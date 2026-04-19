@@ -9,6 +9,15 @@ Two parts, cleanly separable:
 Free-tier responses for restricted endpoints come back as a plain-text error
 message; we detect them and raise :class:`EodhdFreeTierError` so the pipeline
 can record the failure cleanly.
+
+Why not the official ``eodhd`` PyPI SDK? Evaluated; it is a thin wrapper that
+(a) silently swallows all HTTP errors and returns empty ``{}`` — there is no
+way for us to distinguish a free-tier 403 from a genuinely empty response,
+breaking our ``EodhdFreeTierError`` domain signal; (b) has no retry/backoff
+and no concurrency — our ``fetch_metadata`` runs five endpoints in parallel,
+roughly 5× faster; (c) pulls in ~100 MB of transitive deps (matplotlib,
+pillow, websockets) that we don't need. This custom client is ~270 LOC,
+injectable-session-friendly for tests, and has full coverage.
 """
 
 from __future__ import annotations
