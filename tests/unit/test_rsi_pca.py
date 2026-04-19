@@ -1,5 +1,5 @@
 """Unit tests for the RSI-PCA reference strategy (ML lifecycle: fit, predict,
-save/load). Inspired by https://github.com/neurotrader888/RSI-PCA.
+save/load).
 """
 
 from __future__ import annotations

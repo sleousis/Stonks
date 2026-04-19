@@ -1,11 +1,9 @@
 """Bar-shuffle permutation utilities and the MonteCarloPermutationTest
 (MCPT) survival test.
 
-Adapted from https://github.com/neurotrader888/mcpt (``bar_permute.py``
-and ``insample_donchian_mcpt.py``). The permutation preserves per-bar
-return statistics but destroys time-ordering, which makes it a proper
-null for strategies that rely on temporal structure (momentum, breakout,
-mean-reversion, …).
+The permutation preserves per-bar return statistics but destroys
+time-ordering, which makes it a proper null for strategies that rely on
+temporal structure (momentum, breakout, mean-reversion, …).
 
 Algorithm (in log space):
 - relative open ``r_o[i] = log_open[i] - log_close[i-1]`` (gap)

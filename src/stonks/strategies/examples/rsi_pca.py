@@ -1,4 +1,5 @@
-"""RSI-PCA predictive strategy — inspired by neurotrader888/RSI-PCA.
+"""RSI-PCA predictive strategy — a classic PCA-over-multiple-RSI-periods
+signal with a linear read-out head.
 
 A proper ML strategy that exercises the full ``fit`` → ``save`` → ``load``
 lifecycle of our ``BaseStrategy``:
@@ -18,12 +19,12 @@ At inference time we compute the current bar's RSI vector, center with the
 fitted means, project onto the fitted eigenvectors, dot into the linear
 coefficients, and compare to the thresholds.
 
-Implementation note (divergence from the reference): the reference
-``np.dot(rsis, evecs[j])`` indexes eigenvectors as rows. Since
-``numpy.linalg.eigh`` returns eigenvectors as *columns*, that reference
-implementation is not a true principal-component projection. Our version
-uses ``X @ evecs[:, :n_components]`` — the mathematically correct PCA — so
-behavior will differ from the reference on the same input, by design.
+Implementation note: PCA is done the mathematically correct way —
+eigenvectors come out as the columns of ``np.linalg.eigh``'s output, so
+we project via ``X @ evecs[:, :n_components]``. This is worth flagging
+because some public implementations of this idea erroneously index the
+eigenvector matrix by row and end up with a different, non-PCA
+projection.
 """
 
 from __future__ import annotations

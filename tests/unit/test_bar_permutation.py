@@ -1,4 +1,4 @@
-"""Unit tests for permute_bars — adapted from neurotrader888/mcpt.
+"""Unit tests for permute_bars.
 
 The permutation must:
 - preserve the first ``start_index + 1`` bars exactly

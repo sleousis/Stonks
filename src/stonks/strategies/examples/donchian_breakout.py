@@ -1,7 +1,5 @@
 """Donchian channel breakout — reference rule-based trend-following strategy.
 
-Inspired by https://github.com/neurotrader888/mcpt (``donchian.py``).
-
 Signal at bar ``t`` (using bars at the configured :class:`Interval`):
 
 - ``upper`` = max of the ``lookback - 1`` closes *before* ``t``
