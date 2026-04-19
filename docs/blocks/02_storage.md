@@ -36,7 +36,14 @@ class DuckDBLake:
     def sql(self, query: str, params: list | None = None) -> DataFrame: ...  # escape hatch
 ```
 
-## Lake schema (MVP, `migrations/001_init.sql`)
+## Lake schema
+
+**Migrations live in `migrations_duckdb/`** and are applied in order:
+
+- `001_init.sql` — `tickers`, `prices`, `fundamentals` (3 statements), `ingest_runs`.
+- `002_extended_fundamentals.sql` — widens `tickers` with profile columns (beta, short_percent, employee_count, …) and adds the full non-statement metadata surface: `dividends`, `insider_transactions`, `news`, `news_sentiment`, `analyst_estimates`, `analyst_ratings`, `shares_outstanding`, `employee_count`, `segmentation` (one table covering both revenue and geographic dimensions).
+
+### `001_init.sql`
 
 ```sql
 CREATE TABLE tickers (
@@ -85,7 +92,27 @@ CREATE TABLE ingest_runs (
 );
 ```
 
-Feature tables, backtest artifacts, and survival-report blobs are added via future migrations.
+### `002_extended_fundamentals.sql`
+
+Profile columns added to `tickers`: `name`, `country_iso`, `fiscal_year_end`, `web_url`, `is_bank`, `beta`, `short_percent`, `insider_ownership_percent`, `institutional_ownership_percent`, `employee_count`, `esg_score`.
+
+New tables:
+
+| Table | Natural key | Purpose |
+|---|---|---|
+| `dividends` | `(ticker, ex_date)` | Historical cash dividends. |
+| `insider_transactions` | `(ticker, date, owner_name, transaction_code, shares)` (unique index) | Insider trade event log. |
+| `news` | `(ticker, published_at, title)` | News articles with optional per-article sentiment. |
+| `news_sentiment` | `(ticker, date)` | Daily aggregate sentiment. |
+| `analyst_estimates` | `(ticker, period_end, metric)` | Long-format analyst metrics (epsActual, epsEstimate, …). |
+| `analyst_ratings` | `(ticker)` | Current consensus snapshot; upserted. |
+| `shares_outstanding` | `(ticker, date)` | Historical share count. |
+| `employee_count` | `(ticker, date)` | Historical headcount. |
+| `segmentation` | `(ticker, period_end, dimension, segment)` | Revenue and geographic segmentations in one table, distinguished by `dimension`. |
+
+Each lake method (`upsert_dividends`, `upsert_news`, `upsert_segmentation`, …) is idempotent via `INSERT … ON CONFLICT DO UPDATE`. Pipeline ingests the full surface via a single `MetadataBundle` returned by `DataSource.fetch_metadata`.
+
+Feature tables and backtest-artifact tables are added via future migrations.
 
 ## `SqliteState` (implemented)
 

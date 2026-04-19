@@ -15,6 +15,7 @@ from datetime import date
 
 import pandas as pd
 
+from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.schemas import FundamentalRow, RawPriceBar
 from stonks.ingest.sources.base import DataSource
 from stonks.logging import get_logger
@@ -58,6 +59,64 @@ class IngestPipeline:
             to_df=_fundamentals_to_df,
             upsert=self._lake.upsert_fundamentals,
         )
+
+    def run_metadata(self, tickers: Sequence[str]) -> IngestRunResult:
+        """Pull the extended fundamentals bundle per ticker (profile, dividends,
+        insiders, news + sentiment, analyst estimates + ratings, shares
+        outstanding, employee count, segmentations) and upsert each non-empty
+        part into its matching lake table."""
+        run_id = self._lake.open_ingest_run(source=self._source.source_id, kind="metadata")
+        log = self._log.bind(run_id=run_id, kind="metadata")
+
+        ok = 0
+        failed = 0
+        last_error: str | None = None
+
+        for ticker in tickers:
+            try:
+                bundle = self._source.fetch_metadata(ticker)
+                self._upsert_bundle(bundle)
+                ok += 1
+                log.info(
+                    "ticker.ingested",
+                    ticker=ticker,
+                    kinds_found=_non_empty_parts(bundle),
+                )
+            except Exception as exc:
+                failed += 1
+                last_error = f"{type(exc).__name__}: {exc}"
+                log.warning("ticker.failed", ticker=ticker, error=last_error)
+
+        status = _status(ok, failed)
+        self._lake.close_ingest_run(
+            run_id,
+            tickers_ok=ok,
+            tickers_failed=failed,
+            status=status,
+            error=last_error if status == "error" else None,
+        )
+        log.info("run.finished", status=status, tickers_ok=ok, tickers_failed=failed)
+        return IngestRunResult(
+            run_id=run_id,
+            kind="metadata",
+            status=status,
+            tickers_ok=ok,
+            tickers_failed=failed,
+        )
+
+    def _upsert_bundle(self, bundle: MetadataBundle) -> None:
+        if bundle.profile is not None:
+            self._lake.upsert_ticker_profile(_rows_to_df([bundle.profile]))
+        self._lake.upsert_dividends(_rows_to_df(bundle.dividends))
+        self._lake.upsert_insider_transactions(_rows_to_df(bundle.insider_transactions))
+        self._lake.upsert_news(_rows_to_df(bundle.news))
+        self._lake.upsert_news_sentiment(_rows_to_df(bundle.news_sentiment))
+        self._lake.upsert_analyst_estimates(_rows_to_df(bundle.analyst_estimates))
+        if bundle.analyst_ratings is not None:
+            self._lake.upsert_analyst_ratings(_rows_to_df([bundle.analyst_ratings]))
+        self._lake.upsert_shares_outstanding(_rows_to_df(bundle.shares_outstanding))
+        self._lake.upsert_employee_count(_rows_to_df(bundle.employee_count))
+        self._lake.upsert_segmentation(_rows_to_df(bundle.segmentation))
 
     def _run(self, *, kind, tickers, fetch, to_df, upsert) -> IngestRunResult:
         run_id = self._lake.open_ingest_run(source=self._source.source_id, kind=kind)
@@ -115,3 +174,27 @@ def _fundamentals_to_df(rows: Iterable[FundamentalRow]) -> pd.DataFrame:
     cols = ("ticker", "period_end", "frequency", "statement", "line_item", "value")
     data = [tuple(getattr(r, c) for c in cols) for r in rows]
     return pd.DataFrame(data, columns=list(cols))
+
+
+def _rows_to_df(rows: Iterable) -> pd.DataFrame:
+    """Pydantic-row → DataFrame via ``model_dump``. Empty iterable → empty df."""
+    data = [r.model_dump() for r in rows]
+    if not data:
+        return pd.DataFrame()
+    return pd.DataFrame(data)
+
+
+def _non_empty_parts(bundle: MetadataBundle) -> list[str]:
+    out: list[str] = []
+    if bundle.profile is not None:
+        out.append("profile")
+    for name in (
+        "dividends", "insider_transactions", "news", "news_sentiment",
+        "analyst_estimates", "shares_outstanding", "employee_count",
+        "segmentation",
+    ):
+        if getattr(bundle, name):
+            out.append(name)
+    if bundle.analyst_ratings is not None:
+        out.append("analyst_ratings")
+    return out

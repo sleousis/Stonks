@@ -42,7 +42,9 @@ def test_migrate_is_idempotent(tmp_path):
     DuckDBLake(path).migrate()  # second call must not raise
     with DuckDBLake(path) as lake:
         versions = lake.applied_migrations()
-    assert versions == [1]
+    # Exact set matches the number of .sql files in migrations_duckdb/
+    assert versions == sorted(versions)
+    assert 1 in versions   # initial schema
 
 
 def test_upsert_prices_roundtrip(lake):

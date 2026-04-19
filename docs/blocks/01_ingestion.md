@@ -29,6 +29,13 @@ class DataSource(ABC):
                      until: date | None = None) -> Iterable[RawPriceBar]: ...
     @abstractmethod
     def fetch_fundamentals(self, ticker: str) -> Iterable[FundamentalRow]: ...
+
+    # Everything-else surface: dividends, insider trades, news + sentiment,
+    # analyst estimates + ratings, shares outstanding, employees, revenue
+    # and geographic segmentations, static profile. Default returns an empty
+    # bundle so subclasses only populate what they cover.
+    def fetch_metadata(self, ticker: str) -> MetadataBundle:
+        return MetadataBundle()
 ```
 
 - Thin HTTP client. No transformation beyond parsing JSON into typed rows.
@@ -44,6 +51,7 @@ class IngestPipeline:
     def run_prices(self, tickers: Sequence[str], since: date | None = None,
                    until: date | None = None) -> IngestRunResult: ...
     def run_fundamentals(self, tickers: Sequence[str]) -> IngestRunResult: ...
+    def run_metadata(self, tickers: Sequence[str]) -> IngestRunResult: ...   # fetches MetadataBundle per ticker
 ```
 
 - Opens an `ingest_runs` row at start, closes with status at end.

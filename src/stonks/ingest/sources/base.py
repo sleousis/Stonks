@@ -1,7 +1,9 @@
 """Abstract base class for vendor data sources.
 
 A DataSource is a thin HTTP client: it fetches raw rows for a single ticker and
-maps them into canonical row schemas (:class:`RawPriceBar`, :class:`FundamentalRow`).
+maps them into canonical row schemas (:class:`RawPriceBar`, :class:`FundamentalRow`,
+or a :class:`MetadataBundle` covering everything else).
+
 Normalization and persistence are the pipeline's job; sources don't touch the lake.
 """
 
@@ -11,6 +13,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from datetime import date
 
+from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.schemas import FundamentalRow, RawPriceBar
 
 
@@ -27,3 +30,11 @@ class DataSource(ABC):
 
     @abstractmethod
     def fetch_fundamentals(self, ticker: str) -> Iterable[FundamentalRow]: ...
+
+    # Extended fundamentals: ticker profile, dividends, insiders, news, analysts,
+    # shares outstanding, employees, segmentation — all in one bundle. Sources
+    # that only cover a subset return an empty bundle + populate only what
+    # they have. Default implementation returns an empty bundle so existing
+    # subclasses don't have to opt in.
+    def fetch_metadata(self, ticker: str) -> MetadataBundle:
+        return MetadataBundle()

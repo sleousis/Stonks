@@ -178,6 +178,168 @@ class DuckDBLake:
             [datetime.now(UTC), tickers_ok, tickers_failed, status, error, run_id],
         )
 
+    # ---- extended fundamentals (migration 002) ------------------------------
+
+    _DIVIDEND_COLS = (
+        "ticker", "ex_date", "amount", "currency",
+        "pay_date", "record_date", "declaration_date",
+    )
+    _INSIDER_COLS = (
+        "ticker", "date", "owner_name", "owner_relation", "transaction_code",
+        "shares", "price", "value", "vendor_id",
+    )
+    _NEWS_COLS = ("ticker", "published_at", "title", "url", "source_name", "sentiment")
+    _NEWS_SENTIMENT_COLS = ("ticker", "date", "sentiment", "article_count")
+    _ANALYST_EST_COLS = ("ticker", "period_end", "metric", "value")
+    _ANALYST_RATINGS_COLS = (
+        "ticker", "rating", "target_price",
+        "strong_buy", "buy", "hold", "sell", "strong_sell", "updated_at",
+    )
+    _SHARES_OUT_COLS = ("ticker", "date", "shares")
+    _EMPLOYEES_COLS = ("ticker", "date", "count")
+    _SEGMENTATION_COLS = ("ticker", "period_end", "dimension", "segment", "value")
+    _TICKER_PROFILE_COLS = (
+        "id", "exchange", "currency", "name", "country_iso", "ipo_date",
+        "sector", "industry", "fiscal_year_end", "web_url",
+        "is_delisted", "is_bank",
+        "beta", "short_percent", "insider_ownership_percent",
+        "institutional_ownership_percent", "employee_count", "esg_score",
+    )
+
+    def upsert_dividends(self, df: pd.DataFrame) -> int:
+        return self._upsert(
+            df,
+            table="dividends",
+            cols=self._DIVIDEND_COLS,
+            pk=("ticker", "ex_date"),
+        )
+
+    def get_dividends(self, ticker: str) -> pd.DataFrame:
+        return self.con.execute(
+            "SELECT * FROM dividends WHERE ticker = ? ORDER BY ex_date",
+            [ticker],
+        ).fetchdf()
+
+    def upsert_insider_transactions(self, df: pd.DataFrame) -> int:
+        # Deduplicates on (ticker, date, owner_name, transaction_code, shares)
+        # via the unique index; the synthetic id column is excluded from insert.
+        if df.empty:
+            return 0
+        self.con.register("_in", df[list(self._INSIDER_COLS)])
+        try:
+            self.con.execute(
+                f"""
+                INSERT INTO insider_transactions ({", ".join(self._INSIDER_COLS)})
+                SELECT {", ".join(self._INSIDER_COLS)} FROM _in
+                ON CONFLICT (ticker, date, owner_name, transaction_code, shares)
+                DO UPDATE SET
+                    owner_relation = EXCLUDED.owner_relation,
+                    price = EXCLUDED.price,
+                    value = EXCLUDED.value,
+                    vendor_id = EXCLUDED.vendor_id
+                """
+            )
+        finally:
+            self.con.unregister("_in")
+        return len(df)
+
+    def upsert_news(self, df: pd.DataFrame) -> int:
+        return self._upsert(
+            df,
+            table="news",
+            cols=self._NEWS_COLS,
+            pk=("ticker", "published_at", "title"),
+        )
+
+    def upsert_news_sentiment(self, df: pd.DataFrame) -> int:
+        return self._upsert(
+            df,
+            table="news_sentiment",
+            cols=self._NEWS_SENTIMENT_COLS,
+            pk=("ticker", "date"),
+        )
+
+    def upsert_analyst_estimates(self, df: pd.DataFrame) -> int:
+        return self._upsert(
+            df,
+            table="analyst_estimates",
+            cols=self._ANALYST_EST_COLS,
+            pk=("ticker", "period_end", "metric"),
+        )
+
+    def upsert_analyst_ratings(self, df: pd.DataFrame) -> int:
+        return self._upsert(
+            df,
+            table="analyst_ratings",
+            cols=self._ANALYST_RATINGS_COLS,
+            pk=("ticker",),
+        )
+
+    def upsert_shares_outstanding(self, df: pd.DataFrame) -> int:
+        return self._upsert(
+            df,
+            table="shares_outstanding",
+            cols=self._SHARES_OUT_COLS,
+            pk=("ticker", "date"),
+        )
+
+    def upsert_employee_count(self, df: pd.DataFrame) -> int:
+        return self._upsert(
+            df,
+            table="employee_count",
+            cols=self._EMPLOYEES_COLS,
+            pk=("ticker", "date"),
+        )
+
+    def upsert_segmentation(self, df: pd.DataFrame) -> int:
+        return self._upsert(
+            df,
+            table="segmentation",
+            cols=self._SEGMENTATION_COLS,
+            pk=("ticker", "period_end", "dimension", "segment"),
+        )
+
+    def upsert_ticker_profile(self, df: pd.DataFrame) -> int:
+        return self._upsert(
+            df,
+            table="tickers",
+            cols=self._TICKER_PROFILE_COLS,
+            pk=("id",),
+        )
+
+    # ---- generic upsert helper ---------------------------------------------
+
+    def _upsert(
+        self,
+        df: pd.DataFrame,
+        *,
+        table: str,
+        cols: tuple[str, ...],
+        pk: tuple[str, ...],
+    ) -> int:
+        if df.empty:
+            return 0
+        self.con.register("_in", df[list(cols)])
+        non_pk = [c for c in cols if c not in pk]
+        update_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in non_pk)
+        try:
+            if non_pk:
+                sql = (
+                    f"INSERT INTO {table} ({', '.join(cols)}) "
+                    f"SELECT {', '.join(cols)} FROM _in "
+                    f"ON CONFLICT ({', '.join(pk)}) DO UPDATE SET {update_clause}"
+                )
+            else:
+                sql = (
+                    f"INSERT INTO {table} ({', '.join(cols)}) "
+                    f"SELECT {', '.join(cols)} FROM _in "
+                    f"ON CONFLICT ({', '.join(pk)}) DO NOTHING"
+                )
+            self.con.execute(sql)
+        finally:
+            self.con.unregister("_in")
+        return len(df)
+
     # ---- escape hatch -------------------------------------------------------
 
     def sql(self, query: str, params: list | None = None) -> pd.DataFrame:
