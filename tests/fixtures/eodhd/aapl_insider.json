@@ -1,0 +1,15 @@
+[
+  {
+    "date": "2026-03-01",
+    "ownerCik": "0001214156",
+    "ownerName": "COOK TIMOTHY D",
+    "ownerRelationship": "Chief Executive Officer",
+    "transactionDate": "2026-03-01",
+    "transactionCode": "S",
+    "transactionAmount": 50000,
+    "transactionPrice": 250.0,
+    "transactionAcquiredDisposed": "D",
+    "postTransactionAmount": 3200000,
+    "secLink": "https://sec.gov/..."
+  }
+]

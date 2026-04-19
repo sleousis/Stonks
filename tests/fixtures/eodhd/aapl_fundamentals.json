@@ -4,8 +4,65 @@
     "Exchange": "US",
     "Name": "Apple Inc",
     "CurrencyCode": "USD",
+    "CountryISO": "US",
     "Sector": "Technology",
-    "Industry": "Consumer Electronics"
+    "Industry": "Consumer Electronics",
+    "FullTimeEmployees": 164000,
+    "WebURL": "http://www.apple.com",
+    "IPODate": "1980-12-12",
+    "FiscalYearEnd": "September",
+    "IsDelisted": false
+  },
+  "Highlights": {
+    "MarketCapitalization": 3000000000000,
+    "EBITDA": 130000000000,
+    "PERatio": 28.5,
+    "DividendShare": 0.96,
+    "DividendYield": 0.0045
+  },
+  "Technicals": {
+    "Beta": 1.25
+  },
+  "SharesStats": {
+    "SharesOutstanding": 15600000000,
+    "SharesFloat": 15500000000,
+    "PercentInsiders": 7.0,
+    "PercentInstitutions": 61.0,
+    "ShortRatio": 1.2,
+    "ShortPercent": 0.6
+  },
+  "Earnings": {
+    "History": {
+      "2025-12-31": {
+        "reportDate": "2026-01-25",
+        "date": "2025-12-31",
+        "epsActual": 2.40,
+        "epsEstimate": 2.35,
+        "epsDifference": 0.05,
+        "surprisePercent": 2.13
+      },
+      "2025-09-30": {
+        "reportDate": "2025-10-30",
+        "date": "2025-09-30",
+        "epsActual": 1.53,
+        "epsEstimate": 1.50,
+        "epsDifference": 0.03,
+        "surprisePercent": 2.0
+      }
+    }
+  },
+  "AnalystRatings": {
+    "Rating": 2.3,
+    "TargetPrice": 250.00,
+    "StrongBuy": 10,
+    "Buy": 20,
+    "Hold": 5,
+    "Sell": 2,
+    "StrongSell": 0
+  },
+  "SplitsDividends": {
+    "ForwardAnnualDividendRate": 0.96,
+    "ForwardAnnualDividendYield": 0.0045
   },
   "Financials": {
     "Income_Statement": {

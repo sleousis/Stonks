@@ -95,3 +95,33 @@ def test_ingest_prices_via_fake_source(runner, cli_env, monkeypatch):
     )
     assert result.exit_code == 0, result.output
     assert "ok" in result.output.lower()
+
+
+def test_ingest_metadata_via_fake_source(runner, cli_env, monkeypatch):
+    """`stonks ingest metadata` runs against a FakeSource that returns a
+    minimal non-empty MetadataBundle; the run should report ok."""
+    from datetime import date as _date
+
+    from stonks import cli as cli_module
+    from stonks.ingest.metadata_bundle import MetadataBundle
+    from stonks.ingest.schemas import DividendRow, TickerProfile
+
+    class _FakeMetaSource(_FakeSource):
+        def fetch_metadata(self, ticker):
+            return MetadataBundle(
+                profile=TickerProfile(id=ticker, name="Apple Inc", sector="Technology"),
+                dividends=(
+                    DividendRow(
+                        ticker=ticker, ex_date=_date(2026, 2, 10),
+                        amount=0.25, currency="USD",
+                    ),
+                ),
+            )
+
+    monkeypatch.setattr(cli_module, "_build_source", lambda settings: _FakeMetaSource())
+
+    runner.invoke(app, ["db", "init"])
+    result = runner.invoke(app, ["ingest", "metadata", "--tickers", "AAPL.US"])
+    assert result.exit_code == 0, result.output
+    assert "ok" in result.output.lower()
+    assert "metadata" in result.output

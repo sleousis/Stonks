@@ -1,0 +1,19 @@
+[
+  {
+    "date": "2026-04-01T14:30:00+00:00",
+    "title": "Apple announces new product line",
+    "content": "Apple announced...",
+    "link": "https://example.com/story/1",
+    "symbols": ["AAPL.US"],
+    "tags": ["products"],
+    "sentiment": {"polarity": 0.5, "neg": 0.05, "neu": 0.45, "pos": 0.50}
+  },
+  {
+    "date": "2026-04-02T09:00:00+00:00",
+    "title": "Apple beats earnings expectations",
+    "content": "Apple reported...",
+    "link": "https://example.com/story/2",
+    "symbols": ["AAPL.US"],
+    "tags": ["earnings"]
+  }
+]

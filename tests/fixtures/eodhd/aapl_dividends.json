@@ -1,0 +1,22 @@
+[
+  {
+    "date": "2026-02-10",
+    "declarationDate": "2026-01-30",
+    "recordDate": "2026-02-11",
+    "paymentDate": "2026-02-13",
+    "period": "Quarterly",
+    "value": 0.25,
+    "unadjustedValue": 0.25,
+    "currency": "USD"
+  },
+  {
+    "date": "2025-11-10",
+    "declarationDate": "2025-10-30",
+    "recordDate": "2025-11-11",
+    "paymentDate": "2025-11-14",
+    "period": "Quarterly",
+    "value": 0.24,
+    "unadjustedValue": 0.24,
+    "currency": "USD"
+  }
+]

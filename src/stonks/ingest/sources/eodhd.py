@@ -15,12 +15,25 @@ from __future__ import annotations
 
 import time
 from collections.abc import Iterable, Iterator
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 import requests
 
-from stonks.ingest.schemas import FundamentalRow, RawPriceBar
+from stonks.ingest.metadata_bundle import MetadataBundle
+from stonks.ingest.schemas import (
+    AnalystEstimateRow,
+    AnalystRatingsRow,
+    DividendRow,
+    EmployeeCountRow,
+    FundamentalRow,
+    InsiderTransactionRow,
+    NewsArticleRow,
+    NewsSentimentRow,
+    RawPriceBar,
+    SharesOutstandingRow,
+    TickerProfile,
+)
 from stonks.ingest.sources.base import DataSource
 from stonks.logging import get_logger
 
@@ -122,6 +135,234 @@ def _coerce_optional_float(value: Any) -> float | None:
         return None
 
 
+def _coerce_optional_int(value: Any) -> int | None:
+    v = _coerce_optional_float(value)
+    return int(v) if v is not None else None
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    return None
+
+
+# ---- extended-fundamentals parsers (pure, unit-tested) ---------------------
+
+
+def parse_profile_from_fundamentals(ticker: str, payload: Any) -> TickerProfile | None:
+    """Extract the TickerProfile from the fundamentals JSON blob."""
+    if not isinstance(payload, dict):
+        return None
+    general = payload.get("General") or {}
+    shares_stats = payload.get("SharesStats") or {}
+    technicals = payload.get("Technicals") or {}
+
+    return TickerProfile(
+        id=ticker,
+        exchange=general.get("Exchange"),
+        currency=general.get("CurrencyCode"),
+        name=general.get("Name"),
+        country_iso=general.get("CountryISO"),
+        ipo_date=_parse_date(general.get("IPODate")),
+        sector=general.get("Sector"),
+        industry=general.get("Industry"),
+        fiscal_year_end=general.get("FiscalYearEnd"),
+        web_url=general.get("WebURL"),
+        is_delisted=bool(general.get("IsDelisted", False)),
+        is_bank=bool(general.get("IsBank", False)),
+        beta=_coerce_optional_float(technicals.get("Beta")),
+        short_percent=_coerce_optional_float(shares_stats.get("ShortPercent")),
+        insider_ownership_percent=_coerce_optional_float(shares_stats.get("PercentInsiders")),
+        institutional_ownership_percent=_coerce_optional_float(
+            shares_stats.get("PercentInstitutions")
+        ),
+        employee_count=_coerce_optional_int(general.get("FullTimeEmployees")),
+        esg_score=_coerce_optional_float((payload.get("ESGScores") or {}).get("TotalESG")),
+    )
+
+
+def parse_analyst_estimates_from_fundamentals(
+    ticker: str, payload: Any
+) -> Iterator[AnalystEstimateRow]:
+    """Flatten Earnings.History into one row per (period, metric)."""
+    if not isinstance(payload, dict):
+        return iter(())
+    history = ((payload.get("Earnings") or {}).get("History")) or {}
+    return _iter_analyst_estimates(ticker, history)
+
+
+def _iter_analyst_estimates(ticker: str, history: dict) -> Iterator[AnalystEstimateRow]:
+    _metric_keys = ("epsActual", "epsEstimate", "epsDifference", "surprisePercent")
+    for period_key, row in history.items():
+        if not isinstance(row, dict):
+            continue
+        period_end = _parse_date(row.get("date") or period_key)
+        if period_end is None:
+            continue
+        for metric in _metric_keys:
+            if metric in row:
+                yield AnalystEstimateRow(
+                    ticker=ticker,
+                    period_end=period_end,
+                    metric=metric,
+                    value=_coerce_optional_float(row[metric]),
+                )
+
+
+def parse_analyst_ratings_from_fundamentals(
+    ticker: str, payload: Any
+) -> AnalystRatingsRow | None:
+    if not isinstance(payload, dict):
+        return None
+    ratings = payload.get("AnalystRatings")
+    if not isinstance(ratings, dict):
+        return None
+    return AnalystRatingsRow(
+        ticker=ticker,
+        rating=_coerce_optional_float(ratings.get("Rating")),
+        target_price=_coerce_optional_float(ratings.get("TargetPrice")),
+        strong_buy=_coerce_optional_int(ratings.get("StrongBuy")) or 0,
+        buy=_coerce_optional_int(ratings.get("Buy")) or 0,
+        hold=_coerce_optional_int(ratings.get("Hold")) or 0,
+        sell=_coerce_optional_int(ratings.get("Sell")) or 0,
+        strong_sell=_coerce_optional_int(ratings.get("StrongSell")) or 0,
+    )
+
+
+def parse_shares_outstanding_snapshot(
+    ticker: str, payload: Any, as_of: date | None = None
+) -> SharesOutstandingRow | None:
+    """SharesStats carries a current-snapshot count; stamp it with ``as_of``
+    (defaults to today) so it slots into the historical time-series."""
+    if not isinstance(payload, dict):
+        return None
+    shares = _coerce_optional_float((payload.get("SharesStats") or {}).get("SharesOutstanding"))
+    if shares is None:
+        return None
+    return SharesOutstandingRow(
+        ticker=ticker,
+        date=as_of or date.today(),
+        shares=shares,
+    )
+
+
+def parse_employee_count_snapshot(
+    ticker: str, payload: Any, as_of: date | None = None
+) -> EmployeeCountRow | None:
+    if not isinstance(payload, dict):
+        return None
+    count = _coerce_optional_int((payload.get("General") or {}).get("FullTimeEmployees"))
+    if count is None:
+        return None
+    return EmployeeCountRow(ticker=ticker, date=as_of or date.today(), count=count)
+
+
+def parse_dividends_response(ticker: str, payload: Any) -> Iterator[DividendRow]:
+    """Parse /api/div/<ticker> into DividendRow entries."""
+    _check_free_tier(payload)
+    if not isinstance(payload, list):
+        return iter(())
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        ex_date = _parse_date(row.get("date"))
+        amount = _coerce_optional_float(row.get("value"))
+        if ex_date is None or amount is None or amount < 0:
+            continue
+        yield DividendRow(
+            ticker=ticker,
+            ex_date=ex_date,
+            amount=amount,
+            currency=row.get("currency"),
+            pay_date=_parse_date(row.get("paymentDate")),
+            record_date=_parse_date(row.get("recordDate")),
+            declaration_date=_parse_date(row.get("declarationDate")),
+        )
+
+
+def parse_news_response(ticker: str, payload: Any) -> Iterator[NewsArticleRow]:
+    _check_free_tier(payload)
+    if not isinstance(payload, list):
+        return iter(())
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        published_at = _parse_datetime(row.get("date"))
+        title = row.get("title")
+        if published_at is None or not title:
+            continue
+        sentiment = None
+        sent_obj = row.get("sentiment")
+        if isinstance(sent_obj, dict):
+            sentiment = _coerce_optional_float(sent_obj.get("polarity"))
+        elif isinstance(sent_obj, (int, float)):
+            sentiment = float(sent_obj)
+        yield NewsArticleRow(
+            ticker=ticker,
+            published_at=published_at,
+            title=title,
+            url=row.get("link"),
+            source_name=row.get("source") or row.get("source_name"),
+            sentiment=sentiment,
+        )
+
+
+def parse_insider_response(ticker: str, payload: Any) -> Iterator[InsiderTransactionRow]:
+    _check_free_tier(payload)
+    if not isinstance(payload, list):
+        return iter(())
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        tx_date = _parse_date(row.get("transactionDate") or row.get("date"))
+        if tx_date is None:
+            continue
+        shares = _coerce_optional_float(row.get("transactionAmount"))
+        price = _coerce_optional_float(row.get("transactionPrice"))
+        value = (shares * price) if shares is not None and price is not None else None
+        yield InsiderTransactionRow(
+            ticker=ticker,
+            date=tx_date,
+            owner_name=row.get("ownerName"),
+            owner_relation=row.get("ownerRelationship"),
+            transaction_code=row.get("transactionCode"),
+            shares=shares,
+            price=price,
+            value=value,
+            vendor_id=row.get("ownerCik"),
+        )
+
+
+def parse_sentiments_response(
+    ticker: str, payload: Any
+) -> Iterator[NewsSentimentRow]:
+    """EODHD sentiment endpoint returns ``{"<ticker>": [{date, count, normalized}, ...]}``."""
+    _check_free_tier(payload)
+    if isinstance(payload, dict):
+        rows = payload.get(ticker) or next(iter(payload.values()), [])
+    elif isinstance(payload, list):
+        rows = payload
+    else:
+        return iter(())
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        d = _parse_date(row.get("date"))
+        if d is None:
+            continue
+        yield NewsSentimentRow(
+            ticker=ticker,
+            date=d,
+            sentiment=_coerce_optional_float(row.get("normalized")),
+            article_count=_coerce_optional_int(row.get("count")),
+        )
+
+
 # ---- HTTP client ------------------------------------------------------------
 
 
@@ -170,6 +411,82 @@ class EodhdDataSource(DataSource):
         url = f"{self._base_url}/fundamentals/{ticker}"
         data = self._get(url, params={"fmt": "json"})
         return list(parse_fundamentals_response(ticker, data))
+
+    def fetch_metadata(self, ticker: str, since: date | None = None) -> MetadataBundle:
+        """Assemble the full metadata bundle by hitting five EODHD endpoints.
+
+        Each sub-fetch is wrapped in free-tier / network error tolerance:
+        a subscription-blocked or transport error on one endpoint leaves the
+        corresponding bundle field empty; other fields still populate.
+        """
+        bundle_parts: dict[str, Any] = {}
+
+        fundamentals = self._try(lambda: self._get_json(f"/fundamentals/{ticker}"))
+        if fundamentals is not None:
+            profile = parse_profile_from_fundamentals(ticker, fundamentals)
+            if profile is not None:
+                bundle_parts["profile"] = profile
+            bundle_parts["analyst_estimates"] = tuple(
+                parse_analyst_estimates_from_fundamentals(ticker, fundamentals)
+            )
+            rating = parse_analyst_ratings_from_fundamentals(ticker, fundamentals)
+            if rating is not None:
+                bundle_parts["analyst_ratings"] = rating
+            so = parse_shares_outstanding_snapshot(ticker, fundamentals)
+            if so is not None:
+                bundle_parts["shares_outstanding"] = (so,)
+            ec = parse_employee_count_snapshot(ticker, fundamentals)
+            if ec is not None:
+                bundle_parts["employee_count"] = (ec,)
+
+        div_params: dict[str, str] = {"fmt": "json"}
+        if since is not None:
+            div_params["from"] = since.isoformat()
+        dividends = self._try(lambda: self._get_json(f"/div/{ticker}", div_params))
+        if dividends is not None:
+            bundle_parts["dividends"] = tuple(parse_dividends_response(ticker, dividends))
+
+        news_params: dict[str, str] = {"fmt": "json", "s": ticker}
+        if since is not None:
+            news_params["from"] = since.isoformat()
+        news = self._try(lambda: self._get_json("/news", news_params))
+        if news is not None:
+            bundle_parts["news"] = tuple(parse_news_response(ticker, news))
+
+        insider_params: dict[str, str] = {"fmt": "json", "code": ticker}
+        if since is not None:
+            insider_params["from"] = since.isoformat()
+        insider = self._try(lambda: self._get_json("/insider-transactions", insider_params))
+        if insider is not None:
+            bundle_parts["insider_transactions"] = tuple(
+                parse_insider_response(ticker, insider)
+            )
+
+        sentiments = self._try(
+            lambda: self._get_json("/sentiments", {"fmt": "json", "s": ticker})
+        )
+        if sentiments is not None:
+            bundle_parts["news_sentiment"] = tuple(
+                parse_sentiments_response(ticker, sentiments)
+            )
+
+        return MetadataBundle(**bundle_parts)
+
+    def _get_json(self, path: str, params: dict[str, str] | None = None) -> Any:
+        return self._get(f"{self._base_url}{path}", params=params or {"fmt": "json"})
+
+    def _try(self, fn):
+        """Run ``fn`` and swallow subscription/transport errors so one blocked
+        endpoint doesn't poison the rest of the metadata bundle. Returns
+        ``None`` on any known failure; the bundle field just stays empty."""
+        try:
+            return fn()
+        except EodhdFreeTierError as exc:
+            self._log.info("eodhd.metadata.skipped_free_tier", reason=str(exc))
+            return None
+        except Exception as exc:
+            self._log.warning("eodhd.metadata.skipped_error", error=str(exc))
+            return None
 
     def _get(self, url: str, params: dict[str, str]) -> Any:
         params = {**params, "api_token": self._api_key}

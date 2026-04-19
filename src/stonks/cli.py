@@ -164,6 +164,25 @@ def ingest_fundamentals(
     _print_result(result)
 
 
+@ingest_app.command("metadata")
+def ingest_metadata(
+    tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),
+) -> None:
+    """Pull the full metadata bundle (profile, dividends, insider trades,
+    news + sentiment, analyst estimates + ratings, shares outstanding,
+    employee count, segmentations) per ticker."""
+    settings = _settings()
+    source = _build_source(settings)
+
+    with _open_lake(settings.lake.path) as lake:
+        lake.migrate()
+        ticker_list = _parse_tickers(tickers)
+        pipeline = IngestPipeline(source=source, lake=lake)
+        result = pipeline.run_metadata(ticker_list)
+
+    _print_result(result)
+
+
 def _print_result(result) -> None:
     color = {"ok": "green", "partial": "yellow", "error": "red"}.get(result.status, "white")
     console.print(
