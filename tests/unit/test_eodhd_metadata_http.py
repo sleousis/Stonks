@@ -52,11 +52,13 @@ def _load(name: str):
     return json.loads((FIXTURES / name).read_text())
 
 
-def test_fetch_metadata_assembles_full_bundle_from_five_endpoints():
+def test_fetch_metadata_assembles_full_bundle_from_all_endpoints():
     session = _RoutingSession(
         {
             "/fundamentals/": _Response(200, _load("aapl_fundamentals.json")),
             "/div/": _Response(200, _load("aapl_dividends.json")),
+            "/splits/": _Response(200, _load("aapl_splits.json")),
+            "/historical-market-cap/": _Response(200, _load("aapl_market_cap.json")),
             "/news": _Response(200, _load("aapl_news.json")),
             "/insider-transactions": _Response(200, _load("aapl_insider.json")),
             "/sentiments": _Response(200, _load("aapl_sentiments.json")),
@@ -68,12 +70,15 @@ def test_fetch_metadata_assembles_full_bundle_from_five_endpoints():
     assert bundle.profile is not None
     assert bundle.profile.name == "Apple Inc"
     assert len(bundle.dividends) == 2
+    assert len(bundle.splits) == 5
+    assert len(bundle.market_cap_history) == 4
     assert len(bundle.news) == 2
     assert len(bundle.insider_transactions) == 1
     assert len(bundle.news_sentiment) == 2
     assert len(bundle.analyst_estimates) == 8
     assert bundle.analyst_ratings is not None
-    assert len(bundle.shares_outstanding) == 1
+    # full history from fundamentals.outstandingShares now, not a snapshot
+    assert len(bundle.shares_outstanding) == 5
     assert len(bundle.employee_count) == 1
 
 
@@ -82,6 +87,8 @@ def test_fetch_metadata_tolerates_free_tier_403_on_some_endpoints():
         {
             "/fundamentals/": _Response(200, _load("aapl_fundamentals.json")),
             "/div/": _Response(403, "Only EOD data allowed for free users."),
+            "/splits/": _Response(403, "Only EOD data allowed."),
+            "/historical-market-cap/": _Response(403, "Only EOD data allowed."),
             "/news": _Response(403, "Only EOD data allowed for free users."),
             "/insider-transactions": _Response(403, "Only EOD data allowed."),
             "/sentiments": _Response(403, "Only EOD data allowed."),
@@ -96,6 +103,8 @@ def test_fetch_metadata_tolerates_free_tier_403_on_some_endpoints():
     assert len(bundle.analyst_estimates) == 8
     # paid-only fields silently empty
     assert bundle.dividends == ()
+    assert bundle.splits == ()
+    assert bundle.market_cap_history == ()
     assert bundle.news == ()
     assert bundle.insider_transactions == ()
     assert bundle.news_sentiment == ()
@@ -106,6 +115,8 @@ def test_fetch_metadata_tolerates_complete_free_tier():
         {
             "/fundamentals/": _Response(403, "Only EOD data allowed."),
             "/div/": _Response(403, "Only EOD data allowed."),
+            "/splits/": _Response(403, "Only EOD data allowed."),
+            "/historical-market-cap/": _Response(403, "Only EOD data allowed."),
             "/news": _Response(403, "Only EOD data allowed."),
             "/insider-transactions": _Response(403, "Only EOD data allowed."),
             "/sentiments": _Response(403, "Only EOD data allowed."),
@@ -117,5 +128,7 @@ def test_fetch_metadata_tolerates_complete_free_tier():
     # completely empty bundle, no exception
     assert bundle.profile is None
     assert bundle.dividends == ()
+    assert bundle.splits == ()
+    assert bundle.market_cap_history == ()
     assert bundle.news == ()
     assert bundle.analyst_estimates == ()

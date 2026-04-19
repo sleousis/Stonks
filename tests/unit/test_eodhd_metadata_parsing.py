@@ -17,10 +17,12 @@ from stonks.ingest.sources.eodhd import (
     parse_dividends_response,
     parse_employee_count_snapshot,
     parse_insider_response,
+    parse_market_cap_response,
     parse_news_response,
     parse_profile_from_fundamentals,
     parse_sentiments_response,
-    parse_shares_outstanding_snapshot,
+    parse_shares_outstanding_history,
+    parse_splits_response,
 )
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "eodhd"
@@ -93,13 +95,24 @@ def test_analyst_ratings_none_when_section_absent():
 # ---- shares outstanding + employees snapshots -----------------------------
 
 
-def test_shares_outstanding_snapshot_stamped_with_as_of():
-    row = parse_shares_outstanding_snapshot(
-        "AAPL.US", _load("aapl_fundamentals.json"), as_of=date(2026, 4, 15)
+def test_shares_outstanding_history_from_fundamentals():
+    rows = list(
+        parse_shares_outstanding_history("AAPL.US", _load("aapl_fundamentals.json"))
     )
-    assert row is not None
-    assert row.shares == 15_600_000_000.0
-    assert row.date == date(2026, 4, 15)
+    # fixture has 2 annual + 3 quarterly entries (5 rows — duplicate dates
+    # across annual/quarterly are preserved; the lake's ON CONFLICT dedupes).
+    assert len(rows) == 5
+    assert all(r.ticker == "AAPL.US" for r in rows)
+    dates = {r.date for r in rows}
+    assert date(2025, 12, 31) in dates
+    assert date(2025, 9, 30) in dates
+    # integer share counts are preserved as floats (lake schema is DOUBLE)
+    assert all(r.shares > 0 for r in rows)
+
+
+def test_shares_outstanding_history_empty_when_section_missing():
+    rows = list(parse_shares_outstanding_history("X.US", {"General": {}}))
+    assert rows == []
 
 
 def test_employee_count_snapshot_uses_general_full_time_employees():
@@ -177,3 +190,48 @@ def test_sentiments_parse_dict_keyed_by_ticker():
     first = next(r for r in rows if r.date == date(2026, 4, 1))
     assert first.sentiment == 0.2
     assert first.article_count == 12
+
+
+# ---- stock splits ----------------------------------------------------------
+
+
+def test_splits_parse_ratio_from_new_over_old_string():
+    rows = list(parse_splits_response("AAPL.US", _load("aapl_splits.json")))
+    assert len(rows) == 5
+    # 2014 was the 7-for-1 split
+    split_7_1 = next(r for r in rows if r.date == date(2014, 6, 9))
+    assert split_7_1.ratio == 7.0
+    # 2020 was the 4-for-1
+    split_4_1 = next(r for r in rows if r.date == date(2020, 8, 31))
+    assert split_4_1.ratio == 4.0
+
+
+def test_splits_parser_skips_malformed_rows():
+    rows = list(parse_splits_response("X.US", [
+        {"date": "2020-01-01", "split": "not-a-ratio"},
+        {"date": "bad-date", "split": "2/1"},
+        {"date": "2020-02-01", "split": "2/0"},   # divide-by-zero
+        {"date": "2020-03-01", "split": "2/1"},   # only valid row
+    ]))
+    assert len(rows) == 1
+    assert rows[0].ratio == 2.0
+
+
+# ---- historical market cap -------------------------------------------------
+
+
+def test_market_cap_parses_dict_keyed_by_index():
+    rows = list(parse_market_cap_response("AAPL.US", _load("aapl_market_cap.json")))
+    assert len(rows) == 4
+    assert all(r.ticker == "AAPL.US" for r in rows)
+    top = next(r for r in rows if r.date == date(2025, 12, 31))
+    assert top.market_cap == 3_800_000_000_000.0
+
+
+def test_market_cap_parser_accepts_list_shape_too():
+    payload = [
+        {"date": "2025-01-01", "value": 1000000000},
+        {"date": "2025-01-08", "value": 1050000000},
+    ]
+    rows = list(parse_market_cap_response("X.US", payload))
+    assert len(rows) == 2

@@ -108,6 +108,7 @@ class IngestPipeline:
         if bundle.profile is not None:
             self._lake.upsert_ticker_profile(_rows_to_df([bundle.profile]))
         self._lake.upsert_dividends(_rows_to_df(bundle.dividends))
+        self._lake.upsert_stock_splits(_rows_to_df(bundle.splits))
         self._lake.upsert_insider_transactions(_rows_to_df(bundle.insider_transactions))
         self._lake.upsert_news(_rows_to_df(bundle.news))
         self._lake.upsert_news_sentiment(_rows_to_df(bundle.news_sentiment))
@@ -117,6 +118,7 @@ class IngestPipeline:
         self._lake.upsert_shares_outstanding(_rows_to_df(bundle.shares_outstanding))
         self._lake.upsert_employee_count(_rows_to_df(bundle.employee_count))
         self._lake.upsert_segmentation(_rows_to_df(bundle.segmentation))
+        self._lake.upsert_market_cap_history(_rows_to_df(bundle.market_cap_history))
 
     def _run(self, *, kind, tickers, fetch, to_df, upsert) -> IngestRunResult:
         run_id = self._lake.open_ingest_run(source=self._source.source_id, kind=kind)
@@ -189,9 +191,9 @@ def _non_empty_parts(bundle: MetadataBundle) -> list[str]:
     if bundle.profile is not None:
         out.append("profile")
     for name in (
-        "dividends", "insider_transactions", "news", "news_sentiment",
+        "dividends", "splits", "insider_transactions", "news", "news_sentiment",
         "analyst_estimates", "shares_outstanding", "employee_count",
-        "segmentation",
+        "segmentation", "market_cap_history",
     ):
         if getattr(bundle, name):
             out.append(name)

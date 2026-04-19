@@ -251,6 +251,8 @@ class DuckDBLake:
     _SHARES_OUT_COLS = ("ticker", "date", "shares")
     _EMPLOYEES_COLS = ("ticker", "date", "count")
     _SEGMENTATION_COLS = ("ticker", "period_end", "dimension", "segment", "value")
+    _STOCK_SPLITS_COLS = ("ticker", "date", "ratio")
+    _MARKET_CAP_COLS = ("ticker", "date", "market_cap")
     _TICKER_PROFILE_COLS = (
         "id", "exchange", "currency", "name", "country_iso", "ipo_date",
         "sector", "industry", "fiscal_year_end", "web_url",
@@ -350,6 +352,22 @@ class DuckDBLake:
             table="segmentation",
             cols=self._SEGMENTATION_COLS,
             pk=("ticker", "period_end", "dimension", "segment"),
+        )
+
+    def upsert_stock_splits(self, df: pd.DataFrame) -> int:
+        return self._upsert(
+            df,
+            table="stock_splits",
+            cols=self._STOCK_SPLITS_COLS,
+            pk=("ticker", "date"),
+        )
+
+    def upsert_market_cap_history(self, df: pd.DataFrame) -> int:
+        return self._upsert(
+            df,
+            table="market_cap_history",
+            cols=self._MARKET_CAP_COLS,
+            pk=("ticker", "date"),
         )
 
     def upsert_ticker_profile(self, df: pd.DataFrame) -> int:

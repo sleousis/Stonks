@@ -39,10 +39,12 @@ from stonks.ingest.schemas import (
     EmployeeCountRow,
     FundamentalRow,
     InsiderTransactionRow,
+    MarketCapRow,
     NewsArticleRow,
     NewsSentimentRow,
     RawPriceBar,
     SharesOutstandingRow,
+    StockSplitRow,
     TickerProfile,
 )
 from stonks.ingest.sources.base import DataSource
@@ -249,21 +251,39 @@ def parse_analyst_ratings_from_fundamentals(
     )
 
 
-def parse_shares_outstanding_snapshot(
-    ticker: str, payload: Any, as_of: date | None = None
-) -> SharesOutstandingRow | None:
-    """SharesStats carries a current-snapshot count; stamp it with ``as_of``
-    (defaults to today) so it slots into the historical time-series."""
+def parse_shares_outstanding_history(
+    ticker: str, payload: Any
+) -> Iterator[SharesOutstandingRow]:
+    """Fundamentals has an ``outstandingShares`` section with both
+    ``annual`` and ``quarterly`` dicts — each period dict carries
+    ``dateFormatted`` (ISO date) and ``shares`` (integer count). We pull
+    the full history from both, merged. Duplicate ``(ticker, date)`` rows
+    (same period appearing in annual + quarterly) are idempotent in the
+    lake via ON CONFLICT, so we emit them all and let the DB dedupe.
+    """
     if not isinstance(payload, dict):
-        return None
-    shares = _coerce_optional_float((payload.get("SharesStats") or {}).get("SharesOutstanding"))
-    if shares is None:
-        return None
-    return SharesOutstandingRow(
-        ticker=ticker,
-        date=as_of or date.today(),
-        shares=shares,
-    )
+        return iter(())
+    shares_blob = payload.get("outstandingShares")
+    if not isinstance(shares_blob, dict):
+        return iter(())
+    return _iter_shares_outstanding(ticker, shares_blob)
+
+
+def _iter_shares_outstanding(
+    ticker: str, shares_blob: dict
+) -> Iterator[SharesOutstandingRow]:
+    for frequency_key in ("annual", "quarterly"):
+        periods = shares_blob.get(frequency_key) or {}
+        if not isinstance(periods, dict):
+            continue
+        for period_entry in periods.values():
+            if not isinstance(period_entry, dict):
+                continue
+            d = _parse_date(period_entry.get("dateFormatted") or period_entry.get("date"))
+            shares = _coerce_optional_float(period_entry.get("shares"))
+            if d is None or shares is None or shares < 0:
+                continue
+            yield SharesOutstandingRow(ticker=ticker, date=d, shares=shares)
 
 
 def parse_employee_count_snapshot(
@@ -378,6 +398,57 @@ def parse_sentiments_response(
         )
 
 
+def parse_splits_response(ticker: str, payload: Any) -> Iterator[StockSplitRow]:
+    """Parse ``/api/splits/{TICKER}`` into StockSplitRow entries.
+
+    EODHD returns ``[{"date": "YYYY-MM-DD", "split": "2.000000/1.000000"}, ...]``
+    where the split string is ``"new/old"``; we emit ``ratio = new / old``
+    (forward-split ratios > 1, reverse < 1).
+    """
+    _check_free_tier(payload)
+    if not isinstance(payload, list):
+        return iter(())
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        d = _parse_date(row.get("date"))
+        split_str = row.get("split")
+        if d is None or not isinstance(split_str, str) or "/" not in split_str:
+            continue
+        try:
+            new, old = split_str.split("/", 1)
+            ratio = float(new) / float(old)
+        except (ValueError, ZeroDivisionError):
+            continue
+        if ratio <= 0:
+            continue
+        yield StockSplitRow(ticker=ticker, date=d, ratio=ratio)
+
+
+def parse_market_cap_response(ticker: str, payload: Any) -> Iterator[MarketCapRow]:
+    """Parse ``/api/historical-market-cap/{TICKER}`` into MarketCapRow.
+
+    EODHD returns a dict keyed by integer-string index
+    (``{"0": {"date": "...", "value": ...}, "1": {...}, ...}``) rather
+    than a list — we iterate values directly.
+    """
+    _check_free_tier(payload)
+    if isinstance(payload, dict):
+        rows = payload.values()
+    elif isinstance(payload, list):
+        rows = payload
+    else:
+        return iter(())
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        d = _parse_date(row.get("date"))
+        mcap = _coerce_optional_float(row.get("value"))
+        if d is None or mcap is None or mcap < 0:
+            continue
+        yield MarketCapRow(ticker=ticker, date=d, market_cap=mcap)
+
+
 # ---- HTTP client ------------------------------------------------------------
 
 
@@ -445,6 +516,12 @@ class EodhdDataSource(DataSource):
             "dividends":    lambda: self._get_json(
                 f"/div/{ticker}", _params_with_since({"fmt": "json"}),
             ),
+            "splits":       lambda: self._get_json(
+                f"/splits/{ticker}", _params_with_since({"fmt": "json"}),
+            ),
+            "market_cap":   lambda: self._get_json(
+                f"/historical-market-cap/{ticker}", {"fmt": "json"},
+            ),
             "news":         lambda: self._get_json(
                 "/news", _params_with_since({"fmt": "json", "s": ticker}),
             ),
@@ -473,9 +550,11 @@ class EodhdDataSource(DataSource):
             rating = parse_analyst_ratings_from_fundamentals(ticker, fundamentals)
             if rating is not None:
                 bundle_parts["analyst_ratings"] = rating
-            so = parse_shares_outstanding_snapshot(ticker, fundamentals)
-            if so is not None:
-                bundle_parts["shares_outstanding"] = (so,)
+            # Full shares-outstanding history from fundamentals.outstandingShares;
+            # falls back to empty tuple if the section is missing.
+            bundle_parts["shares_outstanding"] = tuple(
+                parse_shares_outstanding_history(ticker, fundamentals)
+            )
             ec = parse_employee_count_snapshot(ticker, fundamentals)
             if ec is not None:
                 bundle_parts["employee_count"] = (ec,)
@@ -483,6 +562,14 @@ class EodhdDataSource(DataSource):
         if results["dividends"] is not None:
             bundle_parts["dividends"] = tuple(
                 parse_dividends_response(ticker, results["dividends"])
+            )
+        if results["splits"] is not None:
+            bundle_parts["splits"] = tuple(
+                parse_splits_response(ticker, results["splits"])
+            )
+        if results["market_cap"] is not None:
+            bundle_parts["market_cap_history"] = tuple(
+                parse_market_cap_response(ticker, results["market_cap"])
             )
         if results["news"] is not None:
             bundle_parts["news"] = tuple(parse_news_response(ticker, results["news"]))

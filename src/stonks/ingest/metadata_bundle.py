@@ -18,10 +18,12 @@ from stonks.ingest.schemas import (
     DividendRow,
     EmployeeCountRow,
     InsiderTransactionRow,
+    MarketCapRow,
     NewsArticleRow,
     NewsSentimentRow,
     SegmentationRow,
     SharesOutstandingRow,
+    StockSplitRow,
     TickerProfile,
 )
 
@@ -30,6 +32,7 @@ from stonks.ingest.schemas import (
 class MetadataBundle:
     profile: TickerProfile | None = None
     dividends: tuple[DividendRow, ...] = ()
+    splits: tuple[StockSplitRow, ...] = ()
     insider_transactions: tuple[InsiderTransactionRow, ...] = ()
     news: tuple[NewsArticleRow, ...] = ()
     news_sentiment: tuple[NewsSentimentRow, ...] = ()
@@ -38,3 +41,4 @@ class MetadataBundle:
     shares_outstanding: tuple[SharesOutstandingRow, ...] = ()
     employee_count: tuple[EmployeeCountRow, ...] = ()
     segmentation: tuple[SegmentationRow, ...] = ()
+    market_cap_history: tuple[MarketCapRow, ...] = ()

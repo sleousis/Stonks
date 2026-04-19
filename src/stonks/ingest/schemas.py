@@ -132,6 +132,25 @@ class SharesOutstandingRow(BaseModel):
     shares: float = Field(ge=0.0)
 
 
+class StockSplitRow(BaseModel):
+    """One stock split event. ``ratio > 1`` is a forward split (2:1 → 2.0);
+    ``ratio < 1`` is a reverse split (1:10 → 0.1)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    ticker: str
+    date: date
+    ratio: float = Field(gt=0.0)
+
+
+class MarketCapRow(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    ticker: str
+    date: date
+    market_cap: float = Field(ge=0.0)
+
+
 class EmployeeCountRow(BaseModel):
     model_config = ConfigDict(frozen=True)
 
