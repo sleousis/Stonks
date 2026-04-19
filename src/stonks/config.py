@@ -46,6 +46,14 @@ class LoggingConfig(BaseModel):
     level: str = "INFO"
 
 
+class ProductionConfig(BaseModel):
+    universe: list[str] = []
+    threshold: float = 0.0
+    initial_cash: float = 10_000.0
+    slippage_bps: float = 0.0
+    fee_per_trade: float = 0.0
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -54,6 +62,7 @@ class Settings(BaseSettings):
     registry: RegistryConfig = RegistryConfig()
     logging: LoggingConfig = LoggingConfig()
     sources: SourcesConfig = SourcesConfig()
+    production: ProductionConfig = ProductionConfig()
 
 
 def load_settings(config_path: Path | None = None) -> Settings:

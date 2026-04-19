@@ -1,6 +1,6 @@
 # Block 3 — Strategy Lab
 
-> Status: **designed only**. Not implemented in MVP. Interfaces below are the contract that later milestones will land against.
+> Status: **implemented** (Block 3a + Block 3b). Reference strategies: BuyAndHold (rule-based) and Momentum (technical indicator). ML strategies fit the same Protocol when added.
 
 ## Purpose
 

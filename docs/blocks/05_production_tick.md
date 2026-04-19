@@ -1,6 +1,6 @@
 # Block 5 — Production Tick
 
-> Status: **designed only**. Not implemented in MVP.
+> Status: **implemented** for paper mode via `SimulatedBroker`. Live broker adapters (Alpaca, IB, etc.) remain a post-MVP drop-in behind the same `Broker` Protocol.
 
 ## Purpose
 

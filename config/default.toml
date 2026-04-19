@@ -10,6 +10,14 @@ artifacts_dir = "data/artifacts"
 [logging]
 level = "INFO"
 
+[production]
+# Universe the production tick iterates; empty means "explicitly pass --tickers".
+universe = []
+threshold = 0.0
+initial_cash = 10000.0
+slippage_bps = 0.0
+fee_per_trade = 0.0
+
 [sources.eodhd]
 base_url = "https://eodhd.com/api"
 timeout_seconds = 30

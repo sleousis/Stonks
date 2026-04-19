@@ -17,6 +17,7 @@ from stonks.ingest.pipeline import IngestPipeline
 from stonks.ingest.sources.base import DataSource
 from stonks.ingest.sources.eodhd import EodhdDataSource
 from stonks.logging import configure_logging, get_logger
+from stonks.production.tick import TickSettings, run_tick
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
@@ -248,6 +249,68 @@ def registry_retire(strategy_id: str) -> None:
         console.print(f"[yellow]{strategy_id} → retired[/yellow]")
     finally:
         state.close()
+
+
+# ---- production tick --------------------------------------------------------
+
+
+@app.command("tick")
+def tick(
+    dry_run: bool = typer.Option(False, "--dry-run", help="rank + log, place no orders"),
+    as_of: str | None = typer.Option(
+        None, "--as-of", help="override date (YYYY-MM-DD); default is today"
+    ),
+    tickers: str | None = typer.Option(
+        None,
+        "--tickers",
+        help="comma-separated universe; overrides config.production.universe",
+    ),
+) -> None:
+    """One-shot production tick. Rank active strategies × universe, pick a
+    winner, let it decide, execute idempotently through the broker, and
+    record everything in state. Designed to be invoked by cron/systemd."""
+    settings = _settings()
+
+    universe = _parse_tickers(tickers) or list(settings.production.universe)
+    if not universe:
+        raise typer.BadParameter(
+            "production universe is empty — provide --tickers or set "
+            "[production].universe in config/default.toml"
+        )
+
+    as_of_date = date.fromisoformat(as_of) if as_of else date.today()
+
+    tick_settings = TickSettings(
+        universe=universe,
+        threshold=settings.production.threshold,
+        initial_cash=settings.production.initial_cash,
+        slippage_bps=settings.production.slippage_bps,
+        fee_per_trade=settings.production.fee_per_trade,
+    )
+
+    state, registry = _open_registry(settings)
+    try:
+        with _open_lake(settings.lake.path) as lake:
+            result = run_tick(
+                state=state,
+                lake=lake,
+                registry=registry,
+                settings=tick_settings,
+                as_of=as_of_date,
+                dry_run=dry_run,
+            )
+    finally:
+        state.close()
+
+    color = {"ok": "green", "partial": "yellow", "error": "red", "noop": "cyan"}.get(
+        result.status, "white"
+    )
+    console.print(
+        f"[{color}]{result.tick_id}[/{color}]  status={result.status}  "
+        f"winner={result.winner_strategy_id or '-'}  "
+        f"orders={result.orders_placed}  fills={result.fills}"
+        + ("  [dim](dry-run)[/dim]" if dry_run else "")
+    )
 
 
 # Re-export bound logger so tests / users can discover it easily

@@ -1,6 +1,6 @@
 # Block 4 — Strategy Store (Registry)
 
-> Status: **designed only**. Not implemented in MVP.
+> Status: **implemented**. Metadata in SQLite (`strategies`, `survival_reports`); artifacts on disk under `data/artifacts/<id>/`.
 
 ## Purpose
 
