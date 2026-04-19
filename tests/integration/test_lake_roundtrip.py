@@ -58,7 +58,8 @@ def test_upsert_prices_roundtrip(lake):
 
     read = lake.get_prices("AAPL.US", date(2026, 3, 1), date(2026, 5, 1))
     assert len(read) == 2
-    assert set(read["date"].dt.date.tolist()) == {date(2026, 4, 1), date(2026, 4, 2)}
+    # shim returns pure Python date objects for daily bars
+    assert set(read["date"].tolist()) == {date(2026, 4, 1), date(2026, 4, 2)}
 
 
 def test_upsert_prices_is_idempotent(lake):

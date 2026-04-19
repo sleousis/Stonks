@@ -42,6 +42,7 @@ class DuckDBLake:
 
 - `001_init.sql` — `tickers`, `prices`, `fundamentals` (3 statements), `ingest_runs`.
 - `002_extended_fundamentals.sql` — widens `tickers` with profile columns (beta, short_percent, employee_count, …) and adds the full non-statement metadata surface: `dividends`, `insider_transactions`, `news`, `news_sentiment`, `analyst_estimates`, `analyst_ratings`, `shares_outstanding`, `employee_count`, `segmentation` (one table covering both revenue and geographic dimensions).
+- `003_intraday_bars.sql` — supersedes the daily-only `prices` table with an interval-aware `bars` table keyed by `(ticker, timestamp, interval)`. The `interval` column stores the canonical `Interval` code (`1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `12h`, `1d`, `1w`). A read-only `prices` view over the `interval='1d'` slice is recreated for backward-compat SQL; `upsert_prices` / `get_prices` are thin shims over `upsert_bars` / `get_bars` with `interval=Interval.DAY_1`. Same `bars` table holds mixed granularities for the same ticker (e.g. 5m live alongside 1d historical).
 
 ### `001_init.sql`
 

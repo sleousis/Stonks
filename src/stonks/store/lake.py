@@ -6,16 +6,19 @@ and applied in lexical order at ``migrate()`` time.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
 import duckdb
 import pandas as pd
 
+from stonks.core.interval import Interval
+
 MIGRATIONS_DIR = Path(__file__).parent / "migrations_duckdb"
 
 _PRICE_COLS = ("ticker", "date", "open", "high", "low", "close", "adj_close", "volume")
+_BAR_COLS = ("ticker", "timestamp", "interval", "open", "high", "low", "close", "adj_close", "volume")
 _FUND_COLS = ("ticker", "period_end", "frequency", "statement", "line_item", "value")
 
 
@@ -87,18 +90,32 @@ class DuckDBLake:
     def count_rows(self, table: str) -> int:
         return int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
 
-    # ---- prices -------------------------------------------------------------
+    # ---- bars (interval-aware) ---------------------------------------------
 
-    def upsert_prices(self, df: pd.DataFrame) -> int:
+    def upsert_bars(self, df: pd.DataFrame, interval: Interval) -> int:
+        """Upsert OHLCV bars at the given Interval.
+
+        Expects columns ``ticker, timestamp, open, high, low, close,
+        adj_close, volume``. The ``interval`` dimension is injected from
+        the argument (not read from the frame) so callers can't silently
+        mix granularities inside one batch.
+        """
         if df.empty:
             return 0
-        self.con.register("_in", df[list(_PRICE_COLS)])
+        required = ("ticker", "timestamp", "open", "high", "low", "close", "adj_close", "volume")
+        frame = df[list(required)].copy()
+        frame["interval"] = interval.code
+        self.con.register("_in", frame[list(_BAR_COLS)])
         try:
             self.con.execute(
                 """
-                INSERT INTO prices (ticker, date, open, high, low, close, adj_close, volume)
-                SELECT ticker, date, open, high, low, close, adj_close, volume FROM _in
-                ON CONFLICT (ticker, date) DO UPDATE SET
+                INSERT INTO bars (
+                    ticker, timestamp, interval,
+                    open, high, low, close, adj_close, volume)
+                SELECT ticker, timestamp, interval,
+                       open, high, low, close, adj_close, volume
+                FROM _in
+                ON CONFLICT (ticker, timestamp, interval) DO UPDATE SET
                     open = EXCLUDED.open,
                     high = EXCLUDED.high,
                     low = EXCLUDED.low,
@@ -111,16 +128,46 @@ class DuckDBLake:
             self.con.unregister("_in")
         return len(df)
 
-    def get_prices(self, ticker: str, start: Any, end: Any) -> pd.DataFrame:
+    def get_bars(
+        self,
+        ticker: str,
+        interval: Interval,
+        start: Any,
+        end: Any,
+    ) -> pd.DataFrame:
+        """Fetch bars at the given interval inside a ``[start, end]`` window."""
         return self.con.execute(
             """
-            SELECT ticker, date, open, high, low, close, adj_close, volume
-            FROM prices
-            WHERE ticker = ? AND date BETWEEN ? AND ?
-            ORDER BY date
+            SELECT ticker, timestamp, open, high, low, close, adj_close, volume
+              FROM bars
+             WHERE ticker = ? AND interval = ? AND timestamp BETWEEN ? AND ?
+             ORDER BY timestamp
             """,
-            [ticker, start, end],
+            [ticker, interval.code, start, end],
         ).fetchdf()
+
+    # ---- prices (back-compat shim over daily bars) -------------------------
+
+    def upsert_prices(self, df: pd.DataFrame) -> int:
+        if df.empty:
+            return 0
+        frame = df[list(_PRICE_COLS)].copy()
+        # Map the daily ``date`` column onto the ``timestamp`` column in bars.
+        frame["timestamp"] = pd.to_datetime(frame["date"])
+        frame = frame.drop(columns=["date"])
+        return self.upsert_bars(frame, interval=Interval.DAY_1)
+
+    def get_prices(self, ticker: str, start: Any, end: Any) -> pd.DataFrame:
+        # widen ``date``-typed args to timestamp bounds so daily bars stored
+        # at midnight fall inside the window.
+        start_ts = _to_day_start(start)
+        end_ts = _to_day_end(end)
+        bars = self.get_bars(ticker, interval=Interval.DAY_1, start=start_ts, end=end_ts)
+        if bars.empty:
+            return pd.DataFrame(columns=list(_PRICE_COLS))
+        out = bars.rename(columns={"timestamp": "date"})
+        out["date"] = pd.to_datetime(out["date"]).dt.date
+        return out[list(_PRICE_COLS)]
 
     # ---- fundamentals -------------------------------------------------------
 
@@ -345,3 +392,19 @@ class DuckDBLake:
     def sql(self, query: str, params: list | None = None) -> pd.DataFrame:
         cur = self.con.execute(query, params) if params else self.con.execute(query)
         return cur.fetchdf()
+
+
+def _to_day_start(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return datetime(value.year, value.month, value.day)
+    return value
+
+
+def _to_day_end(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return datetime(value.year, value.month, value.day, 23, 59, 59)
+    return value

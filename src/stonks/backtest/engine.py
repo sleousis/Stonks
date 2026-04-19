@@ -1,21 +1,22 @@
-"""Date-driven backtest engine.
+"""Interval-aware backtest engine.
 
-Drives ``Strategy`` + ``Broker`` across a date range using prices read from
-the lake. For each trading day, for each active strategy and each ticker in
-the universe, it calls ``estimate_return``, builds a ranked list, picks the
-winner(s), and lets the winning strategy ``decide`` on orders. The same
-Broker Protocol is used in production, so strategy code is identical in
-both worlds.
+Iterates bars in ``[start, end]`` at a configurable ``Interval`` (1m, 5m,
+15m, 1h, 4h, 1d, 1w, …). For each bar, for each active strategy and each
+ticker in the universe, it calls ``estimate_return``, builds a ranked
+list, picks the winner(s), and lets the winning strategy ``decide`` on
+orders. The same Broker Protocol is used in production, so strategy code
+is identical in both worlds.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 
 from stonks.backtest.report import BacktestReport, compute_report
 from stonks.backtest.simulated_broker import SimulatedBroker
+from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy
 from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
@@ -25,16 +26,18 @@ _log = get_logger("stonks.backtest.engine")
 
 @dataclass(frozen=True)
 class BacktestConfig:
-    start: date
-    end: date
+    start: date | datetime
+    end: date | datetime
     universe: Sequence[str]
+    interval: Interval = Interval.DAY_1
     threshold: float = 0.0
-    rebalance_every_days: int = 1
+    #: Rebalance every N bars (at the configured interval). 1 = every bar.
+    rebalance_every_bars: int = 1
 
 
 @dataclass
-class _DayPrices:
-    as_of: date
+class _BarPrices:
+    as_of: datetime
     prices: dict[str, float] = field(default_factory=dict)
 
 
@@ -52,23 +55,22 @@ class Backtester:
         self._config = config
 
     def run(self) -> BacktestReport:
-        trading_days = self._trading_days()
-        equity_dates: list[date] = []
+        timestamps = self._trading_timestamps()
+        equity_dates: list[datetime] = []
         equity_curve: list[float] = []
 
-        last_rebalance: date | None = None
-        for as_of in trading_days:
+        bars_since_rebalance: int | None = None
+        for as_of in timestamps:
             day_prices = self._prices_on(as_of)
             self._broker.set_prices(day_prices.prices, as_of=as_of)
 
-            # rebalance cadence
-            do_rebalance = (
-                last_rebalance is None
-                or (as_of - last_rebalance).days >= self._config.rebalance_every_days
-            )
-            if do_rebalance:
+            # Rebalance cadence — counted in bars, not calendar days, so this
+            # is identical for daily and intraday intervals.
+            if bars_since_rebalance is None or bars_since_rebalance >= self._config.rebalance_every_bars:
                 self._rebalance(as_of, day_prices.prices)
-                last_rebalance = as_of
+                bars_since_rebalance = 1
+            else:
+                bars_since_rebalance += 1
 
             portfolio = self._broker.fetch_portfolio()
             equity = portfolio.total_value(day_prices.prices)
@@ -80,29 +82,38 @@ class Backtester:
 
     # ---- internals ----------------------------------------------------------
 
-    def _trading_days(self) -> list[date]:
+    def _trading_timestamps(self) -> list[datetime]:
+        start_ts, end_ts = _to_window_bounds(self._config.start, self._config.end)
         df = self._lake.sql(
             """
-            SELECT DISTINCT date FROM prices
-             WHERE ticker = ANY(?)
-               AND date BETWEEN ? AND ?
-             ORDER BY date
+            SELECT DISTINCT timestamp FROM bars
+             WHERE ticker = ANY(?) AND interval = ?
+               AND timestamp BETWEEN ? AND ?
+             ORDER BY timestamp
             """,
-            [list(self._config.universe), self._config.start, self._config.end],
+            [
+                list(self._config.universe),
+                self._config.interval.code,
+                start_ts,
+                end_ts,
+            ],
         )
         if df.empty:
             return []
-        return [d.date() if hasattr(d, "date") else d for d in df["date"]]
+        return [_to_py_datetime(t) for t in df["timestamp"]]
 
-    def _prices_on(self, as_of: date) -> _DayPrices:
+    def _prices_on(self, as_of: datetime) -> _BarPrices:
         df = self._lake.sql(
-            "SELECT ticker, close FROM prices WHERE ticker = ANY(?) AND date = ?",
-            [list(self._config.universe), as_of],
+            """
+            SELECT ticker, close FROM bars
+             WHERE ticker = ANY(?) AND interval = ? AND timestamp = ?
+            """,
+            [list(self._config.universe), self._config.interval.code, as_of],
         )
         prices = {row.ticker: float(row.close) for row in df.itertuples(index=False)}
-        return _DayPrices(as_of=as_of, prices=prices)
+        return _BarPrices(as_of=as_of, prices=prices)
 
-    def _rebalance(self, as_of: date, prices: dict[str, float]) -> None:
+    def _rebalance(self, as_of: datetime, prices: dict[str, float]) -> None:
         picks_by_strategy: dict[str, list[tuple[float, str]]] = {s.id: [] for s in self._strategies}
         for strategy in self._strategies:
             for ticker in self._config.universe:
@@ -119,3 +130,27 @@ class Backtester:
             orders = strategy.decide(picks, portfolio, prices, as_of)
             for order in orders:
                 self._broker.place_order(order)
+
+
+def _to_window_bounds(start, end) -> tuple[datetime, datetime]:
+    start_ts = (
+        start
+        if isinstance(start, datetime)
+        else datetime(start.year, start.month, start.day)
+    )
+    end_ts = (
+        end
+        if isinstance(end, datetime)
+        else datetime(end.year, end.month, end.day, 23, 59, 59)
+    )
+    return start_ts, end_ts
+
+
+def _to_py_datetime(t) -> datetime:
+    if hasattr(t, "to_pydatetime"):
+        return t.to_pydatetime()
+    if isinstance(t, datetime):
+        return t
+    if isinstance(t, date):
+        return datetime(t.year, t.month, t.day)
+    return t  # trust the caller

@@ -39,20 +39,22 @@ uv run stonks tick [--dry-run] [--as-of YYYY-MM-DD] [--tickers AAPL.US,MSFT.US]
 
 - **`core/`** — dependency-free primitives: `types.py` (Bar, Fundamentals, Order, Fill, Portfolio), `params.py` (`ParameterSpec`, `Params`, `ParamSpace`), `protocols.py` (`Strategy`, `Tuner`, `Objective`, `SurvivalTest`, `Broker`). Everything downstream imports from here.
 - **`ingest/`** — pluggable `DataSource` ABC + `IngestPipeline` that normalizes and idempotently upserts into the lake. EODHD is the first source. Adding Yahoo Finance is a one-file drop-in.
-- **`store/`** — `DuckDBLake` (prices, fundamentals, later features/artifacts) and `SqliteState` (strategies, survival_reports, tick_runs, orders, fills, portfolio_snapshots). Migrations live in `store/migrations_duckdb/*.sql` and `store/migrations_sqlite/*.sql`, applied in order at startup. `SqliteState` is a thin foundation — domain helpers (`register_strategy`, `place_order`) belong to the blocks that own each table.
+- **`store/`** — `DuckDBLake` (interval-aware `bars`, fundamentals, metadata, later features/artifacts) and `SqliteState` (strategies, survival_reports, tick_runs, orders, fills, portfolio_snapshots). Migrations live in `store/migrations_duckdb/*.sql` and `store/migrations_sqlite/*.sql`, applied in order at startup. The `bars` table is keyed by `(ticker, timestamp, interval)` and accepts any `Interval` code (1m, 5m, 15m, 30m, 1h, 4h, 12h, 1d, 1w); the old `prices` API is preserved as a daily shim. `SqliteState` is a thin foundation — domain helpers (`register_strategy`, `place_order`) belong to the blocks that own each table.
 - **`strategies/`** — `BaseStrategy` + examples (`buy_and_hold`, `momentum`). Rule-based, technical, aggregator, ML, hybrid all satisfy the `Strategy` Protocol. **Feature extraction lives inside each strategy**; there is intentionally no shared "features pipeline" stage. `features/library.py` is an optional toolkit of reusable helpers (`ttm`, `rolling_zscore`, `trailing_return`, …), nothing more.
 - **`lab/`** — `lab.runner` orchestrates tune → fit → survival suite → verdict. `GridTuner` + `RandomTuner`, `SharpeObjective`/`CAGRObjective`/`FinalReturnObjective`, and four survival tests (`oos`, `period_stability`, `perturbation`, `drift`). `Tuner` and `SurvivalTest` are strategy-agnostic; a new strategy never touches them, and a new tuner/test never touches any strategy.
 - **`registry/`** — `StrategyRegistry` over SQLite for metadata + `ArtifactBundle` on disk at `data/artifacts/<id>/` (`meta.json`, `params.json`, `reports/<test_id>.json`, optional `fitted_state.joblib`). Load round-trips a strategy via `importlib` from the stored class path.
-- **`backtest/`** — date-driven `Backtester` + `SimulatedBroker` (idempotent via `client_id`) + `BacktestReport` with Sharpe / max-drawdown / CAGR. Shares the `Broker` Protocol with the execution/production layers, so strategies don't know or care which world they run in.
+- **`backtest/`** — interval-aware `Backtester` + `SimulatedBroker` (idempotent via `client_id`) + `BacktestReport` with Sharpe / max-drawdown / CAGR. `BacktestConfig.interval: Interval` (default `DAY_1`) drives which bar granularity the engine iterates; `rebalance_every_bars` is a bar count, not a day count, so the same config works for daily and sub-daily backtests. Shares the `Broker` Protocol with the execution/production layers.
 - **`execution/` + `production/`** — `make_client_id(tick_id, strategy_id, ticker, side)` helper; `Ranker.rank(as_of)` walks active strategies × universe; `run_tick(...)` is the one-shot entrypoint invoked via `stonks tick`. Stateless across invocations; all state lives in DuckDB + SQLite. Portfolio auto-seeds from `production.initial_cash` on first tick; thereafter it resumes from the latest `portfolio_snapshots` row.
 
 ## Canonical schemas (current)
 
 **Lake (DuckDB):**
-- `tickers (id, exchange, currency, ipo_date, sector, industry, is_delisted)`
-- `prices (ticker, date, open, high, low, close, adj_close, volume; PK (ticker, date))`
+- `tickers (id, exchange, currency, ipo_date, sector, industry, is_delisted, … + profile columns from migration 002)`
+- `bars (ticker, timestamp, interval, open, high, low, close, adj_close, volume; PK (ticker, timestamp, interval))` — canonical OHLCV at any granularity.
+- `prices` — read-only view over `bars` where `interval='1d'`, for back-compat SQL only. Write through `upsert_prices` (daily shim) or `upsert_bars` (any interval).
 - `fundamentals (ticker, period_end, frequency, statement, line_item, value; PK (ticker, period_end, frequency, statement, line_item))`
 - `ingest_runs (id, source, kind, started_at, finished_at, tickers_ok, tickers_failed, status, error)`
+- Metadata surface (from migration 002): `dividends`, `insider_transactions`, `news`, `news_sentiment`, `analyst_estimates`, `analyst_ratings`, `shares_outstanding`, `employee_count`, `segmentation`.
 
 **State (SQLite):**
 - `strategies (id PK, class_path, params_json, artifact_path, status, created_at, updated_at)` — `status ∈ {active, shadow, retired}`

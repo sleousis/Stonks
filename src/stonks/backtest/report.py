@@ -59,8 +59,16 @@ def compute_report(
             dd = (v - peak) / peak
             max_dd = min(max_dd, dd)
 
-    years = max((dates[-1] - dates[0]).days / 365.25, 1e-9) if len(dates) > 1 else 1e-9
-    cagr = (end / start) ** (1 / years) - 1.0 if start > 0 else 0.0
+    # Use seconds so CAGR makes sense for intraday windows too. Below one
+    # full year we just report the scaled annual equivalent.
+    _SECONDS_PER_YEAR = 365.25 * 24 * 3600
+    if len(dates) > 1:
+        span = dates[-1] - dates[0]
+        seconds = getattr(span, "total_seconds", lambda: span.days * 86400)()
+        years = max(seconds / _SECONDS_PER_YEAR, 1 / _SECONDS_PER_YEAR)
+    else:
+        years = 1 / _SECONDS_PER_YEAR
+    cagr = (end / start) ** (1 / years) - 1.0 if start > 0 and end > 0 else 0.0
 
     return BacktestReport(
         strategy_id=strategy_id,
