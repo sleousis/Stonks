@@ -17,14 +17,17 @@ from stonks.ingest.pipeline import IngestPipeline
 from stonks.ingest.sources.base import DataSource
 from stonks.ingest.sources.eodhd import EodhdDataSource
 from stonks.logging import configure_logging, get_logger
+from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
 
 app = typer.Typer(add_completion=False, help="Stonks CLI")
 db_app = typer.Typer(help="Database / lake operations")
 ingest_app = typer.Typer(help="Data ingestion")
+registry_app = typer.Typer(help="Strategy registry operations")
 app.add_typer(db_app, name="db")
 app.add_typer(ingest_app, name="ingest")
+app.add_typer(registry_app, name="registry")
 
 console = Console()
 
@@ -166,6 +169,85 @@ def _print_result(result) -> None:
         f"[{color}]run #{result.run_id} — kind={result.kind} status={result.status} "
         f"ok={result.tickers_ok} failed={result.tickers_failed}[/{color}]"
     )
+
+
+def _open_registry(settings: Settings) -> tuple[SqliteState, StrategyRegistry]:
+    state = SqliteState(settings.state.path)
+    return state, StrategyRegistry(state=state, artifacts_dir=settings.registry.artifacts_dir)
+
+
+@registry_app.command("list")
+def registry_list(
+    status: str | None = typer.Option(
+        None, "--status", help="filter by status (active|shadow|retired)"
+    ),
+) -> None:
+    settings = _settings()
+    state, registry = _open_registry(settings)
+    try:
+        handles = registry.list_all(status=status)
+        table = Table(title=f"strategies ({status or 'all'})")
+        table.add_column("id", no_wrap=True, overflow="fold")
+        for col in ("status", "class_path", "params", "created_at"):
+            table.add_column(col)
+        for h in handles:
+            table.add_row(
+                h.id,
+                h.status,
+                h.class_path,
+                ",".join(f"{k}={v}" for k, v in sorted(h.params.items())),
+                h.created_at,
+            )
+        console.print(table)
+    finally:
+        state.close()
+
+
+@registry_app.command("show")
+def registry_show(strategy_id: str) -> None:
+    settings = _settings()
+    state, registry = _open_registry(settings)
+    try:
+        handles = registry.list_all()
+        match = next((h for h in handles if h.id == strategy_id), None)
+        if match is None:
+            console.print(f"[red]no strategy with id {strategy_id!r}[/red]")
+            raise typer.Exit(code=1)
+        console.print(f"[bold]{match.id}[/bold]  status=[cyan]{match.status}[/cyan]")
+        console.print(f"class_path: {match.class_path}")
+        console.print(f"artifact_path: {match.artifact_path}")
+        console.print(f"params: {match.params}")
+        reports = registry.get_reports(strategy_id)
+        rtable = Table(title="survival reports")
+        for col in ("test_id", "passed", "metrics"):
+            rtable.add_column(col)
+        for r in reports:
+            rtable.add_row(r.test_id, "yes" if r.passed else "no", str(dict(r.metrics)))
+        console.print(rtable)
+    finally:
+        state.close()
+
+
+@registry_app.command("promote")
+def registry_promote(strategy_id: str) -> None:
+    settings = _settings()
+    state, registry = _open_registry(settings)
+    try:
+        registry.set_status(strategy_id, "active")
+        console.print(f"[green]{strategy_id} → active[/green]")
+    finally:
+        state.close()
+
+
+@registry_app.command("retire")
+def registry_retire(strategy_id: str) -> None:
+    settings = _settings()
+    state, registry = _open_registry(settings)
+    try:
+        registry.set_status(strategy_id, "retired")
+        console.print(f"[yellow]{strategy_id} → retired[/yellow]")
+    finally:
+        state.close()
 
 
 # Re-export bound logger so tests / users can discover it easily
