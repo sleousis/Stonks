@@ -11,7 +11,6 @@ import os
 import tomllib
 from pathlib import Path
 
-from dotenv import load_dotenv
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -66,9 +65,13 @@ class Settings(BaseSettings):
 
 
 def load_settings(config_path: Path | None = None) -> Settings:
-    """Load settings from TOML + environment (env wins for mapped keys)."""
-    load_dotenv(override=False)
+    """Load settings from TOML + environment (env wins for mapped keys).
 
+    This reads from the *current* process environment only. Callers that
+    want ``.env`` loaded first (CLI entry points, live tests) should do
+    that themselves before calling this — keeps ``load_settings`` pure
+    and test-monkeypatchable.
+    """
     if config_path is None:
         config_path = DEFAULT_CONFIG_PATH
 

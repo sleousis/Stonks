@@ -37,6 +37,11 @@ console = Console()
 
 
 def _settings() -> Settings:
+    # CLI is the right place to materialize .env into the process env;
+    # load_settings itself stays pure so tests can monkeypatch freely.
+    from dotenv import load_dotenv
+
+    load_dotenv(override=False)
     settings = load_settings()
     configure_logging(level=settings.logging.level)
     return settings
