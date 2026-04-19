@@ -18,8 +18,9 @@ class BacktestReport:
     max_drawdown: float
     cagr: float
     #: Profit factor — sum of positive per-bar returns divided by the absolute
-    #: sum of negative per-bar returns. 0.0 when there are no negative returns
-    #: (degenerate "all upside" case) and 0.0 when no returns at all.
+    #: sum of negative per-bar returns. ``inf`` when there are positive
+    #: returns but no negative ones ("all upside") and ``0.0`` when there are
+    #: no positive returns at all (either all-flat or all-loss).
     profit_factor: float = 0.0
 
 
@@ -76,7 +77,12 @@ def compute_report(
 
     pos = sum(r for r in returns if r > 0)
     neg = abs(sum(r for r in returns if r < 0))
-    profit_factor = pos / neg if neg > 0 else 0.0
+    if pos == 0:
+        profit_factor = 0.0        # no gains at all — either flat or all-loss
+    elif neg == 0:
+        profit_factor = math.inf   # gains but zero losses: infinite PF
+    else:
+        profit_factor = pos / neg
 
     return BacktestReport(
         strategy_id=strategy_id,

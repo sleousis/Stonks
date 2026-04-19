@@ -18,6 +18,7 @@ from stonks.backtest.report import BacktestReport, compute_report
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy
+from stonks.core.timeutil import as_datetime, day_end, day_start
 from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
 
@@ -100,7 +101,7 @@ class Backtester:
         )
         if df.empty:
             return []
-        return [_to_py_datetime(t) for t in df["timestamp"]]
+        return [as_datetime(t) for t in df["timestamp"]]
 
     def _prices_on(self, as_of: datetime) -> _BarPrices:
         df = self._lake.sql(
@@ -133,24 +134,4 @@ class Backtester:
 
 
 def _to_window_bounds(start, end) -> tuple[datetime, datetime]:
-    start_ts = (
-        start
-        if isinstance(start, datetime)
-        else datetime(start.year, start.month, start.day)
-    )
-    end_ts = (
-        end
-        if isinstance(end, datetime)
-        else datetime(end.year, end.month, end.day, 23, 59, 59)
-    )
-    return start_ts, end_ts
-
-
-def _to_py_datetime(t) -> datetime:
-    if hasattr(t, "to_pydatetime"):
-        return t.to_pydatetime()
-    if isinstance(t, datetime):
-        return t
-    if isinstance(t, date):
-        return datetime(t.year, t.month, t.day)
-    return t  # trust the caller
+    return day_start(start), day_end(end)

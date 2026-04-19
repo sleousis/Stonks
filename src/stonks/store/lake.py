@@ -6,7 +6,7 @@ and applied in lexical order at ``migrate()`` time.
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +14,7 @@ import duckdb
 import pandas as pd
 
 from stonks.core.interval import Interval
+from stonks.core.timeutil import day_end, day_start
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations_duckdb"
 
@@ -88,6 +89,11 @@ class DuckDBLake:
         return [r[0] for r in rows]
 
     def count_rows(self, table: str) -> int:
+        # Whitelist the name against the schema to keep this method safe to
+        # call with caller-supplied strings (CLI args, config, etc.).
+        known = set(self.tables())
+        if table not in known:
+            raise ValueError(f"unknown table {table!r}")
         return int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
 
     # ---- bars (interval-aware) ---------------------------------------------
@@ -160,8 +166,8 @@ class DuckDBLake:
     def get_prices(self, ticker: str, start: Any, end: Any) -> pd.DataFrame:
         # widen ``date``-typed args to timestamp bounds so daily bars stored
         # at midnight fall inside the window.
-        start_ts = _to_day_start(start)
-        end_ts = _to_day_end(end)
+        start_ts = day_start(start)
+        end_ts = day_end(end)
         bars = self.get_bars(ticker, interval=Interval.DAY_1, start=start_ts, end=end_ts)
         if bars.empty:
             return pd.DataFrame(columns=list(_PRICE_COLS))
@@ -394,17 +400,3 @@ class DuckDBLake:
         return cur.fetchdf()
 
 
-def _to_day_start(value: Any) -> datetime:
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, date):
-        return datetime(value.year, value.month, value.day)
-    return value
-
-
-def _to_day_end(value: Any) -> datetime:
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, date):
-        return datetime(value.year, value.month, value.day, 23, 59, 59)
-    return value

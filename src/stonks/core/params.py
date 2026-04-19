@@ -66,9 +66,14 @@ def validate_params(params: Params, space: ParamSpace) -> None:
             continue
 
         if spec.kind == "categorical":
-            choices = spec.bounds or []
-            if value not in choices:
-                raise ValueError(f"{name}={value!r} not in choices {list(choices)}")
+            # ``bounds=None`` on a categorical = no closed choice set, any
+            # string is accepted. This is what single-ticker strategies use
+            # for their ``ticker`` parameter (the set of valid tickers is
+            # the lake's universe, which is not declarable at the spec).
+            if spec.bounds is None:
+                continue
+            if value not in spec.bounds:
+                raise ValueError(f"{name}={value!r} not in choices {list(spec.bounds)}")
             continue
 
 

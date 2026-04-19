@@ -16,14 +16,15 @@ line — not just a flat rolling max.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
-from datetime import date, datetime
 from typing import Any
 
 from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
 from stonks.features.library import trendline_breakout_signal
+from stonks.strategies._common import as_datetime, iso
 from stonks.strategies.base import BaseStrategy
 
 
@@ -56,11 +57,6 @@ class TrendlineBreakoutStrategy(BaseStrategy):
                 description="Fraction of cash deployed on a fresh long entry.",
             ),
         ]
-
-    def __init__(self, params):
-        filtered = {k: v for k, v in params.items() if k != "ticker"}
-        BaseStrategy.__init__(self, filtered)
-        self.params["ticker"] = params.get("ticker", "AAPL.US")
 
     # ---- Strategy Protocol -------------------------------------------------
 
@@ -106,7 +102,7 @@ class TrendlineBreakoutStrategy(BaseStrategy):
             if qty > 0:
                 orders.append(
                     Order(
-                        client_id=f"{self.id}:buy:{target}:{_iso(as_of)}",
+                        client_id=f"{self.id}:buy:{target}:{iso(as_of)}",
                         ticker=target, side="buy", quantity=qty,
                         order_type="market", strategy_id=self.id,
                     )
@@ -116,7 +112,7 @@ class TrendlineBreakoutStrategy(BaseStrategy):
         if not my_picks and holding > 0:
             orders.append(
                 Order(
-                    client_id=f"{self.id}:sell:{target}:{_iso(as_of)}",
+                    client_id=f"{self.id}:sell:{target}:{iso(as_of)}",
                     ticker=target, side="sell", quantity=holding,
                     order_type="market", strategy_id=self.id,
                 )
@@ -137,7 +133,7 @@ class TrendlineBreakoutStrategy(BaseStrategy):
         # against weekends/gaps and signal carry-over.
         span_bars = lookback * 3 + 10
         span_td = interval.to_timedelta() * span_bars
-        start = _as_datetime(as_of) - span_td
+        start = as_datetime(as_of) - span_td
 
         df = lake.get_bars(ticker, interval, start=start, end=as_of)
         if df is None or df.empty or len(df) < lookback + 1:
@@ -147,22 +143,8 @@ class TrendlineBreakoutStrategy(BaseStrategy):
         s_tl, r_tl, sig = trendline_breakout_signal(closes, lookback=lookback)
 
         last = len(closes) - 1
-        support = float(s_tl[last]) if not _is_nan(s_tl[last]) else float("nan")
-        resistance = float(r_tl[last]) if not _is_nan(r_tl[last]) else float("nan")
+        support = float(s_tl[last]) if not math.isnan(s_tl[last]) else float("nan")
+        resistance = float(r_tl[last]) if not math.isnan(r_tl[last]) else float("nan")
         return support, resistance, float(closes[last]), int(sig[last])
 
 
-def _as_datetime(as_of) -> datetime:
-    if isinstance(as_of, datetime):
-        return as_of
-    if isinstance(as_of, date):
-        return datetime(as_of.year, as_of.month, as_of.day)
-    return as_of
-
-
-def _iso(as_of) -> str:
-    return as_of.isoformat() if hasattr(as_of, "isoformat") else str(as_of)
-
-
-def _is_nan(x: float) -> bool:
-    return x != x

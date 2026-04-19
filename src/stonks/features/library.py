@@ -53,6 +53,8 @@ def rsi(prices: pd.Series, period: int = 14) -> pd.Series:
     are ``NaN`` because Wilder's average needs that many gain/loss
     observations to warm up.
     """
+    if period < 2:
+        raise ValueError(f"rsi period must be >= 2, got {period}")
     delta = prices.diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
@@ -296,6 +298,19 @@ def trendline_breakout_signal(
 # ---- Wald-Wolfowitz runs test ---------------------------------------------
 
 
+def count_runs(signs: np.ndarray) -> int:
+    """Number of runs (maximal same-sign streaks) in a ±1 sequence.
+    Shared by ``runs_test_z_score`` and the runs-test survival check.
+    """
+    if len(signs) == 0:
+        return 0
+    n = 1
+    for i in range(1, len(signs)):
+        if signs[i] != signs[i - 1]:
+            n += 1
+    return n
+
+
 def runs_test_z_score(signs: np.ndarray) -> float:
     """Z-score of the observed number of runs in a ±1 sequence, under the
     null that consecutive signs are independent. A value around 0 is
@@ -319,8 +334,4 @@ def runs_test_z_score(signs: np.ndarray) -> float:
     if variance <= 0:
         return float("nan")
 
-    runs = 1
-    for i in range(1, len(signs)):
-        if signs[i] != signs[i - 1]:
-            runs += 1
-    return (runs - expected) / math.sqrt(variance)
+    return (count_runs(signs) - expected) / math.sqrt(variance)

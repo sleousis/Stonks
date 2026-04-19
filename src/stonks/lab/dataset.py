@@ -19,7 +19,7 @@ class LabDataset:
     lake: DuckDBLake
     universe: list[str] = field(default_factory=list)
     start: date = date(2000, 1, 1)
-    end: date = date.today
+    end: date = field(default_factory=date.today)
     train_ratio: float = 0.7
     #: Bar interval the tests/tuner should fetch from the lake. Daily by default;
     #: intraday scenarios pass e.g. ``Interval.MIN_5`` or ``Interval.HOUR_1``.

@@ -14,15 +14,19 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
+from typing import Literal
 
 from stonks.backtest.simulated_broker import SimulatedBroker
-from stonks.core.types import Order, Portfolio
+from stonks.core.types import Order, OrderStatus, Portfolio
 from stonks.execution.orders import make_client_id
 from stonks.logging import get_logger
 from stonks.production.ranker import Ranker
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
+
+TickStatus = Literal["ok", "partial", "error", "noop"]
+_DBTickStatus = Literal["running", "ok", "partial", "error"]
 
 _log = get_logger("stonks.production.tick")
 
@@ -39,7 +43,7 @@ class TickSettings:
 @dataclass(frozen=True)
 class TickResult:
     tick_id: str
-    status: str  # 'ok' | 'partial' | 'error' | 'noop'
+    status: TickStatus
     winner_strategy_id: str | None
     orders_placed: int
     fills: int
@@ -181,28 +185,41 @@ def _load_or_seed_portfolio(state: SqliteState, initial_cash: float) -> Portfoli
 
 
 def _current_prices(lake: DuckDBLake, universe: Sequence[str], as_of: date) -> dict[str, float]:
-    prices: dict[str, float] = {}
-    for ticker in universe:
-        df = lake.sql(
-            "SELECT close FROM prices WHERE ticker=? AND date<=? "
-            "ORDER BY date DESC LIMIT 1",
-            [ticker, as_of],
-        )
-        if not df.empty:
-            prices[ticker] = float(df.iloc[0]["close"])
-    return prices
+    if not universe:
+        return {}
+    # Single grouped query: per ticker, take the latest close at or before
+    # ``as_of``. Avoids the N+1 pattern of one LIMIT-1 query per ticker.
+    df = lake.sql(
+        """
+        SELECT ticker, close
+          FROM prices
+         WHERE ticker = ANY(?) AND date <= ?
+         QUALIFY ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY date DESC) = 1
+        """,
+        [list(universe), as_of],
+    )
+    if df.empty:
+        return {}
+    return {row.ticker: float(row.close) for row in df.itertuples(index=False)}
 
 
-def _record_order(state: SqliteState, order: Order, status: str) -> None:
-    # Use INSERT OR IGNORE: if a previous (crashed) tick already inserted this
-    # client_id, we leave that row alone — the broker won't double-fill either.
+def _record_order(state: SqliteState, order: Order, status: OrderStatus) -> None:
+    # ON CONFLICT DO UPDATE lets a retried tick progress the status of a
+    # previously-``rejected`` order to ``filled`` if the re-submission
+    # succeeds. The ``WHERE status IS NOT excluded.status`` guard avoids
+    # rewriting ``updated_at`` when the status is unchanged (a retried
+    # tick replaying an already-filled order).
     now = _iso_now()
     state.execute(
         """
-        INSERT OR IGNORE INTO orders
+        INSERT INTO orders
             (client_id, tick_id, strategy_id, ticker, side, quantity,
              order_type, limit_price, status, broker_order_id, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+        ON CONFLICT (client_id) DO UPDATE SET
+            status = excluded.status,
+            updated_at = excluded.updated_at
+          WHERE orders.status IS NOT excluded.status
         """,
         [
             order.client_id,
@@ -262,11 +279,11 @@ def _snapshot_portfolio(
     )
 
 
-def _close_tick(state: SqliteState, tick_id: str, status: str, summary: dict) -> None:
-    # The tick_runs CHECK constraint accepts 'ok' | 'partial' | 'error' | 'running'.
+def _close_tick(state: SqliteState, tick_id: str, status: TickStatus, summary: dict) -> None:
+    # The tick_runs CHECK constraint accepts 'running' | 'ok' | 'partial' | 'error'.
     # 'noop' is a TickResult-only distinction (no candidates were ranked); persist
     # it as 'ok' and leave the "it was a no-op" signal in summary_json.
-    db_status = "ok" if status == "noop" else status
+    db_status: _DBTickStatus = "ok" if status == "noop" else status
     state.execute(
         "UPDATE tick_runs SET finished_at=?, status=?, summary_json=? WHERE id=?",
         [_iso_now(), db_status, json.dumps(summary, sort_keys=True), tick_id],

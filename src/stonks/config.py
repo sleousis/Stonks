@@ -92,7 +92,8 @@ def _overlay_env(data: dict) -> None:
 
     data_dir = os.environ.get("STONKS_DATA_DIR")
     if data_dir:
+        # env > TOML for all three store paths (documented precedence).
         base = Path(data_dir)
-        data.setdefault("lake", {}).setdefault("path", str(base / "lake.duckdb"))
-        data.setdefault("state", {}).setdefault("path", str(base / "state.sqlite"))
-        data.setdefault("registry", {}).setdefault("artifacts_dir", str(base / "artifacts"))
+        data.setdefault("lake", {})["path"] = str(base / "lake.duckdb")
+        data.setdefault("state", {})["path"] = str(base / "state.sqlite")
+        data.setdefault("registry", {})["artifacts_dir"] = str(base / "artifacts")

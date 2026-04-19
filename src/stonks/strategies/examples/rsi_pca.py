@@ -31,7 +31,6 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
-from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +41,7 @@ from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
 from stonks.features.library import rsi
+from stonks.strategies._common import as_datetime, iso
 from stonks.strategies.base import BaseStrategy
 
 
@@ -96,9 +96,7 @@ class RSIPCAStrategy(BaseStrategy):
         ]
 
     def __init__(self, params):
-        filtered = {k: v for k, v in params.items() if k != "ticker"}
-        BaseStrategy.__init__(self, filtered)
-        self.params["ticker"] = params.get("ticker", "AAPL.US")
+        BaseStrategy.__init__(self, params)
         self._rsi_means: np.ndarray | None = None
         self._evecs: np.ndarray | None = None        # shape (n_rsi, n_components)
         self._coefs: np.ndarray | None = None        # shape (n_components,)
@@ -118,8 +116,8 @@ class RSIPCAStrategy(BaseStrategy):
 
         bars = dataset.lake.get_bars(
             ticker, interval,
-            start=_to_datetime(train_start),
-            end=_to_datetime(train_end),
+            start=as_datetime(train_start),
+            end=as_datetime(train_end),
         )
         if bars.empty:
             raise ValueError(f"no bars for {ticker!r} in training window")
@@ -212,7 +210,7 @@ class RSIPCAStrategy(BaseStrategy):
             if qty > 0:
                 orders.append(
                     Order(
-                        client_id=f"{self.id}:buy:{target}:{_iso(as_of)}",
+                        client_id=f"{self.id}:buy:{target}:{iso(as_of)}",
                         ticker=target, side="buy", quantity=qty,
                         order_type="market", strategy_id=self.id,
                     )
@@ -222,7 +220,7 @@ class RSIPCAStrategy(BaseStrategy):
         if not my_picks and holding > 0:
             orders.append(
                 Order(
-                    client_id=f"{self.id}:sell:{target}:{_iso(as_of)}",
+                    client_id=f"{self.id}:sell:{target}:{iso(as_of)}",
                     ticker=target, side="sell", quantity=holding,
                     order_type="market", strategy_id=self.id,
                 )
@@ -271,7 +269,7 @@ class RSIPCAStrategy(BaseStrategy):
         rsi_max = int(self.params["rsi_period_max"])
         span_bars = rsi_max * 4 + 20
         span_td = interval.to_timedelta() * span_bars
-        start = _to_datetime(as_of) - span_td
+        start = as_datetime(as_of) - span_td
 
         bars = lake.get_bars(ticker, interval, start=start, end=as_of)
         if bars.empty:
@@ -288,15 +286,3 @@ class RSIPCAStrategy(BaseStrategy):
         centered = current_rsis - self._rsi_means
         projected = centered @ self._evecs
         return float(projected @ self._coefs)
-
-
-def _to_datetime(as_of) -> datetime:
-    if isinstance(as_of, datetime):
-        return as_of
-    if isinstance(as_of, date):
-        return datetime(as_of.year, as_of.month, as_of.day)
-    return as_of
-
-
-def _iso(as_of) -> str:
-    return as_of.isoformat() if hasattr(as_of, "isoformat") else str(as_of)

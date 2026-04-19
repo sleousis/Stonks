@@ -21,7 +21,7 @@ from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.core.types import Portfolio
-from stonks.features.library import runs_test_z_score
+from stonks.features.library import count_runs, runs_test_z_score
 from stonks.lab.dataset import LabDataset
 
 
@@ -76,7 +76,7 @@ class RunsTestSurvivalTest:
         z = runs_test_z_score(signs)
         n_pos = int((signs > 0).sum())
         n_neg = int((signs < 0).sum())
-        n_runs = int(_count_runs(signs))
+        n_runs = count_runs(signs)
 
         if math.isnan(z):
             return SurvivalReport(
@@ -104,11 +104,3 @@ class RunsTestSurvivalTest:
         )
 
 
-def _count_runs(signs: np.ndarray) -> int:
-    if signs.size == 0:
-        return 0
-    n = 1
-    for i in range(1, signs.size):
-        if signs[i] != signs[i - 1]:
-            n += 1
-    return n

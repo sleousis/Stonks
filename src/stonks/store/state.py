@@ -94,6 +94,11 @@ class SqliteState:
         return [r[0] for r in rows]
 
     def count_rows(self, table: str) -> int:
+        # Whitelist the name against sqlite_master so we can interpolate into
+        # the SQL string safely even for CLI/config-sourced table names.
+        known = set(self.tables())
+        if table not in known:
+            raise ValueError(f"unknown table {table!r}")
         row = self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()
         return int(row[0])
 

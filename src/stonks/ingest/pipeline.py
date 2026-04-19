@@ -93,7 +93,7 @@ class IngestPipeline:
             tickers_ok=ok,
             tickers_failed=failed,
             status=status,
-            error=last_error if status == "error" else None,
+            error=last_error if status in ("error", "partial") else None,
         )
         log.info("run.finished", status=status, tickers_ok=ok, tickers_failed=failed)
         return IngestRunResult(
@@ -144,7 +144,7 @@ class IngestPipeline:
             tickers_ok=ok,
             tickers_failed=failed,
             status=status,
-            error=last_error if status == "error" else None,
+            error=last_error if status in ("error", "partial") else None,
         )
         log.info("run.finished", status=status, tickers_ok=ok, tickers_failed=failed)
         return IngestRunResult(

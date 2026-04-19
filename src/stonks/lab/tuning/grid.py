@@ -37,8 +37,9 @@ class GridTuner:
             strategy = strategy_cls(params)
             try:
                 score = objective.score(strategy, dataset)
-            except Exception as exc:  # log, keep going
+            except Exception as exc:
                 _log.warning("grid.trial.failed", params=params, error=str(exc))
+                history.append((params, float("nan")))
                 continue
             history.append((params, score))
             if _better(score, best_score, objective.direction):

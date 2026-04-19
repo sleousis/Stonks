@@ -40,11 +40,6 @@ class BuyAndHold(BaseStrategy):
             ),
         ]
 
-    def __init__(self, params):
-        # allow ticker pass-through without a categorical choice list
-        filtered = {k: v for k, v in params.items() if k != "ticker"}
-        BaseStrategy.__init__(self, filtered)
-        self.params["ticker"] = params.get("ticker", "AAPL.US")
 
     def estimate_return(self, ticker: str, as_of: date, lake: Any) -> float | None:
         return 1.0 if ticker == self.params["ticker"] else None

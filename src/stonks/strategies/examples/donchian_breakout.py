@@ -16,7 +16,6 @@ broker gains short-sell semantics without any change to this strategy.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from datetime import date, datetime
 from typing import Any
 
 import numpy as np
@@ -25,6 +24,7 @@ import pandas as pd
 from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
+from stonks.strategies._common import as_datetime, iso
 from stonks.strategies.base import BaseStrategy
 
 
@@ -67,11 +67,6 @@ class DonchianBreakout(BaseStrategy):
                 description="Fraction of cash deployed on a fresh long entry.",
             ),
         ]
-
-    def __init__(self, params):
-        filtered = {k: v for k, v in params.items() if k != "ticker"}
-        BaseStrategy.__init__(self, filtered)
-        self.params["ticker"] = params.get("ticker", "AAPL.US")
 
     # ---- Strategy Protocol -------------------------------------------------
 
@@ -120,7 +115,7 @@ class DonchianBreakout(BaseStrategy):
             if qty > 0:
                 orders.append(
                     Order(
-                        client_id=f"{self.id}:buy:{target}:{_iso(as_of)}",
+                        client_id=f"{self.id}:buy:{target}:{iso(as_of)}",
                         ticker=target,
                         side="buy",
                         quantity=qty,
@@ -134,7 +129,7 @@ class DonchianBreakout(BaseStrategy):
         if not my_picks and holding > 0:
             orders.append(
                 Order(
-                    client_id=f"{self.id}:sell:{target}:{_iso(as_of)}",
+                    client_id=f"{self.id}:sell:{target}:{iso(as_of)}",
                     ticker=target,
                     side="sell",
                     quantity=holding,
@@ -156,7 +151,7 @@ class DonchianBreakout(BaseStrategy):
         lookback = int(self.params["lookback"])
 
         span_td = interval.to_timedelta() * (lookback * 4 + 5)
-        start = _as_datetime(as_of) - span_td
+        start = as_datetime(as_of) - span_td
 
         df = lake.get_bars(ticker, interval, start=start, end=as_of)
         if df is None or df.empty or len(df) < lookback:
@@ -177,13 +172,3 @@ class DonchianBreakout(BaseStrategy):
         return last_upper, last_lower, float(closes[-1]), int(sig_series.iloc[-1])
 
 
-def _as_datetime(as_of) -> datetime:
-    if isinstance(as_of, datetime):
-        return as_of
-    if isinstance(as_of, date):
-        return datetime(as_of.year, as_of.month, as_of.day)
-    return as_of
-
-
-def _iso(as_of) -> str:
-    return as_of.isoformat() if hasattr(as_of, "isoformat") else str(as_of)

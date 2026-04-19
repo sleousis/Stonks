@@ -13,9 +13,11 @@ can record the failure cleanly.
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Iterable, Iterator
-from datetime import date, datetime
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, date, datetime
 from typing import Any
 
 import requests
@@ -142,12 +144,16 @@ def _coerce_optional_int(value: Any) -> int | None:
 
 def _parse_datetime(value: Any) -> datetime | None:
     if isinstance(value, datetime):
-        return value
+        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
     if isinstance(value, str):
         try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError:
             return None
+        # EODHD's news feed sometimes returns "YYYY-MM-DD HH:MM:SS" with no
+        # offset. We assume UTC in that case so downstream code never has to
+        # juggle naive timestamps.
+        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
     return None
 
 
@@ -413,15 +419,41 @@ class EodhdDataSource(DataSource):
         return list(parse_fundamentals_response(ticker, data))
 
     def fetch_metadata(self, ticker: str, since: date | None = None) -> MetadataBundle:
-        """Assemble the full metadata bundle by hitting five EODHD endpoints.
+        """Assemble the full metadata bundle by hitting five EODHD endpoints
+        in parallel (``requests.Session`` is thread-safe for concurrent GETs).
 
         Each sub-fetch is wrapped in free-tier / network error tolerance:
         a subscription-blocked or transport error on one endpoint leaves the
         corresponding bundle field empty; other fields still populate.
         """
-        bundle_parts: dict[str, Any] = {}
+        since_iso = since.isoformat() if since is not None else None
 
-        fundamentals = self._try(lambda: self._get_json(f"/fundamentals/{ticker}"))
+        def _params_with_since(base: dict[str, str]) -> dict[str, str]:
+            return {**base, "from": since_iso} if since_iso else base
+
+        jobs = {
+            "fundamentals": lambda: self._get_json(f"/fundamentals/{ticker}"),
+            "dividends":    lambda: self._get_json(
+                f"/div/{ticker}", _params_with_since({"fmt": "json"}),
+            ),
+            "news":         lambda: self._get_json(
+                "/news", _params_with_since({"fmt": "json", "s": ticker}),
+            ),
+            "insider":      lambda: self._get_json(
+                "/insider-transactions",
+                _params_with_since({"fmt": "json", "code": ticker}),
+            ),
+            "sentiments":   lambda: self._get_json(
+                "/sentiments", {"fmt": "json", "s": ticker},
+            ),
+        }
+
+        with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+            futures = {name: pool.submit(self._try, fn) for name, fn in jobs.items()}
+            results = {name: fut.result() for name, fut in futures.items()}
+
+        bundle_parts: dict[str, Any] = {}
+        fundamentals = results["fundamentals"]
         if fundamentals is not None:
             profile = parse_profile_from_fundamentals(ticker, fundamentals)
             if profile is not None:
@@ -439,35 +471,19 @@ class EodhdDataSource(DataSource):
             if ec is not None:
                 bundle_parts["employee_count"] = (ec,)
 
-        div_params: dict[str, str] = {"fmt": "json"}
-        if since is not None:
-            div_params["from"] = since.isoformat()
-        dividends = self._try(lambda: self._get_json(f"/div/{ticker}", div_params))
-        if dividends is not None:
-            bundle_parts["dividends"] = tuple(parse_dividends_response(ticker, dividends))
-
-        news_params: dict[str, str] = {"fmt": "json", "s": ticker}
-        if since is not None:
-            news_params["from"] = since.isoformat()
-        news = self._try(lambda: self._get_json("/news", news_params))
-        if news is not None:
-            bundle_parts["news"] = tuple(parse_news_response(ticker, news))
-
-        insider_params: dict[str, str] = {"fmt": "json", "code": ticker}
-        if since is not None:
-            insider_params["from"] = since.isoformat()
-        insider = self._try(lambda: self._get_json("/insider-transactions", insider_params))
-        if insider is not None:
-            bundle_parts["insider_transactions"] = tuple(
-                parse_insider_response(ticker, insider)
+        if results["dividends"] is not None:
+            bundle_parts["dividends"] = tuple(
+                parse_dividends_response(ticker, results["dividends"])
             )
-
-        sentiments = self._try(
-            lambda: self._get_json("/sentiments", {"fmt": "json", "s": ticker})
-        )
-        if sentiments is not None:
+        if results["news"] is not None:
+            bundle_parts["news"] = tuple(parse_news_response(ticker, results["news"]))
+        if results["insider"] is not None:
+            bundle_parts["insider_transactions"] = tuple(
+                parse_insider_response(ticker, results["insider"])
+            )
+        if results["sentiments"] is not None:
             bundle_parts["news_sentiment"] = tuple(
-                parse_sentiments_response(ticker, sentiments)
+                parse_sentiments_response(ticker, results["sentiments"])
             )
 
         return MetadataBundle(**bundle_parts)
@@ -476,15 +492,18 @@ class EodhdDataSource(DataSource):
         return self._get(f"{self._base_url}{path}", params=params or {"fmt": "json"})
 
     def _try(self, fn):
-        """Run ``fn`` and swallow subscription/transport errors so one blocked
-        endpoint doesn't poison the rest of the metadata bundle. Returns
-        ``None`` on any known failure; the bundle field just stays empty."""
+        """Run ``fn`` and swallow *known-safe* error types so one blocked
+        endpoint doesn't poison the rest of the metadata bundle. Only
+        ``EodhdFreeTierError`` (subscription), ``requests.RequestException``
+        (transport), and JSON decode errors are suppressed — everything
+        else (ValidationError, KeyError, AttributeError, TypeError) is a
+        programming bug and propagates so tests can catch it."""
         try:
             return fn()
         except EodhdFreeTierError as exc:
             self._log.info("eodhd.metadata.skipped_free_tier", reason=str(exc))
             return None
-        except Exception as exc:
+        except (requests.RequestException, json.JSONDecodeError) as exc:
             self._log.warning("eodhd.metadata.skipped_error", error=str(exc))
             return None
 
