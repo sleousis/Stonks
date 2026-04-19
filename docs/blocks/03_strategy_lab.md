@@ -1,8 +1,9 @@
 # Block 3 — Strategy Lab
 
-> Status: **implemented** (Block 3a + Block 3b). Reference strategies: BuyAndHold (rule-based), Momentum (technical indicator), DonchianBreakout (channel breakout), RSIPCAStrategy (ML — PCA over many RSI periods + a linear predictor with quantile thresholds). The `fit` → `save` → `load` lifecycle is exercised end-to-end by RSIPCAStrategy (fitted weights persist alongside params in the artifact bundle). Backtester is **interval-agnostic** — `BacktestConfig.interval` accepts any `Interval` (1m, 5m, 15m, 30m, 1h, 4h, 12h, 1d, 1w). Rebalance cadence is bar-counted (`rebalance_every_bars`), so the same config works identically at every interval.
+> Status: **implemented** (Block 3a + Block 3b). Reference strategies: BuyAndHold (rule-based), Momentum (technical indicator), DonchianBreakout (horizontal-channel breakout), TrendlineBreakoutStrategy (slope-aware support/resistance breakout), RSIPCAStrategy (ML — PCA over many RSI periods + a linear predictor with quantile thresholds). The `fit` → `save` → `load` lifecycle is exercised end-to-end by RSIPCAStrategy. Backtester is **interval-agnostic** — `BacktestConfig.interval` accepts any `Interval` (1m, 5m, 15m, 30m, 1h, 4h, 12h, 1d, 1w). Rebalance cadence is bar-counted (`rebalance_every_bars`), so the same config works identically at every interval.
 >
-> Survival tests now include **MonteCarloPermutationTest (MCPT)**: scores the strategy against the real bars and against N in-memory lakes filled with time-shuffled bars, deriving a p-value. The bar-permutation preserves per-bar return distribution but destroys time ordering — a proper null for any strategy that claims to exploit temporal structure (momentum, breakout, mean-reversion, …).
+> Survival suite now includes **MonteCarloPermutationTest (MCPT)** and **RunsTestSurvivalTest**: the former checks whether the strategy's real-data score is reliably better than scores on time-shuffled bars (bar-permutation null); the latter applies Wald-Wolfowitz Z to the per-bar return-sign sequence to flag strategies with strongly dependent wins/losses (regime lock-in).
+>
 
 ## Purpose
 
