@@ -18,6 +18,7 @@ from stonks.ingest.sources.base import DataSource
 from stonks.ingest.sources.eodhd import EodhdDataSource
 from stonks.logging import configure_logging, get_logger
 from stonks.store.lake import DuckDBLake
+from stonks.store.state import SqliteState
 
 app = typer.Typer(add_completion=False, help="Stonks CLI")
 db_app = typer.Typer(help="Database / lake operations")
@@ -67,25 +68,42 @@ def _parse_tickers(raw: str | None) -> list[str]:
 
 @db_app.command("init")
 def db_init() -> None:
-    """Create the lake file and apply pending migrations."""
+    """Create the lake + state files and apply pending migrations to each."""
     settings = _settings()
     with _open_lake(settings.lake.path) as lake:
         lake.migrate()
-        versions = lake.applied_migrations()
-    console.print(f"[green]lake ready at {settings.lake.path}[/green] (migrations: {versions})")
+        lake_versions = lake.applied_migrations()
+    with SqliteState(settings.state.path) as state:
+        state.migrate()
+        state_versions = state.applied_migrations()
+    console.print(
+        f"[green]lake ready[/green]  {settings.lake.path} (migrations: {lake_versions})"
+    )
+    console.print(
+        f"[green]state ready[/green] {settings.state.path} (migrations: {state_versions})"
+    )
 
 
 @db_app.command("info")
 def db_info() -> None:
-    """Print tables and row counts in the lake."""
+    """Print tables and row counts for both the lake and the state DB."""
     settings = _settings()
-    table = Table(title=str(settings.lake.path))
-    table.add_column("table")
-    table.add_column("rows", justify="right")
+
+    lake_table = Table(title=f"lake — {settings.lake.path}")
+    lake_table.add_column("table")
+    lake_table.add_column("rows", justify="right")
     with _open_lake(settings.lake.path) as lake:
         for name in sorted(lake.tables()):
-            table.add_row(name, str(lake.count_rows(name)))
-    console.print(table)
+            lake_table.add_row(name, str(lake.count_rows(name)))
+    console.print(lake_table)
+
+    state_table = Table(title=f"state — {settings.state.path}")
+    state_table.add_column("table")
+    state_table.add_column("rows", justify="right")
+    with SqliteState(settings.state.path) as state:
+        for name in sorted(state.tables()):
+            state_table.add_row(name, str(state.count_rows(name)))
+    console.print(state_table)
 
 
 # ---- ingest -----------------------------------------------------------------

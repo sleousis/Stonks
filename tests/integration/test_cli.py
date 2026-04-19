@@ -51,6 +51,9 @@ def cli_env(tmp_path, monkeypatch):
 [lake]
 path = "data/lake.duckdb"
 
+[state]
+path = "data/state.sqlite"
+
 [sources.eodhd]
 base_url = "https://example.test/api"
 """.strip()
@@ -59,19 +62,25 @@ base_url = "https://example.test/api"
     return tmp_path
 
 
-def test_db_init_creates_lake(runner, cli_env):
+def test_db_init_creates_lake_and_state(runner, cli_env):
     result = runner.invoke(app, ["db", "init"])
     assert result.exit_code == 0, result.output
     assert (cli_env / "data" / "lake.duckdb").exists()
+    assert (cli_env / "data" / "state.sqlite").exists()
 
 
-def test_db_info_lists_tables(runner, cli_env):
+def test_db_info_lists_tables_from_both_stores(runner, cli_env):
     runner.invoke(app, ["db", "init"])
     result = runner.invoke(app, ["db", "info"])
     assert result.exit_code == 0, result.output
+    # lake tables
     assert "prices" in result.output
     assert "fundamentals" in result.output
     assert "ingest_runs" in result.output
+    # state tables
+    assert "strategies" in result.output
+    assert "orders" in result.output
+    assert "tick_runs" in result.output
 
 
 def test_ingest_prices_via_fake_source(runner, cli_env, monkeypatch):

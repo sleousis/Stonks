@@ -13,7 +13,7 @@ from typing import Any
 import duckdb
 import pandas as pd
 
-MIGRATIONS_DIR = Path(__file__).parent / "migrations"
+MIGRATIONS_DIR = Path(__file__).parent / "migrations_duckdb"
 
 _PRICE_COLS = ("ticker", "date", "open", "high", "low", "close", "adj_close", "volume")
 _FUND_COLS = ("ticker", "period_end", "frequency", "statement", "line_item", "value")
