@@ -33,3 +33,21 @@ def trailing_return(prices: pd.Series, n_days: int) -> pd.Series:
     features.
     """
     return prices.pct_change(periods=n_days)
+
+
+def rsi(prices: pd.Series, period: int = 14) -> pd.Series:
+    """Relative Strength Index using Wilder's smoothing.
+
+    Implementation equivalent to the canonical formula used by
+    ``pandas_ta.rsi`` (EWM with ``alpha = 1/period``, ``adjust=False``),
+    without pulling in the extra dependency. The first ``period`` outputs
+    are ``NaN`` because Wilder's average needs that many gain/loss
+    observations to warm up.
+    """
+    delta = prices.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
+    avg_loss = loss.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
+    rs = avg_gain / avg_loss
+    return 100.0 - 100.0 / (1.0 + rs)

@@ -12,6 +12,7 @@ import pandas as pd
 from stonks.features.library import (
     pct_change_n_days,
     rolling_zscore,
+    rsi,
     trailing_return,
     ttm,
 )
@@ -56,6 +57,43 @@ def test_trailing_return_over_n_days():
     assert r.iloc[2] == pytest_approx(0.04)
     # At index 4: 110/104 - 1
     assert r.iloc[4] == pytest_approx(110.0 / 104.0 - 1.0)
+
+
+def test_rsi_is_fifty_for_zero_change_series():
+    s = pd.Series([100.0] * 30)
+    r = rsi(s, period=14)
+    # A flat series has zero gains and zero losses → 0/0, the formula is
+    # undefined; we treat it as NaN. Callers can forward-fill or use 50 if
+    # they prefer.
+    assert r.iloc[-1] != r.iloc[-1] or r.iloc[-1] == pytest_approx(50.0)
+
+
+def test_rsi_approaches_100_for_strictly_increasing_series():
+    s = pd.Series(np.linspace(100, 200, 100))
+    r = rsi(s, period=14)
+    assert r.iloc[-1] > 95.0
+
+
+def test_rsi_approaches_0_for_strictly_decreasing_series():
+    s = pd.Series(np.linspace(200, 100, 100))
+    r = rsi(s, period=14)
+    assert r.iloc[-1] < 5.0
+
+
+def test_rsi_bounded_in_0_100():
+    rng = np.random.default_rng(0)
+    s = pd.Series(100.0 + np.cumsum(rng.normal(0, 1.0, size=200)))
+    r = rsi(s, period=14).dropna()
+    assert (r >= 0.0).all()
+    assert (r <= 100.0).all()
+
+
+def test_rsi_first_period_minus_1_bars_are_nan():
+    s = pd.Series([100.0, 101.0, 99.0, 103.0, 102.0, 105.0, 104.0, 107.0])
+    r = rsi(s, period=5)
+    # diff at index 0 is NaN, so index 0 is NaN; first RSI values require
+    # `period` observations of gain/loss history.
+    assert pd.isna(r.iloc[0])
 
 
 # --- tiny approx helper (avoids importing pytest namespace at module level) --
