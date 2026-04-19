@@ -1,0 +1,57 @@
+{
+  "General": {
+    "Code": "AAPL",
+    "Exchange": "US",
+    "Name": "Apple Inc",
+    "CurrencyCode": "USD",
+    "Sector": "Technology",
+    "Industry": "Consumer Electronics"
+  },
+  "Financials": {
+    "Income_Statement": {
+      "quarterly": {
+        "2025-12-31": {
+          "date": "2025-12-31",
+          "totalRevenue": "124300000000",
+          "netIncome": "36330000000",
+          "grossProfit": "58480000000"
+        },
+        "2025-09-30": {
+          "date": "2025-09-30",
+          "totalRevenue": "94930000000",
+          "netIncome": "23940000000",
+          "grossProfit": "43880000000"
+        }
+      },
+      "yearly": {
+        "2024-09-30": {
+          "date": "2024-09-30",
+          "totalRevenue": "394300000000",
+          "netIncome": "99800000000",
+          "grossProfit": "180680000000"
+        }
+      }
+    },
+    "Balance_Sheet": {
+      "quarterly": {
+        "2025-12-31": {
+          "date": "2025-12-31",
+          "totalAssets": "345000000000",
+          "totalStockholderEquity": "65000000000"
+        }
+      },
+      "yearly": {}
+    },
+    "Cash_Flow": {
+      "quarterly": {
+        "2025-12-31": {
+          "date": "2025-12-31",
+          "totalCashFromOperatingActivities": "45000000000",
+          "capitalExpenditures": "-3000000000",
+          "freeCashFlow": "42000000000"
+        }
+      },
+      "yearly": {}
+    }
+  }
+}

@@ -1,0 +1,17 @@
+[lake]
+path = "data/lake.duckdb"
+
+[state]
+path = "data/state.sqlite"
+
+[registry]
+artifacts_dir = "data/artifacts"
+
+[logging]
+level = "INFO"
+
+[sources.eodhd]
+base_url = "https://eodhd.com/api"
+timeout_seconds = 30
+max_retries = 3
+retry_backoff_seconds = 1.0

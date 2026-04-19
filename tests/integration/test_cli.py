@@ -1,0 +1,88 @@
+"""Smoke tests for the Typer CLI. Uses a fake source injected via a monkeypatch
+so we exercise the full wiring without touching the network."""
+
+from __future__ import annotations
+
+from datetime import date
+
+import pytest
+from typer.testing import CliRunner
+
+from stonks.cli import app
+from stonks.ingest.schemas import RawPriceBar
+from stonks.ingest.sources.base import DataSource
+
+
+class _FakeSource(DataSource):
+    source_id = "eodhd"
+
+    def list_tickers(self, exchange):
+        return ["AAPL.US"]
+
+    def fetch_prices(self, ticker, since=None, until=None):
+        return [
+            RawPriceBar(
+                ticker=ticker,
+                date=date(2026, 4, 1),
+                open=100.0,
+                high=105.0,
+                low=99.0,
+                close=104.0,
+                adj_close=104.0,
+                volume=1_000_000,
+            )
+        ]
+
+    def fetch_fundamentals(self, ticker):
+        return []
+
+
+@pytest.fixture
+def runner():
+    return CliRunner()
+
+
+@pytest.fixture
+def cli_env(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "default.toml").write_text(
+        """
+[lake]
+path = "data/lake.duckdb"
+
+[sources.eodhd]
+base_url = "https://example.test/api"
+""".strip()
+    )
+    monkeypatch.setenv("EODHD_API_KEY", "test-key")
+    return tmp_path
+
+
+def test_db_init_creates_lake(runner, cli_env):
+    result = runner.invoke(app, ["db", "init"])
+    assert result.exit_code == 0, result.output
+    assert (cli_env / "data" / "lake.duckdb").exists()
+
+
+def test_db_info_lists_tables(runner, cli_env):
+    runner.invoke(app, ["db", "init"])
+    result = runner.invoke(app, ["db", "info"])
+    assert result.exit_code == 0, result.output
+    assert "prices" in result.output
+    assert "fundamentals" in result.output
+    assert "ingest_runs" in result.output
+
+
+def test_ingest_prices_via_fake_source(runner, cli_env, monkeypatch):
+    from stonks import cli as cli_module
+
+    monkeypatch.setattr(cli_module, "_build_source", lambda settings: _FakeSource())
+
+    runner.invoke(app, ["db", "init"])
+    result = runner.invoke(
+        app,
+        ["ingest", "prices", "--tickers", "AAPL.US", "--since", "2026-03-01"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "ok" in result.output.lower()
