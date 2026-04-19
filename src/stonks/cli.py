@@ -173,9 +173,10 @@ def ingest_fundamentals(
 def ingest_metadata(
     tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),
 ) -> None:
-    """Pull the full metadata bundle (profile, dividends, insider trades,
-    news + sentiment, analyst estimates + ratings, shares outstanding,
-    employee count, segmentations) per ticker."""
+    """Pull the full metadata bundle (profile, dividends, splits, insider
+    trades, news + sentiment, analyst estimates + ratings, shares outstanding
+    history, employee count, market cap history, segmentations) per
+    ticker."""
     settings = _settings()
     source = _build_source(settings)
 
@@ -186,6 +187,129 @@ def ingest_metadata(
         result = pipeline.run_metadata(ticker_list)
 
     _print_result(result)
+
+
+@ingest_app.command("intraday")
+def ingest_intraday(
+    tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),
+    interval: str = typer.Option("5m", "--interval", help="native intraday: 1m | 5m | 1h"),
+    since: str | None = typer.Option(None, "--since", help="earliest date (YYYY-MM-DD)"),
+    until: str | None = typer.Option(None, "--until", help="latest date (YYYY-MM-DD)"),
+) -> None:
+    """Pull sub-daily OHLCV bars at a native intraday interval. Only 1m,
+    5m, and 1h are available from EODHD; coarser sub-daily bars (4h, 6h,
+    12h) are produced by ``stonks ingest aggregate``."""
+    from stonks.core.interval import Interval
+
+    settings = _settings()
+    source = _build_source(settings)
+    parsed = Interval.parse(interval)
+
+    with _open_lake(settings.lake.path) as lake:
+        lake.migrate()
+        ticker_list = _parse_tickers(tickers)
+        since_d = date.fromisoformat(since) if since else None
+        until_d = date.fromisoformat(until) if until else None
+        pipeline = IngestPipeline(source=source, lake=lake)
+        result = pipeline.run_intraday_bars(
+            ticker_list, parsed, since=since_d, until=until_d
+        )
+
+    _print_result(result)
+
+
+@ingest_app.command("aggregate")
+def ingest_aggregate(
+    tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),
+    source_interval: str = typer.Option(..., "--from", help="source interval (e.g. 1h, 1d, 1mo)"),
+    target_interval: str = typer.Option(..., "--to", help="target interval (must be coarser, e.g. 4h, 3d, 6mo)"),
+) -> None:
+    """Derive coarser-interval bars by time-bucketing stored source bars.
+    Source bars must already be ingested (via ``ingest prices`` or
+    ``ingest intraday``)."""
+    from stonks.core.interval import Interval
+
+    settings = _settings()
+    src_iv = Interval.parse(source_interval)
+    tgt_iv = Interval.parse(target_interval)
+
+    with _open_lake(settings.lake.path) as lake:
+        lake.migrate()
+        ticker_list = _parse_tickers(tickers)
+        for ticker in ticker_list:
+            delta = lake.aggregate_bars(ticker, src_iv, tgt_iv)
+            console.print(
+                f"[green]{ticker}[/green] {src_iv.code} → {tgt_iv.code}  "
+                f"+{delta} rows"
+            )
+
+
+@ingest_app.command("all-intervals")
+def ingest_all_intervals(
+    tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),
+    since: str | None = typer.Option(None, "--since", help="earliest date (YYYY-MM-DD); applies to daily + intraday fetches"),
+    until: str | None = typer.Option(None, "--until", help="latest date (YYYY-MM-DD)"),
+    intraday_since: str | None = typer.Option(
+        None, "--intraday-since",
+        help="separate start date for intraday pulls (1m/5m/1h); defaults to --since if omitted, "
+             "but EODHD caps 1m history at ~120 days so setting this explicitly avoids long failing fetches",
+    ),
+) -> None:
+    """Populate every canonical interval for each ticker: native 1m / 5m /
+    1h / 1d / 1w / 1mo from EODHD, plus derived 4h / 6h / 12h / 3d / 5d /
+    6mo / 1y / 5y via aggregation."""
+    from stonks.core.interval import Interval
+
+    settings = _settings()
+    source = _build_source(settings)
+
+    since_d = date.fromisoformat(since) if since else None
+    until_d = date.fromisoformat(until) if until else None
+    intraday_since_d = (
+        date.fromisoformat(intraday_since) if intraday_since else since_d
+    )
+
+    with _open_lake(settings.lake.path) as lake:
+        lake.migrate()
+        ticker_list = _parse_tickers(tickers)
+        pipeline = IngestPipeline(source=source, lake=lake)
+
+        # 1. daily — uses the existing EOD endpoint; full history by default.
+        console.print("[bold]→ fetching 1d[/bold]")
+        _print_result(pipeline.run_prices(ticker_list, since=since_d, until=until_d))
+
+        # 2. native intraday
+        for iv in (Interval.HOUR_1, Interval.MIN_5, Interval.MIN_1):
+            console.print(f"[bold]→ fetching {iv.code}[/bold]")
+            _print_result(
+                pipeline.run_intraday_bars(
+                    ticker_list, iv, since=intraday_since_d, until=until_d
+                )
+            )
+
+        # 3. derived — aggregate from the finest source that's both stored
+        #    and strictly finer than the target.
+        derivations: list[tuple[Interval, Interval]] = [
+            (Interval.HOUR_1, Interval.HOUR_4),
+            (Interval.HOUR_1, Interval.HOUR_6),
+            (Interval.HOUR_1, Interval.HOUR_12),
+            (Interval.DAY_1,  Interval.DAY_3),
+            (Interval.DAY_1,  Interval.DAY_5),
+            (Interval.DAY_1,  Interval.WEEK_1),
+            (Interval.DAY_1,  Interval.MONTH_1),
+            (Interval.DAY_1,  Interval.MONTH_6),
+            (Interval.DAY_1,  Interval.YEAR_1),
+            (Interval.DAY_1,  Interval.YEAR_5),
+        ]
+        for src_iv, tgt_iv in derivations:
+            console.print(f"[dim]aggregating {src_iv.code} → {tgt_iv.code}[/dim]")
+            for ticker in ticker_list:
+                try:
+                    lake.aggregate_bars(ticker, src_iv, tgt_iv)
+                except Exception as exc:
+                    console.print(
+                        f"[red]aggregate {src_iv.code}→{tgt_iv.code} for {ticker} failed:[/red] {exc}"
+                    )
 
 
 def _print_result(result) -> None:

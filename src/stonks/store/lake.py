@@ -28,6 +28,10 @@ class DuckDBLake:
         self._path = Path(path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._con: duckdb.DuckDBPyConnection | None = duckdb.connect(str(self._path))
+        # Pin the session to UTC so tz-aware inputs (e.g. UTC intraday
+        # timestamps from EODHD) aren't silently shifted into the host's
+        # local time when they land in naive-TIMESTAMP columns.
+        self._con.execute("SET TimeZone = 'UTC'")
 
     def __enter__(self) -> DuckDBLake:
         return self
@@ -151,6 +155,63 @@ class DuckDBLake:
             """,
             [ticker, interval.code, start, end],
         ).fetchdf()
+
+    def aggregate_bars(
+        self,
+        ticker: str,
+        source: Interval,
+        target: Interval,
+    ) -> int:
+        """Derive ``target``-interval bars for ``ticker`` by time-bucketing
+        the already-stored ``source`` bars. Idempotent via the bars-table
+        PK; re-running overwrites the target bars with the current
+        aggregation of source bars.
+
+        Target must be a strictly coarser interval than source (the whole
+        point of aggregation is upsampling duration). Any prior target
+        bars for this ticker fall under the ON CONFLICT path.
+        """
+        if target.seconds <= source.seconds:
+            raise ValueError(
+                f"target interval {target.code} must be coarser than "
+                f"source {source.code}"
+            )
+        # DuckDB's time_bucket(interval, ts) aligns on the interval origin.
+        # OHLCV aggregation within each bucket:
+        #   open  = first (earliest timestamp)
+        #   close = last  (latest timestamp)
+        #   high  = max, low = min
+        #   volume = sum
+        # adj_close tracks close (we don't have per-bucket corporate-actions
+        # adjustment here; closing price is the best we can do).
+        sql = f"""
+            INSERT INTO bars (
+                ticker, timestamp, interval,
+                open, high, low, close, adj_close, volume)
+            SELECT
+                ticker,
+                time_bucket({target.duckdb_interval}, timestamp) AS bucket,
+                ? AS interval,
+                arg_min(open, timestamp) AS open,
+                max(high) AS high,
+                min(low) AS low,
+                arg_max(close, timestamp) AS close,
+                arg_max(close, timestamp) AS adj_close,
+                sum(volume) AS volume
+              FROM bars
+             WHERE ticker = ? AND interval = ?
+             GROUP BY ticker, bucket
+            ON CONFLICT (ticker, timestamp, interval) DO UPDATE SET
+                open = EXCLUDED.open,
+                high = EXCLUDED.high,
+                low = EXCLUDED.low,
+                close = EXCLUDED.close,
+                adj_close = EXCLUDED.adj_close,
+                volume = EXCLUDED.volume
+        """
+        before = self.count_rows("bars")
+        self.con.execute(sql, [target.code, ticker, source.code])
+        return int(self.count_rows("bars") - before)
 
     # ---- prices (back-compat shim over daily bars) -------------------------
 

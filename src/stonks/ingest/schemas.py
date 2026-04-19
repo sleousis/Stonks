@@ -17,6 +17,26 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# Re-export for DataSource implementations that need to import from the
+# schemas module in a single statement.
+__all__ = [
+    "AnalystEstimateRow",
+    "AnalystRatingsRow",
+    "DividendRow",
+    "EmployeeCountRow",
+    "FundamentalRow",
+    "InsiderTransactionRow",
+    "IntradayBar",
+    "MarketCapRow",
+    "NewsArticleRow",
+    "NewsSentimentRow",
+    "RawPriceBar",
+    "SegmentationRow",
+    "SharesOutstandingRow",
+    "StockSplitRow",
+    "TickerProfile",
+]
+
 # ---- prices + financial statements (original surface) ----------------------
 
 
@@ -25,6 +45,23 @@ class RawPriceBar(BaseModel):
 
     ticker: str
     date: date
+    open: float
+    high: float
+    low: float
+    close: float
+    adj_close: float
+    volume: int | None = None
+
+
+class IntradayBar(BaseModel):
+    """Sub-daily bar — same shape as :class:`RawPriceBar` but with a full
+    ``datetime`` instead of a plain date. Flows directly into the ``bars``
+    table via ``DuckDBLake.upsert_bars`` with an explicit ``interval``."""
+
+    model_config = ConfigDict(frozen=True)
+
+    ticker: str
+    timestamp: datetime
     open: float
     high: float
     low: float

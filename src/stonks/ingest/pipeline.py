@@ -15,8 +15,9 @@ from datetime import date
 
 import pandas as pd
 
+from stonks.core.interval import Interval
 from stonks.ingest.metadata_bundle import MetadataBundle
-from stonks.ingest.schemas import FundamentalRow, RawPriceBar
+from stonks.ingest.schemas import FundamentalRow, IntradayBar, RawPriceBar
 from stonks.ingest.sources.base import DataSource
 from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
@@ -58,6 +59,21 @@ class IngestPipeline:
             fetch=self._source.fetch_fundamentals,
             to_df=_fundamentals_to_df,
             upsert=self._lake.upsert_fundamentals,
+        )
+
+    def run_intraday_bars(
+        self,
+        tickers: Sequence[str],
+        interval: Interval,
+        since: date | None = None,
+        until: date | None = None,
+    ) -> IngestRunResult:
+        return self._run(
+            kind=f"intraday:{interval.code}",
+            tickers=tickers,
+            fetch=lambda t: self._source.fetch_intraday_bars(t, interval, since, until),
+            to_df=_intraday_to_df,
+            upsert=lambda df: self._lake.upsert_bars(df, interval=interval),
         )
 
     def run_metadata(self, tickers: Sequence[str]) -> IngestRunResult:
@@ -168,6 +184,12 @@ def _status(ok: int, failed: int) -> str:
 
 def _prices_to_df(rows: Iterable[RawPriceBar]) -> pd.DataFrame:
     cols = ("ticker", "date", "open", "high", "low", "close", "adj_close", "volume")
+    data = [tuple(getattr(r, c) for c in cols) for r in rows]
+    return pd.DataFrame(data, columns=list(cols))
+
+
+def _intraday_to_df(rows: Iterable[IntradayBar]) -> pd.DataFrame:
+    cols = ("ticker", "timestamp", "open", "high", "low", "close", "adj_close", "volume")
     data = [tuple(getattr(r, c) for c in cols) for r in rows]
     return pd.DataFrame(data, columns=list(cols))
 

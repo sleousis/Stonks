@@ -80,8 +80,28 @@ def test_well_known_constants_exist_and_match():
     assert Interval.parse("15m") == Interval.MIN_15
     assert Interval.parse("1h") == Interval.HOUR_1
     assert Interval.parse("4h") == Interval.HOUR_4
+    assert Interval.parse("6h") == Interval.HOUR_6
+    assert Interval.parse("12h") == Interval.HOUR_12
     assert Interval.parse("1d") == Interval.DAY_1
+    assert Interval.parse("3d") == Interval.DAY_3
+    assert Interval.parse("5d") == Interval.DAY_5
     assert Interval.parse("1w") == Interval.WEEK_1
+    assert Interval.parse("1mo") == Interval.MONTH_1
+    assert Interval.parse("6mo") == Interval.MONTH_6
+    assert Interval.parse("1y") == Interval.YEAR_1
+    assert Interval.parse("5y") == Interval.YEAR_5
+
+
+def test_standard_tuple_lists_all_fourteen_canonical_intervals():
+    codes = {i.code for i in Interval.STANDARD}
+    assert codes == {
+        "1m", "5m",
+        "1h", "4h", "6h", "12h",
+        "1d", "3d", "5d",
+        "1w",
+        "1mo", "6mo",
+        "1y", "5y",
+    }
 
 
 def test_is_intraday_helper():
@@ -89,3 +109,33 @@ def test_is_intraday_helper():
     assert Interval.parse("4h").is_intraday is True
     assert Interval.parse("1d").is_intraday is False
     assert Interval.parse("1w").is_intraday is False
+    assert Interval.parse("1mo").is_intraday is False
+    assert Interval.parse("1y").is_intraday is False
+
+
+def test_parse_month_and_year_units():
+    assert Interval.parse("1mo").seconds == 30 * 24 * 3600
+    assert Interval.parse("6mo").seconds == 6 * 30 * 24 * 3600
+    assert Interval.parse("1y").seconds == 365 * 24 * 3600
+    assert Interval.parse("5y").seconds == 5 * 365 * 24 * 3600
+
+
+def test_parse_human_aliases_normalize_to_canonical():
+    assert Interval.parse("1month") == Interval.MONTH_1
+    assert Interval.parse("6months") == Interval.MONTH_6
+    assert Interval.parse("1year") == Interval.YEAR_1
+    assert Interval.parse("5years") == Interval.YEAR_5
+    assert Interval.parse("30minutes") == Interval.MIN_30
+    assert Interval.parse("4hours") == Interval.HOUR_4
+
+
+def test_month_not_mistaken_for_minute():
+    assert Interval.parse("1m").seconds == 60
+    assert Interval.parse("1mo").seconds == 30 * 24 * 3600
+
+
+def test_duckdb_interval_literal_preserves_calendar_units():
+    assert Interval.parse("4h").duckdb_interval == "INTERVAL '4 hours'"
+    assert Interval.parse("3d").duckdb_interval == "INTERVAL '3 days'"
+    assert Interval.parse("6mo").duckdb_interval == "INTERVAL '6 months'"
+    assert Interval.parse("1y").duckdb_interval == "INTERVAL '1 years'"

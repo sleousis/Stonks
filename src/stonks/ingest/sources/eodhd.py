@@ -31,6 +31,7 @@ from typing import Any
 
 import requests
 
+from stonks.core.interval import Interval
 from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.schemas import (
     AnalystEstimateRow,
@@ -39,6 +40,7 @@ from stonks.ingest.schemas import (
     EmployeeCountRow,
     FundamentalRow,
     InsiderTransactionRow,
+    IntradayBar,
     MarketCapRow,
     NewsArticleRow,
     NewsSentimentRow,
@@ -87,6 +89,42 @@ def parse_prices_response(ticker: str, payload: Any) -> Iterator[RawPriceBar]:
             low=row["low"],
             close=row["close"],
             adj_close=row.get("adjusted_close", row["close"]),
+            volume=row.get("volume"),
+        )
+
+
+def parse_intraday_response(ticker: str, payload: Any) -> Iterator[IntradayBar]:
+    """Parse ``/api/intraday/{ticker}`` into IntradayBar entries.
+
+    Each row has a Unix ``timestamp`` (seconds since epoch); we convert to
+    a UTC ``datetime``. Volume can legitimately be ``None`` for post-market
+    bars on thin names.
+    """
+    _check_free_tier(payload)
+    if not isinstance(payload, list):
+        return iter(())
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        ts = row.get("timestamp")
+        if ts is None:
+            continue
+        try:
+            ts_int = int(ts)
+        except (TypeError, ValueError):
+            continue
+        when = datetime.fromtimestamp(ts_int, tz=UTC)
+        close_val = row.get("close")
+        if close_val is None:
+            continue
+        yield IntradayBar(
+            ticker=ticker,
+            timestamp=when,
+            open=row.get("open", close_val),
+            high=row.get("high", close_val),
+            low=row.get("low", close_val),
+            close=close_val,
+            adj_close=close_val,
             volume=row.get("volume"),
         )
 
@@ -497,6 +535,31 @@ class EodhdDataSource(DataSource):
         url = f"{self._base_url}/fundamentals/{ticker}"
         data = self._get(url, params={"fmt": "json"})
         return list(parse_fundamentals_response(ticker, data))
+
+    # EODHD natively supports 1-minute, 5-minute, and 1-hour bars on the
+    # /api/intraday endpoint. Everything else is derived via aggregation.
+    _INTRADAY_NATIVE = frozenset({"1m", "5m", "1h"})
+
+    def fetch_intraday_bars(
+        self,
+        ticker: str,
+        interval: Interval,
+        since: date | None = None,
+        until: date | None = None,
+    ) -> Iterable[IntradayBar]:
+        if interval.code not in self._INTRADAY_NATIVE:
+            raise ValueError(
+                f"EODHD intraday supports {sorted(self._INTRADAY_NATIVE)}; "
+                f"use aggregation for {interval.code!r}"
+            )
+        url = f"{self._base_url}/intraday/{ticker}"
+        params: dict[str, str] = {"fmt": "json", "interval": interval.code}
+        if since is not None:
+            params["from"] = str(int(datetime(since.year, since.month, since.day, tzinfo=UTC).timestamp()))
+        if until is not None:
+            params["to"] = str(int(datetime(until.year, until.month, until.day, 23, 59, 59, tzinfo=UTC).timestamp()))
+        data = self._get(url, params=params)
+        return list(parse_intraday_response(ticker, data))
 
     def fetch_metadata(self, ticker: str, since: date | None = None) -> MetadataBundle:
         """Assemble the full metadata bundle by hitting five EODHD endpoints

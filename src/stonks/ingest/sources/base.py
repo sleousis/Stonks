@@ -13,8 +13,9 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from datetime import date
 
+from stonks.core.interval import Interval
 from stonks.ingest.metadata_bundle import MetadataBundle
-from stonks.ingest.schemas import FundamentalRow, RawPriceBar
+from stonks.ingest.schemas import FundamentalRow, IntradayBar, RawPriceBar
 
 
 class DataSource(ABC):
@@ -38,3 +39,15 @@ class DataSource(ABC):
     # subclasses don't have to opt in.
     def fetch_metadata(self, ticker: str) -> MetadataBundle:
         return MetadataBundle()
+
+    def fetch_intraday_bars(
+        self,
+        ticker: str,
+        interval: Interval,
+        since: date | None = None,
+        until: date | None = None,
+    ) -> Iterable[IntradayBar]:
+        """Return sub-daily bars at the given native interval. Subclasses
+        that don't support intraday data can leave the default empty
+        implementation."""
+        return ()
