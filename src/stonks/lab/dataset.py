@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
+from stonks.core.interval import Interval
+
 if TYPE_CHECKING:  # pragma: no cover
     from stonks.store.lake import DuckDBLake
 
@@ -19,6 +21,9 @@ class LabDataset:
     start: date = date(2000, 1, 1)
     end: date = date.today
     train_ratio: float = 0.7
+    #: Bar interval the tests/tuner should fetch from the lake. Daily by default;
+    #: intraday scenarios pass e.g. ``Interval.MIN_5`` or ``Interval.HOUR_1``.
+    interval: Interval = field(default_factory=lambda: Interval.DAY_1)
 
     @property
     def train_window(self) -> tuple[date, date]:

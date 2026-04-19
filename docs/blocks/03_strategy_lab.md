@@ -1,6 +1,8 @@
 # Block 3 — Strategy Lab
 
-> Status: **implemented** (Block 3a + Block 3b). Reference strategies: BuyAndHold (rule-based) and Momentum (technical indicator). ML strategies fit the same Protocol when added. Backtester is **interval-agnostic** — `BacktestConfig.interval` accepts any `Interval` (1m, 5m, 15m, 30m, 1h, 4h, 12h, 1d, 1w). Rebalance cadence is bar-counted (`rebalance_every_bars`), so the same config works identically at every interval.
+> Status: **implemented** (Block 3a + Block 3b). Reference strategies: BuyAndHold (rule-based), Momentum (technical indicator), DonchianBreakout (channel breakout, inspired by neurotrader888/mcpt). ML strategies fit the same Protocol when added. Backtester is **interval-agnostic** — `BacktestConfig.interval` accepts any `Interval` (1m, 5m, 15m, 30m, 1h, 4h, 12h, 1d, 1w). Rebalance cadence is bar-counted (`rebalance_every_bars`), so the same config works identically at every interval.
+>
+> Survival tests now include **MonteCarloPermutationTest (MCPT)**: scores the strategy against the real bars and against N in-memory lakes filled with time-shuffled bars, deriving a p-value. The bar-permutation preserves per-bar return distribution but destroys time ordering — a proper null for any strategy that claims to exploit temporal structure (momentum, breakout, mean-reversion, …).
 
 ## Purpose
 

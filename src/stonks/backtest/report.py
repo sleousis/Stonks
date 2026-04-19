@@ -17,6 +17,10 @@ class BacktestReport:
     sharpe: float
     max_drawdown: float
     cagr: float
+    #: Profit factor — sum of positive per-bar returns divided by the absolute
+    #: sum of negative per-bar returns. 0.0 when there are no negative returns
+    #: (degenerate "all upside" case) and 0.0 when no returns at all.
+    profit_factor: float = 0.0
 
 
 def compute_report(
@@ -70,6 +74,10 @@ def compute_report(
         years = 1 / _SECONDS_PER_YEAR
     cagr = (end / start) ** (1 / years) - 1.0 if start > 0 and end > 0 else 0.0
 
+    pos = sum(r for r in returns if r > 0)
+    neg = abs(sum(r for r in returns if r < 0))
+    profit_factor = pos / neg if neg > 0 else 0.0
+
     return BacktestReport(
         strategy_id=strategy_id,
         equity_dates=dates,
@@ -78,4 +86,5 @@ def compute_report(
         sharpe=sharpe,
         max_drawdown=max_dd,
         cagr=cagr,
+        profit_factor=profit_factor,
     )
