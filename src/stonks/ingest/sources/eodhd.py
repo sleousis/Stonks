@@ -825,13 +825,29 @@ class EodhdDataSource(DataSource):
         self._log = get_logger("stonks.ingest.sources.eodhd")
 
     def list_tickers(self, exchange: str) -> list[str]:
+        # EODHD's `delisted=1` returns *only* delisted entries (verified
+        # empirically: the active-only and delisted=1 sets are disjoint), so
+        # to surface the full survivorship-bias-free universe we issue both
+        # calls and concatenate. Order is preserved (active first, then
+        # delisted) and duplicates are dropped defensively in case the vendor
+        # ever changes the semantics.
         url = f"{self._base_url}/exchange-symbol-list/{exchange}"
-        data = self._get(url, params={"fmt": "json"})
-        if not isinstance(data, list):
-            return []
-        return [
-            f"{row['Code']}.{exchange}" for row in data if isinstance(row, dict) and "Code" in row
-        ]
+        active = self._get(url, params={"fmt": "json"})
+        delisted = self._get(url, params={"fmt": "json", "delisted": "1"})
+        out: list[str] = []
+        seen: set[str] = set()
+        for data in (active, delisted):
+            if not isinstance(data, list):
+                continue
+            for row in data:
+                if not isinstance(row, dict) or "Code" not in row:
+                    continue
+                ticker = f"{row['Code']}.{exchange}"
+                if ticker in seen:
+                    continue
+                seen.add(ticker)
+                out.append(ticker)
+        return out
 
     def fetch_prices(
         self, ticker: str, since: date | None = None, until: date | None = None
