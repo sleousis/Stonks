@@ -1,6 +1,9 @@
 """Typer CLI entrypoint — ``stonks`` command.
 
 Subcommands: ``db init``, ``db info``, ``ingest prices``, ``ingest fundamentals``.
+
+To browse the lake interactively, run ``uv run duckdb -ui data/lake.duckdb``
+(requires the standalone DuckDB CLI on PATH: https://install.duckdb.org).
 """
 
 from __future__ import annotations
