@@ -33,6 +33,7 @@ __all__ = [
     "EmployeeCountRow",
     "EsgActivityRow",
     "EsgSnapshotRow",
+    "ExchangeInfo",
     "FundamentalRow",
     "InsiderTransactionRow",
     "InstitutionalHolderRow",
@@ -482,3 +483,22 @@ class TickerProfile(BaseModel):
     # Misc
     description: str | None = None
     updated_at: datetime | None = None
+
+
+# ---- source discovery (not a lake-row type) --------------------------------
+
+
+class ExchangeInfo(BaseModel):
+    """One exchange supported by a :class:`DataSource`. Returned by
+    :meth:`DataSource.list_exchanges` for human discovery — not persisted to
+    the lake."""
+
+    model_config = ConfigDict(frozen=True)
+
+    code: str
+    name: str | None = None
+    country: str | None = None
+    currency: str | None = None
+    country_iso2: str | None = None
+    country_iso3: str | None = None
+    operating_mic: str | None = None

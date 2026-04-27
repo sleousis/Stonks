@@ -15,7 +15,7 @@ from datetime import date
 
 from stonks.core.interval import Interval
 from stonks.ingest.metadata_bundle import MetadataBundle
-from stonks.ingest.schemas import FundamentalRow, IntradayBar, RawPriceBar
+from stonks.ingest.schemas import ExchangeInfo, FundamentalRow, IntradayBar, RawPriceBar
 
 
 class DataSource(ABC):
@@ -50,4 +50,9 @@ class DataSource(ABC):
         """Return sub-daily bars at the given native interval. Subclasses
         that don't support intraday data can leave the default empty
         implementation."""
+        return ()
+
+    def list_exchanges(self) -> Iterable[ExchangeInfo]:
+        """Return the exchanges this source can serve. Sources without a
+        discovery endpoint inherit the empty default."""
         return ()

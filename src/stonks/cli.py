@@ -121,6 +121,31 @@ def db_info() -> None:
 # ---- ingest -----------------------------------------------------------------
 
 
+@ingest_app.command("exchanges")
+def ingest_exchanges() -> None:
+    """List the exchanges supported by the configured data source."""
+    settings = _settings()
+    source = _build_source(settings)
+    rows = sorted(source.list_exchanges(), key=lambda r: r.code)
+
+    table = Table(title=f"exchanges — {source.source_id}")
+    table.add_column("code")
+    table.add_column("name")
+    table.add_column("country")
+    table.add_column("currency")
+    table.add_column("MIC")
+    for row in rows:
+        table.add_row(
+            row.code,
+            row.name or "",
+            row.country or "",
+            row.currency or "",
+            row.operating_mic or "",
+        )
+    console.print(table)
+    console.print(f"[dim]{len(rows)} exchanges[/dim]")
+
+
 @ingest_app.command("prices")
 def ingest_prices(
     tickers: str | None = typer.Option(

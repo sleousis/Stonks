@@ -46,6 +46,7 @@ from stonks.ingest.schemas import (
     EmployeeCountRow,
     EsgActivityRow,
     EsgSnapshotRow,
+    ExchangeInfo,
     FundamentalRow,
     InsiderTransactionRow,
     InstitutionalHolderRow,
@@ -799,6 +800,43 @@ def parse_market_cap_response(ticker: str, payload: Any) -> Iterator[MarketCapRo
         yield MarketCapRow(ticker=ticker, date=d, market_cap=mcap)
 
 
+def parse_exchanges_response(payload: Any) -> Iterator[ExchangeInfo]:
+    """Parse ``/api/exchanges-list`` rows into :class:`ExchangeInfo`.
+
+    Vendor field mapping (PascalCase → canonical snake_case):
+      ``Code → code``, ``Name → name``, ``Country → country``,
+      ``Currency → currency``, ``CountryISO2 → country_iso2``,
+      ``CountryISO3 → country_iso3``, ``OperatingMIC → operating_mic``.
+
+    Rows missing ``Code`` are skipped (no usable identifier). The vendor's
+    response includes virtual asset-class buckets (FOREX, CC, INDX, …)
+    alongside real stock exchanges; both are passed through — callers
+    decide whether to filter.
+    """
+    _check_free_tier(payload)
+    if not isinstance(payload, list):
+        return iter(())
+    return _iter_exchanges(payload)
+
+
+def _iter_exchanges(payload: list) -> Iterator[ExchangeInfo]:
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        code = row.get("Code")
+        if not code:
+            continue
+        yield ExchangeInfo(
+            code=code,
+            name=row.get("Name"),
+            country=row.get("Country"),
+            currency=row.get("Currency"),
+            country_iso2=row.get("CountryISO2"),
+            country_iso3=row.get("CountryISO3"),
+            operating_mic=row.get("OperatingMIC"),
+        )
+
+
 # ---- HTTP client ------------------------------------------------------------
 
 
@@ -823,6 +861,11 @@ class EodhdDataSource(DataSource):
         self._backoff = retry_backoff_seconds
         self._session = session or requests.Session()
         self._log = get_logger("stonks.ingest.sources.eodhd")
+
+    def list_exchanges(self) -> list[ExchangeInfo]:
+        url = f"{self._base_url}/exchanges-list"
+        data = self._get(url, params={"fmt": "json"})
+        return list(parse_exchanges_response(data))
 
     def list_tickers(self, exchange: str) -> list[str]:
         # EODHD's `delisted=1` returns *only* delisted entries (verified
