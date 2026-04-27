@@ -244,6 +244,12 @@ def _coerce_optional_int(value: Any) -> int | None:
     return int(v) if v is not None else None
 
 
+def _str_tuple(value: Any) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        return ()
+    return tuple(item for item in value if isinstance(item, str) and item)
+
+
 def _parse_datetime(value: Any) -> datetime | None:
     if isinstance(value, datetime):
         return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
@@ -679,19 +685,35 @@ def parse_news_response(ticker: str, payload: Any) -> Iterator[NewsArticleRow]:
         title = row.get("title")
         if published_at is None or not title:
             continue
-        sentiment = None
+        sentiment_polarity: float | None = None
+        sentiment_pos: float | None = None
+        sentiment_neg: float | None = None
+        sentiment_neu: float | None = None
         sent_obj = row.get("sentiment")
         if isinstance(sent_obj, dict):
-            sentiment = _coerce_optional_float(sent_obj.get("polarity"))
+            sentiment_polarity = _coerce_optional_float(sent_obj.get("polarity"))
+            sentiment_pos = _coerce_optional_float(sent_obj.get("pos"))
+            sentiment_neg = _coerce_optional_float(sent_obj.get("neg"))
+            sentiment_neu = _coerce_optional_float(sent_obj.get("neu"))
         elif isinstance(sent_obj, (int, float)):
-            sentiment = float(sent_obj)
+            sentiment_polarity = float(sent_obj)
         yield NewsArticleRow(
             ticker=ticker,
             published_at=published_at,
             title=title,
             url=row.get("link"),
             source_name=row.get("source") or row.get("source_name"),
-            sentiment=sentiment,
+            # `content` is deliberately not populated: storing every article
+            # body would meaningfully inflate the lake without a current
+            # consumer. The schema column exists so a future flip can begin
+            # populating it without a migration.
+            content=None,
+            symbols=_str_tuple(row.get("symbols")),
+            tags=_str_tuple(row.get("tags")),
+            sentiment=sentiment_polarity,
+            sentiment_pos=sentiment_pos,
+            sentiment_neg=sentiment_neg,
+            sentiment_neu=sentiment_neu,
         )
 
 

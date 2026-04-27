@@ -107,7 +107,12 @@ def _sample_bundle() -> MetadataBundle:
                 published_at=datetime(2026, 4, 1, 14, 30, tzinfo=UTC),
                 title="Apple announces new product",
                 url="https://example.com/1",
+                symbols=("AAPL.US", "MSFT.US"),
+                tags=("products", "earnings"),
                 sentiment=0.5,
+                sentiment_pos=0.5,
+                sentiment_neg=0.05,
+                sentiment_neu=0.45,
             ),
         ),
         news_sentiment=(
@@ -252,6 +257,17 @@ def test_run_metadata_populates_every_table(lake):
     assert profile.iloc[0]["gic_sector"] == "Information Technology"
     snap = lake.sql("SELECT beta, short_percent FROM ticker_snapshots WHERE ticker='AAPL.US'")
     assert snap.iloc[0]["beta"] == 1.25
+
+    news_row = lake.sql(
+        "SELECT symbols, tags, content, sentiment_pos, sentiment_neg, sentiment_neu "
+        "FROM news WHERE ticker='AAPL.US'"
+    ).iloc[0]
+    assert list(news_row["symbols"]) == ["AAPL.US", "MSFT.US"]
+    assert list(news_row["tags"]) == ["products", "earnings"]
+    assert news_row["content"] is None
+    assert news_row["sentiment_pos"] == 0.5
+    assert news_row["sentiment_neg"] == 0.05
+    assert news_row["sentiment_neu"] == 0.45
 
 
 def test_run_metadata_is_idempotent(lake):

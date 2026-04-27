@@ -327,7 +327,20 @@ class DuckDBLake:
         "post_transaction_amount",
         "sec_link",
     )
-    _NEWS_COLS = ("ticker", "published_at", "title", "url", "source_name", "sentiment")
+    _NEWS_COLS = (
+        "ticker",
+        "published_at",
+        "title",
+        "url",
+        "source_name",
+        "content",
+        "symbols",
+        "tags",
+        "sentiment",
+        "sentiment_pos",
+        "sentiment_neg",
+        "sentiment_neu",
+    )
     _NEWS_SENTIMENT_COLS = ("ticker", "date", "sentiment", "article_count")
     _ANALYST_RATINGS_COLS = (
         "ticker",

@@ -154,13 +154,23 @@ def test_upsert_news_and_query(lake):
                 "title": "Apple announces new thing",
                 "url": "https://example.com/1",
                 "source_name": "Wire",
+                "content": None,
+                "symbols": ["AAPL.US", "MSFT.US"],
+                "tags": ["products"],
                 "sentiment": 0.5,
+                "sentiment_pos": 0.5,
+                "sentiment_neg": 0.05,
+                "sentiment_neu": 0.45,
             },
         ]
     )
     lake.upsert_news(df)
     lake.upsert_news(df)  # idempotent
     assert lake.count_rows("news") == 1
+    out = lake.sql("SELECT symbols, tags, sentiment_pos FROM news WHERE ticker='AAPL.US'")
+    assert list(out.iloc[0]["symbols"]) == ["AAPL.US", "MSFT.US"]
+    assert list(out.iloc[0]["tags"]) == ["products"]
+    assert out.iloc[0]["sentiment_pos"] == 0.5
 
 
 def test_upsert_news_sentiment(lake):

@@ -146,7 +146,13 @@ class NewsArticleRow(BaseModel):
     title: str
     url: str | None = None
     source_name: str | None = None
-    sentiment: float | None = None  # per-article score when provided
+    content: str | None = None
+    symbols: tuple[str, ...] = ()
+    tags: tuple[str, ...] = ()
+    sentiment: float | None = None  # composite polarity in [-1, 1]
+    sentiment_pos: float | None = None
+    sentiment_neg: float | None = None
+    sentiment_neu: float | None = None
 
 
 class NewsSentimentRow(BaseModel):

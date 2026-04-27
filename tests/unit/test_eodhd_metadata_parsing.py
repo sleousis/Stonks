@@ -331,13 +331,23 @@ def test_news_parses_timestamps_and_sentiment_polarity():
     assert first.title == "Apple announces new product line"
     assert first.published_at == datetime(2026, 4, 1, 14, 30, tzinfo=UTC)
     assert first.sentiment == 0.5
+    assert first.sentiment_pos == 0.5
+    assert first.sentiment_neg == 0.05
+    assert first.sentiment_neu == 0.45
+    assert first.symbols == ("AAPL.US",)
+    assert first.tags == ("products",)
+    assert first.content is None  # deliberately not populated; see parser
 
 
 def test_news_accepts_missing_sentiment_and_link():
     rows = list(parse_news_response("AAPL.US", _load("aapl_news.json")))
     second = rows[1]
     assert second.sentiment is None
+    assert second.sentiment_pos is None
+    assert second.sentiment_neg is None
+    assert second.sentiment_neu is None
     assert second.url is not None  # fixture has link
+    assert second.tags == ("earnings",)
 
 
 # ---- insider transactions --------------------------------------------------
