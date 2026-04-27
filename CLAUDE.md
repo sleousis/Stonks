@@ -76,6 +76,7 @@ uv run stonks tick [--dry-run] [--as-of YYYY-MM-DD] [--tickers AAPL.US,MSFT.US]
 - Abstract base classes + Protocols are the seam for plugging in new behavior: `DataSource`, `Strategy`, `Tuner`, `Objective`, `SurvivalTest`, `Broker`.
 - Logging via `stonks.logging.get_logger(name)` (structlog JSON). Every cross-block action carries a `run_id` / `tick_id` so logs correlate.
 - Free-tier EODHD only returns EOD prices; the fundamentals endpoint returns a text error. Live fundamentals tests must handle that signal gracefully (skip, not fail).
+- **`Literal` vs `Enum`.** Default to `Literal[...]` for closed sets of stringly-typed tags that flow through serialization boundaries (DB columns, JSON, vendor APIs). Reach for `StrEnum` (3.11+) when the set grows behavior (methods, predicates), needs iteration as a first-class operation, or when named symbols at call sites read better than bare strings. Don't stick with `Literal` just because neighboring code uses it.
 
 ## Known external limits
 
