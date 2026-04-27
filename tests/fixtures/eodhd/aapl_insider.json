@@ -1,15 +1,36 @@
 [
   {
+    "code": "AAPL",
+    "exchange": "US",
     "date": "2026-03-01",
+    "reportDate": "2026-03-05",
     "ownerCik": "0001214156",
     "ownerName": "COOK TIMOTHY D",
     "ownerRelationship": "Chief Executive Officer",
+    "ownerTitle": "CEO",
     "transactionDate": "2026-03-01",
     "transactionCode": "S",
     "transactionAmount": 50000,
     "transactionPrice": 250.0,
     "transactionAcquiredDisposed": "D",
     "postTransactionAmount": 3200000,
-    "secLink": "https://sec.gov/..."
+    "link": "https://sec.gov/Archives/edgar/data/320193/example-form4.xml"
+  },
+  {
+    "code": "AAPL",
+    "exchange": "US",
+    "date": "2026-02-15",
+    "reportDate": "2026-02-19",
+    "ownerCik": null,
+    "ownerName": "MAESTRI LUCA",
+    "ownerRelationship": null,
+    "ownerTitle": "CFO",
+    "transactionDate": "2026-02-14",
+    "transactionCode": "M",
+    "transactionAmount": 12000,
+    "transactionPrice": 230.0,
+    "transactionAcquiredDisposed": "A",
+    "postTransactionAmount": null,
+    "link": null
   }
 ]

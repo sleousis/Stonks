@@ -1,17 +1,50 @@
 {
   "General": {
     "Code": "AAPL",
+    "Type": "Common Stock",
     "Exchange": "US",
     "Name": "Apple Inc",
     "CurrencyCode": "USD",
     "CountryISO": "US",
+    "CountryName": "USA",
     "Sector": "Technology",
     "Industry": "Consumer Electronics",
+    "GicSector": "Information Technology",
+    "GicGroup": "Technology Hardware & Equipment",
+    "GicIndustry": "Technology Hardware, Storage & Peripherals",
+    "GicSubIndustry": "Technology Hardware, Storage & Peripherals",
     "FullTimeEmployees": 164000,
     "WebURL": "http://www.apple.com",
     "IPODate": "1980-12-12",
     "FiscalYearEnd": "September",
-    "IsDelisted": false
+    "IsDelisted": false,
+    "DelistedDate": null,
+    "Description": "Apple Inc. designs, manufactures, and markets smartphones, personal computers, tablets, wearables, and accessories worldwide.",
+    "UpdatedAt": "2026-04-20",
+    "CUSIP": "037833100",
+    "CIK": "0000320193",
+    "ISIN": "US0378331005",
+    "OpenFigi": "BBG000B9XRY4",
+    "LEI": "HWUPKR0MPOU8FGXBT394",
+    "EmployerIdNumber": "94-2404110",
+    "PrimaryTicker": "AAPL.US",
+    "Phone": "408 996 1010",
+    "AddressData": {
+      "Street": "One Apple Park Way",
+      "City": "Cupertino",
+      "State": "CA",
+      "Country": "USA",
+      "ZIP": "95014"
+    },
+    "Listings": {
+      "0": {"Code": "0R2V", "Exchange": "LSE", "Name": "Apple Inc."},
+      "1": {"Code": "APC", "Exchange": "XETRA", "Name": "Apple Inc."}
+    },
+    "Officers": {
+      "0": {"Name": "Mr. Timothy D. Cook", "Title": "CEO & Director", "YearBorn": "1961"},
+      "1": {"Name": "Ms. Deirdre O'Brien", "Title": "Senior VP, Retail + People", "YearBorn": "1967"},
+      "2": {"Name": "Mr. Luca Maestri", "Title": "CFO", "YearBorn": "1964"}
+    }
   },
   "Highlights": {
     "MarketCapitalization": 3000000000000,
@@ -29,13 +62,15 @@
     "PercentInsiders": 7.0,
     "PercentInstitutions": 61.0,
     "ShortRatio": 1.2,
-    "ShortPercent": 0.6
+    "ShortPercentFloat": 0.6
   },
   "Earnings": {
     "History": {
       "2025-12-31": {
         "reportDate": "2026-01-25",
         "date": "2025-12-31",
+        "beforeAfterMarket": "AfterMarket",
+        "currency": "USD",
         "epsActual": 2.40,
         "epsEstimate": 2.35,
         "epsDifference": 0.05,
@@ -44,10 +79,66 @@
       "2025-09-30": {
         "reportDate": "2025-10-30",
         "date": "2025-09-30",
+        "beforeAfterMarket": "AfterMarket",
+        "currency": "USD",
         "epsActual": 1.53,
         "epsEstimate": 1.50,
         "epsDifference": 0.03,
         "surprisePercent": 2.0
+      }
+    },
+    "Trend": {
+      "2026-03-31": {
+        "date": "2026-03-31",
+        "period": "0q",
+        "growth": "0.0500",
+        "earningsEstimateAvg": "1.9400",
+        "earningsEstimateLow": "1.8500",
+        "earningsEstimateHigh": "2.0500",
+        "earningsEstimateYearAgoEps": "1.8500",
+        "earningsEstimateNumberOfAnalysts": "32.0",
+        "earningsEstimateGrowth": "0.0486",
+        "revenueEstimateAvg": "94000000000",
+        "revenueEstimateLow": "92000000000",
+        "revenueEstimateHigh": "96000000000",
+        "revenueEstimateYearAgoEps": null,
+        "revenueEstimateNumberOfAnalysts": "30.0",
+        "revenueEstimateGrowth": "0.0322",
+        "epsTrendCurrent": "1.9400",
+        "epsTrend7daysAgo": "1.9400",
+        "epsTrend30daysAgo": "1.9300",
+        "epsTrend60daysAgo": "1.9000",
+        "epsTrend90daysAgo": "1.8800",
+        "epsRevisionsUpLast7days": "0.0",
+        "epsRevisionsUpLast30days": "2.0",
+        "epsRevisionsDownLast7days": "0.0",
+        "epsRevisionsDownLast30days": "1.0"
+      },
+      "2027-09-30": {
+        "date": "2027-09-30",
+        "period": "+1y",
+        "growth": "0.0978",
+        "earningsEstimateAvg": "9.3883",
+        "earningsEstimateLow": "8.4300",
+        "earningsEstimateHigh": "10.3800",
+        "earningsEstimateYearAgoEps": "8.5227",
+        "earningsEstimateNumberOfAnalysts": "40.0",
+        "earningsEstimateGrowth": "0.1016",
+        "revenueEstimateAvg": "500667070630.00",
+        "revenueEstimateLow": "473881148700.00",
+        "revenueEstimateHigh": "550153103810.00",
+        "revenueEstimateYearAgoEps": null,
+        "revenueEstimateNumberOfAnalysts": "41.0",
+        "revenueEstimateGrowth": "0.0728",
+        "epsTrendCurrent": "9.3883",
+        "epsTrend7daysAgo": "9.3279",
+        "epsTrend30daysAgo": "9.3600",
+        "epsTrend60daysAgo": "9.3273",
+        "epsTrend90daysAgo": "9.1317",
+        "epsRevisionsUpLast7days": "2.0",
+        "epsRevisionsUpLast30days": "3.0",
+        "epsRevisionsDownLast7days": null,
+        "epsRevisionsDownLast30days": "6.0"
       }
     }
   },
@@ -59,6 +150,36 @@
     "Hold": 5,
     "Sell": 2,
     "StrongSell": 0
+  },
+  "Holders": {
+    "Institutions": {
+      "0": {"name": "Vanguard Group Inc", "date": "2025-12-31", "totalShares": 9.7151, "totalAssets": 5.6215, "currentShares": 1426283914, "change": 26856752, "change_p": 1.9191},
+      "1": {"name": "Blackrock Inc", "date": "2025-12-31", "totalShares": 7.2400, "totalAssets": 4.5300, "currentShares": 1062314000, "change": -8400000, "change_p": -0.7800}
+    },
+    "Funds": {
+      "0": {"name": "Vanguard Total Stock Mkt Idx Inv", "date": "2026-03-31", "totalShares": 3.1766, "totalAssets": 5.928, "currentShares": 466354347, "change": -1025493, "change_p": -0.2194},
+      "1": {"name": "SPDR S&P 500 ETF Trust", "date": "2026-03-31", "totalShares": 1.4500, "totalAssets": 7.2500, "currentShares": 213000000, "change": 1200000, "change_p": 0.5660}
+    }
+  },
+  "ESGScores": {
+    "Disclaimer": "ESG Risk Ratings provided by Sustainalytics.",
+    "RatingDate": "2026-04-01",
+    "TotalEsg": 17.04,
+    "TotalEsgPercentile": 28.5,
+    "EnvironmentScore": 0.7,
+    "EnvironmentScorePercentile": 12,
+    "SocialScore": 7.85,
+    "SocialScorePercentile": 32,
+    "GovernanceScore": 8.49,
+    "GovernanceScorePercentile": 56,
+    "ControversyLevel": 3,
+    "ActivitiesInvolvement": {
+      "0": {"Activity": "adult", "Involvement": "No"},
+      "1": {"Activity": "alcohol", "Involvement": "No"},
+      "2": {"Activity": "tobacco", "Involvement": "No"},
+      "3": {"Activity": "controversial weapons", "Involvement": "No"},
+      "4": {"Activity": "gambling", "Involvement": "No"}
+    }
   },
   "SplitsDividends": {
     "ForwardAnnualDividendRate": 0.96,

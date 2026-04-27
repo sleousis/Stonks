@@ -1,7 +1,7 @@
 """EODHD data source.
 
 Two parts, cleanly separable:
-  - pure response parsers (``parse_prices_response`` / ``parse_fundamentals_response``)
+  - pure response parsers (``parse_*_response`` / ``parse_*_from_fundamentals``)
     — unit-testable with captured fixtures, no HTTP.
   - :class:`EodhdDataSource` — the HTTP client that calls the API and hands the
     JSON to those parsers.
@@ -18,6 +18,10 @@ and no concurrency — our ``fetch_metadata`` runs five endpoints in parallel,
 roughly 5× faster; (c) pulls in ~100 MB of transitive deps (matplotlib,
 pillow, websockets) that we don't need. This custom client is ~270 LOC,
 injectable-session-friendly for tests, and has full coverage.
+
+Vendor-specific vocabulary is normalized at parse time — see the
+``_BEFORE_AFTER_MARKET_MAP``, ``_PERIOD_RELATIVE_MAP``, and
+``_SECURITY_TYPE_MAP`` translations.
 """
 
 from __future__ import annotations
@@ -34,20 +38,27 @@ import requests
 from stonks.core.interval import Interval
 from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.schemas import (
-    AnalystEstimateRow,
+    AnalystForecastRow,
     AnalystRatingsRow,
+    CrossListingRow,
     DividendRow,
+    EarningsAnnouncementRow,
     EmployeeCountRow,
+    EsgActivityRow,
+    EsgSnapshotRow,
     FundamentalRow,
     InsiderTransactionRow,
+    InstitutionalHolderRow,
     IntradayBar,
     MarketCapRow,
     NewsArticleRow,
     NewsSentimentRow,
+    OfficerRow,
     RawPriceBar,
     SharesOutstandingRow,
     StockSplitRow,
     TickerProfile,
+    TickerSnapshotRow,
 )
 from stonks.ingest.sources.base import DataSource
 from stonks.logging import get_logger
@@ -61,6 +72,31 @@ _STATEMENT_MAP = {
     "Cash_Flow": "cashflow",
 }
 _FREQUENCY_MAP = {"quarterly": "Q", "yearly": "A"}
+
+# Vendor-string → canonical literal maps (vendor-agnostic principle: the
+# lake never sees vendor vocabulary).
+_BEFORE_AFTER_MARKET_MAP = {
+    "BeforeMarket": "before",
+    "AfterMarket": "after",
+    "DuringMarket": "during",
+}
+_PERIOD_RELATIVE_MAP = {
+    "-1y": "prior_year",
+    "-1q": "prior_quarter",
+    "0q": "current_quarter",
+    "+1q": "next_quarter",
+    "0y": "current_year",
+    "+1y": "next_year",
+}
+# EODHD's `General.Type` strings vary in capitalization; we normalize on
+# lower-cased contains-checks. Anything that doesn't match falls into "other".
+_SECURITY_TYPE_KEYWORDS = (
+    ("preferred", "preferred_stock"),
+    ("adr", "adr"),
+    ("etf", "etf"),
+    ("fund", "fund"),
+    ("common", "common_stock"),
+)
 
 
 class EodhdFreeTierError(RuntimeError):
@@ -206,16 +242,29 @@ def _parse_datetime(value: Any) -> datetime | None:
     return None
 
 
+def _normalize_security_type(raw: Any) -> str | None:
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    needle = raw.strip().lower()
+    for keyword, canonical in _SECURITY_TYPE_KEYWORDS:
+        if keyword in needle:
+            return canonical
+    return "other"
+
+
 # ---- extended-fundamentals parsers (pure, unit-tested) ---------------------
 
 
 def parse_profile_from_fundamentals(ticker: str, payload: Any) -> TickerProfile | None:
-    """Extract the TickerProfile from the fundamentals JSON blob."""
+    """Extract the static :class:`TickerProfile` from the fundamentals JSON.
+
+    Volatile metrics (beta, short interest, ownership %) are routed to
+    :class:`TickerSnapshotRow` via :func:`parse_ticker_snapshot_from_fundamentals`.
+    """
     if not isinstance(payload, dict):
         return None
     general = payload.get("General") or {}
-    shares_stats = payload.get("SharesStats") or {}
-    technicals = payload.get("Technicals") or {}
+    address_data = general.get("AddressData") or {}
 
     return TickerProfile(
         id=ticker,
@@ -223,55 +272,174 @@ def parse_profile_from_fundamentals(ticker: str, payload: Any) -> TickerProfile 
         currency=general.get("CurrencyCode"),
         name=general.get("Name"),
         country_iso=general.get("CountryISO"),
-        ipo_date=_parse_date(general.get("IPODate")),
         sector=general.get("Sector"),
         industry=general.get("Industry"),
-        fiscal_year_end=general.get("FiscalYearEnd"),
-        web_url=general.get("WebURL"),
+        gic_sector=general.get("GicSector"),
+        gic_group=general.get("GicGroup"),
+        gic_industry=general.get("GicIndustry"),
+        gic_sub_industry=general.get("GicSubIndustry"),
+        ipo_date=_parse_date(general.get("IPODate")),
         is_delisted=bool(general.get("IsDelisted", False)),
+        delisted_date=_parse_date(general.get("DelistedDate")),
         is_bank=bool(general.get("IsBank", False)),
-        beta=_coerce_optional_float(technicals.get("Beta")),
-        short_percent=_coerce_optional_float(shares_stats.get("ShortPercent")),
-        insider_ownership_percent=_coerce_optional_float(shares_stats.get("PercentInsiders")),
-        institutional_ownership_percent=_coerce_optional_float(
-            shares_stats.get("PercentInstitutions")
-        ),
-        employee_count=_coerce_optional_int(general.get("FullTimeEmployees")),
-        esg_score=_coerce_optional_float((payload.get("ESGScores") or {}).get("TotalESG")),
+        fiscal_year_end=general.get("FiscalYearEnd"),
+        security_type=_normalize_security_type(general.get("Type")),
+        cusip=general.get("CUSIP"),
+        cik=general.get("CIK"),
+        isin=general.get("ISIN"),
+        open_figi=general.get("OpenFigi"),
+        lei=general.get("LEI"),
+        employer_id_number=general.get("EmployerIdNumber"),
+        primary_ticker=general.get("PrimaryTicker"),
+        address_street=address_data.get("Street"),
+        address_city=address_data.get("City"),
+        address_state=address_data.get("State"),
+        address_country=address_data.get("Country"),
+        address_zip=address_data.get("ZIP"),
+        phone=general.get("Phone"),
+        web_url=general.get("WebURL"),
+        description=general.get("Description"),
+        updated_at=_parse_datetime(general.get("UpdatedAt")),
     )
 
 
-def parse_analyst_estimates_from_fundamentals(
+def parse_ticker_snapshot_from_fundamentals(
+    ticker: str, payload: Any, as_of: date | None = None
+) -> TickerSnapshotRow | None:
+    """Extract the volatile per-ticker metrics into a snapshot row.
+
+    Vendors don't always carry an explicit "as of" date for these fields;
+    callers can override via ``as_of``, otherwise we use today's date so
+    the row has a valid time-series anchor.
+    """
+    if not isinstance(payload, dict):
+        return None
+    shares_stats = payload.get("SharesStats") or {}
+    technicals = payload.get("Technicals") or {}
+
+    snapshot_date = as_of or date.today()
+    beta = _coerce_optional_float(technicals.get("Beta"))
+    short_percent = _coerce_optional_float(
+        shares_stats.get("ShortPercentFloat")
+        or shares_stats.get("ShortPercent")
+        or technicals.get("ShortPercent")
+    )
+    percent_insiders = _coerce_optional_float(shares_stats.get("PercentInsiders"))
+    percent_institutions = _coerce_optional_float(shares_stats.get("PercentInstitutions"))
+
+    if all(v is None for v in (beta, short_percent, percent_insiders, percent_institutions)):
+        return None
+
+    return TickerSnapshotRow(
+        ticker=ticker,
+        snapshot_date=snapshot_date,
+        beta=beta,
+        short_percent=short_percent,
+        percent_insiders=percent_insiders,
+        percent_institutions=percent_institutions,
+    )
+
+
+def parse_earnings_announcements_from_fundamentals(
     ticker: str, payload: Any
-) -> Iterator[AnalystEstimateRow]:
-    """Flatten Earnings.History into one row per (period, metric)."""
+) -> Iterator[EarningsAnnouncementRow]:
+    """Parse ``Earnings.History`` into structured earnings events.
+
+    Replaces the older flat ``AnalystEstimateRow(metric, value)`` shape: the
+    structured form preserves the announcement timing (``report_date`` /
+    ``before_after_market``) and pairs actual + estimate + surprise on the
+    same row.
+    """
     if not isinstance(payload, dict):
         return iter(())
     history = ((payload.get("Earnings") or {}).get("History")) or {}
-    return _iter_analyst_estimates(ticker, history)
+    return _iter_earnings_announcements(ticker, history)
 
 
-def _iter_analyst_estimates(ticker: str, history: dict) -> Iterator[AnalystEstimateRow]:
-    _metric_keys = ("epsActual", "epsEstimate", "epsDifference", "surprisePercent")
+def _iter_earnings_announcements(ticker: str, history: dict) -> Iterator[EarningsAnnouncementRow]:
     for period_key, row in history.items():
         if not isinstance(row, dict):
             continue
         period_end = _parse_date(row.get("date") or period_key)
         if period_end is None:
             continue
-        for metric in _metric_keys:
-            if metric in row:
-                yield AnalystEstimateRow(
-                    ticker=ticker,
-                    period_end=period_end,
-                    metric=metric,
-                    value=_coerce_optional_float(row[metric]),
-                )
+        yield EarningsAnnouncementRow(
+            ticker=ticker,
+            period_end=period_end,
+            report_date=_parse_date(row.get("reportDate")),
+            before_after_market=_BEFORE_AFTER_MARKET_MAP.get(row.get("beforeAfterMarket") or ""),
+            currency=row.get("currency"),
+            eps_actual=_coerce_optional_float(row.get("epsActual")),
+            eps_estimate=_coerce_optional_float(row.get("epsEstimate")),
+            eps_difference=_coerce_optional_float(row.get("epsDifference")),
+            surprise_percent=_coerce_optional_float(row.get("surprisePercent")),
+        )
+
+
+def parse_analyst_forecasts_from_fundamentals(
+    ticker: str, payload: Any
+) -> Iterator[AnalystForecastRow]:
+    """Parse ``Earnings.Trend`` into analyst dispersion + revision rows.
+
+    Vendor strings ``-1q`` / ``0q`` / ``+1q`` / ``-1y`` / ``0y`` / ``+1y``
+    map to the canonical ``period_relative`` literal.
+    """
+    if not isinstance(payload, dict):
+        return iter(())
+    trend = ((payload.get("Earnings") or {}).get("Trend")) or {}
+    return _iter_analyst_forecasts(ticker, trend)
+
+
+def _iter_analyst_forecasts(ticker: str, trend: dict) -> Iterator[AnalystForecastRow]:
+    for period_key, row in trend.items():
+        if not isinstance(row, dict):
+            continue
+        period_end = _parse_date(row.get("date") or period_key)
+        if period_end is None:
+            continue
+        period_relative = _PERIOD_RELATIVE_MAP.get(row.get("period") or "")
+        yield AnalystForecastRow(
+            ticker=ticker,
+            period_end=period_end,
+            period_relative=period_relative,
+            growth=_coerce_optional_float(row.get("growth")),
+            eps_estimate_avg=_coerce_optional_float(row.get("earningsEstimateAvg")),
+            eps_estimate_low=_coerce_optional_float(row.get("earningsEstimateLow")),
+            eps_estimate_high=_coerce_optional_float(row.get("earningsEstimateHigh")),
+            eps_estimate_year_ago=_coerce_optional_float(row.get("earningsEstimateYearAgoEps")),
+            eps_estimate_n_analysts=_coerce_optional_int(
+                row.get("earningsEstimateNumberOfAnalysts")
+            ),
+            eps_estimate_growth=_coerce_optional_float(row.get("earningsEstimateGrowth")),
+            revenue_estimate_avg=_coerce_optional_float(row.get("revenueEstimateAvg")),
+            revenue_estimate_low=_coerce_optional_float(row.get("revenueEstimateLow")),
+            revenue_estimate_high=_coerce_optional_float(row.get("revenueEstimateHigh")),
+            revenue_estimate_year_ago=_coerce_optional_float(row.get("revenueEstimateYearAgoEps")),
+            revenue_estimate_n_analysts=_coerce_optional_int(
+                row.get("revenueEstimateNumberOfAnalysts")
+            ),
+            revenue_estimate_growth=_coerce_optional_float(row.get("revenueEstimateGrowth")),
+            eps_trend_current=_coerce_optional_float(row.get("epsTrendCurrent")),
+            eps_trend_7d_ago=_coerce_optional_float(row.get("epsTrend7daysAgo")),
+            eps_trend_30d_ago=_coerce_optional_float(row.get("epsTrend30daysAgo")),
+            eps_trend_60d_ago=_coerce_optional_float(row.get("epsTrend60daysAgo")),
+            eps_trend_90d_ago=_coerce_optional_float(row.get("epsTrend90daysAgo")),
+            eps_revisions_up_7d=_coerce_optional_int(row.get("epsRevisionsUpLast7days")),
+            eps_revisions_up_30d=_coerce_optional_int(row.get("epsRevisionsUpLast30days")),
+            eps_revisions_down_7d=_coerce_optional_int(row.get("epsRevisionsDownLast7days")),
+            eps_revisions_down_30d=_coerce_optional_int(row.get("epsRevisionsDownLast30days")),
+        )
 
 
 def parse_analyst_ratings_from_fundamentals(
-    ticker: str, payload: Any
+    ticker: str, payload: Any, as_of: date | None = None
 ) -> AnalystRatingsRow | None:
+    """Extract the consensus ratings snapshot.
+
+    The row carries an explicit ``snapshot_date`` so the table is a proper
+    time series; callers pass ``as_of`` (or we fall back to today) since
+    EODHD doesn't expose a per-snapshot timestamp on this object.
+    """
     if not isinstance(payload, dict):
         return None
     ratings = payload.get("AnalystRatings")
@@ -279,6 +447,7 @@ def parse_analyst_ratings_from_fundamentals(
         return None
     return AnalystRatingsRow(
         ticker=ticker,
+        snapshot_date=as_of or date.today(),
         rating=_coerce_optional_float(ratings.get("Rating")),
         target_price=_coerce_optional_float(ratings.get("TargetPrice")),
         strong_buy=_coerce_optional_int(ratings.get("StrongBuy")) or 0,
@@ -289,9 +458,135 @@ def parse_analyst_ratings_from_fundamentals(
     )
 
 
-def parse_shares_outstanding_history(
+def parse_holders_from_fundamentals(ticker: str, payload: Any) -> Iterator[InstitutionalHolderRow]:
+    """Parse ``Holders.Institutions`` and ``Holders.Funds`` into rows.
+
+    Both sub-objects share the same shape; the ``holder_kind``
+    discriminator distinguishes them downstream.
+    """
+    if not isinstance(payload, dict):
+        return iter(())
+    holders = payload.get("Holders")
+    if not isinstance(holders, dict):
+        return iter(())
+    return _iter_holders(ticker, holders)
+
+
+def _iter_holders(ticker: str, holders: dict) -> Iterator[InstitutionalHolderRow]:
+    for vendor_kind, canonical_kind in (("Institutions", "institution"), ("Funds", "fund")):
+        bucket = holders.get(vendor_kind)
+        if not isinstance(bucket, dict):
+            continue
+        for entry in bucket.values():
+            if not isinstance(entry, dict):
+                continue
+            name = entry.get("name")
+            snapshot_date = _parse_date(entry.get("date"))
+            if not name or snapshot_date is None:
+                continue
+            yield InstitutionalHolderRow(
+                ticker=ticker,
+                holder_kind=canonical_kind,  # type: ignore[arg-type]
+                name=name,
+                snapshot_date=snapshot_date,
+                total_shares_pct=_coerce_optional_float(entry.get("totalShares")),
+                total_assets_pct=_coerce_optional_float(entry.get("totalAssets")),
+                current_shares=_coerce_optional_int(entry.get("currentShares")),
+                change_shares=_coerce_optional_int(entry.get("change")),
+                change_pct=_coerce_optional_float(entry.get("change_p")),
+            )
+
+
+def parse_esg_from_fundamentals(
     ticker: str, payload: Any
-) -> Iterator[SharesOutstandingRow]:
+) -> tuple[EsgSnapshotRow | None, list[EsgActivityRow]]:
+    """Parse ``ESGScores`` into a header row plus per-activity child rows."""
+    if not isinstance(payload, dict):
+        return (None, [])
+    esg = payload.get("ESGScores")
+    if not isinstance(esg, dict):
+        return (None, [])
+    rating_date = _parse_date(esg.get("RatingDate"))
+    if rating_date is None:
+        return (None, [])
+    snapshot = EsgSnapshotRow(
+        ticker=ticker,
+        rating_date=rating_date,
+        total_esg=_coerce_optional_float(esg.get("TotalEsg") or esg.get("TotalESG")),
+        total_esg_percentile=_coerce_optional_float(esg.get("TotalEsgPercentile")),
+        environment_score=_coerce_optional_float(esg.get("EnvironmentScore")),
+        environment_percentile=_coerce_optional_float(esg.get("EnvironmentScorePercentile")),
+        social_score=_coerce_optional_float(esg.get("SocialScore")),
+        social_percentile=_coerce_optional_float(esg.get("SocialScorePercentile")),
+        governance_score=_coerce_optional_float(esg.get("GovernanceScore")),
+        governance_percentile=_coerce_optional_float(esg.get("GovernanceScorePercentile")),
+        controversy_level=_coerce_optional_int(esg.get("ControversyLevel")),
+    )
+    activities_raw = esg.get("ActivitiesInvolvement")
+    activities: list[EsgActivityRow] = []
+    if isinstance(activities_raw, dict):
+        for entry in activities_raw.values():
+            if not isinstance(entry, dict):
+                continue
+            activity = entry.get("Activity")
+            involvement = entry.get("Involvement")
+            if not activity or involvement is None:
+                continue
+            activities.append(
+                EsgActivityRow(
+                    ticker=ticker,
+                    rating_date=rating_date,
+                    activity=str(activity),
+                    involvement=str(involvement),
+                )
+            )
+    return (snapshot, activities)
+
+
+def parse_cross_listings_from_fundamentals(ticker: str, payload: Any) -> Iterator[CrossListingRow]:
+    """Parse ``General.Listings`` (other-exchange listings) into rows."""
+    if not isinstance(payload, dict):
+        return iter(())
+    listings = (payload.get("General") or {}).get("Listings")
+    if not isinstance(listings, dict):
+        return iter(())
+    for entry in listings.values():
+        if not isinstance(entry, dict):
+            continue
+        exchange = entry.get("Exchange")
+        code = entry.get("Code")
+        if not exchange or not code:
+            continue
+        yield CrossListingRow(
+            ticker=ticker,
+            exchange=exchange,
+            exchange_code=code,
+            name=entry.get("Name"),
+        )
+
+
+def parse_officers_from_fundamentals(ticker: str, payload: Any) -> Iterator[OfficerRow]:
+    """Parse the current officer roster from ``General.Officers``."""
+    if not isinstance(payload, dict):
+        return iter(())
+    officers = (payload.get("General") or {}).get("Officers")
+    if not isinstance(officers, dict):
+        return iter(())
+    for entry in officers.values():
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("Name")
+        if not name:
+            continue
+        yield OfficerRow(
+            ticker=ticker,
+            name=name,
+            title=entry.get("Title"),
+            year_born=_coerce_optional_int(entry.get("YearBorn")),
+        )
+
+
+def parse_shares_outstanding_history(ticker: str, payload: Any) -> Iterator[SharesOutstandingRow]:
     """Fundamentals has an ``outstandingShares`` section with both
     ``annual`` and ``quarterly`` dicts — each period dict carries
     ``dateFormatted`` (ISO date) and ``shares`` (integer count). We pull
@@ -307,9 +602,7 @@ def parse_shares_outstanding_history(
     return _iter_shares_outstanding(ticker, shares_blob)
 
 
-def _iter_shares_outstanding(
-    ticker: str, shares_blob: dict
-) -> Iterator[SharesOutstandingRow]:
+def _iter_shares_outstanding(ticker: str, shares_blob: dict) -> Iterator[SharesOutstandingRow]:
     for frequency_key in ("annual", "quarterly"):
         periods = shares_blob.get(frequency_key) or {}
         if not isinstance(periods, dict):
@@ -386,6 +679,20 @@ def parse_news_response(ticker: str, payload: Any) -> Iterator[NewsArticleRow]:
 
 
 def parse_insider_response(ticker: str, payload: Any) -> Iterator[InsiderTransactionRow]:
+    """Parse ``/api/insider-transactions`` rows.
+
+    Vendor field mapping:
+      - ``transactionDate`` → ``transaction_date`` (actual trade date)
+      - ``reportDate`` → ``filing_date`` (SEC filing date; lag = signal)
+      - ``ownerCik`` → ``owner_cik``
+      - ``ownerRelationship`` → ``owner_relation`` (categorical)
+      - ``ownerTitle`` → ``owner_title`` (free text e.g. "CEO")
+      - ``transactionAcquiredDisposed`` → ``acquired_disposed`` (A | D)
+      - ``postTransactionAmount`` → ``post_transaction_amount``
+      - ``link`` → ``sec_link`` (URL to the underlying Form 4)
+
+    Derives ``value = shares * price`` when both are present.
+    """
     _check_free_tier(payload)
     if not isinstance(payload, list):
         return iter(())
@@ -398,22 +705,27 @@ def parse_insider_response(ticker: str, payload: Any) -> Iterator[InsiderTransac
         shares = _coerce_optional_float(row.get("transactionAmount"))
         price = _coerce_optional_float(row.get("transactionPrice"))
         value = (shares * price) if shares is not None and price is not None else None
+        ad_raw = row.get("transactionAcquiredDisposed")
+        acquired_disposed = ad_raw if ad_raw in ("A", "D") else None
         yield InsiderTransactionRow(
             ticker=ticker,
-            date=tx_date,
+            transaction_date=tx_date,
+            filing_date=_parse_date(row.get("reportDate")),
             owner_name=row.get("ownerName"),
+            owner_cik=row.get("ownerCik"),
             owner_relation=row.get("ownerRelationship"),
+            owner_title=row.get("ownerTitle"),
             transaction_code=row.get("transactionCode"),
+            acquired_disposed=acquired_disposed,
             shares=shares,
             price=price,
             value=value,
-            vendor_id=row.get("ownerCik"),
+            post_transaction_amount=_coerce_optional_float(row.get("postTransactionAmount")),
+            sec_link=row.get("link") or row.get("secLink"),
         )
 
 
-def parse_sentiments_response(
-    ticker: str, payload: Any
-) -> Iterator[NewsSentimentRow]:
+def parse_sentiments_response(ticker: str, payload: Any) -> Iterator[NewsSentimentRow]:
     """EODHD sentiment endpoint returns ``{"<ticker>": [{date, count, normalized}, ...]}``."""
     _check_free_tier(payload)
     if isinstance(payload, dict):
@@ -517,7 +829,9 @@ class EodhdDataSource(DataSource):
         data = self._get(url, params={"fmt": "json"})
         if not isinstance(data, list):
             return []
-        return [f"{row['Code']}.{exchange}" for row in data if isinstance(row, dict) and "Code" in row]
+        return [
+            f"{row['Code']}.{exchange}" for row in data if isinstance(row, dict) and "Code" in row
+        ]
 
     def fetch_prices(
         self, ticker: str, since: date | None = None, until: date | None = None
@@ -555,19 +869,30 @@ class EodhdDataSource(DataSource):
         url = f"{self._base_url}/intraday/{ticker}"
         params: dict[str, str] = {"fmt": "json", "interval": interval.code}
         if since is not None:
-            params["from"] = str(int(datetime(since.year, since.month, since.day, tzinfo=UTC).timestamp()))
+            params["from"] = str(
+                int(datetime(since.year, since.month, since.day, tzinfo=UTC).timestamp())
+            )
         if until is not None:
-            params["to"] = str(int(datetime(until.year, until.month, until.day, 23, 59, 59, tzinfo=UTC).timestamp()))
+            params["to"] = str(
+                int(
+                    datetime(until.year, until.month, until.day, 23, 59, 59, tzinfo=UTC).timestamp()
+                )
+            )
         data = self._get(url, params=params)
         return list(parse_intraday_response(ticker, data))
 
     def fetch_metadata(self, ticker: str, since: date | None = None) -> MetadataBundle:
-        """Assemble the full metadata bundle by hitting five EODHD endpoints
+        """Assemble the full metadata bundle by hitting seven EODHD endpoints
         in parallel (``requests.Session`` is thread-safe for concurrent GETs).
 
         Each sub-fetch is wrapped in free-tier / network error tolerance:
         a subscription-blocked or transport error on one endpoint leaves the
         corresponding bundle field empty; other fields still populate.
+
+        The single ``/fundamentals`` payload contributes the lion's share —
+        profile, ticker_snapshot, holders, earnings_announcements,
+        analyst_forecasts, analyst_ratings, esg_snapshot/activities,
+        cross_listings, officers, shares_outstanding history, employee_count.
         """
         since_iso = since.isoformat() if since is not None else None
 
@@ -576,24 +901,29 @@ class EodhdDataSource(DataSource):
 
         jobs = {
             "fundamentals": lambda: self._get_json(f"/fundamentals/{ticker}"),
-            "dividends":    lambda: self._get_json(
-                f"/div/{ticker}", _params_with_since({"fmt": "json"}),
+            "dividends": lambda: self._get_json(
+                f"/div/{ticker}",
+                _params_with_since({"fmt": "json"}),
             ),
-            "splits":       lambda: self._get_json(
-                f"/splits/{ticker}", _params_with_since({"fmt": "json"}),
+            "splits": lambda: self._get_json(
+                f"/splits/{ticker}",
+                _params_with_since({"fmt": "json"}),
             ),
-            "market_cap":   lambda: self._get_json(
-                f"/historical-market-cap/{ticker}", {"fmt": "json"},
+            "market_cap": lambda: self._get_json(
+                f"/historical-market-cap/{ticker}",
+                {"fmt": "json"},
             ),
-            "news":         lambda: self._get_json(
-                "/news", _params_with_since({"fmt": "json", "s": ticker}),
+            "news": lambda: self._get_json(
+                "/news",
+                _params_with_since({"fmt": "json", "s": ticker}),
             ),
-            "insider":      lambda: self._get_json(
+            "insider": lambda: self._get_json(
                 "/insider-transactions",
                 _params_with_since({"fmt": "json", "code": ticker}),
             ),
-            "sentiments":   lambda: self._get_json(
-                "/sentiments", {"fmt": "json", "s": ticker},
+            "sentiments": lambda: self._get_json(
+                "/sentiments",
+                {"fmt": "json", "s": ticker},
             ),
         }
 
@@ -607,12 +937,30 @@ class EodhdDataSource(DataSource):
             profile = parse_profile_from_fundamentals(ticker, fundamentals)
             if profile is not None:
                 bundle_parts["profile"] = profile
-            bundle_parts["analyst_estimates"] = tuple(
-                parse_analyst_estimates_from_fundamentals(ticker, fundamentals)
+            snapshot = parse_ticker_snapshot_from_fundamentals(ticker, fundamentals)
+            if snapshot is not None:
+                bundle_parts["ticker_snapshot"] = snapshot
+            bundle_parts["earnings_announcements"] = tuple(
+                parse_earnings_announcements_from_fundamentals(ticker, fundamentals)
+            )
+            bundle_parts["analyst_forecasts"] = tuple(
+                parse_analyst_forecasts_from_fundamentals(ticker, fundamentals)
             )
             rating = parse_analyst_ratings_from_fundamentals(ticker, fundamentals)
             if rating is not None:
-                bundle_parts["analyst_ratings"] = rating
+                bundle_parts["analyst_ratings"] = (rating,)
+            bundle_parts["institutional_holders"] = tuple(
+                parse_holders_from_fundamentals(ticker, fundamentals)
+            )
+            esg_snap, esg_activities = parse_esg_from_fundamentals(ticker, fundamentals)
+            if esg_snap is not None:
+                bundle_parts["esg_snapshot"] = esg_snap
+            if esg_activities:
+                bundle_parts["esg_activities"] = tuple(esg_activities)
+            bundle_parts["cross_listings"] = tuple(
+                parse_cross_listings_from_fundamentals(ticker, fundamentals)
+            )
+            bundle_parts["officers"] = tuple(parse_officers_from_fundamentals(ticker, fundamentals))
             # Full shares-outstanding history from fundamentals.outstandingShares;
             # falls back to empty tuple if the section is missing.
             bundle_parts["shares_outstanding"] = tuple(
@@ -627,9 +975,7 @@ class EodhdDataSource(DataSource):
                 parse_dividends_response(ticker, results["dividends"])
             )
         if results["splits"] is not None:
-            bundle_parts["splits"] = tuple(
-                parse_splits_response(ticker, results["splits"])
-            )
+            bundle_parts["splits"] = tuple(parse_splits_response(ticker, results["splits"]))
         if results["market_cap"] is not None:
             bundle_parts["market_cap_history"] = tuple(
                 parse_market_cap_response(ticker, results["market_cap"])

@@ -55,3 +55,36 @@ def test_live_fundamentals_either_succeeds_or_reports_free_tier(source):
         pytest.skip("fundamentals endpoint is paid-only; free tier returned the expected error")
     else:
         assert rows, "paid tier should yield at least one fundamental row"
+
+
+def test_live_metadata_carries_extended_surface(source):
+    """Smoke-test the full metadata bundle on a paid plan: every new field
+    we model should be populated for AAPL. Free-tier runs leave most of
+    the bundle empty (soft-fail) — we assert that the call returned
+    without raising and that at least the static profile landed.
+    """
+    bundle = source.fetch_metadata("AAPL.US")
+
+    # Profile is sourced from /api/fundamentals; on paid tier it must be present.
+    if bundle.profile is None:
+        pytest.skip("fundamentals blocked on free tier — bundle is empty")
+
+    # Static identifiers (paid-tier expectation; we assert presence, not
+    # exact values, since vendor data can drift).
+    assert bundle.profile.cusip, "expected CUSIP populated"
+    assert bundle.profile.cik, "expected CIK populated"
+    assert bundle.profile.gic_sector, "expected GIC sector populated"
+    assert bundle.profile.security_type == "common_stock"
+
+    # Volatile snapshot row should be populated (beta + ownership).
+    assert bundle.ticker_snapshot is not None
+    assert bundle.ticker_snapshot.beta is not None
+
+    # New fundamentals-derived collections (size > 0 on paid tier).
+    assert bundle.earnings_announcements, "expected historical earnings announcements"
+    assert bundle.analyst_forecasts, "expected analyst forecast rows"
+    assert bundle.analyst_ratings, "expected analyst ratings snapshot"
+    assert bundle.institutional_holders, "expected institutional holders top-N"
+    assert bundle.cross_listings or bundle.officers, (
+        "expected cross_listings or officers populated for AAPL"
+    )

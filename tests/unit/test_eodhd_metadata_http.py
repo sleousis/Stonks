@@ -67,17 +67,32 @@ def test_fetch_metadata_assembles_full_bundle_from_all_endpoints():
     source = EodhdDataSource(api_key="k", session=session)  # type: ignore[arg-type]
     bundle = source.fetch_metadata("AAPL.US")
 
+    # Static profile
     assert bundle.profile is not None
     assert bundle.profile.name == "Apple Inc"
+    assert bundle.profile.cusip == "037833100"
+    assert bundle.profile.gic_sector == "Information Technology"
+    # Volatile snapshot lives on the new TickerSnapshotRow
+    assert bundle.ticker_snapshot is not None
+    assert bundle.ticker_snapshot.beta == 1.25
+    # Standalone-endpoint fields
     assert len(bundle.dividends) == 2
     assert len(bundle.splits) == 5
     assert len(bundle.market_cap_history) == 4
     assert len(bundle.news) == 2
-    assert len(bundle.insider_transactions) == 1
+    assert len(bundle.insider_transactions) == 2
     assert len(bundle.news_sentiment) == 2
-    assert len(bundle.analyst_estimates) == 8
-    assert bundle.analyst_ratings is not None
-    # full history from fundamentals.outstandingShares now, not a snapshot
+    # New fundamentals-derived fields
+    assert len(bundle.earnings_announcements) == 2
+    assert len(bundle.analyst_forecasts) == 2
+    assert len(bundle.analyst_ratings) == 1
+    assert len(bundle.institutional_holders) == 4
+    assert bundle.esg_snapshot is not None
+    assert bundle.esg_snapshot.environment_score == 0.7
+    assert len(bundle.esg_activities) == 5
+    assert len(bundle.cross_listings) == 2
+    assert len(bundle.officers) == 3
+    # full history from fundamentals.outstandingShares
     assert len(bundle.shares_outstanding) == 5
     assert len(bundle.employee_count) == 1
 
@@ -99,9 +114,13 @@ def test_fetch_metadata_tolerates_free_tier_403_on_some_endpoints():
 
     # fundamentals-derived fields still present
     assert bundle.profile is not None
-    assert bundle.analyst_ratings is not None
-    assert len(bundle.analyst_estimates) == 8
-    # paid-only fields silently empty
+    assert bundle.ticker_snapshot is not None
+    assert len(bundle.analyst_ratings) == 1
+    assert len(bundle.earnings_announcements) == 2
+    assert len(bundle.analyst_forecasts) == 2
+    assert len(bundle.institutional_holders) == 4
+    assert len(bundle.officers) == 3
+    # paid-only standalone-endpoint fields silently empty
     assert bundle.dividends == ()
     assert bundle.splits == ()
     assert bundle.market_cap_history == ()
@@ -127,8 +146,13 @@ def test_fetch_metadata_tolerates_complete_free_tier():
 
     # completely empty bundle, no exception
     assert bundle.profile is None
+    assert bundle.ticker_snapshot is None
     assert bundle.dividends == ()
     assert bundle.splits == ()
     assert bundle.market_cap_history == ()
     assert bundle.news == ()
-    assert bundle.analyst_estimates == ()
+    assert bundle.earnings_announcements == ()
+    assert bundle.analyst_forecasts == ()
+    assert bundle.institutional_holders == ()
+    assert bundle.cross_listings == ()
+    assert bundle.officers == ()

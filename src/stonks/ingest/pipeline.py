@@ -123,14 +123,22 @@ class IngestPipeline:
     def _upsert_bundle(self, bundle: MetadataBundle) -> None:
         if bundle.profile is not None:
             self._lake.upsert_ticker_profile(_rows_to_df([bundle.profile]))
+        if bundle.ticker_snapshot is not None:
+            self._lake.upsert_ticker_snapshots(_rows_to_df([bundle.ticker_snapshot]))
         self._lake.upsert_dividends(_rows_to_df(bundle.dividends))
         self._lake.upsert_stock_splits(_rows_to_df(bundle.splits))
         self._lake.upsert_insider_transactions(_rows_to_df(bundle.insider_transactions))
         self._lake.upsert_news(_rows_to_df(bundle.news))
         self._lake.upsert_news_sentiment(_rows_to_df(bundle.news_sentiment))
-        self._lake.upsert_analyst_estimates(_rows_to_df(bundle.analyst_estimates))
-        if bundle.analyst_ratings is not None:
-            self._lake.upsert_analyst_ratings(_rows_to_df([bundle.analyst_ratings]))
+        self._lake.upsert_earnings_announcements(_rows_to_df(bundle.earnings_announcements))
+        self._lake.upsert_analyst_forecasts(_rows_to_df(bundle.analyst_forecasts))
+        self._lake.upsert_analyst_ratings(_rows_to_df(bundle.analyst_ratings))
+        self._lake.upsert_institutional_holders(_rows_to_df(bundle.institutional_holders))
+        if bundle.esg_snapshot is not None:
+            self._lake.upsert_esg_snapshots(_rows_to_df([bundle.esg_snapshot]))
+        self._lake.upsert_esg_activities(_rows_to_df(bundle.esg_activities))
+        self._lake.upsert_cross_listings(_rows_to_df(bundle.cross_listings))
+        self._lake.upsert_officers(_rows_to_df(bundle.officers))
         self._lake.upsert_shares_outstanding(_rows_to_df(bundle.shares_outstanding))
         self._lake.upsert_employee_count(_rows_to_df(bundle.employee_count))
         self._lake.upsert_segmentation(_rows_to_df(bundle.segmentation))
@@ -212,13 +220,28 @@ def _non_empty_parts(bundle: MetadataBundle) -> list[str]:
     out: list[str] = []
     if bundle.profile is not None:
         out.append("profile")
+    if bundle.ticker_snapshot is not None:
+        out.append("ticker_snapshot")
+    if bundle.esg_snapshot is not None:
+        out.append("esg_snapshot")
     for name in (
-        "dividends", "splits", "insider_transactions", "news", "news_sentiment",
-        "analyst_estimates", "shares_outstanding", "employee_count",
-        "segmentation", "market_cap_history",
+        "dividends",
+        "splits",
+        "insider_transactions",
+        "news",
+        "news_sentiment",
+        "earnings_announcements",
+        "analyst_forecasts",
+        "analyst_ratings",
+        "institutional_holders",
+        "esg_activities",
+        "cross_listings",
+        "officers",
+        "shares_outstanding",
+        "employee_count",
+        "segmentation",
+        "market_cap_history",
     ):
         if getattr(bundle, name):
             out.append(name)
-    if bundle.analyst_ratings is not None:
-        out.append("analyst_ratings")
     return out

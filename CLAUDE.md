@@ -34,6 +34,11 @@ uv run stonks tick [--dry-run] [--as-of YYYY-MM-DD] [--tickers AAPL.US,MSFT.US]
 - **TDD.** Write a failing unit test first, then the implementation. Every new component ships with unit tests. Integration tests live under `tests/integration/`; any test that hits a real network goes under `tests/integration/live/` and is gated by `@pytest.mark.live` + `STONKS_RUN_LIVE_TESTS=1`.
 - **No live-API calls in default test runs.** Default `pytest` must be hermetic. Use `FakeDataSource` (canned data) for pipeline tests.
 - **Secrets never land in git.** `.env` is gitignored; `.env.example` is the only checked-in template.
+- **Vendor-agnostic schemas.** Schemas, lake tables, and column names describe domain concepts, never vendor JSON shapes. EODHD is the first `DataSource`; other adapters must populate the same tables without renaming columns or inventing parallel schemas. Concretely:
+  - Fields whose vendor vocabulary varies (e.g. `before_after_market`, `security_type`, analyst-forecast `period_relative`) use **normalized literal values**; adapters map vendor strings to the canonical literal at parse time.
+  - Vendor-specific fields with no cross-vendor analogue (e.g. EODHD's `HomeCategory`, `LogoURL`) are **not added** — they don't earn a column.
+  - **Domain identifiers** (CUSIP, CIK, ISIN, OpenFigi, LEI) live on `TickerProfile`; the EODHD ticker (`AAPL.US`) is one access key among many.
+  - **Column names use domain terms**, not vendor JSON keys (e.g. `change_pct` not `change_p`, `total_shares_pct` not `totalShares`).
 
 ## Architecture in one screen
 
