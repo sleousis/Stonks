@@ -22,6 +22,22 @@ injectable-session-friendly for tests, and has full coverage.
 Vendor-specific vocabulary is normalized at parse time — see the
 ``_BEFORE_AFTER_MARKET_MAP``, ``_PERIOD_RELATIVE_MAP``, and
 ``_SECURITY_TYPE_MAP`` translations.
+
+Things to keep in mind
+----------------------
+- **Bulk EOD / splits / dividends endpoint** (not yet wired up):
+  ``https://eodhd.com/api/eod-bulk-last-day/{EXCHANGE}`` returns one
+  full-exchange snapshot per request (optionally ``?type=splits`` or
+  ``?type=dividends``). Cost is a flat 100 API calls for the whole
+  exchange vs. 1 per ticker on the per-symbol endpoints, so for daily
+  market-wide refreshes it is dramatically cheaper than looping over
+  ``fetch_prices`` / ``fetch_dividends`` / ``fetch_splits`` per ticker.
+  Caveats: the ``symbols=`` filter only applies to EOD (splits/dividends
+  ignore it), ``filter=extended`` data only covers the last 30 days, and
+  it is a single-day snapshot — backfilling history still needs the
+  per-ticker endpoints. Skipped for now to avoid adding a parallel
+  ingestion path; revisit when daily full-universe refreshes become a
+  bottleneck.
 """
 
 from __future__ import annotations
