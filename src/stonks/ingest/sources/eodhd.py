@@ -25,6 +25,13 @@ Vendor-specific vocabulary is normalized at parse time — see the
 
 Things to keep in mind
 ----------------------
+- **Full API catalog**: ``https://eodhd.com/financial-apis/`` is the vendor's
+  top-level index of every endpoint they expose (prices, fundamentals, news,
+  options, macro, crypto, screener, websockets, …). Each tile links to the
+  per-endpoint docs page with the URL shape, query params, response example,
+  and credit cost. When extending this adapter — or evaluating whether
+  EODHD covers a new domain we want to ingest — start here rather than
+  guessing endpoint paths or scraping individual articles in isolation.
 - **Bulk EOD / splits / dividends endpoint** (not yet wired up):
   ``https://eodhd.com/api/eod-bulk-last-day/{EXCHANGE}`` returns one
   full-exchange snapshot per request (optionally ``?type=splits`` or
@@ -38,6 +45,13 @@ Things to keep in mind
   per-ticker endpoints. Skipped for now to avoid adding a parallel
   ingestion path; revisit when daily full-universe refreshes become a
   bottleneck.
+- **Bulk fundamentals endpoints** (not yet wired up): EODHD also exposes
+  exchange-wide bulk variants for fundamentals (and related metadata) that
+  return one snapshot covering the whole exchange per call rather than one
+  call per ticker. Same trade-off as the bulk EOD endpoint above — much
+  cheaper for full-universe refreshes, but adds a parallel ingestion path.
+  Worth revisiting if per-ticker ``fetch_fundamentals`` / ``fetch_metadata``
+  fan-out becomes the dominant cost as the universe grows.
 """
 
 from __future__ import annotations
