@@ -39,6 +39,7 @@ uv run stonks tick [--dry-run] [--as-of YYYY-MM-DD] [--tickers AAPL.US,MSFT.US]
   - Vendor-specific fields with no cross-vendor analogue (e.g. EODHD's `HomeCategory`, `LogoURL`) are **not added** — they don't earn a column.
   - **Domain identifiers** (CUSIP, CIK, ISIN, OpenFigi, LEI) live on `TickerProfile`; the EODHD ticker (`AAPL.US`) is one access key among many.
   - **Column names use domain terms**, not vendor JSON keys (e.g. `change_pct` not `change_p`, `total_shares_pct` not `totalShares`).
+- **Third-party libraries.** Don't reinvent the wheel — prefer well-maintained external libraries (e.g. `vectorbt`, `FinanceToolkit`) over hand-rolled implementations of non-trivial trading/finance logic. But every non-trivial third-party library must be wrapped behind one of our seams (`Strategy`, `Tuner`, `DataSource`, `Broker`, `Objective`, `SurvivalTest`, or a new ABC if none fit) so vendor-specific types, naming, and quirks never leak into `core/` or downstream blocks. Trivial utility libraries (numpy, pandas, scipy) are exempt.
 
 ## Architecture in one screen
 
