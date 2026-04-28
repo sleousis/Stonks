@@ -1,11 +1,14 @@
-"""DuckDB-backed analytical data lake: prices, fundamentals, ingest run ledger.
+"""DuckDB-backed analytical data lake: prices, financial statements,
+extended metadata, ingest run ledger.
 
-Schema lives in ``migrations/*.sql``; versions are tracked in ``schema_migrations``
-and applied in lexical order at ``migrate()`` time.
+Schema lives in ``migrations_duckdb/*.sql``; versions are tracked in
+``schema_migrations`` and applied in lexical order at ``migrate()`` time.
 """
 
 from __future__ import annotations
 
+import os
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -17,8 +20,19 @@ import pandas as pd
 
 from stonks.core.interval import Interval
 from stonks.core.timeutil import day_end, day_start
+from stonks.logging import get_logger
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations_duckdb"
+
+# Env var that lets an operator opt into a destructive migration
+# (``DROP TABLE``) against a table that currently holds rows. The default
+# is to refuse — losing committed data must be an explicit choice, not
+# something a routine ``stonks db init`` does silently.
+_DESTRUCTIVE_OPT_IN_ENV = "STONKS_ALLOW_DESTRUCTIVE_MIGRATIONS"
+_DROP_TABLE_RE = re.compile(
+    r"\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*;",
+    re.IGNORECASE,
+)
 
 _PRICE_COLS = ("ticker", "date", "open", "high", "low", "close", "adj_close", "volume")
 _BAR_COLS = (
@@ -32,7 +46,151 @@ _BAR_COLS = (
     "adj_close",
     "volume",
 )
-_FUND_COLS = ("ticker", "period_end", "frequency", "statement", "line_item", "value")
+# Wide column lists for each financial-statement table (migration 008).
+# Source of truth is the SQL migration; if the two diverge an upsert will
+# raise on the missing/extra column at INSERT time, which is loud enough.
+_INCOME_STATEMENT_COLS: tuple[str, ...] = (
+    "ticker",
+    "period_end",
+    "frequency",
+    "filing_date",
+    "currency",
+    "revenue",
+    "cost_of_revenue",
+    "gross_profit",
+    "research_development",
+    "selling_general_administrative",
+    "selling_marketing_expenses",
+    "other_operating_expenses",
+    "total_operating_expenses",
+    "operating_income",
+    "interest_income",
+    "interest_expense",
+    "net_interest_income",
+    "non_operating_income_other",
+    "total_other_income_expense_net",
+    "income_before_tax",
+    "income_tax_expense",
+    "tax_provision",
+    "minority_interest",
+    "net_income_continuing",
+    "discontinued_operations",
+    "extraordinary_items",
+    "non_recurring",
+    "other_items",
+    "effect_of_accounting_charges",
+    "net_income",
+    "net_income_to_common",
+    "preferred_stock_adjustments",
+    "ebit",
+    "ebitda",
+    "depreciation_amortization",
+    "reconciled_depreciation",
+)
+_BALANCE_SHEET_COLS: tuple[str, ...] = (
+    "ticker",
+    "period_end",
+    "frequency",
+    "filing_date",
+    "currency",
+    "total_assets",
+    "current_assets",
+    "cash",
+    "cash_and_equivalents",
+    "cash_and_short_term_investments",
+    "short_term_investments",
+    "net_receivables",
+    "inventory",
+    "other_current_assets",
+    "non_current_assets",
+    "long_term_investments",
+    "property_plant_equipment_net",
+    "property_plant_equipment_gross",
+    "accumulated_depreciation",
+    "accumulated_amortization",
+    "goodwill",
+    "intangible_assets",
+    "other_assets",
+    "deferred_long_term_asset_charges",
+    "non_current_assets_other",
+    "earning_assets",
+    "total_liabilities",
+    "current_liabilities",
+    "accounts_payable",
+    "current_deferred_revenue",
+    "short_term_debt",
+    "short_long_term_debt",
+    "short_long_term_debt_total",
+    "other_current_liabilities",
+    "non_current_liabilities",
+    "long_term_debt",
+    "long_term_debt_total",
+    "capital_lease_obligations",
+    "deferred_long_term_liabilities",
+    "other_liabilities",
+    "non_current_liabilities_other",
+    "negative_goodwill",
+    "warrants",
+    "preferred_stock_redeemable",
+    "total_stockholder_equity",
+    "common_stock",
+    "capital_stock",
+    "additional_paid_in_capital",
+    "retained_earnings",
+    "treasury_stock",
+    "accumulated_other_comprehensive_income",
+    "other_stockholder_equity",
+    "common_stock_total_equity",
+    "preferred_stock_total_equity",
+    "retained_earnings_total_equity",
+    "capital_surplus",
+    "total_permanent_equity",
+    "noncontrolling_interest",
+    "temporary_equity_redeemable_noncontrolling",
+    "liabilities_and_stockholders_equity",
+    "net_debt",
+    "net_tangible_assets",
+    "net_working_capital",
+    "investments",
+    "common_stock_shares_outstanding",
+)
+_CASH_FLOW_STATEMENT_COLS: tuple[str, ...] = (
+    "ticker",
+    "period_end",
+    "frequency",
+    "filing_date",
+    "currency",
+    "operating_cash_flow",
+    "investing_cash_flow",
+    "financing_cash_flow",
+    "net_income",
+    "depreciation",
+    "stock_based_compensation",
+    "change_in_working_capital",
+    "change_to_inventory",
+    "change_to_account_receivables",
+    "change_to_liabilities",
+    "change_to_operating_activities",
+    "change_to_net_income",
+    "change_receivables",
+    "cash_flows_other_operating",
+    "other_non_cash_items",
+    "capital_expenditures",
+    "investments",
+    "other_cash_flows_investing",
+    "dividends_paid",
+    "net_borrowings",
+    "issuance_of_capital_stock",
+    "sale_purchase_of_stock",
+    "other_cash_flows_financing",
+    "change_in_cash",
+    "cash_and_cash_equivalents_changes",
+    "begin_period_cash_flow",
+    "end_period_cash_flow",
+    "exchange_rate_changes",
+    "free_cash_flow",
+)
+_STATEMENT_PK: tuple[str, ...] = ("ticker", "period_end", "frequency")
 
 
 class DuckDBLake:
@@ -72,11 +230,13 @@ class DuckDBLake:
         applied = {
             row[0] for row in self.con.execute("SELECT version FROM schema_migrations").fetchall()
         }
+        log = get_logger("stonks.store.lake.migrate")
         for path in sorted(MIGRATIONS_DIR.glob("*.sql")):
             version = int(path.stem.split("_", 1)[0])
             if version in applied:
                 continue
             sql = path.read_text()
+            self._guard_destructive_drops(sql, version=version, log=log)
             self.con.execute("BEGIN")
             try:
                 self.con.execute(sql)
@@ -88,6 +248,39 @@ class DuckDBLake:
             except Exception:
                 self.con.execute("ROLLBACK")
                 raise
+
+    def _guard_destructive_drops(self, sql: str, *, version: int, log: Any) -> None:
+        """Refuse to apply a migration whose ``DROP TABLE`` step would
+        delete a table that currently holds rows, unless the operator
+        explicitly opts in via ``STONKS_ALLOW_DESTRUCTIVE_MIGRATIONS=1``.
+
+        Empty / non-existent tables are dropped silently — this guard
+        only fires when real data would be lost. Each affected table
+        produces one structured WARNING log line so operators can see
+        exactly what they'd lose before opting in.
+        """
+        existing = set(self.tables())
+        opt_in = os.environ.get(_DESTRUCTIVE_OPT_IN_ENV, "").lower() in {"1", "true", "yes"}
+        for match in _DROP_TABLE_RE.finditer(sql):
+            target = match.group(1)
+            if target not in existing:
+                continue
+            row_count = int(self.con.execute(f"SELECT COUNT(*) FROM {target}").fetchone()[0])
+            if row_count == 0:
+                continue
+            log.warning(
+                "lake.migrate.destructive_drop",
+                migration_version=version,
+                table=target,
+                rows=row_count,
+                opt_in_env=_DESTRUCTIVE_OPT_IN_ENV,
+            )
+            if not opt_in:
+                raise RuntimeError(
+                    f"migration {version:03d} would DROP TABLE {target} which holds "
+                    f"{row_count} row(s); set {_DESTRUCTIVE_OPT_IN_ENV}=1 to confirm "
+                    f"that the data is expendable, then re-run."
+                )
 
     def applied_migrations(self) -> list[int]:
         return [
@@ -279,33 +472,117 @@ class DuckDBLake:
         out["date"] = pd.to_datetime(out["date"]).dt.date
         return out[list(_PRICE_COLS)]
 
-    # ---- fundamentals -------------------------------------------------------
+    # ---- financial statements (migration 008) ------------------------------
 
-    def upsert_fundamentals(self, df: pd.DataFrame) -> int:
+    def upsert_income_statement(self, df: pd.DataFrame) -> int:
+        return self._upsert_statement(df, "income_statement", _INCOME_STATEMENT_COLS)
+
+    def upsert_balance_sheet(self, df: pd.DataFrame) -> int:
+        return self._upsert_statement(df, "balance_sheet", _BALANCE_SHEET_COLS)
+
+    def upsert_cash_flow_statement(self, df: pd.DataFrame) -> int:
+        return self._upsert_statement(df, "cash_flow_statement", _CASH_FLOW_STATEMENT_COLS)
+
+    def _upsert_statement(self, df: pd.DataFrame, table: str, cols: tuple[str, ...]) -> int:
+        """Upsert helper for the three wide financial-statement tables.
+
+        Vendors omit line items that don't apply to a given filer (banks
+        have no ``cost_of_revenue``, software firms no ``inventory``), so
+        the input DataFrame is intentionally sparse. Two consequences:
+
+        1. We reindex up to the full column set so absent columns land
+           as NULL on first INSERT.
+        2. On UPDATE conflict we use ``COALESCE(EXCLUDED.col, <table>.col)``
+           so a NULL coming in from the input does **not** overwrite a
+           prior non-NULL value. Real values overwrite (the typical
+           "vendor restated revenue" case); absences are preserved.
+
+        The PK columns must be present and non-NULL; the table's NOT
+        NULL constraint catches NULL-valued PKs but the column-presence
+        check raises a clearer error before that.
+        """
         if df.empty:
             return 0
-        self.con.register("_in", df[list(_FUND_COLS)])
-        try:
-            self.con.execute(
-                """
-                INSERT INTO fundamentals (ticker, period_end, frequency, statement, line_item, value)
-                SELECT ticker, period_end, frequency, statement, line_item, value FROM _in
-                ON CONFLICT (ticker, period_end, frequency, statement, line_item) DO UPDATE SET
-                    value = EXCLUDED.value
-                """
+        missing_pk = [c for c in _STATEMENT_PK if c not in df.columns]
+        if missing_pk:
+            raise ValueError(
+                f"{table}: missing required PK column(s) {missing_pk}; "
+                f"input columns were {list(df.columns)}"
             )
+        if df[list(_STATEMENT_PK)].isnull().to_numpy().any():
+            raise ValueError(
+                f"{table}: PK columns {_STATEMENT_PK} must be non-null; got NULL in input row(s)"
+            )
+        widened = df.reindex(columns=list(cols))
+        return self._upsert_preserve_nulls(widened, table=table, cols=cols, pk=_STATEMENT_PK)
+
+    def _upsert_preserve_nulls(
+        self,
+        df: pd.DataFrame,
+        *,
+        table: str,
+        cols: tuple[str, ...],
+        pk: tuple[str, ...],
+    ) -> int:
+        """Variant of :meth:`_upsert` that uses ``COALESCE(EXCLUDED.col,
+        <table>.col)`` in the UPDATE clause so a NULL in the input does
+        not overwrite a prior non-NULL value.
+
+        Used by the wide statement upserts where "vendor omitted this
+        line item" must not be confused with "vendor restated this line
+        to NULL". For tables where the input row is always complete
+        (e.g. ``dividends``, ``insider_transactions``), prefer the
+        plain :meth:`_upsert` so explicit deletions can land.
+
+        EXCLUDED is cast to each column's declared type so a sparse
+        DataFrame (whose absent columns arrive as ``DOUBLE`` NaN after
+        ``reindex``) can be coalesced against ``DATE`` / ``VARCHAR``
+        columns without DuckDB's strict-type binder rejecting the mix.
+        """
+        if df.empty:
+            return 0
+        col_types = self._column_types(table)
+        self.con.register("_in", df[list(cols)])
+        non_pk = [c for c in cols if c not in pk]
+        update_clause = ", ".join(
+            f"{c} = COALESCE(CAST(EXCLUDED.{c} AS {col_types[c]}), {table}.{c})" for c in non_pk
+        )
+        try:
+            sql = (
+                f"INSERT INTO {table} ({', '.join(cols)}) "
+                f"SELECT {', '.join(cols)} FROM _in "
+                f"ON CONFLICT ({', '.join(pk)}) DO UPDATE SET {update_clause}"
+            )
+            self.con.execute(sql)
         finally:
             self.con.unregister("_in")
         return len(df)
 
-    def get_fundamentals(self, ticker: str, statement: str | None = None) -> pd.DataFrame:
-        if statement is None:
-            return self.con.execute(
-                "SELECT * FROM fundamentals WHERE ticker = ?", [ticker]
-            ).fetchdf()
+    def _column_types(self, table: str) -> dict[str, str]:
+        rows = self.con.execute(
+            "SELECT column_name, data_type FROM information_schema.columns "
+            "WHERE table_schema='main' AND table_name = ?",
+            [table],
+        ).fetchall()
+        return {row[0]: row[1] for row in rows}
+
+    def get_income_statement(self, ticker: str) -> pd.DataFrame:
         return self.con.execute(
-            "SELECT * FROM fundamentals WHERE ticker = ? AND statement = ?",
-            [ticker, statement],
+            "SELECT * FROM income_statement WHERE ticker = ? ORDER BY period_end DESC, frequency",
+            [ticker],
+        ).fetchdf()
+
+    def get_balance_sheet(self, ticker: str) -> pd.DataFrame:
+        return self.con.execute(
+            "SELECT * FROM balance_sheet WHERE ticker = ? ORDER BY period_end DESC, frequency",
+            [ticker],
+        ).fetchdf()
+
+    def get_cash_flow_statement(self, ticker: str) -> pd.DataFrame:
+        return self.con.execute(
+            "SELECT * FROM cash_flow_statement "
+            "WHERE ticker = ? ORDER BY period_end DESC, frequency",
+            [ticker],
         ).fetchdf()
 
     # ---- ingest_runs --------------------------------------------------------

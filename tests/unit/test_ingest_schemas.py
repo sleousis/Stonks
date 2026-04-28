@@ -8,8 +8,10 @@ from pydantic import ValidationError
 from stonks.ingest.schemas import (
     AnalystForecastRow,
     AnalystRatingsRow,
+    BalanceSheetRow,
     BondProfileRow,
     BondYieldRow,
+    CashFlowStatementRow,
     CommodityContractRow,
     CrossListingRow,
     CryptoProfileRow,
@@ -18,7 +20,8 @@ from stonks.ingest.schemas import (
     EmployeeCountRow,
     EsgActivityRow,
     EsgSnapshotRow,
-    FundamentalRow,
+    FinancialStatementsBundle,
+    IncomeStatementRow,
     InsiderTransactionRow,
     InstitutionalHolderRow,
     NewsArticleRow,
@@ -75,54 +78,81 @@ def test_raw_price_bar_rejects_non_numeric_close():
         )
 
 
-def test_fundamental_row_construction():
-    row = FundamentalRow(
+def test_income_statement_row_construction_and_optional_fields():
+    row = IncomeStatementRow(
         ticker="AAPL.US",
         period_end=date(2025, 12, 31),
         frequency="Q",
-        statement="income",
-        line_item="totalRevenue",
-        value=123_456_789.0,
+        revenue=124_300_000_000.0,
+        cost_of_revenue=70_000_000_000.0,
+        net_income=36_330_000_000.0,
     )
-    assert row.statement == "income"
     assert row.frequency == "Q"
-    assert row.value == 123_456_789.0
+    assert row.revenue == 124_300_000_000.0
+    # Unset line items default to None — vendors omit lines that don't
+    # apply (e.g. banks have no cost_of_revenue).
+    assert row.gross_profit is None
+    assert row.ebitda is None
+    assert row.filing_date is None
 
 
-def test_fundamental_row_rejects_bad_frequency():
+def test_income_statement_row_rejects_bad_frequency():
     with pytest.raises(ValidationError):
-        FundamentalRow(
+        IncomeStatementRow(
             ticker="AAPL.US",
             period_end=date(2025, 12, 31),
             frequency="weekly",  # type: ignore[arg-type]
-            statement="income",
-            line_item="totalRevenue",
-            value=1.0,
         )
 
 
-def test_fundamental_row_rejects_bad_statement():
-    with pytest.raises(ValidationError):
-        FundamentalRow(
-            ticker="AAPL.US",
-            period_end=date(2025, 12, 31),
-            frequency="Q",
-            statement="wrong",  # type: ignore[arg-type]
-            line_item="totalRevenue",
-            value=1.0,
-        )
-
-
-def test_fundamental_row_allows_null_value():
-    row = FundamentalRow(
+def test_balance_sheet_row_construction():
+    row = BalanceSheetRow(
         ticker="AAPL.US",
         period_end=date(2025, 12, 31),
         frequency="A",
-        statement="balance",
-        line_item="totalAssets",
-        value=None,
+        total_assets=365_000_000_000.0,
+        total_liabilities=280_000_000_000.0,
+        total_stockholder_equity=85_000_000_000.0,
     )
-    assert row.value is None
+    assert row.frequency == "A"
+    assert row.total_assets == 365_000_000_000.0
+    assert row.cash is None  # not set
+
+
+def test_cash_flow_statement_row_construction():
+    row = CashFlowStatementRow(
+        ticker="AAPL.US",
+        period_end=date(2025, 12, 31),
+        frequency="Q",
+        operating_cash_flow=40_000_000_000.0,
+        capital_expenditures=-5_000_000_000.0,
+        free_cash_flow=35_000_000_000.0,
+    )
+    assert row.operating_cash_flow == 40_000_000_000.0
+    assert row.dividends_paid is None
+
+
+def test_financial_statements_bundle_defaults_to_empty_tuples():
+    bundle = FinancialStatementsBundle()
+    assert bundle.income == ()
+    assert bundle.balance == ()
+    assert bundle.cashflow == ()
+
+
+def test_financial_statements_bundle_holds_each_statement_independently():
+    bundle = FinancialStatementsBundle(
+        income=(
+            IncomeStatementRow(
+                ticker="AAPL.US",
+                period_end=date(2025, 12, 31),
+                frequency="Q",
+                revenue=100.0,
+            ),
+        ),
+    )
+    assert len(bundle.income) == 1
+    assert bundle.balance == ()
+    assert bundle.cashflow == ()
 
 
 # ---- extended fundamentals row schemas -------------------------------------

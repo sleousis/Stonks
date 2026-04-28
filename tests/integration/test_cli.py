@@ -34,7 +34,9 @@ class _FakeSource(DataSource):
         ]
 
     def fetch_fundamentals(self, ticker):
-        return []
+        from stonks.ingest.schemas import FinancialStatementsBundle
+
+        return FinancialStatementsBundle()
 
 
 @pytest.fixture
@@ -75,7 +77,9 @@ def test_db_info_lists_tables_from_both_stores(runner, cli_env):
     assert result.exit_code == 0, result.output
     # lake tables
     assert "prices" in result.output
-    assert "fundamentals" in result.output
+    assert "income_statement" in result.output
+    assert "balance_sheet" in result.output
+    assert "cash_flow_statement" in result.output
     assert "ingest_runs" in result.output
     # state tables
     assert "strategies" in result.output

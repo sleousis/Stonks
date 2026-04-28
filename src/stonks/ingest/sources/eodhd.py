@@ -72,9 +72,11 @@ from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.schemas import (
     AnalystForecastRow,
     AnalystRatingsRow,
+    BalanceSheetRow,
     BondIssuerKind,
     BondKind,
     BondProfileRow,
+    CashFlowStatementRow,
     CommodityContractKind,
     CommodityContractRow,
     CrossListingRow,
@@ -86,7 +88,8 @@ from stonks.ingest.schemas import (
     EsgActivityRow,
     EsgSnapshotRow,
     ExchangeInfo,
-    FundamentalRow,
+    FinancialStatementsBundle,
+    IncomeStatementRow,
     InsiderTransactionRow,
     InstitutionalHolderRow,
     IntradayBar,
@@ -96,6 +99,7 @@ from stonks.ingest.schemas import (
     OfficerRow,
     RawPriceBar,
     SharesOutstandingRow,
+    StatementFrequency,
     StockSplitRow,
     TickerProfile,
     TickerSnapshotRow,
@@ -114,12 +118,149 @@ _FREE_TIER_MARKERS: tuple[str, ...] = (
 )
 _FREE_TIER_WARNING_KEY = "warning"
 
-_STATEMENT_MAP = {
-    "Income_Statement": "income",
-    "Balance_Sheet": "balance",
-    "Cash_Flow": "cashflow",
+# EODHD's frequency keys → canonical literal. Iteration order matches the
+# vendor's two sub-objects under each statement section.
+_FREQUENCY_MAP: dict[str, StatementFrequency] = {"quarterly": "Q", "yearly": "A"}
+
+# Vendor camelCase line item → canonical snake_case column. One map per
+# statement; the map is the single source of truth that pairs the EODHD
+# field names with our schema fields. Keys not present in the map are
+# silently skipped at parse time (vendor adds new fields all the time —
+# they land in the lake only after we've consciously added a column).
+_INCOME_LINE_ITEMS: dict[str, str] = {
+    "totalRevenue": "revenue",
+    "costOfRevenue": "cost_of_revenue",
+    "grossProfit": "gross_profit",
+    "researchDevelopment": "research_development",
+    "sellingGeneralAdministrative": "selling_general_administrative",
+    "sellingAndMarketingExpenses": "selling_marketing_expenses",
+    "otherOperatingExpenses": "other_operating_expenses",
+    "totalOperatingExpenses": "total_operating_expenses",
+    "operatingIncome": "operating_income",
+    "interestIncome": "interest_income",
+    "interestExpense": "interest_expense",
+    "netInterestIncome": "net_interest_income",
+    "nonOperatingIncomeNetOther": "non_operating_income_other",
+    "totalOtherIncomeExpenseNet": "total_other_income_expense_net",
+    "incomeBeforeTax": "income_before_tax",
+    "incomeTaxExpense": "income_tax_expense",
+    "taxProvision": "tax_provision",
+    "minorityInterest": "minority_interest",
+    "netIncomeFromContinuingOps": "net_income_continuing",
+    "discontinuedOperations": "discontinued_operations",
+    "extraordinaryItems": "extraordinary_items",
+    "nonRecurring": "non_recurring",
+    "otherItems": "other_items",
+    "effectOfAccountingCharges": "effect_of_accounting_charges",
+    "netIncome": "net_income",
+    "netIncomeApplicableToCommonShares": "net_income_to_common",
+    "preferredStockAndOtherAdjustments": "preferred_stock_adjustments",
+    "ebit": "ebit",
+    "ebitda": "ebitda",
+    "depreciationAndAmortization": "depreciation_amortization",
+    "reconciledDepreciation": "reconciled_depreciation",
 }
-_FREQUENCY_MAP = {"quarterly": "Q", "yearly": "A"}
+_BALANCE_LINE_ITEMS: dict[str, str] = {
+    "totalAssets": "total_assets",
+    "totalCurrentAssets": "current_assets",
+    "cash": "cash",
+    "cashAndEquivalents": "cash_and_equivalents",
+    "cashAndShortTermInvestments": "cash_and_short_term_investments",
+    "shortTermInvestments": "short_term_investments",
+    "netReceivables": "net_receivables",
+    "inventory": "inventory",
+    "otherCurrentAssets": "other_current_assets",
+    "nonCurrentAssetsTotal": "non_current_assets",
+    "longTermInvestments": "long_term_investments",
+    "propertyPlantAndEquipmentNet": "property_plant_equipment_net",
+    "propertyPlantAndEquipmentGross": "property_plant_equipment_gross",
+    "accumulatedDepreciation": "accumulated_depreciation",
+    "accumulatedAmortization": "accumulated_amortization",
+    "goodWill": "goodwill",
+    "intangibleAssets": "intangible_assets",
+    "otherAssets": "other_assets",
+    "deferredLongTermAssetCharges": "deferred_long_term_asset_charges",
+    # EODHD's misspelling — kept verbatim on the vendor side, mapped to a
+    # correctly-spelled column. The corrected spelling is also accepted
+    # so an upstream typo fix doesn't silently zero the column.
+    "nonCurrrentAssetsOther": "non_current_assets_other",
+    "nonCurrentAssetsOther": "non_current_assets_other",
+    "earningAssets": "earning_assets",
+    "totalLiab": "total_liabilities",
+    "totalCurrentLiabilities": "current_liabilities",
+    "accountsPayable": "accounts_payable",
+    "currentDeferredRevenue": "current_deferred_revenue",
+    "shortTermDebt": "short_term_debt",
+    "shortLongTermDebt": "short_long_term_debt",
+    "shortLongTermDebtTotal": "short_long_term_debt_total",
+    "otherCurrentLiab": "other_current_liabilities",
+    "nonCurrentLiabilitiesTotal": "non_current_liabilities",
+    "longTermDebt": "long_term_debt",
+    "longTermDebtTotal": "long_term_debt_total",
+    "capitalLeaseObligations": "capital_lease_obligations",
+    "deferredLongTermLiab": "deferred_long_term_liabilities",
+    "otherLiab": "other_liabilities",
+    "nonCurrentLiabilitiesOther": "non_current_liabilities_other",
+    "negativeGoodwill": "negative_goodwill",
+    "warrants": "warrants",
+    "preferredStockRedeemable": "preferred_stock_redeemable",
+    "totalStockholderEquity": "total_stockholder_equity",
+    "commonStock": "common_stock",
+    "capitalStock": "capital_stock",
+    "additionalPaidInCapital": "additional_paid_in_capital",
+    "retainedEarnings": "retained_earnings",
+    "treasuryStock": "treasury_stock",
+    "accumulatedOtherComprehensiveIncome": "accumulated_other_comprehensive_income",
+    "otherStockholderEquity": "other_stockholder_equity",
+    "commonStockTotalEquity": "common_stock_total_equity",
+    "preferredStockTotalEquity": "preferred_stock_total_equity",
+    "retainedEarningsTotalEquity": "retained_earnings_total_equity",
+    # EODHD's misspelling — kept verbatim on the vendor side. The
+    # corrected spelling is also accepted so an upstream typo fix
+    # doesn't silently zero the column.
+    "capitalSurpluse": "capital_surplus",
+    "capitalSurplus": "capital_surplus",
+    "totalPermanentEquity": "total_permanent_equity",
+    "noncontrollingInterestInConsolidatedEntity": "noncontrolling_interest",
+    "temporaryEquityRedeemableNoncontrollingInterests": "temporary_equity_redeemable_noncontrolling",
+    "liabilitiesAndStockholdersEquity": "liabilities_and_stockholders_equity",
+    "netDebt": "net_debt",
+    "netTangibleAssets": "net_tangible_assets",
+    "netWorkingCapital": "net_working_capital",
+    "investments": "investments",
+    "commonStockSharesOutstanding": "common_stock_shares_outstanding",
+}
+_CASHFLOW_LINE_ITEMS: dict[str, str] = {
+    "totalCashFromOperatingActivities": "operating_cash_flow",
+    "totalCashflowsFromInvestingActivities": "investing_cash_flow",
+    "totalCashFromFinancingActivities": "financing_cash_flow",
+    "netIncome": "net_income",
+    "depreciation": "depreciation",
+    "stockBasedCompensation": "stock_based_compensation",
+    "changeInWorkingCapital": "change_in_working_capital",
+    "changeToInventory": "change_to_inventory",
+    "changeToAccountReceivables": "change_to_account_receivables",
+    "changeToLiabilities": "change_to_liabilities",
+    "changeToOperatingActivities": "change_to_operating_activities",
+    "changeToNetincome": "change_to_net_income",
+    "changeReceivables": "change_receivables",
+    "cashFlowsOtherOperating": "cash_flows_other_operating",
+    "otherNonCashItems": "other_non_cash_items",
+    "capitalExpenditures": "capital_expenditures",
+    "investments": "investments",
+    "otherCashflowsFromInvestingActivities": "other_cash_flows_investing",
+    "dividendsPaid": "dividends_paid",
+    "netBorrowings": "net_borrowings",
+    "issuanceOfCapitalStock": "issuance_of_capital_stock",
+    "salePurchaseOfStock": "sale_purchase_of_stock",
+    "otherCashflowsFromFinancingActivities": "other_cash_flows_financing",
+    "changeInCash": "change_in_cash",
+    "cashAndCashEquivalentsChanges": "cash_and_cash_equivalents_changes",
+    "beginPeriodCashFlow": "begin_period_cash_flow",
+    "endPeriodCashFlow": "end_period_cash_flow",
+    "exchangeRateChanges": "exchange_rate_changes",
+    "freeCashFlow": "free_cash_flow",
+}
 
 # Vendor-string → canonical literal maps (vendor-agnostic principle: the
 # lake never sees vendor vocabulary).
@@ -286,36 +427,110 @@ def parse_intraday_response(ticker: str, payload: Any) -> Iterator[IntradayBar]:
         _log_parse_drops("parse_intraday_response", ticker, kept, dropped)
 
 
-def parse_fundamentals_response(ticker: str, payload: Any) -> Iterator[FundamentalRow]:
+def parse_financial_statements_response(ticker: str, payload: Any) -> FinancialStatementsBundle:
+    """Parse the EODHD ``/fundamentals`` payload into the three statement
+    streams.
+
+    EODHD returns all three financial statements under one ``Financials``
+    key; we project each section into its statement-specific row type so
+    downstream code never has to know vendor camelCase names.
+    """
     _check_free_tier(payload)
     if not isinstance(payload, dict):
-        return iter(())
-    return _iter_fundamentals(ticker, payload)
-
-
-def _iter_fundamentals(ticker: str, payload: dict) -> Iterator[FundamentalRow]:
+        return FinancialStatementsBundle()
     financials = payload.get("Financials") or {}
-    for vendor_statement, canonical in _STATEMENT_MAP.items():
-        section = financials.get(vendor_statement) or {}
+    return FinancialStatementsBundle(
+        income=tuple(
+            _iter_statement_section(
+                ticker,
+                financials.get("Income_Statement") or {},
+                _INCOME_LINE_ITEMS,
+                IncomeStatementRow,
+            )
+        ),
+        balance=tuple(
+            _iter_statement_section(
+                ticker,
+                financials.get("Balance_Sheet") or {},
+                _BALANCE_LINE_ITEMS,
+                BalanceSheetRow,
+            )
+        ),
+        cashflow=tuple(
+            _iter_statement_section(
+                ticker,
+                financials.get("Cash_Flow") or {},
+                _CASHFLOW_LINE_ITEMS,
+                CashFlowStatementRow,
+            )
+        ),
+    )
+
+
+def _iter_statement_section(
+    ticker: str,
+    section: dict,
+    line_item_map: dict[str, str],
+    row_cls: type,
+) -> Iterator[Any]:
+    """Yield ``row_cls`` instances from one statement section.
+
+    ``section`` is the vendor object under ``Financials.<Statement_Name>``;
+    inside it sit ``quarterly`` and ``yearly`` sub-objects keyed by
+    period date strings. We project each period dict into one wide row
+    by translating known camelCase keys via ``line_item_map`` and dropping
+    everything else.
+
+    Unknown frequency sub-keys (e.g. a future ``ttm`` block) are logged
+    once at info-level so a vendor extension doesn't silently leak
+    data; malformed period entries are counted and reported via the
+    shared ``_log_parse_drops`` channel so silent corruption surfaces
+    in observability.
+    """
+    statement_label = row_cls.__name__
+    if isinstance(section, dict):
+        for sub_key in section:
+            if sub_key not in _FREQUENCY_MAP and sub_key != "currency_symbol":
+                _log_unknown_vendor_value(
+                    "eodhd.statement.unknown_frequency",
+                    {"statement": statement_label, "ticker": ticker, "key": sub_key},
+                )
+    kept = 0
+    dropped = 0
+    try:
         for vendor_freq, canonical_freq in _FREQUENCY_MAP.items():
             periods = section.get(vendor_freq) or {}
+            if not isinstance(periods, dict):
+                continue
             for period_key, period_dict in periods.items():
                 if not isinstance(period_dict, dict):
+                    dropped += 1
                     continue
                 period_end = _parse_date(period_dict.get("date") or period_key)
                 if period_end is None:
+                    dropped += 1
                     continue
-                for line_item, raw_value in period_dict.items():
-                    if line_item == "date":
-                        continue
-                    yield FundamentalRow(
-                        ticker=ticker,
-                        period_end=period_end,
-                        frequency=canonical_freq,
-                        statement=canonical,
-                        line_item=line_item,
-                        value=_coerce_optional_float(raw_value),
-                    )
+                kwargs: dict[str, Any] = {
+                    "ticker": ticker,
+                    "period_end": period_end,
+                    "frequency": canonical_freq,
+                    "filing_date": _parse_date(period_dict.get("filing_date")),
+                    "currency": period_dict.get("currency_symbol"),
+                }
+                # ``vendor_key in period_dict`` collapses "absent" and
+                # "explicit null" to the same write-NULL semantic. The
+                # lake's statement upsert uses COALESCE(EXCLUDED, table)
+                # in the UPDATE clause so NULL doesn't overwrite a prior
+                # non-NULL value — but it also means a vendor explicitly
+                # restating a line to NULL is a no-op on update. That's
+                # the right trade-off here (vendor flake > silent wipe).
+                for vendor_key, canonical_key in line_item_map.items():
+                    if vendor_key in period_dict:
+                        kwargs[canonical_key] = _coerce_optional_float(period_dict[vendor_key])
+                kept += 1
+                yield row_cls(**kwargs)
+    finally:
+        _log_parse_drops(f"_iter_statement_section[{statement_label}]", ticker, kept, dropped)
 
 
 def _check_free_tier(payload: Any) -> None:
@@ -1422,7 +1637,7 @@ class EodhdDataSource(DataSource):
         data = self._get(url, params=params)
         return list(parse_prices_response(ticker, data))
 
-    def fetch_fundamentals(self, ticker: str) -> Iterable[FundamentalRow]:
+    def fetch_fundamentals(self, ticker: str) -> FinancialStatementsBundle:
         # Income/balance/cashflow statements are equity-only. Crypto/bond/
         # commodity tickers don't have an issuer with financial statements,
         # so we short-circuit instead of issuing an HTTP call that would
@@ -1434,10 +1649,10 @@ class EodhdDataSource(DataSource):
                 ticker=ticker,
                 asset_class=asset_class,
             )
-            return ()
+            return FinancialStatementsBundle()
         url = f"{self._base_url}/fundamentals/{ticker}"
         data = self._get(url, params={"fmt": "json"})
-        return list(parse_fundamentals_response(ticker, data))
+        return parse_financial_statements_response(ticker, data)
 
     # EODHD natively supports 1-minute, 5-minute, and 1-hour bars on the
     # /api/intraday endpoint. Everything else is derived via aggregation.

@@ -4,11 +4,19 @@ These are the *normalized*, vendor-agnostic rows that flow from any
 ``DataSource`` into the lake — vendor-specific shapes are translated up-front,
 so the pipeline and the lake never see vendor fields.
 
-Schemas cover the full fundamentals surface area (dividends, insider trades,
-news, analyst data, shares outstanding, employee count, segmentations,
-profile, holders, earnings events, ESG, listings, officers) — not just the
-three financial statements — so strategies can draw on whatever they need
-without each layer having to be extended.
+Schemas cover the full fundamentals surface area (the three financial
+statements — income, balance sheet, cash flow — plus dividends, insider
+trades, news, analyst data, shares outstanding, employee count,
+segmentations, profile, holders, earnings events, ESG, listings, officers)
+so strategies can draw on whatever they need without each layer having to
+be extended.
+
+The three financial statements each have their own row type
+(:class:`IncomeStatementRow`, :class:`BalanceSheetRow`,
+:class:`CashFlowStatementRow`) with a snake_case column per known line
+item. Every statement-specific value is ``Optional[float]`` because vendors
+routinely omit lines that don't apply to a given filer (e.g. banks have no
+``cost_of_revenue``, software firms have no ``inventory``).
 
 Vendor-agnostic principle (CLAUDE.md): fields whose vocabulary varies across
 vendors use ``Literal`` values that adapters map their raw strings into;
@@ -39,10 +47,12 @@ CommodityContractKind = Literal["spot", "continuous", "futures", "index", "other
 __all__ = [
     "AnalystForecastRow",
     "AnalystRatingsRow",
+    "BalanceSheetRow",
     "BondIssuerKind",
     "BondKind",
     "BondProfileRow",
     "BondYieldRow",
+    "CashFlowStatementRow",
     "CommodityContractKind",
     "CommodityContractRow",
     "CrossListingRow",
@@ -54,7 +64,8 @@ __all__ = [
     "EsgActivityRow",
     "EsgSnapshotRow",
     "ExchangeInfo",
-    "FundamentalRow",
+    "FinancialStatementsBundle",
+    "IncomeStatementRow",
     "InsiderTransactionRow",
     "InstitutionalHolderRow",
     "IntradayBar",
@@ -66,9 +77,15 @@ __all__ = [
     "SegmentationRow",
     "SharesOutstandingRow",
     "StockSplitRow",
+    "StatementFrequency",
     "TickerProfile",
     "TickerSnapshotRow",
 ]
+
+
+# ``Q`` = quarterly, ``A`` = annual. Same alias used by every statement row
+# so a downstream filter or join can stay literal-typed.
+StatementFrequency = Literal["Q", "A"]
 
 
 class FrozenRow(BaseModel):
@@ -111,15 +128,224 @@ class IntradayBar(FrozenRow):
     volume: int | None = None
 
 
-class FundamentalRow(FrozenRow):
-    """One cell from a financial statement at a specific period end."""
+class _StatementRowBase(FrozenRow):
+    """Shared key columns for the three financial-statement rows.
+
+    Each statement subclass adds its own wide set of statement-specific
+    columns; this base centralises the ``(ticker, period_end,
+    frequency)`` primary key and the two header columns
+    (``filing_date``, ``currency``) every statement carries.
+    """
 
     ticker: str
     period_end: date
-    frequency: Literal["Q", "A"]
-    statement: Literal["income", "balance", "cashflow"]
-    line_item: str
-    value: float | None
+    frequency: StatementFrequency
+    filing_date: date | None = None
+    # Reporting currency for the statement (typically a 3-letter ISO-4217
+    # code, but vendors don't all enforce that — EODHD's
+    # ``currency_symbol`` is whatever the issuer files in). Stored as
+    # free-text rather than ``Literal[...]`` because the realistic set
+    # spans 100+ currencies and any closed list would lock out exotic
+    # filers; downstream consumers should uppercase + length-check
+    # before equality comparisons.
+    currency: str | None = None
+
+
+class IncomeStatementRow(_StatementRowBase):
+    """One income-statement filing for a (ticker, period_end, frequency).
+
+    Every value is ``Optional[float]``: vendors omit lines that don't
+    apply to a given filer (e.g. banks have no ``cost_of_revenue``).
+    Names are the canonical accounting concept in snake_case — the
+    vendor camelCase (``totalRevenue``, ``grossProfit``, …) is mapped
+    by the adapter so the lake never sees vendor vocabulary.
+    """
+
+    revenue: float | None = None
+    cost_of_revenue: float | None = None
+    gross_profit: float | None = None
+
+    research_development: float | None = None
+    selling_general_administrative: float | None = None
+    selling_marketing_expenses: float | None = None
+    other_operating_expenses: float | None = None
+    total_operating_expenses: float | None = None
+
+    operating_income: float | None = None
+
+    interest_income: float | None = None
+    interest_expense: float | None = None
+    net_interest_income: float | None = None
+    non_operating_income_other: float | None = None
+    total_other_income_expense_net: float | None = None
+
+    income_before_tax: float | None = None
+    income_tax_expense: float | None = None
+    tax_provision: float | None = None
+
+    minority_interest: float | None = None
+    net_income_continuing: float | None = None
+    discontinued_operations: float | None = None
+    extraordinary_items: float | None = None
+    non_recurring: float | None = None
+    other_items: float | None = None
+    effect_of_accounting_charges: float | None = None
+    net_income: float | None = None
+    net_income_to_common: float | None = None
+    preferred_stock_adjustments: float | None = None
+
+    # Vendor-supplied EBIT/EBITDA: kept as columns rather than re-derived
+    # downstream because vendors apply their own one-time-item exclusions.
+    ebit: float | None = None
+    ebitda: float | None = None
+    depreciation_amortization: float | None = None
+    reconciled_depreciation: float | None = None
+
+
+class BalanceSheetRow(_StatementRowBase):
+    """One balance-sheet filing for a (ticker, period_end, frequency).
+
+    Wide schema (one column per known line item). Asset / liability /
+    equity lines are grouped by section in the column order so a SELECT *
+    reads top-to-bottom like the statement itself.
+    """
+
+    # Asset side
+    total_assets: float | None = None
+    current_assets: float | None = None
+    cash: float | None = None
+    cash_and_equivalents: float | None = None
+    cash_and_short_term_investments: float | None = None
+    short_term_investments: float | None = None
+    net_receivables: float | None = None
+    inventory: float | None = None
+    other_current_assets: float | None = None
+
+    non_current_assets: float | None = None
+    long_term_investments: float | None = None
+    property_plant_equipment_net: float | None = None
+    property_plant_equipment_gross: float | None = None
+    accumulated_depreciation: float | None = None
+    accumulated_amortization: float | None = None
+    goodwill: float | None = None
+    intangible_assets: float | None = None
+    other_assets: float | None = None
+    deferred_long_term_asset_charges: float | None = None
+    non_current_assets_other: float | None = None
+    earning_assets: float | None = None
+
+    # Liability side
+    total_liabilities: float | None = None
+    current_liabilities: float | None = None
+    accounts_payable: float | None = None
+    current_deferred_revenue: float | None = None
+    short_term_debt: float | None = None
+    short_long_term_debt: float | None = None
+    short_long_term_debt_total: float | None = None
+    other_current_liabilities: float | None = None
+
+    non_current_liabilities: float | None = None
+    long_term_debt: float | None = None
+    long_term_debt_total: float | None = None
+    capital_lease_obligations: float | None = None
+    deferred_long_term_liabilities: float | None = None
+    other_liabilities: float | None = None
+    non_current_liabilities_other: float | None = None
+    negative_goodwill: float | None = None
+    warrants: float | None = None
+    preferred_stock_redeemable: float | None = None
+
+    # Equity
+    total_stockholder_equity: float | None = None
+    common_stock: float | None = None
+    capital_stock: float | None = None
+    additional_paid_in_capital: float | None = None
+    retained_earnings: float | None = None
+    treasury_stock: float | None = None
+    accumulated_other_comprehensive_income: float | None = None
+    other_stockholder_equity: float | None = None
+    common_stock_total_equity: float | None = None
+    preferred_stock_total_equity: float | None = None
+    retained_earnings_total_equity: float | None = None
+    capital_surplus: float | None = None
+    total_permanent_equity: float | None = None
+    noncontrolling_interest: float | None = None
+    temporary_equity_redeemable_noncontrolling: float | None = None
+    liabilities_and_stockholders_equity: float | None = None
+
+    # Aggregates / vendor-derived
+    net_debt: float | None = None
+    net_tangible_assets: float | None = None
+    net_working_capital: float | None = None
+    investments: float | None = None
+    common_stock_shares_outstanding: float | None = None
+
+
+class CashFlowStatementRow(_StatementRowBase):
+    """One cash-flow-statement filing for a (ticker, period_end, frequency).
+
+    Sections (operating / investing / financing) are grouped in column
+    order; the section subtotals (``operating_cash_flow``, etc.) sit at
+    the top so they're discoverable without scanning the breakdown.
+    """
+
+    # Headline subtotals
+    operating_cash_flow: float | None = None
+    investing_cash_flow: float | None = None
+    financing_cash_flow: float | None = None
+
+    # Operating-section detail
+    net_income: float | None = None
+    depreciation: float | None = None
+    stock_based_compensation: float | None = None
+    change_in_working_capital: float | None = None
+    change_to_inventory: float | None = None
+    change_to_account_receivables: float | None = None
+    change_to_liabilities: float | None = None
+    change_to_operating_activities: float | None = None
+    change_to_net_income: float | None = None
+    change_receivables: float | None = None
+    cash_flows_other_operating: float | None = None
+    other_non_cash_items: float | None = None
+
+    # Investing-section detail
+    capital_expenditures: float | None = None
+    investments: float | None = None
+    other_cash_flows_investing: float | None = None
+
+    # Financing-section detail
+    dividends_paid: float | None = None
+    net_borrowings: float | None = None
+    issuance_of_capital_stock: float | None = None
+    sale_purchase_of_stock: float | None = None
+    other_cash_flows_financing: float | None = None
+
+    # Period reconciliation
+    change_in_cash: float | None = None
+    cash_and_cash_equivalents_changes: float | None = None
+    begin_period_cash_flow: float | None = None
+    end_period_cash_flow: float | None = None
+    exchange_rate_changes: float | None = None
+
+    # Vendor-derived
+    free_cash_flow: float | None = None
+
+
+class FinancialStatementsBundle(FrozenRow):
+    """Three parallel streams returned by :meth:`DataSource.fetch_fundamentals`.
+
+    Vendors that expose all three statements in a single endpoint
+    (EODHD's ``/fundamentals``) populate all three lists from one call;
+    sources that only carry one of them leave the others empty.
+
+    The bundle is the unit of "fundamentals for one ticker" — the
+    ingest pipeline upserts the three lists inside one transaction so
+    a partial failure doesn't leave the lake half-populated.
+    """
+
+    income: tuple[IncomeStatementRow, ...] = ()
+    balance: tuple[BalanceSheetRow, ...] = ()
+    cashflow: tuple[CashFlowStatementRow, ...] = ()
 
 
 # ---- time-series metadata --------------------------------------------------

@@ -24,22 +24,18 @@ def _prices_df(rows):
     )
 
 
-def _fundamentals_df(rows):
-    return pd.DataFrame(
-        rows,
-        columns=["ticker", "period_end", "frequency", "statement", "line_item", "value"],
-    )
-
-
 def test_migrate_creates_expected_tables(lake):
     tables = set(lake.tables())
-    # Migration 007 renames `tickers` → `instruments` and adds the per-class
-    # profile tables. The old name is intentionally gone — no back-compat
-    # view — so tests that check the schema surface lock the new name in.
+    # Migration 007 renamed `tickers` → `instruments`; migration 008 split
+    # the long-form `fundamentals` table into three wide statement tables.
+    # Both old names are intentionally gone — no back-compat view — so the
+    # schema surface stays unambiguous.
     assert {
         "instruments",
         "prices",
-        "fundamentals",
+        "income_statement",
+        "balance_sheet",
+        "cash_flow_statement",
         "ingest_runs",
         "schema_migrations",
         "crypto_profiles",
@@ -48,6 +44,7 @@ def test_migrate_creates_expected_tables(lake):
         "commodity_contracts",
     } <= tables
     assert "tickers" not in tables
+    assert "fundamentals" not in tables
 
 
 def test_migrate_is_idempotent(tmp_path):
@@ -92,26 +89,168 @@ def test_upsert_prices_updates_on_conflict(lake):
     assert read.iloc[0]["volume"] == 1_500_000
 
 
-def test_upsert_fundamentals_roundtrip(lake):
-    df = _fundamentals_df(
+def test_upsert_income_statement_roundtrip(lake):
+    df = pd.DataFrame(
         [
-            ("AAPL.US", date(2025, 12, 31), "Q", "income", "totalRevenue", 123.0),
-            ("AAPL.US", date(2025, 12, 31), "Q", "income", "netIncome", 45.0),
-            ("AAPL.US", date(2025, 12, 31), "Q", "balance", "totalAssets", 500.0),
+            {
+                "ticker": "AAPL.US",
+                "period_end": date(2025, 12, 31),
+                "frequency": "Q",
+                "filing_date": date(2026, 1, 25),
+                "currency": "USD",
+                "revenue": 124_300_000_000.0,
+                "cost_of_revenue": 70_000_000_000.0,
+                "gross_profit": 54_300_000_000.0,
+                "net_income": 36_330_000_000.0,
+            },
+            {
+                "ticker": "AAPL.US",
+                "period_end": date(2025, 9, 30),
+                "frequency": "Q",
+                "filing_date": date(2025, 10, 31),
+                "currency": "USD",
+                "revenue": 94_900_000_000.0,
+                "cost_of_revenue": 52_000_000_000.0,
+                "gross_profit": 42_900_000_000.0,
+                "net_income": 23_400_000_000.0,
+            },
         ]
     )
-    assert lake.upsert_fundamentals(df) == 3
-    read = lake.get_fundamentals("AAPL.US")
-    assert len(read) == 3
-    read_income = lake.get_fundamentals("AAPL.US", statement="income")
-    assert len(read_income) == 2
+    assert lake.upsert_income_statement(df) == 2
+    read = lake.get_income_statement("AAPL.US")
+    assert len(read) == 2
+    # DuckDB returns DATE columns as pandas Timestamps; compare via
+    # ``.date()`` so the test pins the value, not the surface type.
+    assert read.iloc[0]["period_end"].date() == date(2025, 12, 31)
+    assert read.iloc[0]["revenue"] == 124_300_000_000.0
 
 
-def test_upsert_fundamentals_is_idempotent(lake):
-    df = _fundamentals_df([("AAPL.US", date(2025, 12, 31), "Q", "income", "totalRevenue", 123.0)])
-    lake.upsert_fundamentals(df)
-    lake.upsert_fundamentals(df)
-    assert lake.count_rows("fundamentals") == 1
+def test_upsert_income_statement_is_idempotent_and_updates_on_conflict(lake):
+    pk = {
+        "ticker": "AAPL.US",
+        "period_end": date(2025, 12, 31),
+        "frequency": "Q",
+    }
+    first = pd.DataFrame([{**pk, "revenue": 123.0, "net_income": 45.0}])
+    lake.upsert_income_statement(first)
+    lake.upsert_income_statement(first)
+    assert lake.count_rows("income_statement") == 1
+
+    # Vendor restated revenue: PK is unchanged so the row updates in place.
+    revised = pd.DataFrame([{**pk, "revenue": 130.0, "net_income": 45.0}])
+    lake.upsert_income_statement(revised)
+    assert lake.count_rows("income_statement") == 1
+    out = lake.get_income_statement("AAPL.US")
+    assert out.iloc[0]["revenue"] == 130.0
+
+
+def test_upsert_balance_sheet_roundtrip(lake):
+    df = pd.DataFrame(
+        [
+            {
+                "ticker": "AAPL.US",
+                "period_end": date(2025, 12, 31),
+                "frequency": "Q",
+                "total_assets": 365_000_000_000.0,
+                "total_liabilities": 280_000_000_000.0,
+                "total_stockholder_equity": 85_000_000_000.0,
+                "cash": 30_000_000_000.0,
+            },
+        ]
+    )
+    assert lake.upsert_balance_sheet(df) == 1
+    read = lake.get_balance_sheet("AAPL.US")
+    assert read.iloc[0]["total_assets"] == 365_000_000_000.0
+
+
+def test_upsert_cash_flow_statement_roundtrip(lake):
+    df = pd.DataFrame(
+        [
+            {
+                "ticker": "AAPL.US",
+                "period_end": date(2025, 12, 31),
+                "frequency": "Q",
+                "operating_cash_flow": 40_000_000_000.0,
+                "investing_cash_flow": -5_000_000_000.0,
+                "financing_cash_flow": -30_000_000_000.0,
+                "free_cash_flow": 35_000_000_000.0,
+                "capital_expenditures": -5_000_000_000.0,
+            },
+        ]
+    )
+    assert lake.upsert_cash_flow_statement(df) == 1
+    read = lake.get_cash_flow_statement("AAPL.US")
+    assert read.iloc[0]["free_cash_flow"] == 35_000_000_000.0
+
+
+def test_get_statement_returns_empty_df_when_no_match(lake):
+    assert lake.get_income_statement("ZZZZ.US").empty
+    assert lake.get_balance_sheet("ZZZZ.US").empty
+    assert lake.get_cash_flow_statement("ZZZZ.US").empty
+
+
+def test_upsert_statement_empty_df_is_noop(lake):
+    empty = pd.DataFrame()
+    assert lake.upsert_income_statement(empty) == 0
+    assert lake.upsert_balance_sheet(empty) == 0
+    assert lake.upsert_cash_flow_statement(empty) == 0
+
+
+def test_sparse_upsert_preserves_prior_non_null_values(lake):
+    """Re-upserting with a sparser DataFrame must NOT wipe prior values
+    to NULL — only real (non-NULL) values overwrite. This is the
+    contract that makes wide-table upserts safe for callers who don't
+    pass every column on every call."""
+    pk = {
+        "ticker": "AAPL.US",
+        "period_end": date(2025, 12, 31),
+        "frequency": "Q",
+    }
+    full = pd.DataFrame([{**pk, "revenue": 100.0, "gross_profit": 60.0, "net_income": 40.0}])
+    lake.upsert_income_statement(full)
+    sparse = pd.DataFrame([{**pk, "revenue": 110.0}])
+    lake.upsert_income_statement(sparse)
+    out = lake.get_income_statement("AAPL.US").iloc[0]
+    # Real value overwrites:
+    assert out["revenue"] == 110.0
+    # Absent values are preserved (NOT silently set to NULL):
+    assert out["gross_profit"] == 60.0
+    assert out["net_income"] == 40.0
+
+
+def test_upsert_statement_rejects_missing_pk_columns(lake):
+    df = pd.DataFrame([{"ticker": "AAPL.US", "revenue": 100.0}])
+    with pytest.raises(ValueError, match="missing required PK column"):
+        lake.upsert_income_statement(df)
+
+
+def test_upsert_statement_rejects_null_pk_value(lake):
+    df = pd.DataFrame(
+        [
+            {
+                "ticker": "AAPL.US",
+                "period_end": None,
+                "frequency": "Q",
+                "revenue": 100.0,
+            }
+        ]
+    )
+    with pytest.raises(ValueError, match="must be non-null"):
+        lake.upsert_income_statement(df)
+
+
+def test_migration_frequency_check_constraint_rejects_bad_value(lake):
+    """The CHECK (frequency IN ('Q','A')) constraint guards against a
+    bad direct INSERT that the Pydantic Literal would also reject.
+    Belt-and-braces: the lake column won't accept what the row type
+    won't construct."""
+    import duckdb
+
+    with pytest.raises(duckdb.ConstraintException):
+        lake.con.execute(
+            "INSERT INTO income_statement (ticker, period_end, frequency) "
+            "VALUES ('AAPL.US', DATE '2025-12-31', 'weekly')"
+        )
 
 
 def test_ingest_run_lifecycle(lake):
