@@ -61,7 +61,7 @@ import time
 from collections.abc import Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Any, Literal
 
 import requests
 
@@ -114,6 +114,52 @@ _FREQUENCY_MAP = {"quarterly": "Q", "yearly": "A"}
 
 # Vendor-string → canonical literal maps (vendor-agnostic principle: the
 # lake never sees vendor vocabulary).
+
+# EODHD ESG ``Involvement`` is a closed Yes/No set — lower-case it to match
+# the schema's ``Literal["yes", "no"]``. Anything else gets dropped at the
+# parse boundary (logged once per ticker).
+_INVOLVEMENT_MAP: dict[str, Literal["yes", "no"]] = {
+    "yes": "yes",
+    "y": "yes",
+    "true": "yes",
+    "no": "no",
+    "n": "no",
+    "false": "no",
+}
+
+# Owner-relation keyword priority. EODHD's ``ownerRelationship`` is
+# free-form text mixing role and rank ("Chief Executive Officer", "Director",
+# "Officer, Director", "10% Owner", combined commas, …). We keyword-match
+# in priority order so one rule covers all the variants we've seen, then
+# combine officer+director into the dual literal. Any non-empty string that
+# matches none of these falls back to ``"other"`` so the column stays
+# typed; ``None`` means the vendor didn't supply a value at all.
+_OWNER_RELATION_TEN_PERCENT = ("10%", "ten percent")
+_OWNER_RELATION_DIRECTOR_KW = "director"
+_OWNER_RELATION_OFFICER_KW = "officer"
+
+
+def _normalize_owner_relation(
+    raw: Any,
+) -> Literal["officer", "director", "officer_and_director", "ten_percent_owner", "other"] | None:
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip().lower()
+    if not text:
+        return None
+    if any(needle in text for needle in _OWNER_RELATION_TEN_PERCENT):
+        return "ten_percent_owner"
+    has_officer = _OWNER_RELATION_OFFICER_KW in text
+    has_director = _OWNER_RELATION_DIRECTOR_KW in text
+    if has_officer and has_director:
+        return "officer_and_director"
+    if has_officer:
+        return "officer"
+    if has_director:
+        return "director"
+    return "other"
+
+
 _BEFORE_AFTER_MARKET_MAP = {
     "BeforeMarket": "before",
     "AfterMarket": "after",
@@ -495,7 +541,6 @@ def parse_analyst_ratings_from_fundamentals(
     return AnalystRatingsRow(
         ticker=ticker,
         snapshot_date=as_of or date.today(),
-        rating=_coerce_optional_float(ratings.get("Rating")),
         target_price=_coerce_optional_float(ratings.get("TargetPrice")),
         strong_buy=_coerce_optional_int(ratings.get("StrongBuy")) or 0,
         buy=_coerce_optional_int(ratings.get("Buy")) or 0,
@@ -576,15 +621,21 @@ def parse_esg_from_fundamentals(
             if not isinstance(entry, dict):
                 continue
             activity = entry.get("Activity")
-            involvement = entry.get("Involvement")
-            if not activity or involvement is None:
+            involvement_raw = entry.get("Involvement")
+            if not activity or involvement_raw is None:
+                continue
+            canonical_involvement = _INVOLVEMENT_MAP.get(str(involvement_raw).strip().lower())
+            if canonical_involvement is None:
+                # Unknown vendor value (e.g. "Maybe", localized text). Drop
+                # the row rather than store an unnormalized string — keeps
+                # the schema's Literal["yes","no"] honest.
                 continue
             activities.append(
                 EsgActivityRow(
                     ticker=ticker,
                     rating_date=rating_date,
                     activity=str(activity),
-                    involvement=str(involvement),
+                    involvement=canonical_involvement,
                 )
             )
     return (snapshot, activities)
@@ -776,7 +827,7 @@ def parse_insider_response(ticker: str, payload: Any) -> Iterator[InsiderTransac
             filing_date=_parse_date(row.get("reportDate")),
             owner_name=row.get("ownerName"),
             owner_cik=row.get("ownerCik"),
-            owner_relation=row.get("ownerRelationship"),
+            owner_relation=_normalize_owner_relation(row.get("ownerRelationship")),
             owner_title=row.get("ownerTitle"),
             transaction_code=row.get("transactionCode"),
             acquired_disposed=acquired_disposed,

@@ -345,7 +345,6 @@ class DuckDBLake:
     _ANALYST_RATINGS_COLS = (
         "ticker",
         "snapshot_date",
-        "rating",
         "target_price",
         "strong_buy",
         "buy",
@@ -354,7 +353,6 @@ class DuckDBLake:
         "strong_sell",
     )
     _ANALYST_RATINGS_VALUE_COLS = (
-        "rating",
         "target_price",
         "strong_buy",
         "buy",

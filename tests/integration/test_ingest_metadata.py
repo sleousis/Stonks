@@ -90,7 +90,7 @@ def _sample_bundle() -> MetadataBundle:
                 filing_date=date(2026, 3, 5),
                 owner_name="Cook, Tim",
                 owner_cik="0001214156",
-                owner_relation="Officer",
+                owner_relation="officer",
                 owner_title="CEO",
                 transaction_code="S",
                 acquired_disposed="D",
@@ -146,7 +146,6 @@ def _sample_bundle() -> MetadataBundle:
             AnalystRatingsRow(
                 ticker="AAPL.US",
                 snapshot_date=date(2026, 4, 1),
-                rating=2.3,
                 target_price=250.0,
                 strong_buy=10,
                 buy=20,
@@ -186,7 +185,7 @@ def _sample_bundle() -> MetadataBundle:
         ),
         esg_activities=(
             EsgActivityRow(
-                ticker="AAPL.US", rating_date=date(2026, 4, 1), activity="alcohol", involvement="No"
+                ticker="AAPL.US", rating_date=date(2026, 4, 1), activity="alcohol", involvement="no"
             ),
         ),
         cross_listings=(

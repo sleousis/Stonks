@@ -129,7 +129,12 @@ class InsiderTransactionRow(FrozenRow):
     filing_date: date | None = None
     owner_name: str | None = None
     owner_cik: str | None = None
-    owner_relation: str | None = None  # categorical: officer / director / 10% owner
+    # Normalized cross-vendor relation. Adapters (e.g. EODHD's
+    # ``ownerRelationship`` keyword-match) map their raw vendor strings into
+    # this closed set at parse time so strategies can group by it directly.
+    owner_relation: (
+        Literal["officer", "director", "officer_and_director", "ten_percent_owner", "other"] | None
+    ) = None
     owner_title: str | None = None  # free text e.g. "CEO"
     transaction_code: str | None = None  # SEC Form 4 code (S, P, A, M, …)
     acquired_disposed: Literal["A", "D"] | None = None
@@ -251,11 +256,15 @@ class AnalystRatingsRow(FrozenRow):
 
     Ingested via change-detection (``_upsert_on_change``) so the table only
     grows when the consensus actually moves.
+
+    No single composite ``rating`` field — vendors use incompatible numeric
+    scales for the same buckets (some 1=buy, some 1=sell), so we keep only
+    the bucket counts (``strong_buy`` … ``strong_sell``) which are
+    cross-vendor consistent. Consumers can compute their own consensus.
     """
 
     ticker: str
     snapshot_date: date
-    rating: float | None = None  # vendor-defined numeric scale
     target_price: float | None = None
     strong_buy: int = 0
     buy: int = 0
@@ -277,8 +286,12 @@ class InstitutionalHolderRow(FrozenRow):
     holder_kind: Literal["institution", "fund"]
     name: str
     snapshot_date: date
-    total_shares_pct: float | None = None  # % of issuer's outstanding shares
-    total_assets_pct: float | None = None  # % of holder's portfolio
+    # Stored as a percent in the 0–100 range, NOT a 0–1 fraction. EODHD's
+    # ``totalShares`` / ``totalAssets`` keys already arrive as percentages
+    # (e.g. ``9.7151`` means 9.72%, not 9.72×); other adapters must convert
+    # before constructing this row.
+    total_shares_pct: float | None = Field(default=None, ge=0.0, le=100.0)
+    total_assets_pct: float | None = Field(default=None, ge=0.0, le=100.0)
     current_shares: int | None = None
     change_shares: int | None = None
     change_pct: float | None = None
@@ -312,7 +325,10 @@ class EsgActivityRow(FrozenRow):
     ticker: str
     rating_date: date
     activity: str
-    involvement: str  # typically "Yes" / "No"
+    # Closed cross-vendor set. Adapters normalize their raw vendor strings
+    # (EODHD's ``"Yes"`` / ``"No"``) at parse time; rows where the vendor
+    # returns anything else are dropped at the adapter boundary.
+    involvement: Literal["yes", "no"]
 
 
 class CrossListingRow(FrozenRow):
