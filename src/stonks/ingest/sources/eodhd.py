@@ -91,7 +91,7 @@ from stonks.ingest.schemas import (
     TickerProfile,
     TickerSnapshotRow,
 )
-from stonks.ingest.sources.base import DataSource
+from stonks.ingest.sources.base import DataSource, DataSourceError
 from stonks.logging import get_logger
 
 # Substrings (case-insensitive) that EODHD returns in plain-text bodies when
@@ -184,11 +184,11 @@ _SECURITY_TYPE_KEYWORDS = (
 )
 
 
-class EodhdFreeTierError(RuntimeError):
+class EodhdFreeTierError(DataSourceError):
     """Raised when the API signals an endpoint is blocked on the free tier."""
 
 
-class EodhdAllEndpointsFailedError(RuntimeError):
+class EodhdAllEndpointsFailedError(DataSourceError):
     """Raised when every parallel sub-fetch in ``fetch_metadata`` failed
     with a transport-class error (network, HTTP, JSON decode). Free-tier
     blocks do **not** trigger this — they're a legitimate steady state for

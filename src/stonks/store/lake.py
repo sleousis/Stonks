@@ -6,6 +6,8 @@ and applied in lexical order at ``migrate()`` time.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -108,6 +110,39 @@ class DuckDBLake:
         if table not in known:
             raise ValueError(f"unknown table {table!r}")
         return int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        """Group multiple writes into one atomic unit.
+
+        DuckDB's UPSERT and DELETE are statement-level atomic, but a
+        sequence of them isn't — so any caller that wants "all or nothing"
+        across several methods (e.g. an ingest bundle, or the
+        delete-then-insert dance in ``upsert_officers``) must wrap the
+        block in this helper. On exception the transaction is ROLLed BACK
+        and the exception re-raises; on clean exit it COMMITs.
+
+        Re-entrant: a nested call is a no-op (DuckDB doesn't support nested
+        transactions, and the outer ``transaction()`` already owns the
+        atomicity). The outermost caller is responsible for the
+        BEGIN/COMMIT pair.
+        """
+        if getattr(self, "_in_transaction", False):
+            # Inner caller piggy-backs on the outer transaction. The
+            # outermost ``transaction()`` keeps the rollback responsibility.
+            yield
+            return
+        self.con.execute("BEGIN")
+        self._in_transaction = True
+        try:
+            yield
+        except Exception:
+            self.con.execute("ROLLBACK")
+            raise
+        else:
+            self.con.execute("COMMIT")
+        finally:
+            self._in_transaction = False
 
     # ---- bars (interval-aware) ---------------------------------------------
 
@@ -680,15 +715,22 @@ class DuckDBLake:
             return 0
         self.con.register("_in", frame)
         try:
-            placeholders = ",".join(["?"] * len(tickers))
-            self.con.execute(
-                f"DELETE FROM officers WHERE ticker IN ({placeholders})",
-                tickers,
-            )
-            self.con.execute(
-                f"INSERT INTO officers ({', '.join(self._OFFICERS_COLS)}) "
-                f"SELECT {', '.join(self._OFFICERS_COLS)} FROM _in"
-            )
+            # Atomic delete-then-insert: if the INSERT fails (e.g. a NOT
+            # NULL violation on a column the vendor unexpectedly returned
+            # blank), we don't want the DELETE to have already wiped the
+            # roster — wrap both statements in one transaction so the
+            # caller either sees the new roster or the old one, never an
+            # empty one.
+            with self.transaction():
+                placeholders = ",".join(["?"] * len(tickers))
+                self.con.execute(
+                    f"DELETE FROM officers WHERE ticker IN ({placeholders})",
+                    tickers,
+                )
+                self.con.execute(
+                    f"INSERT INTO officers ({', '.join(self._OFFICERS_COLS)}) "
+                    f"SELECT {', '.join(self._OFFICERS_COLS)} FROM _in"
+                )
         finally:
             self.con.unregister("_in")
         return len(df)
@@ -784,7 +826,21 @@ class DuckDBLake:
 
         cols = list(cols)
         identity_eq = " AND ".join(f"_in.{c} = latest.{c}" for c in identity_cols)
-        any_value_changed = " OR ".join(f"latest.{c} IS DISTINCT FROM _in.{c}" for c in value_cols)
+        # NULL-drift suppression (I10): a vendor briefly returning NULL for
+        # a previously-known value is *not* a change worth recording — that
+        # would bloat the time series with vendor flakiness, not real
+        # movement. So we count a column as "changed" only when the new
+        # value is non-NULL AND differs from the prior. Going from NULL to
+        # a real value still counts (we just learned it); going the other
+        # way doesn't (we forgot it momentarily).
+        any_value_changed = " OR ".join(
+            (
+                f"((latest.{c} IS NULL AND _in.{c} IS NOT NULL) "
+                f"OR (latest.{c} IS NOT NULL AND _in.{c} IS NOT NULL "
+                f"AND latest.{c} != _in.{c}))"
+            )
+            for c in value_cols
+        )
         update_clause = ", ".join(
             f"{c} = EXCLUDED.{c}" for c in cols if c not in (*identity_cols, snapshot_col)
         )
@@ -794,35 +850,36 @@ class DuckDBLake:
 
         self.con.register("_in", df[cols])
         try:
-            before = int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
-            sql = f"""
-                WITH ranked AS (
-                    SELECT *,
-                           ROW_NUMBER() OVER (
-                               PARTITION BY {partition}
-                               ORDER BY {snapshot_col} DESC
-                           ) AS _rn
-                      FROM {table}
-                ),
-                latest AS (
-                    SELECT * FROM ranked WHERE _rn = 1
-                ),
-                eligible AS (
-                    SELECT _in.* FROM _in
-                    LEFT JOIN latest ON {identity_eq}
-                    WHERE
-                        latest.{snapshot_col} IS NULL
-                        OR _in.{snapshot_col} <= latest.{snapshot_col}
-                        OR ({any_value_changed})
-                )
-                INSERT INTO {table} ({col_list})
-                SELECT {col_list} FROM eligible
-                ON CONFLICT ({pk_list})
-                DO UPDATE SET {update_clause}
-            """
-            self.con.execute(sql)
-            after = int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
-            return after - before
+            with self.transaction():
+                before = int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+                sql = f"""
+                    WITH ranked AS (
+                        SELECT *,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY {partition}
+                                   ORDER BY {snapshot_col} DESC
+                               ) AS _rn
+                          FROM {table}
+                    ),
+                    latest AS (
+                        SELECT * FROM ranked WHERE _rn = 1
+                    ),
+                    eligible AS (
+                        SELECT _in.* FROM _in
+                        LEFT JOIN latest ON {identity_eq}
+                        WHERE
+                            latest.{snapshot_col} IS NULL
+                            OR _in.{snapshot_col} <= latest.{snapshot_col}
+                            OR ({any_value_changed})
+                    )
+                    INSERT INTO {table} ({col_list})
+                    SELECT {col_list} FROM eligible
+                    ON CONFLICT ({pk_list})
+                    DO UPDATE SET {update_clause}
+                """
+                self.con.execute(sql)
+                after = int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+                return after - before
         finally:
             self.con.unregister("_in")
 
