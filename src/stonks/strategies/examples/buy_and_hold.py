@@ -40,7 +40,6 @@ class BuyAndHold(BaseStrategy):
             ),
         ]
 
-
     def estimate_return(self, ticker: str, as_of: date, lake: Any) -> float | None:
         return 1.0 if ticker == self.params["ticker"] else None
 

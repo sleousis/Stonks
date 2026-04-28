@@ -52,44 +52,70 @@ class RSIPCAStrategy(BaseStrategy):
     def parameter_spec(cls):
         return [
             ParameterSpec(
-                name="n_components", kind="int", default=3, bounds=(1, 8),
+                name="n_components",
+                kind="int",
+                default=3,
+                bounds=(1, 8),
                 description="Top-K principal components to keep.",
             ),
             ParameterSpec(
-                name="lookahead", kind="int", default=6, bounds=(1, 48),
+                name="lookahead",
+                kind="int",
+                default=6,
+                bounds=(1, 48),
                 description="Forward return horizon (in bars) the linear model predicts.",
             ),
             ParameterSpec(
-                name="long_quantile", kind="float", default=0.99, bounds=(0.80, 0.999),
+                name="long_quantile",
+                kind="float",
+                default=0.99,
+                bounds=(0.80, 0.999),
                 description="In-sample prediction quantile that triggers a long.",
             ),
             ParameterSpec(
-                name="short_quantile", kind="float", default=0.01, bounds=(0.001, 0.20),
+                name="short_quantile",
+                kind="float",
+                default=0.01,
+                bounds=(0.001, 0.20),
                 description="In-sample prediction quantile that triggers a short.",
             ),
             ParameterSpec(
-                name="rsi_period_min", kind="int", default=2, bounds=(2, 10),
+                name="rsi_period_min",
+                kind="int",
+                default=2,
+                bounds=(2, 10),
                 tunable=False,
                 description="Shortest RSI period in the feature matrix (inclusive).",
             ),
             ParameterSpec(
-                name="rsi_period_max", kind="int", default=25, bounds=(5, 60),
+                name="rsi_period_max",
+                kind="int",
+                default=25,
+                bounds=(5, 60),
                 tunable=False,
                 description="Exclusive upper bound on RSI period.",
             ),
             ParameterSpec(
-                name="interval", kind="categorical", default="1d",
+                name="interval",
+                kind="categorical",
+                default="1d",
                 bounds=["1m", "5m", "15m", "30m", "1h", "4h", "12h", "1d", "1w"],
                 tunable=False,
                 description="Bar interval to read from the lake.",
             ),
             ParameterSpec(
-                name="ticker", kind="categorical", default="AAPL.US",
-                bounds=None, tunable=False,
+                name="ticker",
+                kind="categorical",
+                default="AAPL.US",
+                bounds=None,
+                tunable=False,
                 description="Ticker the strategy trades.",
             ),
             ParameterSpec(
-                name="allocation", kind="float", default=1.0, bounds=(0.0, 1.0),
+                name="allocation",
+                kind="float",
+                default=1.0,
+                bounds=(0.0, 1.0),
                 tunable=False,
                 description="Fraction of cash deployed on a fresh long entry.",
             ),
@@ -98,8 +124,8 @@ class RSIPCAStrategy(BaseStrategy):
     def __init__(self, params):
         BaseStrategy.__init__(self, params)
         self._rsi_means: np.ndarray | None = None
-        self._evecs: np.ndarray | None = None        # shape (n_rsi, n_components)
-        self._coefs: np.ndarray | None = None        # shape (n_components,)
+        self._evecs: np.ndarray | None = None  # shape (n_rsi, n_components)
+        self._coefs: np.ndarray | None = None  # shape (n_components,)
         self._long_thresh: float | None = None
         self._short_thresh: float | None = None
 
@@ -115,7 +141,8 @@ class RSIPCAStrategy(BaseStrategy):
         train_start, train_end = dataset.train_window
 
         bars = dataset.lake.get_bars(
-            ticker, interval,
+            ticker,
+            interval,
             start=as_datetime(train_start),
             end=as_datetime(train_end),
         )
@@ -211,8 +238,11 @@ class RSIPCAStrategy(BaseStrategy):
                 orders.append(
                     Order(
                         client_id=f"{self.id}:buy:{target}:{iso(as_of)}",
-                        ticker=target, side="buy", quantity=qty,
-                        order_type="market", strategy_id=self.id,
+                        ticker=target,
+                        side="buy",
+                        quantity=qty,
+                        order_type="market",
+                        strategy_id=self.id,
                     )
                 )
             return orders
@@ -221,8 +251,11 @@ class RSIPCAStrategy(BaseStrategy):
             orders.append(
                 Order(
                     client_id=f"{self.id}:sell:{target}:{iso(as_of)}",
-                    ticker=target, side="sell", quantity=holding,
-                    order_type="market", strategy_id=self.id,
+                    ticker=target,
+                    side="sell",
+                    quantity=holding,
+                    order_type="market",
+                    strategy_id=self.id,
                 )
             )
         return orders
@@ -240,9 +273,7 @@ class RSIPCAStrategy(BaseStrategy):
             "long_thresh": float(self._long_thresh),
             "short_thresh": float(self._short_thresh),
         }
-        (Path(path) / "fitted_state.json").write_text(
-            json.dumps(state, indent=2, sort_keys=True)
-        )
+        (Path(path) / "fitted_state.json").write_text(json.dumps(state, indent=2, sort_keys=True))
 
     @classmethod
     def load(cls, path) -> RSIPCAStrategy:

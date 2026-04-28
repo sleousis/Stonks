@@ -14,7 +14,6 @@ from stonks.ingest.sources.eodhd import (
     parse_crypto_profile_response,
 )
 
-
 # ---- classify_asset_class --------------------------------------------------
 
 

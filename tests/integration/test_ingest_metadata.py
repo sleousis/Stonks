@@ -450,9 +450,11 @@ def test_run_metadata_persists_per_class_bundle_fields(lake):
     assert result.status == "ok"
     assert result.tickers_ok == 3
 
-    classes = lake.sql(
-        "SELECT id, asset_class FROM instruments ORDER BY id"
-    ).set_index("id")["asset_class"].to_dict()
+    classes = (
+        lake.sql("SELECT id, asset_class FROM instruments ORDER BY id")
+        .set_index("id")["asset_class"]
+        .to_dict()
+    )
     assert classes == {
         "BTC-USD.CC": "crypto",
         "GC.COMM": "commodity",

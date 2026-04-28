@@ -33,9 +33,16 @@ def lake_500d(tmp_path):
     lake.upsert_prices(
         pd.DataFrame(
             [
-                {"ticker": "X.US", "date": d.date(),
-                 "open": c, "high": c + 0.3, "low": c - 0.3,
-                 "close": c, "adj_close": c, "volume": 1_000_000}
+                {
+                    "ticker": "X.US",
+                    "date": d.date(),
+                    "open": c,
+                    "high": c + 0.3,
+                    "low": c - 0.3,
+                    "close": c,
+                    "adj_close": c,
+                    "volume": 1_000_000,
+                }
                 for d, c in zip(dates, close, strict=False)
             ]
         )
@@ -114,9 +121,12 @@ def test_fit_raises_on_empty_training_data(tmp_path):
     empty.migrate()
     try:
         dataset = LabDataset(
-            lake=empty, universe=["Y.US"],
-            start=date(2024, 1, 1), end=date(2024, 12, 31),
-            interval=Interval.DAY_1, train_ratio=0.7,
+            lake=empty,
+            universe=["Y.US"],
+            start=date(2024, 1, 1),
+            end=date(2024, 12, 31),
+            interval=Interval.DAY_1,
+            train_ratio=0.7,
         )
         s = RSIPCAStrategy({"ticker": "Y.US"})
         with pytest.raises(ValueError, match="no bars"):
@@ -159,7 +169,8 @@ def test_decide_buys_on_long_signal_when_flat(lake_500d):
     portfolio = Portfolio(cash=10_000.0, positions={})
     orders = s.decide(
         my_picks=[(0.01, "X.US")],
-        portfolio=portfolio, prices={"X.US": 100.0},
+        portfolio=portfolio,
+        prices={"X.US": 100.0},
         as_of=dates[-1].date(),
     )
     assert len(orders) == 1
@@ -173,7 +184,8 @@ def test_decide_sells_when_signal_off_and_holding(lake_500d):
     portfolio = Portfolio(cash=0.0, positions={"X.US": 5.0})
     orders = s.decide(
         my_picks=[],
-        portfolio=portfolio, prices={"X.US": 100.0},
+        portfolio=portfolio,
+        prices={"X.US": 100.0},
         as_of=dates[-1].date(),
     )
     sells = [o for o in orders if o.side == "sell"]

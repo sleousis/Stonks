@@ -1583,9 +1583,7 @@ class EodhdDataSource(DataSource):
         # is missing, which is fine — we keep the minimal default profile.
         equity_profile = parse_profile_from_fundamentals(ticker, payload)
         if equity_profile is not None:
-            bundle_parts["profile"] = equity_profile.model_copy(
-                update={"asset_class": asset_class}
-            )
+            bundle_parts["profile"] = equity_profile.model_copy(update={"asset_class": asset_class})
 
         return MetadataBundle(**bundle_parts)
 

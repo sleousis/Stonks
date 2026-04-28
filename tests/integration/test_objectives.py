@@ -22,7 +22,7 @@ def test_sharpe_objective_prefers_uptrending(lake_trending):
         universe=["UP.US", "DOWN.US"],
         start=date(2025, 10, 1),
         end=date(2026, 4, 1),
-        train_ratio=1.0,   # use full window for train
+        train_ratio=1.0,  # use full window for train
     )
 
     s_up = obj.score(up_strategy, ds)

@@ -34,9 +34,7 @@ class Strategy(Protocol):
 
     def fit(self, dataset: Any) -> None: ...
 
-    def estimate_return(
-        self, ticker: str, as_of: date, lake: DuckDBLake
-    ) -> float | None: ...
+    def estimate_return(self, ticker: str, as_of: date, lake: DuckDBLake) -> float | None: ...
 
     def decide(
         self,

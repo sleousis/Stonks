@@ -51,9 +51,7 @@ def test_grid_tuner_does_not_tune_non_tunable_params(lake_trending):
         dataset=_dataset(lake_trending),
         budget=8,
     )
-    default_alloc = next(
-        s.default for s in Momentum.parameter_spec() if s.name == "allocation"
-    )
+    default_alloc = next(s.default for s in Momentum.parameter_spec() if s.name == "allocation")
     for params, _ in result.history:
         assert params["allocation"] == default_alloc
 

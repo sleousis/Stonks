@@ -95,12 +95,20 @@ def test_well_known_constants_exist_and_match():
 def test_standard_tuple_lists_all_fourteen_canonical_intervals():
     codes = {i.code for i in Interval.STANDARD}
     assert codes == {
-        "1m", "5m",
-        "1h", "4h", "6h", "12h",
-        "1d", "3d", "5d",
+        "1m",
+        "5m",
+        "1h",
+        "4h",
+        "6h",
+        "12h",
+        "1d",
+        "3d",
+        "5d",
         "1w",
-        "1mo", "6mo",
-        "1y", "5y",
+        "1mo",
+        "6mo",
+        "1y",
+        "5y",
     }
 
 

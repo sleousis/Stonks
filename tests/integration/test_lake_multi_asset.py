@@ -155,9 +155,7 @@ def test_upsert_bond_yields_is_idempotent(lake):
     )
     lake.upsert_bond_yields(_rows_to_df([revised]))
     assert lake.count_rows("bond_yield_history") == 1
-    got = lake.sql(
-        "SELECT yield_to_maturity FROM bond_yield_history WHERE ticker = 'US10Y.GBOND'"
-    )
+    got = lake.sql("SELECT yield_to_maturity FROM bond_yield_history WHERE ticker = 'US10Y.GBOND'")
     assert got.iloc[0]["yield_to_maturity"] == 4.19
 
 

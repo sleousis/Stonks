@@ -57,9 +57,7 @@ def test_tick_places_order_and_records_everything(tick_env):
     )
     assert len(fill_rows) == 1
 
-    snaps = state.sql(
-        "SELECT * FROM portfolio_snapshots WHERE tick_id = ?", [result.tick_id]
-    )
+    snaps = state.sql("SELECT * FROM portfolio_snapshots WHERE tick_id = ?", [result.tick_id])
     assert len(snaps) == 1
 
 
@@ -80,11 +78,9 @@ def test_tick_is_idempotent_on_same_day(tick_env):
 def test_tick_dry_run_records_no_orders_or_snapshots(tick_env):
     lake, state, registry = tick_env
     settings = TickSettings(universe=["UP.US"], threshold=0.0, initial_cash=10_000.0)
-    result = run_tick(
-        state, lake, registry, settings, as_of=date(2026, 3, 20), dry_run=True
-    )
+    result = run_tick(state, lake, registry, settings, as_of=date(2026, 3, 20), dry_run=True)
 
-    assert result.orders_placed >= 1   # decisions were ranked, but...
+    assert result.orders_placed >= 1  # decisions were ranked, but...
     assert state.count_rows("orders") == 0
     assert state.count_rows("fills") == 0
     assert state.count_rows("portfolio_snapshots") == 0

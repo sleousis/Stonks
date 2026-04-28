@@ -950,6 +950,29 @@ class DuckDBLake:
         finally:
             self.con.unregister("_in")
 
+    # ---- multi-asset helpers ------------------------------------------------
+
+    def get_asset_classes(self, tickers: list[str]) -> dict[str, str]:
+        """Return ``{ticker → asset_class}`` for every ticker that has a
+        row in ``instruments``.
+
+        Tickers with no instrument profile (price-bar landed before the
+        profile fetch, or the profile fetch failed) are omitted from the
+        result rather than defaulted — callers should treat the absence
+        as "asset class unknown" and decide locally how to handle it.
+        Used by the Ranker to drop universe tickers outside a strategy's
+        ``applicable_asset_classes``.
+        """
+        if not tickers:
+            return {}
+        placeholders = ",".join(["?"] * len(tickers))
+        rows = self.con.execute(
+            f"SELECT id, asset_class FROM instruments "
+            f"WHERE id IN ({placeholders}) AND asset_class IS NOT NULL",
+            tickers,
+        ).fetchall()
+        return {row[0]: row[1] for row in rows}
+
     # ---- escape hatch -------------------------------------------------------
 
     def sql(self, query: str, params: list | None = None) -> pd.DataFrame:

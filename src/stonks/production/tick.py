@@ -80,8 +80,11 @@ def run_tick(
         _close_tick(state, tick_id, status="noop", summary={"reason": "no_candidates"})
         log.info("tick.noop", reason="no_candidates")
         return TickResult(
-            tick_id=tick_id, status="noop", winner_strategy_id=None,
-            orders_placed=0, fills=0,
+            tick_id=tick_id,
+            status="noop",
+            winner_strategy_id=None,
+            orders_placed=0,
+            fills=0,
         )
 
     winner_return, winner_id, winner_ticker = ranked[0]

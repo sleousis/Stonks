@@ -39,10 +39,25 @@ class Ranker:
 
     def rank(self, as_of: date) -> list[tuple[float, str, str]]:
         handles = self._registry.list_active()
+        # Resolve asset classes once per tick. Tickers without an
+        # ``instruments`` row don't appear in this map — they're treated
+        # as "asset class unknown" and routed only to strategies that
+        # accept *every* class (i.e. the unknown intersection failure
+        # is handled by the per-strategy filter below).
+        asset_classes = self._lake.get_asset_classes(self._universe)
         picks: list[tuple[float, str, str]] = []
         for handle in handles:
             strategy = self._registry.load(handle.id)
+            allowed = set(getattr(strategy, "applicable_asset_classes", ("equity",)))
             for ticker in self._universe:
+                ticker_class = asset_classes.get(ticker)
+                if ticker_class is None:
+                    # No profile row → assume the historical default
+                    # (equity). This preserves prior behaviour for tickers
+                    # whose price bars landed before any metadata fetch.
+                    ticker_class = "equity"
+                if ticker_class not in allowed:
+                    continue
                 try:
                     r = strategy.estimate_return(ticker, as_of, self._lake)
                 except Exception as exc:

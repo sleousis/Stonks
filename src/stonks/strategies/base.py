@@ -14,11 +14,16 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from stonks.core.params import Params, ParamSpace, validate_params
-from stonks.core.types import Features
+from stonks.core.types import AssetClass, Features
 
 
 class BaseStrategy:
     id: ClassVar[str] = "base"
+    # AssetClass intersection — the Ranker drops universe tickers whose
+    # asset class isn't in this tuple. Default keeps every existing
+    # strategy equity-only without an opt-in change. Cross-class
+    # strategies override (e.g. ``("equity", "crypto")``).
+    applicable_asset_classes: ClassVar[tuple[AssetClass, ...]] = ("equity",)
 
     @classmethod
     def parameter_spec(cls) -> ParamSpace:

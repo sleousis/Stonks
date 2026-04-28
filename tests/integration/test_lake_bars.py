@@ -41,8 +41,9 @@ def _bar(ticker, ts, close):
 def _intraday_bars(ticker="AAPL.US"):
     start = datetime(2026, 4, 1, 9, 30, tzinfo=UTC)
     return pd.DataFrame(
-        [_bar(ticker, start.replace(minute=start.minute + 5 * i), 100.0 + i)
-         for i in range(6)]  # 6 bars: 09:30, 09:35, 09:40, 09:45, 09:50, 09:55
+        [
+            _bar(ticker, start.replace(minute=start.minute + 5 * i), 100.0 + i) for i in range(6)
+        ]  # 6 bars: 09:30, 09:35, 09:40, 09:45, 09:50, 09:55
     )
 
 
@@ -52,9 +53,12 @@ def _intraday_bars(ticker="AAPL.US"):
 def test_migration_003_creates_bars_table_and_prices_view(lake):
     assert "bars" in lake.tables()
     # `prices` remains available (as a view) for backward-compat SQL
-    assert "prices" in lake.sql(
-        "SELECT table_name FROM information_schema.tables WHERE table_name='prices'"
-    ).to_dict()["table_name"].values()
+    assert (
+        "prices"
+        in lake.sql("SELECT table_name FROM information_schema.tables WHERE table_name='prices'")
+        .to_dict()["table_name"]
+        .values()
+    )
 
 
 # ---- upsert_bars + get_bars ------------------------------------------------
@@ -104,9 +108,7 @@ def test_upsert_bars_updates_on_conflict(lake):
 def test_get_bars_returns_only_requested_interval(lake):
     # same (ticker, timestamp) with two different intervals should coexist
     min5 = _intraday_bars()
-    hour1 = pd.DataFrame(
-        [_bar("AAPL.US", datetime(2026, 4, 1, 10, 0, tzinfo=UTC), 100.0)]
-    )
+    hour1 = pd.DataFrame([_bar("AAPL.US", datetime(2026, 4, 1, 10, 0, tzinfo=UTC), 100.0)])
     lake.upsert_bars(min5, interval=Interval.MIN_5)
     lake.upsert_bars(hour1, interval=Interval.HOUR_1)
 
@@ -138,7 +140,7 @@ def test_get_bars_filters_by_window(lake):
         start=datetime(2026, 4, 1, 9, 40, tzinfo=UTC),
         end=datetime(2026, 4, 1, 9, 50, tzinfo=UTC),
     )
-    assert len(got) == 3   # 09:40, 09:45, 09:50
+    assert len(got) == 3  # 09:40, 09:45, 09:50
 
 
 # ---- backwards-compat: daily shims -----------------------------------------
@@ -147,16 +149,21 @@ def test_get_bars_filters_by_window(lake):
 def test_upsert_prices_backwards_compat_writes_into_bars(lake):
     df = pd.DataFrame(
         [
-            {"ticker": "AAPL.US", "date": date(2026, 4, 1),
-             "open": 100, "high": 105, "low": 99, "close": 104,
-             "adj_close": 104, "volume": 1_000_000},
+            {
+                "ticker": "AAPL.US",
+                "date": date(2026, 4, 1),
+                "open": 100,
+                "high": 105,
+                "low": 99,
+                "close": 104,
+                "adj_close": 104,
+                "volume": 1_000_000,
+            },
         ]
     )
     lake.upsert_prices(df)
 
-    bars_rows = lake.sql(
-        "SELECT ticker, interval FROM bars WHERE ticker='AAPL.US'"
-    )
+    bars_rows = lake.sql("SELECT ticker, interval FROM bars WHERE ticker='AAPL.US'")
     assert len(bars_rows) == 1
     assert bars_rows.iloc[0]["interval"] == "1d"
 
@@ -168,9 +175,16 @@ def test_upsert_prices_backwards_compat_writes_into_bars(lake):
 def test_prices_view_sees_only_daily_bars(lake):
     df_daily = pd.DataFrame(
         [
-            {"ticker": "AAPL.US", "date": date(2026, 4, 1),
-             "open": 100, "high": 105, "low": 99, "close": 104,
-             "adj_close": 104, "volume": 1_000_000},
+            {
+                "ticker": "AAPL.US",
+                "date": date(2026, 4, 1),
+                "open": 100,
+                "high": 105,
+                "low": 99,
+                "close": 104,
+                "adj_close": 104,
+                "volume": 1_000_000,
+            },
         ]
     )
     lake.upsert_prices(df_daily)

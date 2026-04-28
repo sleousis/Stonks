@@ -25,8 +25,12 @@ def lake_with_breakout(tmp_path):
         {
             "ticker": "X.US",
             "date": d.date(),
-            "open": c, "high": c + 0.1, "low": c - 0.1,
-            "close": c, "adj_close": c, "volume": 1_000_000,
+            "open": c,
+            "high": c + 0.1,
+            "low": c - 0.1,
+            "close": c,
+            "adj_close": c,
+            "volume": 1_000_000,
         }
         for d, c in zip(dates, closes, strict=False)
     ]
@@ -90,7 +94,7 @@ def test_decide_sells_on_breakdown_when_holding(lake_with_breakout):
     strategy = DonchianBreakout({"lookback": 20, "ticker": "X.US", "allocation": 1.0})
     portfolio = Portfolio(cash=0.0, positions={"X.US": 50.0})
     orders = strategy.decide(
-        my_picks=[],               # no pick → signal has gone off
+        my_picks=[],  # no pick → signal has gone off
         portfolio=portfolio,
         prices={"X.US": 90.0},
         as_of=date(2026, 2, 15),

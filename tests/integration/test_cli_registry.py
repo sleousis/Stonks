@@ -46,9 +46,7 @@ def _seed_registry(cli_env):
     state.migrate()
     try:
         reg = StrategyRegistry(state=state, artifacts_dir=cli_env / "data" / "artifacts")
-        reports = [
-            SurvivalReport(test_id="oos", passed=True, metrics={"sharpe_oos": 1.0})
-        ]
+        reports = [SurvivalReport(test_id="oos", passed=True, metrics={"sharpe_oos": 1.0})]
         a = reg.register(BuyAndHold({"ticker": "AAPL.US"}), reports=reports)
         b = reg.register(BuyAndHold({"ticker": "MSFT.US"}), reports=reports)
         reg.set_status(a, "active")
@@ -97,3 +95,21 @@ def test_registry_promote_and_retire(runner, cli_env):
     assert r3.exit_code == 0, r3.output
     r4 = runner.invoke(app, ["registry", "list", "--status", "retired"])
     assert b in r4.output
+
+
+def test_registry_list_asset_class_filter(runner, cli_env):
+    """``--asset-class`` filters to strategies whose
+    ``applicable_asset_classes`` contains the requested class. The
+    default BuyAndHold strategies are equity-only, so an --asset-class=crypto
+    filter should produce an empty list."""
+    runner.invoke(app, ["db", "init"])
+    a, b = _seed_registry(cli_env)
+    result = runner.invoke(app, ["registry", "list", "--asset-class", "equity"])
+    assert result.exit_code == 0, result.output
+    assert a in result.output
+    assert b in result.output
+
+    crypto_only = runner.invoke(app, ["registry", "list", "--asset-class", "crypto"])
+    assert crypto_only.exit_code == 0, crypto_only.output
+    assert a not in crypto_only.output
+    assert b not in crypto_only.output

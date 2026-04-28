@@ -46,11 +46,7 @@ def compute_report(
     end = curve[-1]
     final_return = end / start - 1.0 if start > 0 else 0.0
 
-    returns = [
-        curve[i] / curve[i - 1] - 1.0
-        for i in range(1, len(curve))
-        if curve[i - 1] > 0
-    ]
+    returns = [curve[i] / curve[i - 1] - 1.0 for i in range(1, len(curve)) if curve[i - 1] > 0]
     mean = sum(returns) / len(returns) if returns else 0.0
     var = sum((r - mean) ** 2 for r in returns) / len(returns) if returns else 0.0
     std = math.sqrt(var)
@@ -78,9 +74,9 @@ def compute_report(
     pos = sum(r for r in returns if r > 0)
     neg = abs(sum(r for r in returns if r < 0))
     if pos == 0:
-        profit_factor = 0.0        # no gains at all — either flat or all-loss
+        profit_factor = 0.0  # no gains at all — either flat or all-loss
     elif neg == 0:
-        profit_factor = math.inf   # gains but zero losses: infinite PF
+        profit_factor = math.inf  # gains but zero losses: infinite PF
     else:
         profit_factor = pos / neg
 

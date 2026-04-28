@@ -95,7 +95,7 @@ def test_backtester_skips_days_with_no_prices(lake_with_trend):
     )
     strategy = BuyAndHold({"ticker": "AAPL.US", "allocation": 1.0})
     config = BacktestConfig(
-        start=date(2025, 1, 1),   # before any price data
+        start=date(2025, 1, 1),  # before any price data
         end=dates[-1].date(),
         universe=["AAPL.US"],
         threshold=0.0,

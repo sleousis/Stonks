@@ -40,10 +40,15 @@ class RunsTestSurvivalTest:
 
         broker = SimulatedBroker(portfolio=Portfolio(cash=10_000.0, positions={}))
         report = Backtester(
-            strategies=[strategy], broker=broker, lake=context.lake,
+            strategies=[strategy],
+            broker=broker,
+            lake=context.lake,
             config=BacktestConfig(
-                start=start, end=end, universe=universe,
-                interval=interval, threshold=0.0,
+                start=start,
+                end=end,
+                universe=universe,
+                interval=interval,
+                threshold=0.0,
             ),
         ).run()
 
@@ -53,7 +58,9 @@ class RunsTestSurvivalTest:
                 test_id=self.id,
                 passed=True,
                 metrics={
-                    "z_score": 0.0, "n_positive": 0.0, "n_negative": 0.0,
+                    "z_score": 0.0,
+                    "n_positive": 0.0,
+                    "n_negative": 0.0,
                     "n_runs": 0.0,
                 },
                 notes="insufficient equity-curve length for a runs test",
@@ -66,7 +73,9 @@ class RunsTestSurvivalTest:
                 test_id=self.id,
                 passed=True,
                 metrics={
-                    "z_score": 0.0, "n_positive": 0.0, "n_negative": 0.0,
+                    "z_score": 0.0,
+                    "n_positive": 0.0,
+                    "n_negative": 0.0,
                     "n_runs": 0.0,
                 },
                 notes="insufficient variance in per-bar returns",
@@ -102,5 +111,3 @@ class RunsTestSurvivalTest:
                 "n_runs": float(n_runs),
             },
         )
-
-

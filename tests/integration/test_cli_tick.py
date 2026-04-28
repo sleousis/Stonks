@@ -76,9 +76,7 @@ base_url = "https://example.test/api"
 
     state = SqliteState(tmp_path / "data" / "state.sqlite")
     state.migrate()
-    registry = StrategyRegistry(
-        state=state, artifacts_dir=tmp_path / "data" / "artifacts"
-    )
+    registry = StrategyRegistry(state=state, artifacts_dir=tmp_path / "data" / "artifacts")
     sid = registry.register(
         BuyAndHold({"ticker": "UP.US", "allocation": 1.0}),
         reports=[SurvivalReport(test_id="oos", passed=True, metrics={"sharpe_oos": 1.0})],

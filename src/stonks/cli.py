@@ -357,12 +357,30 @@ def registry_list(
     status: str | None = typer.Option(
         None, "--status", help="filter by status (active|shadow|retired)"
     ),
+    asset_class: str | None = typer.Option(
+        None,
+        "--asset-class",
+        help="filter to strategies whose applicable_asset_classes include this class "
+        "(equity|crypto|commodity|bond)",
+    ),
 ) -> None:
     settings = _settings()
     state, registry = _open_registry(settings)
     try:
         handles = registry.list_all(status=status)
-        table = Table(title=f"strategies ({status or 'all'})")
+        if asset_class is not None:
+            kept = []
+            for h in handles:
+                strategy = registry.load(h.id)
+                applicable = getattr(strategy, "applicable_asset_classes", ("equity",))
+                if asset_class in applicable:
+                    kept.append(h)
+            handles = kept
+        title = f"strategies ({status or 'all'}"
+        if asset_class is not None:
+            title += f", asset_class={asset_class}"
+        title += ")"
+        table = Table(title=title)
         table.add_column("id", no_wrap=True, overflow="fold")
         for col in ("status", "class_path", "params", "created_at"):
             table.add_column(col)
@@ -440,6 +458,13 @@ def tick(
         "--tickers",
         help="comma-separated universe; overrides config.production.universe",
     ),
+    asset_class: str | None = typer.Option(
+        None,
+        "--asset-class",
+        help="restrict universe to instruments of this class "
+        "(equity|crypto|commodity|bond); requires the instruments table to "
+        "have asset_class populated for the relevant tickers",
+    ),
 ) -> None:
     """One-shot production tick. Rank active strategies × universe, pick a
     winner, let it decide, execute idempotently through the broker, and
@@ -452,6 +477,16 @@ def tick(
             "production universe is empty — provide --tickers or set "
             "[production].universe in config/default.toml"
         )
+
+    if asset_class is not None:
+        with _open_lake(settings.lake.path) as lake:
+            classes = lake.get_asset_classes(universe)
+        universe = [t for t in universe if classes.get(t) == asset_class]
+        if not universe:
+            raise typer.BadParameter(
+                f"no instruments in the universe match --asset-class={asset_class!r}; "
+                "ingest profiles first or relax the filter"
+            )
 
     as_of_date = date.fromisoformat(as_of) if as_of else date.today()
 

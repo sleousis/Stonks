@@ -67,7 +67,10 @@ class Backtester:
 
             # Rebalance cadence — counted in bars, not calendar days, so this
             # is identical for daily and intraday intervals.
-            if bars_since_rebalance is None or bars_since_rebalance >= self._config.rebalance_every_bars:
+            if (
+                bars_since_rebalance is None
+                or bars_since_rebalance >= self._config.rebalance_every_bars
+            ):
                 self._rebalance(as_of, day_prices.prices)
                 bars_since_rebalance = 1
             else:

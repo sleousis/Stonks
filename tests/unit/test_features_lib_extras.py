@@ -142,7 +142,7 @@ def test_fit_trendlines_single_on_linear_rising_data():
     data = np.linspace(100.0, 200.0, 60)
     support, resistance = fit_trendlines_single(data)
     # both lines should be near-identical on a perfect straight line
-    assert support[0] > 0   # positive slope
+    assert support[0] > 0  # positive slope
     assert resistance[0] > 0
     assert abs(support[0] - resistance[0]) < 1e-4
 

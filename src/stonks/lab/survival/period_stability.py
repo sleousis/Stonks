@@ -29,7 +29,9 @@ class PeriodStabilityTest:
 
         for i in range(self._n):
             start = context.start + timedelta(days=i * chunk)
-            end = context.start + timedelta(days=(i + 1) * chunk) if i < self._n - 1 else context.end
+            end = (
+                context.start + timedelta(days=(i + 1) * chunk) if i < self._n - 1 else context.end
+            )
             broker = SimulatedBroker(portfolio=Portfolio(cash=10_000.0, positions={}))
             report = Backtester(
                 strategies=[strategy],

@@ -170,5 +170,3 @@ class DonchianBreakout(BaseStrategy):
         last_upper = float(upper.iloc[-1]) if not pd.isna(upper.iloc[-1]) else float("nan")
         last_lower = float(lower.iloc[-1]) if not pd.isna(lower.iloc[-1]) else float("nan")
         return last_upper, last_lower, float(closes[-1]), int(sig_series.iloc[-1])
-
-
