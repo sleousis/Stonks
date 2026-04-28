@@ -143,7 +143,7 @@ class IngestPipeline:
         # half-state.
         with self._lake.transaction():
             if bundle.profile is not None:
-                self._lake.upsert_ticker_profile(_rows_to_df([bundle.profile]))
+                self._lake.upsert_instrument_profile(_rows_to_df([bundle.profile]))
             if bundle.ticker_snapshot is not None:
                 self._lake.upsert_ticker_snapshots(_rows_to_df([bundle.ticker_snapshot]))
             self._lake.upsert_dividends(_rows_to_df(bundle.dividends))
@@ -164,6 +164,15 @@ class IngestPipeline:
             self._lake.upsert_employee_count(_rows_to_df(bundle.employee_count))
             self._lake.upsert_segmentation(_rows_to_df(bundle.segmentation))
             self._lake.upsert_market_cap_history(_rows_to_df(bundle.market_cap_history))
+            # Per-asset-class profile rows (only the relevant one is set
+            # per ticker by the source adapter).
+            if bundle.crypto_profile is not None:
+                self._lake.upsert_crypto_profile(_rows_to_df([bundle.crypto_profile]))
+            if bundle.bond_profile is not None:
+                self._lake.upsert_bond_profile(_rows_to_df([bundle.bond_profile]))
+            if bundle.commodity_contract is not None:
+                self._lake.upsert_commodity_contract(_rows_to_df([bundle.commodity_contract]))
+            self._lake.upsert_bond_yields(_rows_to_df(bundle.bond_yields))
 
     def _run(self, *, kind, tickers, fetch, to_df, upsert) -> IngestRunResult:
         run_id = self._lake.open_ingest_run(source=self._source.source_id, kind=kind)

@@ -33,7 +33,21 @@ def _fundamentals_df(rows):
 
 def test_migrate_creates_expected_tables(lake):
     tables = set(lake.tables())
-    assert {"tickers", "prices", "fundamentals", "ingest_runs", "schema_migrations"} <= tables
+    # Migration 007 renames `tickers` → `instruments` and adds the per-class
+    # profile tables. The old name is intentionally gone — no back-compat
+    # view — so tests that check the schema surface lock the new name in.
+    assert {
+        "instruments",
+        "prices",
+        "fundamentals",
+        "ingest_runs",
+        "schema_migrations",
+        "crypto_profiles",
+        "bond_profiles",
+        "bond_yield_history",
+        "commodity_contracts",
+    } <= tables
+    assert "tickers" not in tables
 
 
 def test_migrate_is_idempotent(tmp_path):

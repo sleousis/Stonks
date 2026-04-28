@@ -253,7 +253,7 @@ def test_run_metadata_populates_every_table(lake):
     assert lake.count_rows("employee_count") == 1
     assert lake.count_rows("segmentation") == 2
 
-    profile = lake.sql("SELECT name, cusip, gic_sector FROM tickers WHERE id='AAPL.US'")
+    profile = lake.sql("SELECT name, cusip, gic_sector FROM instruments WHERE id='AAPL.US'")
     assert profile.iloc[0]["name"] == "Apple Inc"
     assert profile.iloc[0]["cusip"] == "037833100"
     assert profile.iloc[0]["gic_sector"] == "Information Technology"
@@ -287,7 +287,7 @@ def test_run_metadata_is_idempotent(lake):
     assert lake.count_rows("ticker_snapshots") == 1
     assert lake.count_rows("esg_snapshots") == 1
     assert lake.count_rows("officers") == 1
-    assert lake.count_rows("tickers") == 1
+    assert lake.count_rows("instruments") == 1
 
 
 def test_run_metadata_soft_fails_on_bad_ticker(lake):
