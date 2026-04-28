@@ -425,7 +425,10 @@ def ingest_macro(
     country_list = _parse_tickers(countries)
     if not country_list:
         raise typer.BadParameter("--countries requires at least one ISO-3 code")
-    bad_countries = [c for c in country_list if len(c) != 3 or not c.isalpha()]
+    # ``isalpha()`` returns True for non-ASCII letters (Greek, Cyrillic,
+    # accented Latin); the explicit ``isascii()`` keeps the check aligned
+    # with the "three ASCII letters" promise we make to operators.
+    bad_countries = [c for c in country_list if len(c) != 3 or not (c.isascii() and c.isalpha())]
     if bad_countries:
         raise typer.BadParameter(
             f"--countries entries must be ISO 3166-1 alpha-3 (e.g. USA); invalid: {bad_countries}"

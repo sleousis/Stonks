@@ -174,31 +174,48 @@ class IngestPipeline:
         ok = 0
         failed = 0
         last_error: str | None = None
+        try:
+            for country in countries:
+                for indicator in indicators:
+                    try:
+                        rows = list(self._source.fetch_macro_indicator(country, indicator))
+                        df = _macro_to_df(rows)
+                        self._lake.upsert_macro_indicators(df)
+                        ok += 1
+                        log.info(
+                            "macro.ingested",
+                            country_iso=country,
+                            indicator=indicator,
+                            rows=len(rows),
+                        )
+                    except _SOFT_FAIL_EXCEPTIONS as exc:
+                        failed += 1
+                        last_error = f"{type(exc).__name__}: {exc}"
+                        log.warning(
+                            "macro.failed",
+                            country_iso=country,
+                            indicator=indicator,
+                            error=last_error,
+                        )
 
-        for country in countries:
-            for indicator in indicators:
-                try:
-                    rows = list(self._source.fetch_macro_indicator(country, indicator))
-                    df = _macro_to_df(rows)
-                    self._lake.upsert_macro_indicators(df)
-                    ok += 1
-                    log.info(
-                        "macro.ingested",
-                        country_iso=country,
-                        indicator=indicator,
-                        rows=len(rows),
-                    )
-                except _SOFT_FAIL_EXCEPTIONS as exc:
-                    failed += 1
-                    last_error = f"{type(exc).__name__}: {exc}"
-                    log.warning(
-                        "macro.failed",
-                        country_iso=country,
-                        indicator=indicator,
-                        error=last_error,
-                    )
+            status = _status(ok, failed)
+        except BaseException as exc:
+            # Same belt-and-braces guard ``run_fundamentals`` uses: a long
+            # N×M run that gets SIGTERMed mid-loop must still close the
+            # ``ingest_runs`` row to a terminal status, otherwise operators
+            # have to triage orphaned ``running`` rows by hand.
+            status = "error"
+            last_error = f"{type(exc).__name__}: {exc}"
+            self._lake.close_ingest_run(
+                run_id,
+                tickers_ok=ok,
+                tickers_failed=failed,
+                status=status,
+                error=last_error,
+            )
+            log.error("run.aborted", status=status, error=last_error)
+            raise
 
-        status = _status(ok, failed)
         self._lake.close_ingest_run(
             run_id,
             tickers_ok=ok,

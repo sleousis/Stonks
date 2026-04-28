@@ -169,6 +169,55 @@ def test_pipeline_run_macro_indicators_persists_and_records_run(lake):
     assert df["country_iso"].tolist() == ["DEU", "USA"]
 
 
+def test_pipeline_closes_ingest_run_even_when_loop_raises_baseexception(lake):
+    """A long N×M run interrupted by SIGTERM (or SystemExit) must still
+    close the `ingest_runs` row to a terminal status — leaving a `running`
+    row behind orphans operator triage. Mirrors the same guard
+    `run_fundamentals` carries for the equivalent equity flow."""
+
+    class _CrashingSource(_FakeMacroSource):
+        def fetch_macro_indicator(self, country_iso: str, indicator: str):
+            raise SystemExit("simulated SIGTERM mid-loop")
+
+    pipeline = IngestPipeline(source=_CrashingSource([]), lake=lake)
+
+    with pytest.raises(SystemExit):
+        pipeline.run_macro_indicators(countries=["USA"], indicators=["real_gdp_total"])
+
+    df = lake.sql("SELECT status FROM ingest_runs WHERE kind = 'macro'")
+    assert df.shape[0] == 1
+    assert df["status"].iloc[0] != "running"
+
+
+def test_pipeline_soft_fails_on_value_error_from_fetcher(lake):
+    """`EodhdDataSource.fetch_macro_indicator` validates inputs and raises a
+    domain error on bad ones. The pipeline must catch that as a per-pair
+    soft-fail (not a hard crash) — otherwise a single bad pair aborts the
+    whole multi-country run."""
+
+    class _ValueErrorSource(_FakeMacroSource):
+        def fetch_macro_indicator(self, country_iso: str, indicator: str):
+            if country_iso == "BAD":
+                from stonks.ingest.sources.base import DataSourceError
+
+                raise DataSourceError(f"bad country_iso {country_iso!r}")
+            return super().fetch_macro_indicator(country_iso, indicator)
+
+    rows = [
+        MacroIndicatorRow(
+            country_iso="USA",
+            indicator="real_gdp_total",
+            observation_date=date(2023, 1, 1),
+            value=1.0,
+        ),
+    ]
+    pipeline = IngestPipeline(source=_ValueErrorSource(rows), lake=lake)
+    result = pipeline.run_macro_indicators(countries=["USA", "BAD"], indicators=["real_gdp_total"])
+    assert result.status == "partial"
+    assert result.tickers_failed == 1
+    assert result.tickers_ok == 1
+
+
 def test_pipeline_run_macro_indicators_soft_fails_per_pair(lake):
     """A single (country, indicator) pair raising must not abort the run;
     it should be counted in tickers_failed and the rest still persisted."""

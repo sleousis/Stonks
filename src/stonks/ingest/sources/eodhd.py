@@ -1696,13 +1696,24 @@ def parse_macro_indicators_response(
     (``real_gdp_total``) collapse into the same lake column value.
     """
     _check_free_tier(payload)
-    if not isinstance(payload, list):
-        return
     canonical_country = country_iso.upper()
     canonical_indicator = _normalize_macro_indicator(indicator)
+    # Degenerate indicator ("---", "   ", "") collapses to "" — yield
+    # nothing rather than constructing rows that would each trip
+    # ``MacroIndicatorRow.indicator``'s min_length=1 validator. Same
+    # early-out shape as the per-row drop on unparseable Date.
+    if not canonical_indicator:
+        return
     kept = 0
     dropped = 0
+    # ``isinstance`` guard lives inside the try so the ``finally``-guarded
+    # drop log fires even when the vendor returns an unexpected non-list
+    # payload (e.g. an empty ``{}`` on a 200) — that's the silent-corruption
+    # signal the log was added to surface.
     try:
+        if not isinstance(payload, list):
+            dropped += 1
+            return
         for row in payload:
             if not isinstance(row, dict):
                 dropped += 1
@@ -1879,13 +1890,23 @@ class EodhdDataSource(DataSource):
         endpoint as the vendor's catalog keys.
         """
         canonical_country = country_iso.strip().upper()
-        if len(canonical_country) != 3 or not canonical_country.isalpha():
-            raise ValueError(
+        # ``isalpha()`` returns True for non-ASCII letters (Greek, Cyrillic,
+        # accented Latin); the explicit ``isascii()`` guard keeps the check
+        # aligned with the "three ASCII letters" docstring promise. Raised
+        # as ``DataSourceError`` (not bare ``ValueError``) so the pipeline's
+        # ``_SOFT_FAIL_EXCEPTIONS`` catches it as a per-pair soft-fail
+        # rather than aborting the whole multi-country run.
+        if (
+            len(canonical_country) != 3
+            or not canonical_country.isascii()
+            or not canonical_country.isalpha()
+        ):
+            raise DataSourceError(
                 f"country_iso must be ISO 3166-1 alpha-3 (e.g. 'USA'); got {country_iso!r}"
             )
         canonical_indicator = _normalize_macro_indicator(indicator)
         if not canonical_indicator:
-            raise ValueError(f"indicator must be a non-empty string; got {indicator!r}")
+            raise DataSourceError(f"indicator must be a non-empty string; got {indicator!r}")
         url = f"{self._base_url}/macro-indicator/{canonical_country}"
         params = {"fmt": "json", "indicator": canonical_indicator}
         data = self._get(url, params=params)
