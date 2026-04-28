@@ -98,9 +98,41 @@ No change required in `IngestPipeline`, the lake schema, or anything downstream.
 ## CLI
 
 ```
-stonks ingest prices   [--source eodhd] [--exchange US | --tickers AAPL.US,MSFT.US] [--since 2025-05-01]
-stonks ingest fundamentals [--source eodhd] --tickers AAPL.US,MSFT.US
+stonks ingest prices       [--exchange US | --tickers AAPL.US,MSFT.US | --asset-class crypto] [--since 2025-05-01]
+stonks ingest fundamentals --tickers AAPL.US,MSFT.US
+stonks ingest metadata     [--tickers AAPL.US | --asset-class crypto]
+stonks ingest intraday     --tickers AAPL.US --interval 5m
 ```
+
+## Multi-asset support
+
+Assets fall into a closed set declared in `core.types.AssetClass`: `equity`, `crypto`, `commodity`, `bond`. Equity is the historical default and has the richest metadata surface (the three financial statements, dividends, insider trades, analyst data, ESG, …). Non-equity classes share the same `bars` time series and add a small per-class profile table (`crypto_profiles`, `bond_profiles` + `bond_yield_history`, `commodity_contracts`).
+
+EODHD encodes the class in the ticker suffix:
+
+| Asset class | EODHD virtual exchange | Example tickers |
+|-------------|-----------------------|-----------------|
+| equity      | many real exchanges (US, LSE, XETRA, …) | `AAPL.US`, `VOD.LSE` |
+| crypto      | `CC`                                    | `BTC-USD.CC`, `ETH-USD.CC` |
+| commodity   | `COMM`                                  | `GC.COMM`, `CL.COMM` |
+| bond        | `GBOND`                                 | `US10Y.GBOND`, `DE10Y.GBOND` |
+
+Adapter behaviour:
+
+- `classify_asset_class(ticker)` is the single source of truth for routing; both the CLI and the EODHD adapter share it.
+- `EodhdDataSource.fetch_fundamentals` short-circuits with an empty bundle for non-equity tickers (no issuer → no statements).
+- `EodhdDataSource.fetch_metadata` routes non-equity tickers to a narrower path that only hits `/fundamentals` and populates the matching per-class profile (`crypto_profile` / `bond_profile` / `commodity_contract`); the equity-shaped fields stay at their defaults.
+
+CLI ergonomics: every ingest command that takes a universe accepts `--asset-class` so an operator doesn't need to memorise EODHD's virtual-exchange codes.
+
+```
+stonks ingest prices --asset-class crypto                # auto-resolves to --exchange CC
+stonks ingest prices --asset-class bond                  # auto-resolves to --exchange GBOND
+stonks ingest prices --tickers BTC-USD.CC,ETH-USD.CC --asset-class crypto   # validates
+stonks ingest metadata --asset-class commodity           # full profile pull for COMM universe
+```
+
+Equity has no single virtual exchange, so `--asset-class equity` requires `--exchange` or `--tickers` to be passed explicitly. Mixing classes under one `--asset-class` flag (e.g. `--asset-class crypto --tickers BTC-USD.CC,AAPL.US`) fails fast with the offending ticker named.
 
 ## Testing
 

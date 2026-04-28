@@ -1303,6 +1303,29 @@ def classify_asset_class(ticker: str) -> AssetClass:
     return _ASSET_CLASS_SUFFIX_MAP.get(suffix, "equity")
 
 
+# Inverse of ``_ASSET_CLASS_SUFFIX_MAP``: AssetClass → EODHD virtual
+# exchange code, for the three classes EODHD models as a single
+# vendor-side bucket. ``equity`` has no entry here on purpose: equities
+# live on dozens of real exchanges (US / LSE / XETRA / …) so there is
+# no single code we could resolve to without making a silent guess.
+_ASSET_CLASS_VIRTUAL_EXCHANGE_MAP: dict[AssetClass, str] = {
+    asset_class: suffix for suffix, asset_class in _ASSET_CLASS_SUFFIX_MAP.items()
+}
+
+
+def eodhd_exchange_for_asset_class(asset_class: AssetClass) -> str | None:
+    """Return EODHD's virtual exchange code for an asset class, or ``None``
+    when the class doesn't map to a single exchange.
+
+    Used by the CLI's ``--asset-class`` ergonomics so an operator can say
+    ``stonks ingest prices --asset-class crypto`` without first learning
+    that EODHD groups crypto under the ``CC`` virtual exchange. Equity
+    has no mapping here (dozens of real exchanges) — callers fall back to
+    requiring an explicit ``--exchange`` or ``--tickers`` for that class.
+    """
+    return _ASSET_CLASS_VIRTUAL_EXCHANGE_MAP.get(asset_class)
+
+
 _CRYPTO_CONSENSUS_KEYWORDS: tuple[tuple[str, CryptoConsensusType], ...] = (
     # Order matters — broader / abbreviated terms after the more specific
     # ones so e.g. "delegated" beats "stake" and "dpos" beats "pos".

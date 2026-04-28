@@ -9,10 +9,36 @@ import pytest
 
 from stonks.ingest.sources.eodhd import (
     classify_asset_class,
+    eodhd_exchange_for_asset_class,
     parse_bond_profile_response,
     parse_commodity_contract_response,
     parse_crypto_profile_response,
 )
+
+# ---- eodhd_exchange_for_asset_class ---------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("asset_class", "expected"),
+    [
+        ("crypto", "CC"),
+        ("commodity", "COMM"),
+        ("bond", "GBOND"),
+    ],
+)
+def test_eodhd_exchange_for_asset_class_returns_virtual_exchange(asset_class, expected):
+    """The non-equity classes each map to exactly one EODHD virtual
+    exchange; the inverse must be the round-trip of ``classify_asset_class``
+    on a synthetic ticker assembled from the suffix."""
+    assert eodhd_exchange_for_asset_class(asset_class) == expected
+    assert classify_asset_class(f"FOO.{expected}") == asset_class
+
+
+def test_eodhd_exchange_for_asset_class_returns_none_for_equity():
+    """Equity instruments live on dozens of real exchanges, so the
+    resolver returns ``None`` to force callers to ask explicitly."""
+    assert eodhd_exchange_for_asset_class("equity") is None
+
 
 # ---- classify_asset_class --------------------------------------------------
 
