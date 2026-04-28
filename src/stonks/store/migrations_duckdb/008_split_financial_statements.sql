@@ -19,7 +19,7 @@ DROP TABLE IF EXISTS fundamentals;
 CREATE TABLE income_statement (
     ticker                          VARCHAR NOT NULL,
     period_end                      DATE    NOT NULL,
-    frequency                       VARCHAR NOT NULL,   -- 'Q' | 'A'
+    frequency                       VARCHAR NOT NULL CHECK (frequency IN ('Q','A')),
     filing_date                     DATE,
     currency                        VARCHAR,
 
@@ -45,7 +45,11 @@ CREATE TABLE income_statement (
     non_operating_income_other      DOUBLE,
     total_other_income_expense_net  DOUBLE,
 
-    -- Pre-tax / tax
+    -- Pre-tax / tax. EODHD exposes both `incomeTaxExpense` and
+    -- `taxProvision` for the same accounting concept (typically
+    -- equal-or-near-equal on the same filing); we store both verbatim.
+    -- Downstream consumers should prefer `income_tax_expense` as the
+    -- canonical value and treat `tax_provision` as a redundancy check.
     income_before_tax               DOUBLE,
     income_tax_expense              DOUBLE,
     tax_provision                   DOUBLE,
@@ -79,7 +83,7 @@ CREATE TABLE income_statement (
 CREATE TABLE balance_sheet (
     ticker                                  VARCHAR NOT NULL,
     period_end                              DATE    NOT NULL,
-    frequency                               VARCHAR NOT NULL,
+    frequency                               VARCHAR NOT NULL CHECK (frequency IN ('Q','A')),
     filing_date                             DATE,
     currency                                VARCHAR,
 
@@ -161,7 +165,7 @@ CREATE TABLE balance_sheet (
 CREATE TABLE cash_flow_statement (
     ticker                              VARCHAR NOT NULL,
     period_end                          DATE    NOT NULL,
-    frequency                           VARCHAR NOT NULL,
+    frequency                           VARCHAR NOT NULL CHECK (frequency IN ('Q','A')),
     filing_date                         DATE,
     currency                            VARCHAR,
 

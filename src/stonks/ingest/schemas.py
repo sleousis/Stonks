@@ -141,10 +141,13 @@ class _StatementRowBase(FrozenRow):
     period_end: date
     frequency: StatementFrequency
     filing_date: date | None = None
-    # ISO-4217 currency the statement is reported in (vendor field
-    # ``currency_symbol``). Adapter-mapped at parse time; kept on the row
-    # because filers in the same exchange can still report in different
-    # currencies (ADRs, dual-listed issuers).
+    # Reporting currency for the statement (typically a 3-letter ISO-4217
+    # code, but vendors don't all enforce that — EODHD's
+    # ``currency_symbol`` is whatever the issuer files in). Stored as
+    # free-text rather than ``Literal[...]`` because the realistic set
+    # spans 100+ currencies and any closed list would lock out exotic
+    # filers; downstream consumers should uppercase + length-check
+    # before equality comparisons.
     currency: str | None = None
 
 

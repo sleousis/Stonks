@@ -196,6 +196,63 @@ def test_upsert_statement_empty_df_is_noop(lake):
     assert lake.upsert_cash_flow_statement(empty) == 0
 
 
+def test_sparse_upsert_preserves_prior_non_null_values(lake):
+    """Re-upserting with a sparser DataFrame must NOT wipe prior values
+    to NULL — only real (non-NULL) values overwrite. This is the
+    contract that makes wide-table upserts safe for callers who don't
+    pass every column on every call."""
+    pk = {
+        "ticker": "AAPL.US",
+        "period_end": date(2025, 12, 31),
+        "frequency": "Q",
+    }
+    full = pd.DataFrame([{**pk, "revenue": 100.0, "gross_profit": 60.0, "net_income": 40.0}])
+    lake.upsert_income_statement(full)
+    sparse = pd.DataFrame([{**pk, "revenue": 110.0}])
+    lake.upsert_income_statement(sparse)
+    out = lake.get_income_statement("AAPL.US").iloc[0]
+    # Real value overwrites:
+    assert out["revenue"] == 110.0
+    # Absent values are preserved (NOT silently set to NULL):
+    assert out["gross_profit"] == 60.0
+    assert out["net_income"] == 40.0
+
+
+def test_upsert_statement_rejects_missing_pk_columns(lake):
+    df = pd.DataFrame([{"ticker": "AAPL.US", "revenue": 100.0}])
+    with pytest.raises(ValueError, match="missing required PK column"):
+        lake.upsert_income_statement(df)
+
+
+def test_upsert_statement_rejects_null_pk_value(lake):
+    df = pd.DataFrame(
+        [
+            {
+                "ticker": "AAPL.US",
+                "period_end": None,
+                "frequency": "Q",
+                "revenue": 100.0,
+            }
+        ]
+    )
+    with pytest.raises(ValueError, match="must be non-null"):
+        lake.upsert_income_statement(df)
+
+
+def test_migration_frequency_check_constraint_rejects_bad_value(lake):
+    """The CHECK (frequency IN ('Q','A')) constraint guards against a
+    bad direct INSERT that the Pydantic Literal would also reject.
+    Belt-and-braces: the lake column won't accept what the row type
+    won't construct."""
+    import duckdb
+
+    with pytest.raises(duckdb.ConstraintException):
+        lake.con.execute(
+            "INSERT INTO income_statement (ticker, period_end, frequency) "
+            "VALUES ('AAPL.US', DATE '2025-12-31', 'weekly')"
+        )
+
+
 def test_ingest_run_lifecycle(lake):
     run_id = lake.open_ingest_run(source="eodhd", kind="prices")
     assert isinstance(run_id, int)

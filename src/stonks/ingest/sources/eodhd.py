@@ -181,8 +181,10 @@ _BALANCE_LINE_ITEMS: dict[str, str] = {
     "otherAssets": "other_assets",
     "deferredLongTermAssetCharges": "deferred_long_term_asset_charges",
     # EODHD's misspelling — kept verbatim on the vendor side, mapped to a
-    # correctly-spelled column.
+    # correctly-spelled column. The corrected spelling is also accepted
+    # so an upstream typo fix doesn't silently zero the column.
     "nonCurrrentAssetsOther": "non_current_assets_other",
+    "nonCurrentAssetsOther": "non_current_assets_other",
     "earningAssets": "earning_assets",
     "totalLiab": "total_liabilities",
     "totalCurrentLiabilities": "current_liabilities",
@@ -213,8 +215,11 @@ _BALANCE_LINE_ITEMS: dict[str, str] = {
     "commonStockTotalEquity": "common_stock_total_equity",
     "preferredStockTotalEquity": "preferred_stock_total_equity",
     "retainedEarningsTotalEquity": "retained_earnings_total_equity",
-    # EODHD's misspelling — kept verbatim on the vendor side.
+    # EODHD's misspelling — kept verbatim on the vendor side. The
+    # corrected spelling is also accepted so an upstream typo fix
+    # doesn't silently zero the column.
     "capitalSurpluse": "capital_surplus",
+    "capitalSurplus": "capital_surplus",
     "totalPermanentEquity": "total_permanent_equity",
     "noncontrollingInterestInConsolidatedEntity": "noncontrolling_interest",
     "temporaryEquityRedeemableNoncontrollingInterests": "temporary_equity_redeemable_noncontrolling",
@@ -475,28 +480,57 @@ def _iter_statement_section(
     period date strings. We project each period dict into one wide row
     by translating known camelCase keys via ``line_item_map`` and dropping
     everything else.
+
+    Unknown frequency sub-keys (e.g. a future ``ttm`` block) are logged
+    once at info-level so a vendor extension doesn't silently leak
+    data; malformed period entries are counted and reported via the
+    shared ``_log_parse_drops`` channel so silent corruption surfaces
+    in observability.
     """
-    for vendor_freq, canonical_freq in _FREQUENCY_MAP.items():
-        periods = section.get(vendor_freq) or {}
-        if not isinstance(periods, dict):
-            continue
-        for period_key, period_dict in periods.items():
-            if not isinstance(period_dict, dict):
+    statement_label = row_cls.__name__
+    if isinstance(section, dict):
+        for sub_key in section:
+            if sub_key not in _FREQUENCY_MAP and sub_key != "currency_symbol":
+                _log_unknown_vendor_value(
+                    "eodhd.statement.unknown_frequency",
+                    {"statement": statement_label, "ticker": ticker, "key": sub_key},
+                )
+    kept = 0
+    dropped = 0
+    try:
+        for vendor_freq, canonical_freq in _FREQUENCY_MAP.items():
+            periods = section.get(vendor_freq) or {}
+            if not isinstance(periods, dict):
                 continue
-            period_end = _parse_date(period_dict.get("date") or period_key)
-            if period_end is None:
-                continue
-            kwargs: dict[str, Any] = {
-                "ticker": ticker,
-                "period_end": period_end,
-                "frequency": canonical_freq,
-                "filing_date": _parse_date(period_dict.get("filing_date")),
-                "currency": period_dict.get("currency_symbol"),
-            }
-            for vendor_key, canonical_key in line_item_map.items():
-                if vendor_key in period_dict:
-                    kwargs[canonical_key] = _coerce_optional_float(period_dict[vendor_key])
-            yield row_cls(**kwargs)
+            for period_key, period_dict in periods.items():
+                if not isinstance(period_dict, dict):
+                    dropped += 1
+                    continue
+                period_end = _parse_date(period_dict.get("date") or period_key)
+                if period_end is None:
+                    dropped += 1
+                    continue
+                kwargs: dict[str, Any] = {
+                    "ticker": ticker,
+                    "period_end": period_end,
+                    "frequency": canonical_freq,
+                    "filing_date": _parse_date(period_dict.get("filing_date")),
+                    "currency": period_dict.get("currency_symbol"),
+                }
+                # ``vendor_key in period_dict`` collapses "absent" and
+                # "explicit null" to the same write-NULL semantic. The
+                # lake's statement upsert uses COALESCE(EXCLUDED, table)
+                # in the UPDATE clause so NULL doesn't overwrite a prior
+                # non-NULL value — but it also means a vendor explicitly
+                # restating a line to NULL is a no-op on update. That's
+                # the right trade-off here (vendor flake > silent wipe).
+                for vendor_key, canonical_key in line_item_map.items():
+                    if vendor_key in period_dict:
+                        kwargs[canonical_key] = _coerce_optional_float(period_dict[vendor_key])
+                kept += 1
+                yield row_cls(**kwargs)
+    finally:
+        _log_parse_drops(f"_iter_statement_section[{statement_label}]", ticker, kept, dropped)
 
 
 def _check_free_tier(payload: Any) -> None:

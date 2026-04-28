@@ -71,8 +71,12 @@ class IngestPipeline:
         the three statements into their dedicated tables.
 
         One vendor call per ticker (the bundle), three lake writes
-        wrapped in a single transaction so a partial failure never
-        leaves the lake half-populated.
+        wrapped in a per-ticker transaction so a partial failure on one
+        ticker never leaves that ticker half-populated. The overall run
+        is **not** atomic — successful tickers stay committed even if a
+        later ticker fails. The ``ingest_runs`` row is always closed,
+        even if an unhandled exception escapes the loop, so operators
+        never have to clean up orphaned ``running`` rows by hand.
         """
         run_id = self._lake.open_ingest_run(source=self._source.source_id, kind="fundamentals")
         log = self._log.bind(run_id=run_id, kind="fundamentals")
@@ -80,25 +84,41 @@ class IngestPipeline:
         ok = 0
         failed = 0
         last_error: str | None = None
+        try:
+            for ticker in tickers:
+                try:
+                    bundle = self._source.fetch_fundamentals(ticker)
+                    self._upsert_statements_bundle(bundle)
+                    ok += 1
+                    log.info(
+                        "ticker.ingested",
+                        ticker=ticker,
+                        income_rows=len(bundle.income),
+                        balance_rows=len(bundle.balance),
+                        cashflow_rows=len(bundle.cashflow),
+                    )
+                except _SOFT_FAIL_EXCEPTIONS as exc:
+                    failed += 1
+                    last_error = f"{type(exc).__name__}: {exc}"
+                    log.warning("ticker.failed", ticker=ticker, error=last_error)
 
-        for ticker in tickers:
-            try:
-                bundle = self._source.fetch_fundamentals(ticker)
-                self._upsert_statements_bundle(bundle)
-                ok += 1
-                log.info(
-                    "ticker.ingested",
-                    ticker=ticker,
-                    income_rows=len(bundle.income),
-                    balance_rows=len(bundle.balance),
-                    cashflow_rows=len(bundle.cashflow),
-                )
-            except _SOFT_FAIL_EXCEPTIONS as exc:
-                failed += 1
-                last_error = f"{type(exc).__name__}: {exc}"
-                log.warning("ticker.failed", ticker=ticker, error=last_error)
+            status = _status(ok, failed)
+        except BaseException as exc:
+            # Catch SystemExit / KeyboardInterrupt too: the ingest_runs
+            # row must close so operators don't have to triage orphaned
+            # ``running`` rows. Re-raised after the row is closed.
+            status = "error"
+            last_error = f"{type(exc).__name__}: {exc}"
+            self._lake.close_ingest_run(
+                run_id,
+                tickers_ok=ok,
+                tickers_failed=failed,
+                status=status,
+                error=last_error,
+            )
+            log.error("run.aborted", status=status, error=last_error)
+            raise
 
-        status = _status(ok, failed)
         self._lake.close_ingest_run(
             run_id,
             tickers_ok=ok,
@@ -116,9 +136,10 @@ class IngestPipeline:
         )
 
     def _upsert_statements_bundle(self, bundle: FinancialStatementsBundle) -> None:
-        # Atomic per ticker: a downstream NOT NULL violation on one of
-        # the three tables rolls back the other two so the ticker either
-        # has all three statements applied or none at all.
+        # Atomic *per ticker* (not per run): a downstream NOT NULL
+        # violation on one of the three tables rolls back the other two
+        # so the ticker either has all three statements applied or
+        # none at all. Other tickers in the same run are unaffected.
         with self._lake.transaction():
             self._lake.upsert_income_statement(_rows_to_df(bundle.income))
             self._lake.upsert_balance_sheet(_rows_to_df(bundle.balance))

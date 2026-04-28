@@ -7,6 +7,8 @@ Schema lives in ``migrations_duckdb/*.sql``; versions are tracked in
 
 from __future__ import annotations
 
+import os
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -18,8 +20,19 @@ import pandas as pd
 
 from stonks.core.interval import Interval
 from stonks.core.timeutil import day_end, day_start
+from stonks.logging import get_logger
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations_duckdb"
+
+# Env var that lets an operator opt into a destructive migration
+# (``DROP TABLE``) against a table that currently holds rows. The default
+# is to refuse — losing committed data must be an explicit choice, not
+# something a routine ``stonks db init`` does silently.
+_DESTRUCTIVE_OPT_IN_ENV = "STONKS_ALLOW_DESTRUCTIVE_MIGRATIONS"
+_DROP_TABLE_RE = re.compile(
+    r"\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*;",
+    re.IGNORECASE,
+)
 
 _PRICE_COLS = ("ticker", "date", "open", "high", "low", "close", "adj_close", "volume")
 _BAR_COLS = (
@@ -217,11 +230,13 @@ class DuckDBLake:
         applied = {
             row[0] for row in self.con.execute("SELECT version FROM schema_migrations").fetchall()
         }
+        log = get_logger("stonks.store.lake.migrate")
         for path in sorted(MIGRATIONS_DIR.glob("*.sql")):
             version = int(path.stem.split("_", 1)[0])
             if version in applied:
                 continue
             sql = path.read_text()
+            self._guard_destructive_drops(sql, version=version, log=log)
             self.con.execute("BEGIN")
             try:
                 self.con.execute(sql)
@@ -233,6 +248,39 @@ class DuckDBLake:
             except Exception:
                 self.con.execute("ROLLBACK")
                 raise
+
+    def _guard_destructive_drops(self, sql: str, *, version: int, log: Any) -> None:
+        """Refuse to apply a migration whose ``DROP TABLE`` step would
+        delete a table that currently holds rows, unless the operator
+        explicitly opts in via ``STONKS_ALLOW_DESTRUCTIVE_MIGRATIONS=1``.
+
+        Empty / non-existent tables are dropped silently — this guard
+        only fires when real data would be lost. Each affected table
+        produces one structured WARNING log line so operators can see
+        exactly what they'd lose before opting in.
+        """
+        existing = set(self.tables())
+        opt_in = os.environ.get(_DESTRUCTIVE_OPT_IN_ENV, "").lower() in {"1", "true", "yes"}
+        for match in _DROP_TABLE_RE.finditer(sql):
+            target = match.group(1)
+            if target not in existing:
+                continue
+            row_count = int(self.con.execute(f"SELECT COUNT(*) FROM {target}").fetchone()[0])
+            if row_count == 0:
+                continue
+            log.warning(
+                "lake.migrate.destructive_drop",
+                migration_version=version,
+                table=target,
+                rows=row_count,
+                opt_in_env=_DESTRUCTIVE_OPT_IN_ENV,
+            )
+            if not opt_in:
+                raise RuntimeError(
+                    f"migration {version:03d} would DROP TABLE {target} which holds "
+                    f"{row_count} row(s); set {_DESTRUCTIVE_OPT_IN_ENV}=1 to confirm "
+                    f"that the data is expendable, then re-run."
+                )
 
     def applied_migrations(self) -> list[int]:
         return [
@@ -438,11 +486,20 @@ class DuckDBLake:
     def _upsert_statement(self, df: pd.DataFrame, table: str, cols: tuple[str, ...]) -> int:
         """Upsert helper for the three wide financial-statement tables.
 
-        Vendors omit line items that don't apply to a given filer, so
-        the input DataFrame is intentionally sparse — we reindex up to
-        the full column set (filling absent columns with NULL/NaN)
-        before delegating to the strict :meth:`_upsert`. The PK columns
-        must be present; everything else is optional.
+        Vendors omit line items that don't apply to a given filer (banks
+        have no ``cost_of_revenue``, software firms no ``inventory``), so
+        the input DataFrame is intentionally sparse. Two consequences:
+
+        1. We reindex up to the full column set so absent columns land
+           as NULL on first INSERT.
+        2. On UPDATE conflict we use ``COALESCE(EXCLUDED.col, <table>.col)``
+           so a NULL coming in from the input does **not** overwrite a
+           prior non-NULL value. Real values overwrite (the typical
+           "vendor restated revenue" case); absences are preserved.
+
+        The PK columns must be present and non-NULL; the table's NOT
+        NULL constraint catches NULL-valued PKs but the column-presence
+        check raises a clearer error before that.
         """
         if df.empty:
             return 0
@@ -452,8 +509,62 @@ class DuckDBLake:
                 f"{table}: missing required PK column(s) {missing_pk}; "
                 f"input columns were {list(df.columns)}"
             )
+        if df[list(_STATEMENT_PK)].isnull().to_numpy().any():
+            raise ValueError(
+                f"{table}: PK columns {_STATEMENT_PK} must be non-null; got NULL in input row(s)"
+            )
         widened = df.reindex(columns=list(cols))
-        return self._upsert(widened, table=table, cols=cols, pk=_STATEMENT_PK)
+        return self._upsert_preserve_nulls(widened, table=table, cols=cols, pk=_STATEMENT_PK)
+
+    def _upsert_preserve_nulls(
+        self,
+        df: pd.DataFrame,
+        *,
+        table: str,
+        cols: tuple[str, ...],
+        pk: tuple[str, ...],
+    ) -> int:
+        """Variant of :meth:`_upsert` that uses ``COALESCE(EXCLUDED.col,
+        <table>.col)`` in the UPDATE clause so a NULL in the input does
+        not overwrite a prior non-NULL value.
+
+        Used by the wide statement upserts where "vendor omitted this
+        line item" must not be confused with "vendor restated this line
+        to NULL". For tables where the input row is always complete
+        (e.g. ``dividends``, ``insider_transactions``), prefer the
+        plain :meth:`_upsert` so explicit deletions can land.
+
+        EXCLUDED is cast to each column's declared type so a sparse
+        DataFrame (whose absent columns arrive as ``DOUBLE`` NaN after
+        ``reindex``) can be coalesced against ``DATE`` / ``VARCHAR``
+        columns without DuckDB's strict-type binder rejecting the mix.
+        """
+        if df.empty:
+            return 0
+        col_types = self._column_types(table)
+        self.con.register("_in", df[list(cols)])
+        non_pk = [c for c in cols if c not in pk]
+        update_clause = ", ".join(
+            f"{c} = COALESCE(CAST(EXCLUDED.{c} AS {col_types[c]}), {table}.{c})" for c in non_pk
+        )
+        try:
+            sql = (
+                f"INSERT INTO {table} ({', '.join(cols)}) "
+                f"SELECT {', '.join(cols)} FROM _in "
+                f"ON CONFLICT ({', '.join(pk)}) DO UPDATE SET {update_clause}"
+            )
+            self.con.execute(sql)
+        finally:
+            self.con.unregister("_in")
+        return len(df)
+
+    def _column_types(self, table: str) -> dict[str, str]:
+        rows = self.con.execute(
+            "SELECT column_name, data_type FROM information_schema.columns "
+            "WHERE table_schema='main' AND table_name = ?",
+            [table],
+        ).fetchall()
+        return {row[0]: row[1] for row in rows}
 
     def get_income_statement(self, ticker: str) -> pd.DataFrame:
         return self.con.execute(

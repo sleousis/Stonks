@@ -244,3 +244,21 @@ def test_run_fundamentals_is_idempotent(lake):
     pipe.run_fundamentals(["AAPL.US"])
     assert lake.count_rows("income_statement") == 1
     assert lake.count_rows("balance_sheet") == 1
+
+
+def test_run_fundamentals_closes_run_row_when_unhandled_exception_escapes(lake):
+    """An unhandled exception (programmer bug, KeyboardInterrupt) must
+    still close the ``ingest_runs`` row so operators don't have to
+    triage orphaned ``running`` rows by hand."""
+
+    class _ExplodingSource(FakeDataSource):
+        def fetch_fundamentals(self, ticker: str) -> FinancialStatementsBundle:
+            raise RuntimeError("synthetic programmer bug")
+
+    pipe = IngestPipeline(source=_ExplodingSource(), lake=lake)
+    with pytest.raises(RuntimeError, match="synthetic programmer bug"):
+        pipe.run_fundamentals(["AAPL.US"])
+    runs = lake.sql("SELECT status, finished_at, error FROM ingest_runs ORDER BY id DESC LIMIT 1")
+    assert runs.iloc[0]["status"] == "error"
+    assert runs.iloc[0]["finished_at"] is not None
+    assert "synthetic programmer bug" in runs.iloc[0]["error"]
