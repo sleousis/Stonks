@@ -425,6 +425,33 @@ def test_insider_parse_normalizes_owner_relation(vendor_raw, expected):
     assert rows[0].owner_relation == expected
 
 
+def test_parse_news_logs_warning_when_drop_rate_is_high(capsys):
+    """I5: when a vendor schema break causes most rows to be dropped, the
+    parser must surface this loudly instead of silently returning an
+    almost-empty list. ``_log_parse_drops`` emits at WARN above the 50%
+    threshold; below that, it stays at DEBUG so normal noise doesn't
+    flood the logs.
+    """
+    # 1 valid row + 4 malformed (no title) → 80% drop rate → WARN.
+    payload = [
+        {"date": "2026-04-01T10:00:00+00:00", "title": "Apple announces"},
+        {"date": "2026-04-01T11:00:00+00:00"},  # missing title
+        {"date": "2026-04-01T12:00:00+00:00"},
+        {"date": "2026-04-01T13:00:00+00:00"},
+        {"date": "2026-04-01T14:00:00+00:00"},
+    ]
+    rows = list(parse_news_response("AAPL.US", payload))
+    assert len(rows) == 1
+    out = capsys.readouterr().out
+    matches = [line for line in out.splitlines() if "eodhd.parser.high_drop_rate" in line]
+    assert matches, f"expected high_drop_rate WARN; got {out!r}"
+    line = matches[0]
+    assert '"parser": "parse_news_response"' in line
+    assert '"ticker": "AAPL.US"' in line
+    assert '"kept": 1' in line
+    assert '"dropped": 4' in line
+
+
 def test_esg_drops_activities_with_unrecognized_involvement():
     # The schema's ``Literal["yes","no"]`` is enforced by dropping rows
     # whose vendor ``Involvement`` value isn't a known yes/no synonym —

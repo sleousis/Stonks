@@ -112,8 +112,10 @@ def test_ingest_metadata_via_fake_source(runner, cli_env, monkeypatch):
                 profile=TickerProfile(id=ticker, name="Apple Inc", sector="Technology"),
                 dividends=(
                     DividendRow(
-                        ticker=ticker, ex_date=_date(2026, 2, 10),
-                        amount=0.25, currency="USD",
+                        ticker=ticker,
+                        ex_date=_date(2026, 2, 10),
+                        amount=0.25,
+                        currency="USD",
                     ),
                 ),
             )
@@ -125,3 +127,41 @@ def test_ingest_metadata_via_fake_source(runner, cli_env, monkeypatch):
     assert result.exit_code == 0, result.output
     assert "ok" in result.output.lower()
     assert "metadata" in result.output
+
+
+def test_ingest_exchanges_exits_cleanly_on_free_tier(runner, cli_env, monkeypatch):
+    """I7: a free-tier user invoking ``stonks ingest exchanges`` should see
+    a friendly message + non-zero exit, not a Python traceback."""
+    from stonks import cli as cli_module
+    from stonks.ingest.sources.eodhd import EodhdFreeTierError
+
+    class _FreeTierSource(_FakeSource):
+        def list_exchanges(self):
+            raise EodhdFreeTierError("exchanges-list endpoint requires a paid plan")
+
+    monkeypatch.setattr(cli_module, "_build_source", lambda settings: _FreeTierSource())
+
+    result = runner.invoke(app, ["ingest", "exchanges"])
+    assert result.exit_code == 2, result.output
+    assert "free tier" in result.output.lower()
+    # Make sure we did NOT spill a Traceback to the user.
+    assert "Traceback" not in result.output
+
+
+def test_ingest_exchanges_exits_with_error_on_request_failure(runner, cli_env, monkeypatch):
+    """I7: transport errors should also be caught and shown as a user-facing
+    error message rather than a stack trace."""
+    import requests
+
+    from stonks import cli as cli_module
+
+    class _FailingSource(_FakeSource):
+        def list_exchanges(self):
+            raise requests.ConnectionError("DNS failure")
+
+    monkeypatch.setattr(cli_module, "_build_source", lambda settings: _FailingSource())
+
+    result = runner.invoke(app, ["ingest", "exchanges"])
+    assert result.exit_code == 1, result.output
+    assert "exchanges fetch failed" in result.output.lower()
+    assert "Traceback" not in result.output
