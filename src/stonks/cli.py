@@ -9,7 +9,7 @@ from __future__ import annotations
 import importlib
 from datetime import date
 from pathlib import Path
-from typing import get_args
+from typing import cast, get_args
 
 import typer
 from rich.console import Console
@@ -19,7 +19,12 @@ from stonks.config import Settings, load_settings
 from stonks.core.types import AssetClass
 from stonks.ingest.pipeline import IngestPipeline, IngestRunResult
 from stonks.ingest.sources.base import DataSource
-from stonks.ingest.sources.eodhd import EodhdDataSource, EodhdFreeTierError
+from stonks.ingest.sources.eodhd import (
+    EodhdDataSource,
+    EodhdFreeTierError,
+    classify_asset_class,
+    eodhd_exchange_for_asset_class,
+)
 from stonks.logging import configure_logging, get_logger
 from stonks.production.tick import TickSettings, run_tick
 from stonks.registry.store import StrategyRegistry
@@ -99,6 +104,22 @@ def _parse_tickers(raw: str | None) -> list[str]:
     if not raw:
         return []
     return [t.strip() for t in raw.split(",") if t.strip()]
+
+
+def _validate_tickers_match_asset_class(tickers: list[str], asset_class: AssetClass) -> None:
+    """Catch the copy-paste where ``--asset-class crypto --tickers
+    BTC-USD.CC,AAPL.US`` would otherwise silently land an equity row
+    inside a crypto-flagged ingest run.
+    """
+    mismatches = [
+        (t, classify_asset_class(t)) for t in tickers if classify_asset_class(t) != asset_class
+    ]
+    if not mismatches:
+        return
+    detail = ", ".join(f"{t} (classified as {cls})" for t, cls in mismatches)
+    raise typer.BadParameter(
+        f"--asset-class={asset_class} but the following tickers don't match: {detail}"
+    )
 
 
 # ---- db ---------------------------------------------------------------------
@@ -187,6 +208,17 @@ def ingest_prices(
     exchange: str | None = typer.Option(
         None, "--exchange", help="fetch all tickers on this exchange (e.g. US)"
     ),
+    asset_class: str | None = typer.Option(
+        None,
+        "--asset-class",
+        help=(
+            f"restrict / discover the universe by asset class ({'|'.join(_ASSET_CLASS_CHOICES)}). "
+            "For non-equity classes, omitting --tickers and --exchange auto-resolves to EODHD's "
+            "virtual exchange (crypto→CC, commodity→COMM, bond→GBOND). "
+            "Equity has many real exchanges and requires --exchange or --tickers."
+        ),
+        callback=_validate_asset_class,
+    ),
     since: str | None = typer.Option(
         None, "--since", help="earliest date (YYYY-MM-DD); omit to fetch full history"
     ),
@@ -198,10 +230,28 @@ def ingest_prices(
     with _open_lake(settings.lake.path) as lake:
         lake.migrate()
         ticker_list = _parse_tickers(tickers)
+
+        # Asset-class ergonomics: when --asset-class is set, either (a)
+        # validate the explicit tickers match the class, or (b) auto-
+        # resolve to the virtual exchange for non-equity classes.
+        if asset_class is not None:
+            ac = cast(AssetClass, asset_class)
+            if ticker_list:
+                _validate_tickers_match_asset_class(ticker_list, ac)
+            elif exchange is None:
+                resolved = eodhd_exchange_for_asset_class(ac)
+                if resolved is None:
+                    raise typer.BadParameter(
+                        f"--asset-class={ac} doesn't map to a single exchange — equities "
+                        "live on dozens of real exchanges (US/LSE/XETRA/…). "
+                        "Pass --exchange or --tickers explicitly."
+                    )
+                exchange = resolved
+
         if not ticker_list and exchange:
             ticker_list = source.list_tickers(exchange)
         if not ticker_list:
-            raise typer.BadParameter("provide --tickers or --exchange")
+            raise typer.BadParameter("provide --tickers or --exchange (or --asset-class)")
 
         since_d = date.fromisoformat(since) if since else None
         until_d = date.fromisoformat(until) if until else None
@@ -215,13 +265,48 @@ def ingest_prices(
 @ingest_app.command("fundamentals")
 def ingest_fundamentals(
     tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),
+    asset_class: str | None = typer.Option(
+        None,
+        "--asset-class",
+        help=(
+            "accepted for symmetry with `ingest prices` / `ingest metadata`, but only "
+            f"`equity` is valid: financial statements don't apply to crypto / commodity / bond. "
+            f"Allowed: {'|'.join(_ASSET_CLASS_CHOICES)}."
+        ),
+        callback=_validate_asset_class,
+    ),
 ) -> None:
+    """Pull income / balance-sheet / cash-flow statements per ticker.
+
+    Deliberately does not auto-discover a universe via `--asset-class`
+    (unlike `ingest prices` / `ingest metadata`): financial statements
+    are equity-only by construction, so the natural multi-asset workflow
+    here is "name the equity tickers explicitly". Non-equity tickers
+    are rejected up-front rather than letting the EODHD adapter silently
+    no-op the request.
+    """
     settings = _settings()
     source = _build_source(settings)
 
+    if asset_class is not None and asset_class != "equity":
+        raise typer.BadParameter(
+            f"`ingest fundamentals` is equity-only (income / balance / cashflow "
+            f"statements). --asset-class={asset_class} is not supported here; "
+            "use `ingest metadata` for crypto / bond / commodity profile data."
+        )
+
+    ticker_list = _parse_tickers(tickers)
+    non_equity = [t for t in ticker_list if classify_asset_class(t) != "equity"]
+    if non_equity:
+        joined = ", ".join(non_equity)
+        raise typer.BadParameter(
+            f"`ingest fundamentals` is equity-only (income / balance / cashflow "
+            f"statements). The following tickers are non-equity: {joined}. "
+            "Use `ingest metadata` for crypto / bond / commodity profile data."
+        )
+
     with _open_lake(settings.lake.path) as lake:
         lake.migrate()
-        ticker_list = _parse_tickers(tickers)
         pipeline = IngestPipeline(source=source, lake=lake)
         result = pipeline.run_fundamentals(ticker_list)
 
@@ -230,18 +315,50 @@ def ingest_fundamentals(
 
 @ingest_app.command("metadata")
 def ingest_metadata(
-    tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),
+    tickers: str | None = typer.Option(None, "--tickers", help="comma-separated tickers"),
+    asset_class: str | None = typer.Option(
+        None,
+        "--asset-class",
+        help=(
+            f"discover the universe by asset class ({'|'.join(_ASSET_CLASS_CHOICES)}); "
+            "for non-equity classes, omitting --tickers auto-resolves to EODHD's virtual exchange. "
+            "When --tickers is also given, validates each one's classification matches."
+        ),
+        callback=_validate_asset_class,
+    ),
 ) -> None:
-    """Pull the full metadata bundle (profile, dividends, splits, insider
-    trades, news + sentiment, analyst estimates + ratings, shares outstanding
-    history, employee count, market cap history, segmentations) per
-    ticker."""
+    """Pull the full metadata bundle per ticker.
+
+    For equity tickers, that's profile + dividends + splits + insider
+    trades + news + sentiment + analyst estimates + ratings + shares
+    outstanding + employee count + market cap history + segmentations.
+    For crypto / bond / commodity tickers, the equity-shaped surface is
+    skipped and only the asset-class-specific profile (crypto_profile /
+    bond_profile / commodity_contract) is populated.
+    """
     settings = _settings()
     source = _build_source(settings)
 
     with _open_lake(settings.lake.path) as lake:
         lake.migrate()
         ticker_list = _parse_tickers(tickers)
+
+        if asset_class is not None:
+            ac = cast(AssetClass, asset_class)
+            if ticker_list:
+                _validate_tickers_match_asset_class(ticker_list, ac)
+            else:
+                resolved = eodhd_exchange_for_asset_class(ac)
+                if resolved is None:
+                    raise typer.BadParameter(
+                        f"--asset-class={ac} doesn't map to a single exchange — pass "
+                        "--tickers explicitly for equity."
+                    )
+                ticker_list = source.list_tickers(resolved)
+
+        if not ticker_list:
+            raise typer.BadParameter("provide --tickers or --asset-class")
+
         pipeline = IngestPipeline(source=source, lake=lake)
         result = pipeline.run_metadata(ticker_list)
 
