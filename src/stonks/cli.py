@@ -9,7 +9,7 @@ from __future__ import annotations
 import importlib
 from datetime import date
 from pathlib import Path
-from typing import get_args
+from typing import cast, get_args
 
 import typer
 from rich.console import Console
@@ -107,12 +107,7 @@ def _parse_tickers(raw: str | None) -> list[str]:
 
 
 def _validate_tickers_match_asset_class(tickers: list[str], asset_class: AssetClass) -> None:
-    """Fail fast when an operator passes mixed-class tickers under a single
-    ``--asset-class`` filter. Each ticker is classified via the same
-    suffix rule the EODHD adapter uses, so the validation matches what
-    the lake would record once ingested.
-
-    Catches the copy-paste where, e.g., ``--asset-class crypto --tickers
+    """Catch the copy-paste where ``--asset-class crypto --tickers
     BTC-USD.CC,AAPL.US`` would otherwise silently land an equity row
     inside a crypto-flagged ingest run.
     """
@@ -240,7 +235,7 @@ def ingest_prices(
         # validate the explicit tickers match the class, or (b) auto-
         # resolve to the virtual exchange for non-equity classes.
         if asset_class is not None:
-            ac: AssetClass = asset_class  # type: ignore[assignment]
+            ac = cast(AssetClass, asset_class)
             if ticker_list:
                 _validate_tickers_match_asset_class(ticker_list, ac)
             elif exchange is None:
@@ -270,16 +265,35 @@ def ingest_prices(
 @ingest_app.command("fundamentals")
 def ingest_fundamentals(
     tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),
+    asset_class: str | None = typer.Option(
+        None,
+        "--asset-class",
+        help=(
+            "accepted for symmetry with `ingest prices` / `ingest metadata`, but only "
+            f"`equity` is valid: financial statements don't apply to crypto / commodity / bond. "
+            f"Allowed: {'|'.join(_ASSET_CLASS_CHOICES)}."
+        ),
+        callback=_validate_asset_class,
+    ),
 ) -> None:
     """Pull income / balance-sheet / cash-flow statements per ticker.
 
-    Equity-only by construction: crypto, bonds, and commodities don't
-    have an issuer with financial statements, so passing a non-equity
-    ticker is rejected up-front rather than letting the EODHD adapter
-    silently no-op the request.
+    Deliberately does not auto-discover a universe via `--asset-class`
+    (unlike `ingest prices` / `ingest metadata`): financial statements
+    are equity-only by construction, so the natural multi-asset workflow
+    here is "name the equity tickers explicitly". Non-equity tickers
+    are rejected up-front rather than letting the EODHD adapter silently
+    no-op the request.
     """
     settings = _settings()
     source = _build_source(settings)
+
+    if asset_class is not None and asset_class != "equity":
+        raise typer.BadParameter(
+            f"`ingest fundamentals` is equity-only (income / balance / cashflow "
+            f"statements). --asset-class={asset_class} is not supported here; "
+            "use `ingest metadata` for crypto / bond / commodity profile data."
+        )
 
     ticker_list = _parse_tickers(tickers)
     non_equity = [t for t in ticker_list if classify_asset_class(t) != "equity"]
@@ -330,7 +344,7 @@ def ingest_metadata(
         ticker_list = _parse_tickers(tickers)
 
         if asset_class is not None:
-            ac: AssetClass = asset_class  # type: ignore[assignment]
+            ac = cast(AssetClass, asset_class)
             if ticker_list:
                 _validate_tickers_match_asset_class(ticker_list, ac)
             else:

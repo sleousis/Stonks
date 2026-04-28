@@ -1309,7 +1309,7 @@ def classify_asset_class(ticker: str) -> AssetClass:
 # live on dozens of real exchanges (US / LSE / XETRA / …) so there is
 # no single code we could resolve to without making a silent guess.
 _ASSET_CLASS_VIRTUAL_EXCHANGE_MAP: dict[AssetClass, str] = {
-    asset_class: suffix for suffix, asset_class in _ASSET_CLASS_SUFFIX_MAP.items()
+    cls: code for code, cls in _ASSET_CLASS_SUFFIX_MAP.items()
 }
 
 

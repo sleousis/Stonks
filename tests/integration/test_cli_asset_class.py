@@ -102,7 +102,15 @@ def runner():
 
 
 @pytest.fixture
-def cli_env(tmp_path, monkeypatch):
+def cli_env(tmp_path, monkeypatch, runner):
+    """Chdir into a temp working dir, drop a minimal config, set the
+    fake API key, and provision the lake + state DBs via ``db init``.
+
+    Asserting ``db init`` succeeds here (not in each test) means a
+    regression in `db init` itself surfaces with a clear message
+    instead of cascading into confusing downstream "exit_code != 0"
+    failures in every test that follows.
+    """
     monkeypatch.chdir(tmp_path)
     (tmp_path / "config").mkdir()
     (tmp_path / "config" / "default.toml").write_text(
@@ -118,6 +126,8 @@ base_url = "https://example.test/api"
 """.strip()
     )
     monkeypatch.setenv("EODHD_API_KEY", "test-key")
+    init_result = runner.invoke(app, ["db", "init"])
+    assert init_result.exit_code == 0, init_result.output
     return tmp_path
 
 
@@ -130,29 +140,12 @@ def fake_source(monkeypatch):
     return src
 
 
-# ---- helper ----------------------------------------------------------------
-
-
-def test_eodhd_exchange_for_asset_class_maps_known_classes():
-    """The resolver lives in the EODHD adapter (vendor-specific virtual
-    exchange codes shouldn't leak into the CLI). Equity has many real
-    exchanges so it has no single mapping — the resolver returns None
-    for that case."""
-    from stonks.ingest.sources.eodhd import eodhd_exchange_for_asset_class
-
-    assert eodhd_exchange_for_asset_class("crypto") == "CC"
-    assert eodhd_exchange_for_asset_class("commodity") == "COMM"
-    assert eodhd_exchange_for_asset_class("bond") == "GBOND"
-    assert eodhd_exchange_for_asset_class("equity") is None
-
-
 # ---- ingest prices ---------------------------------------------------------
 
 
 def test_ingest_prices_asset_class_resolves_to_virtual_exchange(runner, cli_env, fake_source):
     """``--asset-class crypto`` alone (no --tickers, no --exchange) resolves
     to EODHD's ``CC`` virtual exchange and fetches the universe from there."""
-    runner.invoke(app, ["db", "init"])
     result = runner.invoke(app, ["ingest", "prices", "--asset-class", "crypto"])
     assert result.exit_code == 0, result.output
     assert fake_source.list_tickers_calls == ["CC"]
@@ -160,7 +153,6 @@ def test_ingest_prices_asset_class_resolves_to_virtual_exchange(runner, cli_env,
 
 
 def test_ingest_prices_asset_class_commodity(runner, cli_env, fake_source):
-    runner.invoke(app, ["db", "init"])
     result = runner.invoke(app, ["ingest", "prices", "--asset-class", "commodity"])
     assert result.exit_code == 0, result.output
     assert fake_source.list_tickers_calls == ["COMM"]
@@ -168,7 +160,6 @@ def test_ingest_prices_asset_class_commodity(runner, cli_env, fake_source):
 
 
 def test_ingest_prices_asset_class_bond(runner, cli_env, fake_source):
-    runner.invoke(app, ["db", "init"])
     result = runner.invoke(app, ["ingest", "prices", "--asset-class", "bond"])
     assert result.exit_code == 0, result.output
     assert fake_source.list_tickers_calls == ["GBOND"]
@@ -180,7 +171,6 @@ def test_ingest_prices_asset_class_equity_requires_explicit_universe(runner, cli
     are dozens — US, LSE, XETRA, …) so the CLI must reject this combination
     rather than silently picking one. The user is told to pass --exchange
     or --tickers explicitly."""
-    runner.invoke(app, ["db", "init"])
     result = runner.invoke(app, ["ingest", "prices", "--asset-class", "equity"])
     assert result.exit_code != 0
     # Don't pin the exact message — pin the user's understanding.
@@ -188,12 +178,27 @@ def test_ingest_prices_asset_class_equity_requires_explicit_universe(runner, cli
     assert "equity" in out and ("exchange" in out or "tickers" in out)
 
 
+def test_ingest_prices_explicit_exchange_overrides_asset_class_resolution(
+    runner, cli_env, fake_source
+):
+    """When the operator passes both ``--asset-class crypto`` and
+    ``--exchange US``, the explicit ``--exchange`` wins (the auto-resolver
+    only kicks in when ``--exchange`` is omitted). Pin this so a future
+    refactor of the universe-resolution logic doesn't silently flip the
+    precedence."""
+    result = runner.invoke(app, ["ingest", "prices", "--asset-class", "crypto", "--exchange", "US"])
+    assert result.exit_code == 0, result.output
+    # The fake's ``"US"`` bucket carries AAPL.US — proves the explicit
+    # --exchange was used to discover the universe rather than CC.
+    assert fake_source.list_tickers_calls == ["US"]
+    assert fake_source.fetch_prices_calls == ["AAPL.US"]
+
+
 def test_ingest_prices_asset_class_validates_explicit_tickers(runner, cli_env, fake_source):
     """Passing both --tickers and --asset-class should validate every
     ticker's classification matches. This catches a copy-paste where the
     operator mixes classes in one batch and would otherwise have the
     instruments table inserted with mismatched asset_class metadata."""
-    runner.invoke(app, ["db", "init"])
     result = runner.invoke(
         app,
         [
@@ -211,11 +216,31 @@ def test_ingest_prices_asset_class_validates_explicit_tickers(runner, cli_env, f
     assert "crypto" in out  # name the requested class
 
 
+def test_ingest_prices_strips_whitespace_around_ticker_separators(runner, cli_env, fake_source):
+    """Operators paste ticker lists from spreadsheets / chat / docs;
+    the parser must tolerate ``\" BTC-USD.CC , ETH-USD.CC \"`` rather
+    than treating the inner spaces as part of the ticker (which would
+    otherwise misclassify ``\" BTC-USD.CC\"`` as equity by suffix and
+    fail the asset-class validation for spurious reasons)."""
+    result = runner.invoke(
+        app,
+        [
+            "ingest",
+            "prices",
+            "--asset-class",
+            "crypto",
+            "--tickers",
+            " BTC-USD.CC , ETH-USD.CC ",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert sorted(fake_source.fetch_prices_calls) == ["BTC-USD.CC", "ETH-USD.CC"]
+
+
 def test_ingest_prices_rejects_unknown_asset_class(runner, cli_env, fake_source):
     """Typer's callback validation should reject any value outside the
     closed AssetClass set — so ``--asset-class forex`` (a real EODHD
     bucket but not yet in our type) fails fast with a friendly message."""
-    runner.invoke(app, ["db", "init"])
     result = runner.invoke(
         app, ["ingest", "prices", "--asset-class", "forex", "--tickers", "EURUSD.FOREX"]
     )
@@ -230,7 +255,6 @@ def test_ingest_metadata_asset_class_resolves_universe(runner, cli_env, fake_sou
     """``ingest metadata --asset-class crypto`` covers the same universe-
     discovery path as ``ingest prices`` so the operator can populate
     profiles for an entire class without naming each ticker."""
-    runner.invoke(app, ["db", "init"])
     result = runner.invoke(app, ["ingest", "metadata", "--asset-class", "crypto"])
     assert result.exit_code == 0, result.output
     assert fake_source.list_tickers_calls == ["CC"]
@@ -238,7 +262,6 @@ def test_ingest_metadata_asset_class_resolves_universe(runner, cli_env, fake_sou
 
 
 def test_ingest_metadata_asset_class_validates_explicit_tickers(runner, cli_env, fake_source):
-    runner.invoke(app, ["db", "init"])
     result = runner.invoke(
         app,
         [
@@ -264,7 +287,6 @@ def test_ingest_fundamentals_warns_on_non_equity_class(runner, cli_env, fake_sou
     EODHD adapter already short-circuits for non-equity tickers, but
     invoking the command for a clearly-non-equity universe should fail
     fast instead of silently churning through a no-op run."""
-    runner.invoke(app, ["db", "init"])
     result = runner.invoke(
         app,
         [
@@ -278,3 +300,26 @@ def test_ingest_fundamentals_warns_on_non_equity_class(runner, cli_env, fake_sou
     out = result.output.lower()
     assert "fundamentals" in out
     assert "equity" in out
+
+
+def test_ingest_fundamentals_rejects_non_equity_asset_class_flag(runner, cli_env, fake_source):
+    """``--asset-class crypto`` on the equity-only fundamentals command
+    must produce the curated equity-only error message rather than
+    Typer's default "no such option". Pins the symmetry with the prices
+    / metadata commands: every ingest subcommand accepts --asset-class,
+    fundamentals just rejects the non-equity values."""
+    result = runner.invoke(
+        app,
+        [
+            "ingest",
+            "fundamentals",
+            "--asset-class",
+            "crypto",
+            "--tickers",
+            "AAPL.US",
+        ],
+    )
+    assert result.exit_code != 0
+    out = result.output.lower()
+    assert "equity-only" in out or "equity only" in out
+    assert "crypto" in out

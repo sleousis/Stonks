@@ -132,7 +132,7 @@ stonks ingest prices --tickers BTC-USD.CC,ETH-USD.CC --asset-class crypto   # va
 stonks ingest metadata --asset-class commodity           # full profile pull for COMM universe
 ```
 
-Equity has no single virtual exchange, so `--asset-class equity` requires `--exchange` or `--tickers` to be passed explicitly. Mixing classes under one `--asset-class` flag (e.g. `--asset-class crypto --tickers BTC-USD.CC,AAPL.US`) fails fast with the offending ticker named.
+Equity has no single virtual exchange, so `--asset-class equity` requires `--exchange` or `--tickers` to be passed explicitly. Mixing classes under one `--asset-class` flag (e.g. `--asset-class crypto --tickers BTC-USD.CC,AAPL.US`) fails fast with the offending ticker named. Conversely, `stonks ingest fundamentals` rejects non-equity tickers up-front, since income / balance / cash-flow statements are equity-only by construction.
 
 ## Testing
 
