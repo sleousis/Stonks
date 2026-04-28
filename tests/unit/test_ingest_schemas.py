@@ -148,7 +148,7 @@ def test_insider_transaction_row_full_shape():
         filing_date=date(2026, 3, 5),
         owner_name="Cook, Tim",
         owner_cik="0001214156",
-        owner_relation="Chief Executive Officer",
+        owner_relation="officer",
         owner_title="CEO",
         transaction_code="S",
         acquired_disposed="D",
@@ -162,6 +162,18 @@ def test_insider_transaction_row_full_shape():
     assert row.acquired_disposed == "D"
     assert row.filing_date == date(2026, 3, 5)
     assert row.sec_link == "https://sec.gov/..."
+
+
+def test_insider_transaction_row_rejects_unnormalized_owner_relation():
+    # The schema enforces the closed Literal — anything outside
+    # {officer, director, officer_and_director, ten_percent_owner, other}
+    # must be rejected so vendor-specific raw strings can't sneak in.
+    with pytest.raises(ValidationError):
+        InsiderTransactionRow(
+            ticker="AAPL.US",
+            transaction_date=date(2026, 3, 1),
+            owner_relation="Chief Executive Officer",  # type: ignore[arg-type]
+        )
 
 
 def test_insider_transaction_row_rejects_bad_acquired_disposed():
@@ -336,10 +348,44 @@ def test_esg_activity_row():
         ticker="AAPL.US",
         rating_date=date(2026, 4, 1),
         activity="alcohol",
-        involvement="No",
+        involvement="no",
     )
     assert row.activity == "alcohol"
-    assert row.involvement == "No"
+    assert row.involvement == "no"
+
+
+def test_esg_activity_row_rejects_unnormalized_involvement():
+    # Vendor strings like "Yes"/"No" must be normalized at the adapter
+    # boundary; the schema only accepts the canonical lowercase Literal.
+    with pytest.raises(ValidationError):
+        EsgActivityRow(
+            ticker="AAPL.US",
+            rating_date=date(2026, 4, 1),
+            activity="alcohol",
+            involvement="No",  # type: ignore[arg-type]
+        )
+
+
+def test_institutional_holder_row_rejects_pct_outside_0_to_100():
+    # Defensive guard: vendors occasionally hand back a fraction (e.g. 0.097
+    # for 9.7%). The schema's percent units are 0–100, so anything outside
+    # that range — or below 0 — must be rejected loudly at construction.
+    with pytest.raises(ValidationError):
+        InstitutionalHolderRow(
+            ticker="AAPL.US",
+            holder_kind="institution",
+            name="X",
+            snapshot_date=date(2026, 1, 1),
+            total_shares_pct=150.0,
+        )
+    with pytest.raises(ValidationError):
+        InstitutionalHolderRow(
+            ticker="AAPL.US",
+            holder_kind="institution",
+            name="X",
+            snapshot_date=date(2026, 1, 1),
+            total_assets_pct=-1.0,
+        )
 
 
 def test_cross_listing_row():

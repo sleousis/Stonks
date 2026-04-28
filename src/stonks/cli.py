@@ -16,7 +16,7 @@ from rich.table import Table
 from stonks.config import Settings, load_settings
 from stonks.ingest.pipeline import IngestPipeline, IngestRunResult
 from stonks.ingest.sources.base import DataSource
-from stonks.ingest.sources.eodhd import EodhdDataSource
+from stonks.ingest.sources.eodhd import EodhdDataSource, EodhdFreeTierError
 from stonks.logging import configure_logging, get_logger
 from stonks.production.tick import TickSettings, run_tick
 from stonks.registry.store import StrategyRegistry
@@ -120,9 +120,18 @@ def db_info() -> None:
 @ingest_app.command("exchanges")
 def ingest_exchanges() -> None:
     """List the exchanges supported by the configured data source."""
+    import requests
+
     settings = _settings()
     source = _build_source(settings)
-    rows = sorted(source.list_exchanges(), key=lambda r: r.code)
+    try:
+        rows = sorted(source.list_exchanges(), key=lambda r: r.code)
+    except EodhdFreeTierError as exc:
+        console.print(f"[yellow]exchanges endpoint blocked on free tier:[/yellow] {exc}")
+        raise typer.Exit(code=2) from exc
+    except requests.RequestException as exc:
+        console.print(f"[red]exchanges fetch failed:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
 
     table = Table(title=f"exchanges — {source.source_id}")
     table.add_column("code")

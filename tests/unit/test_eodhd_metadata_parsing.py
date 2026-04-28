@@ -11,6 +11,8 @@ import json
 from datetime import UTC, date, datetime
 from pathlib import Path
 
+import pytest
+
 from stonks.ingest.sources.eodhd import (
     parse_analyst_forecasts_from_fundamentals,
     parse_analyst_ratings_from_fundamentals,
@@ -188,7 +190,6 @@ def test_analyst_ratings_carry_explicit_snapshot_date():
     )
     assert rating is not None
     assert rating.snapshot_date == date(2026, 4, 27)
-    assert rating.rating == 2.3
     assert rating.target_price == 250.0
     assert rating.strong_buy == 10
     assert rating.sell == 2
@@ -234,7 +235,8 @@ def test_esg_parses_snapshot_and_activities():
     # Five activities in the fixture
     assert len(activities) == 5
     alc = next(a for a in activities if a.activity == "alcohol")
-    assert alc.involvement == "No"
+    # Vendor sends "No"/"Yes" — adapter normalizes to lowercase canonical.
+    assert alc.involvement == "no"
 
 
 def test_esg_returns_empty_pair_when_section_missing():
@@ -360,7 +362,9 @@ def test_insider_parse_extracts_full_form4_surface():
     assert cook.transaction_date == date(2026, 3, 1)
     assert cook.filing_date == date(2026, 3, 5)
     assert cook.owner_cik == "0001214156"
-    assert cook.owner_relation == "Chief Executive Officer"
+    # ``Chief Executive Officer`` (vendor) → ``officer`` (canonical), per
+    # _normalize_owner_relation's keyword-priority mapping.
+    assert cook.owner_relation == "officer"
     assert cook.owner_title == "CEO"
     assert cook.transaction_code == "S"
     assert cook.acquired_disposed == "D"
@@ -379,6 +383,98 @@ def test_insider_parse_handles_partial_rows():
     assert luca.acquired_disposed == "A"
     assert luca.sec_link is None
     assert luca.post_transaction_amount is None
+
+
+@pytest.mark.parametrize(
+    "vendor_raw,expected",
+    [
+        # Single-role keyword matches
+        ("Chief Executive Officer", "officer"),
+        ("Chief Financial Officer", "officer"),
+        ("Senior Vice President - Officer", "officer"),
+        ("Director", "director"),
+        ("Independent Director", "director"),
+        # Combined role: both keywords present → composite literal
+        ("Officer, Director", "officer_and_director"),
+        ("Director and Officer", "officer_and_director"),
+        # 10% owner forms (priority over officer/director keywords)
+        ("10% Owner", "ten_percent_owner"),
+        ("Ten Percent Owner", "ten_percent_owner"),
+        # Catch-all: vendor sent something but it didn't match any keyword
+        ("Unknown Capacity", "other"),
+        ("Trustee", "other"),
+        # Missing-data forms map to None, not "other"
+        ("", None),
+        ("   ", None),
+        (None, None),
+    ],
+)
+def test_insider_parse_normalizes_owner_relation(vendor_raw, expected):
+    rows = list(
+        parse_insider_response(
+            "X.US",
+            [
+                {
+                    "transactionDate": "2026-04-01",
+                    "ownerRelationship": vendor_raw,
+                }
+            ],
+        )
+    )
+    assert len(rows) == 1
+    assert rows[0].owner_relation == expected
+
+
+def test_parse_news_logs_warning_when_drop_rate_is_high(capsys):
+    """I5: when a vendor schema break causes most rows to be dropped, the
+    parser must surface this loudly instead of silently returning an
+    almost-empty list. ``_log_parse_drops`` emits at WARN above the 50%
+    threshold; below that, it stays at DEBUG so normal noise doesn't
+    flood the logs.
+    """
+    # 1 valid row + 4 malformed (no title) → 80% drop rate → WARN.
+    payload = [
+        {"date": "2026-04-01T10:00:00+00:00", "title": "Apple announces"},
+        {"date": "2026-04-01T11:00:00+00:00"},  # missing title
+        {"date": "2026-04-01T12:00:00+00:00"},
+        {"date": "2026-04-01T13:00:00+00:00"},
+        {"date": "2026-04-01T14:00:00+00:00"},
+    ]
+    rows = list(parse_news_response("AAPL.US", payload))
+    assert len(rows) == 1
+    out = capsys.readouterr().out
+    matches = [line for line in out.splitlines() if "eodhd.parser.high_drop_rate" in line]
+    assert matches, f"expected high_drop_rate WARN; got {out!r}"
+    line = matches[0]
+    assert '"parser": "parse_news_response"' in line
+    assert '"ticker": "AAPL.US"' in line
+    assert '"kept": 1' in line
+    assert '"dropped": 4' in line
+
+
+def test_esg_drops_activities_with_unrecognized_involvement():
+    # The schema's ``Literal["yes","no"]`` is enforced by dropping rows
+    # whose vendor ``Involvement`` value isn't a known yes/no synonym —
+    # rather than silently storing whatever string the vendor sent.
+    payload = {
+        "ESGScores": {
+            "RatingDate": "2026-04-01",
+            "TotalEsg": 17.04,
+            "ActivitiesInvolvement": {
+                "0": {"Activity": "alcohol", "Involvement": "Yes"},
+                "1": {"Activity": "tobacco", "Involvement": "Maybe"},  # unknown
+                "2": {"Activity": "weapons", "Involvement": "no"},
+            },
+        }
+    }
+    _, activities = parse_esg_from_fundamentals("X.US", payload)
+    activities_by_name = {a.activity: a for a in activities}
+    assert "alcohol" in activities_by_name
+    assert activities_by_name["alcohol"].involvement == "yes"
+    assert "weapons" in activities_by_name
+    assert activities_by_name["weapons"].involvement == "no"
+    # The "Maybe" row was dropped — no canonical yes/no value to store.
+    assert "tobacco" not in activities_by_name
 
 
 def test_insider_parse_drops_rows_without_transaction_date():

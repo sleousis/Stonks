@@ -18,6 +18,15 @@ from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.schemas import ExchangeInfo, FundamentalRow, IntradayBar, RawPriceBar
 
 
+class DataSourceError(RuntimeError):
+    """Base for vendor-class errors callers can soft-fail on (free-tier
+    blocks, vendor outages, malformed responses). The pipeline narrows its
+    per-ticker ``except`` to this type plus ``requests.RequestException``
+    / ``json.JSONDecodeError`` / ``pydantic.ValidationError`` so genuine
+    programmer bugs (KeyError, AttributeError, TypeError…) surface loudly
+    instead of being silently filed as "ticker had no data."""
+
+
 class DataSource(ABC):
     source_id: str  # unique id, e.g. "eodhd", "yahoo"
 

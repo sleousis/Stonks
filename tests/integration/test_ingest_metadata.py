@@ -32,7 +32,7 @@ from stonks.ingest.schemas import (
     TickerProfile,
     TickerSnapshotRow,
 )
-from stonks.ingest.sources.base import DataSource
+from stonks.ingest.sources.base import DataSource, DataSourceError
 from stonks.store.lake import DuckDBLake
 
 
@@ -54,7 +54,10 @@ class _FakeMetadataSource(DataSource):
 
     def fetch_metadata(self, ticker):
         if ticker in self._fail_on:
-            raise RuntimeError(f"boom on {ticker}")
+            # DataSourceError is what the pipeline's narrow soft-fail
+            # accepts; raising bare Exception would correctly propagate
+            # as a programmer-bug signal.
+            raise DataSourceError(f"boom on {ticker}")
         return self._bundles.get(ticker, MetadataBundle())
 
 
@@ -90,7 +93,7 @@ def _sample_bundle() -> MetadataBundle:
                 filing_date=date(2026, 3, 5),
                 owner_name="Cook, Tim",
                 owner_cik="0001214156",
-                owner_relation="Officer",
+                owner_relation="officer",
                 owner_title="CEO",
                 transaction_code="S",
                 acquired_disposed="D",
@@ -146,7 +149,6 @@ def _sample_bundle() -> MetadataBundle:
             AnalystRatingsRow(
                 ticker="AAPL.US",
                 snapshot_date=date(2026, 4, 1),
-                rating=2.3,
                 target_price=250.0,
                 strong_buy=10,
                 buy=20,
@@ -186,7 +188,7 @@ def _sample_bundle() -> MetadataBundle:
         ),
         esg_activities=(
             EsgActivityRow(
-                ticker="AAPL.US", rating_date=date(2026, 4, 1), activity="alcohol", involvement="No"
+                ticker="AAPL.US", rating_date=date(2026, 4, 1), activity="alcohol", involvement="no"
             ),
         ),
         cross_listings=(
@@ -328,3 +330,59 @@ def test_run_metadata_empty_bundle_still_counts_as_ok(lake):
         "segmentation",
     ):
         assert lake.count_rows(table) == 0
+
+
+def test_run_metadata_bundle_is_atomic_on_mid_bundle_failure(lake, monkeypatch):
+    """C2: if any single ``upsert_*`` call inside ``_upsert_bundle`` raises,
+    every write earlier in the bundle must be rolled back. Without this
+    transaction guarantee, the lake would end up with profile + dividends +
+    splits + insiders persisted but everything after the failure missing —
+    then the per-ticker ``except`` would hide the inconsistency."""
+    src = _FakeMetadataSource({"AAPL.US": _sample_bundle()})
+    pipe = IngestPipeline(source=src, lake=lake)
+
+    # Monkeypatch a mid-bundle method to fail. ``upsert_news_sentiment`` is
+    # roughly halfway through ``_upsert_bundle`` so we can verify both that
+    # earlier writes (dividends, news) are rolled back AND that later
+    # writes (officers) never happen.
+    def _boom(_df):
+        raise RuntimeError("simulated mid-bundle failure")
+
+    monkeypatch.setattr(lake, "upsert_news_sentiment", _boom)
+
+    # The pipeline narrows soft-fail to known vendor-class exceptions; a
+    # bare RuntimeError is treated as a programmer bug and propagates.
+    with pytest.raises(RuntimeError, match="simulated mid-bundle failure"):
+        pipe.run_metadata(["AAPL.US"])
+
+    # Every metadata table — including those written before the failure
+    # point — must be empty: the transaction rolled the bundle back.
+    for table in (
+        "dividends",
+        "news",
+        "news_sentiment",
+        "earnings_announcements",
+        "analyst_ratings",
+        "institutional_holders",
+        "officers",
+    ):
+        assert lake.count_rows(table) == 0, f"{table} should be empty after rollback"
+
+
+def test_run_metadata_propagates_programmer_bugs_instead_of_soft_failing(lake):
+    """I1: a TypeError / KeyError / NameError out of a parser is a real
+    bug, not "this ticker had no data." The pipeline now narrows its
+    per-ticker ``except`` to vendor-class exceptions, so programmer bugs
+    surface to the caller (where tests can catch them) rather than being
+    silently filed as a failed ticker.
+    """
+
+    class _BuggySource(_FakeMetadataSource):
+        def fetch_metadata(self, ticker):
+            # Simulate a parser bug — exactly the failure mode I1 targets.
+            raise TypeError("parser crashed on a vendor field shape")
+
+    src = _BuggySource({})
+    pipe = IngestPipeline(source=src, lake=lake)
+    with pytest.raises(TypeError, match="parser crashed"):
+        pipe.run_metadata(["AAPL.US"])

@@ -87,3 +87,21 @@ def test_list_tickers_tolerates_one_side_missing():
     source = EodhdDataSource(api_key="k", session=session)  # type: ignore[arg-type]
 
     assert source.list_tickers("US") == ["AAPL.US"]
+
+
+def test_list_tickers_warns_loudly_when_delisted_leg_returns_non_list(capsys):
+    """I6: silently swallowing a failed delisted call would re-introduce
+    survivorship bias. The warning log carries ``exchange=`` and an explicit
+    survivorship-bias note so the user can spot the gap."""
+    active = [{"Code": "AAPL", "Exchange": "NASDAQ"}]
+    session = _DelistedAwareSession(active=active, delisted={})  # type: ignore[arg-type]
+    source = EodhdDataSource(api_key="k", session=session)  # type: ignore[arg-type]
+
+    source.list_tickers("US")
+    out = capsys.readouterr().out
+    matches = [line for line in out.splitlines() if "list_tickers.unexpected_payload_shape" in line]
+    assert matches, f"expected a payload-shape warning; got {out!r}"
+    line = matches[0]
+    assert '"exchange": "US"' in line
+    assert '"leg": "delisted"' in line
+    assert "survivorship" in line

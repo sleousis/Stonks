@@ -263,7 +263,6 @@ def test_upsert_analyst_ratings_is_change_detected_time_series(lake):
             {
                 "ticker": "AAPL.US",
                 "snapshot_date": date(2026, 4, 1),
-                "rating": 2.3,
                 "target_price": 250.0,
                 "strong_buy": 10,
                 "buy": 20,
@@ -285,11 +284,11 @@ def test_upsert_analyst_ratings_is_change_detected_time_series(lake):
     assert lake.upsert_analyst_ratings(same_values_later) == 0
     assert lake.count_rows("analyst_ratings") == 1
 
-    # New date, different rating → INSERT
+    # New date, real consensus shift → INSERT
     different = first.copy()
     different["snapshot_date"] = date(2026, 4, 15)
-    different["rating"] = 2.5
     different["target_price"] = 260.0
+    different["strong_buy"] = 12
     assert lake.upsert_analyst_ratings(different) == 1
     assert lake.count_rows("analyst_ratings") == 2
 

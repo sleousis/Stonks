@@ -108,10 +108,12 @@ DROP TABLE analyst_estimates;
 -- -----------------------------------------------------------------------
 
 DROP TABLE analyst_ratings;
+-- No composite ``rating`` column: vendors use incompatible numeric scales
+-- for the same buckets, so we keep only the bucket counts (cross-vendor
+-- consistent) and let consumers compute their own consensus.
 CREATE TABLE analyst_ratings (
     ticker        VARCHAR NOT NULL,
     snapshot_date DATE    NOT NULL,
-    rating        DOUBLE,
     target_price  DOUBLE,
     strong_buy    INTEGER DEFAULT 0,
     buy           INTEGER DEFAULT 0,

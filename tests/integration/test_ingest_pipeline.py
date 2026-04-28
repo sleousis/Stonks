@@ -11,7 +11,7 @@ import pytest
 
 from stonks.ingest.pipeline import IngestPipeline, IngestRunResult
 from stonks.ingest.schemas import FundamentalRow, RawPriceBar
-from stonks.ingest.sources.base import DataSource
+from stonks.ingest.sources.base import DataSource, DataSourceError
 from stonks.store.lake import DuckDBLake
 
 
@@ -38,13 +38,17 @@ class FakeDataSource(DataSource):
     ) -> Iterable[RawPriceBar]:
         self.price_calls.append(ticker)
         if ticker in self._fail_on:
-            raise RuntimeError(f"boom on {ticker}")
+            # DataSourceError is what the pipeline soft-fails on; bare
+            # RuntimeError would propagate as a programmer-bug signal now.
+            raise DataSourceError(f"boom on {ticker}")
         return list(self._prices.get(ticker, []))
 
     def fetch_fundamentals(self, ticker: str) -> list[FundamentalRow]:
         self.fundamental_calls.append(ticker)
         if ticker in self._fail_on:
-            raise RuntimeError(f"boom on {ticker}")
+            # DataSourceError is what the pipeline soft-fails on; bare
+            # RuntimeError would propagate as a programmer-bug signal now.
+            raise DataSourceError(f"boom on {ticker}")
         return list(self._fundamentals.get(ticker, []))
 
 
@@ -156,7 +160,10 @@ def test_run_prices_with_empty_ticker_list_records_ok_noop(lake):
 def test_run_fundamentals_happy_path(lake):
     src = FakeDataSource(
         fundamentals={
-            "AAPL.US": [_fund("AAPL.US", "totalRevenue", 123.0), _fund("AAPL.US", "netIncome", 45.0)],
+            "AAPL.US": [
+                _fund("AAPL.US", "totalRevenue", 123.0),
+                _fund("AAPL.US", "netIncome", 45.0),
+            ],
         }
     )
     pipe = IngestPipeline(source=src, lake=lake)
