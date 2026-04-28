@@ -10,7 +10,13 @@ from datetime import date
 import pytest
 
 from stonks.ingest.pipeline import IngestPipeline, IngestRunResult
-from stonks.ingest.schemas import FundamentalRow, RawPriceBar
+from stonks.ingest.schemas import (
+    BalanceSheetRow,
+    CashFlowStatementRow,
+    FinancialStatementsBundle,
+    IncomeStatementRow,
+    RawPriceBar,
+)
 from stonks.ingest.sources.base import DataSource, DataSourceError
 from stonks.store.lake import DuckDBLake
 
@@ -21,7 +27,7 @@ class FakeDataSource(DataSource):
     def __init__(
         self,
         prices: dict[str, list[RawPriceBar]] | None = None,
-        fundamentals: dict[str, list[FundamentalRow]] | None = None,
+        fundamentals: dict[str, FinancialStatementsBundle] | None = None,
         fail_on: set[str] | None = None,
     ):
         self._prices = prices or {}
@@ -43,13 +49,13 @@ class FakeDataSource(DataSource):
             raise DataSourceError(f"boom on {ticker}")
         return list(self._prices.get(ticker, []))
 
-    def fetch_fundamentals(self, ticker: str) -> list[FundamentalRow]:
+    def fetch_fundamentals(self, ticker: str) -> FinancialStatementsBundle:
         self.fundamental_calls.append(ticker)
         if ticker in self._fail_on:
             # DataSourceError is what the pipeline soft-fails on; bare
             # RuntimeError would propagate as a programmer-bug signal now.
             raise DataSourceError(f"boom on {ticker}")
-        return list(self._fundamentals.get(ticker, []))
+        return self._fundamentals.get(ticker, FinancialStatementsBundle())
 
 
 def _bar(ticker: str, d: date, close: float = 100.0) -> RawPriceBar:
@@ -65,14 +71,30 @@ def _bar(ticker: str, d: date, close: float = 100.0) -> RawPriceBar:
     )
 
 
-def _fund(ticker: str, line_item: str, value: float) -> FundamentalRow:
-    return FundamentalRow(
+def _income(ticker: str, **values: float) -> IncomeStatementRow:
+    return IncomeStatementRow(
         ticker=ticker,
         period_end=date(2025, 12, 31),
         frequency="Q",
-        statement="income",
-        line_item=line_item,
-        value=value,
+        **values,
+    )
+
+
+def _balance(ticker: str, **values: float) -> BalanceSheetRow:
+    return BalanceSheetRow(
+        ticker=ticker,
+        period_end=date(2025, 12, 31),
+        frequency="Q",
+        **values,
+    )
+
+
+def _cashflow(ticker: str, **values: float) -> CashFlowStatementRow:
+    return CashFlowStatementRow(
+        ticker=ticker,
+        period_end=date(2025, 12, 31),
+        frequency="Q",
+        **values,
     )
 
 
@@ -160,10 +182,11 @@ def test_run_prices_with_empty_ticker_list_records_ok_noop(lake):
 def test_run_fundamentals_happy_path(lake):
     src = FakeDataSource(
         fundamentals={
-            "AAPL.US": [
-                _fund("AAPL.US", "totalRevenue", 123.0),
-                _fund("AAPL.US", "netIncome", 45.0),
-            ],
+            "AAPL.US": FinancialStatementsBundle(
+                income=(_income("AAPL.US", revenue=123.0, net_income=45.0),),
+                balance=(_balance("AAPL.US", total_assets=500.0),),
+                cashflow=(_cashflow("AAPL.US", operating_cash_flow=80.0),),
+            ),
         }
     )
     pipe = IngestPipeline(source=src, lake=lake)
@@ -171,4 +194,53 @@ def test_run_fundamentals_happy_path(lake):
     result = pipe.run_fundamentals(["AAPL.US"])
     assert result.status == "ok"
     assert result.tickers_ok == 1
-    assert lake.count_rows("fundamentals") == 2
+    assert lake.count_rows("income_statement") == 1
+    assert lake.count_rows("balance_sheet") == 1
+    assert lake.count_rows("cash_flow_statement") == 1
+
+
+def test_run_fundamentals_partial_bundle_only_writes_present_statements(lake):
+    src = FakeDataSource(
+        fundamentals={
+            "MSFT.US": FinancialStatementsBundle(
+                income=(_income("MSFT.US", revenue=200.0),),
+                # balance + cashflow intentionally empty
+            ),
+        }
+    )
+    pipe = IngestPipeline(source=src, lake=lake)
+    result = pipe.run_fundamentals(["MSFT.US"])
+    assert result.status == "ok"
+    assert lake.count_rows("income_statement") == 1
+    assert lake.count_rows("balance_sheet") == 0
+    assert lake.count_rows("cash_flow_statement") == 0
+
+
+def test_run_fundamentals_soft_fails_on_bad_ticker(lake):
+    src = FakeDataSource(
+        fundamentals={
+            "GOOD.US": FinancialStatementsBundle(
+                income=(_income("GOOD.US", revenue=10.0),),
+            ),
+        },
+        fail_on={"BAD.US"},
+    )
+    pipe = IngestPipeline(source=src, lake=lake)
+    result = pipe.run_fundamentals(["GOOD.US", "BAD.US"])
+    assert result.status == "partial"
+    assert result.tickers_ok == 1
+    assert result.tickers_failed == 1
+    assert lake.count_rows("income_statement") == 1
+
+
+def test_run_fundamentals_is_idempotent(lake):
+    bundle = FinancialStatementsBundle(
+        income=(_income("AAPL.US", revenue=123.0),),
+        balance=(_balance("AAPL.US", total_assets=500.0),),
+    )
+    src = FakeDataSource(fundamentals={"AAPL.US": bundle})
+    pipe = IngestPipeline(source=src, lake=lake)
+    pipe.run_fundamentals(["AAPL.US"])
+    pipe.run_fundamentals(["AAPL.US"])
+    assert lake.count_rows("income_statement") == 1
+    assert lake.count_rows("balance_sheet") == 1

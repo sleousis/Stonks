@@ -1,8 +1,9 @@
 """Abstract base class for vendor data sources.
 
-A DataSource is a thin HTTP client: it fetches raw rows for a single ticker and
-maps them into canonical row schemas (:class:`RawPriceBar`, :class:`FundamentalRow`,
-or a :class:`MetadataBundle` covering everything else).
+A DataSource is a thin HTTP client: it fetches raw rows for a single ticker
+and maps them into canonical row schemas (:class:`RawPriceBar`,
+:class:`FinancialStatementsBundle`, or a :class:`MetadataBundle` covering
+everything else).
 
 Normalization and persistence are the pipeline's job; sources don't touch the lake.
 """
@@ -15,7 +16,7 @@ from datetime import date
 
 from stonks.core.interval import Interval
 from stonks.ingest.metadata_bundle import MetadataBundle
-from stonks.ingest.schemas import ExchangeInfo, FundamentalRow, IntradayBar, RawPriceBar
+from stonks.ingest.schemas import ExchangeInfo, FinancialStatementsBundle, IntradayBar, RawPriceBar
 
 
 class DataSourceError(RuntimeError):
@@ -39,7 +40,14 @@ class DataSource(ABC):
     ) -> Iterable[RawPriceBar]: ...
 
     @abstractmethod
-    def fetch_fundamentals(self, ticker: str) -> Iterable[FundamentalRow]: ...
+    def fetch_fundamentals(self, ticker: str) -> FinancialStatementsBundle:
+        """Return all three financial statements for the ticker as one bundle.
+
+        Vendors that expose the three statements in a single endpoint
+        (e.g. EODHD's ``/fundamentals``) issue one call and split the
+        result into the three streams. Sources that only carry one
+        statement type leave the others empty.
+        """
 
     # Extended fundamentals: ticker profile, dividends, insiders, news, analysts,
     # shares outstanding, employees, segmentation — all in one bundle. Sources

@@ -50,11 +50,13 @@ def test_live_fetch_prices_aapl(source):
 
 def test_live_fundamentals_either_succeeds_or_reports_free_tier(source):
     try:
-        rows = list(source.fetch_fundamentals("AAPL.US"))
+        bundle = source.fetch_fundamentals("AAPL.US")
     except EodhdFreeTierError:
         pytest.skip("fundamentals endpoint is paid-only; free tier returned the expected error")
     else:
-        assert rows, "paid tier should yield at least one fundamental row"
+        assert bundle.income, "paid tier should yield at least one income statement row"
+        assert bundle.balance, "paid tier should yield at least one balance sheet row"
+        assert bundle.cashflow, "paid tier should yield at least one cash flow row"
 
 
 def test_live_metadata_carries_extended_surface(source):

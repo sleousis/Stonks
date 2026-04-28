@@ -10,11 +10,17 @@ from typing import Any
 
 import pytest
 
-from stonks.ingest.schemas import FundamentalRow, RawPriceBar
+from stonks.ingest.schemas import (
+    BalanceSheetRow,
+    CashFlowStatementRow,
+    FinancialStatementsBundle,
+    IncomeStatementRow,
+    RawPriceBar,
+)
 from stonks.ingest.sources.eodhd import (
     EodhdDataSource,
     EodhdFreeTierError,
-    parse_fundamentals_response,
+    parse_financial_statements_response,
     parse_prices_response,
 )
 
@@ -48,43 +54,73 @@ def test_parse_prices_raises_on_free_tier_warning_shape():
         list(parse_prices_response("AAPL.US", payload))
 
 
-def test_parse_fundamentals_yields_rows_for_all_statements_and_frequencies():
-    rows = list(parse_fundamentals_response("AAPL.US", _load("aapl_fundamentals.json")))
-    assert all(isinstance(r, FundamentalRow) for r in rows)
-    assert all(r.ticker == "AAPL.US" for r in rows)
+def test_parse_financial_statements_yields_rows_for_all_three_statements():
+    bundle = parse_financial_statements_response("AAPL.US", _load("aapl_fundamentals.json"))
+    assert isinstance(bundle, FinancialStatementsBundle)
+    assert all(isinstance(r, IncomeStatementRow) for r in bundle.income)
+    assert all(isinstance(r, BalanceSheetRow) for r in bundle.balance)
+    assert all(isinstance(r, CashFlowStatementRow) for r in bundle.cashflow)
 
-    statements = {r.statement for r in rows}
-    assert statements == {"income", "balance", "cashflow"}
+    assert all(r.ticker == "AAPL.US" for r in bundle.income)
+    # Income has both Q and A in the fixture; balance + cashflow only Q.
+    # We verify each statement populated at least one frequency rather
+    # than asserting a specific shape — the parser splits whatever the
+    # fixture carries into its statement-specific rows.
+    assert {r.frequency for r in bundle.income} == {"Q", "A"}
+    assert bundle.balance and {r.frequency for r in bundle.balance} == {"Q"}
+    assert bundle.cashflow and {r.frequency for r in bundle.cashflow} == {"Q"}
 
-    frequencies = {r.frequency for r in rows}
-    assert frequencies == {"Q", "A"}
 
-
-def test_parse_fundamentals_coerces_string_numbers_to_floats():
-    rows = list(parse_fundamentals_response("AAPL.US", _load("aapl_fundamentals.json")))
-    rev = next(
-        r
-        for r in rows
-        if r.line_item == "totalRevenue"
-        and r.frequency == "Q"
-        and r.period_end == date(2025, 12, 31)
+def test_parse_financial_statements_maps_camelcase_to_snake_case():
+    bundle = parse_financial_statements_response("AAPL.US", _load("aapl_fundamentals.json"))
+    income_q = next(
+        r for r in bundle.income if r.frequency == "Q" and r.period_end == date(2025, 12, 31)
     )
-    assert rev.value == 124_300_000_000.0
-    assert isinstance(rev.value, float)
+    # The fixture uses EODHD's ``totalRevenue`` camelCase; the parser
+    # projects it onto the canonical ``revenue`` column.
+    assert income_q.revenue == 124_300_000_000.0
+    assert isinstance(income_q.revenue, float)
+    assert income_q.gross_profit is not None
+    assert income_q.net_income is not None
 
 
-def test_parse_fundamentals_skips_date_field_as_line_item():
-    rows = list(parse_fundamentals_response("AAPL.US", _load("aapl_fundamentals.json")))
-    assert not any(r.line_item == "date" for r in rows)
+def test_parse_financial_statements_unknown_line_items_are_dropped():
+    """Vendor adds new fields all the time; unknown camelCase keys land
+    in the lake only after we've consciously added the column. Until
+    then they're silently dropped, not crashed on."""
+    payload = {
+        "Financials": {
+            "Income_Statement": {
+                "quarterly": {
+                    "2025-12-31": {
+                        "date": "2025-12-31",
+                        "totalRevenue": "100",
+                        "someBrandNewVendorField": "999",
+                    }
+                }
+            }
+        }
+    }
+    bundle = parse_financial_statements_response("AAPL.US", payload)
+    assert len(bundle.income) == 1
+    row = bundle.income[0]
+    assert row.revenue == 100.0
+    assert not hasattr(row, "someBrandNewVendorField")
 
 
-def test_parse_fundamentals_raises_on_free_tier_error_text():
+def test_parse_financial_statements_returns_empty_bundle_on_non_dict_payload():
+    bundle = parse_financial_statements_response("X.US", None)
+    assert bundle == FinancialStatementsBundle()
+    assert bundle.income == ()
+    assert bundle.balance == ()
+    assert bundle.cashflow == ()
+
+
+def test_parse_financial_statements_raises_on_free_tier_error_text():
     with pytest.raises(EodhdFreeTierError):
-        list(
-            parse_fundamentals_response(
-                "AAPL.US",
-                "Only EOD data allowed for free users. Please, contact our support team: support@eodhistoricaldata.com",
-            )
+        parse_financial_statements_response(
+            "AAPL.US",
+            "Only EOD data allowed for free users. Please, contact our support team: support@eodhistoricaldata.com",
         )
 
 
@@ -96,9 +132,9 @@ def test_parse_fundamentals_raises_on_free_tier_error_text():
         "ONLY EOD DATA ALLOWED for free users.",
     ],
 )
-def test_parse_fundamentals_raises_on_other_known_free_tier_markers(body: str):
+def test_parse_financial_statements_raises_on_other_known_free_tier_markers(body: str):
     with pytest.raises(EodhdFreeTierError):
-        list(parse_fundamentals_response("AAPL.US", body))
+        parse_financial_statements_response("AAPL.US", body)
 
 
 # ---- HTTP layer ------------------------------------------------------------
@@ -144,7 +180,7 @@ def test_fetch_fundamentals_maps_403_to_free_tier_error():
     )
     source = EodhdDataSource(api_key="k", max_retries=1, session=session)  # type: ignore[arg-type]
     with pytest.raises(EodhdFreeTierError):
-        list(source.fetch_fundamentals("AAPL.US"))
+        source.fetch_fundamentals("AAPL.US")
     assert len(session.calls) == 1  # no retries on free-tier signal
 
 

@@ -26,6 +26,7 @@ from stonks.ingest.schemas import (
     EmployeeCountRow,
     EsgActivityRow,
     EsgSnapshotRow,
+    FinancialStatementsBundle,
     InsiderTransactionRow,
     InstitutionalHolderRow,
     NewsArticleRow,
@@ -54,7 +55,7 @@ class _FakeMetadataSource(DataSource):
         return []
 
     def fetch_fundamentals(self, ticker):
-        return []
+        return FinancialStatementsBundle()
 
     def fetch_metadata(self, ticker):
         if ticker in self._fail_on:

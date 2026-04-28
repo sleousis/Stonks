@@ -20,7 +20,7 @@ import requests
 
 from stonks.core.interval import Interval
 from stonks.ingest.metadata_bundle import MetadataBundle
-from stonks.ingest.schemas import FundamentalRow, IntradayBar, RawPriceBar
+from stonks.ingest.schemas import FinancialStatementsBundle, IntradayBar, RawPriceBar
 from stonks.ingest.sources.base import DataSource, DataSourceError
 from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
@@ -67,13 +67,62 @@ class IngestPipeline:
         )
 
     def run_fundamentals(self, tickers: Sequence[str]) -> IngestRunResult:
-        return self._run(
-            kind="fundamentals",
-            tickers=tickers,
-            fetch=self._source.fetch_fundamentals,
-            to_df=_fundamentals_to_df,
-            upsert=self._lake.upsert_fundamentals,
+        """Pull each ticker's :class:`FinancialStatementsBundle` and upsert
+        the three statements into their dedicated tables.
+
+        One vendor call per ticker (the bundle), three lake writes
+        wrapped in a single transaction so a partial failure never
+        leaves the lake half-populated.
+        """
+        run_id = self._lake.open_ingest_run(source=self._source.source_id, kind="fundamentals")
+        log = self._log.bind(run_id=run_id, kind="fundamentals")
+
+        ok = 0
+        failed = 0
+        last_error: str | None = None
+
+        for ticker in tickers:
+            try:
+                bundle = self._source.fetch_fundamentals(ticker)
+                self._upsert_statements_bundle(bundle)
+                ok += 1
+                log.info(
+                    "ticker.ingested",
+                    ticker=ticker,
+                    income_rows=len(bundle.income),
+                    balance_rows=len(bundle.balance),
+                    cashflow_rows=len(bundle.cashflow),
+                )
+            except _SOFT_FAIL_EXCEPTIONS as exc:
+                failed += 1
+                last_error = f"{type(exc).__name__}: {exc}"
+                log.warning("ticker.failed", ticker=ticker, error=last_error)
+
+        status = _status(ok, failed)
+        self._lake.close_ingest_run(
+            run_id,
+            tickers_ok=ok,
+            tickers_failed=failed,
+            status=status,
+            error=last_error if status in ("error", "partial") else None,
         )
+        log.info("run.finished", status=status, tickers_ok=ok, tickers_failed=failed)
+        return IngestRunResult(
+            run_id=run_id,
+            kind="fundamentals",
+            status=status,
+            tickers_ok=ok,
+            tickers_failed=failed,
+        )
+
+    def _upsert_statements_bundle(self, bundle: FinancialStatementsBundle) -> None:
+        # Atomic per ticker: a downstream NOT NULL violation on one of
+        # the three tables rolls back the other two so the ticker either
+        # has all three statements applied or none at all.
+        with self._lake.transaction():
+            self._lake.upsert_income_statement(_rows_to_df(bundle.income))
+            self._lake.upsert_balance_sheet(_rows_to_df(bundle.balance))
+            self._lake.upsert_cash_flow_statement(_rows_to_df(bundle.cashflow))
 
     def run_intraday_bars(
         self,
@@ -228,12 +277,6 @@ def _prices_to_df(rows: Iterable[RawPriceBar]) -> pd.DataFrame:
 
 def _intraday_to_df(rows: Iterable[IntradayBar]) -> pd.DataFrame:
     cols = ("ticker", "timestamp", "open", "high", "low", "close", "adj_close", "volume")
-    data = [tuple(getattr(r, c) for c in cols) for r in rows]
-    return pd.DataFrame(data, columns=list(cols))
-
-
-def _fundamentals_to_df(rows: Iterable[FundamentalRow]) -> pd.DataFrame:
-    cols = ("ticker", "period_end", "frequency", "statement", "line_item", "value")
     data = [tuple(getattr(r, c) for c in cols) for r in rows]
     return pd.DataFrame(data, columns=list(cols))
 

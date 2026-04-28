@@ -1,7 +1,8 @@
-"""DuckDB-backed analytical data lake: prices, fundamentals, ingest run ledger.
+"""DuckDB-backed analytical data lake: prices, financial statements,
+extended metadata, ingest run ledger.
 
-Schema lives in ``migrations/*.sql``; versions are tracked in ``schema_migrations``
-and applied in lexical order at ``migrate()`` time.
+Schema lives in ``migrations_duckdb/*.sql``; versions are tracked in
+``schema_migrations`` and applied in lexical order at ``migrate()`` time.
 """
 
 from __future__ import annotations
@@ -32,7 +33,151 @@ _BAR_COLS = (
     "adj_close",
     "volume",
 )
-_FUND_COLS = ("ticker", "period_end", "frequency", "statement", "line_item", "value")
+# Wide column lists for each financial-statement table (migration 008).
+# Source of truth is the SQL migration; if the two diverge an upsert will
+# raise on the missing/extra column at INSERT time, which is loud enough.
+_INCOME_STATEMENT_COLS: tuple[str, ...] = (
+    "ticker",
+    "period_end",
+    "frequency",
+    "filing_date",
+    "currency",
+    "revenue",
+    "cost_of_revenue",
+    "gross_profit",
+    "research_development",
+    "selling_general_administrative",
+    "selling_marketing_expenses",
+    "other_operating_expenses",
+    "total_operating_expenses",
+    "operating_income",
+    "interest_income",
+    "interest_expense",
+    "net_interest_income",
+    "non_operating_income_other",
+    "total_other_income_expense_net",
+    "income_before_tax",
+    "income_tax_expense",
+    "tax_provision",
+    "minority_interest",
+    "net_income_continuing",
+    "discontinued_operations",
+    "extraordinary_items",
+    "non_recurring",
+    "other_items",
+    "effect_of_accounting_charges",
+    "net_income",
+    "net_income_to_common",
+    "preferred_stock_adjustments",
+    "ebit",
+    "ebitda",
+    "depreciation_amortization",
+    "reconciled_depreciation",
+)
+_BALANCE_SHEET_COLS: tuple[str, ...] = (
+    "ticker",
+    "period_end",
+    "frequency",
+    "filing_date",
+    "currency",
+    "total_assets",
+    "current_assets",
+    "cash",
+    "cash_and_equivalents",
+    "cash_and_short_term_investments",
+    "short_term_investments",
+    "net_receivables",
+    "inventory",
+    "other_current_assets",
+    "non_current_assets",
+    "long_term_investments",
+    "property_plant_equipment_net",
+    "property_plant_equipment_gross",
+    "accumulated_depreciation",
+    "accumulated_amortization",
+    "goodwill",
+    "intangible_assets",
+    "other_assets",
+    "deferred_long_term_asset_charges",
+    "non_current_assets_other",
+    "earning_assets",
+    "total_liabilities",
+    "current_liabilities",
+    "accounts_payable",
+    "current_deferred_revenue",
+    "short_term_debt",
+    "short_long_term_debt",
+    "short_long_term_debt_total",
+    "other_current_liabilities",
+    "non_current_liabilities",
+    "long_term_debt",
+    "long_term_debt_total",
+    "capital_lease_obligations",
+    "deferred_long_term_liabilities",
+    "other_liabilities",
+    "non_current_liabilities_other",
+    "negative_goodwill",
+    "warrants",
+    "preferred_stock_redeemable",
+    "total_stockholder_equity",
+    "common_stock",
+    "capital_stock",
+    "additional_paid_in_capital",
+    "retained_earnings",
+    "treasury_stock",
+    "accumulated_other_comprehensive_income",
+    "other_stockholder_equity",
+    "common_stock_total_equity",
+    "preferred_stock_total_equity",
+    "retained_earnings_total_equity",
+    "capital_surplus",
+    "total_permanent_equity",
+    "noncontrolling_interest",
+    "temporary_equity_redeemable_noncontrolling",
+    "liabilities_and_stockholders_equity",
+    "net_debt",
+    "net_tangible_assets",
+    "net_working_capital",
+    "investments",
+    "common_stock_shares_outstanding",
+)
+_CASH_FLOW_STATEMENT_COLS: tuple[str, ...] = (
+    "ticker",
+    "period_end",
+    "frequency",
+    "filing_date",
+    "currency",
+    "operating_cash_flow",
+    "investing_cash_flow",
+    "financing_cash_flow",
+    "net_income",
+    "depreciation",
+    "stock_based_compensation",
+    "change_in_working_capital",
+    "change_to_inventory",
+    "change_to_account_receivables",
+    "change_to_liabilities",
+    "change_to_operating_activities",
+    "change_to_net_income",
+    "change_receivables",
+    "cash_flows_other_operating",
+    "other_non_cash_items",
+    "capital_expenditures",
+    "investments",
+    "other_cash_flows_investing",
+    "dividends_paid",
+    "net_borrowings",
+    "issuance_of_capital_stock",
+    "sale_purchase_of_stock",
+    "other_cash_flows_financing",
+    "change_in_cash",
+    "cash_and_cash_equivalents_changes",
+    "begin_period_cash_flow",
+    "end_period_cash_flow",
+    "exchange_rate_changes",
+    "free_cash_flow",
+)
+_STATEMENT_PK: tuple[str, ...] = ("ticker", "period_end", "frequency")
 
 
 class DuckDBLake:
@@ -279,33 +424,54 @@ class DuckDBLake:
         out["date"] = pd.to_datetime(out["date"]).dt.date
         return out[list(_PRICE_COLS)]
 
-    # ---- fundamentals -------------------------------------------------------
+    # ---- financial statements (migration 008) ------------------------------
 
-    def upsert_fundamentals(self, df: pd.DataFrame) -> int:
+    def upsert_income_statement(self, df: pd.DataFrame) -> int:
+        return self._upsert_statement(df, "income_statement", _INCOME_STATEMENT_COLS)
+
+    def upsert_balance_sheet(self, df: pd.DataFrame) -> int:
+        return self._upsert_statement(df, "balance_sheet", _BALANCE_SHEET_COLS)
+
+    def upsert_cash_flow_statement(self, df: pd.DataFrame) -> int:
+        return self._upsert_statement(df, "cash_flow_statement", _CASH_FLOW_STATEMENT_COLS)
+
+    def _upsert_statement(self, df: pd.DataFrame, table: str, cols: tuple[str, ...]) -> int:
+        """Upsert helper for the three wide financial-statement tables.
+
+        Vendors omit line items that don't apply to a given filer, so
+        the input DataFrame is intentionally sparse — we reindex up to
+        the full column set (filling absent columns with NULL/NaN)
+        before delegating to the strict :meth:`_upsert`. The PK columns
+        must be present; everything else is optional.
+        """
         if df.empty:
             return 0
-        self.con.register("_in", df[list(_FUND_COLS)])
-        try:
-            self.con.execute(
-                """
-                INSERT INTO fundamentals (ticker, period_end, frequency, statement, line_item, value)
-                SELECT ticker, period_end, frequency, statement, line_item, value FROM _in
-                ON CONFLICT (ticker, period_end, frequency, statement, line_item) DO UPDATE SET
-                    value = EXCLUDED.value
-                """
+        missing_pk = [c for c in _STATEMENT_PK if c not in df.columns]
+        if missing_pk:
+            raise ValueError(
+                f"{table}: missing required PK column(s) {missing_pk}; "
+                f"input columns were {list(df.columns)}"
             )
-        finally:
-            self.con.unregister("_in")
-        return len(df)
+        widened = df.reindex(columns=list(cols))
+        return self._upsert(widened, table=table, cols=cols, pk=_STATEMENT_PK)
 
-    def get_fundamentals(self, ticker: str, statement: str | None = None) -> pd.DataFrame:
-        if statement is None:
-            return self.con.execute(
-                "SELECT * FROM fundamentals WHERE ticker = ?", [ticker]
-            ).fetchdf()
+    def get_income_statement(self, ticker: str) -> pd.DataFrame:
         return self.con.execute(
-            "SELECT * FROM fundamentals WHERE ticker = ? AND statement = ?",
-            [ticker, statement],
+            "SELECT * FROM income_statement WHERE ticker = ? ORDER BY period_end DESC, frequency",
+            [ticker],
+        ).fetchdf()
+
+    def get_balance_sheet(self, ticker: str) -> pd.DataFrame:
+        return self.con.execute(
+            "SELECT * FROM balance_sheet WHERE ticker = ? ORDER BY period_end DESC, frequency",
+            [ticker],
+        ).fetchdf()
+
+    def get_cash_flow_statement(self, ticker: str) -> pd.DataFrame:
+        return self.con.execute(
+            "SELECT * FROM cash_flow_statement "
+            "WHERE ticker = ? ORDER BY period_end DESC, frequency",
+            [ticker],
         ).fetchdf()
 
     # ---- ingest_runs --------------------------------------------------------
