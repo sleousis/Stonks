@@ -8,7 +8,11 @@ from pydantic import ValidationError
 from stonks.ingest.schemas import (
     AnalystForecastRow,
     AnalystRatingsRow,
+    BondProfileRow,
+    BondYieldRow,
+    CommodityContractRow,
     CrossListingRow,
+    CryptoProfileRow,
     DividendRow,
     EarningsAnnouncementRow,
     EmployeeCountRow,
@@ -499,3 +503,157 @@ def test_ticker_profile_rejects_unknown_security_type():
             id="AAPL.US",
             security_type="Common Stock",  # type: ignore[arg-type]  # raw vendor string
         )
+
+
+# ---- multi-asset support ---------------------------------------------------
+
+
+def test_ticker_profile_defaults_asset_class_to_equity():
+    """Existing single-asset code paths must keep working: every TickerProfile
+    constructed without an explicit ``asset_class`` lands as 'equity', which
+    matches the migration backfill of pre-existing rows."""
+    t = TickerProfile(id="AAPL.US")
+    assert t.asset_class == "equity"
+
+
+def test_ticker_profile_accepts_each_asset_class():
+    for cls in ("equity", "crypto", "commodity", "bond"):
+        t = TickerProfile(id=f"X.{cls.upper()}", asset_class=cls)  # type: ignore[arg-type]
+        assert t.asset_class == cls
+
+
+def test_ticker_profile_rejects_unknown_asset_class():
+    with pytest.raises(ValidationError):
+        TickerProfile(id="X.US", asset_class="forex")  # type: ignore[arg-type]
+
+
+def test_crypto_profile_row_basic_shape():
+    row = CryptoProfileRow(
+        ticker="BTC-USD.CC",
+        base_symbol="BTC",
+        quote_symbol="USD",
+        blockchain="Bitcoin",
+        consensus_type="proof_of_work",
+        circulating_supply=19_700_000.0,
+        total_supply=19_700_000.0,
+        max_supply=21_000_000.0,
+        supply_snapshot_date=date(2026, 4, 1),
+    )
+    assert row.base_symbol == "BTC"
+    assert row.max_supply == 21_000_000.0
+
+
+def test_crypto_profile_row_allows_only_ticker():
+    """Free-tier vendors that don't expose supply/blockchain still produce a
+    valid row — every metadata field is optional except the ticker key."""
+    row = CryptoProfileRow(ticker="BTC-USD.CC")
+    assert row.ticker == "BTC-USD.CC"
+    assert row.circulating_supply is None
+
+
+def test_crypto_profile_row_rejects_negative_supply():
+    with pytest.raises(ValidationError):
+        CryptoProfileRow(ticker="BTC-USD.CC", circulating_supply=-1.0)
+
+
+def test_bond_profile_row_basic_shape():
+    row = BondProfileRow(
+        ticker="US10Y.GBOND",
+        issuer_name="United States Treasury",
+        issuer_kind="sovereign",
+        bond_kind="treasury",
+        coupon_rate=4.25,
+        coupon_frequency=2,
+        face_value=1000.0,
+        currency="USD",
+        issue_date=date(2025, 11, 15),
+        maturity_date=date(2035, 11, 15),
+        credit_rating="AAA",
+    )
+    assert row.issuer_kind == "sovereign"
+    assert row.coupon_frequency == 2
+
+
+def test_bond_profile_row_rejects_unnormalized_issuer_kind():
+    """Vendors emit raw strings ('Government', 'Corp.', …); the schema only
+    accepts the canonical Literal so adapters do the mapping at parse time."""
+    with pytest.raises(ValidationError):
+        BondProfileRow(
+            ticker="US10Y.GBOND",
+            issuer_kind="Government",  # type: ignore[arg-type]
+        )
+
+
+def test_bond_profile_row_rejects_unnormalized_bond_kind():
+    with pytest.raises(ValidationError):
+        BondProfileRow(
+            ticker="US10Y.GBOND",
+            bond_kind="Treasury Note",  # type: ignore[arg-type]
+        )
+
+
+def test_bond_yield_row_basic_shape():
+    row = BondYieldRow(
+        ticker="US10Y.GBOND",
+        date=date(2026, 4, 1),
+        yield_to_maturity=4.18,
+        clean_price=99.45,
+    )
+    assert row.yield_to_maturity == 4.18
+    assert row.clean_price == 99.45
+
+
+def test_commodity_contract_row_basic_shape():
+    row = CommodityContractRow(
+        ticker="GC.COMM",
+        underlying_symbol="GC",
+        contract_kind="continuous",
+        contract_month=None,
+        expiry_date=None,
+        contract_size=100.0,
+        contract_unit="troy_ounce",
+    )
+    assert row.contract_kind == "continuous"
+    assert row.contract_size == 100.0
+
+
+def test_commodity_contract_row_rejects_unnormalized_contract_kind():
+    with pytest.raises(ValidationError):
+        CommodityContractRow(
+            ticker="GC.COMM",
+            contract_kind="Front month",  # type: ignore[arg-type]
+        )
+
+
+def test_metadata_bundle_carries_per_class_profile_rows():
+    """The ingest pipeline reaches into ``MetadataBundle`` for each non-equity
+    profile field; if the field isn't on the dataclass the upsert call site
+    AttributeError's silently. Lock the field set in here."""
+    from stonks.ingest.metadata_bundle import MetadataBundle
+
+    bundle = MetadataBundle(
+        crypto_profile=CryptoProfileRow(ticker="BTC-USD.CC"),
+        bond_profile=BondProfileRow(ticker="US10Y.GBOND"),
+        commodity_contract=CommodityContractRow(ticker="GC.COMM"),
+        bond_yields=(
+            BondYieldRow(
+                ticker="US10Y.GBOND",
+                date=date(2026, 4, 1),
+                yield_to_maturity=4.18,
+            ),
+        ),
+    )
+    assert bundle.crypto_profile is not None
+    assert bundle.bond_profile is not None
+    assert bundle.commodity_contract is not None
+    assert len(bundle.bond_yields) == 1
+
+
+def test_metadata_bundle_defaults_all_per_class_fields_empty():
+    from stonks.ingest.metadata_bundle import MetadataBundle
+
+    bundle = MetadataBundle()
+    assert bundle.crypto_profile is None
+    assert bundle.bond_profile is None
+    assert bundle.commodity_contract is None
+    assert bundle.bond_yields == ()

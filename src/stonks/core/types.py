@@ -16,6 +16,11 @@ OrderSide = Literal["buy", "sell"]
 OrderType = Literal["market", "limit", "stop", "stop_limit"]
 OrderStatus = Literal["pending", "filled", "partially_filled", "rejected", "cancelled"]
 
+# Top-level asset class. Closed set; future additions (forex, fund, index)
+# are non-breaking. Lives in core so every block (ingest, lake, strategies,
+# ranker) imports from the same place.
+AssetClass = Literal["equity", "crypto", "commodity", "bond"]
+
 
 @dataclass(frozen=True)
 class Order:

@@ -19,7 +19,11 @@ from dataclasses import dataclass
 from stonks.ingest.schemas import (
     AnalystForecastRow,
     AnalystRatingsRow,
+    BondProfileRow,
+    BondYieldRow,
+    CommodityContractRow,
     CrossListingRow,
+    CryptoProfileRow,
     DividendRow,
     EarningsAnnouncementRow,
     EmployeeCountRow,
@@ -60,3 +64,9 @@ class MetadataBundle:
     employee_count: tuple[EmployeeCountRow, ...] = ()
     segmentation: tuple[SegmentationRow, ...] = ()
     market_cap_history: tuple[MarketCapRow, ...] = ()
+    # Per-asset-class profiles. Equity sources leave these at the defaults;
+    # crypto/bond/commodity sources populate the matching field.
+    crypto_profile: CryptoProfileRow | None = None
+    bond_profile: BondProfileRow | None = None
+    commodity_contract: CommodityContractRow | None = None
+    bond_yields: tuple[BondYieldRow, ...] = ()
