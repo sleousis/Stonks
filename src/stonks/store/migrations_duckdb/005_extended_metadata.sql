@@ -59,8 +59,10 @@ ALTER TABLE tickers ADD COLUMN updated_at TIMESTAMP;
 -- 2. insider_transactions: drop and recreate.
 --    Real trade date is now `transaction_date`; SEC filing date is
 --    `filing_date`. Adds owner_cik / owner_title / acquired_disposed /
---    post_transaction_amount / sec_link. Drops vendor_id (never populated
---    by EODHD; better natural keys exist).
+--    post_transaction_amount / sec_link. Drops `vendor_id`: what we used
+--    to stuff there from EODHD (`ownerCik`) now lives in its own typed
+--    `owner_cik` column, and the expanded natural key (now including
+--    `sec_link`) handles dedup directly.
 -- -----------------------------------------------------------------------
 
 DROP INDEX IF EXISTS uq_insider_natural;

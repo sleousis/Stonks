@@ -458,9 +458,6 @@ class DuckDBLake:
         "eps_revisions_down_7d",
         "eps_revisions_down_30d",
     )
-    _ANALYST_FORECASTS_VALUE_COLS = tuple(
-        c for c in _ANALYST_FORECASTS_COLS if c not in ("ticker", "period_end", "period_relative")
-    )
     _ESG_SNAPSHOTS_COLS = (
         "ticker",
         "rating_date",
@@ -764,13 +761,16 @@ class DuckDBLake:
            outpaced the data's real change cadence).
 
         Backfill of older snapshot dates is permitted: rows whose
-        ``snapshot_col`` is strictly older than the latest stored row
-        always pass through to INSERT, since they cannot collide on the
-        ``(identity_cols, snapshot_col)`` PK.
+        ``snapshot_col`` is ``<=`` the latest stored row always pass the
+        eligibility filter. If the exact ``(identity_cols..., snapshot_col)``
+        row already exists, the ON CONFLICT branch UPDATEs it in place
+        (vendor correction); otherwise it INSERTs a new historical row.
 
-        Returns the net number of rows added to ``table`` (count after −
-        count before). Same-date corrections that hit the ON CONFLICT
-        path return 0 since they update in place.
+        Returns the *net* number of rows added to ``table`` (count after −
+        count before) — **not** rows touched. ON CONFLICT updates and
+        no-change skips both return 0, indistinguishable from each other
+        at this layer; callers that need to disambiguate should query
+        ``table`` directly before/after.
 
         ``identity_cols`` define the entity (e.g. ``["ticker", "name"]``);
         ``value_cols`` are the observable columns we compare for change;

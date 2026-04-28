@@ -50,12 +50,22 @@ __all__ = [
     "TickerSnapshotRow",
 ]
 
+
+class FrozenRow(BaseModel):
+    """Shared base for all immutable schema rows.
+
+    Centralises ``frozen=True`` so every row class is hashable and can't be
+    mutated after construction — see CLAUDE.md's "vendor-agnostic schemas"
+    rule for why we treat normalised rows as values, not records.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+
 # ---- prices + financial statements (original surface) ----------------------
 
 
-class RawPriceBar(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
+class RawPriceBar(FrozenRow):
     ticker: str
     date: date
     open: float
@@ -66,12 +76,10 @@ class RawPriceBar(BaseModel):
     volume: int | None = None
 
 
-class IntradayBar(BaseModel):
+class IntradayBar(FrozenRow):
     """Sub-daily bar — same shape as :class:`RawPriceBar` but with a full
     ``datetime`` instead of a plain date. Flows directly into the ``bars``
     table via ``DuckDBLake.upsert_bars`` with an explicit ``interval``."""
-
-    model_config = ConfigDict(frozen=True)
 
     ticker: str
     timestamp: datetime
@@ -83,10 +91,8 @@ class IntradayBar(BaseModel):
     volume: int | None = None
 
 
-class FundamentalRow(BaseModel):
+class FundamentalRow(FrozenRow):
     """One cell from a financial statement at a specific period end."""
-
-    model_config = ConfigDict(frozen=True)
 
     ticker: str
     period_end: date
@@ -99,9 +105,7 @@ class FundamentalRow(BaseModel):
 # ---- time-series metadata --------------------------------------------------
 
 
-class DividendRow(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
+class DividendRow(FrozenRow):
     ticker: str
     ex_date: date
     amount: float = Field(ge=0.0)
@@ -111,7 +115,7 @@ class DividendRow(BaseModel):
     declaration_date: date | None = None
 
 
-class InsiderTransactionRow(BaseModel):
+class InsiderTransactionRow(FrozenRow):
     """One insider trade. Captures both the trade event and the SEC filing.
 
     ``transaction_date`` is the actual trade; ``filing_date`` is when the
@@ -119,8 +123,6 @@ class InsiderTransactionRow(BaseModel):
     itself is a signal, and event-study windows anchor on the trade date
     while disclosure-flow studies anchor on the filing date.
     """
-
-    model_config = ConfigDict(frozen=True)
 
     ticker: str
     transaction_date: date
@@ -138,9 +140,7 @@ class InsiderTransactionRow(BaseModel):
     sec_link: str | None = None  # URL to the underlying Form 4
 
 
-class NewsArticleRow(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
+class NewsArticleRow(FrozenRow):
     ticker: str
     published_at: datetime
     title: str
@@ -155,10 +155,8 @@ class NewsArticleRow(BaseModel):
     sentiment_neu: float | None = None
 
 
-class NewsSentimentRow(BaseModel):
+class NewsSentimentRow(FrozenRow):
     """Daily aggregate sentiment for a ticker (typical vendor shape)."""
-
-    model_config = ConfigDict(frozen=True)
 
     ticker: str
     date: date
@@ -166,7 +164,7 @@ class NewsSentimentRow(BaseModel):
     article_count: int | None = None
 
 
-class EarningsAnnouncementRow(BaseModel):
+class EarningsAnnouncementRow(FrozenRow):
     """One earnings event for a fiscal period.
 
     Holds both the actual reported result and the analyst consensus going in,
@@ -179,8 +177,6 @@ class EarningsAnnouncementRow(BaseModel):
     map them into ``before`` / ``after`` / ``during``.
     """
 
-    model_config = ConfigDict(frozen=True)
-
     ticker: str
     period_end: date
     report_date: date | None = None
@@ -192,7 +188,7 @@ class EarningsAnnouncementRow(BaseModel):
     surprise_percent: float | None = None
 
 
-class AnalystForecastRow(BaseModel):
+class AnalystForecastRow(FrozenRow):
     """Analyst dispersion, revenue forecasts, and EPS revision history for a
     given fiscal period.
 
@@ -202,8 +198,6 @@ class AnalystForecastRow(BaseModel):
     is the discriminator: vendors emit strings like EODHD's ``0q`` /
     ``+1q`` / ``+1y``; adapters map them into the literal below.
     """
-
-    model_config = ConfigDict(frozen=True)
 
     ticker: str
     period_end: date
@@ -250,7 +244,7 @@ class AnalystForecastRow(BaseModel):
     eps_revisions_down_30d: int | None = None
 
 
-class AnalystRatingsRow(BaseModel):
+class AnalystRatingsRow(FrozenRow):
     """Analyst consensus ratings + target price for a ticker, with an
     explicit ``snapshot_date`` so the row is a time series — not a
     single-row-per-ticker snapshot.
@@ -258,8 +252,6 @@ class AnalystRatingsRow(BaseModel):
     Ingested via change-detection (``_upsert_on_change``) so the table only
     grows when the consensus actually moves.
     """
-
-    model_config = ConfigDict(frozen=True)
 
     ticker: str
     snapshot_date: date
@@ -272,7 +264,7 @@ class AnalystRatingsRow(BaseModel):
     strong_sell: int = 0
 
 
-class InstitutionalHolderRow(BaseModel):
+class InstitutionalHolderRow(FrozenRow):
     """One institutional / fund holder snapshot for a ticker.
 
     EODHD returns top-20 institutions and top-20 funds; the same row schema
@@ -280,8 +272,6 @@ class InstitutionalHolderRow(BaseModel):
     change-detection: a new row is only inserted when one of the observed
     values (shares, assets %, change) actually moves.
     """
-
-    model_config = ConfigDict(frozen=True)
 
     ticker: str
     holder_kind: Literal["institution", "fund"]
@@ -294,10 +284,8 @@ class InstitutionalHolderRow(BaseModel):
     change_pct: float | None = None
 
 
-class EsgSnapshotRow(BaseModel):
+class EsgSnapshotRow(FrozenRow):
     """ESG ratings header. Time-series via ``rating_date`` + change-detection."""
-
-    model_config = ConfigDict(frozen=True)
 
     ticker: str
     rating_date: date
@@ -312,7 +300,7 @@ class EsgSnapshotRow(BaseModel):
     controversy_level: int | None = None
 
 
-class EsgActivityRow(BaseModel):
+class EsgActivityRow(FrozenRow):
     """One controversial-activity flag for an ESG snapshot
     (e.g. ``activity='alcohol', involvement='No'``).
 
@@ -321,22 +309,18 @@ class EsgActivityRow(BaseModel):
     one taxonomy.
     """
 
-    model_config = ConfigDict(frozen=True)
-
     ticker: str
     rating_date: date
     activity: str
     involvement: str  # typically "Yes" / "No"
 
 
-class CrossListingRow(BaseModel):
+class CrossListingRow(FrozenRow):
     """A secondary listing of the same security on another exchange.
 
     The row's ``ticker`` is the *canonical* (primary) ticker; ``exchange`` +
     ``exchange_code`` identify where else it trades.
     """
-
-    model_config = ConfigDict(frozen=True)
 
     ticker: str
     exchange: str
@@ -344,7 +328,7 @@ class CrossListingRow(BaseModel):
     name: str | None = None
 
 
-class OfficerRow(BaseModel):
+class OfficerRow(FrozenRow):
     """One executive on the current officer roster of an issuer.
 
     EODHD returns a current-state list with no per-officer date; we model
@@ -352,23 +336,19 @@ class OfficerRow(BaseModel):
     ticker's existing officers before inserting), not a time series.
     """
 
-    model_config = ConfigDict(frozen=True)
-
     ticker: str
     name: str
     title: str | None = None
     year_born: int | None = None
 
 
-class TickerSnapshotRow(BaseModel):
+class TickerSnapshotRow(FrozenRow):
     """Volatile metric snapshot for a ticker — extracted from
     ``TickerProfile`` so the static profile stays static and these
     drift-prone metrics get a proper time series.
 
     Ingested via change-detection.
     """
-
-    model_config = ConfigDict(frozen=True)
 
     ticker: str
     snapshot_date: date
@@ -378,48 +358,38 @@ class TickerSnapshotRow(BaseModel):
     percent_institutions: float | None = None
 
 
-class SharesOutstandingRow(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
+class SharesOutstandingRow(FrozenRow):
     ticker: str
     date: date
     shares: float = Field(ge=0.0)
 
 
-class StockSplitRow(BaseModel):
+class StockSplitRow(FrozenRow):
     """One stock split event. ``ratio > 1`` is a forward split (2:1 → 2.0);
     ``ratio < 1`` is a reverse split (1:10 → 0.1)."""
-
-    model_config = ConfigDict(frozen=True)
 
     ticker: str
     date: date
     ratio: float = Field(gt=0.0)
 
 
-class MarketCapRow(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
+class MarketCapRow(FrozenRow):
     ticker: str
     date: date
     market_cap: float = Field(ge=0.0)
 
 
-class EmployeeCountRow(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
+class EmployeeCountRow(FrozenRow):
     ticker: str
     date: date
     count: int = Field(ge=0)
 
 
-class SegmentationRow(BaseModel):
+class SegmentationRow(FrozenRow):
     """Revenue or geographic segmentation line for a period.
 
     One row per (ticker, period_end, dimension, segment).
     """
-
-    model_config = ConfigDict(frozen=True)
 
     ticker: str
     period_end: date
@@ -431,7 +401,7 @@ class SegmentationRow(BaseModel):
 # ---- static profile --------------------------------------------------------
 
 
-class TickerProfile(BaseModel):
+class TickerProfile(FrozenRow):
     """Static-ish metadata about a ticker. Refreshed periodically but not a
     time series — volatile metrics like ownership percentages, beta and
     short interest live on :class:`TickerSnapshotRow` instead.
@@ -441,8 +411,6 @@ class TickerProfile(BaseModel):
     map their vendor strings (e.g. EODHD's ``Common Stock`` / ``ETF``)
     into this literal.
     """
-
-    model_config = ConfigDict(frozen=True)
 
     id: str  # canonical ticker (e.g. AAPL.US)
     exchange: str | None = None
@@ -494,12 +462,10 @@ class TickerProfile(BaseModel):
 # ---- source discovery (not a lake-row type) --------------------------------
 
 
-class ExchangeInfo(BaseModel):
+class ExchangeInfo(FrozenRow):
     """One exchange supported by a :class:`DataSource`. Returned by
     :meth:`DataSource.list_exchanges` for human discovery — not persisted to
     the lake."""
-
-    model_config = ConfigDict(frozen=True)
 
     code: str
     name: str | None = None

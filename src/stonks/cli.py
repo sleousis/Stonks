@@ -1,6 +1,4 @@
-"""Typer CLI entrypoint — ``stonks`` command.
-
-Subcommands: ``db init``, ``db info``, ``ingest prices``, ``ingest fundamentals``.
+"""Typer CLI entrypoint — ``stonks`` command. Run ``stonks --help`` for the subcommand surface.
 
 To browse the lake interactively, run ``uv run duckdb -ui data/lake.duckdb``
 (requires the standalone DuckDB CLI on PATH: https://install.duckdb.org).
@@ -16,7 +14,7 @@ from rich.console import Console
 from rich.table import Table
 
 from stonks.config import Settings, load_settings
-from stonks.ingest.pipeline import IngestPipeline
+from stonks.ingest.pipeline import IngestPipeline, IngestRunResult
 from stonks.ingest.sources.base import DataSource
 from stonks.ingest.sources.eodhd import EodhdDataSource
 from stonks.logging import configure_logging, get_logger
@@ -88,9 +86,7 @@ def db_init() -> None:
     with SqliteState(settings.state.path) as state:
         state.migrate()
         state_versions = state.applied_migrations()
-    console.print(
-        f"[green]lake ready[/green]  {settings.lake.path} (migrations: {lake_versions})"
-    )
+    console.print(f"[green]lake ready[/green]  {settings.lake.path} (migrations: {lake_versions})")
     console.print(
         f"[green]state ready[/green] {settings.state.path} (migrations: {state_versions})"
     )
@@ -157,9 +153,7 @@ def ingest_prices(
     since: str | None = typer.Option(
         None, "--since", help="earliest date (YYYY-MM-DD); omit to fetch full history"
     ),
-    until: str | None = typer.Option(
-        None, "--until", help="latest date (YYYY-MM-DD)"
-    ),
+    until: str | None = typer.Option(None, "--until", help="latest date (YYYY-MM-DD)"),
 ) -> None:
     settings = _settings()
     source = _build_source(settings)
@@ -239,9 +233,7 @@ def ingest_intraday(
         since_d = date.fromisoformat(since) if since else None
         until_d = date.fromisoformat(until) if until else None
         pipeline = IngestPipeline(source=source, lake=lake)
-        result = pipeline.run_intraday_bars(
-            ticker_list, parsed, since=since_d, until=until_d
-        )
+        result = pipeline.run_intraday_bars(ticker_list, parsed, since=since_d, until=until_d)
 
     _print_result(result)
 
@@ -250,7 +242,9 @@ def ingest_intraday(
 def ingest_aggregate(
     tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),
     source_interval: str = typer.Option(..., "--from", help="source interval (e.g. 1h, 1d, 1mo)"),
-    target_interval: str = typer.Option(..., "--to", help="target interval (must be coarser, e.g. 4h, 3d, 6mo)"),
+    target_interval: str = typer.Option(
+        ..., "--to", help="target interval (must be coarser, e.g. 4h, 3d, 6mo)"
+    ),
 ) -> None:
     """Derive coarser-interval bars by time-bucketing stored source bars.
     Source bars must already be ingested (via ``ingest prices`` or
@@ -266,21 +260,21 @@ def ingest_aggregate(
         ticker_list = _parse_tickers(tickers)
         for ticker in ticker_list:
             delta = lake.aggregate_bars(ticker, src_iv, tgt_iv)
-            console.print(
-                f"[green]{ticker}[/green] {src_iv.code} → {tgt_iv.code}  "
-                f"+{delta} rows"
-            )
+            console.print(f"[green]{ticker}[/green] {src_iv.code} → {tgt_iv.code}  +{delta} rows")
 
 
 @ingest_app.command("all-intervals")
 def ingest_all_intervals(
     tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),
-    since: str | None = typer.Option(None, "--since", help="earliest date (YYYY-MM-DD); applies to daily + intraday fetches"),
+    since: str | None = typer.Option(
+        None, "--since", help="earliest date (YYYY-MM-DD); applies to daily + intraday fetches"
+    ),
     until: str | None = typer.Option(None, "--until", help="latest date (YYYY-MM-DD)"),
     intraday_since: str | None = typer.Option(
-        None, "--intraday-since",
+        None,
+        "--intraday-since",
         help="separate start date for intraday pulls (1m/5m/1h); defaults to --since if omitted, "
-             "but EODHD caps 1m history at ~120 days so setting this explicitly avoids long failing fetches",
+        "but EODHD caps 1m history at ~120 days so setting this explicitly avoids long failing fetches",
     ),
 ) -> None:
     """Populate every canonical interval for each ticker: native 1m / 5m /
@@ -293,9 +287,7 @@ def ingest_all_intervals(
 
     since_d = date.fromisoformat(since) if since else None
     until_d = date.fromisoformat(until) if until else None
-    intraday_since_d = (
-        date.fromisoformat(intraday_since) if intraday_since else since_d
-    )
+    intraday_since_d = date.fromisoformat(intraday_since) if intraday_since else since_d
 
     with _open_lake(settings.lake.path) as lake:
         lake.migrate()
@@ -310,9 +302,7 @@ def ingest_all_intervals(
         for iv in (Interval.HOUR_1, Interval.MIN_5, Interval.MIN_1):
             console.print(f"[bold]→ fetching {iv.code}[/bold]")
             _print_result(
-                pipeline.run_intraday_bars(
-                    ticker_list, iv, since=intraday_since_d, until=until_d
-                )
+                pipeline.run_intraday_bars(ticker_list, iv, since=intraday_since_d, until=until_d)
             )
 
         # 3. derived — aggregate from the finest source that's both stored
@@ -321,13 +311,13 @@ def ingest_all_intervals(
             (Interval.HOUR_1, Interval.HOUR_4),
             (Interval.HOUR_1, Interval.HOUR_6),
             (Interval.HOUR_1, Interval.HOUR_12),
-            (Interval.DAY_1,  Interval.DAY_3),
-            (Interval.DAY_1,  Interval.DAY_5),
-            (Interval.DAY_1,  Interval.WEEK_1),
-            (Interval.DAY_1,  Interval.MONTH_1),
-            (Interval.DAY_1,  Interval.MONTH_6),
-            (Interval.DAY_1,  Interval.YEAR_1),
-            (Interval.DAY_1,  Interval.YEAR_5),
+            (Interval.DAY_1, Interval.DAY_3),
+            (Interval.DAY_1, Interval.DAY_5),
+            (Interval.DAY_1, Interval.WEEK_1),
+            (Interval.DAY_1, Interval.MONTH_1),
+            (Interval.DAY_1, Interval.MONTH_6),
+            (Interval.DAY_1, Interval.YEAR_1),
+            (Interval.DAY_1, Interval.YEAR_5),
         ]
         for src_iv, tgt_iv in derivations:
             console.print(f"[dim]aggregating {src_iv.code} → {tgt_iv.code}[/dim]")
@@ -340,7 +330,7 @@ def ingest_all_intervals(
                     )
 
 
-def _print_result(result) -> None:
+def _print_result(result: IngestRunResult) -> None:
     color = {"ok": "green", "partial": "yellow", "error": "red"}.get(result.status, "white")
     console.print(
         f"[{color}]run #{result.run_id} — kind={result.kind} status={result.status} "

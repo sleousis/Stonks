@@ -94,7 +94,15 @@ from stonks.ingest.schemas import (
 from stonks.ingest.sources.base import DataSource
 from stonks.logging import get_logger
 
-_FREE_TIER_TEXT = "only eod data allowed"
+# Substrings (case-insensitive) that EODHD returns in plain-text bodies when
+# the caller's free tier blocks an endpoint. Add new markers here as we
+# encounter them — keeping a tuple lets ``_check_free_tier`` map any of them
+# to the same domain exception without reshaping callers.
+_FREE_TIER_MARKERS: tuple[str, ...] = (
+    "only eod data allowed",
+    "demo api",
+    "this api endpoint is paid only",
+)
 _FREE_TIER_WARNING_KEY = "warning"
 
 _STATEMENT_MAP = {
@@ -229,8 +237,10 @@ def _iter_fundamentals(ticker: str, payload: dict) -> Iterator[FundamentalRow]:
 
 
 def _check_free_tier(payload: Any) -> None:
-    if isinstance(payload, str) and _FREE_TIER_TEXT in payload.lower():
-        raise EodhdFreeTierError(payload.strip())
+    if isinstance(payload, str):
+        lowered = payload.lower()
+        if any(marker in lowered for marker in _FREE_TIER_MARKERS):
+            raise EodhdFreeTierError(payload.strip())
 
 
 def _parse_date(value: Any) -> date | None:
@@ -1139,7 +1149,8 @@ class EodhdDataSource(DataSource):
                 try:
                     return response.json()
                 except ValueError:
-                    if _FREE_TIER_TEXT in text.lower():
+                    lowered = text.lower()
+                    if any(marker in lowered for marker in _FREE_TIER_MARKERS):
                         raise EodhdFreeTierError(text.strip()) from None
                     raise
             except EodhdFreeTierError:
