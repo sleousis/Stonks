@@ -476,3 +476,80 @@ def test_run_metadata_persists_per_class_bundle_fields(lake):
         "esg_snapshots",
     ):
         assert lake.count_rows(equity_only) == 0
+
+
+def _multi_asset_bundles():
+    return {
+        "BTC-USD.CC": MetadataBundle(
+            profile=TickerProfile(id="BTC-USD.CC", asset_class="crypto"),
+            crypto_profile=CryptoProfileRow(
+                ticker="BTC-USD.CC",
+                base_symbol="BTC",
+                quote_symbol="USD",
+                circulating_supply=19_700_000.0,
+            ),
+        ),
+        "US10Y.GBOND": MetadataBundle(
+            profile=TickerProfile(id="US10Y.GBOND", asset_class="bond"),
+            bond_profile=BondProfileRow(
+                ticker="US10Y.GBOND",
+                issuer_kind="sovereign",
+                bond_kind="treasury",
+            ),
+            bond_yields=(
+                BondYieldRow(
+                    ticker="US10Y.GBOND",
+                    date=date(2026, 4, 1),
+                    yield_to_maturity=4.18,
+                ),
+            ),
+        ),
+        "GC.COMM": MetadataBundle(
+            profile=TickerProfile(id="GC.COMM", asset_class="commodity"),
+            commodity_contract=CommodityContractRow(
+                ticker="GC.COMM",
+                contract_kind="continuous",
+            ),
+        ),
+    }
+
+
+def test_run_metadata_multi_asset_is_idempotent(lake):
+    """Re-running the same multi-asset bundles must keep the new
+    per-class tables stable. The first three are PK-by-ticker and rely
+    on ``ON CONFLICT … DO UPDATE``; ``bond_yield_history`` is composite
+    PK and uses the same path. Without this, a regression in any of the
+    new ``upsert_*`` SQL would only show up here.
+    """
+    bundles = _multi_asset_bundles()
+    src = _FakeMetadataSource(bundles)
+    pipe = IngestPipeline(source=src, lake=lake)
+    pipe.run_metadata(list(bundles))
+    pipe.run_metadata(list(bundles))  # second run
+    assert lake.count_rows("crypto_profiles") == 1
+    assert lake.count_rows("bond_profiles") == 1
+    assert lake.count_rows("commodity_contracts") == 1
+    assert lake.count_rows("bond_yield_history") == 1
+    assert lake.count_rows("instruments") == 3
+
+
+def test_run_metadata_handles_partial_bundle_with_no_per_class_profile(lake):
+    """A free-tier-blocked non-equity ticker yields a profile-only
+    bundle (no crypto/bond/commodity row). The pipeline must handle
+    that without crashing — and the per-class tables must stay empty
+    rather than getting a NULL row from a misguided "always upsert"."""
+    src = _FakeMetadataSource(
+        {
+            "BTC-USD.CC": MetadataBundle(
+                profile=TickerProfile(id="BTC-USD.CC", asset_class="crypto"),
+            ),
+        }
+    )
+    pipe = IngestPipeline(source=src, lake=lake)
+    result = pipe.run_metadata(["BTC-USD.CC"])
+    assert result.status == "ok"
+    assert result.tickers_ok == 1
+    assert lake.count_rows("instruments") == 1
+    assert lake.count_rows("crypto_profiles") == 0  # no per-class row to upsert
+    assert lake.count_rows("bond_profiles") == 0
+    assert lake.count_rows("commodity_contracts") == 0

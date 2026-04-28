@@ -141,6 +141,43 @@ def test_ranker_skips_tickers_outside_strategy_applicable_classes(tmp_path, lake
         state.close()
 
 
+def test_ranker_skips_tickers_without_instrument_row(tmp_path, lake_trending, capsys):
+    """A ticker present in the universe but absent from ``instruments``
+    is skipped (not silently classified as equity). The skipped tickers
+    are logged once per tick — structlog writes to stdout — so the
+    operator has actionable signal.
+    """
+    state = SqliteState(tmp_path / "state.sqlite")
+    state.migrate()
+    try:
+        registry = StrategyRegistry(state=state, artifacts_dir=tmp_path / "artifacts")
+        bh_id = registry.register(
+            BuyAndHold({"ticker": "UP.US", "allocation": 1.0}),
+            reports=[SurvivalReport(test_id="oos", passed=True, metrics={"sharpe_oos": 1.0})],
+        )
+        registry.set_status(bh_id, "active")
+
+        ranker = Ranker(
+            registry=registry,
+            lake=lake_trending,
+            # MYSTERY.US has no instruments row in the lake_trending fixture.
+            universe=["UP.US", "MYSTERY.US"],
+            threshold=0.0,
+        )
+        picks = ranker.rank(as_of=date(2026, 3, 20))
+        captured = capsys.readouterr()
+
+        tickers = {ticker for _, _, ticker in picks}
+        # UP.US has a profile and is equity; MYSTERY.US is silently dropped.
+        assert "MYSTERY.US" not in tickers
+        # The operator gets a single warning naming the dropped ticker via
+        # the structlog ``ranker.unknown_asset_class.skipped`` event.
+        assert "MYSTERY.US" in captured.out
+        assert "ranker.unknown_asset_class.skipped" in captured.out
+    finally:
+        state.close()
+
+
 def test_ranker_includes_tickers_when_strategy_lists_their_class(tmp_path, lake_trending):
     """The complement: a strategy that explicitly opts into a non-equity
     class sees those tickers in its universe."""

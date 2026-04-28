@@ -95,3 +95,20 @@ def test_subclass_can_override_applicable_asset_classes():
             return []
 
     assert _Multi.applicable_asset_classes == ("equity", "crypto")
+
+
+def test_subclass_with_empty_applicable_asset_classes_raises_at_class_definition():
+    """Empty tuple silently means 'applies to nothing' — the Ranker filter
+    would drop every ticker for that strategy with no error signal. Catch
+    the footgun at class definition time."""
+    with pytest.raises(ValueError, match="must be non-empty"):
+
+        class _Broken(BaseStrategy):
+            id = "broken"
+            applicable_asset_classes = ()
+
+            def estimate_return(self, ticker, as_of, lake):
+                return 0.0
+
+            def decide(self, my_picks, portfolio, prices, as_of):
+                return []

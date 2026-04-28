@@ -20,19 +20,33 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from stonks.core.types import AssetClass
+
+# Closed Literal aliases for the per-asset-class profile fields.
+# Exposed at module scope so adapters import the canonical set instead
+# of redeclaring their own ``Literal[...]`` for normalizer return types.
+CryptoConsensusType = Literal[
+    "proof_of_work", "proof_of_stake", "delegated_proof_of_stake", "other"
+]
+BondIssuerKind = Literal["sovereign", "corporate", "municipal", "agency", "supranational", "other"]
+BondKind = Literal["treasury", "corporate", "municipal", "zero_coupon", "other"]
+CommodityContractKind = Literal["spot", "continuous", "futures", "index", "other"]
 
 # Re-export for DataSource implementations that need to import from the
 # schemas module in a single statement.
 __all__ = [
     "AnalystForecastRow",
     "AnalystRatingsRow",
+    "BondIssuerKind",
+    "BondKind",
     "BondProfileRow",
     "BondYieldRow",
+    "CommodityContractKind",
     "CommodityContractRow",
     "CrossListingRow",
+    "CryptoConsensusType",
     "CryptoProfileRow",
     "DividendRow",
     "EarningsAnnouncementRow",
@@ -481,6 +495,20 @@ class TickerProfile(FrozenRow):
     description: str | None = None
     updated_at: datetime | None = None
 
+    @model_validator(mode="after")
+    def _security_type_is_equity_only(self) -> TickerProfile:
+        # ``security_type`` is the equity sub-kind (common_stock / etf /
+        # …); non-equity rows must leave it ``None``. Catches the bug
+        # where an equity profile parser is reused for a non-equity
+        # ticker and the vendor's ``Type`` field leaks into the equity
+        # column (see review C2).
+        if self.asset_class != "equity" and self.security_type is not None:
+            raise ValueError(
+                f"security_type is equity-only; got "
+                f"asset_class={self.asset_class!r} security_type={self.security_type!r}"
+            )
+        return self
+
 
 # ---- per-asset-class profile rows ------------------------------------------
 
@@ -499,19 +527,45 @@ class CryptoProfileRow(FrozenRow):
     ``consensus_type`` is normalized at the adapter boundary; vendors emit
     strings like "Proof of Work" / "PoS" — adapters map them to the closed
     Literal below so SQL filters stay portable.
+
+    The ``max_supply >= total_supply >= circulating_supply`` invariant is
+    enforced when each pair is non-``None``: the row exists precisely to
+    surface the data-quality bug a vendor returning, e.g., total > max
+    after a chain fork would represent. ``None``-on-either-side is left
+    alone (legitimate partial fill — the vendor only reports circulating).
     """
 
     ticker: str
     base_symbol: str | None = None
     quote_symbol: str | None = None
     blockchain: str | None = None
-    consensus_type: (
-        Literal["proof_of_work", "proof_of_stake", "delegated_proof_of_stake", "other"] | None
-    ) = None
+    consensus_type: CryptoConsensusType | None = None
     circulating_supply: float | None = Field(default=None, ge=0.0)
     total_supply: float | None = Field(default=None, ge=0.0)
     max_supply: float | None = Field(default=None, ge=0.0)
     supply_snapshot_date: date | None = None
+
+    @model_validator(mode="after")
+    def _validate_supply_chain(self) -> CryptoProfileRow:
+        if (
+            self.total_supply is not None
+            and self.circulating_supply is not None
+            and self.total_supply < self.circulating_supply
+        ):
+            raise ValueError(
+                f"total_supply ({self.total_supply}) < circulating_supply "
+                f"({self.circulating_supply}) for {self.ticker}"
+            )
+        if (
+            self.max_supply is not None
+            and self.total_supply is not None
+            and self.max_supply < self.total_supply
+        ):
+            raise ValueError(
+                f"max_supply ({self.max_supply}) < total_supply "
+                f"({self.total_supply}) for {self.ticker}"
+            )
+        return self
 
 
 class BondProfileRow(FrozenRow):
@@ -529,12 +583,14 @@ class BondProfileRow(FrozenRow):
 
     ticker: str
     issuer_name: str | None = None
-    issuer_kind: (
-        Literal["sovereign", "corporate", "municipal", "agency", "supranational", "other"] | None
-    ) = None
-    bond_kind: Literal["treasury", "corporate", "municipal", "zero_coupon", "other"] | None = None
-    coupon_rate: float | None = None  # annual %
-    coupon_frequency: int | None = None  # payments per year
+    issuer_kind: BondIssuerKind | None = None
+    bond_kind: BondKind | None = None
+    # ``coupon_rate`` is annual % (zero-coupon bonds use 0.0). The
+    # ``le=100`` cap catches the canonical decimal-vs-percent confusion
+    # bug — a vendor returning 0.0425 instead of 4.25% would otherwise
+    # silently mis-classify the bond as low-coupon.
+    coupon_rate: float | None = Field(default=None, ge=0.0, le=100.0)
+    coupon_frequency: int | None = Field(default=None, ge=0, le=365)  # payments per year
     face_value: float | None = Field(default=None, ge=0.0)
     currency: str | None = None
     issue_date: date | None = None
@@ -571,8 +627,10 @@ class CommodityContractRow(FrozenRow):
 
     ticker: str
     underlying_symbol: str | None = None  # e.g. 'GC' for gold futures
-    contract_kind: Literal["spot", "continuous", "futures", "index", "other"] | None = None
-    contract_month: str | None = None  # 'YYYY-MM' for specific futures
+    contract_kind: CommodityContractKind | None = None
+    # 'YYYY-MM' for specific futures; pinned by regex so downstream
+    # parsers don't each have to re-validate the format.
+    contract_month: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}$")
     expiry_date: date | None = None
     contract_size: float | None = Field(default=None, ge=0.0)
     contract_unit: str | None = None  # 'troy_ounce', 'barrel', 'metric_ton', …

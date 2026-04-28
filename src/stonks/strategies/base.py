@@ -25,6 +25,18 @@ class BaseStrategy:
     # strategies override (e.g. ``("equity", "crypto")``).
     applicable_asset_classes: ClassVar[tuple[AssetClass, ...]] = ("equity",)
 
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        # Catch the ``applicable_asset_classes = ()`` footgun at class
+        # definition time. Empty tuple silently means "applies to
+        # nothing" — the Ranker filter would then drop every ticker
+        # for the strategy with no error signal.
+        super().__init_subclass__(**kwargs)
+        if not cls.applicable_asset_classes:
+            raise ValueError(
+                f"{cls.__name__}.applicable_asset_classes must be non-empty; "
+                f"declare at least one AssetClass the strategy is meant to handle"
+            )
+
     @classmethod
     def parameter_spec(cls) -> ParamSpace:
         return []

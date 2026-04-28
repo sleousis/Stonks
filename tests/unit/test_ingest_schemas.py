@@ -527,6 +527,23 @@ def test_ticker_profile_rejects_unknown_asset_class():
         TickerProfile(id="X.US", asset_class="forex")  # type: ignore[arg-type]
 
 
+def test_ticker_profile_rejects_security_type_on_non_equity():
+    """``security_type`` is the equity sub-kind; it must be ``None`` on
+    crypto / bond / commodity profiles. Catches the C2 leak — equity
+    parser gets reused, vendor's ``Type`` field maps to a non-None
+    security_type, the row lands in ``instruments`` with a contradictory
+    pair of fields. Validator fires before the row reaches the lake."""
+    with pytest.raises(ValidationError):
+        TickerProfile(id="BTC-USD.CC", asset_class="crypto", security_type="other")
+    # Equity rows still accept security_type — they're the only ones
+    # that should.
+    ok = TickerProfile(id="AAPL.US", asset_class="equity", security_type="common_stock")
+    assert ok.security_type == "common_stock"
+    # Non-equity rows with security_type=None remain valid.
+    ok2 = TickerProfile(id="BTC-USD.CC", asset_class="crypto", security_type=None)
+    assert ok2.security_type is None
+
+
 def test_crypto_profile_row_basic_shape():
     row = CryptoProfileRow(
         ticker="BTC-USD.CC",
@@ -554,6 +571,36 @@ def test_crypto_profile_row_allows_only_ticker():
 def test_crypto_profile_row_rejects_negative_supply():
     with pytest.raises(ValidationError):
         CryptoProfileRow(ticker="BTC-USD.CC", circulating_supply=-1.0)
+
+
+def test_crypto_profile_row_rejects_total_below_circulating():
+    """Domain invariant: total_supply >= circulating_supply when both
+    are present. Surfaces the kind of vendor data-quality bug the row
+    exists to catch (chain-fork inconsistencies, etc.)."""
+    with pytest.raises(ValidationError):
+        CryptoProfileRow(
+            ticker="BTC-USD.CC",
+            circulating_supply=21_000_000.0,
+            total_supply=19_000_000.0,
+        )
+
+
+def test_crypto_profile_row_rejects_max_below_total():
+    with pytest.raises(ValidationError):
+        CryptoProfileRow(
+            ticker="BTC-USD.CC",
+            total_supply=21_000_000.0,
+            max_supply=19_000_000.0,
+        )
+
+
+def test_crypto_profile_row_allows_partial_supply_chain():
+    """When only one supply field is set, the other two stay None and
+    the validator must not trip — the partial-fill case is legitimate
+    (vendor only reports circulating)."""
+    row = CryptoProfileRow(ticker="BTC-USD.CC", circulating_supply=19_700_000.0)
+    assert row.total_supply is None
+    assert row.max_supply is None
 
 
 def test_bond_profile_row_basic_shape():
@@ -592,6 +639,24 @@ def test_bond_profile_row_rejects_unnormalized_bond_kind():
         )
 
 
+def test_bond_profile_row_rejects_decimal_vs_percent_coupon_confusion():
+    """Coupon rate is annual %; a vendor returning 1500.0 (the canonical
+    decimal-vs-percent confusion bug) must be rejected."""
+    with pytest.raises(ValidationError):
+        BondProfileRow(ticker="US10Y.GBOND", coupon_rate=1500.0)
+
+
+def test_bond_profile_row_accepts_zero_coupon():
+    row = BondProfileRow(ticker="ZERO.GBOND", coupon_rate=0.0, coupon_frequency=0)
+    assert row.coupon_rate == 0.0
+    assert row.coupon_frequency == 0
+
+
+def test_bond_profile_row_rejects_implausible_coupon_frequency():
+    with pytest.raises(ValidationError):
+        BondProfileRow(ticker="US10Y.GBOND", coupon_frequency=10_000)
+
+
 def test_bond_yield_row_basic_shape():
     row = BondYieldRow(
         ticker="US10Y.GBOND",
@@ -625,16 +690,24 @@ def test_commodity_contract_row_rejects_unnormalized_contract_kind():
         )
 
 
+def test_commodity_contract_row_rejects_unparseable_contract_month():
+    """``contract_month`` must match the canonical YYYY-MM format so
+    downstream consumers can trust it."""
+    with pytest.raises(ValidationError):
+        CommodityContractRow(ticker="GC.COMM", contract_month="June 2026")
+
+
 def test_metadata_bundle_carries_per_class_profile_rows():
     """The ingest pipeline reaches into ``MetadataBundle`` for each non-equity
     profile field; if the field isn't on the dataclass the upsert call site
-    AttributeError's silently. Lock the field set in here."""
+    AttributeError's silently. Lock the field set in here. (Per-class
+    profiles are mutually exclusive — ``MetadataBundle`` enforces at most
+    one of {crypto_profile, bond_profile, commodity_contract} per
+    bundle, so each class is checked separately.)"""
     from stonks.ingest.metadata_bundle import MetadataBundle
 
-    bundle = MetadataBundle(
-        crypto_profile=CryptoProfileRow(ticker="BTC-USD.CC"),
+    bond_bundle = MetadataBundle(
         bond_profile=BondProfileRow(ticker="US10Y.GBOND"),
-        commodity_contract=CommodityContractRow(ticker="GC.COMM"),
         bond_yields=(
             BondYieldRow(
                 ticker="US10Y.GBOND",
@@ -643,10 +716,14 @@ def test_metadata_bundle_carries_per_class_profile_rows():
             ),
         ),
     )
-    assert bundle.crypto_profile is not None
-    assert bundle.bond_profile is not None
-    assert bundle.commodity_contract is not None
-    assert len(bundle.bond_yields) == 1
+    assert bond_bundle.bond_profile is not None
+    assert len(bond_bundle.bond_yields) == 1
+
+    crypto_bundle = MetadataBundle(crypto_profile=CryptoProfileRow(ticker="BTC-USD.CC"))
+    assert crypto_bundle.crypto_profile is not None
+
+    commodity_bundle = MetadataBundle(commodity_contract=CommodityContractRow(ticker="GC.COMM"))
+    assert commodity_bundle.commodity_contract is not None
 
 
 def test_metadata_bundle_defaults_all_per_class_fields_empty():
@@ -657,3 +734,16 @@ def test_metadata_bundle_defaults_all_per_class_fields_empty():
     assert bundle.bond_profile is None
     assert bundle.commodity_contract is None
     assert bundle.bond_yields == ()
+
+
+def test_metadata_bundle_rejects_two_per_class_profiles():
+    """A single ticker can only belong to one asset class. Two non-None
+    per-class profiles is illegal — catches the "adapter copy-pasted
+    between branches" bug at construction time."""
+    from stonks.ingest.metadata_bundle import MetadataBundle
+
+    with pytest.raises(ValueError, match="at most one"):
+        MetadataBundle(
+            crypto_profile=CryptoProfileRow(ticker="X.CC"),
+            bond_profile=BondProfileRow(ticker="X.GBOND"),
+        )

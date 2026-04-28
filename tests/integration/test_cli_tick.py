@@ -12,6 +12,8 @@ from typer.testing import CliRunner
 
 from stonks.cli import app
 from stonks.core.protocols import SurvivalReport
+from stonks.ingest.pipeline import _rows_to_df
+from stonks.ingest.schemas import TickerProfile
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
@@ -72,6 +74,9 @@ base_url = "https://example.test/api"
             ]
         )
     )
+    # Ranker filters by ``instruments.asset_class``; without a row here
+    # UP.US would be skipped as "unknown class" and the tick would no-op.
+    lake.upsert_instrument_profile(_rows_to_df([TickerProfile(id="UP.US", asset_class="equity")]))
     lake.close()
 
     state = SqliteState(tmp_path / "data" / "state.sqlite")
@@ -115,3 +120,33 @@ def test_tick_with_tickers_override(runner, seeded):
         app, ["tick", "--dry-run", "--as-of", "2026-03-20", "--tickers", "UP.US"]
     )
     assert result.exit_code == 0, result.output
+
+
+def test_tick_asset_class_filter_keeps_matching(runner, seeded):
+    """``--asset-class equity`` keeps the equity-only seeded universe."""
+    result = runner.invoke(
+        app, ["tick", "--dry-run", "--as-of", "2026-03-20", "--asset-class", "equity"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "dry-run" in result.output
+
+
+def test_tick_asset_class_filter_empty_universe_raises(runner, seeded):
+    """``--asset-class crypto`` against an equity-only universe — the
+    filter empties the universe and the CLI raises rather than silently
+    no-op'ing the tick (see review I2)."""
+    result = runner.invoke(
+        app, ["tick", "--dry-run", "--as-of", "2026-03-20", "--asset-class", "crypto"]
+    )
+    assert result.exit_code != 0, result.output
+    assert "no instruments in the universe match" in result.output
+
+
+def test_tick_asset_class_filter_rejects_invalid_class(runner, seeded):
+    """Typos like ``--asset-class crpyto`` fail-fast at the validation
+    callback rather than silently filtering to an empty universe."""
+    result = runner.invoke(
+        app, ["tick", "--dry-run", "--as-of", "2026-03-20", "--asset-class", "crpyto"]
+    )
+    assert result.exit_code != 0, result.output
+    assert "must be one of" in result.output

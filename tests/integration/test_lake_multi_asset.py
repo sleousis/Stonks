@@ -52,6 +52,63 @@ def test_migration_007_adds_asset_class_column_with_equity_default(lake):
     assert got.iloc[0]["asset_class"] == "equity"
 
 
+def test_migration_007_backfills_existing_rows_to_equity(tmp_path):
+    """The most production-relevant scenario: a lake created on an older
+    version (migrations 001-006) that already has rows in ``tickers``,
+    then 007 lands. The ``UPDATE … WHERE asset_class IS NULL`` is the
+    only thing protecting existing data from landing as NULL — pin it.
+    """
+    import duckdb
+
+    from stonks.store.lake import MIGRATIONS_DIR
+
+    db_path = tmp_path / "lake.duckdb"
+    # Apply migrations 001-006 directly, bypassing the migrate() helper —
+    # that's what mirrors the upgrade-an-existing-lake scenario.
+    pre_007 = sorted(MIGRATIONS_DIR.glob("00[1-6]_*.sql"))
+    assert len(pre_007) == 6
+    con = duckdb.connect(str(db_path))
+    try:
+        con.execute("SET TimeZone = 'UTC'")
+        con.execute(
+            "CREATE TABLE schema_migrations ("
+            " version INTEGER PRIMARY KEY, applied_at TIMESTAMP NOT NULL)"
+        )
+        for sql_path in pre_007:
+            con.execute(sql_path.read_text())
+            con.execute(
+                "INSERT INTO schema_migrations VALUES (?, current_timestamp)",
+                [int(sql_path.stem.split("_", 1)[0])],
+            )
+        # Insert a pre-007 row into ``tickers``.
+        con.execute(
+            "INSERT INTO tickers (id, exchange, currency, name) "
+            "VALUES ('AAPL.US', 'US', 'USD', 'Apple Inc')"
+        )
+    finally:
+        con.close()
+
+    # Now run the full migrate() — it should apply 007, do the rename
+    # plus backfill, and leave the existing row classified as equity.
+    lake = DuckDBLake(db_path)
+    try:
+        lake.migrate()
+
+        tables = set(lake.tables())
+        assert "instruments" in tables
+        assert "tickers" not in tables
+
+        row = lake.sql("SELECT id, asset_class, name FROM instruments").iloc[0]
+        assert row["id"] == "AAPL.US"
+        assert row["asset_class"] == "equity"
+        assert row["name"] == "Apple Inc"
+
+        # Round-trip through the same helper the Ranker uses.
+        assert lake.get_asset_classes(["AAPL.US"]) == {"AAPL.US": "equity"}
+    finally:
+        lake.close()
+
+
 def test_instrument_profile_round_trip_preserves_asset_class(lake):
     crypto = TickerProfile(id="BTC-USD.CC", asset_class="crypto", name="Bitcoin")
     bond = TickerProfile(id="US10Y.GBOND", asset_class="bond")

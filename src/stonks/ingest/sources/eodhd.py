@@ -64,6 +64,7 @@ from datetime import UTC, date, datetime
 from typing import Any, Literal
 
 import requests
+from pydantic import ValidationError
 
 from stonks.core.interval import Interval
 from stonks.core.types import AssetClass
@@ -71,9 +72,13 @@ from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.schemas import (
     AnalystForecastRow,
     AnalystRatingsRow,
+    BondIssuerKind,
+    BondKind,
     BondProfileRow,
+    CommodityContractKind,
     CommodityContractRow,
     CrossListingRow,
+    CryptoConsensusType,
     CryptoProfileRow,
     DividendRow,
     EarningsAnnouncementRow,
@@ -201,6 +206,14 @@ class EodhdAllEndpointsFailedError(DataSourceError):
     failed ticker recorded in ``tickers_failed``."""
 
 
+class EodhdFieldParseError(DataSourceError):
+    """Raised when a vendor field fails Pydantic validation on the way
+    into one of our row schemas (e.g. ``CouponRate=\"approx 4%\"``,
+    ``CirculatingSupply=-1``). Wraps the ``ValidationError`` with vendor
+    + ticker context so the operator-facing log line names the data
+    quality issue, not the schema constraint."""
+
+
 # ---- pure parsers (unit-tested) --------------------------------------------
 
 
@@ -316,6 +329,17 @@ def _check_free_tier(payload: Any) -> None:
 # module-level structlog logger for emitting drop-rate observability when
 # they have to skip malformed vendor rows.
 _PARSER_LOG = get_logger("stonks.ingest.sources.eodhd.parsers")
+
+
+def _log_unknown_vendor_value(event: str, raw: Any) -> None:
+    """Emit a single info-level event when a normalizer encounters a
+    vendor string outside its known keyword set. Distinct from "vendor
+    said nothing" (the field is empty / non-string) — this is "vendor
+    said *something* and we couldn't classify it", which is the signal
+    we extend the keyword table from.
+    """
+    _PARSER_LOG.info(event, raw=raw)
+
 
 # Threshold above which a "we dropped some rows" event is loud (WARN
 # = canary for vendor schema break) rather than quiet (DEBUG).
@@ -1064,22 +1088,30 @@ def classify_asset_class(ticker: str) -> AssetClass:
     return _ASSET_CLASS_SUFFIX_MAP.get(suffix, "equity")
 
 
-_CRYPTO_CONSENSUS_KEYWORDS: tuple[
-    tuple[str, Literal["proof_of_work", "proof_of_stake", "delegated_proof_of_stake"]], ...
-] = (
+_CRYPTO_CONSENSUS_KEYWORDS: tuple[tuple[str, CryptoConsensusType], ...] = (
+    # Order matters — broader / abbreviated terms after the more specific
+    # ones so e.g. "delegated" beats "stake" and "dpos" beats "pos".
     ("delegated", "delegated_proof_of_stake"),
+    ("dpos", "delegated_proof_of_stake"),
     ("stake", "proof_of_stake"),
+    ("pos", "proof_of_stake"),
     ("work", "proof_of_work"),
+    ("pow", "proof_of_work"),
+    # Vendors do explicitly say "Other" — pass it through rather than
+    # collapsing into the "unknown vocabulary" bucket below.
+    ("other", "other"),
 )
 
 
-def _normalize_consensus_type(
-    raw: Any,
-) -> Literal["proof_of_work", "proof_of_stake", "delegated_proof_of_stake", "other"] | None:
+def _normalize_consensus_type(raw: Any) -> CryptoConsensusType | None:
     """Map EODHD's free-form ``ConsensusType`` strings ('Proof-of-Work',
-    'Proof of Stake', 'Delegated PoS', …) into the schema's closed
-    Literal. Anything non-empty that we don't recognise becomes
-    ``"other"`` so the column stays typed."""
+    'Proof of Stake', 'PoS', 'DPoS', …) into the schema's closed Literal.
+
+    Returns ``None`` for unknown vendor strings (and logs them, so the
+    keyword table can be extended when EODHD coins something new) —
+    that's distinct from the explicit ``"other"`` literal, which we
+    emit when the vendor *said* "Other".
+    """
     if not isinstance(raw, str):
         return None
     text = raw.strip().lower()
@@ -1088,7 +1120,8 @@ def _normalize_consensus_type(
     for needle, value in _CRYPTO_CONSENSUS_KEYWORDS:
         if needle in text:
             return value
-    return "other"
+    _log_unknown_vendor_value("eodhd.normalize.unknown_consensus_type", raw)
+    return None
 
 
 def _split_crypto_pair(general: dict, ticker: str) -> tuple[str | None, str | None]:
@@ -1111,6 +1144,22 @@ def _split_crypto_pair(general: dict, ticker: str) -> tuple[str | None, str | No
     return base, quote
 
 
+def _build_row_or_field_error(row_cls, ticker: str, /, **kwargs: Any) -> Any:
+    """Construct a Pydantic row, translating any ``ValidationError`` into
+    an :class:`EodhdFieldParseError` that names the vendor + ticker
+    first. The pipeline's per-ticker soft-fail catches ``DataSourceError``,
+    so the run continues with this ticker recorded as failed — but the
+    error message reads like a vendor data-quality issue, not a schema
+    bug.
+    """
+    try:
+        return row_cls(**kwargs)
+    except ValidationError as exc:
+        raise EodhdFieldParseError(
+            f"eodhd {row_cls.__name__} validation failed for {ticker}: {exc}"
+        ) from exc
+
+
 def parse_crypto_profile_response(ticker: str, payload: Any) -> CryptoProfileRow | None:
     """Build a :class:`CryptoProfileRow` from EODHD's crypto fundamentals
     payload.
@@ -1120,32 +1169,33 @@ def parse_crypto_profile_response(ticker: str, payload: Any) -> CryptoProfileRow
     returns the dict but lacks the supply / blockchain block, the row
     still carries the ticker (and base/quote derived from the symbol)
     so identity is captured.
+
+    Vendor data-quality failures (negative supply, supply chain
+    inversion, …) raise :class:`EodhdFieldParseError` with the ticker
+    named up front so the pipeline's failure log is actionable.
     """
     if not isinstance(payload, dict):
         return None
     general = payload.get("General") or {}
     components = payload.get("Components") or {}
     base, quote = _split_crypto_pair(general if isinstance(general, dict) else {}, ticker)
-    return CryptoProfileRow(
+    components_dict = components if isinstance(components, dict) else {}
+    return _build_row_or_field_error(
+        CryptoProfileRow,
+        ticker,
         ticker=ticker,
         base_symbol=base,
         quote_symbol=quote,
-        blockchain=components.get("Blockchain") if isinstance(components, dict) else None,
-        consensus_type=_normalize_consensus_type(
-            components.get("ConsensusType") if isinstance(components, dict) else None
-        ),
-        circulating_supply=components.get("CirculatingSupply")
-        if isinstance(components, dict)
-        else None,
-        total_supply=components.get("TotalSupply") if isinstance(components, dict) else None,
-        max_supply=components.get("MaxSupply") if isinstance(components, dict) else None,
+        blockchain=components_dict.get("Blockchain"),
+        consensus_type=_normalize_consensus_type(components_dict.get("ConsensusType")),
+        circulating_supply=components_dict.get("CirculatingSupply"),
+        total_supply=components_dict.get("TotalSupply"),
+        max_supply=components_dict.get("MaxSupply"),
         supply_snapshot_date=None,
     )
 
 
-_BOND_ISSUER_KEYWORDS: tuple[
-    tuple[str, Literal["sovereign", "corporate", "municipal", "agency", "supranational"]], ...
-] = (
+_BOND_ISSUER_KEYWORDS: tuple[tuple[str, BondIssuerKind], ...] = (
     ("sovereign", "sovereign"),
     ("government", "sovereign"),
     ("treasury", "sovereign"),
@@ -1155,22 +1205,22 @@ _BOND_ISSUER_KEYWORDS: tuple[
     ("muni", "municipal"),
     ("corporate", "corporate"),
     ("corp", "corporate"),
+    # Pass through an explicit "Other" from the vendor; unknown strings
+    # below fall through to ``None`` + a log line.
+    ("other", "other"),
 )
-_BOND_KIND_KEYWORDS: tuple[
-    tuple[str, Literal["treasury", "corporate", "municipal", "zero_coupon"]], ...
-] = (
+_BOND_KIND_KEYWORDS: tuple[tuple[str, BondKind], ...] = (
     ("treasury", "treasury"),
     ("zero", "zero_coupon"),
     ("municipal", "municipal"),
     ("muni", "municipal"),
     ("corporate", "corporate"),
     ("corp", "corporate"),
+    ("other", "other"),
 )
 
 
-def _normalize_issuer_kind(
-    raw: Any,
-) -> Literal["sovereign", "corporate", "municipal", "agency", "supranational", "other"] | None:
+def _normalize_issuer_kind(raw: Any) -> BondIssuerKind | None:
     if not isinstance(raw, str):
         return None
     text = raw.strip().lower()
@@ -1179,12 +1229,11 @@ def _normalize_issuer_kind(
     for needle, value in _BOND_ISSUER_KEYWORDS:
         if needle in text:
             return value
-    return "other"
+    _log_unknown_vendor_value("eodhd.normalize.unknown_issuer_kind", raw)
+    return None
 
 
-def _normalize_bond_kind(
-    raw: Any,
-) -> Literal["treasury", "corporate", "municipal", "zero_coupon", "other"] | None:
+def _normalize_bond_kind(raw: Any) -> BondKind | None:
     if not isinstance(raw, str):
         return None
     text = raw.strip().lower()
@@ -1193,7 +1242,8 @@ def _normalize_bond_kind(
     for needle, value in _BOND_KIND_KEYWORDS:
         if needle in text:
             return value
-    return "other"
+    _log_unknown_vendor_value("eodhd.normalize.unknown_bond_kind", raw)
+    return None
 
 
 def _parse_iso_date(raw: Any) -> date | None:
@@ -1221,7 +1271,9 @@ def parse_bond_profile_response(ticker: str, payload: Any) -> BondProfileRow | N
         bond_data = {}
     if not isinstance(general, dict):
         general = {}
-    return BondProfileRow(
+    return _build_row_or_field_error(
+        BondProfileRow,
+        ticker,
         ticker=ticker,
         issuer_name=bond_data.get("Issuer"),
         issuer_kind=_normalize_issuer_kind(bond_data.get("IssuerType")),
@@ -1236,20 +1288,17 @@ def parse_bond_profile_response(ticker: str, payload: Any) -> BondProfileRow | N
     )
 
 
-_COMMODITY_KIND_KEYWORDS: tuple[
-    tuple[str, Literal["spot", "continuous", "futures", "index"]], ...
-] = (
+_COMMODITY_KIND_KEYWORDS: tuple[tuple[str, CommodityContractKind], ...] = (
     ("continuous", "continuous"),
     ("futures", "futures"),
     ("future", "futures"),
     ("spot", "spot"),
     ("index", "index"),
+    ("other", "other"),
 )
 
 
-def _normalize_contract_kind(
-    raw: Any,
-) -> Literal["spot", "continuous", "futures", "index", "other"] | None:
+def _normalize_contract_kind(raw: Any) -> CommodityContractKind | None:
     if not isinstance(raw, str):
         return None
     text = raw.strip().lower()
@@ -1258,7 +1307,8 @@ def _normalize_contract_kind(
     for needle, value in _COMMODITY_KIND_KEYWORDS:
         if needle in text:
             return value
-    return "other"
+    _log_unknown_vendor_value("eodhd.normalize.unknown_contract_kind", raw)
+    return None
 
 
 def parse_commodity_contract_response(ticker: str, payload: Any) -> CommodityContractRow | None:
@@ -1273,7 +1323,9 @@ def parse_commodity_contract_response(ticker: str, payload: Any) -> CommodityCon
     contract_data = payload.get("ContractData") or {}
     if not isinstance(contract_data, dict):
         contract_data = {}
-    return CommodityContractRow(
+    return _build_row_or_field_error(
+        CommodityContractRow,
+        ticker,
         ticker=ticker,
         underlying_symbol=contract_data.get("UnderlyingSymbol"),
         contract_kind=_normalize_contract_kind(contract_data.get("ContractType")),
@@ -1375,7 +1427,13 @@ class EodhdDataSource(DataSource):
         # commodity tickers don't have an issuer with financial statements,
         # so we short-circuit instead of issuing an HTTP call that would
         # come back empty (or, on EODHD, with a free-tier text error).
-        if classify_asset_class(ticker) != "equity":
+        asset_class = classify_asset_class(ticker)
+        if asset_class != "equity":
+            self._log.info(
+                "eodhd.fundamentals.skipped_non_equity",
+                ticker=ticker,
+                asset_class=asset_class,
+            )
             return ()
         url = f"{self._base_url}/fundamentals/{ticker}"
         data = self._get(url, params={"fmt": "json"})
@@ -1547,16 +1605,33 @@ class EodhdDataSource(DataSource):
         the bundle field for an inapplicable surface stays at its
         default (``None`` / ``()``).
 
-        Free-tier blocks and transport errors here behave the same as
-        in the equity path: an empty payload yields an instrument-only
-        profile row keyed on the ticker, so the row exists in
-        ``instruments`` even if the per-class profile metadata is sparse.
+        Error semantics mirror the equity path's ``_try`` accounting:
+        an ``EodhdFreeTierError`` on the sole endpoint is the steady
+        state for free-tier users and produces an instrument-only
+        profile row. Transport / JSON failures, however, are an outage
+        — there's only one endpoint, so a transport failure here is
+        the equivalent of "all endpoints failed" in the equity path.
+        We surface those as ``EodhdAllEndpointsFailedError`` so the
+        pipeline records the ticker in ``tickers_failed`` instead of
+        silently incrementing ``tickers_ok`` with an empty profile.
         """
         asset_class = classify_asset_class(ticker)
-        try:
-            payload = self._get_json(f"/fundamentals/{ticker}")
-        except (EodhdFreeTierError, requests.RequestException, json.JSONDecodeError):
-            payload = None
+        errors: dict[str, str] = {}
+        payload = self._try(
+            lambda: self._get_json(f"/fundamentals/{ticker}"),
+            endpoint="fundamentals",
+            ticker=ticker,
+            errors=errors,
+        )
+        if errors.get("fundamentals") == "transport":
+            # Sole endpoint failed with a transport-class error — that's
+            # an outage, not a steady-state empty bundle. Equity path
+            # raises this when *all* endpoints fail; with a single
+            # endpoint here, "all" and "the one" coincide.
+            raise EodhdAllEndpointsFailedError(
+                f"sole metadata endpoint /fundamentals failed for {ticker} "
+                f"(non-equity, asset_class={asset_class})"
+            )
 
         bundle_parts: dict[str, Any] = {
             "profile": TickerProfile(id=ticker, asset_class=asset_class),
@@ -1579,11 +1654,16 @@ class EodhdDataSource(DataSource):
 
         # Re-use the equity profile parser to enrich the instrument row
         # with whatever shared static fields EODHD happens to expose
-        # (Name, CurrencyCode). It returns None when the General block
-        # is missing, which is fine — we keep the minimal default profile.
+        # (Name, CurrencyCode, Description). ``security_type`` is force-
+        # cleared to None: the spec keeps it equity-only, and EODHD's
+        # ``Type`` field is not orthogonal to ``asset_class`` — it
+        # returns "Currency" / "FUND" / etc. for non-equity rows that
+        # would otherwise leak into the equity sub-kind column.
         equity_profile = parse_profile_from_fundamentals(ticker, payload)
         if equity_profile is not None:
-            bundle_parts["profile"] = equity_profile.model_copy(update={"asset_class": asset_class})
+            bundle_parts["profile"] = equity_profile.model_copy(
+                update={"asset_class": asset_class, "security_type": None}
+            )
 
         return MetadataBundle(**bundle_parts)
 

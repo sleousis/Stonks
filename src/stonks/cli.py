@@ -6,14 +6,17 @@ To browse the lake interactively, run ``uv run duckdb -ui data/lake.duckdb``
 
 from __future__ import annotations
 
+import importlib
 from datetime import date
 from pathlib import Path
+from typing import get_args
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
 from stonks.config import Settings, load_settings
+from stonks.core.types import AssetClass
 from stonks.ingest.pipeline import IngestPipeline, IngestRunResult
 from stonks.ingest.sources.base import DataSource
 from stonks.ingest.sources.eodhd import EodhdDataSource, EodhdFreeTierError
@@ -22,6 +25,31 @@ from stonks.production.tick import TickSettings, run_tick
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
+
+_ASSET_CLASS_CHOICES: tuple[str, ...] = get_args(AssetClass)
+
+
+def _validate_asset_class(value: str | None) -> str | None:
+    if value is None or value in _ASSET_CLASS_CHOICES:
+        return value
+    raise typer.BadParameter(
+        f"--asset-class must be one of {list(_ASSET_CLASS_CHOICES)}, got {value!r}"
+    )
+
+
+def _strategy_applicable_classes(class_path: str) -> tuple[AssetClass, ...]:
+    """Read ``applicable_asset_classes`` off a registered strategy's class
+    object without instantiating it. Falls back to ``("equity",)`` when
+    the import fails (registry has many entries; one broken module
+    shouldn't fail the whole flow)."""
+    try:
+        module_name, cls_name = class_path.split(":", 1)
+        module = importlib.import_module(module_name)
+        cls = getattr(module, cls_name)
+        return tuple(getattr(cls, "applicable_asset_classes", ("equity",)))
+    except Exception:
+        return ("equity",)
+
 
 app = typer.Typer(add_completion=False, help="Stonks CLI")
 db_app = typer.Typer(help="Database / lake operations")
@@ -361,7 +389,8 @@ def registry_list(
         None,
         "--asset-class",
         help="filter to strategies whose applicable_asset_classes include this class "
-        "(equity|crypto|commodity|bond)",
+        f"({'|'.join(_ASSET_CLASS_CHOICES)})",
+        callback=_validate_asset_class,
     ),
 ) -> None:
     settings = _settings()
@@ -369,13 +398,11 @@ def registry_list(
     try:
         handles = registry.list_all(status=status)
         if asset_class is not None:
-            kept = []
-            for h in handles:
-                strategy = registry.load(h.id)
-                applicable = getattr(strategy, "applicable_asset_classes", ("equity",))
-                if asset_class in applicable:
-                    kept.append(h)
-            handles = kept
+            # Read the class attribute via importlib so we don't run any
+            # strategy constructor just to introspect a ClassVar.
+            handles = [
+                h for h in handles if asset_class in _strategy_applicable_classes(h.class_path)
+            ]
         title = f"strategies ({status or 'all'}"
         if asset_class is not None:
             title += f", asset_class={asset_class}"
@@ -462,8 +489,9 @@ def tick(
         None,
         "--asset-class",
         help="restrict universe to instruments of this class "
-        "(equity|crypto|commodity|bond); requires the instruments table to "
-        "have asset_class populated for the relevant tickers",
+        f"({'|'.join(_ASSET_CLASS_CHOICES)}); requires the instruments table "
+        "to have asset_class populated for the relevant tickers",
+        callback=_validate_asset_class,
     ),
 ) -> None:
     """One-shot production tick. Rank active strategies × universe, pick a
@@ -478,29 +506,29 @@ def tick(
             "[production].universe in config/default.toml"
         )
 
-    if asset_class is not None:
-        with _open_lake(settings.lake.path) as lake:
-            classes = lake.get_asset_classes(universe)
-        universe = [t for t in universe if classes.get(t) == asset_class]
-        if not universe:
-            raise typer.BadParameter(
-                f"no instruments in the universe match --asset-class={asset_class!r}; "
-                "ingest profiles first or relax the filter"
-            )
-
     as_of_date = date.fromisoformat(as_of) if as_of else date.today()
-
-    tick_settings = TickSettings(
-        universe=universe,
-        threshold=settings.production.threshold,
-        initial_cash=settings.production.initial_cash,
-        slippage_bps=settings.production.slippage_bps,
-        fee_per_trade=settings.production.fee_per_trade,
-    )
-
     state, registry = _open_registry(settings)
     try:
         with _open_lake(settings.lake.path) as lake:
+            # Apply --asset-class inside the same lake connection that
+            # ``run_tick`` will use, so we don't open the lake twice.
+            if asset_class is not None:
+                classes = lake.get_asset_classes(universe)
+                universe = [t for t in universe if classes.get(t) == asset_class]
+                if not universe:
+                    raise typer.BadParameter(
+                        f"no instruments in the universe match --asset-class={asset_class!r}; "
+                        "ingest profiles first or relax the filter"
+                    )
+
+            tick_settings = TickSettings(
+                universe=universe,
+                threshold=settings.production.threshold,
+                initial_cash=settings.production.initial_cash,
+                slippage_bps=settings.production.slippage_bps,
+                fee_per_trade=settings.production.fee_per_trade,
+            )
+
             result = run_tick(
                 state=state,
                 lake=lake,
