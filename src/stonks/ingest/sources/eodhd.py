@@ -1,7 +1,7 @@
 """EODHD data source.
 
 Two parts, cleanly separable:
-  - pure response parsers (``parse_prices_response`` / ``parse_fundamentals_response``)
+  - pure response parsers (``parse_*_response`` / ``parse_*_from_fundamentals``)
     — unit-testable with captured fixtures, no HTTP.
   - :class:`EodhdDataSource` — the HTTP client that calls the API and hands the
     JSON to those parsers.
@@ -18,6 +18,40 @@ and no concurrency — our ``fetch_metadata`` runs five endpoints in parallel,
 roughly 5× faster; (c) pulls in ~100 MB of transitive deps (matplotlib,
 pillow, websockets) that we don't need. This custom client is ~270 LOC,
 injectable-session-friendly for tests, and has full coverage.
+
+Vendor-specific vocabulary is normalized at parse time — see the
+``_BEFORE_AFTER_MARKET_MAP``, ``_PERIOD_RELATIVE_MAP``, and
+``_SECURITY_TYPE_MAP`` translations.
+
+Things to keep in mind
+----------------------
+- **Full API catalog**: ``https://eodhd.com/financial-apis/`` is the vendor's
+  top-level index of every endpoint they expose (prices, fundamentals, news,
+  options, macro, crypto, screener, websockets, …). Each tile links to the
+  per-endpoint docs page with the URL shape, query params, response example,
+  and credit cost. When extending this adapter — or evaluating whether
+  EODHD covers a new domain we want to ingest — start here rather than
+  guessing endpoint paths or scraping individual articles in isolation.
+- **Bulk EOD / splits / dividends endpoint** (not yet wired up):
+  ``https://eodhd.com/api/eod-bulk-last-day/{EXCHANGE}`` returns one
+  full-exchange snapshot per request (optionally ``?type=splits`` or
+  ``?type=dividends``). Cost is a flat 100 API calls for the whole
+  exchange vs. 1 per ticker on the per-symbol endpoints, so for daily
+  market-wide refreshes it is dramatically cheaper than looping over
+  ``fetch_prices`` / ``fetch_dividends`` / ``fetch_splits`` per ticker.
+  Caveats: the ``symbols=`` filter only applies to EOD (splits/dividends
+  ignore it), ``filter=extended`` data only covers the last 30 days, and
+  it is a single-day snapshot — backfilling history still needs the
+  per-ticker endpoints. Skipped for now to avoid adding a parallel
+  ingestion path; revisit when daily full-universe refreshes become a
+  bottleneck.
+- **Bulk fundamentals endpoints** (not yet wired up): EODHD also exposes
+  exchange-wide bulk variants for fundamentals (and related metadata) that
+  return one snapshot covering the whole exchange per call rather than one
+  call per ticker. Same trade-off as the bulk EOD endpoint above — much
+  cheaper for full-universe refreshes, but adds a parallel ingestion path.
+  Worth revisiting if per-ticker ``fetch_fundamentals`` / ``fetch_metadata``
+  fan-out becomes the dominant cost as the universe grows.
 """
 
 from __future__ import annotations
@@ -27,32 +61,48 @@ import time
 from collections.abc import Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Any, Literal
 
 import requests
 
 from stonks.core.interval import Interval
 from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.schemas import (
-    AnalystEstimateRow,
+    AnalystForecastRow,
     AnalystRatingsRow,
+    CrossListingRow,
     DividendRow,
+    EarningsAnnouncementRow,
     EmployeeCountRow,
+    EsgActivityRow,
+    EsgSnapshotRow,
+    ExchangeInfo,
     FundamentalRow,
     InsiderTransactionRow,
+    InstitutionalHolderRow,
     IntradayBar,
     MarketCapRow,
     NewsArticleRow,
     NewsSentimentRow,
+    OfficerRow,
     RawPriceBar,
     SharesOutstandingRow,
     StockSplitRow,
     TickerProfile,
+    TickerSnapshotRow,
 )
-from stonks.ingest.sources.base import DataSource
+from stonks.ingest.sources.base import DataSource, DataSourceError
 from stonks.logging import get_logger
 
-_FREE_TIER_TEXT = "only eod data allowed"
+# Substrings (case-insensitive) that EODHD returns in plain-text bodies when
+# the caller's free tier blocks an endpoint. Add new markers here as we
+# encounter them — keeping a tuple lets ``_check_free_tier`` map any of them
+# to the same domain exception without reshaping callers.
+_FREE_TIER_MARKERS: tuple[str, ...] = (
+    "only eod data allowed",
+    "demo api",
+    "this api endpoint is paid only",
+)
 _FREE_TIER_WARNING_KEY = "warning"
 
 _STATEMENT_MAP = {
@@ -62,9 +112,89 @@ _STATEMENT_MAP = {
 }
 _FREQUENCY_MAP = {"quarterly": "Q", "yearly": "A"}
 
+# Vendor-string → canonical literal maps (vendor-agnostic principle: the
+# lake never sees vendor vocabulary).
 
-class EodhdFreeTierError(RuntimeError):
+# EODHD ESG ``Involvement`` is a closed Yes/No set — lower-case it to match
+# the schema's ``Literal["yes", "no"]``. Anything else gets dropped at the
+# parse boundary (logged once per ticker).
+_INVOLVEMENT_MAP: dict[str, Literal["yes", "no"]] = {
+    "yes": "yes",
+    "y": "yes",
+    "true": "yes",
+    "no": "no",
+    "n": "no",
+    "false": "no",
+}
+
+# Owner-relation keyword priority. EODHD's ``ownerRelationship`` is
+# free-form text mixing role and rank ("Chief Executive Officer", "Director",
+# "Officer, Director", "10% Owner", combined commas, …). We keyword-match
+# in priority order so one rule covers all the variants we've seen, then
+# combine officer+director into the dual literal. Any non-empty string that
+# matches none of these falls back to ``"other"`` so the column stays
+# typed; ``None`` means the vendor didn't supply a value at all.
+_OWNER_RELATION_TEN_PERCENT = ("10%", "ten percent")
+_OWNER_RELATION_DIRECTOR_KW = "director"
+_OWNER_RELATION_OFFICER_KW = "officer"
+
+
+def _normalize_owner_relation(
+    raw: Any,
+) -> Literal["officer", "director", "officer_and_director", "ten_percent_owner", "other"] | None:
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip().lower()
+    if not text:
+        return None
+    if any(needle in text for needle in _OWNER_RELATION_TEN_PERCENT):
+        return "ten_percent_owner"
+    has_officer = _OWNER_RELATION_OFFICER_KW in text
+    has_director = _OWNER_RELATION_DIRECTOR_KW in text
+    if has_officer and has_director:
+        return "officer_and_director"
+    if has_officer:
+        return "officer"
+    if has_director:
+        return "director"
+    return "other"
+
+
+_BEFORE_AFTER_MARKET_MAP = {
+    "BeforeMarket": "before",
+    "AfterMarket": "after",
+    "DuringMarket": "during",
+}
+_PERIOD_RELATIVE_MAP = {
+    "-1y": "prior_year",
+    "-1q": "prior_quarter",
+    "0q": "current_quarter",
+    "+1q": "next_quarter",
+    "0y": "current_year",
+    "+1y": "next_year",
+}
+# EODHD's `General.Type` strings vary in capitalization; we normalize on
+# lower-cased contains-checks. Anything that doesn't match falls into "other".
+_SECURITY_TYPE_KEYWORDS = (
+    ("preferred", "preferred_stock"),
+    ("adr", "adr"),
+    ("etf", "etf"),
+    ("fund", "fund"),
+    ("common", "common_stock"),
+)
+
+
+class EodhdFreeTierError(DataSourceError):
     """Raised when the API signals an endpoint is blocked on the free tier."""
+
+
+class EodhdAllEndpointsFailedError(DataSourceError):
+    """Raised when every parallel sub-fetch in ``fetch_metadata`` failed
+    with a transport-class error (network, HTTP, JSON decode). Free-tier
+    blocks do **not** trigger this — they're a legitimate steady state for
+    free-tier users and produce empty bundles instead. The pipeline's
+    per-ticker soft-fail catches this so the run continues with the
+    failed ticker recorded in ``tickers_failed``."""
 
 
 # ---- pure parsers (unit-tested) --------------------------------------------
@@ -102,31 +232,41 @@ def parse_intraday_response(ticker: str, payload: Any) -> Iterator[IntradayBar]:
     """
     _check_free_tier(payload)
     if not isinstance(payload, list):
-        return iter(())
-    for row in payload:
-        if not isinstance(row, dict):
-            continue
-        ts = row.get("timestamp")
-        if ts is None:
-            continue
-        try:
-            ts_int = int(ts)
-        except (TypeError, ValueError):
-            continue
-        when = datetime.fromtimestamp(ts_int, tz=UTC)
-        close_val = row.get("close")
-        if close_val is None:
-            continue
-        yield IntradayBar(
-            ticker=ticker,
-            timestamp=when,
-            open=row.get("open", close_val),
-            high=row.get("high", close_val),
-            low=row.get("low", close_val),
-            close=close_val,
-            adj_close=close_val,
-            volume=row.get("volume"),
-        )
+        return
+    kept = 0
+    dropped = 0
+    try:
+        for row in payload:
+            if not isinstance(row, dict):
+                dropped += 1
+                continue
+            ts = row.get("timestamp")
+            if ts is None:
+                dropped += 1
+                continue
+            try:
+                ts_int = int(ts)
+            except (TypeError, ValueError):
+                dropped += 1
+                continue
+            when = datetime.fromtimestamp(ts_int, tz=UTC)
+            close_val = row.get("close")
+            if close_val is None:
+                dropped += 1
+                continue
+            kept += 1
+            yield IntradayBar(
+                ticker=ticker,
+                timestamp=when,
+                open=row.get("open", close_val),
+                high=row.get("high", close_val),
+                low=row.get("low", close_val),
+                close=close_val,
+                adj_close=close_val,
+                volume=row.get("volume"),
+            )
+    finally:
+        _log_parse_drops("parse_intraday_response", ticker, kept, dropped)
 
 
 def parse_fundamentals_response(ticker: str, payload: Any) -> Iterator[FundamentalRow]:
@@ -162,8 +302,48 @@ def _iter_fundamentals(ticker: str, payload: dict) -> Iterator[FundamentalRow]:
 
 
 def _check_free_tier(payload: Any) -> None:
-    if isinstance(payload, str) and _FREE_TIER_TEXT in payload.lower():
-        raise EodhdFreeTierError(payload.strip())
+    if isinstance(payload, str):
+        lowered = payload.lower()
+        if any(marker in lowered for marker in _FREE_TIER_MARKERS):
+            raise EodhdFreeTierError(payload.strip())
+
+
+# Pure parsers don't have a bound source-instance logger, so they share a
+# module-level structlog logger for emitting drop-rate observability when
+# they have to skip malformed vendor rows.
+_PARSER_LOG = get_logger("stonks.ingest.sources.eodhd.parsers")
+
+# Threshold above which a "we dropped some rows" event is loud (WARN
+# = canary for vendor schema break) rather than quiet (DEBUG).
+_HIGH_DROP_RATIO = 0.5
+
+
+def _log_parse_drops(parser: str, ticker: str, kept: int, dropped: int) -> None:
+    """Emit a structured log line summarizing how many rows a parser had to
+    skip. Quiet at DEBUG for the occasional bad row; LOUD at WARN when the
+    drop ratio crosses ``_HIGH_DROP_RATIO`` (a strong signal that the vendor
+    changed its response shape and we're silently losing data)."""
+    if dropped == 0:
+        return
+    total = kept + dropped
+    drop_rate = dropped / total if total > 0 else 0.0
+    if drop_rate >= _HIGH_DROP_RATIO:
+        _PARSER_LOG.warning(
+            "eodhd.parser.high_drop_rate",
+            parser=parser,
+            ticker=ticker,
+            kept=kept,
+            dropped=dropped,
+            drop_rate=round(drop_rate, 3),
+        )
+    else:
+        _PARSER_LOG.debug(
+            "eodhd.parser.drops",
+            parser=parser,
+            ticker=ticker,
+            kept=kept,
+            dropped=dropped,
+        )
 
 
 def _parse_date(value: Any) -> date | None:
@@ -191,6 +371,12 @@ def _coerce_optional_int(value: Any) -> int | None:
     return int(v) if v is not None else None
 
 
+def _str_tuple(value: Any) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        return ()
+    return tuple(item for item in value if isinstance(item, str) and item)
+
+
 def _parse_datetime(value: Any) -> datetime | None:
     if isinstance(value, datetime):
         return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
@@ -206,16 +392,29 @@ def _parse_datetime(value: Any) -> datetime | None:
     return None
 
 
+def _normalize_security_type(raw: Any) -> str | None:
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    needle = raw.strip().lower()
+    for keyword, canonical in _SECURITY_TYPE_KEYWORDS:
+        if keyword in needle:
+            return canonical
+    return "other"
+
+
 # ---- extended-fundamentals parsers (pure, unit-tested) ---------------------
 
 
 def parse_profile_from_fundamentals(ticker: str, payload: Any) -> TickerProfile | None:
-    """Extract the TickerProfile from the fundamentals JSON blob."""
+    """Extract the static :class:`TickerProfile` from the fundamentals JSON.
+
+    Volatile metrics (beta, short interest, ownership %) are routed to
+    :class:`TickerSnapshotRow` via :func:`parse_ticker_snapshot_from_fundamentals`.
+    """
     if not isinstance(payload, dict):
         return None
     general = payload.get("General") or {}
-    shares_stats = payload.get("SharesStats") or {}
-    technicals = payload.get("Technicals") or {}
+    address_data = general.get("AddressData") or {}
 
     return TickerProfile(
         id=ticker,
@@ -223,55 +422,174 @@ def parse_profile_from_fundamentals(ticker: str, payload: Any) -> TickerProfile 
         currency=general.get("CurrencyCode"),
         name=general.get("Name"),
         country_iso=general.get("CountryISO"),
-        ipo_date=_parse_date(general.get("IPODate")),
         sector=general.get("Sector"),
         industry=general.get("Industry"),
-        fiscal_year_end=general.get("FiscalYearEnd"),
-        web_url=general.get("WebURL"),
+        gic_sector=general.get("GicSector"),
+        gic_group=general.get("GicGroup"),
+        gic_industry=general.get("GicIndustry"),
+        gic_sub_industry=general.get("GicSubIndustry"),
+        ipo_date=_parse_date(general.get("IPODate")),
         is_delisted=bool(general.get("IsDelisted", False)),
+        delisted_date=_parse_date(general.get("DelistedDate")),
         is_bank=bool(general.get("IsBank", False)),
-        beta=_coerce_optional_float(technicals.get("Beta")),
-        short_percent=_coerce_optional_float(shares_stats.get("ShortPercent")),
-        insider_ownership_percent=_coerce_optional_float(shares_stats.get("PercentInsiders")),
-        institutional_ownership_percent=_coerce_optional_float(
-            shares_stats.get("PercentInstitutions")
-        ),
-        employee_count=_coerce_optional_int(general.get("FullTimeEmployees")),
-        esg_score=_coerce_optional_float((payload.get("ESGScores") or {}).get("TotalESG")),
+        fiscal_year_end=general.get("FiscalYearEnd"),
+        security_type=_normalize_security_type(general.get("Type")),
+        cusip=general.get("CUSIP"),
+        cik=general.get("CIK"),
+        isin=general.get("ISIN"),
+        open_figi=general.get("OpenFigi"),
+        lei=general.get("LEI"),
+        employer_id_number=general.get("EmployerIdNumber"),
+        primary_ticker=general.get("PrimaryTicker"),
+        address_street=address_data.get("Street"),
+        address_city=address_data.get("City"),
+        address_state=address_data.get("State"),
+        address_country=address_data.get("Country"),
+        address_zip=address_data.get("ZIP"),
+        phone=general.get("Phone"),
+        web_url=general.get("WebURL"),
+        description=general.get("Description"),
+        updated_at=_parse_datetime(general.get("UpdatedAt")),
     )
 
 
-def parse_analyst_estimates_from_fundamentals(
+def parse_ticker_snapshot_from_fundamentals(
+    ticker: str, payload: Any, as_of: date | None = None
+) -> TickerSnapshotRow | None:
+    """Extract the volatile per-ticker metrics into a snapshot row.
+
+    Vendors don't always carry an explicit "as of" date for these fields;
+    callers can override via ``as_of``, otherwise we use today's date so
+    the row has a valid time-series anchor.
+    """
+    if not isinstance(payload, dict):
+        return None
+    shares_stats = payload.get("SharesStats") or {}
+    technicals = payload.get("Technicals") or {}
+
+    snapshot_date = as_of or date.today()
+    beta = _coerce_optional_float(technicals.get("Beta"))
+    short_percent = _coerce_optional_float(
+        shares_stats.get("ShortPercentFloat")
+        or shares_stats.get("ShortPercent")
+        or technicals.get("ShortPercent")
+    )
+    percent_insiders = _coerce_optional_float(shares_stats.get("PercentInsiders"))
+    percent_institutions = _coerce_optional_float(shares_stats.get("PercentInstitutions"))
+
+    if all(v is None for v in (beta, short_percent, percent_insiders, percent_institutions)):
+        return None
+
+    return TickerSnapshotRow(
+        ticker=ticker,
+        snapshot_date=snapshot_date,
+        beta=beta,
+        short_percent=short_percent,
+        percent_insiders=percent_insiders,
+        percent_institutions=percent_institutions,
+    )
+
+
+def parse_earnings_announcements_from_fundamentals(
     ticker: str, payload: Any
-) -> Iterator[AnalystEstimateRow]:
-    """Flatten Earnings.History into one row per (period, metric)."""
+) -> Iterator[EarningsAnnouncementRow]:
+    """Parse ``Earnings.History`` into structured earnings events.
+
+    Replaces the older flat ``AnalystEstimateRow(metric, value)`` shape: the
+    structured form preserves the announcement timing (``report_date`` /
+    ``before_after_market``) and pairs actual + estimate + surprise on the
+    same row.
+    """
     if not isinstance(payload, dict):
         return iter(())
     history = ((payload.get("Earnings") or {}).get("History")) or {}
-    return _iter_analyst_estimates(ticker, history)
+    return _iter_earnings_announcements(ticker, history)
 
 
-def _iter_analyst_estimates(ticker: str, history: dict) -> Iterator[AnalystEstimateRow]:
-    _metric_keys = ("epsActual", "epsEstimate", "epsDifference", "surprisePercent")
+def _iter_earnings_announcements(ticker: str, history: dict) -> Iterator[EarningsAnnouncementRow]:
     for period_key, row in history.items():
         if not isinstance(row, dict):
             continue
         period_end = _parse_date(row.get("date") or period_key)
         if period_end is None:
             continue
-        for metric in _metric_keys:
-            if metric in row:
-                yield AnalystEstimateRow(
-                    ticker=ticker,
-                    period_end=period_end,
-                    metric=metric,
-                    value=_coerce_optional_float(row[metric]),
-                )
+        yield EarningsAnnouncementRow(
+            ticker=ticker,
+            period_end=period_end,
+            report_date=_parse_date(row.get("reportDate")),
+            before_after_market=_BEFORE_AFTER_MARKET_MAP.get(row.get("beforeAfterMarket") or ""),
+            currency=row.get("currency"),
+            eps_actual=_coerce_optional_float(row.get("epsActual")),
+            eps_estimate=_coerce_optional_float(row.get("epsEstimate")),
+            eps_difference=_coerce_optional_float(row.get("epsDifference")),
+            surprise_percent=_coerce_optional_float(row.get("surprisePercent")),
+        )
+
+
+def parse_analyst_forecasts_from_fundamentals(
+    ticker: str, payload: Any
+) -> Iterator[AnalystForecastRow]:
+    """Parse ``Earnings.Trend`` into analyst dispersion + revision rows.
+
+    Vendor strings ``-1q`` / ``0q`` / ``+1q`` / ``-1y`` / ``0y`` / ``+1y``
+    map to the canonical ``period_relative`` literal.
+    """
+    if not isinstance(payload, dict):
+        return iter(())
+    trend = ((payload.get("Earnings") or {}).get("Trend")) or {}
+    return _iter_analyst_forecasts(ticker, trend)
+
+
+def _iter_analyst_forecasts(ticker: str, trend: dict) -> Iterator[AnalystForecastRow]:
+    for period_key, row in trend.items():
+        if not isinstance(row, dict):
+            continue
+        period_end = _parse_date(row.get("date") or period_key)
+        if period_end is None:
+            continue
+        period_relative = _PERIOD_RELATIVE_MAP.get(row.get("period") or "")
+        yield AnalystForecastRow(
+            ticker=ticker,
+            period_end=period_end,
+            period_relative=period_relative,
+            growth=_coerce_optional_float(row.get("growth")),
+            eps_estimate_avg=_coerce_optional_float(row.get("earningsEstimateAvg")),
+            eps_estimate_low=_coerce_optional_float(row.get("earningsEstimateLow")),
+            eps_estimate_high=_coerce_optional_float(row.get("earningsEstimateHigh")),
+            eps_estimate_year_ago=_coerce_optional_float(row.get("earningsEstimateYearAgoEps")),
+            eps_estimate_n_analysts=_coerce_optional_int(
+                row.get("earningsEstimateNumberOfAnalysts")
+            ),
+            eps_estimate_growth=_coerce_optional_float(row.get("earningsEstimateGrowth")),
+            revenue_estimate_avg=_coerce_optional_float(row.get("revenueEstimateAvg")),
+            revenue_estimate_low=_coerce_optional_float(row.get("revenueEstimateLow")),
+            revenue_estimate_high=_coerce_optional_float(row.get("revenueEstimateHigh")),
+            revenue_estimate_year_ago=_coerce_optional_float(row.get("revenueEstimateYearAgoEps")),
+            revenue_estimate_n_analysts=_coerce_optional_int(
+                row.get("revenueEstimateNumberOfAnalysts")
+            ),
+            revenue_estimate_growth=_coerce_optional_float(row.get("revenueEstimateGrowth")),
+            eps_trend_current=_coerce_optional_float(row.get("epsTrendCurrent")),
+            eps_trend_7d_ago=_coerce_optional_float(row.get("epsTrend7daysAgo")),
+            eps_trend_30d_ago=_coerce_optional_float(row.get("epsTrend30daysAgo")),
+            eps_trend_60d_ago=_coerce_optional_float(row.get("epsTrend60daysAgo")),
+            eps_trend_90d_ago=_coerce_optional_float(row.get("epsTrend90daysAgo")),
+            eps_revisions_up_7d=_coerce_optional_int(row.get("epsRevisionsUpLast7days")),
+            eps_revisions_up_30d=_coerce_optional_int(row.get("epsRevisionsUpLast30days")),
+            eps_revisions_down_7d=_coerce_optional_int(row.get("epsRevisionsDownLast7days")),
+            eps_revisions_down_30d=_coerce_optional_int(row.get("epsRevisionsDownLast30days")),
+        )
 
 
 def parse_analyst_ratings_from_fundamentals(
-    ticker: str, payload: Any
+    ticker: str, payload: Any, as_of: date | None = None
 ) -> AnalystRatingsRow | None:
+    """Extract the consensus ratings snapshot.
+
+    The row carries an explicit ``snapshot_date`` so the table is a proper
+    time series; callers pass ``as_of`` (or we fall back to today) since
+    EODHD doesn't expose a per-snapshot timestamp on this object.
+    """
     if not isinstance(payload, dict):
         return None
     ratings = payload.get("AnalystRatings")
@@ -279,7 +597,7 @@ def parse_analyst_ratings_from_fundamentals(
         return None
     return AnalystRatingsRow(
         ticker=ticker,
-        rating=_coerce_optional_float(ratings.get("Rating")),
+        snapshot_date=as_of or date.today(),
         target_price=_coerce_optional_float(ratings.get("TargetPrice")),
         strong_buy=_coerce_optional_int(ratings.get("StrongBuy")) or 0,
         buy=_coerce_optional_int(ratings.get("Buy")) or 0,
@@ -289,9 +607,141 @@ def parse_analyst_ratings_from_fundamentals(
     )
 
 
-def parse_shares_outstanding_history(
+def parse_holders_from_fundamentals(ticker: str, payload: Any) -> Iterator[InstitutionalHolderRow]:
+    """Parse ``Holders.Institutions`` and ``Holders.Funds`` into rows.
+
+    Both sub-objects share the same shape; the ``holder_kind``
+    discriminator distinguishes them downstream.
+    """
+    if not isinstance(payload, dict):
+        return iter(())
+    holders = payload.get("Holders")
+    if not isinstance(holders, dict):
+        return iter(())
+    return _iter_holders(ticker, holders)
+
+
+def _iter_holders(ticker: str, holders: dict) -> Iterator[InstitutionalHolderRow]:
+    for vendor_kind, canonical_kind in (("Institutions", "institution"), ("Funds", "fund")):
+        bucket = holders.get(vendor_kind)
+        if not isinstance(bucket, dict):
+            continue
+        for entry in bucket.values():
+            if not isinstance(entry, dict):
+                continue
+            name = entry.get("name")
+            snapshot_date = _parse_date(entry.get("date"))
+            if not name or snapshot_date is None:
+                continue
+            yield InstitutionalHolderRow(
+                ticker=ticker,
+                holder_kind=canonical_kind,  # type: ignore[arg-type]
+                name=name,
+                snapshot_date=snapshot_date,
+                total_shares_pct=_coerce_optional_float(entry.get("totalShares")),
+                total_assets_pct=_coerce_optional_float(entry.get("totalAssets")),
+                current_shares=_coerce_optional_int(entry.get("currentShares")),
+                change_shares=_coerce_optional_int(entry.get("change")),
+                change_pct=_coerce_optional_float(entry.get("change_p")),
+            )
+
+
+def parse_esg_from_fundamentals(
     ticker: str, payload: Any
-) -> Iterator[SharesOutstandingRow]:
+) -> tuple[EsgSnapshotRow | None, list[EsgActivityRow]]:
+    """Parse ``ESGScores`` into a header row plus per-activity child rows."""
+    if not isinstance(payload, dict):
+        return (None, [])
+    esg = payload.get("ESGScores")
+    if not isinstance(esg, dict):
+        return (None, [])
+    rating_date = _parse_date(esg.get("RatingDate"))
+    if rating_date is None:
+        return (None, [])
+    snapshot = EsgSnapshotRow(
+        ticker=ticker,
+        rating_date=rating_date,
+        total_esg=_coerce_optional_float(esg.get("TotalEsg") or esg.get("TotalESG")),
+        total_esg_percentile=_coerce_optional_float(esg.get("TotalEsgPercentile")),
+        environment_score=_coerce_optional_float(esg.get("EnvironmentScore")),
+        environment_percentile=_coerce_optional_float(esg.get("EnvironmentScorePercentile")),
+        social_score=_coerce_optional_float(esg.get("SocialScore")),
+        social_percentile=_coerce_optional_float(esg.get("SocialScorePercentile")),
+        governance_score=_coerce_optional_float(esg.get("GovernanceScore")),
+        governance_percentile=_coerce_optional_float(esg.get("GovernanceScorePercentile")),
+        controversy_level=_coerce_optional_int(esg.get("ControversyLevel")),
+    )
+    activities_raw = esg.get("ActivitiesInvolvement")
+    activities: list[EsgActivityRow] = []
+    if isinstance(activities_raw, dict):
+        for entry in activities_raw.values():
+            if not isinstance(entry, dict):
+                continue
+            activity = entry.get("Activity")
+            involvement_raw = entry.get("Involvement")
+            if not activity or involvement_raw is None:
+                continue
+            canonical_involvement = _INVOLVEMENT_MAP.get(str(involvement_raw).strip().lower())
+            if canonical_involvement is None:
+                # Unknown vendor value (e.g. "Maybe", localized text). Drop
+                # the row rather than store an unnormalized string — keeps
+                # the schema's Literal["yes","no"] honest.
+                continue
+            activities.append(
+                EsgActivityRow(
+                    ticker=ticker,
+                    rating_date=rating_date,
+                    activity=str(activity),
+                    involvement=canonical_involvement,
+                )
+            )
+    return (snapshot, activities)
+
+
+def parse_cross_listings_from_fundamentals(ticker: str, payload: Any) -> Iterator[CrossListingRow]:
+    """Parse ``General.Listings`` (other-exchange listings) into rows."""
+    if not isinstance(payload, dict):
+        return iter(())
+    listings = (payload.get("General") or {}).get("Listings")
+    if not isinstance(listings, dict):
+        return iter(())
+    for entry in listings.values():
+        if not isinstance(entry, dict):
+            continue
+        exchange = entry.get("Exchange")
+        code = entry.get("Code")
+        if not exchange or not code:
+            continue
+        yield CrossListingRow(
+            ticker=ticker,
+            exchange=exchange,
+            exchange_code=code,
+            name=entry.get("Name"),
+        )
+
+
+def parse_officers_from_fundamentals(ticker: str, payload: Any) -> Iterator[OfficerRow]:
+    """Parse the current officer roster from ``General.Officers``."""
+    if not isinstance(payload, dict):
+        return iter(())
+    officers = (payload.get("General") or {}).get("Officers")
+    if not isinstance(officers, dict):
+        return iter(())
+    for entry in officers.values():
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("Name")
+        if not name:
+            continue
+        yield OfficerRow(
+            ticker=ticker,
+            name=name,
+            title=entry.get("Title"),
+            year_born=_coerce_optional_int(entry.get("YearBorn")),
+        )
+
+
+def parse_shares_outstanding_history(ticker: str, payload: Any) -> Iterator[SharesOutstandingRow]:
     """Fundamentals has an ``outstandingShares`` section with both
     ``annual`` and ``quarterly`` dicts — each period dict carries
     ``dateFormatted`` (ISO date) and ``shares`` (integer count). We pull
@@ -307,9 +757,7 @@ def parse_shares_outstanding_history(
     return _iter_shares_outstanding(ticker, shares_blob)
 
 
-def _iter_shares_outstanding(
-    ticker: str, shares_blob: dict
-) -> Iterator[SharesOutstandingRow]:
+def _iter_shares_outstanding(ticker: str, shares_blob: dict) -> Iterator[SharesOutstandingRow]:
     for frequency_key in ("annual", "quarterly"):
         periods = shares_blob.get(frequency_key) or {}
         if not isinstance(periods, dict):
@@ -339,53 +787,99 @@ def parse_dividends_response(ticker: str, payload: Any) -> Iterator[DividendRow]
     """Parse /api/div/<ticker> into DividendRow entries."""
     _check_free_tier(payload)
     if not isinstance(payload, list):
-        return iter(())
-    for row in payload:
-        if not isinstance(row, dict):
-            continue
-        ex_date = _parse_date(row.get("date"))
-        amount = _coerce_optional_float(row.get("value"))
-        if ex_date is None or amount is None or amount < 0:
-            continue
-        yield DividendRow(
-            ticker=ticker,
-            ex_date=ex_date,
-            amount=amount,
-            currency=row.get("currency"),
-            pay_date=_parse_date(row.get("paymentDate")),
-            record_date=_parse_date(row.get("recordDate")),
-            declaration_date=_parse_date(row.get("declarationDate")),
-        )
+        return
+    kept = 0
+    dropped = 0
+    try:
+        for row in payload:
+            if not isinstance(row, dict):
+                dropped += 1
+                continue
+            ex_date = _parse_date(row.get("date"))
+            amount = _coerce_optional_float(row.get("value"))
+            if ex_date is None or amount is None or amount < 0:
+                dropped += 1
+                continue
+            kept += 1
+            yield DividendRow(
+                ticker=ticker,
+                ex_date=ex_date,
+                amount=amount,
+                currency=row.get("currency"),
+                pay_date=_parse_date(row.get("paymentDate")),
+                record_date=_parse_date(row.get("recordDate")),
+                declaration_date=_parse_date(row.get("declarationDate")),
+            )
+    finally:
+        _log_parse_drops("parse_dividends_response", ticker, kept, dropped)
 
 
 def parse_news_response(ticker: str, payload: Any) -> Iterator[NewsArticleRow]:
     _check_free_tier(payload)
     if not isinstance(payload, list):
-        return iter(())
-    for row in payload:
-        if not isinstance(row, dict):
-            continue
-        published_at = _parse_datetime(row.get("date"))
-        title = row.get("title")
-        if published_at is None or not title:
-            continue
-        sentiment = None
-        sent_obj = row.get("sentiment")
-        if isinstance(sent_obj, dict):
-            sentiment = _coerce_optional_float(sent_obj.get("polarity"))
-        elif isinstance(sent_obj, (int, float)):
-            sentiment = float(sent_obj)
-        yield NewsArticleRow(
-            ticker=ticker,
-            published_at=published_at,
-            title=title,
-            url=row.get("link"),
-            source_name=row.get("source") or row.get("source_name"),
-            sentiment=sentiment,
-        )
+        return
+    kept = 0
+    dropped = 0
+    try:
+        for row in payload:
+            if not isinstance(row, dict):
+                dropped += 1
+                continue
+            published_at = _parse_datetime(row.get("date"))
+            title = row.get("title")
+            if published_at is None or not title:
+                dropped += 1
+                continue
+            sentiment_polarity: float | None = None
+            sentiment_pos: float | None = None
+            sentiment_neg: float | None = None
+            sentiment_neu: float | None = None
+            sent_obj = row.get("sentiment")
+            if isinstance(sent_obj, dict):
+                sentiment_polarity = _coerce_optional_float(sent_obj.get("polarity"))
+                sentiment_pos = _coerce_optional_float(sent_obj.get("pos"))
+                sentiment_neg = _coerce_optional_float(sent_obj.get("neg"))
+                sentiment_neu = _coerce_optional_float(sent_obj.get("neu"))
+            elif isinstance(sent_obj, (int, float)):
+                sentiment_polarity = float(sent_obj)
+            kept += 1
+            yield NewsArticleRow(
+                ticker=ticker,
+                published_at=published_at,
+                title=title,
+                url=row.get("link"),
+                source_name=row.get("source") or row.get("source_name"),
+                # `content` is deliberately not populated: storing every
+                # article body would inflate the lake without a current
+                # consumer. The schema column exists so a future flip can
+                # begin populating it without a migration.
+                content=None,
+                symbols=_str_tuple(row.get("symbols")),
+                tags=_str_tuple(row.get("tags")),
+                sentiment=sentiment_polarity,
+                sentiment_pos=sentiment_pos,
+                sentiment_neg=sentiment_neg,
+                sentiment_neu=sentiment_neu,
+            )
+    finally:
+        _log_parse_drops("parse_news_response", ticker, kept, dropped)
 
 
 def parse_insider_response(ticker: str, payload: Any) -> Iterator[InsiderTransactionRow]:
+    """Parse ``/api/insider-transactions`` rows.
+
+    Vendor field mapping:
+      - ``transactionDate`` → ``transaction_date`` (actual trade date)
+      - ``reportDate`` → ``filing_date`` (SEC filing date; lag = signal)
+      - ``ownerCik`` → ``owner_cik``
+      - ``ownerRelationship`` → ``owner_relation`` (categorical)
+      - ``ownerTitle`` → ``owner_title`` (free text e.g. "CEO")
+      - ``transactionAcquiredDisposed`` → ``acquired_disposed`` (A | D)
+      - ``postTransactionAmount`` → ``post_transaction_amount``
+      - ``link`` → ``sec_link`` (URL to the underlying Form 4)
+
+    Derives ``value = shares * price`` when both are present.
+    """
     _check_free_tier(payload)
     if not isinstance(payload, list):
         return iter(())
@@ -398,22 +892,27 @@ def parse_insider_response(ticker: str, payload: Any) -> Iterator[InsiderTransac
         shares = _coerce_optional_float(row.get("transactionAmount"))
         price = _coerce_optional_float(row.get("transactionPrice"))
         value = (shares * price) if shares is not None and price is not None else None
+        ad_raw = row.get("transactionAcquiredDisposed")
+        acquired_disposed = ad_raw if ad_raw in ("A", "D") else None
         yield InsiderTransactionRow(
             ticker=ticker,
-            date=tx_date,
+            transaction_date=tx_date,
+            filing_date=_parse_date(row.get("reportDate")),
             owner_name=row.get("ownerName"),
-            owner_relation=row.get("ownerRelationship"),
+            owner_cik=row.get("ownerCik"),
+            owner_relation=_normalize_owner_relation(row.get("ownerRelationship")),
+            owner_title=row.get("ownerTitle"),
             transaction_code=row.get("transactionCode"),
+            acquired_disposed=acquired_disposed,
             shares=shares,
             price=price,
             value=value,
-            vendor_id=row.get("ownerCik"),
+            post_transaction_amount=_coerce_optional_float(row.get("postTransactionAmount")),
+            sec_link=row.get("link") or row.get("secLink"),
         )
 
 
-def parse_sentiments_response(
-    ticker: str, payload: Any
-) -> Iterator[NewsSentimentRow]:
+def parse_sentiments_response(ticker: str, payload: Any) -> Iterator[NewsSentimentRow]:
     """EODHD sentiment endpoint returns ``{"<ticker>": [{date, count, normalized}, ...]}``."""
     _check_free_tier(payload)
     if isinstance(payload, dict):
@@ -445,22 +944,32 @@ def parse_splits_response(ticker: str, payload: Any) -> Iterator[StockSplitRow]:
     """
     _check_free_tier(payload)
     if not isinstance(payload, list):
-        return iter(())
-    for row in payload:
-        if not isinstance(row, dict):
-            continue
-        d = _parse_date(row.get("date"))
-        split_str = row.get("split")
-        if d is None or not isinstance(split_str, str) or "/" not in split_str:
-            continue
-        try:
-            new, old = split_str.split("/", 1)
-            ratio = float(new) / float(old)
-        except (ValueError, ZeroDivisionError):
-            continue
-        if ratio <= 0:
-            continue
-        yield StockSplitRow(ticker=ticker, date=d, ratio=ratio)
+        return
+    kept = 0
+    dropped = 0
+    try:
+        for row in payload:
+            if not isinstance(row, dict):
+                dropped += 1
+                continue
+            d = _parse_date(row.get("date"))
+            split_str = row.get("split")
+            if d is None or not isinstance(split_str, str) or "/" not in split_str:
+                dropped += 1
+                continue
+            try:
+                new, old = split_str.split("/", 1)
+                ratio = float(new) / float(old)
+            except (ValueError, ZeroDivisionError):
+                dropped += 1
+                continue
+            if ratio <= 0:
+                dropped += 1
+                continue
+            kept += 1
+            yield StockSplitRow(ticker=ticker, date=d, ratio=ratio)
+    finally:
+        _log_parse_drops("parse_splits_response", ticker, kept, dropped)
 
 
 def parse_market_cap_response(ticker: str, payload: Any) -> Iterator[MarketCapRow]:
@@ -485,6 +994,43 @@ def parse_market_cap_response(ticker: str, payload: Any) -> Iterator[MarketCapRo
         if d is None or mcap is None or mcap < 0:
             continue
         yield MarketCapRow(ticker=ticker, date=d, market_cap=mcap)
+
+
+def parse_exchanges_response(payload: Any) -> Iterator[ExchangeInfo]:
+    """Parse ``/api/exchanges-list`` rows into :class:`ExchangeInfo`.
+
+    Vendor field mapping (PascalCase → canonical snake_case):
+      ``Code → code``, ``Name → name``, ``Country → country``,
+      ``Currency → currency``, ``CountryISO2 → country_iso2``,
+      ``CountryISO3 → country_iso3``, ``OperatingMIC → operating_mic``.
+
+    Rows missing ``Code`` are skipped (no usable identifier). The vendor's
+    response includes virtual asset-class buckets (FOREX, CC, INDX, …)
+    alongside real stock exchanges; both are passed through — callers
+    decide whether to filter.
+    """
+    _check_free_tier(payload)
+    if not isinstance(payload, list):
+        return iter(())
+    return _iter_exchanges(payload)
+
+
+def _iter_exchanges(payload: list) -> Iterator[ExchangeInfo]:
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        code = row.get("Code")
+        if not code:
+            continue
+        yield ExchangeInfo(
+            code=code,
+            name=row.get("Name"),
+            country=row.get("Country"),
+            currency=row.get("Currency"),
+            country_iso2=row.get("CountryISO2"),
+            country_iso3=row.get("CountryISO3"),
+            operating_mic=row.get("OperatingMIC"),
+        )
 
 
 # ---- HTTP client ------------------------------------------------------------
@@ -512,12 +1058,54 @@ class EodhdDataSource(DataSource):
         self._session = session or requests.Session()
         self._log = get_logger("stonks.ingest.sources.eodhd")
 
-    def list_tickers(self, exchange: str) -> list[str]:
-        url = f"{self._base_url}/exchange-symbol-list/{exchange}"
+    def list_exchanges(self) -> list[ExchangeInfo]:
+        url = f"{self._base_url}/exchanges-list"
         data = self._get(url, params={"fmt": "json"})
-        if not isinstance(data, list):
-            return []
-        return [f"{row['Code']}.{exchange}" for row in data if isinstance(row, dict) and "Code" in row]
+        return list(parse_exchanges_response(data))
+
+    def list_tickers(self, exchange: str) -> list[str]:
+        # EODHD's `delisted=1` returns *only* delisted entries (verified
+        # empirically: the active-only and delisted=1 sets are disjoint), so
+        # to surface the full survivorship-bias-free universe we issue both
+        # calls and concatenate. Order is preserved (active first, then
+        # delisted) and duplicates are dropped defensively in case the vendor
+        # ever changes the semantics.
+        url = f"{self._base_url}/exchange-symbol-list/{exchange}"
+        active = self._get(url, params={"fmt": "json"})
+        delisted = self._get(url, params={"fmt": "json", "delisted": "1"})
+        # If either response isn't the list we expect, log loudly *before*
+        # falling through. A silent skip here would re-introduce survivorship
+        # bias on the delisted side without anyone noticing.
+        for label, data in (("active", active), ("delisted", delisted)):
+            if not isinstance(data, list):
+                self._log.warning(
+                    "eodhd.list_tickers.unexpected_payload_shape",
+                    exchange=exchange,
+                    leg=label,
+                    payload_type=type(data).__name__,
+                    note=(
+                        "expected a JSON list; "
+                        + (
+                            "delisted leg failed → returned universe is survivorship-biased"
+                            if label == "delisted"
+                            else "active leg failed → returned universe is incomplete"
+                        )
+                    ),
+                )
+        out: list[str] = []
+        seen: set[str] = set()
+        for data in (active, delisted):
+            if not isinstance(data, list):
+                continue
+            for row in data:
+                if not isinstance(row, dict) or "Code" not in row:
+                    continue
+                ticker = f"{row['Code']}.{exchange}"
+                if ticker in seen:
+                    continue
+                seen.add(ticker)
+                out.append(ticker)
+        return out
 
     def fetch_prices(
         self, ticker: str, since: date | None = None, until: date | None = None
@@ -555,51 +1143,71 @@ class EodhdDataSource(DataSource):
         url = f"{self._base_url}/intraday/{ticker}"
         params: dict[str, str] = {"fmt": "json", "interval": interval.code}
         if since is not None:
-            params["from"] = str(int(datetime(since.year, since.month, since.day, tzinfo=UTC).timestamp()))
+            params["from"] = str(
+                int(datetime(since.year, since.month, since.day, tzinfo=UTC).timestamp())
+            )
         if until is not None:
-            params["to"] = str(int(datetime(until.year, until.month, until.day, 23, 59, 59, tzinfo=UTC).timestamp()))
+            params["to"] = str(
+                int(
+                    datetime(until.year, until.month, until.day, 23, 59, 59, tzinfo=UTC).timestamp()
+                )
+            )
         data = self._get(url, params=params)
         return list(parse_intraday_response(ticker, data))
 
-    def fetch_metadata(self, ticker: str, since: date | None = None) -> MetadataBundle:
-        """Assemble the full metadata bundle by hitting five EODHD endpoints
+    def fetch_metadata(self, ticker: str) -> MetadataBundle:
+        """Assemble the full metadata bundle by hitting seven EODHD endpoints
         in parallel (``requests.Session`` is thread-safe for concurrent GETs).
 
         Each sub-fetch is wrapped in free-tier / network error tolerance:
         a subscription-blocked or transport error on one endpoint leaves the
-        corresponding bundle field empty; other fields still populate.
+        corresponding bundle field empty; other fields still populate. If
+        *every* endpoint fails with a transport-class error (network/JSON
+        decode), the whole fetch raises ``EodhdAllEndpointsFailedError``
+        rather than returning an empty bundle that looks like a successful
+        free-tier user — that's the difference between "vendor said no
+        data" and "we couldn't reach the vendor at all."
+
+        The single ``/fundamentals`` payload contributes the lion's share —
+        profile, ticker_snapshot, holders, earnings_announcements,
+        analyst_forecasts, analyst_ratings, esg_snapshot/activities,
+        cross_listings, officers, shares_outstanding history, employee_count.
         """
-        since_iso = since.isoformat() if since is not None else None
-
-        def _params_with_since(base: dict[str, str]) -> dict[str, str]:
-            return {**base, "from": since_iso} if since_iso else base
-
         jobs = {
             "fundamentals": lambda: self._get_json(f"/fundamentals/{ticker}"),
-            "dividends":    lambda: self._get_json(
-                f"/div/{ticker}", _params_with_since({"fmt": "json"}),
+            "dividends": lambda: self._get_json(f"/div/{ticker}", {"fmt": "json"}),
+            "splits": lambda: self._get_json(f"/splits/{ticker}", {"fmt": "json"}),
+            "market_cap": lambda: self._get_json(
+                f"/historical-market-cap/{ticker}",
+                {"fmt": "json"},
             ),
-            "splits":       lambda: self._get_json(
-                f"/splits/{ticker}", _params_with_since({"fmt": "json"}),
-            ),
-            "market_cap":   lambda: self._get_json(
-                f"/historical-market-cap/{ticker}", {"fmt": "json"},
-            ),
-            "news":         lambda: self._get_json(
-                "/news", _params_with_since({"fmt": "json", "s": ticker}),
-            ),
-            "insider":      lambda: self._get_json(
+            "news": lambda: self._get_json("/news", {"fmt": "json", "s": ticker}),
+            "insider": lambda: self._get_json(
                 "/insider-transactions",
-                _params_with_since({"fmt": "json", "code": ticker}),
+                {"fmt": "json", "code": ticker},
             ),
-            "sentiments":   lambda: self._get_json(
-                "/sentiments", {"fmt": "json", "s": ticker},
-            ),
+            "sentiments": lambda: self._get_json("/sentiments", {"fmt": "json", "s": ticker}),
         }
 
+        # Concurrent dict writes from worker threads — Python's GIL makes
+        # ``dict[str] = str`` atomic, and each worker writes a unique key,
+        # so no extra synchronization is needed.
+        errors: dict[str, str] = {}
         with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
-            futures = {name: pool.submit(self._try, fn) for name, fn in jobs.items()}
+            futures = {
+                name: pool.submit(self._try, fn, endpoint=name, ticker=ticker, errors=errors)
+                for name, fn in jobs.items()
+            }
             results = {name: fut.result() for name, fut in futures.items()}
+
+        transport_failures = sum(1 for kind in errors.values() if kind == "transport")
+        if transport_failures == len(jobs):
+            # Every endpoint failed with a network/HTTP/JSON error — that's
+            # a real outage, not a steady-state empty bundle. Surface it so
+            # the pipeline can record this ticker as failed.
+            raise EodhdAllEndpointsFailedError(
+                f"all {len(jobs)} metadata endpoints failed for {ticker} with transport errors"
+            )
 
         bundle_parts: dict[str, Any] = {}
         fundamentals = results["fundamentals"]
@@ -607,12 +1215,30 @@ class EodhdDataSource(DataSource):
             profile = parse_profile_from_fundamentals(ticker, fundamentals)
             if profile is not None:
                 bundle_parts["profile"] = profile
-            bundle_parts["analyst_estimates"] = tuple(
-                parse_analyst_estimates_from_fundamentals(ticker, fundamentals)
+            snapshot = parse_ticker_snapshot_from_fundamentals(ticker, fundamentals)
+            if snapshot is not None:
+                bundle_parts["ticker_snapshot"] = snapshot
+            bundle_parts["earnings_announcements"] = tuple(
+                parse_earnings_announcements_from_fundamentals(ticker, fundamentals)
+            )
+            bundle_parts["analyst_forecasts"] = tuple(
+                parse_analyst_forecasts_from_fundamentals(ticker, fundamentals)
             )
             rating = parse_analyst_ratings_from_fundamentals(ticker, fundamentals)
             if rating is not None:
-                bundle_parts["analyst_ratings"] = rating
+                bundle_parts["analyst_ratings"] = (rating,)
+            bundle_parts["institutional_holders"] = tuple(
+                parse_holders_from_fundamentals(ticker, fundamentals)
+            )
+            esg_snap, esg_activities = parse_esg_from_fundamentals(ticker, fundamentals)
+            if esg_snap is not None:
+                bundle_parts["esg_snapshot"] = esg_snap
+            if esg_activities:
+                bundle_parts["esg_activities"] = tuple(esg_activities)
+            bundle_parts["cross_listings"] = tuple(
+                parse_cross_listings_from_fundamentals(ticker, fundamentals)
+            )
+            bundle_parts["officers"] = tuple(parse_officers_from_fundamentals(ticker, fundamentals))
             # Full shares-outstanding history from fundamentals.outstandingShares;
             # falls back to empty tuple if the section is missing.
             bundle_parts["shares_outstanding"] = tuple(
@@ -627,9 +1253,7 @@ class EodhdDataSource(DataSource):
                 parse_dividends_response(ticker, results["dividends"])
             )
         if results["splits"] is not None:
-            bundle_parts["splits"] = tuple(
-                parse_splits_response(ticker, results["splits"])
-            )
+            bundle_parts["splits"] = tuple(parse_splits_response(ticker, results["splits"]))
         if results["market_cap"] is not None:
             bundle_parts["market_cap_history"] = tuple(
                 parse_market_cap_response(ticker, results["market_cap"])
@@ -650,20 +1274,38 @@ class EodhdDataSource(DataSource):
     def _get_json(self, path: str, params: dict[str, str] | None = None) -> Any:
         return self._get(f"{self._base_url}{path}", params=params or {"fmt": "json"})
 
-    def _try(self, fn):
+    def _try(self, fn, *, endpoint: str, ticker: str, errors: dict[str, str]):
         """Run ``fn`` and swallow *known-safe* error types so one blocked
         endpoint doesn't poison the rest of the metadata bundle. Only
         ``EodhdFreeTierError`` (subscription), ``requests.RequestException``
         (transport), and JSON decode errors are suppressed — everything
         else (ValidationError, KeyError, AttributeError, TypeError) is a
-        programming bug and propagates so tests can catch it."""
+        programming bug and propagates so tests can catch it.
+
+        Records the failure kind in ``errors[endpoint]`` so the caller can
+        distinguish "ticker had nothing to report on the free tier" from
+        "we couldn't reach the vendor" — both produce ``None`` here, but
+        only the latter should escalate to a full-fetch failure.
+        """
         try:
             return fn()
         except EodhdFreeTierError as exc:
-            self._log.info("eodhd.metadata.skipped_free_tier", reason=str(exc))
+            errors[endpoint] = "free_tier"
+            self._log.info(
+                "eodhd.metadata.skipped_free_tier",
+                ticker=ticker,
+                endpoint=endpoint,
+                reason=str(exc),
+            )
             return None
         except (requests.RequestException, json.JSONDecodeError) as exc:
-            self._log.warning("eodhd.metadata.skipped_error", error=str(exc))
+            errors[endpoint] = "transport"
+            self._log.warning(
+                "eodhd.metadata.skipped_error",
+                ticker=ticker,
+                endpoint=endpoint,
+                error=f"{type(exc).__name__}: {exc}",
+            )
             return None
 
     def _get(self, url: str, params: dict[str, str]) -> Any:
@@ -682,7 +1324,8 @@ class EodhdDataSource(DataSource):
                 try:
                     return response.json()
                 except ValueError:
-                    if _FREE_TIER_TEXT in text.lower():
+                    lowered = text.lower()
+                    if any(marker in lowered for marker in _FREE_TIER_MARKERS):
                         raise EodhdFreeTierError(text.strip()) from None
                     raise
             except EodhdFreeTierError:

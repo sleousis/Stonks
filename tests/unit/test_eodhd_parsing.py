@@ -33,7 +33,7 @@ def test_parse_prices_basic_shape():
     assert first.ticker == "AAPL.US"
     assert first.date == date(2026, 4, 1)
     assert first.close == 255.63
-    assert first.adj_close == 255.63    # mapped from "adjusted_close"
+    assert first.adj_close == 255.63  # mapped from "adjusted_close"
     assert first.volume == 40_059_400
 
 
@@ -62,8 +62,13 @@ def test_parse_fundamentals_yields_rows_for_all_statements_and_frequencies():
 
 def test_parse_fundamentals_coerces_string_numbers_to_floats():
     rows = list(parse_fundamentals_response("AAPL.US", _load("aapl_fundamentals.json")))
-    rev = next(r for r in rows if r.line_item == "totalRevenue"
-               and r.frequency == "Q" and r.period_end == date(2025, 12, 31))
+    rev = next(
+        r
+        for r in rows
+        if r.line_item == "totalRevenue"
+        and r.frequency == "Q"
+        and r.period_end == date(2025, 12, 31)
+    )
     assert rev.value == 124_300_000_000.0
     assert isinstance(rev.value, float)
 
@@ -75,10 +80,25 @@ def test_parse_fundamentals_skips_date_field_as_line_item():
 
 def test_parse_fundamentals_raises_on_free_tier_error_text():
     with pytest.raises(EodhdFreeTierError):
-        list(parse_fundamentals_response(
-            "AAPL.US",
-            "Only EOD data allowed for free users. Please, contact our support team: support@eodhistoricaldata.com",
-        ))
+        list(
+            parse_fundamentals_response(
+                "AAPL.US",
+                "Only EOD data allowed for free users. Please, contact our support team: support@eodhistoricaldata.com",
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Demo API key — please subscribe for full access.",
+        "This API endpoint is paid only.",
+        "ONLY EOD DATA ALLOWED for free users.",
+    ],
+)
+def test_parse_fundamentals_raises_on_other_known_free_tier_markers(body: str):
+    with pytest.raises(EodhdFreeTierError):
+        list(parse_fundamentals_response("AAPL.US", body))
 
 
 # ---- HTTP layer ------------------------------------------------------------

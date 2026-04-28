@@ -34,6 +34,12 @@ uv run stonks tick [--dry-run] [--as-of YYYY-MM-DD] [--tickers AAPL.US,MSFT.US]
 - **TDD.** Write a failing unit test first, then the implementation. Every new component ships with unit tests. Integration tests live under `tests/integration/`; any test that hits a real network goes under `tests/integration/live/` and is gated by `@pytest.mark.live` + `STONKS_RUN_LIVE_TESTS=1`.
 - **No live-API calls in default test runs.** Default `pytest` must be hermetic. Use `FakeDataSource` (canned data) for pipeline tests.
 - **Secrets never land in git.** `.env` is gitignored; `.env.example` is the only checked-in template.
+- **Vendor-agnostic schemas.** Schemas, lake tables, and column names describe domain concepts, never vendor JSON shapes. EODHD is the first `DataSource`; other adapters must populate the same tables without renaming columns or inventing parallel schemas. Concretely:
+  - Fields whose vendor vocabulary varies (e.g. `before_after_market`, `security_type`, analyst-forecast `period_relative`) use **normalized literal values**; adapters map vendor strings to the canonical literal at parse time.
+  - Vendor-specific fields with no cross-vendor analogue (e.g. EODHD's `HomeCategory`, `LogoURL`) are **not added** — they don't earn a column.
+  - **Domain identifiers** (CUSIP, CIK, ISIN, OpenFigi, LEI) live on `TickerProfile`; the EODHD ticker (`AAPL.US`) is one access key among many.
+  - **Column names use domain terms**, not vendor JSON keys (e.g. `change_pct` not `change_p`, `total_shares_pct` not `totalShares`).
+- **Third-party libraries.** Don't reinvent the wheel — prefer well-maintained external libraries (e.g. `vectorbt`, `FinanceToolkit`) over hand-rolled implementations of non-trivial trading/finance logic. But every non-trivial third-party library must be wrapped behind one of our seams (`Strategy`, `Tuner`, `DataSource`, `Broker`, `Objective`, `SurvivalTest`, or a new ABC if none fit) so vendor-specific types, naming, and quirks never leak into `core/` or downstream blocks. Trivial utility libraries (numpy, pandas, scipy) are exempt.
 
 ## Architecture in one screen
 
@@ -70,6 +76,7 @@ uv run stonks tick [--dry-run] [--as-of YYYY-MM-DD] [--tickers AAPL.US,MSFT.US]
 - Abstract base classes + Protocols are the seam for plugging in new behavior: `DataSource`, `Strategy`, `Tuner`, `Objective`, `SurvivalTest`, `Broker`.
 - Logging via `stonks.logging.get_logger(name)` (structlog JSON). Every cross-block action carries a `run_id` / `tick_id` so logs correlate.
 - Free-tier EODHD only returns EOD prices; the fundamentals endpoint returns a text error. Live fundamentals tests must handle that signal gracefully (skip, not fail).
+- **`Literal` vs `Enum`.** Default to `Literal[...]` for closed sets of stringly-typed tags that flow through serialization boundaries (DB columns, JSON, vendor APIs). Reach for `StrEnum` (3.11+) when the set grows behavior (methods, predicates), needs iteration as a first-class operation, or when named symbols at call sites read better than bare strings. Don't stick with `Literal` just because neighboring code uses it.
 
 ## Known external limits
 

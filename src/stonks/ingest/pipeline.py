@@ -9,18 +9,32 @@ succeeded, ``"error"`` when all failed, and always ``"ok"`` for an empty batch
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
 
 import pandas as pd
+import pydantic
+import requests
 
 from stonks.core.interval import Interval
 from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.schemas import FundamentalRow, IntradayBar, RawPriceBar
-from stonks.ingest.sources.base import DataSource
+from stonks.ingest.sources.base import DataSource, DataSourceError
 from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
+
+# Narrow per-ticker soft-fail surface (I1): vendor-class errors and
+# parse/transport-class errors are expected and soft-fail; programmer bugs
+# (KeyError, AttributeError, TypeError, NameError…) propagate so tests
+# catch them instead of having them masked as "this ticker had no data."
+_SOFT_FAIL_EXCEPTIONS = (
+    DataSourceError,
+    requests.RequestException,
+    json.JSONDecodeError,
+    pydantic.ValidationError,
+)
 
 
 @dataclass(frozen=True)
@@ -98,7 +112,7 @@ class IngestPipeline:
                     ticker=ticker,
                     kinds_found=_non_empty_parts(bundle),
                 )
-            except Exception as exc:
+            except _SOFT_FAIL_EXCEPTIONS as exc:
                 failed += 1
                 last_error = f"{type(exc).__name__}: {exc}"
                 log.warning("ticker.failed", ticker=ticker, error=last_error)
@@ -121,20 +135,35 @@ class IngestPipeline:
         )
 
     def _upsert_bundle(self, bundle: MetadataBundle) -> None:
-        if bundle.profile is not None:
-            self._lake.upsert_ticker_profile(_rows_to_df([bundle.profile]))
-        self._lake.upsert_dividends(_rows_to_df(bundle.dividends))
-        self._lake.upsert_stock_splits(_rows_to_df(bundle.splits))
-        self._lake.upsert_insider_transactions(_rows_to_df(bundle.insider_transactions))
-        self._lake.upsert_news(_rows_to_df(bundle.news))
-        self._lake.upsert_news_sentiment(_rows_to_df(bundle.news_sentiment))
-        self._lake.upsert_analyst_estimates(_rows_to_df(bundle.analyst_estimates))
-        if bundle.analyst_ratings is not None:
-            self._lake.upsert_analyst_ratings(_rows_to_df([bundle.analyst_ratings]))
-        self._lake.upsert_shares_outstanding(_rows_to_df(bundle.shares_outstanding))
-        self._lake.upsert_employee_count(_rows_to_df(bundle.employee_count))
-        self._lake.upsert_segmentation(_rows_to_df(bundle.segmentation))
-        self._lake.upsert_market_cap_history(_rows_to_df(bundle.market_cap_history))
+        # Atomic per ticker (C2): if any single upsert raises, every prior
+        # write in this bundle is rolled back. Without this wrapper a mid-
+        # bundle failure would leave half the tables populated and half
+        # not, then the outer per-ticker except in ``run_metadata`` would
+        # mark the ticker "failed" while the lake stayed in an inconsistent
+        # half-state.
+        with self._lake.transaction():
+            if bundle.profile is not None:
+                self._lake.upsert_ticker_profile(_rows_to_df([bundle.profile]))
+            if bundle.ticker_snapshot is not None:
+                self._lake.upsert_ticker_snapshots(_rows_to_df([bundle.ticker_snapshot]))
+            self._lake.upsert_dividends(_rows_to_df(bundle.dividends))
+            self._lake.upsert_stock_splits(_rows_to_df(bundle.splits))
+            self._lake.upsert_insider_transactions(_rows_to_df(bundle.insider_transactions))
+            self._lake.upsert_news(_rows_to_df(bundle.news))
+            self._lake.upsert_news_sentiment(_rows_to_df(bundle.news_sentiment))
+            self._lake.upsert_earnings_announcements(_rows_to_df(bundle.earnings_announcements))
+            self._lake.upsert_analyst_forecasts(_rows_to_df(bundle.analyst_forecasts))
+            self._lake.upsert_analyst_ratings(_rows_to_df(bundle.analyst_ratings))
+            self._lake.upsert_institutional_holders(_rows_to_df(bundle.institutional_holders))
+            if bundle.esg_snapshot is not None:
+                self._lake.upsert_esg_snapshots(_rows_to_df([bundle.esg_snapshot]))
+            self._lake.upsert_esg_activities(_rows_to_df(bundle.esg_activities))
+            self._lake.upsert_cross_listings(_rows_to_df(bundle.cross_listings))
+            self._lake.upsert_officers(_rows_to_df(bundle.officers))
+            self._lake.upsert_shares_outstanding(_rows_to_df(bundle.shares_outstanding))
+            self._lake.upsert_employee_count(_rows_to_df(bundle.employee_count))
+            self._lake.upsert_segmentation(_rows_to_df(bundle.segmentation))
+            self._lake.upsert_market_cap_history(_rows_to_df(bundle.market_cap_history))
 
     def _run(self, *, kind, tickers, fetch, to_df, upsert) -> IngestRunResult:
         run_id = self._lake.open_ingest_run(source=self._source.source_id, kind=kind)
@@ -151,7 +180,7 @@ class IngestPipeline:
                 upsert(df)
                 ok += 1
                 log.info("ticker.ingested", ticker=ticker, rows=len(rows))
-            except Exception as exc:  # per-ticker soft-fail
+            except _SOFT_FAIL_EXCEPTIONS as exc:  # per-ticker soft-fail
                 failed += 1
                 last_error = f"{type(exc).__name__}: {exc}"
                 log.warning("ticker.failed", ticker=ticker, error=last_error)
@@ -212,13 +241,28 @@ def _non_empty_parts(bundle: MetadataBundle) -> list[str]:
     out: list[str] = []
     if bundle.profile is not None:
         out.append("profile")
+    if bundle.ticker_snapshot is not None:
+        out.append("ticker_snapshot")
+    if bundle.esg_snapshot is not None:
+        out.append("esg_snapshot")
     for name in (
-        "dividends", "splits", "insider_transactions", "news", "news_sentiment",
-        "analyst_estimates", "shares_outstanding", "employee_count",
-        "segmentation", "market_cap_history",
+        "dividends",
+        "splits",
+        "insider_transactions",
+        "news",
+        "news_sentiment",
+        "earnings_announcements",
+        "analyst_forecasts",
+        "analyst_ratings",
+        "institutional_holders",
+        "esg_activities",
+        "cross_listings",
+        "officers",
+        "shares_outstanding",
+        "employee_count",
+        "segmentation",
+        "market_cap_history",
     ):
         if getattr(bundle, name):
             out.append(name)
-    if bundle.analyst_ratings is not None:
-        out.append("analyst_ratings")
     return out

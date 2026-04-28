@@ -6,6 +6,8 @@ and applied in lexical order at ``migrate()`` time.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -19,7 +21,17 @@ from stonks.core.timeutil import day_end, day_start
 MIGRATIONS_DIR = Path(__file__).parent / "migrations_duckdb"
 
 _PRICE_COLS = ("ticker", "date", "open", "high", "low", "close", "adj_close", "volume")
-_BAR_COLS = ("ticker", "timestamp", "interval", "open", "high", "low", "close", "adj_close", "volume")
+_BAR_COLS = (
+    "ticker",
+    "timestamp",
+    "interval",
+    "open",
+    "high",
+    "low",
+    "close",
+    "adj_close",
+    "volume",
+)
 _FUND_COLS = ("ticker", "period_end", "frequency", "statement", "line_item", "value")
 
 
@@ -58,8 +70,7 @@ class DuckDBLake:
             " version INTEGER PRIMARY KEY, applied_at TIMESTAMP NOT NULL)"
         )
         applied = {
-            row[0]
-            for row in self.con.execute("SELECT version FROM schema_migrations").fetchall()
+            row[0] for row in self.con.execute("SELECT version FROM schema_migrations").fetchall()
         }
         for path in sorted(MIGRATIONS_DIR.glob("*.sql")):
             version = int(path.stem.split("_", 1)[0])
@@ -99,6 +110,39 @@ class DuckDBLake:
         if table not in known:
             raise ValueError(f"unknown table {table!r}")
         return int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        """Group multiple writes into one atomic unit.
+
+        DuckDB's UPSERT and DELETE are statement-level atomic, but a
+        sequence of them isn't — so any caller that wants "all or nothing"
+        across several methods (e.g. an ingest bundle, or the
+        delete-then-insert dance in ``upsert_officers``) must wrap the
+        block in this helper. On exception the transaction is ROLLed BACK
+        and the exception re-raises; on clean exit it COMMITs.
+
+        Re-entrant: a nested call is a no-op (DuckDB doesn't support nested
+        transactions, and the outer ``transaction()`` already owns the
+        atomicity). The outermost caller is responsible for the
+        BEGIN/COMMIT pair.
+        """
+        if getattr(self, "_in_transaction", False):
+            # Inner caller piggy-backs on the outer transaction. The
+            # outermost ``transaction()`` keeps the rollback responsibility.
+            yield
+            return
+        self.con.execute("BEGIN")
+        self._in_transaction = True
+        try:
+            yield
+        except Exception:
+            self.con.execute("ROLLBACK")
+            raise
+        else:
+            self.con.execute("COMMIT")
+        finally:
+            self._in_transaction = False
 
     # ---- bars (interval-aware) ---------------------------------------------
 
@@ -173,8 +217,7 @@ class DuckDBLake:
         """
         if target.seconds <= source.seconds:
             raise ValueError(
-                f"target interval {target.code} must be coarser than "
-                f"source {source.code}"
+                f"target interval {target.code} must be coarser than source {source.code}"
             )
         # DuckDB's time_bucket(interval, ts) aligns on the interval origin.
         # OHLCV aggregation within each bucket:
@@ -292,22 +335,65 @@ class DuckDBLake:
             [datetime.now(UTC), tickers_ok, tickers_failed, status, error, run_id],
         )
 
-    # ---- extended fundamentals (migration 002) ------------------------------
+    # ---- extended fundamentals (migrations 002 / 004 / 005) ----------------
 
     _DIVIDEND_COLS = (
-        "ticker", "ex_date", "amount", "currency",
-        "pay_date", "record_date", "declaration_date",
+        "ticker",
+        "ex_date",
+        "amount",
+        "currency",
+        "pay_date",
+        "record_date",
+        "declaration_date",
     )
     _INSIDER_COLS = (
-        "ticker", "date", "owner_name", "owner_relation", "transaction_code",
-        "shares", "price", "value", "vendor_id",
+        "ticker",
+        "transaction_date",
+        "filing_date",
+        "owner_name",
+        "owner_cik",
+        "owner_relation",
+        "owner_title",
+        "transaction_code",
+        "acquired_disposed",
+        "shares",
+        "price",
+        "value",
+        "post_transaction_amount",
+        "sec_link",
     )
-    _NEWS_COLS = ("ticker", "published_at", "title", "url", "source_name", "sentiment")
+    _NEWS_COLS = (
+        "ticker",
+        "published_at",
+        "title",
+        "url",
+        "source_name",
+        "content",
+        "symbols",
+        "tags",
+        "sentiment",
+        "sentiment_pos",
+        "sentiment_neg",
+        "sentiment_neu",
+    )
     _NEWS_SENTIMENT_COLS = ("ticker", "date", "sentiment", "article_count")
-    _ANALYST_EST_COLS = ("ticker", "period_end", "metric", "value")
     _ANALYST_RATINGS_COLS = (
-        "ticker", "rating", "target_price",
-        "strong_buy", "buy", "hold", "sell", "strong_sell", "updated_at",
+        "ticker",
+        "snapshot_date",
+        "target_price",
+        "strong_buy",
+        "buy",
+        "hold",
+        "sell",
+        "strong_sell",
+    )
+    _ANALYST_RATINGS_VALUE_COLS = (
+        "target_price",
+        "strong_buy",
+        "buy",
+        "hold",
+        "sell",
+        "strong_sell",
     )
     _SHARES_OUT_COLS = ("ticker", "date", "shares")
     _EMPLOYEES_COLS = ("ticker", "date", "count")
@@ -315,11 +401,128 @@ class DuckDBLake:
     _STOCK_SPLITS_COLS = ("ticker", "date", "ratio")
     _MARKET_CAP_COLS = ("ticker", "date", "market_cap")
     _TICKER_PROFILE_COLS = (
-        "id", "exchange", "currency", "name", "country_iso", "ipo_date",
-        "sector", "industry", "fiscal_year_end", "web_url",
-        "is_delisted", "is_bank",
-        "beta", "short_percent", "insider_ownership_percent",
-        "institutional_ownership_percent", "employee_count", "esg_score",
+        "id",
+        "exchange",
+        "currency",
+        "name",
+        "country_iso",
+        "sector",
+        "industry",
+        "gic_sector",
+        "gic_group",
+        "gic_industry",
+        "gic_sub_industry",
+        "ipo_date",
+        "is_delisted",
+        "delisted_date",
+        "is_bank",
+        "fiscal_year_end",
+        "security_type",
+        "cusip",
+        "cik",
+        "isin",
+        "open_figi",
+        "lei",
+        "employer_id_number",
+        "primary_ticker",
+        "address_street",
+        "address_city",
+        "address_state",
+        "address_country",
+        "address_zip",
+        "phone",
+        "web_url",
+        "description",
+        "updated_at",
+    )
+    _INSTITUTIONAL_HOLDERS_COLS = (
+        "ticker",
+        "holder_kind",
+        "name",
+        "snapshot_date",
+        "total_shares_pct",
+        "total_assets_pct",
+        "current_shares",
+        "change_shares",
+        "change_pct",
+    )
+    _INSTITUTIONAL_HOLDERS_VALUE_COLS = (
+        "total_shares_pct",
+        "total_assets_pct",
+        "current_shares",
+        "change_shares",
+        "change_pct",
+    )
+    _EARNINGS_ANNOUNCEMENTS_COLS = (
+        "ticker",
+        "period_end",
+        "report_date",
+        "before_after_market",
+        "currency",
+        "eps_actual",
+        "eps_estimate",
+        "eps_difference",
+        "surprise_percent",
+    )
+    _ANALYST_FORECASTS_COLS = (
+        "ticker",
+        "period_end",
+        "period_relative",
+        "growth",
+        "eps_estimate_avg",
+        "eps_estimate_low",
+        "eps_estimate_high",
+        "eps_estimate_year_ago",
+        "eps_estimate_n_analysts",
+        "eps_estimate_growth",
+        "revenue_estimate_avg",
+        "revenue_estimate_low",
+        "revenue_estimate_high",
+        "revenue_estimate_year_ago",
+        "revenue_estimate_n_analysts",
+        "revenue_estimate_growth",
+        "eps_trend_current",
+        "eps_trend_7d_ago",
+        "eps_trend_30d_ago",
+        "eps_trend_60d_ago",
+        "eps_trend_90d_ago",
+        "eps_revisions_up_7d",
+        "eps_revisions_up_30d",
+        "eps_revisions_down_7d",
+        "eps_revisions_down_30d",
+    )
+    _ESG_SNAPSHOTS_COLS = (
+        "ticker",
+        "rating_date",
+        "total_esg",
+        "total_esg_percentile",
+        "environment_score",
+        "environment_percentile",
+        "social_score",
+        "social_percentile",
+        "governance_score",
+        "governance_percentile",
+        "controversy_level",
+    )
+    _ESG_SNAPSHOTS_VALUE_COLS = tuple(
+        c for c in _ESG_SNAPSHOTS_COLS if c not in ("ticker", "rating_date")
+    )
+    _ESG_ACTIVITIES_COLS = ("ticker", "rating_date", "activity", "involvement")
+    _CROSS_LISTINGS_COLS = ("ticker", "exchange", "exchange_code", "name")
+    _OFFICERS_COLS = ("ticker", "name", "title", "year_born")
+    _TICKER_SNAPSHOTS_COLS = (
+        "ticker",
+        "snapshot_date",
+        "beta",
+        "short_percent",
+        "percent_insiders",
+        "percent_institutions",
+    )
+    _TICKER_SNAPSHOTS_VALUE_COLS = (
+        "beta",
+        "short_percent",
+        "percent_insiders",
+        "percent_institutions",
     )
 
     def upsert_dividends(self, df: pd.DataFrame) -> int:
@@ -337,22 +540,31 @@ class DuckDBLake:
         ).fetchdf()
 
     def upsert_insider_transactions(self, df: pd.DataFrame) -> int:
-        # Deduplicates on (ticker, date, owner_name, transaction_code, shares)
-        # via the unique index; the synthetic id column is excluded from insert.
+        # Deduplicates on (ticker, transaction_date, owner_name,
+        # transaction_code, shares, sec_link) via the unique index;
+        # the synthetic id column is excluded from insert.
         if df.empty:
             return 0
         self.con.register("_in", df[list(self._INSIDER_COLS)])
         try:
+            non_pk = (
+                "filing_date",
+                "owner_cik",
+                "owner_relation",
+                "owner_title",
+                "acquired_disposed",
+                "price",
+                "value",
+                "post_transaction_amount",
+            )
+            update_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in non_pk)
             self.con.execute(
                 f"""
                 INSERT INTO insider_transactions ({", ".join(self._INSIDER_COLS)})
                 SELECT {", ".join(self._INSIDER_COLS)} FROM _in
-                ON CONFLICT (ticker, date, owner_name, transaction_code, shares)
-                DO UPDATE SET
-                    owner_relation = EXCLUDED.owner_relation,
-                    price = EXCLUDED.price,
-                    value = EXCLUDED.value,
-                    vendor_id = EXCLUDED.vendor_id
+                ON CONFLICT (ticker, transaction_date, owner_name,
+                             transaction_code, shares, sec_link)
+                DO UPDATE SET {update_clause}
                 """
             )
         finally:
@@ -375,20 +587,16 @@ class DuckDBLake:
             pk=("ticker", "date"),
         )
 
-    def upsert_analyst_estimates(self, df: pd.DataFrame) -> int:
-        return self._upsert(
-            df,
-            table="analyst_estimates",
-            cols=self._ANALYST_EST_COLS,
-            pk=("ticker", "period_end", "metric"),
-        )
-
     def upsert_analyst_ratings(self, df: pd.DataFrame) -> int:
-        return self._upsert(
+        # Time-series + change-detection: only insert a new row when the
+        # consensus actually moves from the most recent prior snapshot.
+        return self._upsert_on_change(
             df,
             table="analyst_ratings",
-            cols=self._ANALYST_RATINGS_COLS,
-            pk=("ticker",),
+            cols=list(self._ANALYST_RATINGS_COLS),
+            identity_cols=["ticker"],
+            value_cols=list(self._ANALYST_RATINGS_VALUE_COLS),
+            snapshot_col="snapshot_date",
         )
 
     def upsert_shares_outstanding(self, df: pd.DataFrame) -> int:
@@ -439,7 +647,105 @@ class DuckDBLake:
             pk=("id",),
         )
 
-    # ---- generic upsert helper ---------------------------------------------
+    def upsert_institutional_holders(self, df: pd.DataFrame) -> int:
+        return self._upsert_on_change(
+            df,
+            table="institutional_holders",
+            cols=list(self._INSTITUTIONAL_HOLDERS_COLS),
+            identity_cols=["ticker", "holder_kind", "name"],
+            value_cols=list(self._INSTITUTIONAL_HOLDERS_VALUE_COLS),
+            snapshot_col="snapshot_date",
+        )
+
+    def upsert_earnings_announcements(self, df: pd.DataFrame) -> int:
+        return self._upsert(
+            df,
+            table="earnings_announcements",
+            cols=self._EARNINGS_ANNOUNCEMENTS_COLS,
+            pk=("ticker", "period_end"),
+        )
+
+    def upsert_analyst_forecasts(self, df: pd.DataFrame) -> int:
+        return self._upsert(
+            df,
+            table="analyst_forecasts",
+            cols=self._ANALYST_FORECASTS_COLS,
+            pk=("ticker", "period_end", "period_relative"),
+        )
+
+    def upsert_esg_snapshots(self, df: pd.DataFrame) -> int:
+        return self._upsert_on_change(
+            df,
+            table="esg_snapshots",
+            cols=list(self._ESG_SNAPSHOTS_COLS),
+            identity_cols=["ticker"],
+            value_cols=list(self._ESG_SNAPSHOTS_VALUE_COLS),
+            snapshot_col="rating_date",
+        )
+
+    def upsert_esg_activities(self, df: pd.DataFrame) -> int:
+        return self._upsert(
+            df,
+            table="esg_activities",
+            cols=self._ESG_ACTIVITIES_COLS,
+            pk=("ticker", "rating_date", "activity"),
+        )
+
+    def upsert_cross_listings(self, df: pd.DataFrame) -> int:
+        return self._upsert(
+            df,
+            table="cross_listings",
+            cols=self._CROSS_LISTINGS_COLS,
+            pk=("ticker", "exchange", "exchange_code"),
+        )
+
+    def upsert_officers(self, df: pd.DataFrame) -> int:
+        """Replace the officer roster for each distinct ticker in ``df``.
+
+        Officers don't carry per-officer dates from the vendor, so the table
+        is current-state, not time-series. For each ticker present in the
+        input, existing rows are deleted before the new roster is inserted —
+        so departures show up as removed rows on the next fetch.
+        """
+        if df.empty:
+            return 0
+        frame = df[list(self._OFFICERS_COLS)]
+        tickers = frame["ticker"].unique().tolist()
+        if not tickers:
+            return 0
+        self.con.register("_in", frame)
+        try:
+            # Atomic delete-then-insert: if the INSERT fails (e.g. a NOT
+            # NULL violation on a column the vendor unexpectedly returned
+            # blank), we don't want the DELETE to have already wiped the
+            # roster — wrap both statements in one transaction so the
+            # caller either sees the new roster or the old one, never an
+            # empty one.
+            with self.transaction():
+                placeholders = ",".join(["?"] * len(tickers))
+                self.con.execute(
+                    f"DELETE FROM officers WHERE ticker IN ({placeholders})",
+                    tickers,
+                )
+                self.con.execute(
+                    f"INSERT INTO officers ({', '.join(self._OFFICERS_COLS)}) "
+                    f"SELECT {', '.join(self._OFFICERS_COLS)} FROM _in"
+                )
+        finally:
+            self.con.unregister("_in")
+        return len(df)
+
+    def upsert_ticker_snapshots(self, df: pd.DataFrame) -> int:
+        return self._upsert_on_change(
+            df,
+            table="ticker_snapshots",
+            cols=list(self._TICKER_SNAPSHOTS_COLS),
+            identity_cols=["ticker"],
+            value_cols=list(self._TICKER_SNAPSHOTS_VALUE_COLS),
+            snapshot_col="snapshot_date",
+        )
+
+    # ---- generic upsert helpers --------------------------------------------
 
     def _upsert(
         self,
@@ -472,10 +778,113 @@ class DuckDBLake:
             self.con.unregister("_in")
         return len(df)
 
+    def _upsert_on_change(
+        self,
+        df: pd.DataFrame,
+        *,
+        table: str,
+        cols: list[str],
+        identity_cols: list[str],
+        value_cols: list[str],
+        snapshot_col: str,
+    ) -> int:
+        """Insert-on-change helper for snapshot tables (SCD-2-lite).
+
+        Three behaviours, in one call:
+
+        1. **First time seeing this identity** (no prior row) → INSERT.
+        2. **Same ``snapshot_col`` as the latest prior row** → UPDATE the
+           existing row's value columns (handles vendor corrections).
+        3. **Newer ``snapshot_col`` than the latest prior row** → INSERT a
+           new row only if at least one ``value_col`` differs from the
+           latest prior row; otherwise NO-OP (the polling cadence
+           outpaced the data's real change cadence).
+
+        Backfill of older snapshot dates is permitted: rows whose
+        ``snapshot_col`` is ``<=`` the latest stored row always pass the
+        eligibility filter. If the exact ``(identity_cols..., snapshot_col)``
+        row already exists, the ON CONFLICT branch UPDATEs it in place
+        (vendor correction); otherwise it INSERTs a new historical row.
+
+        Returns the *net* number of rows added to ``table`` (count after −
+        count before) — **not** rows touched. ON CONFLICT updates and
+        no-change skips both return 0, indistinguishable from each other
+        at this layer; callers that need to disambiguate should query
+        ``table`` directly before/after.
+
+        ``identity_cols`` define the entity (e.g. ``["ticker", "name"]``);
+        ``value_cols`` are the observable columns we compare for change;
+        the rest of ``cols`` get persisted on INSERT but aren't part of
+        the change check.
+
+        Tables backed by this helper must declare a PRIMARY KEY of
+        ``(identity_cols..., snapshot_col)`` so the ON CONFLICT clause
+        has something to fire on.
+        """
+        if df.empty:
+            return 0
+
+        cols = list(cols)
+        identity_eq = " AND ".join(f"_in.{c} = latest.{c}" for c in identity_cols)
+        # NULL-drift suppression (I10): a vendor briefly returning NULL for
+        # a previously-known value is *not* a change worth recording — that
+        # would bloat the time series with vendor flakiness, not real
+        # movement. So we count a column as "changed" only when the new
+        # value is non-NULL AND differs from the prior. Going from NULL to
+        # a real value still counts (we just learned it); going the other
+        # way doesn't (we forgot it momentarily).
+        any_value_changed = " OR ".join(
+            (
+                f"((latest.{c} IS NULL AND _in.{c} IS NOT NULL) "
+                f"OR (latest.{c} IS NOT NULL AND _in.{c} IS NOT NULL "
+                f"AND latest.{c} != _in.{c}))"
+            )
+            for c in value_cols
+        )
+        update_clause = ", ".join(
+            f"{c} = EXCLUDED.{c}" for c in cols if c not in (*identity_cols, snapshot_col)
+        )
+        partition = ", ".join(identity_cols)
+        col_list = ", ".join(cols)
+        pk_list = ", ".join((*identity_cols, snapshot_col))
+
+        self.con.register("_in", df[cols])
+        try:
+            with self.transaction():
+                before = int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+                sql = f"""
+                    WITH ranked AS (
+                        SELECT *,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY {partition}
+                                   ORDER BY {snapshot_col} DESC
+                               ) AS _rn
+                          FROM {table}
+                    ),
+                    latest AS (
+                        SELECT * FROM ranked WHERE _rn = 1
+                    ),
+                    eligible AS (
+                        SELECT _in.* FROM _in
+                        LEFT JOIN latest ON {identity_eq}
+                        WHERE
+                            latest.{snapshot_col} IS NULL
+                            OR _in.{snapshot_col} <= latest.{snapshot_col}
+                            OR ({any_value_changed})
+                    )
+                    INSERT INTO {table} ({col_list})
+                    SELECT {col_list} FROM eligible
+                    ON CONFLICT ({pk_list})
+                    DO UPDATE SET {update_clause}
+                """
+                self.con.execute(sql)
+                after = int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+                return after - before
+        finally:
+            self.con.unregister("_in")
+
     # ---- escape hatch -------------------------------------------------------
 
     def sql(self, query: str, params: list | None = None) -> pd.DataFrame:
         cur = self.con.execute(query, params) if params else self.con.execute(query)
         return cur.fetchdf()
-
-
