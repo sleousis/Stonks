@@ -16,7 +16,11 @@ from stonks.ingest.pipeline import IngestPipeline
 from stonks.ingest.schemas import (
     AnalystForecastRow,
     AnalystRatingsRow,
+    BondProfileRow,
+    BondYieldRow,
+    CommodityContractRow,
     CrossListingRow,
+    CryptoProfileRow,
     DividendRow,
     EarningsAnnouncementRow,
     EmployeeCountRow,
@@ -386,3 +390,87 @@ def test_run_metadata_propagates_programmer_bugs_instead_of_soft_failing(lake):
     pipe = IngestPipeline(source=src, lake=lake)
     with pytest.raises(TypeError, match="parser crashed"):
         pipe.run_metadata(["AAPL.US"])
+
+
+# ---- multi-asset bundles ---------------------------------------------------
+
+
+def test_run_metadata_persists_per_class_bundle_fields(lake):
+    """A non-equity bundle round-trips through the pipeline into the
+    matching per-class table — instruments rows carry the right
+    asset_class, equity-only tables stay empty, and bond_yields / supply
+    metadata land on the dedicated tables.
+    """
+    bundles = {
+        "BTC-USD.CC": MetadataBundle(
+            profile=TickerProfile(id="BTC-USD.CC", asset_class="crypto", name="Bitcoin USD"),
+            crypto_profile=CryptoProfileRow(
+                ticker="BTC-USD.CC",
+                base_symbol="BTC",
+                quote_symbol="USD",
+                blockchain="Bitcoin",
+                consensus_type="proof_of_work",
+                circulating_supply=19_700_000.0,
+                max_supply=21_000_000.0,
+            ),
+        ),
+        "US10Y.GBOND": MetadataBundle(
+            profile=TickerProfile(id="US10Y.GBOND", asset_class="bond"),
+            bond_profile=BondProfileRow(
+                ticker="US10Y.GBOND",
+                issuer_name="United States Treasury",
+                issuer_kind="sovereign",
+                bond_kind="treasury",
+                coupon_rate=4.25,
+            ),
+            bond_yields=(
+                BondYieldRow(
+                    ticker="US10Y.GBOND",
+                    date=date(2026, 4, 1),
+                    yield_to_maturity=4.18,
+                    clean_price=99.45,
+                ),
+            ),
+        ),
+        "GC.COMM": MetadataBundle(
+            profile=TickerProfile(id="GC.COMM", asset_class="commodity"),
+            commodity_contract=CommodityContractRow(
+                ticker="GC.COMM",
+                underlying_symbol="GC",
+                contract_kind="continuous",
+                contract_size=100.0,
+                contract_unit="troy_ounce",
+            ),
+        ),
+    }
+    src = _FakeMetadataSource(bundles)
+    pipe = IngestPipeline(source=src, lake=lake)
+    result = pipe.run_metadata(["BTC-USD.CC", "US10Y.GBOND", "GC.COMM"])
+
+    assert result.status == "ok"
+    assert result.tickers_ok == 3
+
+    classes = lake.sql(
+        "SELECT id, asset_class FROM instruments ORDER BY id"
+    ).set_index("id")["asset_class"].to_dict()
+    assert classes == {
+        "BTC-USD.CC": "crypto",
+        "GC.COMM": "commodity",
+        "US10Y.GBOND": "bond",
+    }
+
+    assert lake.count_rows("crypto_profiles") == 1
+    assert lake.count_rows("bond_profiles") == 1
+    assert lake.count_rows("commodity_contracts") == 1
+    assert lake.count_rows("bond_yield_history") == 1
+
+    # Equity-only tables saw nothing — these bundles never set those fields.
+    for equity_only in (
+        "dividends",
+        "insider_transactions",
+        "news",
+        "earnings_announcements",
+        "analyst_ratings",
+        "esg_snapshots",
+    ):
+        assert lake.count_rows(equity_only) == 0
