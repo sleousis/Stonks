@@ -20,6 +20,8 @@ from stonks.core.types import AssetClass
 from stonks.ingest.pipeline import IngestPipeline, IngestRunResult
 from stonks.ingest.sources.base import DataSource
 from stonks.ingest.sources.eodhd import (
+    EODHD_DEFAULT_MACRO_INDICATOR,
+    EODHD_MACRO_INDICATORS,
     EodhdDataSource,
     EodhdFreeTierError,
     classify_asset_class,
@@ -388,6 +390,64 @@ def ingest_intraday(
         until_d = date.fromisoformat(until) if until else None
         pipeline = IngestPipeline(source=source, lake=lake)
         result = pipeline.run_intraday_bars(ticker_list, parsed, since=since_d, until=until_d)
+
+    _print_result(result)
+
+
+@ingest_app.command("macro")
+def ingest_macro(
+    countries: str = typer.Option(
+        ...,
+        "--countries",
+        help="comma-separated ISO 3166-1 alpha-3 country codes, e.g. USA,DEU,GBR",
+    ),
+    indicators: str | None = typer.Option(
+        None,
+        "--indicators",
+        help=(
+            "comma-separated macro indicator keys (snake_case). "
+            "Omit to fall back to EODHD's default ('gdp_current_usd'); "
+            "pass 'all' to ingest the full vendor catalog. "
+            "Reference list: https://eodhd.com/financial-apis/macroeconomics-data-api/"
+        ),
+    ),
+) -> None:
+    """Pull macroeconomic time series for one or more countries × indicators.
+
+    Each (country, indicator) pair is one EODHD call; rows are upserted into
+    the ``macro_indicators`` lake table keyed by
+    ``(country_iso, indicator, observation_date)``. Re-running is idempotent;
+    vendor revisions to a previously-published value land in place.
+    """
+    settings = _settings()
+    source = _build_source(settings)
+
+    country_list = _parse_tickers(countries)
+    if not country_list:
+        raise typer.BadParameter("--countries requires at least one ISO-3 code")
+    bad_countries = [c for c in country_list if len(c) != 3 or not c.isalpha()]
+    if bad_countries:
+        raise typer.BadParameter(
+            f"--countries entries must be ISO 3166-1 alpha-3 (e.g. USA); invalid: {bad_countries}"
+        )
+    country_list = [c.upper() for c in country_list]
+
+    if indicators is None:
+        indicator_list: list[str] = [EODHD_DEFAULT_MACRO_INDICATOR]
+    elif indicators.strip().lower() == "all":
+        indicator_list = list(EODHD_MACRO_INDICATORS)
+    else:
+        indicator_list = _parse_tickers(indicators)
+        if not indicator_list:
+            raise typer.BadParameter("--indicators must be non-empty (or omitted, or 'all')")
+
+    with _open_lake(settings.lake.path) as lake:
+        lake.migrate()
+        pipeline = IngestPipeline(source=source, lake=lake)
+        result = pipeline.run_macro_indicators(
+            countries=country_list,
+            indicators=indicator_list,
+        )
 
     _print_result(result)
 

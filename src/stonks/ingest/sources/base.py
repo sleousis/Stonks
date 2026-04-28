@@ -16,7 +16,13 @@ from datetime import date
 
 from stonks.core.interval import Interval
 from stonks.ingest.metadata_bundle import MetadataBundle
-from stonks.ingest.schemas import ExchangeInfo, FinancialStatementsBundle, IntradayBar, RawPriceBar
+from stonks.ingest.schemas import (
+    ExchangeInfo,
+    FinancialStatementsBundle,
+    IntradayBar,
+    MacroIndicatorRow,
+    RawPriceBar,
+)
 
 
 class DataSourceError(RuntimeError):
@@ -72,4 +78,18 @@ class DataSource(ABC):
     def list_exchanges(self) -> Iterable[ExchangeInfo]:
         """Return the exchanges this source can serve. Sources without a
         discovery endpoint inherit the empty default."""
+        return ()
+
+    def fetch_macro_indicator(
+        self,
+        country_iso: str,
+        indicator: str,
+    ) -> Iterable[MacroIndicatorRow]:
+        """Return the time series for one macroeconomic indicator in one
+        country. ``country_iso`` is ISO 3166-1 alpha-3.
+
+        Sources without a macro endpoint inherit the empty default so
+        only the adapters that actually serve macro data have to opt in.
+        """
+        del country_iso, indicator
         return ()

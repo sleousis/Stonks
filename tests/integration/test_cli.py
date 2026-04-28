@@ -152,6 +152,83 @@ def test_ingest_exchanges_exits_cleanly_on_free_tier(runner, cli_env, monkeypatc
     assert "Traceback" not in result.output
 
 
+def test_ingest_macro_via_fake_source(runner, cli_env, monkeypatch):
+    """`stonks ingest macro --countries USA --indicators real_gdp_total`
+    runs end-to-end against a fake source that returns one observation."""
+    from datetime import date as _date
+
+    from stonks import cli as cli_module
+    from stonks.ingest.schemas import MacroIndicatorRow
+
+    class _FakeMacroSource(_FakeSource):
+        def fetch_macro_indicator(self, country_iso, indicator):
+            return [
+                MacroIndicatorRow(
+                    country_iso=country_iso,
+                    indicator=indicator,
+                    observation_date=_date(2024, 1, 1),
+                    period="annual",
+                    value=27_000.0,
+                ),
+            ]
+
+    monkeypatch.setattr(cli_module, "_build_source", lambda settings: _FakeMacroSource())
+
+    runner.invoke(app, ["db", "init"])
+    result = runner.invoke(
+        app,
+        ["ingest", "macro", "--countries", "USA", "--indicators", "real_gdp_total"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "ok" in result.output.lower()
+
+
+def test_ingest_macro_rejects_non_iso3_country(runner, cli_env, monkeypatch):
+    """A two-letter country code should bounce at the CLI boundary with a
+    BadParameter exit, not bubble through to the HTTP client."""
+    from stonks import cli as cli_module
+
+    monkeypatch.setattr(cli_module, "_build_source", lambda settings: _FakeSource())
+
+    runner.invoke(app, ["db", "init"])
+    result = runner.invoke(
+        app,
+        ["ingest", "macro", "--countries", "US", "--indicators", "real_gdp_total"],
+    )
+    assert result.exit_code != 0
+    assert "ISO" in result.output or "alpha-3" in result.output
+
+
+def test_ingest_macro_defaults_to_vendor_default_indicator(runner, cli_env, monkeypatch):
+    """Omitting --indicators should fall back to the vendor's default
+    (``gdp_current_usd``) and still produce one successful pair."""
+    from datetime import date as _date
+
+    from stonks import cli as cli_module
+    from stonks.ingest.schemas import MacroIndicatorRow
+
+    captured: list[tuple[str, str]] = []
+
+    class _CapturingSource(_FakeSource):
+        def fetch_macro_indicator(self, country_iso, indicator):
+            captured.append((country_iso, indicator))
+            return [
+                MacroIndicatorRow(
+                    country_iso=country_iso,
+                    indicator=indicator,
+                    observation_date=_date(2024, 1, 1),
+                    value=1.0,
+                ),
+            ]
+
+    monkeypatch.setattr(cli_module, "_build_source", lambda settings: _CapturingSource())
+
+    runner.invoke(app, ["db", "init"])
+    result = runner.invoke(app, ["ingest", "macro", "--countries", "USA"])
+    assert result.exit_code == 0, result.output
+    assert captured == [("USA", "gdp_current_usd")]
+
+
 def test_ingest_exchanges_exits_with_error_on_request_failure(runner, cli_env, monkeypatch):
     """I7: transport errors should also be caught and shown as a user-facing
     error message rather than a stack trace."""

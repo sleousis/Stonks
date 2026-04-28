@@ -20,7 +20,12 @@ import requests
 
 from stonks.core.interval import Interval
 from stonks.ingest.metadata_bundle import MetadataBundle
-from stonks.ingest.schemas import FinancialStatementsBundle, IntradayBar, RawPriceBar
+from stonks.ingest.schemas import (
+    FinancialStatementsBundle,
+    IntradayBar,
+    MacroIndicatorRow,
+    RawPriceBar,
+)
 from stonks.ingest.sources.base import DataSource, DataSourceError
 from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
@@ -144,6 +149,71 @@ class IngestPipeline:
             self._lake.upsert_income_statement(_rows_to_df(bundle.income))
             self._lake.upsert_balance_sheet(_rows_to_df(bundle.balance))
             self._lake.upsert_cash_flow_statement(_rows_to_df(bundle.cashflow))
+
+    def run_macro_indicators(
+        self,
+        countries: Sequence[str],
+        indicators: Sequence[str],
+    ) -> IngestRunResult:
+        """Pull each ``(country, indicator)`` macro time series and upsert.
+
+        Iterates the cross product of ``countries × indicators`` (the
+        natural shape of the EODHD endpoint, which serves one country +
+        one indicator per call). Each pair is one unit of work for the
+        purposes of soft-fail accounting: a vendor outage on
+        ``(USA, gdp_growth_annual)`` doesn't poison
+        ``(DEU, real_gdp_total)``.
+
+        ``tickers_ok`` / ``tickers_failed`` count *pairs*, not countries —
+        we keep the existing ``IngestRunResult`` field names to avoid
+        forking the result type for a single new flow.
+        """
+        run_id = self._lake.open_ingest_run(source=self._source.source_id, kind="macro")
+        log = self._log.bind(run_id=run_id, kind="macro")
+
+        ok = 0
+        failed = 0
+        last_error: str | None = None
+
+        for country in countries:
+            for indicator in indicators:
+                try:
+                    rows = list(self._source.fetch_macro_indicator(country, indicator))
+                    df = _macro_to_df(rows)
+                    self._lake.upsert_macro_indicators(df)
+                    ok += 1
+                    log.info(
+                        "macro.ingested",
+                        country_iso=country,
+                        indicator=indicator,
+                        rows=len(rows),
+                    )
+                except _SOFT_FAIL_EXCEPTIONS as exc:
+                    failed += 1
+                    last_error = f"{type(exc).__name__}: {exc}"
+                    log.warning(
+                        "macro.failed",
+                        country_iso=country,
+                        indicator=indicator,
+                        error=last_error,
+                    )
+
+        status = _status(ok, failed)
+        self._lake.close_ingest_run(
+            run_id,
+            tickers_ok=ok,
+            tickers_failed=failed,
+            status=status,
+            error=last_error if status in ("error", "partial") else None,
+        )
+        log.info("run.finished", status=status, tickers_ok=ok, tickers_failed=failed)
+        return IngestRunResult(
+            run_id=run_id,
+            kind="macro",
+            status=status,
+            tickers_ok=ok,
+            tickers_failed=failed,
+        )
 
     def run_intraday_bars(
         self,
@@ -298,6 +368,12 @@ def _prices_to_df(rows: Iterable[RawPriceBar]) -> pd.DataFrame:
 
 def _intraday_to_df(rows: Iterable[IntradayBar]) -> pd.DataFrame:
     cols = ("ticker", "timestamp", "open", "high", "low", "close", "adj_close", "volume")
+    data = [tuple(getattr(r, c) for c in cols) for r in rows]
+    return pd.DataFrame(data, columns=list(cols))
+
+
+def _macro_to_df(rows: Iterable[MacroIndicatorRow]) -> pd.DataFrame:
+    cols = ("country_iso", "indicator", "observation_date", "period", "country_name", "value")
     data = [tuple(getattr(r, c) for c in cols) for r in rows]
     return pd.DataFrame(data, columns=list(cols))
 

@@ -93,6 +93,8 @@ from stonks.ingest.schemas import (
     InsiderTransactionRow,
     InstitutionalHolderRow,
     IntradayBar,
+    MacroIndicatorRow,
+    MacroPeriod,
     MarketCapRow,
     NewsArticleRow,
     NewsSentimentRow,
@@ -308,6 +310,102 @@ def _normalize_owner_relation(
     if has_director:
         return "director"
     return "other"
+
+
+# EODHD's macro ``Period`` strings → canonical lower-case literal. Anything
+# outside this set falls through to ``None`` at parse time (and emits one
+# ``unknown`` log) so the value still lands in the lake even when the
+# cadence tag is unfamiliar.
+_MACRO_PERIOD_MAP: dict[str, MacroPeriod] = {
+    "annual": "annual",
+    "yearly": "annual",
+    "quarterly": "quarterly",
+    "monthly": "monthly",
+}
+
+# Canonical EODHD macro-indicator keys (snake_case). Sourced from
+# https://eodhd.com/financial-apis/macroeconomics-data-api — the vendor's
+# closed-ish published list. Used for CLI completion + as a reference set;
+# the schema itself stays free-text because the vendor is "happy to add
+# more by request" so the list is not actually closed.
+EODHD_MACRO_INDICATORS: tuple[str, ...] = (
+    "real_interest_rate",
+    "population_total",
+    "population_growth_annual",
+    "inflation_consumer_prices_annual",
+    "consumer_price_index",
+    "gdp_current_usd",
+    "gdp_per_capita_usd",
+    "gdp_growth_annual",
+    "debt_percent_gdp",
+    "net_trades_goods_services",
+    "inflation_gdp_deflator_annual",
+    "agriculture_value_added_percent_gdp",
+    "industry_value_added_percent_gdp",
+    "services_value_added_percent_gdp",
+    "exports_of_goods_services_percent_gdp",
+    "imports_of_goods_services_percent_gdp",
+    "gross_capital_formation_percent_gdp",
+    "net_migration",
+    "gni_usd",
+    "gni_per_capita_usd",
+    "gni_ppp_usd",
+    "gni_per_capita_ppp_usd",
+    "income_share_lowest_twenty",
+    "life_expectancy",
+    "fertility_rate",
+    "prevalence_hiv_total",
+    "co2_emissions_tons_per_capita",
+    "surface_area_km",
+    "poverty_poverty_lines_percent_population",
+    "revenue_excluding_grants_percent_gdp",
+    "cash_surplus_deficit_percent_gdp",
+    "startup_procedures_register",
+    "market_cap_domestic_companies_percent_gdp",
+    "mobile_subscriptions_per_hundred",
+    "internet_users_per_hundred",
+    "high_technology_exports_percent_total",
+    "merchandise_trade_percent_gdp",
+    "total_debt_service_percent_gni",
+    "unemployment_total_percent",
+)
+
+# Default indicator the EODHD endpoint falls back to when the caller omits
+# ``indicator=`` — kept aligned with the vendor's documented default so a
+# pass-through call from us produces the same series the vendor would.
+EODHD_DEFAULT_MACRO_INDICATOR = "gdp_current_usd"
+
+
+def _normalize_macro_indicator(raw: str) -> str:
+    """Coerce a macro-indicator label into the canonical lower_snake_case
+    form used as the lake's key. Replaces whitespace + punctuation runs
+    with single underscores, lowercases, and trims leading/trailing
+    underscores. ``Real GDP Total`` → ``real_gdp_total``.
+    """
+    text = raw.strip().lower()
+    if not text:
+        return text
+    out_chars: list[str] = []
+    for ch in text:
+        if ch.isalnum():
+            out_chars.append(ch)
+        else:
+            # Collapse runs of non-alnum into a single underscore separator.
+            if out_chars and out_chars[-1] != "_":
+                out_chars.append("_")
+    return "".join(out_chars).strip("_")
+
+
+def _normalize_macro_period(raw: Any) -> MacroPeriod | None:
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip().lower()
+    if not text:
+        return None
+    period = _MACRO_PERIOD_MAP.get(text)
+    if period is None:
+        _log_unknown_vendor_value("eodhd.normalize.unknown_macro_period", raw)
+    return period
 
 
 _BEFORE_AFTER_MARKET_MAP = {
@@ -1574,6 +1672,60 @@ def parse_commodity_contract_response(ticker: str, payload: Any) -> CommodityCon
     )
 
 
+# ---- macroeconomic-indicator parser (pure, unit-tested) -------------------
+
+
+def parse_macro_indicators_response(
+    country_iso: str,
+    indicator: str,
+    payload: Any,
+) -> Iterator[MacroIndicatorRow]:
+    """Parse the EODHD ``/macro-indicator/{country}`` payload into rows.
+
+    The vendor returns a JSON array of ``{CountryCode, CountryName,
+    Indicator, Date, Period, Value}`` entries. We anchor each row to the
+    *requested* ``country_iso`` + ``indicator`` (rather than trusting the
+    body's CountryCode / Indicator) so the time series stays coherent
+    even if a vendor inconsistency disagrees with the URL. Rows whose
+    ``Date`` doesn't parse are dropped; rows with ``Value=null`` are
+    kept (the observation date is still meaningful — the vendor knows
+    the series exists for that date but the data point isn't published).
+
+    The caller-supplied ``indicator`` is normalized to lower_snake_case
+    so user input ("Real GDP Total") and the vendor's catalog keys
+    (``real_gdp_total``) collapse into the same lake column value.
+    """
+    _check_free_tier(payload)
+    if not isinstance(payload, list):
+        return
+    canonical_country = country_iso.upper()
+    canonical_indicator = _normalize_macro_indicator(indicator)
+    kept = 0
+    dropped = 0
+    try:
+        for row in payload:
+            if not isinstance(row, dict):
+                dropped += 1
+                continue
+            observation_date = _parse_date(row.get("Date"))
+            if observation_date is None:
+                dropped += 1
+                continue
+            kept += 1
+            yield MacroIndicatorRow(
+                country_iso=canonical_country,
+                indicator=canonical_indicator,
+                observation_date=observation_date,
+                period=_normalize_macro_period(row.get("Period")),
+                country_name=row.get("CountryName")
+                if isinstance(row.get("CountryName"), str)
+                else None,
+                value=_coerce_optional_float(row.get("Value")),
+            )
+    finally:
+        _log_parse_drops("parse_macro_indicators_response", canonical_country, kept, dropped)
+
+
 # ---- HTTP client ------------------------------------------------------------
 
 
@@ -1707,6 +1859,43 @@ class EodhdDataSource(DataSource):
             )
         data = self._get(url, params=params)
         return list(parse_intraday_response(ticker, data))
+
+    def fetch_macro_indicator(
+        self,
+        country_iso: str,
+        indicator: str = EODHD_DEFAULT_MACRO_INDICATOR,
+    ) -> Iterable[MacroIndicatorRow]:
+        """Pull one macroeconomic time series for a country.
+
+        Calls ``GET /macro-indicator/{COUNTRY}?indicator={key}`` (vendor
+        documents COUNTRY as ISO 3166-1 alpha-3). The series stretches
+        back to roughly December 1960 for most indicators; vendors omit
+        years where the data point isn't published, so the returned
+        sequence may be sparse without that being a transport error.
+
+        ``country_iso`` is uppercased and ``indicator`` is collapsed to
+        canonical lower_snake_case before issuing the request, so callers
+        passing ``"usa"`` / ``"Real GDP Total"`` end up at the same
+        endpoint as the vendor's catalog keys.
+        """
+        canonical_country = country_iso.strip().upper()
+        if len(canonical_country) != 3 or not canonical_country.isalpha():
+            raise ValueError(
+                f"country_iso must be ISO 3166-1 alpha-3 (e.g. 'USA'); got {country_iso!r}"
+            )
+        canonical_indicator = _normalize_macro_indicator(indicator)
+        if not canonical_indicator:
+            raise ValueError(f"indicator must be a non-empty string; got {indicator!r}")
+        url = f"{self._base_url}/macro-indicator/{canonical_country}"
+        params = {"fmt": "json", "indicator": canonical_indicator}
+        data = self._get(url, params=params)
+        return list(
+            parse_macro_indicators_response(
+                country_iso=canonical_country,
+                indicator=canonical_indicator,
+                payload=data,
+            )
+        )
 
     def fetch_metadata(self, ticker: str) -> MetadataBundle:
         """Assemble the full metadata bundle by hitting seven EODHD endpoints

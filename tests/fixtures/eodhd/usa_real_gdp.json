@@ -1,0 +1,42 @@
+[
+  {
+    "CountryCode": "USA",
+    "CountryName": "United States",
+    "Indicator": "real_gdp_total",
+    "Date": "2023-01-01",
+    "Period": "Annual",
+    "Value": 22996.10
+  },
+  {
+    "CountryCode": "USA",
+    "CountryName": "United States",
+    "Indicator": "real_gdp_total",
+    "Date": "2022-01-01",
+    "Period": "Annual",
+    "Value": 22376.94
+  },
+  {
+    "CountryCode": "USA",
+    "CountryName": "United States",
+    "Indicator": "real_gdp_total",
+    "Date": "2021-01-01",
+    "Period": "Annual",
+    "Value": 21822.04
+  },
+  {
+    "CountryCode": "USA",
+    "CountryName": "United States",
+    "Indicator": "real_gdp_total",
+    "Date": "2020-01-01",
+    "Period": "Annual",
+    "Value": null
+  },
+  {
+    "CountryCode": "USA",
+    "CountryName": "United States",
+    "Indicator": "real_gdp_total",
+    "Date": "bad-date",
+    "Period": "Annual",
+    "Value": 1.0
+  }
+]

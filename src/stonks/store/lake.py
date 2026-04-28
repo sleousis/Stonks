@@ -836,6 +836,14 @@ class DuckDBLake:
         "contract_size",
         "contract_unit",
     )
+    _MACRO_INDICATOR_COLS = (
+        "country_iso",
+        "indicator",
+        "observation_date",
+        "period",
+        "country_name",
+        "value",
+    )
 
     def upsert_dividends(self, df: pd.DataFrame) -> int:
         return self._upsert(
@@ -989,6 +997,25 @@ class DuckDBLake:
             table="commodity_contracts",
             cols=self._COMMODITY_CONTRACT_COLS,
             pk=("ticker",),
+        )
+
+    def upsert_macro_indicators(self, df: pd.DataFrame) -> int:
+        """Upsert macroeconomic-indicator observations.
+
+        Identity is ``(country_iso, indicator, observation_date)``: each
+        country × indicator × date pair maps to one observation. Re-running
+        the same fetch is a no-op; vendor revisions to a previously-published
+        value land via the ``ON CONFLICT DO UPDATE`` branch in plain
+        ``_upsert`` (NULL still overwrites here — unlike financial
+        statements, the macro endpoint always returns the full series, so
+        a NULL ``Value`` is the vendor's authoritative "not published"
+        rather than "not present in this fetch").
+        """
+        return self._upsert(
+            df,
+            table="macro_indicators",
+            cols=self._MACRO_INDICATOR_COLS,
+            pk=("country_iso", "indicator", "observation_date"),
         )
 
     def upsert_institutional_holders(self, df: pd.DataFrame) -> int:
