@@ -39,7 +39,7 @@ def test_register_and_list_returns_new_shadow_strategy(registry):
     assert len(handles) == 1
     h = handles[0]
     assert h.id == sid
-    assert h.status == "shadow"             # default on fresh register
+    assert h.status == "shadow"  # default on fresh register
     assert h.class_path.endswith(":BuyAndHold")
     assert h.params["ticker"] == "AAPL.US"
 

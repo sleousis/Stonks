@@ -40,31 +40,31 @@ _SECONDS_PER_DAY = 24 * 3600
 
 # Unit → seconds map. Ordered longest-suffix-first for the parser.
 _UNIT_SECONDS: dict[str, int] = {
-    "mo": 30 * _SECONDS_PER_DAY,      # month  (approximate)
-    "y":  365 * _SECONDS_PER_DAY,     # year   (approximate)
-    "w":  7 * _SECONDS_PER_DAY,       # week
-    "d":  _SECONDS_PER_DAY,           # day
-    "h":  3600,                       # hour
-    "m":  60,                         # minute
+    "mo": 30 * _SECONDS_PER_DAY,  # month  (approximate)
+    "y": 365 * _SECONDS_PER_DAY,  # year   (approximate)
+    "w": 7 * _SECONDS_PER_DAY,  # week
+    "d": _SECONDS_PER_DAY,  # day
+    "h": 3600,  # hour
+    "m": 60,  # minute
 }
 
 # Human-readable aliases that map onto canonical units. We lowercase the
 # input first, so the aliases are all-lowercase here.
 _UNIT_ALIASES: dict[str, str] = {
-    "month":  "mo",
+    "month": "mo",
     "months": "mo",
-    "year":   "y",
-    "years":  "y",
-    "min":    "m",
-    "mins":   "m",
+    "year": "y",
+    "years": "y",
+    "min": "m",
+    "mins": "m",
     "minute": "m",
     "minutes": "m",
-    "hour":   "h",
-    "hours":  "h",
-    "day":    "d",
-    "days":   "d",
-    "week":   "w",
-    "weeks":  "w",
+    "hour": "h",
+    "hours": "h",
+    "day": "d",
+    "days": "d",
+    "week": "w",
+    "weeks": "w",
 }
 
 
@@ -146,12 +146,12 @@ class Interval:
         unit = self.code.lstrip("0123456789")
         amount_str = self.code[: -len(unit)] or "1"
         expansion = {
-            "m":  "minute",
-            "h":  "hour",
-            "d":  "day",
-            "w":  "week",
+            "m": "minute",
+            "h": "hour",
+            "d": "day",
+            "w": "week",
             "mo": "month",
-            "y":  "year",
+            "y": "year",
         }[unit]
         return f"INTERVAL '{amount_str} {expansion}s'"
 
@@ -179,10 +179,18 @@ Interval.YEAR_1 = Interval.parse("1y")
 Interval.YEAR_5 = Interval.parse("5y")
 
 Interval.STANDARD = (
-    Interval.MIN_1, Interval.MIN_5,
-    Interval.HOUR_1, Interval.HOUR_4, Interval.HOUR_6, Interval.HOUR_12,
-    Interval.DAY_1, Interval.DAY_3, Interval.DAY_5,
+    Interval.MIN_1,
+    Interval.MIN_5,
+    Interval.HOUR_1,
+    Interval.HOUR_4,
+    Interval.HOUR_6,
+    Interval.HOUR_12,
+    Interval.DAY_1,
+    Interval.DAY_3,
+    Interval.DAY_5,
     Interval.WEEK_1,
-    Interval.MONTH_1, Interval.MONTH_6,
-    Interval.YEAR_1, Interval.YEAR_5,
+    Interval.MONTH_1,
+    Interval.MONTH_6,
+    Interval.YEAR_1,
+    Interval.YEAR_5,
 )

@@ -74,9 +74,7 @@ class SqliteState:
             return []
         return [
             row[0]
-            for row in self.con.execute(
-                "SELECT version FROM schema_migrations ORDER BY version"
-            )
+            for row in self.con.execute("SELECT version FROM schema_migrations ORDER BY version")
         ]
 
     def _has_table(self, name: str) -> bool:

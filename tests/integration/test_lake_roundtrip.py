@@ -33,7 +33,21 @@ def _fundamentals_df(rows):
 
 def test_migrate_creates_expected_tables(lake):
     tables = set(lake.tables())
-    assert {"tickers", "prices", "fundamentals", "ingest_runs", "schema_migrations"} <= tables
+    # Migration 007 renames `tickers` → `instruments` and adds the per-class
+    # profile tables. The old name is intentionally gone — no back-compat
+    # view — so tests that check the schema surface lock the new name in.
+    assert {
+        "instruments",
+        "prices",
+        "fundamentals",
+        "ingest_runs",
+        "schema_migrations",
+        "crypto_profiles",
+        "bond_profiles",
+        "bond_yield_history",
+        "commodity_contracts",
+    } <= tables
+    assert "tickers" not in tables
 
 
 def test_migrate_is_idempotent(tmp_path):
@@ -44,7 +58,7 @@ def test_migrate_is_idempotent(tmp_path):
         versions = lake.applied_migrations()
     # Exact set matches the number of .sql files in migrations_duckdb/
     assert versions == sorted(versions)
-    assert 1 in versions   # initial schema
+    assert 1 in versions  # initial schema
 
 
 def test_upsert_prices_roundtrip(lake):
@@ -63,9 +77,7 @@ def test_upsert_prices_roundtrip(lake):
 
 
 def test_upsert_prices_is_idempotent(lake):
-    df = _prices_df(
-        [("AAPL.US", date(2026, 4, 1), 100.0, 110.0, 99.0, 109.0, 109.0, 1_000_000)]
-    )
+    df = _prices_df([("AAPL.US", date(2026, 4, 1), 100.0, 110.0, 99.0, 109.0, 109.0, 1_000_000)])
     lake.upsert_prices(df)
     lake.upsert_prices(df)  # second upsert of same row
     assert lake.count_rows("prices") == 1
@@ -73,12 +85,8 @@ def test_upsert_prices_is_idempotent(lake):
 
 def test_upsert_prices_updates_on_conflict(lake):
     pk_row = ("AAPL.US", date(2026, 4, 1))
-    lake.upsert_prices(
-        _prices_df([pk_row + (100.0, 110.0, 99.0, 109.0, 109.0, 1_000_000)])
-    )
-    lake.upsert_prices(
-        _prices_df([pk_row + (101.0, 115.0, 100.0, 114.0, 114.0, 1_500_000)])
-    )
+    lake.upsert_prices(_prices_df([pk_row + (100.0, 110.0, 99.0, 109.0, 109.0, 1_000_000)]))
+    lake.upsert_prices(_prices_df([pk_row + (101.0, 115.0, 100.0, 114.0, 114.0, 1_500_000)]))
     read = lake.get_prices("AAPL.US", date(2026, 4, 1), date(2026, 4, 1))
     assert read.iloc[0]["close"] == 114.0
     assert read.iloc[0]["volume"] == 1_500_000
@@ -100,9 +108,7 @@ def test_upsert_fundamentals_roundtrip(lake):
 
 
 def test_upsert_fundamentals_is_idempotent(lake):
-    df = _fundamentals_df(
-        [("AAPL.US", date(2025, 12, 31), "Q", "income", "totalRevenue", 123.0)]
-    )
+    df = _fundamentals_df([("AAPL.US", date(2025, 12, 31), "Q", "income", "totalRevenue", 123.0)])
     lake.upsert_fundamentals(df)
     lake.upsert_fundamentals(df)
     assert lake.count_rows("fundamentals") == 1

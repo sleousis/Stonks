@@ -26,9 +26,16 @@ def lake_random_walk(tmp_path):
     lake.upsert_prices(
         pd.DataFrame(
             [
-                {"ticker": "R.US", "date": d.date(),
-                 "open": c, "high": c, "low": c, "close": c,
-                 "adj_close": c, "volume": 1_000_000}
+                {
+                    "ticker": "R.US",
+                    "date": d.date(),
+                    "open": c,
+                    "high": c,
+                    "low": c,
+                    "close": c,
+                    "adj_close": c,
+                    "volume": 1_000_000,
+                }
                 for d, c in zip(dates, close, strict=False)
             ]
         )
@@ -39,8 +46,10 @@ def lake_random_walk(tmp_path):
 
 def _dataset(lake, dates):
     return LabDataset(
-        lake=lake, universe=["R.US"],
-        start=dates[0].date(), end=dates[-1].date(),
+        lake=lake,
+        universe=["R.US"],
+        start=dates[0].date(),
+        end=dates[-1].date(),
         interval=Interval.DAY_1,
     )
 
@@ -90,8 +99,10 @@ def test_runs_test_survival_skips_when_no_bars(tmp_path):
         from datetime import date
 
         ds = LabDataset(
-            lake=lake, universe=["Z.US"],
-            start=date(2025, 1, 1), end=date(2025, 6, 30),
+            lake=lake,
+            universe=["Z.US"],
+            start=date(2025, 1, 1),
+            end=date(2025, 6, 30),
             interval=Interval.DAY_1,
         )
         test = RunsTestSurvivalTest()

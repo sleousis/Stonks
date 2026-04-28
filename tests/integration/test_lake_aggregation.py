@@ -62,7 +62,7 @@ def test_aggregate_1h_to_4h(lake):
     assert first["close"] == 4.0
     assert first["high"] == 4.5
     assert first["low"] == -0.5
-    assert first["volume"] == 400     # 4 × 100
+    assert first["volume"] == 400  # 4 × 100
 
 
 def test_aggregate_rejects_same_or_finer_target(lake):
@@ -90,16 +90,18 @@ def test_aggregate_1d_to_1w(lake):
     rows = []
     for i in range(21):
         ts = start + timedelta(days=i)
-        rows.append({
-            "ticker": "Y.US",
-            "timestamp": ts,
-            "open": 100.0 + i,
-            "high": 100.5 + i,
-            "low": 99.5 + i,
-            "close": 100.2 + i,
-            "adj_close": 100.2 + i,
-            "volume": 1_000_000,
-        })
+        rows.append(
+            {
+                "ticker": "Y.US",
+                "timestamp": ts,
+                "open": 100.0 + i,
+                "high": 100.5 + i,
+                "low": 99.5 + i,
+                "close": 100.2 + i,
+                "adj_close": 100.2 + i,
+                "volume": 1_000_000,
+            }
+        )
     lake.upsert_bars(pd.DataFrame(rows), interval=Interval.DAY_1)
 
     lake.aggregate_bars("Y.US", source=Interval.DAY_1, target=Interval.WEEK_1)

@@ -24,9 +24,7 @@ def test_lab_runner_produces_a_verdict_and_artifacts(lake_trending):
     runner = LabRunner(
         tuner=GridTuner(grid_size=2),
         objective=SharpeObjective(),
-        suite=SurvivalSuite(
-            tests=[OutOfSampleTest(min_sharpe=-10.0, max_drawdown_limit=-0.99)]
-        ),
+        suite=SurvivalSuite(tests=[OutOfSampleTest(min_sharpe=-10.0, max_drawdown_limit=-0.99)]),
         budget=6,
     )
 

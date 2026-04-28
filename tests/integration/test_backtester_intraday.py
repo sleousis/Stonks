@@ -28,7 +28,7 @@ def lake_intraday(tmp_path):
     lake = DuckDBLake(tmp_path / "lake.duckdb")
     lake.migrate()
 
-    start = datetime(2026, 4, 1, 14, 30, tzinfo=UTC)   # 14:30 UTC
+    start = datetime(2026, 4, 1, 14, 30, tzinfo=UTC)  # 14:30 UTC
     bars = []
     for i in range(12):
         ts = start + timedelta(minutes=5 * i)
@@ -109,8 +109,12 @@ def test_backtest_interval_filter_ignores_other_intervals(lake_intraday, tmp_pat
                 {
                     "ticker": "AAPL.US",
                     "timestamp": datetime(2026, 4, 1, 0, 0, tzinfo=UTC),
-                    "open": 50.0, "high": 50.0, "low": 50.0, "close": 50.0,
-                    "adj_close": 50.0, "volume": 10,
+                    "open": 50.0,
+                    "high": 50.0,
+                    "low": 50.0,
+                    "close": 50.0,
+                    "adj_close": 50.0,
+                    "volume": 10,
                 }
             ]
         ),
@@ -126,4 +130,4 @@ def test_backtest_interval_filter_ignores_other_intervals(lake_intraday, tmp_pat
         interval=Interval.MIN_5,
     )
     report = Backtester([strategy], broker, lake_intraday, config).run()
-    assert len(report.equity_curve) == 12   # only the 5m bars
+    assert len(report.equity_curve) == 12  # only the 5m bars

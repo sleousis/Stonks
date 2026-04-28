@@ -19,7 +19,11 @@ from dataclasses import dataclass
 from stonks.ingest.schemas import (
     AnalystForecastRow,
     AnalystRatingsRow,
+    BondProfileRow,
+    BondYieldRow,
+    CommodityContractRow,
     CrossListingRow,
+    CryptoProfileRow,
     DividendRow,
     EarningsAnnouncementRow,
     EmployeeCountRow,
@@ -60,3 +64,25 @@ class MetadataBundle:
     employee_count: tuple[EmployeeCountRow, ...] = ()
     segmentation: tuple[SegmentationRow, ...] = ()
     market_cap_history: tuple[MarketCapRow, ...] = ()
+    # Per-asset-class profiles. Equity sources leave these at the defaults;
+    # crypto/bond/commodity sources populate the matching field.
+    crypto_profile: CryptoProfileRow | None = None
+    bond_profile: BondProfileRow | None = None
+    commodity_contract: CommodityContractRow | None = None
+    bond_yields: tuple[BondYieldRow, ...] = ()
+
+    def __post_init__(self) -> None:
+        # A single ticker can only belong to one asset class, so at most
+        # one of the per-class profile fields may be set per bundle.
+        # Catches the "adapter copy-pasted between branches" bug.
+        per_class = [
+            self.crypto_profile,
+            self.bond_profile,
+            self.commodity_contract,
+        ]
+        non_null = sum(1 for x in per_class if x is not None)
+        if non_null > 1:
+            raise ValueError(
+                "MetadataBundle: at most one of "
+                "{crypto_profile, bond_profile, commodity_contract} may be set per bundle"
+            )

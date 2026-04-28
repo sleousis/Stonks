@@ -400,8 +400,9 @@ class DuckDBLake:
     _SEGMENTATION_COLS = ("ticker", "period_end", "dimension", "segment", "value")
     _STOCK_SPLITS_COLS = ("ticker", "date", "ratio")
     _MARKET_CAP_COLS = ("ticker", "date", "market_cap")
-    _TICKER_PROFILE_COLS = (
+    _INSTRUMENT_PROFILE_COLS = (
         "id",
+        "asset_class",
         "exchange",
         "currency",
         "name",
@@ -524,6 +525,40 @@ class DuckDBLake:
         "percent_insiders",
         "percent_institutions",
     )
+    _CRYPTO_PROFILE_COLS = (
+        "ticker",
+        "base_symbol",
+        "quote_symbol",
+        "blockchain",
+        "consensus_type",
+        "circulating_supply",
+        "total_supply",
+        "max_supply",
+        "supply_snapshot_date",
+    )
+    _BOND_PROFILE_COLS = (
+        "ticker",
+        "issuer_name",
+        "issuer_kind",
+        "bond_kind",
+        "coupon_rate",
+        "coupon_frequency",
+        "face_value",
+        "currency",
+        "issue_date",
+        "maturity_date",
+        "credit_rating",
+    )
+    _BOND_YIELD_COLS = ("ticker", "date", "yield_to_maturity", "clean_price")
+    _COMMODITY_CONTRACT_COLS = (
+        "ticker",
+        "underlying_symbol",
+        "contract_kind",
+        "contract_month",
+        "expiry_date",
+        "contract_size",
+        "contract_unit",
+    )
 
     def upsert_dividends(self, df: pd.DataFrame) -> int:
         return self._upsert(
@@ -639,12 +674,44 @@ class DuckDBLake:
             pk=("ticker", "date"),
         )
 
-    def upsert_ticker_profile(self, df: pd.DataFrame) -> int:
+    def upsert_instrument_profile(self, df: pd.DataFrame) -> int:
         return self._upsert(
             df,
-            table="tickers",
-            cols=self._TICKER_PROFILE_COLS,
+            table="instruments",
+            cols=self._INSTRUMENT_PROFILE_COLS,
             pk=("id",),
+        )
+
+    def upsert_crypto_profile(self, df: pd.DataFrame) -> int:
+        return self._upsert(
+            df,
+            table="crypto_profiles",
+            cols=self._CRYPTO_PROFILE_COLS,
+            pk=("ticker",),
+        )
+
+    def upsert_bond_profile(self, df: pd.DataFrame) -> int:
+        return self._upsert(
+            df,
+            table="bond_profiles",
+            cols=self._BOND_PROFILE_COLS,
+            pk=("ticker",),
+        )
+
+    def upsert_bond_yields(self, df: pd.DataFrame) -> int:
+        return self._upsert(
+            df,
+            table="bond_yield_history",
+            cols=self._BOND_YIELD_COLS,
+            pk=("ticker", "date"),
+        )
+
+    def upsert_commodity_contract(self, df: pd.DataFrame) -> int:
+        return self._upsert(
+            df,
+            table="commodity_contracts",
+            cols=self._COMMODITY_CONTRACT_COLS,
+            pk=("ticker",),
         )
 
     def upsert_institutional_holders(self, df: pd.DataFrame) -> int:
@@ -882,6 +949,29 @@ class DuckDBLake:
                 return after - before
         finally:
             self.con.unregister("_in")
+
+    # ---- multi-asset helpers ------------------------------------------------
+
+    def get_asset_classes(self, tickers: list[str]) -> dict[str, str]:
+        """Return ``{ticker → asset_class}`` for every ticker that has a
+        row in ``instruments``.
+
+        Tickers with no instrument profile (price-bar landed before the
+        profile fetch, or the profile fetch failed) are omitted from the
+        result rather than defaulted — callers should treat the absence
+        as "asset class unknown" and decide locally how to handle it.
+        Used by the Ranker to drop universe tickers outside a strategy's
+        ``applicable_asset_classes``.
+        """
+        if not tickers:
+            return {}
+        placeholders = ",".join(["?"] * len(tickers))
+        rows = self.con.execute(
+            f"SELECT id, asset_class FROM instruments "
+            f"WHERE id IN ({placeholders}) AND asset_class IS NOT NULL",
+            tickers,
+        ).fetchall()
+        return {row[0]: row[1] for row in rows}
 
     # ---- escape hatch -------------------------------------------------------
 

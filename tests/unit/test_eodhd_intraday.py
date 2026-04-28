@@ -17,10 +17,26 @@ from stonks.ingest.sources.eodhd import (
 
 def test_parse_intraday_response_converts_epoch_to_utc_datetime():
     payload = [
-        {"timestamp": 1776087000, "gmtoffset": 0, "datetime": "2026-04-13 13:30:00",
-         "open": 259.85, "high": 260.18, "low": 258.00, "close": 258.60, "volume": 1_600_710},
-        {"timestamp": 1776087300, "gmtoffset": 0, "datetime": "2026-04-13 13:35:00",
-         "open": 258.60, "high": 258.90, "low": 258.10, "close": 258.75, "volume": 800_000},
+        {
+            "timestamp": 1776087000,
+            "gmtoffset": 0,
+            "datetime": "2026-04-13 13:30:00",
+            "open": 259.85,
+            "high": 260.18,
+            "low": 258.00,
+            "close": 258.60,
+            "volume": 1_600_710,
+        },
+        {
+            "timestamp": 1776087300,
+            "gmtoffset": 0,
+            "datetime": "2026-04-13 13:35:00",
+            "open": 258.60,
+            "high": 258.90,
+            "low": 258.10,
+            "close": 258.75,
+            "volume": 800_000,
+        },
     ]
     bars = list(parse_intraday_response("AAPL.US", payload))
     assert len(bars) == 2
@@ -34,9 +50,16 @@ def test_parse_intraday_response_converts_epoch_to_utc_datetime():
 
 def test_parse_intraday_skips_rows_without_timestamp_or_close():
     payload = [
-        {"open": 100, "high": 101, "low": 99, "close": 100, "volume": 10},   # no timestamp
+        {"open": 100, "high": 101, "low": 99, "close": 100, "volume": 10},  # no timestamp
         {"timestamp": 1776087000, "open": 100, "high": 101, "low": 99, "volume": 10},  # no close
-        {"timestamp": 1776087300, "open": 100, "high": 101, "low": 99, "close": 100.5, "volume": 10},
+        {
+            "timestamp": 1776087300,
+            "open": 100,
+            "high": 101,
+            "low": 99,
+            "close": 100.5,
+            "volume": 10,
+        },
     ]
     bars = list(parse_intraday_response("X.US", payload))
     assert len(bars) == 1
@@ -44,8 +67,16 @@ def test_parse_intraday_skips_rows_without_timestamp_or_close():
 
 
 def test_parse_intraday_allows_null_volume_post_market():
-    payload = [{"timestamp": 1776456000, "open": 270.23, "high": 270.23,
-                "low": 270.23, "close": 270.23, "volume": None}]
+    payload = [
+        {
+            "timestamp": 1776456000,
+            "open": 270.23,
+            "high": 270.23,
+            "low": 270.23,
+            "close": 270.23,
+            "volume": None,
+        }
+    ]
     bars = list(parse_intraday_response("AAPL.US", payload))
     assert len(bars) == 1
     assert bars[0].volume is None
@@ -88,8 +119,11 @@ def test_fetch_intraday_builds_expected_query_params():
         status_code = 200
         text = "[]"
 
-        def raise_for_status(self): pass
-        def json(self): return []
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return []
 
     class _FakeSession:
         def __init__(self):
@@ -101,19 +135,19 @@ def test_fetch_intraday_builds_expected_query_params():
 
     session = _FakeSession()
     source = EodhdDataSource(api_key="k", session=session)  # type: ignore[arg-type]
-    list(source.fetch_intraday_bars(
-        "AAPL.US", Interval.MIN_5,
-        since=date(2026, 4, 1), until=date(2026, 4, 2),
-    ))
+    list(
+        source.fetch_intraday_bars(
+            "AAPL.US",
+            Interval.MIN_5,
+            since=date(2026, 4, 1),
+            until=date(2026, 4, 2),
+        )
+    )
     url, params = session.calls[0]
     assert url.endswith("/intraday/AAPL.US")
     assert params["interval"] == "5m"
     # since = 2026-04-01 00:00:00 UTC
-    assert params["from"] == str(int(
-        datetime(2026, 4, 1, tzinfo=UTC).timestamp()
-    ))
+    assert params["from"] == str(int(datetime(2026, 4, 1, tzinfo=UTC).timestamp()))
     # until = 2026-04-02 23:59:59 UTC (end-of-day)
-    assert params["to"] == str(int(
-        datetime(2026, 4, 2, 23, 59, 59, tzinfo=UTC).timestamp()
-    ))
+    assert params["to"] == str(int(datetime(2026, 4, 2, 23, 59, 59, tzinfo=UTC).timestamp()))
     _ = json  # silence unused; kept for readability of fake structure

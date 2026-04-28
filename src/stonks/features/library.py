@@ -115,9 +115,7 @@ def ordinal_patterns(arr: np.ndarray, d: int) -> np.ndarray:
     return ordinals
 
 
-def permutation_entropy(
-    arr: np.ndarray, d: int = 3, lookback_mult: int = 28
-) -> np.ndarray:
+def permutation_entropy(arr: np.ndarray, d: int = 3, lookback_mult: int = 28) -> np.ndarray:
     """Rolling-window permutation entropy normalized to ``[0, 1]``.
 
     Window length is ``d! · lookback_mult``. Low values indicate strong
@@ -172,10 +170,12 @@ def _check_trend_line(support: bool, pivot: int, slope: float, y: np.ndarray) ->
         return -1.0
     if not support and diffs.min() < -1e-5:
         return -1.0
-    return float((diffs ** 2).sum())
+    return float((diffs**2).sum())
 
 
-def _optimize_slope(support: bool, pivot: int, init_slope: float, y: np.ndarray) -> tuple[float, float]:
+def _optimize_slope(
+    support: bool, pivot: int, init_slope: float, y: np.ndarray
+) -> tuple[float, float]:
     slope_unit = (y.max() - y.min()) / len(y)
     opt_step = 1.0
     min_step = 0.0001

@@ -39,10 +39,30 @@ class Ranker:
 
     def rank(self, as_of: date) -> list[tuple[float, str, str]]:
         handles = self._registry.list_active()
+        # Resolve asset classes once per tick. Tickers without an
+        # ``instruments`` row are treated as "asset class unknown" and
+        # skipped with a single warning per tick — defaulting to equity
+        # would route non-equity tickers (whose profile fetch may have
+        # failed) to equity-only strategies, masking real ingestion
+        # problems. To re-enable an unknown ticker, run
+        # ``stonks ingest metadata`` for it.
+        asset_classes = self._lake.get_asset_classes(self._universe)
+        unknown_universe = [t for t in self._universe if t not in asset_classes]
+        if unknown_universe:
+            _log.warning(
+                "ranker.unknown_asset_class.skipped",
+                tickers=unknown_universe,
+                count=len(unknown_universe),
+                hint="run `stonks ingest metadata` to populate instrument profiles",
+            )
         picks: list[tuple[float, str, str]] = []
         for handle in handles:
             strategy = self._registry.load(handle.id)
+            allowed = set(getattr(strategy, "applicable_asset_classes", ("equity",)))
             for ticker in self._universe:
+                ticker_class = asset_classes.get(ticker)
+                if ticker_class is None or ticker_class not in allowed:
+                    continue
                 try:
                     r = strategy.estimate_return(ticker, as_of, self._lake)
                 except Exception as exc:

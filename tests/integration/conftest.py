@@ -5,16 +5,23 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
+from stonks.ingest.pipeline import _rows_to_df
+from stonks.ingest.schemas import TickerProfile
 from stonks.store.lake import DuckDBLake
 
 
 @pytest.fixture
 def lake_trending(tmp_path):
-    """Lake with three tickers spanning ~6 months:
+    """Lake with three equity tickers spanning ~6 months:
 
     - UP.US   : linear uptrend 100→200
     - FLAT.US : constant 50
     - DOWN.US : linear downtrend 100→60
+
+    Instrument profiles are seeded with ``asset_class='equity'`` so the
+    Ranker's per-class filter can resolve them. Tests that want to
+    exercise the "missing profile → skipped" path should use a different
+    fixture or override.
     """
     lake = DuckDBLake(tmp_path / "lake.duckdb")
     lake.migrate()
@@ -42,5 +49,10 @@ def lake_trending(tmp_path):
                 }
             )
     lake.upsert_prices(pd.DataFrame(rows))
+    lake.upsert_instrument_profile(
+        _rows_to_df(
+            [TickerProfile(id=t, asset_class="equity") for t in ("UP.US", "FLAT.US", "DOWN.US")]
+        )
+    )
     yield lake
     lake.close()

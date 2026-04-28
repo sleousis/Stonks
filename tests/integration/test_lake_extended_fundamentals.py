@@ -45,11 +45,12 @@ def test_migrations_create_all_extended_tables(lake):
     # superseded tables removed by 005
     assert "analyst_estimates" not in tables
 
-    # New static profile fields added to tickers; volatile ones dropped.
+    # New static profile fields added to instruments (formerly `tickers`,
+    # renamed in migration 007); volatile ones dropped.
     cols = {
         row["column_name"]
         for row in lake.sql(
-            "SELECT column_name FROM information_schema.columns WHERE table_name='tickers'"
+            "SELECT column_name FROM information_schema.columns WHERE table_name='instruments'"
         ).to_dict(orient="records")
     }
     for expected_col in (
@@ -476,11 +477,12 @@ def test_upsert_segmentation_covers_both_dimensions(lake):
     assert len(revs) == 1
 
 
-def test_upsert_ticker_profile_inserts_then_updates(lake):
+def test_upsert_instrument_profile_inserts_then_updates(lake):
     df = pd.DataFrame(
         [
             {
                 "id": "AAPL.US",
+                "asset_class": "equity",
                 "exchange": "US",
                 "currency": "USD",
                 "name": "Apple Inc",
@@ -516,17 +518,18 @@ def test_upsert_ticker_profile_inserts_then_updates(lake):
             },
         ]
     )
-    lake.upsert_ticker_profile(df)
-    row = lake.sql("SELECT * FROM tickers WHERE id='AAPL.US'").iloc[0]
+    lake.upsert_instrument_profile(df)
+    row = lake.sql("SELECT * FROM instruments WHERE id='AAPL.US'").iloc[0]
     assert row["name"] == "Apple Inc"
     assert row["cusip"] == "037833100"
     assert row["gic_sector"] == "Information Technology"
+    assert row["asset_class"] == "equity"
 
     # update path
     df2 = df.copy()
     df2.loc[0, "industry"] = "Computer Hardware"
-    lake.upsert_ticker_profile(df2)
-    row2 = lake.sql("SELECT industry FROM tickers WHERE id='AAPL.US'").iloc[0]
+    lake.upsert_instrument_profile(df2)
+    row2 = lake.sql("SELECT industry FROM instruments WHERE id='AAPL.US'").iloc[0]
     assert row2["industry"] == "Computer Hardware"
 
 
@@ -549,6 +552,6 @@ def test_upsert_empty_dataframes_are_noop(lake):
         lake.upsert_shares_outstanding,
         lake.upsert_employee_count,
         lake.upsert_segmentation,
-        lake.upsert_ticker_profile,
+        lake.upsert_instrument_profile,
     ):
         assert fn(empty) == 0

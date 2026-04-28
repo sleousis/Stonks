@@ -94,7 +94,7 @@ def test_permutation_destroys_autocorrelation():
     real_autocorr = real_r.autocorr(lag=1)
     perm_autocorr = perm_r.autocorr(lag=1)
     # on a constantly-drifting series real autocorr should be much higher
-    assert abs(real_autocorr) - abs(perm_autocorr) > -0.2   # permuted autocorr << real
+    assert abs(real_autocorr) - abs(perm_autocorr) > -0.2  # permuted autocorr << real
 
 
 def test_same_seed_is_deterministic():
@@ -113,13 +113,15 @@ def test_different_seeds_yield_different_outputs():
 
 
 def test_empty_input_returns_empty_frame():
-    empty = pd.DataFrame(columns=["ticker", "timestamp", "open", "high", "low", "close", "adj_close", "volume"])
+    empty = pd.DataFrame(
+        columns=["ticker", "timestamp", "open", "high", "low", "close", "adj_close", "volume"]
+    )
     out = permute_bars(empty, start_index=0, seed=1)
     assert out.empty
 
 
 def test_input_too_short_returns_unchanged():
     bars = _synthetic_bars(n=3)
-    out = permute_bars(bars, start_index=5, seed=1)   # start_index > len
+    out = permute_bars(bars, start_index=5, seed=1)  # start_index > len
     for col in ("open", "high", "low", "close"):
         assert np.allclose(out[col], bars[col])

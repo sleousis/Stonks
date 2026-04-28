@@ -58,7 +58,7 @@ class LabRunner:
         )
 
         strategy = strategy_cls(tuned.best_params)
-        strategy.fit(dataset)   # no-op for rule-based
+        strategy.fit(dataset)  # no-op for rule-based
 
         reports = self._suite.run(strategy, dataset)
         verdict = "pass" if all(r.passed for r in reports) else "fail"

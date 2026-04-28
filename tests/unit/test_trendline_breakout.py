@@ -24,14 +24,17 @@ def lake_trendline(tmp_path):
     lake.migrate()
 
     dates = pd.bdate_range(start="2026-01-02", periods=120)
-    closes = np.concatenate(
-        [np.full(60, 100.0), np.linspace(100.0, 130.0, 60)]
-    )
+    closes = np.concatenate([np.full(60, 100.0), np.linspace(100.0, 130.0, 60)])
     rows = [
         {
-            "ticker": "X.US", "date": d.date(),
-            "open": c, "high": c + 0.3, "low": c - 0.3,
-            "close": c, "adj_close": c, "volume": 1_000_000,
+            "ticker": "X.US",
+            "date": d.date(),
+            "open": c,
+            "high": c + 0.3,
+            "low": c - 0.3,
+            "close": c,
+            "adj_close": c,
+            "volume": 1_000_000,
         }
         for d, c in zip(dates, closes, strict=False)
     ]
@@ -66,10 +69,7 @@ def test_estimate_return_positive_during_breakout_phase(lake_trendline):
     lake, dates = lake_trendline
     strategy = TrendlineBreakoutStrategy({"lookback": 30, "ticker": "X.US"})
     # deep into the rising phase a long signal should fire at least once
-    hits = [
-        strategy.estimate_return("X.US", dates[i].date(), lake)
-        for i in range(90, 120)
-    ]
+    hits = [strategy.estimate_return("X.US", dates[i].date(), lake) for i in range(90, 120)]
     assert any(h is not None and h > 0 for h in hits)
 
 
@@ -84,7 +84,8 @@ def test_decide_buys_on_long_signal_when_flat(lake_trendline):
     portfolio = Portfolio(cash=10_000.0, positions={})
     orders = strategy.decide(
         my_picks=[(0.01, "X.US")],
-        portfolio=portfolio, prices={"X.US": 130.0},
+        portfolio=portfolio,
+        prices={"X.US": 130.0},
         as_of=date(2026, 3, 15),
     )
     assert len(orders) == 1
@@ -96,7 +97,8 @@ def test_decide_sells_on_no_signal_when_holding(lake_trendline):
     portfolio = Portfolio(cash=0.0, positions={"X.US": 10.0})
     orders = strategy.decide(
         my_picks=[],
-        portfolio=portfolio, prices={"X.US": 100.0},
+        portfolio=portfolio,
+        prices={"X.US": 100.0},
         as_of=date(2026, 3, 15),
     )
     assert any(o.side == "sell" and o.ticker == "X.US" for o in orders)

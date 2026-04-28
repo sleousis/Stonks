@@ -69,8 +69,7 @@ class StrategyRegistry:
                     (id, class_path, params_json, artifact_path, status, created_at, updated_at)
                 VALUES (?, ?, ?, ?, 'shadow', ?, ?)
                 """,
-                [sid, class_path, json.dumps(params, sort_keys=True),
-                 str(artifact_path), now, now],
+                [sid, class_path, json.dumps(params, sort_keys=True), str(artifact_path), now, now],
             )
             for r in reports:
                 self._state.execute(
@@ -92,9 +91,7 @@ class StrategyRegistry:
 
     def set_status(self, strategy_id: str, status: str) -> None:
         if status not in _ALLOWED_STATUSES:
-            raise ValueError(
-                f"status must be one of {_ALLOWED_STATUSES}, got {status!r}"
-            )
+            raise ValueError(f"status must be one of {_ALLOWED_STATUSES}, got {status!r}")
         self._state.execute(
             "UPDATE strategies SET status = ?, updated_at = ? WHERE id = ?",
             [status, _iso_now(), strategy_id],

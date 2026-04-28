@@ -35,25 +35,34 @@ class TrendlineBreakoutStrategy(BaseStrategy):
     def parameter_spec(cls):
         return [
             ParameterSpec(
-                name="lookback", kind="int", default=72,
+                name="lookback",
+                kind="int",
+                default=72,
                 bounds=(20, 300),
-                description="Window size (in bars) over which support + "
-                "resistance lines are fit.",
+                description="Window size (in bars) over which support + resistance lines are fit.",
             ),
             ParameterSpec(
-                name="interval", kind="categorical", default="1d",
+                name="interval",
+                kind="categorical",
+                default="1d",
                 bounds=["1m", "5m", "15m", "30m", "1h", "4h", "12h", "1d", "1w"],
                 tunable=False,
                 description="Bar interval to read from the lake.",
             ),
             ParameterSpec(
-                name="ticker", kind="categorical", default="AAPL.US",
-                bounds=None, tunable=False,
+                name="ticker",
+                kind="categorical",
+                default="AAPL.US",
+                bounds=None,
+                tunable=False,
                 description="Ticker the strategy trades.",
             ),
             ParameterSpec(
-                name="allocation", kind="float", default=1.0,
-                bounds=(0.0, 1.0), tunable=False,
+                name="allocation",
+                kind="float",
+                default=1.0,
+                bounds=(0.0, 1.0),
+                tunable=False,
                 description="Fraction of cash deployed on a fresh long entry.",
             ),
         ]
@@ -103,8 +112,11 @@ class TrendlineBreakoutStrategy(BaseStrategy):
                 orders.append(
                     Order(
                         client_id=f"{self.id}:buy:{target}:{iso(as_of)}",
-                        ticker=target, side="buy", quantity=qty,
-                        order_type="market", strategy_id=self.id,
+                        ticker=target,
+                        side="buy",
+                        quantity=qty,
+                        order_type="market",
+                        strategy_id=self.id,
                     )
                 )
             return orders
@@ -113,8 +125,11 @@ class TrendlineBreakoutStrategy(BaseStrategy):
             orders.append(
                 Order(
                     client_id=f"{self.id}:sell:{target}:{iso(as_of)}",
-                    ticker=target, side="sell", quantity=holding,
-                    order_type="market", strategy_id=self.id,
+                    ticker=target,
+                    side="sell",
+                    quantity=holding,
+                    order_type="market",
+                    strategy_id=self.id,
                 )
             )
         return orders
@@ -146,5 +161,3 @@ class TrendlineBreakoutStrategy(BaseStrategy):
         support = float(s_tl[last]) if not math.isnan(s_tl[last]) else float("nan")
         resistance = float(r_tl[last]) if not math.isnan(r_tl[last]) else float("nan")
         return support, resistance, float(closes[last]), int(sig[last])
-
-

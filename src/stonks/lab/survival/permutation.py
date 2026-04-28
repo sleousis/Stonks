@@ -43,9 +43,7 @@ _log = get_logger("stonks.lab.survival.permutation")
 _OHLC_COLS = ("open", "high", "low", "close")
 
 
-def permute_bars(
-    bars: pd.DataFrame, start_index: int = 0, seed: int | None = None
-) -> pd.DataFrame:
+def permute_bars(bars: pd.DataFrame, start_index: int = 0, seed: int | None = None) -> pd.DataFrame:
     """Return a permuted copy of ``bars``.
 
     ``bars`` is a DataFrame with columns including ``open/high/low/close``.
@@ -72,13 +70,13 @@ def permute_bars(
     # relatives
     r_o = np.empty(n)
     r_o[1:] = log_open[1:] - log_close[:-1]
-    r_o[0] = 0.0   # unused for the preserved bar
+    r_o[0] = 0.0  # unused for the preserved bar
     r_h = log_high - log_open
     r_l = log_low - log_open
     r_c = log_close - log_open
 
-    perm1 = rng.permutation(perm_n)   # intra-bar (h, l, c)
-    perm2 = rng.permutation(perm_n)   # gap (o)
+    perm1 = rng.permutation(perm_n)  # intra-bar (h, l, c)
+    perm2 = rng.permutation(perm_n)  # gap (o)
 
     shuffled_h = r_h[perm_index:][perm1]
     shuffled_l = r_l[perm_index:][perm1]
@@ -113,7 +111,7 @@ def permute_bars(
 
 @dataclass(frozen=True)
 class _McptScoring:
-    metric: str             # "profit_factor" | "sharpe" | "final_return" | "cagr"
+    metric: str  # "profit_factor" | "sharpe" | "final_return" | "cagr"
     direction: str = "maximize"
 
 

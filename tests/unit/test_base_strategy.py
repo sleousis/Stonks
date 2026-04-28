@@ -72,3 +72,43 @@ def test_subclass_without_parameter_spec_treats_as_empty():
 
     e = _Empty({})
     assert e.params == {}
+
+
+def test_base_strategy_default_applicable_asset_classes_is_equity_only():
+    """Existing strategies haven't declared any per-class behaviour, so
+    the default keeps them equity-only — they won't accidentally evaluate
+    crypto / bond / commodity tickers when the universe widens. Subclasses
+    opt into more classes by overriding the attribute."""
+    assert BaseStrategy.applicable_asset_classes == ("equity",)
+    assert _MiniStrategy.applicable_asset_classes == ("equity",)
+
+
+def test_subclass_can_override_applicable_asset_classes():
+    class _Multi(BaseStrategy):
+        id = "multi"
+        applicable_asset_classes = ("equity", "crypto")
+
+        def estimate_return(self, ticker, as_of, lake):
+            return 0.0
+
+        def decide(self, my_picks, portfolio, prices, as_of):
+            return []
+
+    assert _Multi.applicable_asset_classes == ("equity", "crypto")
+
+
+def test_subclass_with_empty_applicable_asset_classes_raises_at_class_definition():
+    """Empty tuple silently means 'applies to nothing' — the Ranker filter
+    would drop every ticker for that strategy with no error signal. Catch
+    the footgun at class definition time."""
+    with pytest.raises(ValueError, match="must be non-empty"):
+
+        class _Broken(BaseStrategy):
+            id = "broken"
+            applicable_asset_classes = ()
+
+            def estimate_return(self, ticker, as_of, lake):
+                return 0.0
+
+            def decide(self, my_picks, portfolio, prices, as_of):
+                return []

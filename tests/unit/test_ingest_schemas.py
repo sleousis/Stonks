@@ -8,7 +8,11 @@ from pydantic import ValidationError
 from stonks.ingest.schemas import (
     AnalystForecastRow,
     AnalystRatingsRow,
+    BondProfileRow,
+    BondYieldRow,
+    CommodityContractRow,
     CrossListingRow,
+    CryptoProfileRow,
     DividendRow,
     EarningsAnnouncementRow,
     EmployeeCountRow,
@@ -498,4 +502,248 @@ def test_ticker_profile_rejects_unknown_security_type():
         TickerProfile(
             id="AAPL.US",
             security_type="Common Stock",  # type: ignore[arg-type]  # raw vendor string
+        )
+
+
+# ---- multi-asset support ---------------------------------------------------
+
+
+def test_ticker_profile_defaults_asset_class_to_equity():
+    """Existing single-asset code paths must keep working: every TickerProfile
+    constructed without an explicit ``asset_class`` lands as 'equity', which
+    matches the migration backfill of pre-existing rows."""
+    t = TickerProfile(id="AAPL.US")
+    assert t.asset_class == "equity"
+
+
+def test_ticker_profile_accepts_each_asset_class():
+    for cls in ("equity", "crypto", "commodity", "bond"):
+        t = TickerProfile(id=f"X.{cls.upper()}", asset_class=cls)  # type: ignore[arg-type]
+        assert t.asset_class == cls
+
+
+def test_ticker_profile_rejects_unknown_asset_class():
+    with pytest.raises(ValidationError):
+        TickerProfile(id="X.US", asset_class="forex")  # type: ignore[arg-type]
+
+
+def test_ticker_profile_rejects_security_type_on_non_equity():
+    """``security_type`` is the equity sub-kind; it must be ``None`` on
+    crypto / bond / commodity profiles. Catches the C2 leak — equity
+    parser gets reused, vendor's ``Type`` field maps to a non-None
+    security_type, the row lands in ``instruments`` with a contradictory
+    pair of fields. Validator fires before the row reaches the lake."""
+    with pytest.raises(ValidationError):
+        TickerProfile(id="BTC-USD.CC", asset_class="crypto", security_type="other")
+    # Equity rows still accept security_type — they're the only ones
+    # that should.
+    ok = TickerProfile(id="AAPL.US", asset_class="equity", security_type="common_stock")
+    assert ok.security_type == "common_stock"
+    # Non-equity rows with security_type=None remain valid.
+    ok2 = TickerProfile(id="BTC-USD.CC", asset_class="crypto", security_type=None)
+    assert ok2.security_type is None
+
+
+def test_crypto_profile_row_basic_shape():
+    row = CryptoProfileRow(
+        ticker="BTC-USD.CC",
+        base_symbol="BTC",
+        quote_symbol="USD",
+        blockchain="Bitcoin",
+        consensus_type="proof_of_work",
+        circulating_supply=19_700_000.0,
+        total_supply=19_700_000.0,
+        max_supply=21_000_000.0,
+        supply_snapshot_date=date(2026, 4, 1),
+    )
+    assert row.base_symbol == "BTC"
+    assert row.max_supply == 21_000_000.0
+
+
+def test_crypto_profile_row_allows_only_ticker():
+    """Free-tier vendors that don't expose supply/blockchain still produce a
+    valid row — every metadata field is optional except the ticker key."""
+    row = CryptoProfileRow(ticker="BTC-USD.CC")
+    assert row.ticker == "BTC-USD.CC"
+    assert row.circulating_supply is None
+
+
+def test_crypto_profile_row_rejects_negative_supply():
+    with pytest.raises(ValidationError):
+        CryptoProfileRow(ticker="BTC-USD.CC", circulating_supply=-1.0)
+
+
+def test_crypto_profile_row_rejects_total_below_circulating():
+    """Domain invariant: total_supply >= circulating_supply when both
+    are present. Surfaces the kind of vendor data-quality bug the row
+    exists to catch (chain-fork inconsistencies, etc.)."""
+    with pytest.raises(ValidationError):
+        CryptoProfileRow(
+            ticker="BTC-USD.CC",
+            circulating_supply=21_000_000.0,
+            total_supply=19_000_000.0,
+        )
+
+
+def test_crypto_profile_row_rejects_max_below_total():
+    with pytest.raises(ValidationError):
+        CryptoProfileRow(
+            ticker="BTC-USD.CC",
+            total_supply=21_000_000.0,
+            max_supply=19_000_000.0,
+        )
+
+
+def test_crypto_profile_row_allows_partial_supply_chain():
+    """When only one supply field is set, the other two stay None and
+    the validator must not trip — the partial-fill case is legitimate
+    (vendor only reports circulating)."""
+    row = CryptoProfileRow(ticker="BTC-USD.CC", circulating_supply=19_700_000.0)
+    assert row.total_supply is None
+    assert row.max_supply is None
+
+
+def test_bond_profile_row_basic_shape():
+    row = BondProfileRow(
+        ticker="US10Y.GBOND",
+        issuer_name="United States Treasury",
+        issuer_kind="sovereign",
+        bond_kind="treasury",
+        coupon_rate=4.25,
+        coupon_frequency=2,
+        face_value=1000.0,
+        currency="USD",
+        issue_date=date(2025, 11, 15),
+        maturity_date=date(2035, 11, 15),
+        credit_rating="AAA",
+    )
+    assert row.issuer_kind == "sovereign"
+    assert row.coupon_frequency == 2
+
+
+def test_bond_profile_row_rejects_unnormalized_issuer_kind():
+    """Vendors emit raw strings ('Government', 'Corp.', …); the schema only
+    accepts the canonical Literal so adapters do the mapping at parse time."""
+    with pytest.raises(ValidationError):
+        BondProfileRow(
+            ticker="US10Y.GBOND",
+            issuer_kind="Government",  # type: ignore[arg-type]
+        )
+
+
+def test_bond_profile_row_rejects_unnormalized_bond_kind():
+    with pytest.raises(ValidationError):
+        BondProfileRow(
+            ticker="US10Y.GBOND",
+            bond_kind="Treasury Note",  # type: ignore[arg-type]
+        )
+
+
+def test_bond_profile_row_rejects_decimal_vs_percent_coupon_confusion():
+    """Coupon rate is annual %; a vendor returning 1500.0 (the canonical
+    decimal-vs-percent confusion bug) must be rejected."""
+    with pytest.raises(ValidationError):
+        BondProfileRow(ticker="US10Y.GBOND", coupon_rate=1500.0)
+
+
+def test_bond_profile_row_accepts_zero_coupon():
+    row = BondProfileRow(ticker="ZERO.GBOND", coupon_rate=0.0, coupon_frequency=0)
+    assert row.coupon_rate == 0.0
+    assert row.coupon_frequency == 0
+
+
+def test_bond_profile_row_rejects_implausible_coupon_frequency():
+    with pytest.raises(ValidationError):
+        BondProfileRow(ticker="US10Y.GBOND", coupon_frequency=10_000)
+
+
+def test_bond_yield_row_basic_shape():
+    row = BondYieldRow(
+        ticker="US10Y.GBOND",
+        date=date(2026, 4, 1),
+        yield_to_maturity=4.18,
+        clean_price=99.45,
+    )
+    assert row.yield_to_maturity == 4.18
+    assert row.clean_price == 99.45
+
+
+def test_commodity_contract_row_basic_shape():
+    row = CommodityContractRow(
+        ticker="GC.COMM",
+        underlying_symbol="GC",
+        contract_kind="continuous",
+        contract_month=None,
+        expiry_date=None,
+        contract_size=100.0,
+        contract_unit="troy_ounce",
+    )
+    assert row.contract_kind == "continuous"
+    assert row.contract_size == 100.0
+
+
+def test_commodity_contract_row_rejects_unnormalized_contract_kind():
+    with pytest.raises(ValidationError):
+        CommodityContractRow(
+            ticker="GC.COMM",
+            contract_kind="Front month",  # type: ignore[arg-type]
+        )
+
+
+def test_commodity_contract_row_rejects_unparseable_contract_month():
+    """``contract_month`` must match the canonical YYYY-MM format so
+    downstream consumers can trust it."""
+    with pytest.raises(ValidationError):
+        CommodityContractRow(ticker="GC.COMM", contract_month="June 2026")
+
+
+def test_metadata_bundle_carries_per_class_profile_rows():
+    """The ingest pipeline reaches into ``MetadataBundle`` for each non-equity
+    profile field; if the field isn't on the dataclass the upsert call site
+    AttributeError's silently. Lock the field set in here. (Per-class
+    profiles are mutually exclusive — ``MetadataBundle`` enforces at most
+    one of {crypto_profile, bond_profile, commodity_contract} per
+    bundle, so each class is checked separately.)"""
+    from stonks.ingest.metadata_bundle import MetadataBundle
+
+    bond_bundle = MetadataBundle(
+        bond_profile=BondProfileRow(ticker="US10Y.GBOND"),
+        bond_yields=(
+            BondYieldRow(
+                ticker="US10Y.GBOND",
+                date=date(2026, 4, 1),
+                yield_to_maturity=4.18,
+            ),
+        ),
+    )
+    assert bond_bundle.bond_profile is not None
+    assert len(bond_bundle.bond_yields) == 1
+
+    crypto_bundle = MetadataBundle(crypto_profile=CryptoProfileRow(ticker="BTC-USD.CC"))
+    assert crypto_bundle.crypto_profile is not None
+
+    commodity_bundle = MetadataBundle(commodity_contract=CommodityContractRow(ticker="GC.COMM"))
+    assert commodity_bundle.commodity_contract is not None
+
+
+def test_metadata_bundle_defaults_all_per_class_fields_empty():
+    from stonks.ingest.metadata_bundle import MetadataBundle
+
+    bundle = MetadataBundle()
+    assert bundle.crypto_profile is None
+    assert bundle.bond_profile is None
+    assert bundle.commodity_contract is None
+    assert bundle.bond_yields == ()
+
+
+def test_metadata_bundle_rejects_two_per_class_profiles():
+    """A single ticker can only belong to one asset class. Two non-None
+    per-class profiles is illegal — catches the "adapter copy-pasted
+    between branches" bug at construction time."""
+    from stonks.ingest.metadata_bundle import MetadataBundle
+
+    with pytest.raises(ValueError, match="at most one"):
+        MetadataBundle(
+            crypto_profile=CryptoProfileRow(ticker="X.CC"),
+            bond_profile=BondProfileRow(ticker="X.GBOND"),
         )

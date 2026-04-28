@@ -36,9 +36,16 @@ def lake_gbm(tmp_path):
     lake.upsert_prices(
         pd.DataFrame(
             [
-                {"ticker": "RND.US", "date": d.date(),
-                 "open": c, "high": c, "low": c, "close": c,
-                 "adj_close": c, "volume": 1_000_000}
+                {
+                    "ticker": "RND.US",
+                    "date": d.date(),
+                    "open": c,
+                    "high": c,
+                    "low": c,
+                    "close": c,
+                    "adj_close": c,
+                    "volume": 1_000_000,
+                }
                 for d, c in zip(dates, close, strict=False)
             ]
         )
@@ -108,7 +115,7 @@ def test_mcpt_skips_when_universe_has_no_bars(tmp_path):
         test = MonteCarloPermutationTest(n_permutations=3)
         strategy = BuyAndHold({"ticker": "NOBARS.US"})
         report = test.run(strategy, dataset)
-        assert report.passed is False   # no data = no evidence
+        assert report.passed is False  # no data = no evidence
         assert report.metrics["p_value"] == 1.0
     finally:
         lake.close()
