@@ -19,6 +19,7 @@ from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
 from stonks.strategies.rule_based import RULE_STRATEGY_CLASS_PATH, RuleStrategy
 from stonks.strategies.rules import TEMPLATES
+from tests.fixtures.governance import seed_status
 
 UNIVERSE = ["UP.US", "FLAT.US", "DOWN.US"]
 
@@ -115,8 +116,8 @@ def test_ranker_filters_by_spec_asset_classes(tmp_path, lake_trending):
         crypto_only = dict(TREND, universe={"asset_classes": ["crypto"]})
         eq = registry.register(RuleStrategy({"spec": TREND}), reports=[])
         cr = registry.register(RuleStrategy({"spec": crypto_only}), reports=[])
-        registry.set_status(eq, "active")
-        registry.set_status(cr, "active")
+        seed_status(registry, eq, "active")
+        seed_status(registry, cr, "active")
         ranked = Ranker(registry=registry, lake=lake_trending, universe=UNIVERSE).rank(
             as_of=date(2026, 3, 2)
         )

@@ -16,6 +16,7 @@ from stonks.production.tick import TickSettings, run_tick
 from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
+from tests.fixtures.governance import seed_status
 
 SPLIT_EX = date(2026, 3, 18)  # FLAT.US 2:1, raw close 50 -> 25
 DIVIDEND_EX = date(2026, 3, 19)  # FLAT.US 0.5 per (post-split) share
@@ -90,7 +91,7 @@ def _register(registry, cls, status="active"):
         cls({"ticker": "UP.US", "allocation": 1.0}),
         reports=[SurvivalReport(test_id="oos", passed=True, metrics={})],
     )
-    registry.set_status(sid, status)
+    seed_status(registry, sid, status)
     return sid
 
 
@@ -193,7 +194,7 @@ def test_noop_tick_persists_applied_events_once(env):
     _, state, registry = env
     sid = _register(registry, Holder)
     _hold(state, sid, {"FLAT.US": 10.0})
-    registry.set_status(sid, "retired")  # no active owner: noop
+    seed_status(registry, sid, "retired")  # no active owner: noop
 
     for _ in range(2):
         result = _tick(env, date(2026, 3, 20))

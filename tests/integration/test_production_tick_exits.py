@@ -13,6 +13,7 @@ from stonks.production.tick import TickSettings, run_tick
 from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
+from tests.fixtures.governance import seed_status
 
 AS_OF = date(2026, 3, 20)
 
@@ -60,7 +61,7 @@ def _register(registry, strategy, status="active"):
     sid = registry.register(
         strategy, reports=[SurvivalReport(test_id="oos", passed=True, metrics={})]
     )
-    registry.set_status(sid, status)
+    seed_status(registry, sid, status)
     return sid
 
 
@@ -112,7 +113,7 @@ def test_no_exit_when_position_owner_is_not_active(env):
     lake, state, registry = env
     sid = _register(registry, ExitWhenUnpicked({"ticker": "UP.US", "allocation": 1.0}))
     _hold(state, sid, {"DOWN.US": 10.0})
-    registry.set_status(sid, "retired")
+    seed_status(registry, sid, "retired")
 
     settings = TickSettings(universe=["UP.US", "DOWN.US"], initial_cash=10_000.0)
     result = run_tick(state, lake, registry, settings, as_of=AS_OF)

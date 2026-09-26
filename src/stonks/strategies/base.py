@@ -4,21 +4,121 @@ Subclasses override whatever they need; the base handles param validation +
 default-filling, no-op ``fit``, empty-Features ``extract_features``, and
 JSON-param save/load. This is the cleanest entry point for rule-based
 strategies; ML strategies layer their own save/load.
+
+Metadata (BL-26) is a set of duck-typed class attributes with safe defaults:
+``hypothesis``, ``alpha_family``, ``premise``, ``label_horizon_bars`` and
+``required_history_bars``. Callers read them through :func:`strategy_metadata`
+(``getattr`` with defaults), so strategies that don't subclass
+``BaseStrategy`` work too. An optional ``asset_classes`` instance param
+overrides ``applicable_asset_classes``, for opt-in use of a strategy outside
+its evidence base.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal, get_args
 
 from stonks.core.params import Params, ParamSpace, validate_params
 from stonks.core.types import AssetClass, Features
 
+AlphaFamily = Literal[
+    "trend",
+    "reversion",
+    "carry",
+    "value",
+    "quality",
+    "growth",
+    "sentiment",
+    "data_driven",
+    "benchmark",
+    "other",
+]
+Premise = Literal["trend", "mean_reversion", "none"]
+ALPHA_FAMILIES: tuple[str, ...] = get_args(AlphaFamily)
+PREMISES: tuple[str, ...] = get_args(Premise)
+_ASSET_CLASSES: tuple[str, ...] = get_args(AssetClass)
+
+#: Instance param that overrides ``applicable_asset_classes``.
+ASSET_CLASSES_PARAM = "asset_classes"
+
+
+@dataclass(frozen=True)
+class StrategyMetadata:
+    """A strategy's hypothesis card and capability hooks (BL-26)."""
+
+    hypothesis: str = ""
+    alpha_family: AlphaFamily = "other"
+    premise: Premise = "none"
+    label_horizon_bars: int = 0
+    required_history_bars: int = 0
+    applicable_asset_classes: tuple[AssetClass, ...] = ("equity",)
+
+    def to_dict(self) -> dict[str, Any]:
+        out = asdict(self)
+        out["applicable_asset_classes"] = list(self.applicable_asset_classes)
+        return out
+
+
+def strategy_metadata(target: Any) -> StrategyMetadata:
+    """The metadata of a strategy class or instance, with defaults for any
+    attribute it doesn't declare. An instance reports its own (possibly
+    overridden) ``applicable_asset_classes``."""
+    d = StrategyMetadata()
+    return StrategyMetadata(
+        hypothesis=getattr(target, "hypothesis", d.hypothesis),
+        alpha_family=getattr(target, "alpha_family", d.alpha_family),
+        premise=getattr(target, "premise", d.premise),
+        label_horizon_bars=getattr(target, "label_horizon_bars", d.label_horizon_bars),
+        required_history_bars=getattr(target, "required_history_bars", d.required_history_bars),
+        applicable_asset_classes=tuple(
+            getattr(target, "applicable_asset_classes", d.applicable_asset_classes)
+        ),
+    )
+
+
+def _check_metadata(cls: type) -> None:
+    name = cls.__name__
+    if not isinstance(cls.hypothesis, str):  # type: ignore[attr-defined]
+        raise ValueError(f"{name}.hypothesis must be a str")
+    if cls.alpha_family not in ALPHA_FAMILIES:  # type: ignore[attr-defined]
+        raise ValueError(f"{name}.alpha_family must be one of {ALPHA_FAMILIES}")
+    if cls.premise not in PREMISES:  # type: ignore[attr-defined]
+        raise ValueError(f"{name}.premise must be one of {PREMISES}")
+    for attr in ("label_horizon_bars", "required_history_bars"):
+        value = getattr(cls, attr)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"{name}.{attr} must be a non-negative int, got {value!r}")
+
+
+def _parse_asset_classes(value: Any) -> tuple[AssetClass, ...]:
+    if isinstance(value, str | bytes | Mapping) or not isinstance(value, list | tuple):
+        raise ValueError(f"asset_classes must be a list of asset classes, got {value!r}")
+    if not value:
+        raise ValueError("asset_classes must be non-empty when given")
+    unknown = [v for v in value if v not in _ASSET_CLASSES]
+    if unknown:
+        raise ValueError(
+            f"asset_classes has unknown classes {unknown}; choose from {_ASSET_CLASSES}"
+        )
+    return tuple(dict.fromkeys(value))
+
 
 class BaseStrategy:
     id: ClassVar[str] = "base"
+    # ---- metadata (BL-26); override per strategy ----------------------------
+    #: Mechanism, expected sign, who loses money to us, and when it should fail.
+    hypothesis: ClassVar[str] = ""
+    alpha_family: ClassVar[AlphaFamily] = "other"
+    premise: ClassVar[Premise] = "none"
+    #: Bars until a decision's outcome is known (embargo length for the lab).
+    label_horizon_bars: ClassVar[int] = 0
+    #: Bars of history ``decide`` needs before it can act.
+    required_history_bars: ClassVar[int] = 0
     # AssetClass intersection — the Ranker drops universe tickers whose
     # asset class isn't in this tuple. Default keeps every existing
     # strategy equity-only without an opt-in change. Cross-class
@@ -36,6 +136,7 @@ class BaseStrategy:
                 f"{cls.__name__}.applicable_asset_classes must be non-empty; "
                 f"declare at least one AssetClass the strategy is meant to handle"
             )
+        _check_metadata(cls)
 
     @classmethod
     def parameter_spec(cls) -> ParamSpace:
@@ -43,9 +144,27 @@ class BaseStrategy:
 
     def __init__(self, params: Params) -> None:
         spec = self.parameter_spec()
-        validate_params(params, spec)
+        params = dict(params)
+        override = None
+        if ASSET_CLASSES_PARAM in params and not any(s.name == ASSET_CLASSES_PARAM for s in spec):
+            override = _parse_asset_classes(params[ASSET_CLASSES_PARAM])
+            params[ASSET_CLASSES_PARAM] = list(override)
+        validate_params(
+            {k: v for k, v in params.items() if override is None or k != ASSET_CLASSES_PARAM},
+            spec,
+        )
         defaults = {s.name: s.default for s in spec}
-        self.params: dict[str, Any] = {**defaults, **dict(params)}
+        self.params: dict[str, Any] = {**defaults, **params}
+        if override is not None:
+            self.applicable_asset_classes = override  # type: ignore[misc]
+            self._asset_classes_override = override
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        # An explicit ``asset_classes`` override wins over classes a subclass
+        # derives at init (a rule spec's universe, a wrapper's inner).
+        if name == "applicable_asset_classes" and "_asset_classes_override" in self.__dict__:
+            return
+        super().__setattr__(name, value)
 
     # --- defaults ------------------------------------------------------------
 
@@ -63,7 +182,11 @@ class BaseStrategy:
         (path / "params.json").write_text(json.dumps(self.params, sort_keys=True, indent=2))
         (path / "meta.json").write_text(
             json.dumps(
-                {"id": self.id, "class_path": self._class_path()},
+                {
+                    "id": self.id,
+                    "class_path": self._class_path(),
+                    "metadata": strategy_metadata(self).to_dict(),
+                },
                 sort_keys=True,
                 indent=2,
             )

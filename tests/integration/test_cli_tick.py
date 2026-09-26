@@ -18,6 +18,7 @@ from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
+from tests.fixtures.governance import seed_status
 
 
 @pytest.fixture
@@ -86,7 +87,7 @@ base_url = "https://example.test/api"
         BuyAndHold({"ticker": "UP.US", "allocation": 1.0}),
         reports=[SurvivalReport(test_id="oos", passed=True, metrics={"sharpe_oos": 1.0})],
     )
-    registry.set_status(sid, "active")
+    seed_status(registry, sid, "active")
     state.close()
 
     return tmp_path, sid
@@ -182,7 +183,7 @@ def _add_shadow_strategy(tmp_path):
             BuyAndHold({"ticker": "UP.US", "allocation": 0.5}),
             reports=[SurvivalReport(test_id="oos", passed=True, metrics={})],
         )
-        registry.set_status(sid, "shadow")
+        seed_status(registry, sid, "shadow")
     finally:
         state.close()
 

@@ -3,24 +3,67 @@
 Registers freshly-lab'd strategies in ``shadow`` status by default. A human
 (or a soak-time policy) promotes them to ``active``; drift or bad live
 performance can flip them back to ``shadow`` or all the way to ``retired``.
+
+Governance (BL-24): :meth:`StrategyRegistry.set_status` is the only writer of
+``strategies.status``. Every change writes one append-only ``status_changes``
+row (actor, from, to, reason, override flag, go-live report) in the same
+transaction. Moving to ``active`` needs a passing go-live report for that
+strategy, or ``override=True`` with a reason of at least
+``MIN_OVERRIDE_REASON_CHARS`` characters. Demotions (``shadow``, ``retired``)
+are always allowed but need a reason.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import importlib
 import json
+import math
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, get_args
 
 from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.registry.artifact import ArtifactBundle
 from stonks.store.state import SqliteState
 
 _ALLOWED_STATUSES = ("active", "shadow", "retired")
+
+#: Minimum length (after trimming) of the reason for a promotion override.
+MIN_OVERRIDE_REASON_CHARS = 20
+
+InterventionKind = Literal["status", "risk_reset", "manual_order", "config"]
+_INTERVENTION_KINDS: tuple[str, ...] = get_args(InterventionKind)
+
+
+class GovernanceError(ValueError):
+    """A status change or intervention broke a governance rule (missing
+    actor, missing or short reason, ...)."""
+
+
+class PromotionRefused(GovernanceError):
+    """Promotion to ``active`` without a passing go-live report and without
+    an override."""
+
+
+@dataclass(frozen=True)
+class StatusChange:
+    """One row of the intervention log."""
+
+    id: int
+    strategy_id: str | None
+    kind: str
+    from_status: str | None
+    to_status: str | None
+    actor: str
+    reason: str
+    override: bool
+    golive_passed: bool | None
+    golive_report: dict[str, Any] | None
+    created_at: str
 
 
 @dataclass
@@ -101,15 +144,84 @@ class StrategyRegistry:
                 )
         return sid
 
-    def set_status(self, strategy_id: str, status: str) -> None:
+    def set_status(
+        self,
+        strategy_id: str,
+        status: str,
+        *,
+        actor: str | None = None,
+        reason: str | None = None,
+        golive_report: Any = None,
+        override: bool = False,
+    ) -> StatusChange | None:
+        """Change a strategy's status and log it; the only status writer.
+
+        ``golive_report`` is duck-typed (``production.golive.GoLiveReport``):
+        it needs ``passed`` and ``strategy_id`` and is stored as JSON. Setting
+        the current status again changes nothing, logs nothing and returns
+        ``None``. Raises ``KeyError`` for an unknown id, ``ValueError`` for an
+        unknown status, :class:`PromotionRefused` / :class:`GovernanceError`
+        when a rule is broken (nothing is written then).
+        """
         if status not in _ALLOWED_STATUSES:
             raise ValueError(f"status must be one of {_ALLOWED_STATUSES}, got {status!r}")
-        cur = self._state.execute(
-            "UPDATE strategies SET status = ?, updated_at = ? WHERE id = ?",
-            [status, _iso_now(), strategy_id],
-        )
-        if cur.rowcount == 0:
-            raise KeyError(strategy_id)
+        with self._state.transaction():
+            current = self._get_handle(strategy_id).status
+            if current == status:
+                return None
+            actor_ = _require_actor(actor)
+            reason_, golive_passed = _check_transition(
+                strategy_id, current, status, reason, golive_report, override
+            )
+            now = _iso_now()
+            # Log first: the ``strategies_status_audited`` trigger only lets
+            # the UPDATE through when the latest log row matches it.
+            change = self._log(
+                strategy_id=strategy_id,
+                kind="status",
+                from_status=current,
+                to_status=status,
+                actor=actor_,
+                reason=reason_,
+                override=override,
+                golive_passed=golive_passed,
+                golive_report=_report_json(golive_report),
+                created_at=now,
+            )
+            cur = self._state.execute(
+                "UPDATE strategies SET status = ?, updated_at = ? WHERE id = ? AND status = ?",
+                [status, now, strategy_id, current],
+            )
+            if cur.rowcount != 1:  # pragma: no cover - guarded by the transaction
+                raise GovernanceError(f"strategy {strategy_id!r} changed status concurrently")
+            return change
+
+    def record_intervention(
+        self,
+        kind: InterventionKind,
+        *,
+        actor: str,
+        reason: str,
+        strategy_id: str | None = None,
+    ) -> StatusChange:
+        """Log a non-status intervention (risk reset, manual order, config
+        change). Status changes go through :meth:`set_status` only."""
+        if kind == "status" or kind not in _INTERVENTION_KINDS:
+            allowed = [k for k in _INTERVENTION_KINDS if k != "status"]
+            raise GovernanceError(f"intervention kind must be one of {allowed}, got {kind!r}")
+        with self._state.transaction():
+            return self._log(
+                strategy_id=strategy_id,
+                kind=kind,
+                from_status=None,
+                to_status=None,
+                actor=_require_actor(actor),
+                reason=_require_reason(reason, what=kind),
+                override=False,
+                golive_passed=None,
+                golive_report=None,
+                created_at=_iso_now(),
+            )
 
     # ---- reads -------------------------------------------------------------
 
@@ -154,7 +266,39 @@ class StrategyRegistry:
             for row in rows
         ]
 
+    def status_history(self, strategy_id: str) -> list[StatusChange]:
+        """The strategy's logged changes and interventions, oldest first."""
+        rows = self._state.sql(
+            "SELECT * FROM status_changes WHERE strategy_id = ? ORDER BY id", [strategy_id]
+        )
+        return [_change_from_row(r) for r in rows]
+
     # ---- internals ---------------------------------------------------------
+
+    def _log(self, **fields: Any) -> StatusChange:
+        golive_passed = fields["golive_passed"]
+        cur = self._state.execute(
+            """
+            INSERT INTO status_changes
+                (strategy_id, kind, from_status, to_status, actor, reason, override,
+                 golive_passed, golive_report_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                fields["strategy_id"],
+                fields["kind"],
+                fields["from_status"],
+                fields["to_status"],
+                fields["actor"],
+                fields["reason"],
+                1 if fields["override"] else 0,
+                None if golive_passed is None else int(golive_passed),
+                fields["golive_report"],
+                fields["created_at"],
+            ],
+        )
+        (row,) = self._state.sql("SELECT * FROM status_changes WHERE id = ?", [cur.lastrowid])
+        return _change_from_row(row)
 
     def _get_handle(self, strategy_id: str) -> StrategyHandle:
         rows = self._query("SELECT * FROM strategies WHERE id=?", [strategy_id])
@@ -179,6 +323,118 @@ class StrategyRegistry:
     def _generate_id(self, strategy: Strategy) -> str:
         suffix = uuid.uuid4().hex[:8]
         return f"{getattr(strategy, 'id', 'strategy')}_{suffix}"
+
+
+def _require_actor(actor: str | None) -> str:
+    if not isinstance(actor, str) or not actor.strip():
+        raise GovernanceError("an actor is required for every status change")
+    return actor.strip()
+
+
+def _require_reason(reason: str | None, *, what: str) -> str:
+    if not isinstance(reason, str) or not reason.strip():
+        raise GovernanceError(f"a reason is required for {what}")
+    return reason.strip()
+
+
+def _check_transition(
+    strategy_id: str,
+    current: str,
+    status: str,
+    reason: str | None,
+    golive_report: Any,
+    override: bool,
+) -> tuple[str, bool | None]:
+    """Apply the promotion rules; returns the reason to log and whether the
+    go-live report passed (``None`` without one). A report only counts when
+    it was evaluated for this strategy in its current status."""
+    golive_passed = None if golive_report is None else bool(golive_report.passed)
+    if status != "active":
+        return _require_reason(reason, what=f"moving a strategy to {status!r}"), golive_passed
+    if golive_report is not None:
+        report_sid = getattr(golive_report, "strategy_id", strategy_id)
+        report_status = getattr(golive_report, "status", current)
+        problem = None
+        if report_sid != strategy_id:
+            problem = (
+                f"go-live report is for another strategy ({report_sid!r}), not {strategy_id!r}"
+            )
+        elif report_status != current:
+            problem = (
+                f"go-live report is stale: evaluated while {report_status!r}, "
+                f"strategy is now {current!r}"
+            )
+        if problem is not None:
+            golive_passed = False
+            if not override:
+                raise PromotionRefused(problem)
+    if override:
+        text = (reason or "").strip()
+        if len(text) < MIN_OVERRIDE_REASON_CHARS:
+            raise GovernanceError(
+                f"a promotion override needs a reason of at least "
+                f"{MIN_OVERRIDE_REASON_CHARS} characters"
+            )
+        return text, golive_passed
+    if golive_report is None:
+        raise PromotionRefused(
+            f"promoting {strategy_id!r} needs a passing go-live check "
+            "(or an override with a reason)"
+        )
+    if not golive_passed:
+        failed = [
+            f"{getattr(c, 'name', '?')}: {getattr(c, 'detail', '')}".rstrip(": ")
+            for c in getattr(golive_report, "checks", [])
+            if not getattr(c, "passed", False)
+        ]
+        raise PromotionRefused(
+            f"go-live check failed for {strategy_id!r}: " + ("; ".join(failed) or "no checks")
+        )
+    text = (reason or "").strip()
+    return text or "go-live check passed", golive_passed
+
+
+def _report_json(report: Any) -> str | None:
+    if report is None:
+        return None
+    if dataclasses.is_dataclass(report) and not isinstance(report, type):
+        payload: Any = dataclasses.asdict(report)
+        payload["passed"] = bool(report.passed)
+    elif isinstance(report, Mapping):
+        payload = dict(report)
+    else:
+        to_dict = getattr(report, "to_dict", None) or getattr(report, "model_dump", None)
+        payload = to_dict() if callable(to_dict) else {"passed": bool(report.passed)}
+    return json.dumps(_finite(payload), sort_keys=True, default=str, allow_nan=False)
+
+
+def _finite(value: Any) -> Any:
+    """Strict JSON: non-finite floats become ``None``."""
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, Mapping):
+        return {k: _finite(v) for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return [_finite(v) for v in value]
+    return value
+
+
+def _change_from_row(row: Any) -> StatusChange:
+    passed = row["golive_passed"]
+    report = row["golive_report_json"]
+    return StatusChange(
+        id=row["id"],
+        strategy_id=row["strategy_id"],
+        kind=row["kind"],
+        from_status=row["from_status"],
+        to_status=row["to_status"],
+        actor=row["actor"],
+        reason=row["reason"],
+        override=bool(row["override"]),
+        golive_passed=None if passed is None else bool(passed),
+        golive_report=json.loads(report) if report else None,
+        created_at=row["created_at"],
+    )
 
 
 def _iso_now() -> str:

@@ -159,11 +159,16 @@ def test_strategy_routes(client, seeded):
 
 
 def test_strategy_status_routes(client, seeded):
+    """Status routes go through the governed service (BL-24): promotion
+    needs a passing go-live check, demotion a reason. The routes take no
+    reason/override yet, so both are refused and nothing changes."""
     sid = seeded["shadow_id"]
-    for action, status in (("promote", "active"), ("retire", "retired"), ("shadow", "shadow")):
-        resp = client.post(f"/api/strategies/{sid}/{action}", headers=AUTH)
-        assert resp.status_code == 200
-        assert resp.json()["status"] == status
+    assert client.post(f"/api/strategies/{sid}/promote", headers=AUTH).status_code == 409
+    for action in ("retire", "shadow"):
+        resp = client.post(f"/api/strategies/{seeded['active_id']}/{action}", headers=AUTH)
+        assert resp.status_code == 422
+    assert client.get(f"/api/strategies/{sid}").json()["status"] == "shadow"
+    assert client.get(f"/api/strategies/{seeded['active_id']}").json()["status"] == "active"
     assert client.post("/api/strategies/missing/promote", headers=AUTH).status_code == 404
 
 

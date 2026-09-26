@@ -133,14 +133,13 @@ async def test_register_enable_disable_are_guarded(mcp):
     assert preview["strategy"]["current_status"] == "shadow"
     assert (await call(mcp, "get_strategy", {"strategy_id": sid}))["status"] == "shadow"
 
-    enabled = await call(mcp, "enable_draft", {"draft_id": did, "confirm": True})
-    assert enabled["draft"]["strategy_status"] == "active"
-    assert (await call(mcp, "get_strategy", {"strategy_id": sid}))["status"] == "active"
+    # Promotion is gated by the go-live check (BL-24): a fresh draft has no
+    # paper period, so a confirmed enable is refused and nothing changes.
+    err = await call_error(mcp, "enable_draft", {"draft_id": did, "confirm": True})
+    assert "go-live" in err
+    assert (await call(mcp, "get_strategy", {"strategy_id": sid}))["status"] == "shadow"
 
     assert (await call(mcp, "disable_draft", {"draft_id": did}))["new_status"] == "shadow"
-    assert (await call(mcp, "get_strategy", {"strategy_id": sid}))["status"] == "active"
-    await call(mcp, "disable_draft", {"draft_id": did, "confirm": True})
-    assert (await call(mcp, "get_strategy", {"strategy_id": sid}))["status"] == "shadow"
 
 
 @pytest.mark.anyio

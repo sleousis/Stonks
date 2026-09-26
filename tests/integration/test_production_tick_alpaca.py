@@ -23,6 +23,7 @@ from stonks.production.tick import TickSettings, run_tick
 from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
+from tests.fixtures.governance import seed_status
 from tests.unit.test_alpaca_broker import FakeClient, raw_order
 
 AS_OF = date(2026, 3, 20)
@@ -38,7 +39,7 @@ def env(tmp_path, lake_trending):
         BuyAndHold({"ticker": "UP.US", "allocation": 0.5}),
         reports=[SurvivalReport(test_id="oos", passed=True, metrics={})],
     )
-    registry.set_status(sid, "active")
+    seed_status(registry, sid, "active")
     client = FakeClient()
     client.account = {"cash": "10000", "currency": "USD", "status": "ACTIVE"}
     brokers: list[AlpacaBroker] = []

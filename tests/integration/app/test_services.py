@@ -98,9 +98,12 @@ def test_strategy_detail_has_params_and_reports(services, seeded):
 
 
 def test_strategy_status_changes(services, seeded):
-    assert services.strategies.promote(seeded["shadow_id"]).status == "active"
-    assert services.strategies.retire(seeded["shadow_id"]).status == "retired"
-    assert services.strategies.shadow(seeded["shadow_id"]).status == "shadow"
+    sid = seeded["shadow_id"]
+    override = "test override: no paper period in this fixture"
+    assert services.strategies.promote(sid, override=True, reason=override).status == "active"
+    assert services.strategies.retire(sid, reason="superseded").status == "retired"
+    assert services.strategies.shadow(sid, reason="re-incubate").status == "shadow"
+    assert len(services.strategies.history(sid)) == 3
 
 
 def test_strategy_unknown_id_is_not_found(services):
