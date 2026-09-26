@@ -232,6 +232,39 @@ Decided: one small always-on cloud VM (for example Hetzner Cloud or DigitalOcean
 | 14.9 Lab offload | Run heavy lab jobs on the 32-core PC or an on-demand large VM against a read-only copy of the Parquet bars, then send results back to the server's registry. |
 | 14.10 Cost and capacity | A sizing guide (CPU, RAM, disk for the lake), monthly cost estimate, and alerts before the disk fills. |
 
+## Phase 15: Accounts, connected brokers and automation modes
+
+Every trader gets a simple experience: connect a broker for insights, pick strategies, and choose whether Stonks acts or only notifies.
+
+| WP | Scope |
+|----|-------|
+| 15.1 Design: tenancy and modes | A design doc (`docs/design/accounts-and-modes.md`) for per-user portfolios, subscriptions, broker connections and modes, and how every table, API route and job gets a user scope. Guides all later work. |
+| 15.2 Per-user data model | Users, portfolios, strategy subscriptions and notification settings; every order, fill, snapshot, alert and audit row belongs to a user. Migrations with a default owner for existing data. |
+| 15.3 Broker connection seam | A `BrokerConnection` interface: read-only sync of positions, cash, orders and history first, trading later. Providers: a direct Alpaca adapter and an aggregator (for example SnapTrade) for many brokers, wrapped behind the seam. OAuth or API keys stored encrypted per user. |
+| 15.4 Portfolio insights | Imported holdings analyzed like Stonks portfolios: allocation, exposure, P&L, risk, and which Stonks strategies agree or disagree with each holding. |
+| 15.5 Automation modes | Per subscription: notify (signals only), paper (simulated account) or auto (connected account). Auto requires a second factor to enable and respects per-user risk limits and the kill switch. |
+| 15.6 Signals and notifications | A signal feed (opportunity, entry, exit, risk alerts) with reasons; Web Push through the browser's service worker so Chrome and installed phone apps get background notifications; quiet hours and per-strategy preferences. |
+| 15.7 Simple trader UX | A home screen with three things: my portfolio, today's signals, my strategies with an on/off and mode switch. Advanced pages stay available but out of the way. |
+
+## Phase 16: Short selling
+
+| WP | Scope |
+|----|-------|
+| 16.1 Engine and broker | Negative positions in the portfolio, short fills in the simulated broker, borrow costs, margin requirements, and short-sale availability checks. |
+| 16.2 Risk rules for shorts | Gross and net exposure limits, per-position short caps, and squeeze protection (stop on adverse moves), as registered risk rules. |
+| 16.3 Strategies that short | Let strategies emit short signals behind an opt-in; re-enable the short legs of the neurotrader888 ports and the long/short books from the book research. |
+| 16.4 Validation for shorts | Backtests, permutation tests and reports handle long/short books; borrow-cost stress tests. |
+
+## Phase 17: Options
+
+| WP | Scope |
+|----|-------|
+| 17.1 Instruments and data | An option contract model (underlying, expiry, strike, right, multiplier) and an options chain data source behind the `DataSource` seam, with daily chain snapshots in the lake. |
+| 17.2 Pricing and Greeks | Black-Scholes and implied volatility through a maintained library (for example py_vollib or QuantLib), wrapped behind a seam; volatility surface basics. |
+| 17.3 Backtesting options | Fills on option prices, expiry and assignment handling, early exercise rules, and multi-leg positions. |
+| 17.4 Risk for options | Greek limits (delta, gamma, vega), max loss per spread, and margin. |
+| 17.5 Options strategies | Covered calls, cash-secured puts, protective puts, vertical spreads, and volatility strategies from the book research (Sinclair, Natenberg). |
+
 ## Execution order
 
 1. Wave 1 in parallel: backtest (1.2, 1.3, 3.5), lab (1.4, 1.5, 3.3), production (2.3, 2.4, 2.5), broker (2.1, 2.2), data (3.4), strategies (3.1, 3.2, 4.2), and the service layer plus REST API for existing features (5.1).
