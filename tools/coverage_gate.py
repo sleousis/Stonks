@@ -20,13 +20,13 @@ from typing import Any
 #: The target for every strict package.
 TARGET = 95.0
 
-#: Floors enforced now. Measured on 2026-09-26 (combined line and branch):
-#: core 92.6, production 95.6, execution 95.9, auth 94.0, portfolio 96.3.
+#: Floors enforced now. Measured on 2026-09-27 (combined line and branch):
+#: core 98.4, production 95.5, execution 95.9, auth 98.5, portfolio 96.3.
 PACKAGE_FLOORS: dict[str, float] = {
-    "core": 92.0,
+    "core": 98.0,
     "production": 95.0,
     "execution": 95.0,
-    "auth": 94.0,
+    "auth": 95.0,
     "portfolio": 95.0,
 }
 
