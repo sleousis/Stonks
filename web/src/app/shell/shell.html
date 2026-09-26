@@ -57,7 +57,11 @@
   </aside>
 
   <main id="main" #main tabindex="-1">
-    <router-outlet />
+    @if (connectivity.online()) {
+      <router-outlet />
+    } @else {
+      <app-offline-page />
+    }
   </main>
 </div>
 

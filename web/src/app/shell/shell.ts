@@ -15,9 +15,11 @@ import { filter, skip } from 'rxjs';
 
 import { AuthTokenService } from '../core/auth/auth-token.service';
 import { ShortcutsService } from '../core/commands/shortcuts.service';
+import { ConnectivityService } from '../core/pwa/connectivity.service';
 import { ThemeService } from '../core/theme/theme.service';
 import { CommandPalette } from '../shared/ui/command-palette/command-palette';
 import { ConfirmDialog } from '../shared/ui/confirm-dialog';
+import { OfflinePage } from '../shared/ui/offline-page';
 import { ShortcutHelp } from '../shared/ui/shortcut-help';
 import { ToastOutlet } from '../shared/ui/toast-outlet';
 import { Nav } from './nav';
@@ -42,6 +44,7 @@ import { registerShellCommands } from './shell-commands';
     ToastOutlet,
     CommandPalette,
     ShortcutHelp,
+    OfflinePage,
   ],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
@@ -51,6 +54,7 @@ export class Shell {
   protected readonly theme = inject(ThemeService);
   protected readonly auth = inject(AuthTokenService);
   protected readonly shortcuts = inject(ShortcutsService);
+  protected readonly connectivity = inject(ConnectivityService);
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
   private readonly drawer = viewChild.required<ElementRef<HTMLDialogElement>>('drawer');

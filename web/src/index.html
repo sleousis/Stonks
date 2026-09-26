@@ -8,7 +8,13 @@
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#eef1f4" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0e141b" media="(prefers-color-scheme: dark)" />
+    <meta name="description" content="Stonks trader console" />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Stonks" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <script>
       // Apply a forced theme before first paint (ThemeService owns it after boot).
       try {
@@ -19,5 +25,6 @@
   </head>
   <body>
     <app-root></app-root>
+    <noscript>The Stonks console needs JavaScript. Turn it on and reload.</noscript>
   </body>
 </html>
