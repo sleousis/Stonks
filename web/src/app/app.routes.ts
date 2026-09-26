@@ -15,6 +15,8 @@ export const routes: Routes = [
   { path: 'go-live', loadChildren: () => import('./pages/go-live/go-live.routes') },
   { path: 'health', loadChildren: () => import('./pages/health/health.routes') },
   { path: 'settings', loadChildren: () => import('./pages/settings/settings.routes') },
+  // ops: halts
+  { path: 'ops', loadChildren: () => import('./pages/ops/ops.routes') },
   {
     path: '**',
     title: 'Not found',

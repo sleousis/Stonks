@@ -57,6 +57,8 @@
   </aside>
 
   <main id="main" #main tabindex="-1">
+    <!-- ops: kill switch banner -->
+    <app-halt-banner />
     @if (connectivity.online()) {
       <router-outlet />
     } @else {
