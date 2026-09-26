@@ -93,7 +93,7 @@ shoulder and right armpit. Exit on whichever comes first:
 | Param | Kind | Default | Bounds |
 |---|---|---|---|
 | `order` | int | 6 | 2 – 48 |
-| `early_find` | bool | False | — |
+| `early_find` | bool | False | - |
 | `hold_mult` | float | 1.0 | 0.5 – 3.0 |
 
 **Deviations:**
@@ -164,7 +164,7 @@ templates are copied from it:
 | Crab | 0.382–0.618 | 0.382–0.886 | 2.618–3.618 | 1.618 |
 | Deep Crab | 0.886 | 0.382–0.886 | 2.0–3.618 | 1.618 |
 | Cypher | 0.382–0.618 | 1.13–1.41 | 1.27–2.00 | 0.786 |
-| Shark | — | 1.13–1.618 | 1.618–2.24 | 0.886–1.13 |
+| Shark | - | 1.13–1.618 | 1.618–2.24 | 0.886–1.13 |
 
 **Rule (bullish patterns only):**
 

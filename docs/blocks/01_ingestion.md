@@ -1,149 +1,145 @@
-# Block 1 — Ingestion (APIs → Lake)
+# Block 1: Ingestion (APIs to lake)
 
 ## Purpose
 
-Pull prices and fundamentals from one or more vendor APIs and upsert them into the canonical DuckDB lake. The block has no knowledge of strategies, backtests, or production.
+Pull market data from vendor APIs and upsert it into the DuckDB lake. The block knows nothing about strategies, backtests or trading.
 
 ## Module layout
 
 ```
 src/stonks/ingest/
 ├── sources/
-│   ├── base.py          # DataSource ABC
-│   ├── eodhd.py         # EodhdDataSource + pure response parsers
-│   └── yahoo.py         # YahooDataSource (post-MVP)
-├── name_mapper.py       # vendor → canonical key renamer
-├── schemas.py           # canonical pydantic row models
-└── pipeline.py          # IngestPipeline orchestration
+│   ├── base.py          # DataSource ABC and DataSourceError
+│   ├── registry.py      # source id -> configured DataSource (--source)
+│   ├── eodhd.py         # EODHD: prices, intraday, statements, metadata, macro, exchanges
+│   ├── yahoo.py         # Yahoo Finance (wraps yfinance): prices, intraday, basic profiles
+│   └── defillama.py     # DefiLlama: DeFi TVL per chain (no key)
+├── pipeline.py          # IngestPipeline: fetch, validate, upsert, record the run
+├── quality.py           # BarQualityChecker: quarantine bad bars, warn on odd ones
+├── quality_config.py    # DataQualityConfig and fallback settings
+├── metadata_bundle.py   # MetadataBundle returned by fetch_metadata
+├── name_mapper.py       # vendor key -> canonical column renamer
+├── redact.py            # keeps API keys out of logged errors
+└── schemas.py           # canonical pydantic row models
 ```
 
 ## `DataSource` contract
 
+Three methods are required. The rest are optional and default to "nothing" (or, for TVL, an `UnsupportedCapabilityError` that the pipeline counts as a soft fail).
+
 ```python
 class DataSource(ABC):
-    source_id: str
-    @abstractmethod
-    def list_tickers(self, exchange: str) -> list[str]: ...
-    @abstractmethod
-    def fetch_prices(self, ticker: str, since: date | None = None,
-                     until: date | None = None) -> Iterable[RawPriceBar]: ...
-    @abstractmethod
-    def fetch_fundamentals(self, ticker: str) -> Iterable[FundamentalRow]: ...
-
-    # Everything-else surface: dividends, insider trades, news + sentiment,
-    # analyst estimates + ratings, shares outstanding, employees, revenue
-    # and geographic segmentations, static profile. Default returns an empty
-    # bundle so subclasses only populate what they cover.
-    def fetch_metadata(self, ticker: str) -> MetadataBundle:
-        return MetadataBundle()
+    source_id: str                                   # "eodhd", "yahoo", "defillama"
+    def list_tickers(self, exchange: str) -> list[str]: ...                  # required
+    def fetch_prices(self, ticker, since=None, until=None) -> Iterable[RawPriceBar]: ...   # required
+    def fetch_fundamentals(self, ticker) -> FinancialStatementsBundle: ...   # required
+    def fetch_metadata(self, ticker) -> MetadataBundle: ...                   # optional
+    def fetch_intraday_bars(self, ticker, interval, since=None, until=None): ...  # optional
+    def list_exchanges(self) -> Iterable[ExchangeInfo]: ...                   # optional
+    def fetch_macro_indicator(self, country_iso, indicator): ...             # optional
+    def fetch_chain_tvl(self, chain, since=None) -> Iterable[DefiTvlRow]: ... # optional
 ```
 
-- Thin HTTP client. No transformation beyond parsing JSON into typed rows.
-- API key, base URL, rate limits injected via constructor (fed by `Settings`).
-- Per-request retry with exponential backoff.
-- Per-ticker soft-fail: exceptions are caught at the pipeline boundary, logged with `ticker` + `source_id`, and accounted for in `ingest_runs.tickers_failed`.
+- A source is a thin client. It parses vendor JSON into canonical rows and maps vendor names to domain names. Vendor types never leave the module.
+- Keys, URLs, timeouts and retries come from `[sources.<id>]` in the config. Keys come from the environment only (`EODHD_API_KEY`).
+- Each request retries with backoff.
 
 ## `IngestPipeline`
 
 ```python
-class IngestPipeline:
-    def __init__(self, source: DataSource, lake: DuckDBLake): ...
-    def run_prices(self, tickers: Sequence[str], since: date | None = None,
-                   until: date | None = None) -> IngestRunResult: ...
-    def run_fundamentals(self, tickers: Sequence[str]) -> IngestRunResult: ...
-    def run_metadata(self, tickers: Sequence[str]) -> IngestRunResult: ...   # fetches MetadataBundle per ticker
+pipe = IngestPipeline(source, lake, quality=None, fallback=None, notifier=None)
+pipe.run_prices(tickers, since, until)
+pipe.run_intraday_bars(tickers, interval, since, until)
+pipe.run_fundamentals(tickers)
+pipe.run_metadata(tickers)
+pipe.run_macro_indicators(...)
+pipe.run_defi_tvl(...)
 ```
 
-- Opens an `ingest_runs` row at start, closes with status at end.
-- Soft-fail semantics: `status="ok"` if all tickers succeeded, `"partial"` if some failed but at least one succeeded, `"error"` if none succeeded, `"ok"` for an empty batch.
-- Pure upserts → idempotent across re-runs.
-
-## Flow diagram
+- Every run opens an `ingest_runs` row and closes it with `tickers_ok`, `tickers_failed` and a status: `ok` (all passed, or an empty batch), `partial` (some failed), `error` (all failed).
+- A failing ticker is logged and counted. It never stops the run.
+- Writes are upserts, so a rerun is safe.
+- Bar runs validate every batch before it reaches the bar store (see [Data quality](#data-quality)) and store a summary in `ingest_runs.quality_json`.
+- With a `fallback` source, a ticker whose primary fetch soft-fails is retried once on the fallback. The CLI does not pass a fallback yet.
 
 ```mermaid
 sequenceDiagram
-    participant CLI as stonks CLI
+    participant CLI as stonks ingest
     participant Pipe as IngestPipeline
     participant Src as DataSource
-    participant API as Vendor API
+    participant Q as BarQualityChecker
     participant Lake as DuckDBLake
-
     CLI->>Pipe: run_prices(tickers, since)
     Pipe->>Lake: open ingest_runs row
     loop per ticker
-        Pipe->>Src: fetch_prices(ticker, since)
-        Src->>API: HTTP GET (retry/backoff)
-        API-->>Src: JSON
-        Src-->>Pipe: Iterable[RawPriceBar]
-        Pipe->>Pipe: map via NameMapper -> canonical rows
-        Pipe->>Lake: upsert_prices(df)
+        Pipe->>Src: fetch_prices(ticker)
+        Src-->>Pipe: canonical rows
+        Pipe->>Q: check batch
+        Q-->>Pipe: clean rows, quarantined rows, warnings
+        Pipe->>Lake: upsert_bars(clean) and quarantined_bars
     end
-    Pipe->>Lake: close ingest_runs (tickers_ok, failed, status)
-    Pipe-->>CLI: IngestRunResult
+    Pipe->>Lake: close run (ok, failed, status, quality_json)
 ```
 
-## EODHD specifics
+## Data quality
 
-- Free tier supports EOD prices only (≤ 1-year window). The fundamentals endpoint returns **HTTP 403** on the free tier; the client maps that to `EodhdFreeTierError` (a clean domain error, no retry churn).
-- Parsing is factored into pure functions (`parse_prices_response`, `parse_fundamentals_response`) so unit tests work from captured fixtures without ever touching the network.
+`BarQualityChecker` runs on every `ingest prices` and `ingest intraday` batch.
 
-## Adding a new data source
+- Rows that cannot be right (missing or non-positive prices, high below low, close outside the range, duplicate timestamps, one-bar spikes that revert) go to `quarantined_bars`, not `bars`.
+- Findings that can be real (large moves that stick, stale or flat series, zero-volume streaks) are warnings only.
+- The thresholds are the `DataQualityConfig` defaults. The `[ingest.quality]` table is not read from the config file yet.
 
-1. Create `sources/<vendor>.py` implementing `DataSource`.
-2. Populate its name map (constants in the module).
-3. Register it in the source factory used by the CLI.
+Details and triage: [runbooks/data-stale.md](../runbooks/data-stale.md).
 
-No change required in `IngestPipeline`, the lake schema, or anything downstream.
+## Sources
+
+| Source | Serves | Key |
+|--------|--------|-----|
+| `eodhd` (default) | Daily and intraday bars, statements, metadata, macro, exchange lists | `EODHD_API_KEY` |
+| `yahoo` | Daily and intraday bars, basic profiles. Equities and crypto only. | none |
+| `defillama` | DeFi TVL per chain | none |
+
+EODHD free tier: daily prices only, one year back. Paid endpoints return HTTP 403, which the client raises as `EodhdFreeTierError` (no retries).
+
+Add a source: write `sources/<vendor>.py`, add a factory to `_FACTORIES` in `sources/registry.py` and a `[sources.<id>]` config model. Nothing else changes.
 
 ## CLI
 
-```
-stonks ingest prices       [--exchange US | --tickers AAPL.US,MSFT.US | --asset-class crypto] [--since 2025-05-01]
-stonks ingest fundamentals --tickers AAPL.US,MSFT.US
-stonks ingest metadata     [--tickers AAPL.US | --asset-class crypto]
-stonks ingest intraday     --tickers AAPL.US --interval 5m
-```
+Every command below except `aggregate` takes `--source eodhd|yahoo|defillama` (default `eodhd`; `tvl` defaults to `defillama`).
 
-## Multi-asset support
-
-Assets fall into a closed set declared in `core.types.AssetClass`: `equity`, `crypto`, `commodity`, `bond`. Equity is the historical default and has the richest metadata surface (the three financial statements, dividends, insider trades, analyst data, ESG, …). Non-equity classes share the same `bars` time series and add a small per-class profile table (`crypto_profiles`, `bond_profiles` + `bond_yield_history`, `commodity_contracts`).
-
-EODHD encodes the class in the ticker suffix:
-
-| Asset class | EODHD virtual exchange | Example tickers |
-|-------------|-----------------------|-----------------|
-| equity      | many real exchanges (US, LSE, XETRA, …) | `AAPL.US`, `VOD.LSE` |
-| crypto      | `CC`                                    | `BTC-USD.CC`, `ETH-USD.CC` |
-| commodity   | `COMM`                                  | `GC.COMM`, `CL.COMM` |
-| bond        | `GBOND`                                 | `US10Y.GBOND`, `DE10Y.GBOND` |
-
-Adapter behaviour:
-
-- `classify_asset_class(ticker)` is the single source of truth for routing; both the CLI and the EODHD adapter share it.
-- `EodhdDataSource.fetch_fundamentals` short-circuits with an empty bundle for non-equity tickers (no issuer → no statements).
-- `EodhdDataSource.fetch_metadata` routes non-equity tickers to a narrower path that only hits `/fundamentals` and populates the matching per-class profile (`crypto_profile` / `bond_profile` / `commodity_contract`); the equity-shaped fields stay at their defaults.
-
-CLI ergonomics: every ingest command that takes a universe accepts `--asset-class` so an operator doesn't need to memorise EODHD's virtual-exchange codes.
-
-```
-stonks ingest prices --asset-class crypto                # auto-resolves to --exchange CC
-stonks ingest prices --asset-class bond                  # auto-resolves to --exchange GBOND
-stonks ingest prices --tickers BTC-USD.CC,ETH-USD.CC --asset-class crypto   # validates
-stonks ingest metadata --asset-class commodity           # full profile pull for COMM universe
+```bash
+uv run stonks ingest exchanges
+uv run stonks ingest prices --tickers AAPL.US,MSFT.US --since 2025-05-01 [--until ...]
+uv run stonks ingest prices --exchange US
+uv run stonks ingest prices --asset-class crypto
+uv run stonks ingest fundamentals --tickers AAPL.US
+uv run stonks ingest metadata --tickers AAPL.US
+uv run stonks ingest intraday --tickers AAPL.US --interval 5m --since 2026-09-01
+uv run stonks ingest macro --countries USA,DEU --indicators real_gdp_total
+uv run stonks ingest tvl --chains ethereum,solana --since 2025-01-01
+uv run stonks ingest aggregate --tickers AAPL.US --from 1d --to 1w
+uv run stonks ingest all-intervals --tickers AAPL.US --since 2025-01-01
 ```
 
-Equity has no single virtual exchange, so `--asset-class equity` requires `--exchange` or `--tickers` to be passed explicitly. Mixing classes under one `--asset-class` flag (e.g. `--asset-class crypto --tickers BTC-USD.CC,AAPL.US`) fails fast with the offending ticker named. Conversely, `stonks ingest fundamentals` rejects non-equity tickers up-front, since income / balance / cash-flow statements are equity-only by construction.
+`aggregate` builds a coarser interval from bars already in the lake. `all-intervals` pulls daily and intraday bars and builds the usual aggregates in one go.
+
+## Asset classes
+
+The closed set is `equity`, `crypto`, `commodity`, `bond` (`core.types.AssetClass`). EODHD puts the class in the ticker suffix:
+
+| Asset class | Suffix | Example |
+|-------------|--------|---------|
+| equity | a real exchange (`US`, `LSE`, `XETRA`, ...) | `AAPL.US` |
+| crypto | `CC` | `BTC-USD.CC` |
+| commodity | `COMM` | `GC.COMM` |
+| bond | `GBOND` | `US10Y.GBOND` |
+
+- `classify_asset_class(ticker)` is the one place that decides the class.
+- `--asset-class crypto` resolves to `--exchange CC` (and so on). `equity` has no single exchange, so it needs `--exchange` or `--tickers`.
+- Mixing classes under one `--asset-class` fails fast and names the ticker.
+- `ingest fundamentals` rejects non-equity tickers: statements are equity-only.
+- For non-equity tickers, `fetch_metadata` fills the class profile table (`crypto_profiles`, `bond_profiles`, `commodity_contracts`).
 
 ## Testing
 
-- `tests/unit/test_name_mapper.py` — key renaming.
-- `tests/unit/test_ingest_schemas.py` — canonical pydantic models.
-- `tests/unit/test_eodhd_parsing.py` — pure parsers + HTTP 403 → `EodhdFreeTierError` (uses a fake `requests.Session`).
-- `tests/integration/test_ingest_pipeline.py` — `FakeDataSource` drives happy path, soft-fail, all-fail, idempotency, empty-batch.
-- `tests/integration/test_cli.py` — Typer CliRunner smoke tests for `stonks db init`, `stonks db info`, `stonks ingest prices`.
-- `tests/integration/live/test_eodhd_live.py` — real EODHD call for AAPL.US, gated by `STONKS_RUN_LIVE_TESTS=1` + `EODHD_API_KEY`.
-
-## Milestones
-
-- **MVP (done):** EODHD source (prices + fundamentals code-path), pipeline, CLI, tests.
-- **Next:** Yahoo source; bulk endpoints where vendors support them; exchange-level discovery via `list_tickers`.
+Pipeline tests use `FakeDataSource` (canned data) and never touch the network. Vendor parsers are tested on captured fixtures. Live contract tests live in `tests/integration/live/` behind `@pytest.mark.live` and `STONKS_RUN_LIVE_TESTS=1`.

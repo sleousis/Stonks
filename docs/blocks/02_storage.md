@@ -1,228 +1,113 @@
-# Block 2 — Storage (DuckDB lake + SQLite state)
-
-> Status: **both halves implemented**. Lake in the initial commit, state foundation in the Block 2 follow-up.
+# Block 2: Storage (DuckDB lake and SQLite state)
 
 ## Purpose
 
-Two physically-separate stores behind clean interfaces. Swap-for-Postgres is a one-class change.
+Two separate stores, each behind a small class:
 
-- **`DuckDBLake`** — append-heavy, analytical, columnar. Prices, fundamentals, features, backtest artifacts.
-- **`SqliteState`** — transactional, small-volume. Portfolio snapshots, orders, fills, strategy registry, survival reports, tick-run ledger.
+- **`DuckDBLake`** (`data/lake.duckdb`): market data. Bars, statements, metadata, macro, TVL. Large, columnar, read by backtests and the lab.
+- **`SqliteState`** (`data/state.sqlite`): everything that changes as Stonks runs. Strategies, survival reports, ticks, orders, fills, snapshots, jobs, alerts, accounts, scheduler, notifications, broker connections.
 
-## Why split
+Neither needs a server. The column lists of every table are in `CLAUDE.md` under "Canonical schemas" and in the migration files themselves.
 
-- Lake is read by parallel backtest + tuning jobs; DuckDB excels at large columnar scans with zero server.
-- State is tiny but needs cross-process safety (cron tick, lab runner, manual CLI). SQLite's WAL mode handles this.
-- Neither needs a server. Ops surface stays ~zero.
+```mermaid
+flowchart LR
+  ING[ingest] --> LAKE[(DuckDBLake)]
+  LAKE --> BARS[(bars: DuckDB table<br/>or Parquet files)]
+  LAB[lab and backtest] --> LAKE
+  TICK[production tick] --> LAKE
+  TICK --> STATE[(SqliteState)]
+  API[API, scheduler, CLI] --> STATE
+```
 
-## `DuckDBLake` (implemented)
+## `DuckDBLake`
 
 ```python
-class DuckDBLake:
-    def __init__(self, path: Path): ...
-    def migrate(self) -> None: ...
-    def applied_migrations(self) -> list[int]: ...
-    def tables(self) -> list[str]: ...
-    def count_rows(self, table: str) -> int: ...
-
-    def upsert_prices(self, df: DataFrame) -> int: ...
-    def get_prices(self, ticker: str, start, end) -> DataFrame: ...
-    def upsert_fundamentals(self, df: DataFrame) -> int: ...
-    def get_fundamentals(self, ticker: str, statement: str | None = None) -> DataFrame: ...
-
-    def open_ingest_run(self, source: str, kind: str) -> int: ...
-    def close_ingest_run(self, run_id, tickers_ok, tickers_failed, status, error=None): ...
-
-    def sql(self, query: str, params: list | None = None) -> DataFrame: ...  # escape hatch
+lake = DuckDBLake(Path("data/lake.duckdb"), read_only=False)
+lake.migrate()
+lake.upsert_bars(df, Interval.DAY_1)
+lake.get_bars(ticker, interval, start, end)
+lake.aggregate_bars(...)                      # build 1w from 1d, 4h from 1h, ...
+lake.upsert_prices(df) / lake.get_prices(...) # daily shims over bars
+lake.get_statement_history(...)               # point in time, by filing_date
+lake.get_corporate_actions(tickers)           # splits and dividends
+lake.sql("SELECT ...")                        # escape hatch
 ```
 
-## Lake schema
+- Every write is an idempotent upsert.
+- Statement upserts use `COALESCE(EXCLUDED.col, table.col)`, so a NULL never wipes a stored value but a real restated value overwrites it.
+- `read_only=True` opens an existing file without the write lock (lab workers use this on snapshot copies).
+- DuckDB allows one writing process per file. While `stonks serve` runs, it holds the lake.
 
-**Migrations live in `migrations_duckdb/`** and are applied in order:
+### Bar store
 
-- `001_init.sql` — `tickers`, `prices`, `fundamentals` (3 statements), `ingest_runs`.
-- `002_extended_fundamentals.sql` — widens `tickers` with profile columns (beta, short_percent, employee_count, …) and adds the full non-statement metadata surface: `dividends`, `insider_transactions`, `news`, `news_sentiment`, `analyst_estimates`, `analyst_ratings`, `shares_outstanding`, `employee_count`, `segmentation` (one table covering both revenue and geographic dimensions).
-- `003_intraday_bars.sql` — supersedes the daily-only `prices` table with an interval-aware `bars` table keyed by `(ticker, timestamp, interval)`. The `interval` column stores the canonical `Interval` code (`1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `12h`, `1d`, `1w`). A read-only `prices` view over the `interval='1d'` slice is recreated for backward-compat SQL; `upsert_prices` / `get_prices` are thin shims over `upsert_bars` / `get_bars` with `interval=Interval.DAY_1`. Same `bars` table holds mixed granularities for the same ticker (e.g. 5m live alongside 1d historical).
+Bars live behind the `BarStore` seam (`store/bars.py`):
 
-### `001_init.sql`
+| Backend | Where | Use when |
+|---------|-------|----------|
+| `duckdb` (default) | the `bars` table in the lake file | one process at a time |
+| `parquet` | `<lake dir>/bars/interval=<code>/ticker=<id>/year=<yyyy>/part-0.parquet` | other processes must read bars while `stonks serve` holds the lake |
 
-```sql
-CREATE TABLE tickers (
-    id            VARCHAR PRIMARY KEY,
-    exchange      VARCHAR,
-    currency      VARCHAR,
-    ipo_date      DATE,
-    sector        VARCHAR,
-    industry      VARCHAR,
-    is_delisted   BOOLEAN DEFAULT FALSE
-);
+The lake remembers its choice in the `lake_settings` table (key `bars_backend`), so every process agrees. Switch with:
 
-CREATE TABLE prices (
-    ticker     VARCHAR NOT NULL,
-    date       DATE    NOT NULL,
-    open       DOUBLE,
-    high       DOUBLE,
-    low        DOUBLE,
-    close      DOUBLE,
-    adj_close  DOUBLE,
-    volume     BIGINT,
-    PRIMARY KEY (ticker, date)
-);
-
-CREATE TABLE fundamentals (
-    ticker      VARCHAR NOT NULL,
-    period_end  DATE    NOT NULL,
-    frequency   VARCHAR NOT NULL,   -- 'Q' | 'A'
-    statement   VARCHAR NOT NULL,   -- 'income' | 'balance' | 'cashflow'
-    line_item   VARCHAR NOT NULL,
-    value       DOUBLE,
-    PRIMARY KEY (ticker, period_end, frequency, statement, line_item)
-);
-
-CREATE SEQUENCE ingest_runs_id_seq;
-CREATE TABLE ingest_runs (
-    id              INTEGER PRIMARY KEY DEFAULT nextval('ingest_runs_id_seq'),
-    source          VARCHAR NOT NULL,
-    kind            VARCHAR NOT NULL,
-    started_at      TIMESTAMP NOT NULL,
-    finished_at     TIMESTAMP,
-    tickers_ok      INTEGER DEFAULT 0,
-    tickers_failed  INTEGER DEFAULT 0,
-    status          VARCHAR,            -- 'running' | 'ok' | 'partial' | 'error'
-    error           VARCHAR
-);
+```bash
+uv run python -m stonks.store.bars_migrate --to parquet   # stop stonks serve first
 ```
 
-### `002_extended_fundamentals.sql`
+The copy is checked per ticker and interval (row count and checksum) before the lake switches.
 
-Profile columns added to `tickers`: `name`, `country_iso`, `fiscal_year_end`, `web_url`, `is_bank`, `beta`, `short_percent`, `insider_ownership_percent`, `institutional_ownership_percent`, `employee_count`, `esg_score`.
+## Lake migrations (`store/migrations_duckdb/`)
 
-New tables:
+| # | Adds |
+|---|------|
+| 001 | `tickers`, `prices`, `fundamentals`, `ingest_runs` |
+| 002 | profile columns on `tickers`; `dividends`, `insider_transactions`, `news`, `news_sentiment`, `analyst_estimates`, `analyst_ratings`, `shares_outstanding`, `employee_count`, `segmentation` |
+| 003 | interval-aware `bars` (PK `ticker, timestamp, interval`); `prices` becomes a view over `interval = '1d'` |
+| 004 | `stock_splits`, `market_cap_history` |
+| 005 | identifiers and GICS columns on `tickers` (drops six old ones); `ticker_snapshots`, `institutional_holders`, `earnings_announcements`, `analyst_forecasts`, `esg_snapshots`, `esg_activities`, `cross_listings`, `officers` |
+| 006 | full article columns on `news` |
+| 007 | `tickers` renamed `instruments`, `asset_class`; `crypto_profiles`, `bond_profiles`, `bond_yield_history`, `commodity_contracts` |
+| 008 | `fundamentals` replaced by `income_statement`, `balance_sheet`, `cash_flow_statement` |
+| 009 | `macro_indicators` |
+| 010 | `insider_transactions` rebuilt with a natural key |
+| 011 | `defi_tvl` |
+| 012 | `lake_settings` |
+| 013 | `quarantined_bars`; `ingest_runs.quality_json` |
 
-| Table | Natural key | Purpose |
-|---|---|---|
-| `dividends` | `(ticker, ex_date)` | Historical cash dividends. |
-| `insider_transactions` | `(ticker, date, owner_name, transaction_code, shares)` (unique index) | Insider trade event log. |
-| `news` | `(ticker, published_at, title)` | News articles with optional per-article sentiment. |
-| `news_sentiment` | `(ticker, date)` | Daily aggregate sentiment. |
-| `analyst_estimates` | `(ticker, period_end, metric)` | Long-format analyst metrics (epsActual, epsEstimate, …). |
-| `analyst_ratings` | `(ticker)` | Current consensus snapshot; upserted. |
-| `shares_outstanding` | `(ticker, date)` | Historical share count. |
-| `employee_count` | `(ticker, date)` | Historical headcount. |
-| `segmentation` | `(ticker, period_end, dimension, segment)` | Revenue and geographic segmentations in one table, distinguished by `dimension`. |
+`stonks db init` refuses a migration that would drop populated data (005 on an old lake) unless `STONKS_ALLOW_DESTRUCTIVE_MIGRATIONS=1`. Back up first.
 
-Each lake method (`upsert_dividends`, `upsert_news`, `upsert_segmentation`, …) is idempotent via `INSERT … ON CONFLICT DO UPDATE`. Pipeline ingests the full surface via a single `MetadataBundle` returned by `DataSource.fetch_metadata`.
+## `SqliteState`
 
-Feature tables and backtest-artifact tables are added via future migrations.
+Deliberately thin: connection, migrations, introspection, `execute`, `sql` and `transaction()`. Domain helpers belong to the block that owns each table (registry, production, accounts, scheduling, notify, connections).
 
-## `SqliteState` (implemented)
+- Opens with `PRAGMA journal_mode=WAL` (several processes can share it) and `PRAGMA foreign_keys=ON`.
+- `transaction()` is an explicit `BEGIN` / `COMMIT` / `ROLLBACK`.
 
-Deliberately **thin**: connection management, migrations, introspection, and a generic SQL surface. Domain helpers (`register_strategy`, `place_order`, etc.) are owned by the blocks that own each table — registry (Block 4) and execution + production (Block 5) — not baked into the store.
+## State migrations (`store/migrations_sqlite/`)
 
-```python
-class SqliteState:
-    def __init__(self, path: Path): ...
-    def migrate(self) -> None: ...
-    def applied_migrations(self) -> list[int]: ...
-    def tables(self) -> list[str]: ...
-    def count_rows(self, table: str) -> int: ...
-    def execute(self, query, params=None) -> sqlite3.Cursor: ...
-    def sql(self, query, params=None) -> list[sqlite3.Row]: ...
-    @contextmanager
-    def transaction(self): ...
-```
+| # | Adds |
+|---|------|
+| 001 | `strategies`, `survival_reports`, `tick_runs`, `orders`, `fills`, `portfolio_snapshots` |
+| 002 | `shadow_decisions`, `shadow_portfolio_snapshots` |
+| 003 | `jobs` (API background jobs) |
+| 004 | `portfolio_snapshots.as_of` |
+| 005 | `strategy_drafts` (Strategy Studio) |
+| 006 | `orders.status_reason` |
+| 007 | `alerts` |
+| 008 | `lab_runs`, `lab_trials` (trial ledger) |
+| 009 | `status_changes` (promotion audit) |
+| 010 | `users`, `portfolios`, `subscriptions`, `audit_log`; `portfolio_id` on orders, fills and snapshots; owners on jobs and drafts; user columns on alerts |
+| 011 | `scheduled_runs`, `scheduler_instances`, `scheduler_deadline_alerts` |
+| 012 | `notification_outbox`, `notification_deliveries`, `push_subscriptions`, `notification_prefs`, `notification_settings` |
+| 013 | `broker_connections`, `broker_credentials`, `broker_accounts`, `broker_positions`, `broker_activities`; `portfolio_snapshots.source` |
+| 014 | `position_attribution` |
 
-- Opens with `PRAGMA journal_mode=WAL` (multi-process readers OK) + `PRAGMA foreign_keys=ON`.
-- `transaction()` is an explicit `BEGIN`/`COMMIT`/`ROLLBACK` context manager. Migrations use `executescript` (which auto-commits per statement) with `IF NOT EXISTS` DDL for idempotent re-runs.
+## Migration rules
 
-## State schema (`migrations_sqlite/001_init.sql`)
+- Files apply in lexical order. Each store tracks them in `schema_migrations`.
+- Never edit an applied migration. Add a new one.
+- SQLite migrations must be idempotent per statement (`IF NOT EXISTS`), because `executescript` commits each statement. DuckDB migrations run in one transaction.
+- `uv run stonks db init` migrates both stores. `uv run stonks db info` lists tables and row counts.
 
-```sql
-CREATE TABLE strategies (
-    id            TEXT PRIMARY KEY,
-    class_path    TEXT NOT NULL,                            -- "pkg.mod:ClassName"
-    params_json   TEXT NOT NULL,
-    artifact_path TEXT,                                     -- NULL for rule-based
-    status        TEXT NOT NULL
-                  CHECK (status IN ('active', 'shadow', 'retired')),
-    created_at    TEXT NOT NULL,
-    updated_at    TEXT NOT NULL
-);
+## Backups
 
-CREATE TABLE survival_reports (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    strategy_id  TEXT NOT NULL REFERENCES strategies(id) ON DELETE CASCADE,
-    test_id      TEXT NOT NULL,
-    passed       INTEGER NOT NULL CHECK (passed IN (0, 1)),
-    metrics_json TEXT NOT NULL,
-    notes        TEXT,
-    created_at   TEXT NOT NULL
-);
-
-CREATE TABLE tick_runs (
-    id           TEXT PRIMARY KEY,                          -- ulid
-    started_at   TEXT NOT NULL,
-    finished_at  TEXT,
-    status       TEXT NOT NULL
-                 CHECK (status IN ('running', 'ok', 'partial', 'error')),
-    summary_json TEXT
-);
-
-CREATE TABLE orders (
-    client_id       TEXT PRIMARY KEY,                      -- idempotency key
-    tick_id         TEXT REFERENCES tick_runs(id),
-    strategy_id     TEXT REFERENCES strategies(id),
-    ticker          TEXT NOT NULL,
-    side            TEXT NOT NULL CHECK (side IN ('buy', 'sell')),
-    quantity        REAL NOT NULL,
-    order_type      TEXT NOT NULL
-                    CHECK (order_type IN ('market', 'limit', 'stop', 'stop_limit')),
-    limit_price     REAL,
-    status          TEXT NOT NULL
-                    CHECK (status IN ('pending', 'filled', 'partially_filled',
-                                      'rejected', 'cancelled')),
-    broker_order_id TEXT,
-    created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL
-);
-
-CREATE TABLE fills (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    order_client_id TEXT NOT NULL REFERENCES orders(client_id),
-    ticker          TEXT NOT NULL,
-    quantity        REAL NOT NULL,
-    price           REAL NOT NULL,
-    fee             REAL NOT NULL DEFAULT 0,
-    filled_at       TEXT NOT NULL
-);
-
-CREATE TABLE portfolio_snapshots (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    tick_id        TEXT REFERENCES tick_runs(id),
-    taken_at       TEXT NOT NULL,
-    cash           REAL NOT NULL,
-    positions_json TEXT NOT NULL,
-    total_value    REAL NOT NULL
-);
-```
-
-Indexes on `(tick_id)`, `(strategy_id)`, and `(order_client_id)` cover the hot lookup paths (ranker, reconciler, registry browser).
-
-## Migrations
-
-Plain SQL files in:
-- `src/stonks/store/migrations_duckdb/` — applied by `DuckDBLake.migrate()`.
-- `src/stonks/store/migrations_sqlite/` — applied by `SqliteState.migrate()`.
-
-Applied in lexical order. Each store has its own `schema_migrations (version, applied_at)` table. Never edit an applied migration; always add a new one. SQLite migrations must be statement-level idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`) because `executescript()` auto-commits per statement; DuckDB migrations get true transactional atomicity via `BEGIN`/`COMMIT`.
-
-## Why not Postgres (yet)
-
-- No server to run or back up.
-- Single-machine quant workstation is the primary target.
-- Postgres becomes necessary only when (a) multiple lab workers need to write artifacts simultaneously, or (b) the tick runs on a different host than the lake. Swap is a `DuckDBLake` → `PostgresLake` class change; upsert SQL is near-identical.
-
-## Testing
-
-- `tests/integration/test_lake_roundtrip.py` — tmp DB; migrate; upsert (idempotent, update-on-conflict); read; run ledger lifecycle; empty-DF is no-op.
-- `tests/integration/test_state_roundtrip.py` — tmp DB; migrate (idempotent); `schema_migrations` versioning; FK enforcement; `CHECK` constraint rejection on invalid `status`/`side`; PK collision; `sql()` mapping row access; `transaction()` commit/rollback semantics; `close()` is idempotent.
+`python -m stonks.ops backup` copies both stores, the Parquet bars and the artifacts consistently. See [runbooks/restore.md](../runbooks/restore.md).
