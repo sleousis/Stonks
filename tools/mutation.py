@@ -18,6 +18,7 @@ this weekly and on demand (.github/workflows/mutation.yml), not per PR.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
 import shutil
@@ -102,6 +103,56 @@ def outcome_name(outcome: Any) -> str:
     return str(getattr(outcome, "value", outcome)).lower()
 
 
+Span = tuple[tuple[int, int], tuple[int, int]]
+
+
+def annotation_spans(source: str) -> list[Span]:
+    """``((line, col), (end_line, end_col))`` of every type annotation.
+    With ``from __future__ import annotations`` they are never evaluated,
+    so a mutant inside one (``str | None`` to ``str + None``) is equivalent
+    and only adds noise."""
+    spans: list[Span] = []
+    for node in ast.walk(ast.parse(source)):
+        found: list[ast.expr | None] = []
+        if isinstance(node, ast.arg):
+            found.append(node.annotation)
+        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            found.append(node.returns)
+        elif isinstance(node, ast.AnnAssign):
+            found.append(node.annotation)
+        for ann in found:
+            if ann is not None and ann.end_lineno is not None and ann.end_col_offset is not None:
+                spans.append(((ann.lineno, ann.col_offset), (ann.end_lineno, ann.end_col_offset)))
+    return spans
+
+
+def in_spans(pos: tuple[int, int], spans: list[Span]) -> bool:
+    return any(start <= tuple(pos) < end for start, end in spans)
+
+
+def _skip_annotation_mutants(session: Path, cwd: Path) -> int:
+    """Mark mutants inside type annotations as skipped; returns how many."""
+    from cosmic_ray.work_db import WorkDB, use_db
+    from cosmic_ray.work_item import WorkerOutcome, WorkResult
+
+    spans: dict[Path, list[Span]] = {}
+    skipped = 0
+    with use_db(str(session), WorkDB.Mode.open) as db:
+        for item in list(db.work_items):
+            for m in item.mutations:
+                path = (cwd / m.module_path).resolve()
+                if path not in spans:
+                    spans[path] = annotation_spans(path.read_text(encoding="utf-8"))
+                if in_spans(tuple(m.start_pos), spans[path]):
+                    db.set_result(
+                        item.job_id,
+                        WorkResult(worker_outcome=WorkerOutcome.SKIPPED),
+                    )
+                    skipped += 1
+                    break
+    return skipped
+
+
 def _outcomes(session: Path) -> tuple[list[str], list[dict[str, Any]]]:
     from cosmic_ray.work_db import WorkDB, use_db
 
@@ -132,18 +183,24 @@ def run_target(target: Target, workdir: Path) -> dict[str, Any]:
     config.write_text(config_text(target))
     session = copy / "session.sqlite"
     env = {**os.environ, "PYTHONPATH": str(copy / "src")}
-    for step in ("init", "exec"):
+
+    def cosmic_ray(step: str) -> None:
         subprocess.run(
             [sys.executable, "-m", "cosmic_ray.cli", step, str(config), str(session)],
             cwd=copy,
             env=env,
             check=True,
         )
+
+    cosmic_ray("init")
+    skipped = _skip_annotation_mutants(session, copy)
+    cosmic_ray("exec")
     outcomes, survivors = _outcomes(session)
     return {
         "target": target.name,
         "module": target.module,
-        "mutants": len(outcomes),
+        "mutants": sum(o in {"killed", "survived", "incompetent"} for o in outcomes),
+        "skipped_in_annotations": skipped,
         "killed": outcomes.count("killed"),
         "survived": outcomes.count("survived"),
         "incompetent": outcomes.count("incompetent"),

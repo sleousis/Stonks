@@ -39,3 +39,24 @@ def test_client_id_shape_contains_date_prefix():
     assert cid.startswith("2026-03-20:")
     assert "AAPL.US" in cid
     assert "buy" in cid
+
+
+# ---- portfolio ids (surviving mutants found by TT-04) -------------------------
+
+
+def test_a_non_default_portfolio_puts_its_id_after_the_date():
+    cid = make_client_id(
+        as_of=D1, strategy_id="s1", ticker="AAPL.US", side="buy", portfolio_id="pf_abc"
+    )
+    assert cid == "2026-03-20:pf_abc:s1:AAPL.US:buy"
+
+
+def test_the_default_portfolio_and_none_keep_the_plain_format():
+    from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
+
+    plain = "2026-03-20:s1:AAPL.US:buy"
+    for portfolio_id in (None, DEFAULT_PORTFOLIO_ID):
+        cid = make_client_id(
+            as_of=D1, strategy_id="s1", ticker="AAPL.US", side="buy", portfolio_id=portfolio_id
+        )
+        assert cid == plain

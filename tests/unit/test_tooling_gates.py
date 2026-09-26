@@ -162,12 +162,21 @@ def test_surviving_rate_ignores_incompetent_mutants():
 def test_outcome_names_read_the_enum_value():
     import enum
 
-    class Outcome(str, enum.Enum):  # cosmic-ray's enum prints as Outcome.KILLED
+    class Outcome(str, enum.Enum):  # noqa: UP042 - mirrors cosmic-ray, prints as Outcome.KILLED
         KILLED = "killed"
 
     assert str(Outcome.KILLED) != "killed"
     assert mutation.outcome_name(Outcome.KILLED) == "killed"
     assert mutation.outcome_name("SURVIVED") == "survived"
+
+
+def test_annotation_spans_cover_argument_return_and_variable_annotations():
+    source = "def f(a: str | None, b=1) -> int | None:\n    x: int | str = 1\n    return a | b\n"
+    spans = mutation.annotation_spans(source)
+    assert mutation.in_spans((1, 13), spans)  # the | in str | None
+    assert mutation.in_spans((1, 34), spans)  # the | in the return type
+    assert mutation.in_spans((2, 11), spans)  # the | in x's annotation
+    assert not mutation.in_spans((3, 13), spans)  # a | b is real code
 
 
 def test_every_target_names_real_modules_and_tests():
