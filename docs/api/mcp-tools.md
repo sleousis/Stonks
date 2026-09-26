@@ -691,7 +691,7 @@ Queue a job that fetches only the missing bars of every member
 over the window (delisted names included) from the data source.
 Follow up with wait_for_job. Without confirm=true returns a preview.
 
-Safety: writes, non-destructive, idempotent, open world. Needs confirm: **yes**.
+Safety: writes, destructive, idempotent, open world. Needs confirm: **yes**.
 
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
@@ -774,7 +774,7 @@ Queue a refresh that rebuilds the universe's membership (an
 exchange universe lists symbols at the data source). Follow up with
 wait_for_job. Without confirm=true returns a preview.
 
-Safety: writes, non-destructive, idempotent, open world. Needs confirm: **yes**.
+Safety: writes, destructive, idempotent, open world. Needs confirm: **yes**.
 
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|

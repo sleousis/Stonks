@@ -27,9 +27,9 @@ from stonks.mcp.tools.common import (
 UNIVERSE_WRITE = ToolAnnotations(
     read_only_hint=False, destructive_hint=True, idempotent_hint=True, open_world_hint=False
 )
-#: Fetches market data from a vendor into the lake.
+#: Fetches from a vendor and writes the lake (membership rows or bars).
 UNIVERSE_FETCH = ToolAnnotations(
-    read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=True
+    read_only_hint=False, destructive_hint=True, idempotent_hint=True, open_world_hint=True
 )
 
 UniverseId = Annotated[str, Field(description="universe id, e.g. sp500 or us_common")]

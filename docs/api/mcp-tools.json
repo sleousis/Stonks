@@ -438,7 +438,7 @@
     },
     {
       "annotations": {
-        "destructive": false,
+        "destructive": true,
         "idempotent": true,
         "open_world": true,
         "read_only": false
@@ -2036,7 +2036,7 @@
     },
     {
       "annotations": {
-        "destructive": false,
+        "destructive": true,
         "idempotent": true,
         "open_world": true,
         "read_only": false
