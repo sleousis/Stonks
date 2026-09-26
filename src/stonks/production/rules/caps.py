@@ -23,7 +23,9 @@ from stonks.production.rules import (
 
 @register_rule
 class SellWithinPosition(OrderRule):
-    """Sells are never blocked, only clipped so they cannot open a short."""
+    """Sells are never blocked, only clipped so they cannot open a short,
+    unless the book allows shorts and the sell is an opening one (a short
+    sale, ``position_effect="open"``): the short rules limit those."""
 
     name = "sell_within_position"
     order = 10
@@ -33,7 +35,9 @@ class SellWithinPosition(OrderRule):
     ) -> float | None:
         if order.side != "sell":
             return qty
-        held = book.positions.get(order.ticker, 0.0)
+        if ctx.allow_short and order.position_effect == "open":
+            return qty
+        held = max(book.positions.get(order.ticker, 0.0), 0.0)
         if qty > held:
             record(
                 order,

@@ -16,6 +16,7 @@ across the accounts upgrade still recognises its orders.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import date
 from typing import Literal
@@ -105,3 +106,23 @@ def retoken(client_id: str, order: Order, token: SideToken) -> str:
         if client_id.endswith(f":{suffix}"):
             return f"{client_id[: -len(suffix)]}{token}"
     return f"{client_id}#{token}"
+
+
+def classify_all(orders: Sequence[Order], positions: Mapping[str, float]) -> list[Order]:
+    """Every order classified in turn against the positions the orders
+    before it leave (:func:`classify`). An order that already carries a
+    position effect passes through unchanged, so running this twice is
+    safe."""
+    held = dict(positions)
+    out: list[Order] = []
+    for order in orders:
+        legs = (
+            [order]
+            if order.position_effect is not None
+            else classify(order, held.get(order.ticker, 0.0))
+        )
+        for leg in legs:
+            out.append(leg)
+            sign = 1.0 if leg.side == "buy" else -1.0
+            held[leg.ticker] = held.get(leg.ticker, 0.0) + sign * leg.quantity
+    return out

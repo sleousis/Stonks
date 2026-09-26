@@ -145,6 +145,10 @@ class BaseStrategy:
     # strategy equity-only without an opt-in change. Cross-class
     # strategies override (e.g. ``("equity", "crypto")``).
     applicable_asset_classes: ClassVar[tuple[AssetClass, ...]] = ("equity",)
+    #: Negative scores mean "short", not only "less long" (roadmap 16).
+    #: A short opens only when the strategy and the book both allow it;
+    #: off by default. Read with ``getattr`` so any Strategy works.
+    supports_short: ClassVar[bool] = False
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         # Catch the ``applicable_asset_classes = ()`` footgun at class

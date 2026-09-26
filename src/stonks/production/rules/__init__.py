@@ -2,8 +2,12 @@
 
 A ``RiskRule`` takes the orders a strategy proposed and returns the ones it
 allows plus one ``RiskAdjustment`` per order it clipped or dropped. Rules
-only ever reduce exposure: buys may shrink or disappear, sells are never
-blocked (only clipped so they cannot open a short).
+never increase gross exposure, and orders that reduce a position (a sell
+of a long, a buy that covers a short) are never blocked: in a long-only
+book buys may shrink or disappear and sells are only clipped so they
+cannot open a short. In a book that allows shorts (``ctx.allow_short``)
+an opening sell (``position_effect="open"``) is a short sale and only the
+short rules limit it; a cover skips the order rules entirely.
 
 Rules are found automatically: every module in this package is imported and
 each class decorated with ``@register_rule`` joins the registry. A new rule
@@ -72,6 +76,7 @@ __all__ = [
     "RiskRule",
     "clip",
     "discover_rules",
+    "is_cover",
     "register_rule",
     "registered_rules",
     "run_order_rules",
@@ -135,6 +140,13 @@ class RiskContext:
     #: The book's portfolio (``None``: the default one); orders a rule
     #: creates carry it in their client id.
     portfolio_id: str | None = None
+    #: The book may hold short positions (roadmap 16).
+    allow_short: bool = False
+    #: The book's margin model and borrow source when the caller has them
+    #: (``execution.margin.MarginModel``, ``execution.borrow.BorrowSource``);
+    #: short rules fall back to their own settings without them.
+    margin: Any = None
+    borrow: Any = None
 
     def __post_init__(self) -> None:
         if self.cost_model is not None and (self.slippage_bps or self.fee_per_trade):
@@ -220,14 +232,14 @@ class RiskBook:
     def commit(self, order: Order, qty: float, ctx: RiskContext) -> None:
         if order.side == "sell":
             remaining = self.positions.get(order.ticker, 0.0) - qty
-            if remaining <= EPS:
-                self.positions.pop(order.ticker, None)
-            else:
-                self.positions[order.ticker] = remaining
             self.cash += ctx.sell_proceeds(order.ticker, qty)
         else:
-            self.positions[order.ticker] = self.positions.get(order.ticker, 0.0) + qty
+            remaining = self.positions.get(order.ticker, 0.0) + qty
             self.cash -= ctx.buy_outlay(order.ticker, qty)
+        if abs(remaining) <= EPS:
+            self.positions.pop(order.ticker, None)
+        else:
+            self.positions[order.ticker] = remaining
 
 
 #: ``record(order, rule_tag, new_quantity, reason)``.
@@ -296,6 +308,11 @@ def run_order_rules(
     for side in ("sell", "buy"):
         for order in (o for o in orders if o.side == side):
             qty: float | None = order.quantity
+            if is_cover(order, book.positions):
+                # Position-reducing: never limited by an order rule.
+                kept.append(order)
+                book.commit(order, order.quantity, ctx)
+                continue
             for rule in rules:
                 qty = rule.check(order, qty, book, ctx, record)
                 if qty is None:
@@ -305,6 +322,13 @@ def run_order_rules(
             kept.append(order if qty == order.quantity else replace(order, quantity=qty))
             book.commit(order, qty, ctx)
     return kept, adjustments
+
+
+def is_cover(order: Order, positions: Mapping[str, float]) -> bool:
+    """A buy that closes (part of) a short position."""
+    if order.side != "buy" or order.position_effect == "open":
+        return False
+    return positions.get(order.ticker, 0.0) < -EPS
 
 
 def clip(order: Order, qty: float, max_qty: float, rule: str, record: Recorder) -> float | None:
