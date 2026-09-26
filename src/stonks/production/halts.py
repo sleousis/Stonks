@@ -3,6 +3,7 @@ new orders at global, user or portfolio scope.
 
 - :func:`trip_halt` opens a halt (idempotent while one of the same kind and
   target is open; an expired one is closed first);
+- :func:`escalate_halt` turns an open ``buys`` halt into an ``all`` one;
 - :func:`active_halts` lists the halts in force for a portfolio on a day
   (global, its owner's, its own);
 - :func:`clear_halt` is the logged reset: it needs an actor and a reason,
@@ -46,6 +47,7 @@ __all__ = [
     "OPERATIONAL_CHECKS",
     "active_halts",
     "clear_halt",
+    "escalate_halt",
     "get_halt",
     "halt_health_check",
     "halts_enabled",
@@ -247,6 +249,40 @@ def trip_halt(
         reason=reason_,
     )
     return created, True
+
+
+def escalate_halt(state: SqliteState, halt_id: int, *, actor: str, reason: str) -> Halt:
+    """Make an open ``buys`` halt stop every order (TO-07). Rows are
+    append-only, so the ``buys`` row is closed (``clear_reason`` says it
+    was escalated) and an ``all`` row of the same kind and target opens in
+    the same transaction: no moment without a halt. An ``all`` halt is
+    returned unchanged (never downgraded)."""
+    actor_ = _required(actor, "actor")
+    reason_ = _required(reason, "reason")
+    with state.transaction():
+        old = get_halt(state, halt_id)
+        if old.cleared:
+            raise HaltError(f"halt {halt_id} was already cleared")
+        if old.halt == "all":
+            return old
+        _close(state, old.id, actor_, f"escalated to all: {reason_}")
+        cur = state.execute(
+            f"INSERT INTO {TABLE} (kind, scope, user_id, portfolio_id, halt, reason,"
+            " tripped_by, tripped_at, expires_on) VALUES (?, ?, ?, ?, 'all', ?, ?, ?, ?)",
+            [
+                old.kind,
+                old.scope,
+                old.user_id,
+                old.portfolio_id,
+                reason_,
+                actor_,
+                _now(),
+                old.expires_on.isoformat() if old.expires_on else None,
+            ],
+        )
+        new = get_halt(state, int(cur.lastrowid or 0))
+    _log.warning("halt.escalated", halt_id=new.id, replaced=old.id, kind=old.kind, actor=actor_)
+    return new
 
 
 def active_halts(
