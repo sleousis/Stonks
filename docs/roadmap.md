@@ -7,9 +7,9 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | Phase | Status |
 |-------|--------|
 | 1 to 8 | Done, except 5.4 end-to-end tests (now 13.14). 8.4 moved to 11.8. |
-| 9 | Waves 1, 2 and 4 mostly done; Wave 3 partly; Wave 5 not started. Details under Phase 9. |
+| 9 | Waves 1, 2 and 4 done. Wave 3 done except 9.3.4. Wave 5 not started. Details under Phase 9. |
 | 11 | Done except parts of 11.6. 11.8 is this docs refresh. |
-| 12 | Mostly done. Open: 12.6 kill switch, 12.10 soak test, parts of 12.3 and 12.5, three runbooks (tick failed, broker unreachable, disk full). |
+| 12 | Mostly done. Open: 12.10 soak test, three runbooks (tick failed, broker unreachable, disk full). |
 | 13 | Partly done: PWA and push, command palette, in-app help, accessibility and locale. The rest is planned. |
 | 14 | Done except 14.9 lab offload. |
 | 15 | Partly done: design, data model, connection seam, notifications backend. Per-portfolio books are built but not wired into the tick yet. |
@@ -130,11 +130,11 @@ About 60 trading books from three reading lists and the Axon "100 books" series,
 
 - Wave 1: done.
 - Wave 2: done. The tick runs its books through the shared pipeline; backtests use it only when `BacktestConfig.construction` is set, which the lab and API don't do yet.
-- Wave 3: 9.3.1 rules added but not yet configurable (`[production.risk.rules]` is not read from the config); 9.3.3 and 9.3.5 done; 9.3.2, 9.3.4 and 9.3.6 not started.
-- Wave 4: 9.4.1 to 9.4.4 done (`quant_momentum`, `stocks_on_the_move` with `atr_parity`, `ewmac_trend`, `tsmom`, `ath_trend`, `TrailingStopWrapper`, `quant_value`); 9.4.5 and 9.4.6 not started.
+- Wave 3: 9.3.1, 9.3.2, 9.3.3, 9.3.5 and 9.3.6 done. The rules are set under `[production.risk.rules.*]`, the circuit breaker and operational halt are off by default, and the quit rule alerts after every tick (`[production.quit_rule]`). Halts are listed and cleared with `stonks halts`. The lab runs the data preflight before tuning, and `stonks audit statements` checks the statements (also after `stonks ingest fundamentals`). 9.3.4 not started.
+- Wave 4: done. 9.4.1 to 9.4.4 (`quant_momentum`, `stocks_on_the_move` with `atr_parity`, `ewmac_trend`, `tsmom`, `ath_trend`, `TrailingStopWrapper`, `quant_value`), 9.4.5 (`RegimeFilter`) and 9.4.6 (legacy defaults and metadata backfill).
 - Wave 5: not started.
 
-Migration numbers in the tables below were plans; the landed ones are `008_lab_trials`, `009_status_changes` and `014_position_attribution`. New migrations take the next free number.
+Migration numbers in the tables below were plans. The landed ones are SQLite `008_lab_trials`, `009_status_changes`, `014_position_attribution` and `016_risk_halts`, and DuckDB `014_statement_flags` and `015_universe_membership`. New migrations take the next free number.
 
 This phase is roadmap item 7.7. It builds the backlog in `docs/research/book-lessons.md` (items BL-01 to BL-49) against the rules in `docs/principles.md`.
 
@@ -171,11 +171,11 @@ Integration 1: realistic costs by default (BL-13), `[lab.parallel]`, the CLI and
 | WP | Scope | Owns |
 |----|-------|------|
 | 9.3.1 Risk rules (BL-27) | Per-position risk budget, portfolio volatility cap, drawdown scaling, liquidity, sector cap, maximum holding time. | `production/rules/{risk_per_position,portfolio_vol,drawdown_scaling,liquidity,sector_cap,max_holding}.py` |
-| 9.3.2 Circuit breaker and quit rule (BL-28, BL-29) | Monthly and weekly loss halts, a latched drawdown halt, an operational halt, a logged reset; the quit rule as a post-tick hook. | `production/rules/{circuit_breaker,operational_halt}.py`, `production/halts.py`, `production/quit_rule.py`, `production/health.py`, `store/migrations_sqlite/009_risk_halts.sql` |
+| 9.3.2 Circuit breaker and quit rule (BL-28, BL-29) | Monthly and weekly loss halts, a latched drawdown halt, an operational halt and a logged reset. The quit rule runs as a post-tick hook. | `production/rules/{circuit_breaker,operational_halt}.py`, `production/halts.py`, `production/quit_rule.py`, `production/health.py`, `store/migrations_sqlite/016_risk_halts.sql` |
 | 9.3.3 Execution realism (BL-30, BL-31) | Participation cap and partial fills, limit and stop fills from the bar range, gap guard, volatility-aware impact, per-ticker spreads. | `backtest/fills.py`, `backtest/simulated_broker.py`, `backtest/engine.py`, `backtest/costs.py`, `features/spread.py` |
 | 9.3.4 TCA and journal (BL-32) | Decision price and context on every order, implementation shortfall, `stonks tca` and journal services. | `core/types.py`, `store/migrations_sqlite/010_tca.sql`, `production/tca.py`, `production/tick.py`, `execution/reconcile.py` |
 | 9.3.5 Signal research (BL-33, BL-34, BL-35) | Signal IC analysis, event study against baseline drift, vs-random test. | `lab/signal_eval.py`, `lab/survival/event_study.py`, `lab/survival/vs_random.py` |
-| 9.3.6 Data integrity (BL-36, BL-37) | Statement audit, point-in-time universe membership, lab preflight. | `store/audit.py`, `store/migrations_duckdb/{011_statement_flags,012_universe_membership}.sql`, `store/lake.py`, `lab/universe.py`, `lab/preflight.py`, `lab/runner.py` |
+| 9.3.6 Data integrity (BL-36, BL-37) | Statement audit, point-in-time universe membership, lab preflight. | `store/audit.py`, `store/migrations_duckdb/{014_statement_flags,015_universe_membership}.sql`, `store/lake.py`, `lab/universe.py`, `lab/preflight.py`, `lab/runner.py` |
 
 ### Wave 4: strategies
 
@@ -220,9 +220,9 @@ Found while building the console and merging Waves 2 and 3.
 
 **Status:**
 
-- Done: 12.1 calendars, 12.2 scheduler (`python -m stonks.scheduling`), 12.4 backups (`python -m stonks.ops`), 12.7 Docker and Compose, 12.8 security checks in CI, 12.9 releases, 12.12 repo hygiene.
-- Partly: 12.3 (deadlines, pings, `GET /metrics`, live and ready probes; backup, push delivery and sync jobs still missing), 12.5 (validation and quarantine done; the fallback source and `[ingest.quality]` are not wired to config yet), 12.11 (runbooks for stale data, restore and failed deploys).
-- Not started: 12.6 kill switch (the `TradeGate` seam exists), 12.10 soak test.
+- Done: 12.1 calendars, 12.2 scheduler (`stonks schedule`), 12.3 dead-man's switch and observability (deadlines, pings, `GET /metrics`, probes, and the backup, push delivery and sync jobs), 12.4 backups (`stonks backup`, and `POST /api/backups` while the server holds the lake), 12.5 data quality and fallback (`[ingest.quality]`, `[ingest.fallback]`), 12.6 kill switch (`stonks halts kill`, the API, the MCP `engage_kill_switch` tool, resume needs a typed confirmation), 12.7 Docker and Compose, 12.8 security checks in CI, 12.9 releases, 12.12 repo hygiene.
+- Partly: 12.11 (runbooks for stale data, restore and failed deploys).
+- Not started: 12.10 soak test.
 
 What it takes to run Stonks unattended every day and trust it.
 

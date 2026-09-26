@@ -32,10 +32,13 @@ uv run stonks ingest fundamentals|metadata|intraday --tickers AAPL.US
 uv run stonks ingest macro | tvl | exchanges
 uv run stonks ingest aggregate --tickers AAPL.US --from 1h --to 4h
 uv run stonks ingest all-intervals --tickers AAPL.US
+uv run stonks audit statements [--tickers AAPL.US]   # statement audit (also runs after ingest fundamentals)
 
 # Lab and registry
 uv run stonks lab run momentum --start 2023-01-01 --end 2025-01-01 --tickers AAPL.US,MSFT.US --preset promotion
+uv run stonks lab run ... --strict | --no-preflight   # data preflight: warnings as errors, or skip it
 uv run stonks lab sweep --start 2023-01-01 --end 2025-01-01
+uv run stonks lab ic --strategy momentum --tickers AAPL.US [--events]   # signal IC and event study
 uv run stonks registry list [--status active|shadow|retired]
 uv run stonks registry show|history <id>
 uv run stonks registry promote <id> [--override --reason "..."]
@@ -44,7 +47,11 @@ uv run stonks golive check <id>
 
 # Production
 uv run stonks tick [--dry-run] [--as-of YYYY-MM-DD] [--tickers AAPL.US,MSFT.US]
-uv run stonks health [--notify]
+uv run stonks health [--notify]   # also opens or clears the global operational halt
+uv run stonks halts list [--all]
+uv run stonks halts kill --scope global|user|portfolio [--portfolio ID] [--flatten] --reason "..."
+uv run stonks halts resume ID --reason "..."   # asks you to type RESUME TRADING
+uv run stonks halts clear ID --reason "..."    # circuit-breaker or operational halt
 uv run stonks pnl [--since YYYY-MM-DD] [--strategy <shadow-id>]
 uv run stonks report [--backtest <job-or-strategy> --start ... --end ...]
 
@@ -52,9 +59,11 @@ uv run stonks report [--backtest <job-or-strategy> --start ... --end ...]
 uv run stonks serve              # REST API + built console on 127.0.0.1:8000
 uv run stonks mcp                # MCP server over the running API
 
+# Operations
+uv run stonks schedule run|next|runs|run-now JOB|check|metrics
+uv run stonks backup backup|verify|restore|list|prune
+
 # Operator entry points
-uv run python -m stonks.scheduling run|next|runs|run-now JOB|check|metrics
-uv run python -m stonks.ops backup|verify|restore|list|prune
 uv run python -m stonks.notify vapid-keygen|test --user EMAIL|deliver
 uv run python -m stonks.connections providers|list|connect|sync [--due]|...
 uv run python -m stonks.security keygen
@@ -86,7 +95,7 @@ uv run python -m stonks.security keygen
 - **`stats/`**: PSR, deflated Sharpe, MinTRL, bootstrap, HAC, CSCV/PBO, multiple testing (FDR).
 - **`backtest/`**: interval-aware `Backtester` (`engine.py`, runs the construction pipeline when `BacktestConfig.construction` is set), `SimulatedBroker` (idempotent by `client_id`), `fills.py` (participation cap, partial fills, limit/stop fills from the bar range, gap guard), `costs.py` (per-asset-class fee, spread and square-root impact), `trades.py` (FIFO round trips), `metrics.py` (Sharpe, Sortino, Calmar, Ulcer, VaR, ES, ...), `benchmark.py` (benchmark curve, alpha, beta), `corporate_actions.py` (splits and dividends), `calendar.py`, `report.py`.
 - **`registry/`**: `StrategyRegistry` over SQLite plus `ArtifactBundle` at `data/artifacts/<id>/`. Governance: `set_status` is the only writer of `strategies.status`, every change writes a `status_changes` row, and promotion needs a passing go-live check or an override with a reason.
-- **`production/`**: `run_tick` (`tick.py`) in three phases: the signal phase (`ranker.py` scores each active strategy once), a portfolio phase over the books of a `TickPlan` (construction pipeline, risk rules, broker, ledger, `portfolio`-stage hooks; every entrypoint runs `TickPlan.default`, the single `pf_default` book, and `load_tick_plan` for per-portfolio books is not wired in yet), then model books (`shadow.py`) and `tick`-stage hooks. `risk.py` plus `rules/` (registered `RiskRule`s: the caps, and position risk, portfolio vol, drawdown scaling, liquidity, sector cap, max holding), `hooks/` (position attribution; `notification_enqueue` only logs so far), `golive.py` (incubation gate), `pnl.py`, `health.py`, `corporate_actions.py`, `prices.py`, `settings_builder.py`.
+- **`production/`**: `run_tick` (`tick.py`) in three phases: the signal phase (`ranker.py` scores each active strategy once), a portfolio phase over the books of a `TickPlan` (construction pipeline, risk rules, broker, ledger, `portfolio`-stage hooks; every entrypoint runs `TickPlan.default`, the single `pf_default` book, and `load_tick_plan` for per-portfolio books is not wired in yet), then model books (`shadow.py`) and `tick`-stage hooks. `risk.py` plus `rules/` (registered `RiskRule`s: the caps, position risk, portfolio vol, drawdown scaling, liquidity, sector cap, max holding, circuit breaker and operational halt, set under `[production.risk.rules.*]`), `halts.py` (`risk_halts` rows: kill switch, breaker trips, the operational halt that `run_health` opens), `quit_rule.py`, `hooks/` (position attribution, notification enqueue, the quit rule, and the `risk_halts` trade gate), `golive.py` (incubation gate), `pnl.py`, `health.py`, `corporate_actions.py`, `prices.py`, `settings_builder.py`.
 - **`execution/`**: `make_client_id` (`orders.py`), brokers in `brokers/` (`simulated`, `alpaca` wrapping `alpaca-py`, `make_broker`), `reconcile.py` (syncs broker order state and fills into `orders`/`fills`).
 - **`accounts/`**: users and roles (viewer, trader, admin), portfolios, subscriptions with modes `notify`/`paper`/`auto`, `BookSpec` with tighten-only merges, `Scope` ownership checks, `audit_log`. Existing installs map to `usr_owner` and `pf_default`.
 - **`connections/`**: `BrokerConnection` seam for read-only broker sync (positions, cash, activities). Providers `alpaca`, `snaptrade`, `fake`; none enabled by default. Credentials sealed with `security/`.
@@ -103,7 +112,7 @@ uv run python -m stonks.security keygen
 
 ## Canonical schemas (current)
 
-**Lake (DuckDB, migrations 001-013):**
+**Lake (DuckDB, migrations 001-015):**
 - `instruments (id, asset_class, exchange, currency, ipo_date, sector, industry, is_delisted, name, identifiers, GICS, address, ...)`: renamed from `tickers` in 007. `asset_class` in {equity, crypto, commodity, bond}.
 - `bars (ticker, timestamp, interval, open, high, low, close, adj_close, volume; PK (ticker, timestamp, interval))`: OHLCV at any `Interval` code (1m, 5m, 1h, 4h, 1d, 1w, 1mo, ...). `prices` is a read-only view of `interval='1d'`. Write with `upsert_bars` or the daily `upsert_prices` shim. With the Parquet backend the rows live under `<lake dir>/bars` instead of the table.
 - Statements (008, equity only), keyed `(ticker, period_end, frequency)`: `income_statement`, `balance_sheet`, `cash_flow_statement`, each with `filing_date` and `currency`. `upsert_<statement>` reindexes sparse frames and uses `COALESCE(EXCLUDED.col, table.col)`, so a NULL never overwrites a stored value but a real restated value does.
@@ -114,8 +123,10 @@ uv run python -m stonks.security keygen
 - `lake_settings (key, value)` (012): today only `bars_backend`.
 - `quarantined_bars (id, run_id, ticker, timestamp, interval, OHLCV, reasons, source, quarantined_at)` and `ingest_runs.quality_json` (013).
 - `ingest_runs (id, source, kind, started_at, finished_at, tickers_ok, tickers_failed, status, error, quality_json)`.
+- `statement_flags (ticker, period_end, frequency, check_id, severity, detail, flagged_at)` (014): the statement audit's findings, replaced per audited ticker.
+- `universe_membership (universe_id, ticker, start_date, end_date)` (015): point-in-time universes, delisted names included.
 
-**State (SQLite, migrations 001-014):**
+**State (SQLite, migrations 001-016):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.
 - 002: `shadow_decisions`, `shadow_portfolio_snapshots` (model books).
 - 003: `jobs` (API background jobs). 004: `portfolio_snapshots.as_of`. 005: `strategy_drafts` (Studio). 006: `orders.status_reason`. 007: `alerts`.
@@ -125,6 +136,8 @@ uv run python -m stonks.security keygen
 - 012 notify: `notification_outbox`, `notification_deliveries`, `push_subscriptions`, `notification_prefs`, `notification_settings`.
 - 013 connections: `broker_connections`, `broker_credentials`, `broker_accounts`, `broker_positions`, `broker_activities`; `portfolio_snapshots.source` (`tick` or sync).
 - 014: `position_attribution (tick_id, portfolio_id, as_of, ticker, strategy_id, subscription_id, quantity, target_weight, weight_share, source)`.
+- 015 auth: `sessions`, `api_tokens`, `recovery_codes`, `login_attempts`, and MFA columns on `users`.
+- 016: `risk_halts (id, kind, scope, user_id, portfolio_id, halt, reason, tripped_by, tripped_at, expires_on, cleared_at, cleared_by, clear_reason)`: the kill switch, circuit-breaker trips and the operational halt.
 
 ## Conventions to match
 
