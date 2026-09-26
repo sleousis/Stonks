@@ -58,6 +58,7 @@ __all__ = [
     "CrossListingRow",
     "CryptoConsensusType",
     "CryptoProfileRow",
+    "DefiTvlRow",
     "DividendRow",
     "EarningsAnnouncementRow",
     "EmployeeCountRow",
@@ -900,6 +901,28 @@ class MacroIndicatorRow(FrozenRow):
     period: MacroPeriod | None = None
     country_name: str | None = None
     value: float | None = None
+
+
+# ---- DeFi total value locked -------------------------------------------------
+
+
+class DefiTvlRow(FrozenRow):
+    """One daily total-value-locked observation for a blockchain.
+
+    Keyed by ``(chain, observation_date)``. ``chain`` is the canonical
+    lower-case chain name (``"ethereum"``, ``"solana"``); adapters normalize
+    their vendor spelling before constructing the row so the key is stable
+    across vendors. ``observation_date`` is the UTC calendar day the vendor
+    stamps the observation with; it is *not* the day the value became
+    public, so point-in-time readers must add their own lag. ``tvl_usd`` is
+    the aggregate DeFi TVL in US dollars; ``source`` records which adapter
+    wrote the row (provenance only, not part of the key).
+    """
+
+    chain: str = Field(min_length=1, pattern=r"^[^A-Z]+$")
+    observation_date: date
+    tvl_usd: float | None = Field(default=None, ge=0.0)
+    source: str = Field(min_length=1)
 
 
 # ---- source discovery (not a lake-row type) --------------------------------
