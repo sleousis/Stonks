@@ -164,6 +164,16 @@ def test_failing_shadow_strategy_does_not_fail_tick_or_other_shadows(env):
     )
 
 
+def test_unloadable_shadow_strategy_is_reported_failed_not_evaluated(env):
+    lake, state, registry = env
+    sid = _register(registry, BuyAndHold({"ticker": "FLAT.US", "allocation": 1.0}), "shadow")
+    state.execute("UPDATE strategies SET class_path = 'stonks.gone:Gone' WHERE id = ?", [sid])
+    result = run_tick(state, lake, registry, SETTINGS, as_of=AS_OF)
+    [outcome] = _summary(state, result.tick_id)["shadow"]
+    assert outcome["status"] == "failed"
+    assert state.count_rows("shadow_portfolio_snapshots") == 0
+
+
 def test_shadow_phase_crash_does_not_fail_real_tick(env, monkeypatch):
     lake, state, registry = env
     _register(registry, BuyAndHold({"ticker": "UP.US", "allocation": 1.0}), "active")

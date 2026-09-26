@@ -126,10 +126,12 @@ def _evaluate_one(
         return ShadowOutcome(strategy_id=strategy_id, status=status)
 
     portfolio = _load_virtual_portfolio(state, strategy_id, settings.initial_cash)
+    # Load even without picks: the Ranker silently skips a strategy that
+    # fails to load, and that must surface as ``failed``, not ``evaluated``.
+    strategy = registry.load(strategy_id)
 
     orders: list[Order] = []
     if picks:
-        strategy = registry.load(strategy_id)
         proposed = strategy.decide(picks, portfolio, prices, as_of)
         risk_result = apply_risk(
             proposed,
