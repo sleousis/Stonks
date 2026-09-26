@@ -1,0 +1,143 @@
+<app-page-header
+  title="Schedule and backups"
+  description="The jobs that run the daily loop, and backups of the stores."
+>
+  <button
+    actions
+    type="button"
+    class="btn"
+    [disabled]="schedule.isLoading() || backups.isLoading()"
+    [attr.aria-busy]="schedule.isLoading() || backups.isLoading()"
+    (click)="schedule.reload(); backups.reload()"
+  >
+    {{ schedule.isLoading() || backups.isLoading() ? 'Refreshing…' : 'Refresh' }}
+  </button>
+</app-page-header>
+
+<div class="page-grid">
+  <!-- Jobs ------------------------------------------------------------------>
+  <section class="panel span-12" aria-labelledby="jobs-title">
+    <div class="panel-head">
+      <h2 id="jobs-title">Scheduled jobs</h2>
+      @if (schedule.hasValue()) {
+        <span class="muted">
+          {{ schedule.value().hosted ? 'Runs inside the server' : 'Runs in its own process' }}
+          ({{ schedule.value().backend }})
+        </span>
+      }
+    </div>
+    @if (schedule.error(); as err) {
+      <app-error-state
+        title="Could not load the schedule"
+        [error]="err"
+        (retry)="schedule.reload()"
+      />
+    } @else if (!schedule.hasValue()) {
+      <app-loading-state label="Loading the schedule" [rows]="4" />
+    } @else if (jobRows().length === 0) {
+      <app-empty-state
+        title="No scheduled jobs"
+        message="Jobs come from [scheduler] in the config. The defaults are ingest, tick, report and health."
+      />
+    } @else {
+      <app-data-table
+        caption="Scheduled jobs with their next run"
+        [rows]="jobRows()"
+        [columns]="jobColumns"
+        [rowKey]="jobKey"
+        [initialSort]="{ key: 'next_run_at', dir: 'asc' }"
+      >
+        <ng-template appCell="last_status" [appCellOf]="jobRows()" let-j>
+          @if (j.last_status) {
+            <app-status-pill [status]="j.last_status" />
+          } @else {
+            <span class="muted">Never</span>
+          }
+        </ng-template>
+        <ng-template appCell="run" [appCellOf]="jobRows()" let-j>
+          <button
+            type="button"
+            class="btn"
+            [disabled]="running() === j.name"
+            [attr.aria-busy]="running() === j.name"
+            [attr.aria-label]="'Run ' + j.name + ' now'"
+            (click)="runNow(j)"
+          >
+            Run now
+          </button>
+        </ng-template>
+      </app-data-table>
+    }
+  </section>
+
+  <!-- Recent runs ----------------------------------------------------------->
+  <section class="panel span-12" aria-labelledby="runs-title">
+    <div class="panel-head">
+      <h2 id="runs-title">Recent runs</h2>
+    </div>
+    @if (schedule.error()) {
+      <p class="panel-body muted">Recent runs show once the schedule loads.</p>
+    } @else if (!schedule.hasValue()) {
+      <app-loading-state label="Loading recent runs" [rows]="4" />
+    } @else if (schedule.value().recent.length === 0) {
+      <app-empty-state
+        title="No runs yet"
+        message="Each scheduled or manual run is listed here with its status."
+      />
+    } @else {
+      @let recent = schedule.value().recent;
+      <app-data-table
+        caption="Recent scheduled runs"
+        [rows]="recent"
+        [columns]="runColumns"
+        [rowKey]="runKey"
+        [initialSort]="{ key: 'started_at', dir: 'desc' }"
+      >
+        <ng-template appCell="status" [appCellOf]="recent" let-r>
+          <app-status-pill [status]="r.status" />
+        </ng-template>
+      </app-data-table>
+    }
+  </section>
+
+  <!-- Backups --------------------------------------------------------------->
+  <section class="panel span-12" aria-labelledby="backups-title">
+    <div class="panel-head">
+      <h2 id="backups-title">Backups</h2>
+      <button
+        type="button"
+        class="btn btn-primary"
+        [disabled]="backingUp()"
+        [attr.aria-busy]="backingUp()"
+        (click)="backUpNow()"
+      >
+        {{ backingUp() ? 'Backing up…' : 'Back up now' }}
+      </button>
+    </div>
+    @if (backupRun(); as run) {
+      <app-job-progress label="Backup" [handle]="run" />
+    }
+    @if (backups.error(); as err) {
+      <app-error-state title="Could not load backups" [error]="err" (retry)="backups.reload()" />
+    } @else if (!backups.hasValue()) {
+      <app-loading-state label="Loading backups" [rows]="3" />
+    } @else if (backupRows().length === 0) {
+      <app-empty-state
+        title="No backups from the server yet"
+        message="Back up now, or let the scheduler run its backup job. Backups made from the command line are not listed here."
+      />
+    } @else {
+      <app-data-table
+        caption="Backups the server ran"
+        [rows]="backupRows()"
+        [columns]="backupColumns"
+        [rowKey]="backupKey"
+        [initialSort]="{ key: 'created_at', dir: 'desc' }"
+      >
+        <ng-template appCell="status" [appCellOf]="backupRows()" let-b>
+          <app-status-pill [status]="b.status" />
+        </ng-template>
+      </app-data-table>
+    }
+  </section>
+</div>
