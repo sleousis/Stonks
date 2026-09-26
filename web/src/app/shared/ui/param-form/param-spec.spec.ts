@@ -83,6 +83,6 @@ describe('param spec', () => {
 
   it('humanizes names and ranges', () => {
     expect(humanize('fast_ma-window')).toBe('Fast ma window');
-    expect(rangeText(paramFields(SPEC)[0])).toBe('5 – 250');
+    expect(rangeText(paramFields(SPEC)[0])).toBe('5–250');
   });
 });

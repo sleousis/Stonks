@@ -130,10 +130,10 @@ export function paramPayload(
   return out;
 }
 
-/** Short range text for hints: "1 – 250", "≥ 0", "one of fast, slow". */
+/** Short range text for hints: "1–250", "≥ 0", "one of fast, slow". */
 export function rangeText(field: ParamField): string | null {
   if (field.control === 'int' || field.control === 'float') {
-    if (field.min !== null && field.max !== null) return `${field.min} – ${field.max}`;
+    if (field.min !== null && field.max !== null) return `${field.min}–${field.max}`;
     if (field.min !== null) return `≥ ${field.min}`;
     if (field.max !== null) return `≤ ${field.max}`;
   }

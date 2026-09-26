@@ -129,7 +129,7 @@ import {
       gap: var(--space-3) var(--space-4);
       grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
     }
-    .bool {
+    .field {
       align-content: start;
     }
     .none {
