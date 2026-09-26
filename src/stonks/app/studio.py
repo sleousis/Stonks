@@ -66,21 +66,17 @@ from stonks.app.context import AppContext
 from stonks.app.errors import AppError, ConflictError, NotFoundError, ValidationError
 from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.app.lab import (
+    BacktestOptions,
     BacktestRequest,
     BacktestResult,
-    EquityPoint,
+    LabRunOptions,
     LabRunRequest,
     LabRunView,
     LabService,
-    ObjectiveName,
-    SurvivalTestName,
-    TunerName,
 )
 from stonks.app.pagination import Page
-from stonks.app.serialize import finite, to_jsonable
+from stonks.app.serialize import to_jsonable
 from stonks.app.strategies import StrategyRef, StrategyStatus, change_status
-from stonks.backtest.engine import BacktestConfig, Backtester
-from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.config import Settings
 from stonks.core.interval import Interval
 from stonks.core.params import validate_params
@@ -242,32 +238,17 @@ class _Window(BaseModel):
         return self
 
 
-class DraftBacktestRequest(_Window):
+class DraftBacktestRequest(_Window, BacktestOptions):
     """A :class:`~stonks.app.lab.BacktestRequest` without the strategy
     (the draft is the strategy)."""
 
-    initial_cash: float = Field(default=10_000.0, gt=0)
-    threshold: float = 0.0
-    rebalance_every_bars: int = Field(default=1, ge=1)
-    slippage_bps: float = Field(default=0.0, ge=0)
-    fee_per_trade: float = Field(default=0.0, ge=0)
 
-
-class DraftLabRunRequest(_Window):
+class DraftLabRunRequest(_Window, LabRunOptions):
     """A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A
     rule draft's spec is fixed (it has no tunable parameters); a code
-    draft's class is tuned over its parameter space."""
-
-    train_ratio: float = Field(default=0.7, gt=0, lt=1)
-    tuner: TunerName = "random"
-    budget: int = Field(default=20, ge=1, le=1_000)
-    seed: int = 0
-    objective: ObjectiveName = "sharpe"
-    survival_tests: list[SurvivalTestName] = Field(
-        default_factory=lambda: ["oos", "period_stability"], min_length=1
-    )
-    #: Register the result (status ``shadow``) and link it to the draft.
-    register_strategy: bool = False
+    draft's class is tuned over its parameter space. Registering
+    (``register_strategy`` always, ``register_if_passes`` only on a pass)
+    links the new strategy to the draft."""
 
 
 # ---- service ----------------------------------------------------------------
@@ -428,7 +409,7 @@ class StudioService:
     def submit_lab_run(self, draft_id: str, request: DraftLabRunRequest) -> Job:
         draft = self.get_draft(draft_id)
         _parse_interval(request.interval)
-        if request.register_strategy and draft.status == "registered":
+        if request.registers and draft.status == "registered":
             raise ConflictError(
                 f"draft {draft_id} is already registered as {draft.registered_strategy_id}"
             )
@@ -614,39 +595,8 @@ class StudioService:
     # ---- internals: running ------------------------------------------------
 
     def _run_backtest(self, strategy: Any, request: DraftBacktestRequest) -> BacktestResult:
-        interval = _parse_interval(request.interval)
-        broker = SimulatedBroker(
-            portfolio=Portfolio(cash=request.initial_cash, positions={}),
-            slippage_bps=request.slippage_bps,
-            fee_per_trade=request.fee_per_trade,
-        )
-        config = BacktestConfig(
-            start=request.start,
-            end=request.end,
-            universe=list(request.universe),
-            interval=interval,
-            threshold=request.threshold,
-            rebalance_every_bars=request.rebalance_every_bars,
-        )
-        with self._ctx.lake() as lake:
-            report = Backtester(
-                strategies=[strategy], broker=broker, lake=lake, config=config
-            ).run()
-        return BacktestResult(
-            strategy_id=report.strategy_id,
-            interval=interval.code,
-            start=request.start,
-            end=request.end,
-            final_return=finite(report.final_return),
-            sharpe=finite(report.sharpe),
-            max_drawdown=finite(report.max_drawdown),
-            cagr=finite(report.cagr),
-            profit_factor=finite(report.profit_factor),
-            equity=[
-                EquityPoint(timestamp=_as_datetime(ts), value=float(v))
-                for ts, v in zip(report.equity_dates, report.equity_curve, strict=True)
-            ],
-        )
+        """Same backtest path as API backtests (cost model, trade ledger)."""
+        return self._lab.run_backtest_strategy(strategy, request)
 
     def _smoke_lake(self, factory: Callable[[], Any], request: ValidateRequest) -> SmokeCheck:
         errors: list[str] = []

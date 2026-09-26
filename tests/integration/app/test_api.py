@@ -160,8 +160,8 @@ def test_strategy_routes(client, seeded):
 
 def test_strategy_status_routes(client, seeded):
     """Status routes go through the governed service (BL-24): promotion
-    needs a passing go-live check, demotion a reason. The routes take no
-    reason/override yet, so both are refused and nothing changes."""
+    needs a passing go-live check, demotion a reason. Without a body both
+    are refused and nothing changes (see test_governance_wiring)."""
     sid = seeded["shadow_id"]
     assert client.post(f"/api/strategies/{sid}/promote", headers=AUTH).status_code == 409
     for action in ("retire", "shadow"):

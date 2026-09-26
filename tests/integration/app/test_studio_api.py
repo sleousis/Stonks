@@ -163,7 +163,7 @@ def test_backtest_register_enable_disable_flow(client):
     assert again.status_code == 409
 
     # enabling is a promotion, gated by go-live (BL-24): refused without a
-    # paper period; the route takes no override yet
+    # paper period and no override in the body
     on = client.post(f"/api/studio/drafts/{draft['id']}/enable", headers=AUTH)
     assert on.status_code == 409
     assert "go-live" in on.json()["detail"]

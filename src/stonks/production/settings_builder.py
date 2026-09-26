@@ -40,6 +40,7 @@ def build_tick_settings(settings: Settings, universe: Sequence[str]) -> TickSett
         risk=p.risk,
         shadow_enabled=p.shadow_enabled,
         broker_kind=settings.brokers.kind,
+        dividend_withholding_rate=p.dividend_withholding_rate,
     )
 
 

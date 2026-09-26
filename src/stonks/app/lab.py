@@ -1,9 +1,18 @@
 """LabService — run a backtest or a full lab run (tune → fit → survival
-suite → verdict) for a strategy, returning plain data."""
+suite → verdict) for a strategy, returning plain data.
+
+:func:`execute_lab_run` is the one lab-run code path: the API, MCP and the
+Strategy Studio reach it through :class:`LabService`, the CLI's
+``stonks lab run`` and ``stonks lab sweep`` call it directly. It builds the
+tuner (``[lab.parallel]`` workers), the suite (survival-test registry), the
+dataset (cost model), pre-registers the run in the trial ledger, and
+registers the result (with its lab provenance in ``meta.json``) when asked.
+"""
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Annotated, Any, Literal, Self
 
@@ -14,15 +23,19 @@ from stonks.app.errors import ValidationError
 from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.app.serialize import finite, to_jsonable
 from stonks.app.strategies import StrategyRef, StrategyService, SurvivalReportView
+from stonks.backtest import metrics as bt_metrics
 from stonks.backtest.costs import CostModel, CostModelSettings
 from stonks.backtest.engine import BacktestConfig, Backtester
+from stonks.backtest.report import BacktestReport
 from stonks.backtest.simulated_broker import SimulatedBroker
+from stonks.backtest.trades import with_trades
 from stonks.core.interval import Interval
 from stonks.core.protocols import Objective, Strategy, SurvivalReport, SurvivalTest, Tuner
 from stonks.core.types import Portfolio
 from stonks.lab.dataset import LabDataset
 from stonks.lab.objectives import CAGRObjective, FinalReturnObjective, SharpeObjective
-from stonks.lab.runner import LabRunner
+from stonks.lab.parallel import ParallelSettings
+from stonks.lab.runner import LabRunner, LabRunResult, costs_are_zero
 from stonks.lab.survival.base import SurvivalSuite
 from stonks.lab.survival.registry import (
     build_survival_test,
@@ -31,9 +44,12 @@ from stonks.lab.survival.registry import (
     survival_test_names,
 )
 from stonks.lab.survival.walk_forward import WalkForwardConfig
+from stonks.lab.trials import TrialLedger
 from stonks.lab.tuning.grid import GridTuner
 from stonks.lab.tuning.random import RandomTuner
 from stonks.logging import get_logger
+from stonks.registry.artifact import update_meta
+from stonks.registry.store import StrategyRegistry
 
 BACKTEST_JOB = "backtest"
 LAB_RUN_JOB = "lab_run"
@@ -111,7 +127,10 @@ class _WindowRequest(BaseModel):
         return self
 
 
-class BacktestRequest(_WindowRequest):
+class BacktestOptions(BaseModel):
+    """Backtest settings shared by :class:`BacktestRequest` and the Studio's
+    draft backtests."""
+
     initial_cash: float = Field(default=10_000.0, gt=0)
     threshold: float = 0.0
     rebalance_every_bars: int = Field(default=1, ge=1)
@@ -127,6 +146,10 @@ class BacktestRequest(_WindowRequest):
         if self.cost_model is not None and (self.slippage_bps or self.fee_per_trade):
             raise ValueError("set cost_model or slippage_bps/fee_per_trade, not both")
         return self
+
+
+class BacktestRequest(_WindowRequest, BacktestOptions):
+    pass
 
 
 class CostModelPreset(BaseModel):
@@ -153,6 +176,44 @@ class EquityPoint(BaseModel):
     value: float
 
 
+class TradeStatsView(BaseModel):
+    """Trade-level statistics of a backtest (``backtest.trades.TradeStats``).
+    Win/loss figures are over closed round trips; ``None`` marks an
+    unbounded ratio (no losing trades)."""
+
+    n_trades: int
+    n_open: int
+    win_rate: float
+    avg_win: float
+    avg_loss: float
+    payoff_ratio: float | None
+    #: Mean P&L per closed trade, in cash.
+    expectancy: float
+    trade_profit_factor: float | None
+    avg_bars_held: float
+    #: Share of bars that closed with a position held.
+    exposure: float
+    turnover_annual: float
+    costs_paid: float
+    cost_drag_annual: float
+
+
+class TradeView(BaseModel):
+    """One round trip (a lot, or part of one, from buy to sell or to the end)."""
+
+    ticker: str
+    entry_ts: datetime
+    exit_ts: datetime
+    qty: float
+    entry_px: float
+    exit_px: float
+    pnl: float
+    return_pct: float
+    bars_held: int
+    fees: float
+    is_open: bool
+
+
 class BacktestResult(BaseModel):
     strategy_id: str
     interval: str
@@ -162,20 +223,39 @@ class BacktestResult(BaseModel):
     sharpe: float | None
     max_drawdown: float | None
     cagr: float | None
-    #: ``None`` when unbounded (gains but no losing bars).
+    #: Per-bar profit factor; ``None`` when unbounded (gains but no losing
+    #: bars). The trade-level figure is ``trade_stats.trade_profit_factor``.
     profit_factor: float | None
     equity: list[EquityPoint]
+    #: Drawdown from the running peak at each equity point (fraction <= 0).
+    drawdown: list[EquityPoint] = Field(default_factory=list)
+    #: Closed round trips (``trade_stats.n_trades``).
+    trade_count: int = 0
+    trade_stats: TradeStatsView | None = None
+    trades: list[TradeView] = Field(default_factory=list)
+    sortino: float | None = None
+    calmar: float | None = None
+    ulcer_index: float | None = None
+    max_dd_duration_bars: int = 0
+    var_95: float | None = None
+    es_95: float | None = None
+    skew: float | None = None
+    kurtosis: float | None = None
+    #: Tulchinsky fitness (Sharpe x sqrt(|return| / turnover)).
+    fitness: float | None = None
 
 
-class LabRunRequest(_WindowRequest):
-    """Tunes the class the ``strategy`` ref points at (its ``params`` are
-    ignored: the tuner searches the class's parameter space)."""
+class LabRunOptions(BaseModel):
+    """Everything about a lab run except the strategy and window; shared by
+    :class:`LabRunRequest` and the Studio's draft lab runs."""
 
     train_ratio: float = Field(default=0.7, gt=0, lt=1)
     tuner: TunerName = "random"
     budget: int = Field(default=20, ge=1, le=1_000)
     seed: int = 0
     objective: ObjectiveName = "sharpe"
+    #: Points per numeric axis for the ``grid`` tuner.
+    grid_size: int = Field(default=5, ge=1, le=50)
     #: Survival test ids to run, in order. When omitted, ``preset`` decides.
     survival_tests: list[SurvivalTestName] | None = Field(default=None, min_length=1)
     #: A named suite used when ``survival_tests`` is omitted. Without either,
@@ -193,6 +273,11 @@ class LabRunRequest(_WindowRequest):
     #: A preset from ``GET /api/lab/cost-models`` or explicit cost-model
     #: settings for every backtest of the run; default ``[backtest.costs]``.
     cost_model: CostModelOption | None = None
+    #: What edge the strategy exploits and who pays for it (P1); recorded
+    #: in the trial ledger before tuning and in the artifact's ``meta.json``.
+    hypothesis: str | None = Field(default=None, max_length=4_000)
+    #: How the strategy is expected to fail; recorded like ``hypothesis``.
+    premortem: str | None = Field(default=None, max_length=4_000)
 
     @property
     def registers(self) -> bool:
@@ -219,6 +304,11 @@ class LabRunRequest(_WindowRequest):
         return self
 
 
+class LabRunRequest(_WindowRequest, LabRunOptions):
+    """Tunes the class the ``strategy`` ref points at (its ``params`` are
+    ignored: the tuner searches the class's parameter space)."""
+
+
 class LabRunView(BaseModel):
     class_path: str
     best_params: dict[str, Any]
@@ -226,6 +316,245 @@ class LabRunView(BaseModel):
     verdict: Literal["pass", "fail"]
     survival_reports: list[SurvivalReportView]
     registered_strategy_id: str | None
+    #: The run's id in the trial ledger (``lab_runs``).
+    run_id: str = ""
+    #: Tuning trials this run evaluated.
+    n_trials_run: int = 0
+    #: Trials of this strategy class across every ledgered run (P2).
+    n_trials_class: int = 0
+
+
+@dataclass(frozen=True)
+class LabExecution:
+    """What :func:`execute_lab_run` returns."""
+
+    result: LabRunResult
+    registered_id: str | None
+
+    def view(self) -> LabRunView:
+        result = self.result
+        strategy_cls = type(result.strategy)
+        return LabRunView(
+            class_path=f"{strategy_cls.__module__}:{strategy_cls.__name__}",
+            best_params=to_jsonable(result.best_params),
+            best_score=finite(result.best_score),
+            verdict=result.verdict,  # type: ignore[arg-type]
+            survival_reports=[
+                SurvivalReportView(
+                    test_id=r.test_id,
+                    passed=r.passed,
+                    metrics={k: finite(v) for k, v in dict(r.metrics).items()},
+                    notes=r.notes,
+                )
+                for r in result.survival_reports
+            ],
+            registered_strategy_id=self.registered_id,
+            run_id=result.run_id,
+            n_trials_run=result.n_trials_run,
+            n_trials_class=result.n_trials_class,
+        )
+
+
+def build_tuner(options: LabRunOptions, parallel: ParallelSettings | None = None) -> Tuner:
+    """The request's tuner, spreading trials over ``parallel`` workers."""
+    if options.tuner == "grid":
+        return GridTuner(grid_size=options.grid_size, seed=options.seed, parallel=parallel)
+    return RandomTuner(seed=options.seed, parallel=parallel)
+
+
+def lab_costs(settings: Any, option: CostModelOption | None) -> CostModelSettings:
+    """The request's cost model, else the configured ``[backtest.costs]``."""
+    return _cost_settings(option) if option is not None else settings.backtest.costs
+
+
+def execute_lab_run(
+    settings: Any,
+    cls: type[Strategy],
+    request: LabRunRequest,
+    *,
+    lake: Any,
+    state: Any = None,
+    progress: JobContext | None = None,
+    register: RegisterFn | None = None,
+    fixed_params: Mapping[str, Any] | None = None,
+    parallel: ParallelSettings | None = None,
+) -> LabExecution:
+    """Tune ``cls`` on ``lake`` and run the survival suite; the one lab-run
+    code path (see the module doc).
+
+    ``state`` (an open ``SqliteState``) enables the trial ledger and is
+    required to register. ``register`` replaces the plain registry
+    registration (the Studio links its draft too); with
+    ``register_if_passes`` neither runs on a failed verdict. ``progress``
+    adds job progress and cancellation checks between trials and tests.
+    ``parallel`` defaults to ``[lab.parallel]``. ``fixed_params`` pin
+    parameters for the whole search (``--params`` on the CLI)."""
+    interval = _parse_interval(request.interval)
+    tuner = build_tuner(request, parallel or settings.lab.parallel)
+    objective: Objective = _OBJECTIVES[request.objective]()
+    tests: list[SurvivalTest] = [
+        build_survival_test(name, _test_options(name, request, settings.lab.walk_forward))
+        for name in request.suite()
+    ]
+    if progress is not None:
+        objective = _CancellableObjective(objective, progress)
+        tests = [_CancellableTest(t, progress) for t in tests]
+    ledger = TrialLedger(state, settings.registry.artifacts_dir) if state is not None else None
+    runner = LabRunner(
+        tuner=tuner,
+        objective=objective,
+        suite=SurvivalSuite(tests),
+        budget=request.budget,
+        ledger=ledger,
+        settings=settings,
+    )
+    if progress is not None:
+        progress.progress(0.05, "tuning")
+    dataset = LabDataset(
+        lake=lake,
+        universe=list(request.universe),
+        start=request.start,
+        end=request.end,
+        train_ratio=request.train_ratio,
+        interval=interval,
+        costs=lab_costs(settings, request.cost_model),
+    )
+    result = runner.run(
+        cls,
+        dataset,
+        fixed_params=fixed_params,
+        hypothesis=request.hypothesis,
+        premortem=request.premortem,
+    )
+
+    registered: str | None = None
+    if request.register_if_passes and result.verdict != "pass":
+        _log.info(
+            "lab.not_registered", run_id=result.run_id, reason="verdict", verdict=result.verdict
+        )
+    elif request.registers:
+        if state is None:
+            raise ValueError("registering a lab run needs the state store")
+        if progress is not None:
+            progress.progress(0.95, "registering")
+        if register is not None:
+            registered = register(result.strategy, list(result.survival_reports))
+        else:
+            registry = StrategyRegistry(state=state, artifacts_dir=settings.registry.artifacts_dir)
+            registered = registry.register(result.strategy, result.survival_reports)
+        _attach_lab_meta(state, registered, result)
+        _log.info(
+            "lab.registered", run_id=result.run_id, strategy_id=registered, verdict=result.verdict
+        )
+    return LabExecution(result=result, registered_id=registered)
+
+
+def _attach_lab_meta(state: Any, strategy_id: str, result: LabRunResult) -> None:
+    """Merge the run's provenance (run id, trial count, hypothesis,
+    manifest) into the registered artifact's ``meta.json``."""
+    rows = state.sql("SELECT artifact_path FROM strategies WHERE id = ?", [strategy_id])
+    if not rows:  # a custom register hook that registered elsewhere
+        _log.warning("lab.meta.no_artifact", strategy_id=strategy_id)
+        return
+    update_meta(rows[0]["artifact_path"], result.artifact_meta)
+
+
+def backtest_report(
+    settings: Any, strategy: Strategy, request: Any, lake: Any
+) -> tuple[BacktestReport, Interval]:
+    """Backtest ``strategy`` for a request carrying a window and
+    :class:`BacktestOptions`; the report has its trade ledger attached."""
+    interval = _parse_interval(request.interval)
+    cost_model = _backtest_cost_model(settings, request)
+    if _backtest_costs_zero(settings, request):
+        _log.warning(
+            "backtest.zero_costs",
+            strategy=getattr(strategy, "id", type(strategy).__name__),
+            hint="results ignore fees, spread and impact; pass a cost model",
+        )
+    broker = SimulatedBroker(
+        portfolio=Portfolio(cash=request.initial_cash, positions={}),
+        slippage_bps=request.slippage_bps,
+        fee_per_trade=request.fee_per_trade,
+        cost_model=cost_model,
+    )
+    config = BacktestConfig(
+        start=request.start,
+        end=request.end,
+        universe=list(request.universe),
+        interval=interval,
+        threshold=request.threshold,
+        rebalance_every_bars=request.rebalance_every_bars,
+    )
+    report = Backtester(strategies=[strategy], broker=broker, lake=lake, config=config).run()
+    report = with_trades(report, broker.fills, reference_price=broker.reference_price)
+    return report, interval
+
+
+def backtest_result(report: BacktestReport, interval: Interval, request: Any) -> BacktestResult:
+    """The API view of a backtest report (equity, drawdown, trades, stats)."""
+    stamps = [_as_datetime(ts) for ts in report.equity_dates]
+    stats = report.trade_stats
+    return BacktestResult(
+        strategy_id=report.strategy_id,
+        interval=interval.code,
+        start=request.start,
+        end=request.end,
+        final_return=finite(report.final_return),
+        sharpe=finite(report.sharpe),
+        max_drawdown=finite(report.max_drawdown),
+        cagr=finite(report.cagr),
+        profit_factor=finite(report.bar_profit_factor),
+        equity=[
+            EquityPoint(timestamp=ts, value=float(v))
+            for ts, v in zip(stamps, report.equity_curve, strict=True)
+        ],
+        drawdown=[
+            EquityPoint(timestamp=ts, value=float(dd))
+            for ts, dd in zip(stamps, bt_metrics.drawdowns(report.equity_curve), strict=True)
+        ],
+        trade_count=stats.n_trades,
+        trade_stats=TradeStatsView(
+            n_trades=stats.n_trades,
+            n_open=stats.n_open,
+            win_rate=stats.win_rate,
+            avg_win=stats.avg_win,
+            avg_loss=stats.avg_loss,
+            payoff_ratio=finite(stats.payoff_ratio),
+            expectancy=stats.expectancy,
+            trade_profit_factor=finite(stats.trade_profit_factor),
+            avg_bars_held=stats.avg_bars_held,
+            exposure=stats.exposure,
+            turnover_annual=stats.turnover_annual,
+            costs_paid=stats.costs_paid,
+            cost_drag_annual=stats.cost_drag_annual,
+        ),
+        trades=[
+            TradeView(
+                ticker=t.ticker,
+                entry_ts=t.entry_ts,
+                exit_ts=t.exit_ts,
+                qty=t.qty,
+                entry_px=t.entry_px,
+                exit_px=t.exit_px,
+                pnl=t.pnl,
+                return_pct=t.return_pct,
+                bars_held=t.bars_held,
+                fees=t.fees,
+                is_open=t.is_open,
+            )
+            for t in report.trades
+        ],
+        sortino=finite(report.sortino),
+        calmar=finite(report.calmar),
+        ulcer_index=finite(report.ulcer_index),
+        max_dd_duration_bars=report.max_dd_duration_bars,
+        var_95=finite(report.var_95),
+        es_95=finite(report.es_95),
+        skew=finite(report.skew),
+        kurtosis=finite(report.kurtosis),
+        fitness=finite(report.fitness),
+    )
 
 
 class LabService:
@@ -245,50 +574,14 @@ class LabService:
         return self._runner.submit(BACKTEST_JOB, request.model_dump(mode="json"))
 
     def run_backtest(self, request: BacktestRequest) -> BacktestResult:
-        interval = _parse_interval(request.interval)
-        strategy = self._strategies.resolve(request.strategy)
-        broker = SimulatedBroker(
-            portfolio=Portfolio(cash=request.initial_cash, positions={}),
-            slippage_bps=request.slippage_bps,
-            fee_per_trade=request.fee_per_trade,
-            cost_model=self._cost_model(request),
-        )
-        config = BacktestConfig(
-            start=request.start,
-            end=request.end,
-            universe=list(request.universe),
-            interval=interval,
-            threshold=request.threshold,
-            rebalance_every_bars=request.rebalance_every_bars,
-        )
-        with self._ctx.lake() as lake:
-            report = Backtester(
-                strategies=[strategy], broker=broker, lake=lake, config=config
-            ).run()
-        return BacktestResult(
-            strategy_id=report.strategy_id,
-            interval=interval.code,
-            start=request.start,
-            end=request.end,
-            final_return=finite(report.final_return),
-            sharpe=finite(report.sharpe),
-            max_drawdown=finite(report.max_drawdown),
-            cagr=finite(report.cagr),
-            profit_factor=finite(report.profit_factor),
-            equity=[
-                EquityPoint(timestamp=_as_datetime(ts), value=float(v))
-                for ts, v in zip(report.equity_dates, report.equity_curve, strict=True)
-            ],
-        )
+        return self.run_backtest_strategy(self._strategies.resolve(request.strategy), request)
 
-    def _cost_model(self, request: BacktestRequest) -> CostModel | None:
-        """A named preset, else flat slippage / fee when given, else the
-        configured ``[backtest.costs]`` (zero costs unless configured)."""
-        if request.cost_model is not None:
-            return _cost_settings(request.cost_model).build()
-        if request.slippage_bps or request.fee_per_trade:
-            return None
-        return self._ctx.settings.backtest.costs.build()
+    def run_backtest_strategy(self, strategy: Strategy, request: Any) -> BacktestResult:
+        """Backtest an already-built strategy (the Studio's code drafts) with
+        a request's window and :class:`BacktestOptions`."""
+        with self._ctx.lake() as lake:
+            report, interval = backtest_report(self._ctx.settings, strategy, request, lake)
+        return backtest_result(report, interval, request)
 
     def cost_models(self) -> list[CostModelPreset]:
         return [
@@ -315,83 +608,19 @@ class LabService:
         progress: JobContext | None = None,
         register: RegisterFn | None = None,
     ) -> LabRunView:
-        """The one lab-run code path (API, MCP and Strategy Studio): tunes
-        ``cls`` (``request.strategy`` is not resolved here), applies the
-        request's ``cost_model`` (else the configured ``[backtest.costs]``),
-        builds the suite from the survival-test registry, defaults
-        walk-forward options from ``[lab.walk_forward]`` and, with
-        ``progress``, honours cancellation between trials and survival
-        tests. ``register`` replaces the plain registry registration (e.g.
-        the studio links the draft too); with ``register_if_passes`` neither
-        runs on a failed verdict."""
-        interval = _parse_interval(request.interval)
-        tuner: Tuner = (
-            GridTuner(seed=request.seed) if request.tuner == "grid" else RandomTuner(request.seed)
-        )
-        objective: Objective = _OBJECTIVES[request.objective]()
-        tests: list[SurvivalTest] = [
-            build_survival_test(
-                name, _test_options(name, request, self._ctx.settings.lab.walk_forward)
-            )
-            for name in request.suite()
-        ]
-        if progress is not None:
-            objective = _CancellableObjective(objective, progress)
-            tests = [_CancellableTest(t, progress) for t in tests]
-        runner = LabRunner(
-            tuner=tuner,
-            objective=objective,
-            suite=SurvivalSuite(tests),
-            budget=request.budget,
-        )
-        if progress is not None:
-            progress.progress(0.05, "tuning")
-        with self._ctx.lake() as lake:
-            dataset = LabDataset(
+        """Run :func:`execute_lab_run` for ``cls`` (``request.strategy`` is
+        not resolved here) on this context's lake and state."""
+        with self._ctx.lake() as lake, self._ctx.state() as state:
+            execution = execute_lab_run(
+                self._ctx.settings,
+                cls,
+                request,
                 lake=lake,
-                universe=list(request.universe),
-                start=request.start,
-                end=request.end,
-                train_ratio=request.train_ratio,
-                interval=interval,
-                costs=(
-                    _cost_settings(request.cost_model)
-                    if request.cost_model is not None
-                    else self._ctx.settings.backtest.costs
-                ),
+                state=state,
+                progress=progress,
+                register=register,
             )
-            result = runner.run(cls, dataset)
-
-        registered: str | None = None
-        if request.register_if_passes and result.verdict != "pass":
-            _log.info("lab.not_registered", reason="verdict", verdict=result.verdict)
-        elif request.registers:
-            if progress is not None:
-                progress.progress(0.95, "registering")
-            if register is not None:
-                registered = register(result.strategy, list(result.survival_reports))
-            else:
-                with self._ctx.registry() as registry:
-                    registered = registry.register(result.strategy, result.survival_reports)
-            _log.info("lab.registered", strategy_id=registered, verdict=result.verdict)
-
-        strategy_cls = type(result.strategy)
-        return LabRunView(
-            class_path=f"{strategy_cls.__module__}:{strategy_cls.__name__}",
-            best_params=to_jsonable(result.best_params),
-            best_score=finite(result.best_score),
-            verdict=result.verdict,  # type: ignore[arg-type]
-            survival_reports=[
-                SurvivalReportView(
-                    test_id=r.test_id,
-                    passed=r.passed,
-                    metrics={k: finite(v) for k, v in dict(r.metrics).items()},
-                    notes=r.notes,
-                )
-                for r in result.survival_reports
-            ],
-            registered_strategy_id=registered,
-        )
+        return execution.view()
 
     # ---- job handlers ------------------------------------------------------
 
@@ -404,17 +633,35 @@ class LabService:
 
 class _CancellableObjective:
     """Objective wrapper that honours job cancellation before every trial
-    (including the re-tuning trials of walk-forward / MCPT)."""
+    (including the re-tuning trials of walk-forward / MCPT).
+
+    On the parallel tuning path the pool ships ``worker_objective`` (the
+    picklable inner objective) to the workers and runs ``checkpoint`` in
+    this process after each trial, so API lab runs tune in parallel and
+    stay cancellable."""
 
     def __init__(self, inner: Objective, ctx: JobContext) -> None:
         self._inner = inner
         self._ctx = ctx
         self.name = inner.name
         self.direction = inner.direction
+        if callable(getattr(inner, "evaluate", None)):
+            self.evaluate = self._evaluate
+
+    @property
+    def worker_objective(self) -> Objective:
+        return self._inner
+
+    def checkpoint(self) -> None:
+        self._ctx.check_cancelled()
 
     def score(self, strategy: Any, dataset: Any) -> float:
         self._ctx.check_cancelled()
         return self._inner.score(strategy, dataset)
+
+    def _evaluate(self, strategy: Any, dataset: Any) -> Any:
+        self._ctx.check_cancelled()
+        return self._inner.evaluate(strategy, dataset)  # type: ignore[attr-defined]
 
 
 class _CancellableTest:
@@ -435,7 +682,7 @@ class _CancellableTest:
 
 
 def _test_options(
-    name: str, request: LabRunRequest, walk_forward_default: WalkForwardConfig
+    name: str, request: LabRunOptions, walk_forward_default: WalkForwardConfig
 ) -> dict[str, Any] | None:
     """Registry options for test ``name``: request options win; walk-forward
     otherwise uses ``[lab.walk_forward]``; other tests use their defaults."""
@@ -444,6 +691,24 @@ def _test_options(
     if name == "mcpt" and request.mcpt is not None:
         return request.mcpt.model_dump()
     return None
+
+
+def _backtest_cost_model(settings: Any, request: Any) -> CostModel | None:
+    """A named preset, else flat slippage / fee when given (``None``: the
+    broker charges those), else the configured ``[backtest.costs]``."""
+    if request.cost_model is not None:
+        return _cost_settings(request.cost_model).build()
+    if request.slippage_bps or request.fee_per_trade:
+        return None
+    return settings.backtest.costs.build()
+
+
+def _backtest_costs_zero(settings: Any, request: Any) -> bool:
+    if request.cost_model is not None:
+        return costs_are_zero(_cost_settings(request.cost_model))
+    if request.slippage_bps or request.fee_per_trade:
+        return False
+    return costs_are_zero(settings.backtest.costs)
 
 
 def _cost_settings(option: CostModelName | CostModelSettings) -> CostModelSettings:

@@ -304,6 +304,13 @@ def test_health_report(client):
     assert body["checked_at"]
 
 
+def test_health_report_exposes_its_thresholds(client, settings):
+    """Roadmap 11.6: the report says which limits it judged against."""
+    thresholds = client.get("/api/health/report").json()["thresholds"]
+    assert thresholds == settings.production.health.model_dump()
+    assert thresholds["max_bar_age_days"] == 4
+
+
 # ---- brokers --------------------------------------------------------------------
 
 
@@ -405,7 +412,9 @@ def test_backtest_with_cost_model_preset_costs_more(client):
         assert _wait_job(client, job["id"])["status"] == "succeeded"
         return client.get(f"/api/lab/backtests/{job['id']}/result").json()["final_return"]
 
-    assert final_return({"cost_model": "realistic"}) < final_return({})
+    assert final_return({"cost_model": "realistic"}) < final_return({"cost_model": "zero"})
+    # BL-13: without a cost model the configured (realistic by default) costs apply
+    assert final_return({}) == final_return({"cost_model": "realistic"})
     bad = client.post(
         "/api/lab/backtests",
         json={**_backtest_body(), "cost_model": "realistic", "slippage_bps": 5},

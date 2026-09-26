@@ -61,17 +61,27 @@ def status_change_preview(strategy: dict[str, Any], new_status: str) -> dict[str
 
 
 def lab_registration_preview(request: dict[str, Any]) -> dict[str, Any]:
-    """Preview of a lab run with ``register_strategy=true``: nothing queued."""
+    """Preview of a lab run that registers its result (``register_strategy``
+    or ``register_if_passes``): nothing queued."""
+    if request.get("register_if_passes"):
+        flag = "register_if_passes"
+        warning = (
+            "register_if_passes=true registers the tuned strategy in shadow (virtual "
+            "portfolio, never traded until promoted) only if every survival test passes"
+        )
+    else:
+        flag = "register_strategy"
+        warning = (
+            "register_strategy=true registers the tuned strategy in shadow (virtual "
+            "portfolio, never traded until promoted), whatever the verdict"
+        )
     return {
         "preview": True,
         "applied": False,
         "request": request,
-        "warnings": [
-            "register_strategy=true registers the tuned strategy in shadow (virtual "
-            "portfolio, never traded until promoted), whatever the verdict"
-        ],
+        "warnings": [warning],
         "next_step": "Nothing was queued. Call again with confirm=true to run and register, "
-        "or with register_strategy=false to run only.",
+        f"or with {flag}=false to run only.",
     }
 
 

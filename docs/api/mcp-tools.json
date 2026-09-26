@@ -21,6 +21,23 @@
       "description": "Queue a backtest of a draft. Returns the job; wait_for_job gives the\nBacktestResult. Simulated only: never places real orders.",
       "input_schema": {
         "properties": {
+          "cost_model": {
+            "anyOf": [
+              {
+                "enum": [
+                  "zero",
+                  "realistic"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "transaction-cost preset (see list_cost_models); default [backtest.costs]",
+            "title": "Cost Model"
+          },
           "draft_id": {
             "title": "Draft Id",
             "type": "string"
@@ -163,7 +180,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Move a registered draft's strategy back to shadow (stops trading it).\nWithout confirm=true returns a preview and changes nothing.",
+      "description": "Move a registered draft's strategy back to shadow (stops trading it).\nNeeds a reason. Without confirm=true returns a preview and changes nothing.",
       "input_schema": {
         "properties": {
           "confirm": {
@@ -175,6 +192,20 @@
           "draft_id": {
             "title": "Draft Id",
             "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "why (logged in the audit trail); required for demotions and overrides",
+            "title": "Reason"
           }
         },
         "required": [
@@ -193,7 +224,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Promote a registered draft's strategy to active so production ticks rank\nand trade it. Without confirm=true returns a preview (survival results,\nwarnings) and changes nothing.",
+      "description": "Promote a registered draft's strategy to active so production ticks rank\nand trade it. Same go-live gate as promote_strategy (override=true needs a\nreason of at least 20 characters). Without confirm=true returns a preview\n(survival results, warnings) and changes nothing.",
       "input_schema": {
         "properties": {
           "confirm": {
@@ -205,6 +236,26 @@
           "draft_id": {
             "title": "Draft Id",
             "type": "string"
+          },
+          "override": {
+            "default": false,
+            "description": "promote without a passing go-live check; needs a reason of at least 20 characters",
+            "title": "Override",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "why (logged in the audit trail); required for demotions and overrides",
+            "title": "Reason"
           }
         },
         "required": [
@@ -606,6 +657,30 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "A strategy's audited status changes (actor, reason, override, go-live\nresult), oldest first.",
+      "input_schema": {
+        "properties": {
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_id"
+        ],
+        "title": "get_strategy_historyArguments",
+        "type": "object"
+      },
+      "name": "get_strategy_history",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "One production tick run with the orders it placed.",
       "input_schema": {
         "properties": {
@@ -646,7 +721,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Queue tune -> fit -> survival suite for a draft (a rule draft's spec\nis fixed; a code draft is tuned). Returns the job; wait_for_job gives\nthe verdict and survival reports. With register_strategy=true it needs\nconfirm=true (preview otherwise), like register_draft.",
+      "description": "Queue tune -> fit -> survival suite for a draft (a rule draft's spec\nis fixed; a code draft is tuned). Returns the job; wait_for_job gives\nthe verdict and survival reports. Registering (register_strategy, or\nregister_if_passes for a passing run only) needs confirm=true\n(preview otherwise), like register_draft.",
       "input_schema": {
         "properties": {
           "budget": {
@@ -659,9 +734,26 @@
           },
           "confirm": {
             "default": false,
-            "description": "must be true with register_strategy=true; otherwise a preview",
+            "description": "must be true with register_strategy / register_if_passes; otherwise a preview",
             "title": "Confirm",
             "type": "boolean"
+          },
+          "cost_model": {
+            "anyOf": [
+              {
+                "enum": [
+                  "zero",
+                  "realistic"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "transaction-cost preset (see list_cost_models); default [backtest.costs]",
+            "title": "Cost Model"
           },
           "draft_id": {
             "title": "Draft Id",
@@ -672,6 +764,20 @@
             "format": "date",
             "title": "End",
             "type": "string"
+          },
+          "hypothesis": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "the edge and who pays for it; recorded before tuning (trial ledger)",
+            "title": "Hypothesis"
           },
           "interval": {
             "default": "1d",
@@ -688,9 +794,47 @@
             "title": "Objective",
             "type": "string"
           },
+          "premortem": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "how the strategy is expected to fail; recorded",
+            "title": "Premortem"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "enum": [
+                  "quick",
+                  "standard",
+                  "promotion"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "named survival suite when survival_tests is omitted (default: promotion when registering, else quick)",
+            "title": "Preset"
+          },
+          "register_if_passes": {
+            "default": false,
+            "description": "register the result in shadow only if every survival test passes (needs confirm=true)",
+            "title": "Register If Passes",
+            "type": "boolean"
+          },
           "register_strategy": {
             "default": false,
-            "description": "register the result in shadow status (needs confirm=true)",
+            "description": "register the result in shadow status whatever the verdict (needs confirm=true)",
             "title": "Register Strategy",
             "type": "boolean"
           },
@@ -1255,7 +1399,7 @@
         "open_world": false,
         "read_only": true
       },
-      "description": "Registered strategies (id, class, params, status), optionally by status.",
+      "description": "Registered strategies (id, class, params, status), optionally by status\nor a search term.",
       "input_schema": {
         "properties": {
           "limit": {
@@ -1272,6 +1416,19 @@
             "minimum": 0,
             "title": "Offset",
             "type": "integer"
+          },
+          "q": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "case-insensitive substring of the id or class path",
+            "title": "Q"
           },
           "status": {
             "anyOf": [
@@ -1364,7 +1521,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Promote a strategy to active so production ticks rank and trade it.\nWithout confirm=true returns a preview (current status, survival\nresults, warnings) and changes nothing.",
+      "description": "Promote a strategy to active so production ticks rank and trade it.\nNeeds a passing go-live check, or override=true with a reason of at\nleast 20 characters; the change is audited. Without confirm=true\nreturns a preview (current status, survival results, warnings) and\nchanges nothing.",
       "input_schema": {
         "properties": {
           "confirm": {
@@ -1372,6 +1529,26 @@
             "description": "must be true to apply; false (default) returns a preview only",
             "title": "Confirm",
             "type": "boolean"
+          },
+          "override": {
+            "default": false,
+            "description": "promote without a passing go-live check; needs a reason of at least 20 characters",
+            "title": "Override",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "why (logged in the audit trail); required for demotions and overrides",
+            "title": "Reason"
           },
           "strategy_id": {
             "title": "Strategy Id",
@@ -1424,7 +1601,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Retire a strategy: it stops being ranked or evaluated.\nWithout confirm=true returns a preview and changes nothing.",
+      "description": "Retire a strategy: it stops being ranked or evaluated.\nNeeds a reason. Without confirm=true returns a preview and changes nothing.",
       "input_schema": {
         "properties": {
           "confirm": {
@@ -1432,6 +1609,20 @@
             "description": "must be true to apply; false (default) returns a preview only",
             "title": "Confirm",
             "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "why (logged in the audit trail); required for demotions and overrides",
+            "title": "Reason"
           },
           "strategy_id": {
             "title": "Strategy Id",
@@ -1688,7 +1879,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Queue a lab run: tune a strategy class, fit, run the survival suite and\ngive a pass/fail verdict. Returns the job; use wait_for_job for the result.\nWith register_strategy=true it needs confirm=true (preview otherwise).",
+      "description": "Queue a lab run: tune a strategy class, fit, run the survival suite and\ngive a pass/fail verdict. Returns the job; use wait_for_job for the result.\nEvery run and trial is recorded in the trial ledger (with the hypothesis).\nRegistering (register_strategy, or register_if_passes to register only a\npassing run) needs confirm=true (preview otherwise).",
       "input_schema": {
         "$defs": {
           "McptOptions": {
@@ -1889,15 +2080,46 @@
           },
           "confirm": {
             "default": false,
-            "description": "must be true with register_strategy=true; otherwise a preview",
+            "description": "must be true with register_strategy / register_if_passes; otherwise a preview",
             "title": "Confirm",
             "type": "boolean"
+          },
+          "cost_model": {
+            "anyOf": [
+              {
+                "enum": [
+                  "zero",
+                  "realistic"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "transaction-cost preset (see list_cost_models); default [backtest.costs]",
+            "title": "Cost Model"
           },
           "end": {
             "description": "YYYY-MM-DD",
             "format": "date",
             "title": "End",
             "type": "string"
+          },
+          "hypothesis": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "the edge and who pays for it; recorded before tuning (trial ledger)",
+            "title": "Hypothesis"
           },
           "interval": {
             "default": "1d",
@@ -1926,9 +2148,47 @@
             "title": "Objective",
             "type": "string"
           },
+          "premortem": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "how the strategy is expected to fail; recorded",
+            "title": "Premortem"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "enum": [
+                  "quick",
+                  "standard",
+                  "promotion"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "named survival suite when survival_tests is omitted (default: promotion when registering, else quick)",
+            "title": "Preset"
+          },
+          "register_if_passes": {
+            "default": false,
+            "description": "register the result in shadow only if every survival test passes (needs confirm=true)",
+            "title": "Register If Passes",
+            "type": "boolean"
+          },
           "register_strategy": {
             "default": false,
-            "description": "register the result in shadow status (needs confirm=true)",
+            "description": "register the result in shadow status whatever the verdict (needs confirm=true)",
             "title": "Register Strategy",
             "type": "boolean"
           },
@@ -2165,7 +2425,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Move a strategy to shadow: evaluated on a virtual portfolio, never traded.\nWithout confirm=true returns a preview and changes nothing.",
+      "description": "Move a strategy to shadow: evaluated on a virtual portfolio, never traded.\nNeeds a reason. Without confirm=true returns a preview and changes nothing.",
       "input_schema": {
         "properties": {
           "confirm": {
@@ -2173,6 +2433,20 @@
             "description": "must be true to apply; false (default) returns a preview only",
             "title": "Confirm",
             "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "why (logged in the audit trail); required for demotions and overrides",
+            "title": "Reason"
           },
           "strategy_id": {
             "title": "Strategy Id",

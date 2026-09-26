@@ -13,7 +13,7 @@ from stonks.app.context import AppContext
 from stonks.app.errors import NotFoundError
 from stonks.app.pagination import Page
 from stonks.app.serialize import finite
-from stonks.config import RiskPolicy
+from stonks.config import HealthConfig, RiskPolicy
 from stonks.production.health import check_health
 from stonks.production.pnl import PnlRow, load_pnl
 
@@ -75,6 +75,8 @@ class HealthReportView(BaseModel):
     healthy: bool
     checked_at: datetime
     checks: list[HealthCheckView]
+    #: The ``[production.health]`` limits the checks were judged against.
+    thresholds: HealthConfig
 
 
 class OperationsService:
@@ -99,6 +101,7 @@ class OperationsService:
             healthy=report.healthy,
             checked_at=report.checked_at,
             checks=[HealthCheckView(name=c.name, ok=c.ok, detail=c.detail) for c in report.checks],
+            thresholds=p.health.model_copy(),
         )
 
     # ---- P&L ---------------------------------------------------------------

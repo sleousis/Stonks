@@ -24,6 +24,7 @@ from stonks.mcp.tools.common import (
     Ticker,
     ToolContext,
     iso,
+    items,
     register_route_reads,
     seg,
 )
@@ -73,15 +74,29 @@ def register(t: ToolContext) -> None:
 
     @server.tool(annotations=READ)
     async def list_strategies(
-        status: StrategyStatus | None = None, limit: Limit = 50, offset: Offset = 0
+        status: StrategyStatus | None = None,
+        q: Annotated[
+            str | None, Field(description="case-insensitive substring of the id or class path")
+        ] = None,
+        limit: Limit = 50,
+        offset: Offset = 0,
     ) -> dict[str, Any]:
-        """Registered strategies (id, class, params, status), optionally by status."""
-        return await t.get("/api/strategies", {"status": status, "limit": limit, "offset": offset})
+        """Registered strategies (id, class, params, status), optionally by status
+        or a search term."""
+        return await t.get(
+            "/api/strategies", {"status": status, "q": q, "limit": limit, "offset": offset}
+        )
 
     @server.tool(annotations=READ)
     async def get_strategy(strategy_id: str) -> dict[str, Any]:
         """One registered strategy with its survival-test reports (pass/fail and metrics)."""
         return await t.get(f"/api/strategies/{seg(strategy_id)}")
+
+    @server.tool(annotations=READ)
+    async def get_strategy_history(strategy_id: str) -> dict[str, Any]:
+        """A strategy's audited status changes (actor, reason, override, go-live
+        result), oldest first."""
+        return items(await t.get(f"/api/strategies/{seg(strategy_id)}/history"))
 
     @server.tool(annotations=READ)
     async def search_instruments(

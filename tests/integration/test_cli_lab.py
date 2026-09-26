@@ -76,9 +76,11 @@ def test_lab_run_tunes_and_reports_a_verdict(runner, lab_env):
     doc = _result(out)
     assert doc["strategy"] == "stonks.strategies.examples.momentum:Momentum"
     assert set(doc["best_params"]) >= {"lookback_days", "threshold", "allocation"}
-    assert [rep["test_id"] for rep in doc["survival_reports"]] == ["oos"]
+    # no --tests / --preset: the registry's "quick" preset
+    assert [rep["test_id"] for rep in doc["survival_reports"]] == ["oos", "period_stability"]
     assert doc["verdict"] in ("pass", "fail")
     assert doc["registered_id"] is None
+    assert doc["run_id"] and doc["n_trials_run"] == 4
 
 
 def test_params_pin_values_and_walk_forward_defaults_come_from_config(runner, lab_env):
@@ -168,6 +170,8 @@ def test_register_puts_a_passing_wrapped_strategy_in_shadow(runner, lab_env, mon
         *UNIVERSE,
         *WINDOW,
         *FAST,
+        "--tests",
+        "oos",
         "--register",
     )
     assert r.exit_code == 0, r.output
@@ -189,7 +193,9 @@ def test_register_skips_a_failing_strategy(runner, lab_env):
         *UNIVERSE,
         *WINDOW,
         *FAST,
-        "--register",
+        "--tests",
+        "oos",
+        "--register-if-passes",
     )
     assert r.exit_code == 0, r.output
     assert "fail" in r.output
@@ -206,9 +212,138 @@ def test_register_skips_a_failing_strategy(runner, lab_env):
         (["momentum", *WINDOW], "--tickers"),
         (["momentum", *UNIVERSE, *WINDOW, "--tuner", "bayes"], "--tuner"),
         (["momentum", *UNIVERSE, *WINDOW, "--mcpt", "--mcpt-retune"], "--mcpt"),
+        (["momentum", *UNIVERSE, *WINDOW, "--tests", "bogus"], "unknown tests"),
+        (["momentum", *UNIVERSE, *WINDOW, "--preset", "huge"], "--preset"),
+        (["momentum", *UNIVERSE, *WINDOW, "--cost-model", "free"], "--cost-model"),
     ],
 )
 def test_bad_input_is_a_usage_error(runner, lab_env, args, needle):
     r = runner.invoke(app, ["lab", "run", *args])
     assert r.exit_code == 2, r.output
     assert needle in r.output
+
+
+# ---- Integration 1: ledger, presets, workers, costs --------------------------
+
+
+def _lab_runs(env):
+    with SqliteState(env / "data" / "state.sqlite") as state:
+        return state.sql("SELECT * FROM lab_runs ORDER BY started_at")
+
+
+def test_hypothesis_and_premortem_are_pre_registered(runner, lab_env):
+    out = lab_env / "result.json"
+    r = _run(
+        runner,
+        "momentum",
+        *UNIVERSE,
+        *WINDOW,
+        *FAST,
+        "--tests",
+        "oos",
+        "--hypothesis",
+        "trend persists",
+        "--premortem",
+        "chop",
+        "--json-out",
+        str(out),
+    )
+    assert r.exit_code == 0, r.output
+    (run,) = _lab_runs(lab_env)
+    assert run["id"] == _result(out)["run_id"]
+    assert (run["hypothesis"], run["premortem"]) == ("trend persists", "chop")
+    assert run["verdict"] in ("pass", "fail")
+
+
+def test_preset_selects_the_registry_suite(runner, lab_env):
+    from stonks.lab.survival.registry import resolve_preset
+
+    out = lab_env / "result.json"
+    r = _run(
+        runner,
+        "momentum",
+        *UNIVERSE,
+        *WINDOW,
+        *FAST,
+        "--preset",
+        "standard",
+        "--json-out",
+        str(out),
+    )
+    assert r.exit_code == 0, r.output
+    ids = [rep["test_id"] for rep in _result(out)["survival_reports"]]
+    assert ids == resolve_preset("standard")
+
+
+def test_workers_do_not_change_the_result(runner, lab_env):
+    docs = []
+    for workers in ("1", "2"):
+        out = lab_env / f"result_{workers}.json"
+        r = _run(
+            runner,
+            "momentum",
+            *UNIVERSE,
+            *WINDOW,
+            *FAST,
+            "--tests",
+            "oos",
+            "--workers",
+            workers,
+            "--json-out",
+            str(out),
+        )
+        assert r.exit_code == 0, r.output
+        docs.append(_result(out))
+    one, two = docs
+    assert one["best_params"] == two["best_params"]
+    assert one["best_score"] == two["best_score"]
+    assert one["survival_reports"] == two["survival_reports"]
+
+
+def test_registered_strategy_meta_has_lab_provenance(runner, lab_env):
+    params = {"ticker": "UP.US"}
+    r = _run(
+        runner,
+        "buy_and_hold",
+        "--params",
+        json.dumps(params),
+        *UNIVERSE,
+        *WINDOW,
+        *FAST,
+        "--tests",
+        "oos",
+        "--register-if-passes",
+        "--hypothesis",
+        "drift up",
+    )
+    assert r.exit_code == 0, r.output
+    ((handle, _),) = _registered(lab_env)
+    meta = json.loads((handle.artifact_path / "meta.json").read_text())
+    (run,) = _lab_runs(lab_env)
+    assert meta["lab_run_id"] == run["id"]
+    assert meta["hypothesis"] == "drift up"
+
+
+def test_cost_model_zero_differs_from_the_realistic_default(runner, lab_env):
+    scores = {}
+    for model in ("zero", "config"):
+        out = lab_env / f"{model}.json"
+        r = _run(
+            runner,
+            "momentum",
+            *UNIVERSE,
+            *WINDOW,
+            *FAST,
+            "--tests",
+            "oos",
+            "--cost-model",
+            model,
+            "--json-out",
+            str(out),
+        )
+        assert r.exit_code == 0, r.output
+        scores[model] = _result(out)["best_score"]
+    assert scores["zero"] != scores["config"]
+    runs = _lab_runs(lab_env)
+    costs = [json.loads(r["manifest_json"])["costs"] for r in runs]
+    assert costs[0] != costs[1]
