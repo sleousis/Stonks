@@ -23,6 +23,7 @@ follows its asset class's calendar.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable
 from dataclasses import dataclass
 
@@ -41,7 +42,9 @@ class TradingCalendar:
     def periods_per_year(self, interval: Interval) -> float:
         """Bars of ``interval`` in one year on this calendar.
 
-        - intraday: ``sessions * max(1, session / interval)`` — bars longer
+        - intraday: ``sessions * max(1, ceil(session / interval))``: a
+          6.5 hour session prints 7 hourly bars and 2 four-hour bars (the
+          last bar covers the rest of the session, RS-16), and bars longer
           than the session still count once per session
         - day multiples: ``sessions / days``
         - weeks ``52 / n``, months ``12 / n``, years ``1 / n`` on every
@@ -49,7 +52,8 @@ class TradingCalendar:
         """
         unit, amount = interval.unit, interval.amount
         if interval.is_intraday:
-            return self.sessions_per_year * max(1.0, self.session_seconds / interval.seconds)
+            bars = math.ceil(round(self.session_seconds / interval.seconds, 9))
+            return self.sessions_per_year * max(1, bars)
         if unit == "d":
             return self.sessions_per_year / amount
         if unit == "w":
