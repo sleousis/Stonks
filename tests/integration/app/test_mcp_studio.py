@@ -79,6 +79,21 @@ async def test_draft_crud_and_validate(mcp):
 
 
 @pytest.mark.anyio
+async def test_lab_run_draft_registering_needs_confirm(mcp):
+    """register_strategy=true registers like register_draft, so it is guarded too."""
+    draft = await _draft(mcp)
+    args = {"draft_id": draft["id"], **WINDOW, "budget": 1, "survival_tests": ["oos"]}
+    preview = await call(mcp, "lab_run_draft", {**args, "register_strategy": True})
+    assert preview["preview"] is True and preview["applied"] is False
+    assert "confirm=true" in preview["next_step"]
+    assert (await call(mcp, "list_jobs"))["total"] == 0
+
+    out = await call(mcp, "lab_run_draft", {**args, "register_strategy": True, "confirm": True})
+    done = await _wait(mcp, out["job"])
+    assert done["result"]["registered_strategy_id"]
+
+
+@pytest.mark.anyio
 async def test_backtest_and_lab_run_a_draft(mcp):
     draft = await _draft(mcp)
     job = await call(mcp, "backtest_draft", {"draft_id": draft["id"], **WINDOW})

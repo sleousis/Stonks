@@ -16,6 +16,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from stonks.mcp.client import ApiClient, ApiError, segment
+from stonks.mcp.guards import lab_registration_preview
 
 # --- annotations --------------------------------------------------------------
 
@@ -67,6 +68,15 @@ SurvivalTestName = Literal[
     "oos", "period_stability", "perturbation", "drift", "runs_test", "permutation", "walk_forward"
 ]
 
+
+RegisterStrategy = Annotated[
+    bool,
+    Field(description="register the result in shadow status (needs confirm=true)"),
+]
+RegisterConfirm = Annotated[
+    bool,
+    Field(description="must be true with register_strategy=true; otherwise a preview"),
+]
 
 #: HTTP status -> explanation prefixed to the API's error message.
 Hints = Mapping[int, str]
@@ -127,6 +137,20 @@ class ToolContext:
 
     async def patch(self, path: str, body: dict[str, Any], *, hints: Hints | None = None) -> Any:
         return await self.call(self.api.patch(path, body), hints)
+
+
+async def queue_lab_run(
+    t: ToolContext, path: str, body: dict[str, Any], confirm: bool, hints: Hints | None = None
+) -> dict[str, Any]:
+    """POST a lab run. Registering the result is a guarded write: with
+    ``register_strategy`` and no ``confirm`` it returns a preview and
+    queues nothing; confirmed, it returns ``{"applied": True, "job": ...}``."""
+    if not body.get("register_strategy"):
+        return await t.post(path, body, hints=hints)
+    if not confirm:
+        return lab_registration_preview(body)
+    job = await t.post(path, body, hints=hints)
+    return {"preview": False, "applied": True, "job": job}
 
 
 # --- declarative parameterless reads ------------------------------------------------

@@ -16,12 +16,15 @@ from stonks.mcp.tools.common import (
     READ,
     IsoDate,
     ObjectiveName,
+    RegisterConfirm,
+    RegisterStrategy,
     SurvivalTestName,
     Tickers,
     ToolContext,
     TunerName,
     drop_none,
     iso,
+    queue_lab_run,
     seg,
 )
 
@@ -157,9 +160,8 @@ def register(t: ToolContext) -> None:
         train_ratio: Annotated[float, Field(gt=0, lt=1)] = 0.7,
         interval: str = "1d",
         seed: int = 0,
-        register_strategy: Annotated[
-            bool, Field(description="register the tuned strategy (lands in shadow status)")
-        ] = False,
+        register_strategy: RegisterStrategy = False,
+        confirm: RegisterConfirm = False,
         walk_forward: Annotated[
             WalkForwardOptions | None,
             Field(description="walk_forward test settings; add 'walk_forward' to survival_tests"),
@@ -170,7 +172,8 @@ def register(t: ToolContext) -> None:
         ] = None,
     ) -> dict[str, Any]:
         """Queue a lab run: tune a strategy class, fit, run the survival suite and
-        give a pass/fail verdict. Returns the job; use wait_for_job for the result."""
+        give a pass/fail verdict. Returns the job; use wait_for_job for the result.
+        With register_strategy=true it needs confirm=true (preview otherwise)."""
         body = drop_none(
             {
                 "strategy": {"class_path": class_path},
@@ -189,7 +192,7 @@ def register(t: ToolContext) -> None:
                 "mcpt": mcpt.body() if mcpt else None,
             }
         )
-        return await t.post("/api/lab/runs", body)
+        return await queue_lab_run(t, "/api/lab/runs", body, confirm)
 
     @server.tool(annotations=JOB_OPEN_WORLD)
     async def run_ingest(

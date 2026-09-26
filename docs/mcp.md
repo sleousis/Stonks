@@ -120,6 +120,10 @@ never orders):
 | `validate_draft` (smoke run; a code draft's Python runs in the API) | `POST /api/studio/drafts/{id}/validate` |
 | `backtest_draft`, `lab_run_draft` | `POST /api/studio/drafts/{id}/backtests`, `/lab-runs` |
 
+`run_lab` and `lab_run_draft` with `register_strategy: true` register the
+result in shadow (whatever the verdict), so like `register_draft` they need
+`confirm: true`; without it they return a preview and queue nothing.
+
 **Draft edit** (destructive, idempotent; no confirm, since a draft is never
 traded): `update_draft` (`PATCH /api/studio/drafts/{id}`, only the fields
 given).

@@ -401,6 +401,20 @@ async def test_lab_walk_forward_and_mcpt_options(mcp):
 
 
 @pytest.mark.anyio
+async def test_lab_registering_needs_confirm(mcp):
+    args = {**LAB_ARGS, "survival_tests": ["oos"], "register_strategy": True}
+    preview = await call(mcp, "run_lab", args)
+    assert preview["preview"] is True and preview["applied"] is False
+    assert preview["request"]["register_strategy"] is True
+    assert (await call(mcp, "list_jobs"))["total"] == 0
+
+    out = await call(mcp, "run_lab", {**args, "confirm": True})
+    done = await call(mcp, "wait_for_job", {"job_id": out["job"]["id"], "poll_seconds": 0.05})
+    assert done["job"]["status"] == "succeeded", done["job"]["error"]
+    assert done["result"]["registered_strategy_id"]
+
+
+@pytest.mark.anyio
 async def test_lab_options_need_their_test(mcp):
     err = await call_error(
         mcp, "run_lab", {**LAB_ARGS, "survival_tests": ["oos"], "mcpt": {"n_permutations": 2}}

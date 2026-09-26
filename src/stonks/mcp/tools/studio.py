@@ -25,6 +25,8 @@ from stonks.mcp.tools.common import (
     Limit,
     ObjectiveName,
     Offset,
+    RegisterConfirm,
+    RegisterStrategy,
     RouteRead,
     SurvivalTestName,
     Tickers,
@@ -32,6 +34,7 @@ from stonks.mcp.tools.common import (
     TunerName,
     drop_none,
     iso,
+    queue_lab_run,
     register_route_reads,
     seg,
 )
@@ -176,13 +179,13 @@ def register(t: ToolContext) -> None:
         train_ratio: Annotated[float, Field(gt=0, lt=1)] = 0.7,
         interval: str = "1d",
         seed: int = 0,
-        register_strategy: Annotated[
-            bool, Field(description="register the result (lands in shadow status)")
-        ] = False,
+        register_strategy: RegisterStrategy = False,
+        confirm: RegisterConfirm = False,
     ) -> dict[str, Any]:
         """Queue tune -> fit -> survival suite for a draft (a rule draft's spec
         is fixed; a code draft is tuned). Returns the job; wait_for_job gives
-        the verdict and survival reports."""
+        the verdict and survival reports. With register_strategy=true it needs
+        confirm=true (preview otherwise), like register_draft."""
         body = drop_none(
             {
                 "universe": universe,
@@ -198,7 +201,7 @@ def register(t: ToolContext) -> None:
                 "register_strategy": register_strategy,
             }
         )
-        return await t.post(draft_path(draft_id, "lab-runs"), body, hints=HINTS)
+        return await queue_lab_run(t, draft_path(draft_id, "lab-runs"), body, confirm, HINTS)
 
     async def guarded(draft_id: str, action: str, confirm: bool) -> dict[str, Any]:
         draft = await t.get(draft_path(draft_id), hints=HINTS)

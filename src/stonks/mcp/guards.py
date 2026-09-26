@@ -60,6 +60,21 @@ def status_change_preview(strategy: dict[str, Any], new_status: str) -> dict[str
     }
 
 
+def lab_registration_preview(request: dict[str, Any]) -> dict[str, Any]:
+    """Preview of a lab run with ``register_strategy=true``: nothing queued."""
+    return {
+        "preview": True,
+        "applied": False,
+        "request": request,
+        "warnings": [
+            "register_strategy=true registers the tuned strategy in shadow (virtual "
+            "portfolio, never traded until promoted), whatever the verdict"
+        ],
+        "next_step": "Nothing was queued. Call again with confirm=true to run and register, "
+        "or with register_strategy=false to run only.",
+    }
+
+
 DraftAction = Literal["register", "enable", "disable"]
 
 #: Registry status each Studio draft action leads to.
