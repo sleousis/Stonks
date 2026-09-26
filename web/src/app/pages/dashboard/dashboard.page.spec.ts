@@ -305,7 +305,7 @@ describe('DashboardPage', () => {
     });
     await flushAll();
     const names = [...el.querySelectorAll('.check-name')].map((p) => p.textContent?.trim());
-    expect(names).toEqual(['Stuck ticks', 'Freshness of AAPL.US']);
+    expect(names).toEqual(['Stuck trading runs', 'Freshness of AAPL.US']);
   });
 
   it('shows when it last updated and reloads when a trading run ends', async () => {
