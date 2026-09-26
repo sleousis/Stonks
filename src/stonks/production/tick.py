@@ -134,6 +134,9 @@ _log = get_logger("stonks.production.tick")
 #: broker trades that object in memory; an external one ignores it).
 BrokerFactory = Callable[[Portfolio], Broker]
 
+#: Quantities closer than this are equal (a fill of the whole order).
+_QTY_EPSILON = 1e-9
+
 #: Bars of daily history the volatility-aware constructors read.
 _VOL_HISTORY_BARS = 260
 
@@ -341,21 +344,34 @@ def run_tick(
         )
         raise
     if result.status == "partial":
-        _safe_notify(
-            notifier,
-            Notification(
-                level="warning",
-                title="tick partially failed",
-                message="one or more orders raised at the broker; see logs",
-                fields={
-                    "tick_id": tick_id,
-                    "as_of": as_of.isoformat(),
-                    "status": result.status,
-                },
-            ),
-            log,
-        )
+        _safe_notify(notifier, _partial_notification(result, as_of), log)
     return result
+
+
+def _partial_notification(result: TickResult, as_of: date) -> Notification:
+    """The operator alert of a partial tick: the books that failed with
+    their errors (TO-12), and those whose orders raised at the broker."""
+    failed = {
+        b.portfolio_id: f"{b.summary.get('error_type', 'Error')}: {b.summary.get('error', '')}"
+        for b in result.portfolios
+        if b.status == "error"
+    }
+    raised = [b.portfolio_id for b in result.portfolios if b.status == "partial"]
+    parts = [f"book {pid} failed: {err}" for pid, err in failed.items()]
+    if raised or not failed:
+        parts.append("one or more orders raised at the broker; see logs")
+    fields: dict[str, Any] = {
+        "tick_id": result.tick_id,
+        "as_of": as_of.isoformat(),
+        "status": result.status,
+    }
+    if failed:
+        fields["failed_portfolios"] = failed
+    if raised:
+        fields["broker_errors_in"] = raised
+    return Notification(
+        level="warning", title="tick partially failed", message="; ".join(parts), fields=fields
+    )
 
 
 # ---- the tick ----------------------------------------------------------------
@@ -886,6 +902,8 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     # recorded without the snapshot that reflects them. External: see
     # ``place_external``.
     outcomes: list[tuple[Order, OrderStatus, Fill | None]] = []
+    #: ``status_reason`` per client id (simulated partial fills).
+    reasons: dict[str, str] = {}
 
     def place_external(order: Order) -> None:
         """The order row is committed as 'pending' *before* the broker sees
@@ -948,6 +966,12 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                 log.warning("tick.order.failed", ticker=order.ticker, error=str(exc))
                 continue
             placed += 1
+            if fill is not None and fill.quantity < order.quantity - _QTY_EPSILON:
+                # scaled down to cash (or volume): the row records what traded (TO-11)
+                reasons[order.client_id] = (
+                    f"filled {fill.quantity:g} of {order.quantity:g} requested"
+                )
+                order = replace(order, quantity=fill.quantity)
             outcomes.append((order, "filled" if fill else "rejected", fill))
             if fill is not None:
                 fills_count += 1
@@ -1006,7 +1030,13 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     elif not dry_run:
         with state.transaction():
             for order, order_status, fill in outcomes:
-                _record_order(state, order, status=order_status, portfolio_id=scope)
+                _record_order(
+                    state,
+                    order,
+                    status=order_status,
+                    reason=reasons.get(order.client_id or ""),
+                    portfolio_id=scope,
+                )
                 if fill is not None:
                     _record_fill(
                         state, fill, portfolio_id=scope, arrival_price=_arrival(broker, fill)

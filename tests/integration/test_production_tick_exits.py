@@ -7,6 +7,7 @@ from datetime import date
 
 import pytest
 
+from stonks.config import RiskPolicy
 from stonks.core.protocols import SurvivalReport
 from stonks.core.types import Order
 from stonks.production.tick import TickSettings, run_tick
@@ -310,3 +311,37 @@ def test_a_tick_with_the_due_bar_buys(env):
     result = run_tick(state, lake, registry, settings, as_of=date(2026, 4, 1))
     rows = state.sql("SELECT ticker, side FROM orders WHERE tick_id = ?", [result.tick_id])
     assert [(r["ticker"], r["side"]) for r in rows] == [("UP.US", "buy")]
+
+
+# ---- TO-11: an order row agrees with its fill ------------------------------------
+
+
+class BuyTooMuch(BuyAndHold):
+    """Ignores cash: always asks for 1,000 shares of its target."""
+
+    def estimate_return(self, ticker, as_of, lake):
+        return None
+
+    def decide(self, my_picks, portfolio, prices, as_of):
+        return [Order(client_id="b", ticker=self.params["ticker"], side="buy", quantity=1000.0)]
+
+
+def test_a_buy_scaled_to_cash_records_the_filled_quantity(env):
+    lake, state, registry = env
+    sid = _register(registry, BuyTooMuch({"ticker": "UP.US", "allocation": 1.0}))
+    _hold(state, sid, {"DOWN.US": 1.0}, cash=1_000.0)  # an owner, so the exit route decides
+
+    # with the risk layer off nothing clips the buy before the broker
+    settings = TickSettings(universe=["UP.US"], risk=RiskPolicy(enabled=False))
+    result = run_tick(state, lake, registry, settings, as_of=AS_OF)
+
+    [order] = state.sql(
+        "SELECT client_id, quantity, status, status_reason FROM orders"
+        " WHERE tick_id = ? AND side = 'buy'",
+        [result.tick_id],
+    )
+    [fill] = state.sql("SELECT quantity FROM fills WHERE order_client_id = ?", [order["client_id"]])
+    assert fill["quantity"] < 1000.0
+    assert order["status"] == "filled"
+    assert order["quantity"] == pytest.approx(fill["quantity"])
+    assert "1000" in order["status_reason"]
