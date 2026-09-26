@@ -401,3 +401,11 @@ S2, S3, S4 and W2.1 run in parallel after S1; S5 to S8 in parallel where the "Af
 4. Email as a fallback channel in v1, or Web Push, in-app and webhooks only?
 5. Should 2FA be mandatory for every trader at first login, or only when enabling auto (current design)?
 6. Per-portfolio universes now, or keep one global universe until 13.4 (watchlists)?
+
+## Decisions (2026-09-26)
+
+- **Auto gate:** a subscription can switch to auto only after at least 20 trading days in paper mode on the same subscription without breaking its risk limits.
+- **Admin visibility:** admins see totals only (aggregate exposure and risk across traders), never individual holdings.
+- **Second factor:** mandatory for every trader at first login (TOTP), plus the step-up for sensitive actions.
+- **Broker connections:** start with the SnapTrade aggregator (read-only); direct adapters come later behind the same seam.
+- **Defaults, easy to change:** email is an optional fallback channel in version 1; per-portfolio universes arrive later with watchlists; the options data vendor is chosen when Phase 17 starts.
