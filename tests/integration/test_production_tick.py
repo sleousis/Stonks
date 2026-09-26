@@ -152,6 +152,34 @@ def test_crash_before_snapshot_rolls_back_orders_and_fills_and_marks_tick_error(
     assert "disk full" in json.loads(runs[0]["summary_json"])["error"]
 
 
+def test_tick_settings_default_price_staleness_is_seven_days():
+    assert TickSettings(universe=["UP.US"]).max_price_staleness_days == 7
+
+
+def test_current_prices_drops_tickers_with_stale_closes(lake_trending):
+    from stonks.production.tick import _current_prices
+
+    # lake_trending's last bar is 2026-04-01 (a Wednesday).
+    fresh = _current_prices(
+        lake_trending, ["UP.US", "FLAT.US"], date(2026, 4, 8), max_staleness_days=7
+    )
+    assert set(fresh) == {"UP.US", "FLAT.US"}
+
+    stale = _current_prices(
+        lake_trending, ["UP.US", "FLAT.US"], date(2026, 4, 9), max_staleness_days=7
+    )
+    assert stale == {}
+
+
+def test_tick_does_not_trade_on_months_old_prices(tick_env):
+    lake, state, registry = tick_env
+    settings = TickSettings(universe=["UP.US"], threshold=0.0, initial_cash=10_000.0)
+    result = run_tick(state, lake, registry, settings, as_of=date(2026, 9, 1))
+
+    assert result.fills == 0
+    assert state.count_rows("fills") == 0
+
+
 def test_crash_during_rank_marks_tick_error(tick_env, monkeypatch):
     from stonks.production.ranker import Ranker
 

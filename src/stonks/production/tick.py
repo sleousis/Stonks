@@ -15,7 +15,7 @@ import json
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal
 
 from stonks.backtest.simulated_broker import SimulatedBroker
@@ -40,6 +40,9 @@ class TickSettings:
     initial_cash: float = 10_000.0
     slippage_bps: float = 0.0
     fee_per_trade: float = 0.0
+    # Closes older than this many calendar days before ``as_of`` are ignored,
+    # so delisted / failed-ingest tickers never fill at months-old prices.
+    max_price_staleness_days: int = 7
 
 
 @dataclass(frozen=True)
@@ -132,7 +135,12 @@ def _run_tick_body(
 
     # 2. prepare portfolio + prices
     portfolio = _load_or_seed_portfolio(state, initial_cash=settings.initial_cash)
-    prices = _current_prices(lake, settings.universe, as_of)
+    prices = _current_prices(
+        lake,
+        settings.universe,
+        as_of,
+        max_staleness_days=settings.max_price_staleness_days,
+    )
 
     broker = SimulatedBroker(
         portfolio=portfolio,
@@ -231,19 +239,28 @@ def _load_or_seed_portfolio(state: SqliteState, initial_cash: float) -> Portfoli
     return Portfolio(cash=float(row["cash"]), positions=json.loads(row["positions_json"]))
 
 
-def _current_prices(lake: DuckDBLake, universe: Sequence[str], as_of: date) -> dict[str, float]:
+def _current_prices(
+    lake: DuckDBLake,
+    universe: Sequence[str],
+    as_of: date,
+    *,
+    max_staleness_days: int = 7,
+) -> dict[str, float]:
     if not universe:
         return {}
     # Single grouped query: per ticker, take the latest close at or before
-    # ``as_of``. Avoids the N+1 pattern of one LIMIT-1 query per ticker.
+    # ``as_of`` but no older than ``max_staleness_days`` calendar days.
+    # Tickers with only older closes are dropped (no price → no trade).
+    # Avoids the N+1 pattern of one LIMIT-1 query per ticker.
+    oldest = as_of - timedelta(days=max_staleness_days)
     df = lake.sql(
         """
         SELECT ticker, close
           FROM prices
-         WHERE ticker = ANY(?) AND date <= ?
+         WHERE ticker = ANY(?) AND date <= ? AND date >= ?
          QUALIFY ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY date DESC) = 1
         """,
-        [list(universe), as_of],
+        [list(universe), as_of, oldest],
     )
     if df.empty:
         return {}
