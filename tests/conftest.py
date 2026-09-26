@@ -91,11 +91,15 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     run only when the marker expression names them (``-m e2e``), so the
     default run stays fast and needs no browser."""
     enable_network_for_live_tests(items)
-    if "e2e" in (config.option.markexpr or ""):
+    # The long paper soak (``soak``) is opt in the same way (-m soak).
+    markexpr = config.option.markexpr or ""
+    opt_in = [m for m in ("e2e", "soak") if m not in markexpr]
+    if not opt_in:
         return
     selected, deselected = [], []
     for item in items:
-        (deselected if item.get_closest_marker("e2e") else selected).append(item)
+        skip = any(item.get_closest_marker(m) for m in opt_in)
+        (deselected if skip else selected).append(item)
     if deselected:
         config.hook.pytest_deselected(items=deselected)
         items[:] = selected
