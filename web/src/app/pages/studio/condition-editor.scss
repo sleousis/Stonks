@@ -1,0 +1,151 @@
+@use 'breakpoints' as bp;
+
+:host {
+  display: block;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.compare-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: start;
+
+  // Side by side once the node is wide enough (nested groups get narrower);
+  // the node's actions wrap under the operands until there is room for them.
+  @container (min-width: 460px) {
+    grid-template-columns: minmax(0, 1.3fr) minmax(6.5rem, 0.8fr) minmax(0, 1.3fr);
+
+    .node-actions {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @container (min-width: 760px) {
+    grid-template-columns: minmax(0, 1.3fr) minmax(7.5rem, 0.8fr) minmax(0, 1.3fr) auto;
+
+    .node-actions {
+      grid-column: auto;
+    }
+  }
+}
+
+.operand {
+  display: flex;
+  gap: var(--space-1);
+  min-width: 0;
+
+  select {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .num-input {
+    flex: 0 1 7rem;
+    min-width: 4.5rem;
+  }
+}
+
+.node-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-1);
+
+  .btn {
+    font-size: var(--text-xs);
+  }
+
+  .remove {
+    font-size: var(--text-lg);
+    color: var(--color-ink-3);
+
+    &:hover:not(:disabled) {
+      color: var(--color-loss);
+    }
+  }
+}
+
+.compare {
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.group,
+.not {
+  margin: 0;
+  min-width: 0;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+
+  @include bp.phone {
+    padding-left: var(--space-2);
+  }
+}
+
+.not {
+  border-left-color: var(--color-warn);
+}
+
+.group-head,
+.not-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.not-head {
+  justify-content: flex-start;
+  font-size: var(--text-sm);
+
+  .node-actions {
+    margin-left: auto;
+  }
+}
+
+.not-label {
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: var(--text-xs);
+  color: var(--color-warn);
+}
+
+.group-type {
+  width: auto;
+  min-width: 0;
+  flex: 1 1 12rem;
+  max-width: 18rem;
+  font-weight: var(--weight-medium);
+}
+
+.children {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.group-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.issue {
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-loss);
+  overflow-wrap: anywhere;
+}

@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 
+import { SILENT_HEADERS } from '../core/http/interceptors';
 import { unwrap } from './api-call';
 import {
   createDraft,
@@ -54,8 +55,9 @@ export class StudioService {
     return unwrap(validateDraft({ path: { draft_id: draftId }, body }));
   }
 
-  validateSpec(body: SpecValidateRequest) {
-    return unwrap(validateRuleSpec({ body }));
+  /** `silent` skips the error toast (the builder validates in the background as you type). */
+  validateSpec(body: SpecValidateRequest, silent = false) {
+    return unwrap(validateRuleSpec({ body, headers: silent ? SILENT_HEADERS : undefined }));
   }
 
   startBacktest(draftId: string, body: DraftBacktestRequest) {
