@@ -1464,6 +1464,7 @@
                     "cross_instrument",
                     "deflated_sharpe",
                     "drift",
+                    "event_study",
                     "mc_trades",
                     "mcpt",
                     "oos",
@@ -1473,6 +1474,8 @@
                     "perturbation",
                     "plateau",
                     "runs_test",
+                    "signal_ic",
+                    "vs_random",
                     "walk_forward",
                     "walk_forward_mcpt"
                   ],
@@ -1501,6 +1504,7 @@
                     "cross_instrument",
                     "deflated_sharpe",
                     "drift",
+                    "event_study",
                     "mc_trades",
                     "mcpt",
                     "oos",
@@ -1510,6 +1514,8 @@
                     "perturbation",
                     "plateau",
                     "runs_test",
+                    "signal_ic",
+                    "vs_random",
                     "walk_forward",
                     "walk_forward_mcpt"
                   ]
@@ -2725,6 +2731,7 @@
                     "cross_instrument",
                     "deflated_sharpe",
                     "drift",
+                    "event_study",
                     "mc_trades",
                     "mcpt",
                     "oos",
@@ -2734,6 +2741,8 @@
                     "perturbation",
                     "plateau",
                     "runs_test",
+                    "signal_ic",
+                    "vs_random",
                     "walk_forward",
                     "walk_forward_mcpt"
                   ],
@@ -2762,6 +2771,7 @@
                     "cross_instrument",
                     "deflated_sharpe",
                     "drift",
+                    "event_study",
                     "mc_trades",
                     "mcpt",
                     "oos",
@@ -2771,6 +2781,8 @@
                     "perturbation",
                     "plateau",
                     "runs_test",
+                    "signal_ic",
+                    "vs_random",
                     "walk_forward",
                     "walk_forward_mcpt"
                   ]
