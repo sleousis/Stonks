@@ -134,3 +134,37 @@ def test_unpriced_benchmark_fails_with_a_note(lake):
     )
     assert not report.passed
     assert "NOPE.US" in report.notes
+
+
+# ---- RS-09: no evidence is not a pass ------------------------------------------------
+
+
+def test_do_nothing_strategy_against_a_falling_benchmark_fails(lake):
+    _upsert(lake, "DOWN.US", 100 * np.cumprod(np.full(len(DAYS), 1 - 0.002)))
+    idle = BuyAndHold({"ticker": "ABSENT.US"})  # never trades
+    report = BenchmarkRelativeTest(benchmark="DOWN.US").run(idle, _dataset(lake))
+    assert not report.passed
+    assert "insufficient data" in report.notes
+
+
+def test_zero_tracking_error_fails(lake):
+    _upsert(lake, "FLAT.US", np.full(len(DAYS), 100.0))
+    idle = BuyAndHold({"ticker": "ABSENT.US"})
+    report = BenchmarkRelativeTest(benchmark="FLAT.US").run(idle, _dataset(lake))
+    assert report.metrics["tracking_error"] == 0.0
+    assert not report.passed
+
+
+def test_a_few_bars_are_not_enough_evidence(lake):
+    short = LabDataset(
+        lake=lake,
+        universe=["WIN.US", "LOSE.US"],
+        start=DAYS[0],
+        end=DAYS[5],
+        interval=Interval.DAY_1,
+    )
+    report = BenchmarkRelativeTest(benchmark="LOSE.US", window="full").run(
+        BuyAndHold({"ticker": "WIN.US"}), short
+    )
+    assert not report.passed
+    assert "insufficient data" in report.notes

@@ -11,6 +11,12 @@ The benchmark is the ``benchmark`` option, else the dataset's
 ``benchmark`` attribute, else ``"auto"``. A disabled dataset benchmark
 (``"none"``) falls back to ``"auto"``: this test has nothing to measure
 without one. An unpriced benchmark fails the test with a note.
+
+No evidence is never a pass (RS-09): the test fails with "insufficient
+data" when the strategy made fewer than ``min_trades`` round trips (open lots count), when fewer
+than ``min_bars`` paired returns exist, or when the tracking error is zero
+(no active risk, so the IR says nothing). A strategy that sits in cash
+while the benchmark falls would otherwise pass on a positive excess CAGR.
 """
 
 from __future__ import annotations
@@ -34,6 +40,8 @@ class BenchmarkRelativeTest:
         require_alpha_tstat: float | None = None,
         window: Literal["val", "full"] = "val",
         benchmark: str | None = None,
+        min_trades: int = 1,
+        min_bars: int = 20,
     ) -> None:
         if window not in _WINDOWS:
             raise ValueError(f"window must be one of {_WINDOWS}, got {window!r}")
@@ -42,6 +50,8 @@ class BenchmarkRelativeTest:
         self._min_t = None if require_alpha_tstat is None else float(require_alpha_tstat)
         self._window = window
         self._benchmark = benchmark
+        self._min_trades = int(min_trades)
+        self._min_bars = int(min_bars)
 
     def _spec(self, context: Any) -> str:
         for candidate in (self._benchmark, getattr(context, "benchmark", DEFAULT_BENCHMARK)):
@@ -63,6 +73,23 @@ class BenchmarkRelativeTest:
             )
         stats = bench.stats
         metrics = {"cagr": float(report.cagr), **bench.metrics()}
+        n_trades = len(report.trades)  # round trips, open lots included
+        metrics["n_trades"] = float(n_trades)
+        lacking = []
+        if n_trades < self._min_trades:
+            lacking.append(f"{n_trades} trades (min {self._min_trades})")
+        if stats.n_obs < self._min_bars:
+            lacking.append(f"{stats.n_obs} bars (min {self._min_bars})")
+        if not stats.tracking_error > 0:
+            lacking.append("zero tracking error")
+        if lacking:
+            return SurvivalReport(
+                test_id=self.id,
+                passed=False,
+                metrics=metrics,
+                notes=f"insufficient data vs {bench.curve.name} ({self._window}): "
+                + ", ".join(lacking),
+            )
         checks = [
             stats.information_ratio >= self._min_ir,
             stats.excess_cagr >= self._min_excess,
