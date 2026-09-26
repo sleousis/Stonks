@@ -67,6 +67,7 @@ describe('LabPage with ?strategy=', () => {
       return req.flush([{ code: '1d', is_intraday: false, seconds: 86400 }]);
     if (path === '/api/lab/cost-models') return req.flush([]);
     if (path === '/api/jobs') return req.flush({ items: [], total: 0, limit: 20, offset: 0 });
+    if (path === '/api/lab/survival-tests') return req.flush([]);
     const m = /^\/api\/strategies\/([^/]+)$/.exec(path);
     if (m) {
       const s = strategies[decodeURIComponent(m[1])];
@@ -107,7 +108,7 @@ describe('LabPage with ?strategy=', () => {
 
   it('says when the registered class is not in the catalog', async () => {
     await open('custom-v1');
-    expect(el.querySelector('.preset')?.textContent).toContain('not in the strategy catalog');
+    expect(el.querySelector('.preset')?.textContent).toContain('not available to test here');
     expect(el.querySelector('#bt-param-lookback_days')).toBeNull();
   });
 
