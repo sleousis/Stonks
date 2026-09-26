@@ -1,12 +1,26 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 
-import { PlannedPage } from '../../shared/ui/planned-page';
+import { PageHeader } from '../../shared/ui/page-header';
+import { TcaSummary } from './tca-summary';
+import { TradeJournal } from './trade-journal';
 
-/** Placeholder until the page is built (roadmap 18.2). */
+/** Trade costs: what trading cost (implementation shortfall) and the trade journal. */
 @Component({
   selector: 'app-trades-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PlannedPage],
-  template: `<app-planned-page title="Trade costs" description="Coming soon." />`,
+  imports: [PageHeader, TcaSummary, TradeJournal],
+  template: `
+    <app-page-header
+      title="Trade costs"
+      description="What your orders cost against the price when they were decided, and a journal of every trade."
+    />
+    <app-tca-summary />
+    <app-trade-journal class="journal" />
+  `,
+  styles: `
+    .journal {
+      margin-top: var(--space-4);
+    }
+  `,
 })
 export class TradesPage {}

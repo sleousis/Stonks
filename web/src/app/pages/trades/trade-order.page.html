@@ -1,0 +1,211 @@
+<a class="back-link" routerLink="/trades"><span aria-hidden="true">←</span> Trade costs</a>
+
+<app-page-header
+  [title]="heading()"
+  description="What this order cost, why it was placed and your notes."
+/>
+
+@if (order.error(); as err) {
+  <app-error-state title="Could not load this order" [error]="err" (retry)="order.reload()" />
+} @else if (!entry()) {
+  <app-loading-state label="Loading the order" [rows]="8" />
+} @else {
+  @let e = entry()!;
+  @let s = e.shortfall;
+  <article class="ticket panel" aria-labelledby="ticket-title">
+    <header class="ticket-head">
+      <app-side-tag [side]="e.side" />
+      <h2 id="ticket-title" class="ticket-title">
+        <span class="mono">{{ e.ticker }}</span>
+        <span class="muted num">{{ e.quantity | num }} shares</span>
+      </h2>
+      @if (live() !== null) {
+        <app-mode-stamp [live]="live()!" />
+      }
+      <app-status-pill [status]="e.status" />
+    </header>
+    <p class="ticket-id">
+      Order <span class="mono">{{ e.client_id }}</span>
+    </p>
+    @if (e.status_reason) {
+      <p class="reason">{{ e.status_reason }}</p>
+    }
+
+    <dl class="prices">
+      <div>
+        <dt>Decision price</dt>
+        <dd class="num mono">{{ e.decision_price | money }}</dd>
+      </div>
+      <div>
+        <dt>Arrival price</dt>
+        <dd class="num mono">{{ s?.arrival_price | money }}</dd>
+      </div>
+      <div>
+        <dt>Fill price</dt>
+        <dd class="num mono">{{ s?.fill_price | money }}</dd>
+      </div>
+      <div>
+        <dt>Filled</dt>
+        <dd class="num mono">
+          {{ s?.filled_quantity ?? 0 | num }} of {{ s?.ordered_quantity ?? e.quantity | num }}
+        </dd>
+      </div>
+    </dl>
+
+    <section class="costs" aria-labelledby="costs-title">
+      <h3 id="costs-title">Shortfall</h3>
+      <p class="muted small">
+        The gap between the price when the order was decided and the price actually paid, fees
+        included. Positive figures are costs.
+      </p>
+      @if (!s) {
+        <app-empty-state
+          title="No cost yet"
+          message="The cost shows once the order fills and the next session's prices arrive."
+        />
+      } @else {
+        <dl class="cost-lines">
+          @for (line of costLines(); track line.label) {
+            <div [class.total]="line.total">
+              <dt>
+                {{ line.label }}
+                <span class="hint">{{ line.hint }}</span>
+              </dt>
+              <dd class="num mono">
+                {{ line.bps }}
+                @if (line.money) {
+                  <span class="money">{{ line.money }}</span>
+                }
+              </dd>
+            </div>
+          }
+        </dl>
+        <dl class="compare">
+          <div>
+            <dt>Cost model expected</dt>
+            <dd class="num mono">{{ bps(s.expected_bps) }}</dd>
+          </div>
+          <div>
+            <dt>Live fill against a backtest fill</dt>
+            <dd class="num mono">{{ bps(s.convention_bps) }}</dd>
+          </div>
+          <div>
+            <dt>Price move over the next session</dt>
+            <dd class="num mono">{{ bps(e.next_session_move_bps) }}</dd>
+          </div>
+        </dl>
+      }
+    </section>
+
+    <section class="why" aria-labelledby="why-title">
+      <h3 id="why-title">Why it was placed</h3>
+      <dl class="facts">
+        <div>
+          <dt>Reason</dt>
+          <dd>{{ trigger(e.trigger) }}</dd>
+        </div>
+        <div>
+          <dt>Strategy</dt>
+          <dd>{{ e.strategy_id ?? 'None' }}</dd>
+        </div>
+        @if (portfolio(); as name) {
+          <div>
+            <dt>Portfolio</dt>
+            <dd>{{ name }}</dd>
+          </div>
+        }
+        @for (row of contextRows(); track row.label) {
+          <div>
+            <dt>{{ row.label }}</dt>
+            <dd class="num">{{ row.value }}</dd>
+          </div>
+        }
+        <div>
+          <dt>Decided</dt>
+          <dd class="num">{{ e.decided_at | dateTime }}</dd>
+        </div>
+        <div>
+          <dt>Placed</dt>
+          <dd class="num">{{ e.created_at | dateTime }}</dd>
+        </div>
+      </dl>
+    </section>
+  </article>
+
+  <section class="panel notes" aria-labelledby="notes-title">
+    <div class="panel-head">
+      <h2 id="notes-title">Notes</h2>
+    </div>
+    <div class="panel-body">
+      @if (e.notes.length === 0) {
+        <p class="muted">No notes yet. Write down what you noticed about this trade.</p>
+      } @else {
+        <ul class="note-list">
+          @for (n of e.notes; track n.id) {
+            <li class="note">
+              <p class="note-meta">
+                <span>{{ authorLabel(n) }}</span>
+                <span class="num">{{ n.updated_at | dateTime }}</span>
+                @if (n.updated_at !== n.created_at) {
+                  <span>(edited)</span>
+                }
+              </p>
+              @if (editingId() === n.id) {
+                <div class="field">
+                  <label [for]="'edit-' + n.id">Edit note</label>
+                  <textarea
+                    class="input"
+                    rows="3"
+                    [id]="'edit-' + n.id"
+                    [attr.maxlength]="noteMax"
+                    [value]="editText()"
+                    (input)="editText.set($any($event.target).value)"
+                  ></textarea>
+                </div>
+                <div class="note-actions">
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    [disabled]="saving() || !editText().trim()"
+                    (click)="saveEdit(n)"
+                  >
+                    Save note
+                  </button>
+                  <button type="button" class="btn" (click)="cancelEdit()">Cancel</button>
+                </div>
+              } @else {
+                <p class="note-text">{{ n.note }}</p>
+                @if (canWrite() && isMine(n)) {
+                  <button type="button" class="btn btn-ghost" (click)="startEdit(n)">
+                    Edit note
+                  </button>
+                }
+              }
+            </li>
+          }
+        </ul>
+      }
+
+      @if (canWrite()) {
+        <form class="add-note" (submit)="$event.preventDefault(); addNote()">
+          <div class="field">
+            <label for="new-note">Add a note</label>
+            <textarea
+              id="new-note"
+              class="input"
+              rows="3"
+              [attr.maxlength]="noteMax"
+              [value]="draft()"
+              (input)="draft.set($any($event.target).value)"
+            ></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary" [disabled]="adding() || !draft().trim()">
+            Add note
+          </button>
+        </form>
+      } @else {
+        <app-permission-note permission="portfolio.manage" />
+      }
+    </div>
+  </section>
+}
