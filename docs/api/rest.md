@@ -390,6 +390,16 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `kind` | "simulated" \| "alpaca" | yes |  |
 | `paper` | boolean | yes |  |
 
+### CircuitBreakerSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cooldown` | "rest_of_month" \| "none" | no |  |
+| `max_drawdown_halt` | number \| null | no |  |
+| `max_month_loss` | number \| null | no |  |
+| `max_week_loss` | number \| null | no |  |
+| `week_sessions` | integer | no |  |
+
 ### ClearHaltRequest
 
 | Field | Type | Required | Description |
@@ -563,6 +573,12 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `issues` | list[[ValidationIssue](#validationissue)] | yes |  |
 | `smoke` | [SmokeCheck](#smokecheck) \| null | no |  |
 | `valid` | boolean | yes |  |
+
+### DrawdownScalingSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `schedule` | list[list[any]] \| null | no |  |
 
 ### EnrolStartView
 
@@ -896,6 +912,14 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `external_account_id` | string | yes |  |
 | `portfolio_id` | string | yes |  |
 
+### LiquiditySettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_amihud` | number \| null | no |  |
+| `max_pct_adv` | number \| null | no |  |
+| `min_median_dollar_volume` | number \| null | no |  |
+
 ### LoginRequest
 
 | Field | Type | Required | Description |
@@ -933,6 +957,12 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `next_close` | date-time | yes |  |
 | `next_open` | date-time | yes |  |
 | `timestamp` | date-time | yes |  |
+
+### MaxHoldingSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_holding_bars` | integer \| null | no |  |
 
 ### McptOptions
 
@@ -974,6 +1004,12 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `method` | "totp" \| "recovery_code" | yes |  |
 | `recovery_codes` | list[string] \| null | no |  |
 | `recovery_codes_left` | integer | yes |  |
+
+### OperationalHaltSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_bar_age_days` | integer \| null | no |  |
 
 ### OrderView
 
@@ -1191,6 +1227,13 @@ One row per day. ``strategy_id`` is ``None`` for the real portfolio and a shadow
 | `total_value` | number | yes |  |
 | `unrealized_pnl` | number | no | Sum of the positions' unrealized_pnl (priced, known cost). |
 
+### PortfolioVolSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `shock_cap` | number \| null | no |  |
+| `vol_cap` | number \| null | no |  |
+
 ### PositionView
 
 | Field | Type | Required | Description |
@@ -1345,6 +1388,14 @@ One order the risk policy clipped or dropped.
 | `side` | string | yes |  |
 | `ticker` | string | yes |  |
 
+### RiskPerPositionSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `atr_multiple` | number | no |  |
+| `max_risk` | number \| null | no |  |
+| `max_var` | number \| null | no |  |
+
 ### RiskPolicy
 
 Portfolio construction limits applied between ``strategy.decide`` and the broker (``[production.risk]``). Defaults are permissive, so an unconfigured install trades exactly what the strategy asks for.
@@ -1357,10 +1408,24 @@ Portfolio construction limits applied between ``strategy.decide`` and the broker
 | `max_weight_per_asset_class` | dict[str, number] | no |  |
 | `max_weight_per_ticker` | number | no |  |
 | `min_order_notional` | number | no |  |
+| `rules` | [RuleSettings](#rulesettings) | no |  |
 
 ### Role
 
 Type: "viewer" \| "trader" \| "admin"
+
+### RuleSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `circuit_breaker` | [CircuitBreakerSettings](#circuitbreakersettings) | no |  |
+| `drawdown_scaling` | [DrawdownScalingSettings](#drawdownscalingsettings) | no |  |
+| `liquidity` | [LiquiditySettings](#liquiditysettings) | no |  |
+| `max_holding` | [MaxHoldingSettings](#maxholdingsettings) | no |  |
+| `operational_halt` | [OperationalHaltSettings](#operationalhaltsettings) | no |  |
+| `portfolio_vol` | [PortfolioVolSettings](#portfoliovolsettings) | no |  |
+| `risk_per_position` | [RiskPerPositionSettings](#riskperpositionsettings) | no |  |
+| `sector_cap` | [SectorCapSettings](#sectorcapsettings) | no |  |
 
 ### RuleTemplateView
 
@@ -1421,6 +1486,12 @@ Type: "viewer" \| "trader" \| "admin"
 | `scheduled_for` | date-time | yes |  |
 | `started_at` | date-time | yes |  |
 | `status` | string | yes |  |
+
+### SectorCapSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_weight_per_sector` | number \| null | no |  |
 
 ### ShadowDecisionView
 

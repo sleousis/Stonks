@@ -408,6 +408,32 @@ export type BrokerInfo = {
 };
 
 /**
+ * CircuitBreakerSettings
+ */
+export type CircuitBreakerSettings = {
+    /**
+     * Cooldown
+     */
+    cooldown?: 'rest_of_month' | 'none';
+    /**
+     * Max Drawdown Halt
+     */
+    max_drawdown_halt?: number | null;
+    /**
+     * Max Month Loss
+     */
+    max_month_loss?: number | null;
+    /**
+     * Max Week Loss
+     */
+    max_week_loss?: number | null;
+    /**
+     * Week Sessions
+     */
+    week_sessions?: number;
+};
+
+/**
  * ClearHaltRequest
  */
 export type ClearHaltRequest = {
@@ -879,6 +905,19 @@ export type DraftValidation = {
      * Valid
      */
     valid: boolean;
+};
+
+/**
+ * DrawdownScalingSettings
+ */
+export type DrawdownScalingSettings = {
+    /**
+     * Schedule
+     */
+    schedule?: Array<[
+        number,
+        number
+    ]> | null;
 };
 
 /**
@@ -1796,6 +1835,24 @@ export type LinkResultView = {
 };
 
 /**
+ * LiquiditySettings
+ */
+export type LiquiditySettings = {
+    /**
+     * Max Amihud
+     */
+    max_amihud?: number | null;
+    /**
+     * Max Pct Adv
+     */
+    max_pct_adv?: number | null;
+    /**
+     * Min Median Dollar Volume
+     */
+    min_median_dollar_volume?: number | null;
+};
+
+/**
  * LoginRequest
  */
 export type LoginRequest = {
@@ -1875,6 +1932,16 @@ export type MarketClockView = {
      * Timestamp
      */
     timestamp: string;
+};
+
+/**
+ * MaxHoldingSettings
+ */
+export type MaxHoldingSettings = {
+    /**
+     * Max Holding Bars
+     */
+    max_holding_bars?: number | null;
 };
 
 /**
@@ -1974,6 +2041,16 @@ export type MfaView = {
      * Recovery Codes Left
      */
     recovery_codes_left: number;
+};
+
+/**
+ * OperationalHaltSettings
+ */
+export type OperationalHaltSettings = {
+    /**
+     * Max Bar Age Days
+     */
+    max_bar_age_days?: number | null;
 };
 
 /**
@@ -2534,6 +2611,20 @@ export type PortfolioView = {
 };
 
 /**
+ * PortfolioVolSettings
+ */
+export type PortfolioVolSettings = {
+    /**
+     * Shock Cap
+     */
+    shock_cap?: number | null;
+    /**
+     * Vol Cap
+     */
+    vol_cap?: number | null;
+};
+
+/**
  * PositionView
  */
 export type PositionView = {
@@ -2914,6 +3005,24 @@ export type RiskAdjustmentView = {
 };
 
 /**
+ * RiskPerPositionSettings
+ */
+export type RiskPerPositionSettings = {
+    /**
+     * Atr Multiple
+     */
+    atr_multiple?: number;
+    /**
+     * Max Risk
+     */
+    max_risk?: number | null;
+    /**
+     * Max Var
+     */
+    max_var?: number | null;
+};
+
+/**
  * RiskPolicy
  *
  * Portfolio construction limits applied between ``strategy.decide`` and
@@ -2951,12 +3060,27 @@ export type RiskPolicy = {
      * Min Order Notional
      */
     min_order_notional?: number;
+    rules?: RuleSettings;
 };
 
 /**
  * Role
  */
 export type Role = 'viewer' | 'trader' | 'admin';
+
+/**
+ * RuleSettings
+ */
+export type RuleSettings = {
+    circuit_breaker?: CircuitBreakerSettings;
+    drawdown_scaling?: DrawdownScalingSettings;
+    liquidity?: LiquiditySettings;
+    max_holding?: MaxHoldingSettings;
+    operational_halt?: OperationalHaltSettings;
+    portfolio_vol?: PortfolioVolSettings;
+    risk_per_position?: RiskPerPositionSettings;
+    sector_cap?: SectorCapSettings;
+};
 
 /**
  * RuleTemplateView
@@ -3116,6 +3240,16 @@ export type ScheduledRunView = {
      * Status
      */
     status: string;
+};
+
+/**
+ * SectorCapSettings
+ */
+export type SectorCapSettings = {
+    /**
+     * Max Weight Per Sector
+     */
+    max_weight_per_sector?: number | null;
 };
 
 /**

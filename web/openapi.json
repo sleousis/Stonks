@@ -833,6 +833,68 @@
         "title": "BrokerInfo",
         "type": "object"
       },
+      "CircuitBreakerSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "cooldown": {
+            "default": "rest_of_month",
+            "enum": [
+              "rest_of_month",
+              "none"
+            ],
+            "title": "Cooldown",
+            "type": "string"
+          },
+          "max_drawdown_halt": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 1.0,
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Drawdown Halt"
+          },
+          "max_month_loss": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 1.0,
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Month Loss"
+          },
+          "max_week_loss": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 1.0,
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Week Loss"
+          },
+          "week_sessions": {
+            "default": 5,
+            "maximum": 60.0,
+            "minimum": 1.0,
+            "title": "Week Sessions",
+            "type": "integer"
+          }
+        },
+        "title": "CircuitBreakerSettings",
+        "type": "object"
+      },
       "ClearHaltRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1819,6 +1881,37 @@
           "issues"
         ],
         "title": "DraftValidation",
+        "type": "object"
+      },
+      "DrawdownScalingSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "schedule": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule"
+          }
+        },
+        "title": "DrawdownScalingSettings",
         "type": "object"
       },
       "EnrolStartView": {
@@ -3599,6 +3692,50 @@
         "title": "LinkResultView",
         "type": "object"
       },
+      "LiquiditySettings": {
+        "additionalProperties": false,
+        "properties": {
+          "max_amihud": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Amihud"
+          },
+          "max_pct_adv": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Pct Adv"
+          },
+          "min_median_dollar_volume": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Median Dollar Volume"
+          }
+        },
+        "title": "LiquiditySettings",
+        "type": "object"
+      },
       "LoginRequest": {
         "properties": {
           "email": {
@@ -3721,6 +3858,25 @@
           "next_close"
         ],
         "title": "MarketClockView",
+        "type": "object"
+      },
+      "MaxHoldingSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "max_holding_bars": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Holding Bars"
+          }
+        },
+        "title": "MaxHoldingSettings",
         "type": "object"
       },
       "McptOptions": {
@@ -3920,6 +4076,25 @@
           "recovery_codes_left"
         ],
         "title": "MfaView",
+        "type": "object"
+      },
+      "OperationalHaltSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "max_bar_age_days": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Bar Age Days"
+          }
+        },
+        "title": "OperationalHaltSettings",
         "type": "object"
       },
       "OrderView": {
@@ -4787,6 +4962,37 @@
         "title": "PortfolioView",
         "type": "object"
       },
+      "PortfolioVolSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "shock_cap": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shock Cap"
+          },
+          "vol_cap": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vol Cap"
+          }
+        },
+        "title": "PortfolioVolSettings",
+        "type": "object"
+      },
       "PositionView": {
         "properties": {
           "avg_cost": {
@@ -5478,6 +5684,45 @@
         "title": "RiskAdjustmentView",
         "type": "object"
       },
+      "RiskPerPositionSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "atr_multiple": {
+            "default": 3.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Atr Multiple",
+            "type": "number"
+          },
+          "max_risk": {
+            "anyOf": [
+              {
+                "maximum": 0.05,
+                "minimum": 0.0025,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Risk"
+          },
+          "max_var": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Var"
+          }
+        },
+        "title": "RiskPerPositionSettings",
+        "type": "object"
+      },
       "RiskPolicy": {
         "additionalProperties": false,
         "description": "Portfolio construction limits applied between ``strategy.decide`` and\nthe broker (``[production.risk]``). Defaults are permissive, so an\nunconfigured install trades exactly what the strategy asks for.\n\nWeights are fractions of total portfolio value (cash + marked positions)\nbefore the tick's orders. Sells are never blocked, only clipped to the\nheld quantity so they cannot open a short.",
@@ -5536,6 +5781,24 @@
             "minimum": 0.0,
             "title": "Min Order Notional",
             "type": "number"
+          },
+          "rules": {
+            "$ref": "#/components/schemas/RuleSettings",
+            "default": {
+              "circuit_breaker": {
+                "cooldown": "rest_of_month",
+                "week_sessions": 5
+              },
+              "drawdown_scaling": {},
+              "liquidity": {},
+              "max_holding": {},
+              "operational_halt": {},
+              "portfolio_vol": {},
+              "risk_per_position": {
+                "atr_multiple": 3.0
+              },
+              "sector_cap": {}
+            }
           }
         },
         "title": "RiskPolicy",
@@ -5549,6 +5812,50 @@
         ],
         "title": "Role",
         "type": "string"
+      },
+      "RuleSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "circuit_breaker": {
+            "$ref": "#/components/schemas/CircuitBreakerSettings",
+            "default": {
+              "cooldown": "rest_of_month",
+              "week_sessions": 5
+            }
+          },
+          "drawdown_scaling": {
+            "$ref": "#/components/schemas/DrawdownScalingSettings",
+            "default": {}
+          },
+          "liquidity": {
+            "$ref": "#/components/schemas/LiquiditySettings",
+            "default": {}
+          },
+          "max_holding": {
+            "$ref": "#/components/schemas/MaxHoldingSettings",
+            "default": {}
+          },
+          "operational_halt": {
+            "$ref": "#/components/schemas/OperationalHaltSettings",
+            "default": {}
+          },
+          "portfolio_vol": {
+            "$ref": "#/components/schemas/PortfolioVolSettings",
+            "default": {}
+          },
+          "risk_per_position": {
+            "$ref": "#/components/schemas/RiskPerPositionSettings",
+            "default": {
+              "atr_multiple": 3.0
+            }
+          },
+          "sector_cap": {
+            "$ref": "#/components/schemas/SectorCapSettings",
+            "default": {}
+          }
+        },
+        "title": "RuleSettings",
+        "type": "object"
       },
       "RuleTemplateView": {
         "properties": {
@@ -5807,6 +6114,26 @@
           "error"
         ],
         "title": "ScheduledRunView",
+        "type": "object"
+      },
+      "SectorCapSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "max_weight_per_sector": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Weight Per Sector"
+          }
+        },
+        "title": "SectorCapSettings",
         "type": "object"
       },
       "ShadowDecisionView": {
