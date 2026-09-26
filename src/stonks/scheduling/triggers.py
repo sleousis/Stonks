@@ -59,6 +59,12 @@ class Trigger(ABC):
         fires = self.fires_between(after, after + _LOOKAHEAD)
         return fires[0] if fires else None
 
+    def last_fire_at_or_before(self, when: datetime, lookback: timedelta) -> Fire | None:
+        """The latest fire with ``when - lookback < scheduled_for <= when``."""
+        when = ensure_utc(when)
+        fires = self.fires_between(when - lookback, when)
+        return fires[-1] if fires else None
+
     @abstractmethod
     def describe(self) -> str: ...
 
@@ -167,6 +173,13 @@ class IntervalTrigger(Trigger):
             out.append(Fire(at, at.date(), at.isoformat()))
             at += step
         return out
+
+    def last_fire_at_or_before(self, when: datetime, lookback: timedelta) -> Fire | None:
+        when = ensure_utc(when)
+        at = _EPOCH + ((when - _EPOCH) // self.every) * self.every
+        if at <= when - lookback:
+            return None
+        return Fire(at, at.date(), at.isoformat())
 
     def describe(self) -> str:
         return f"every {int(self.every.total_seconds() // 60)} min"

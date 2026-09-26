@@ -129,3 +129,21 @@ def test_interval_must_be_positive():
 def test_describe():
     assert "XNYS" in SessionTrigger("XNYS", offset=timedelta(minutes=30)).describe()
     assert "every" in IntervalTrigger(timedelta(minutes=5)).describe()
+
+
+def test_last_fire_at_or_before():
+    lookback = timedelta(days=8)
+    session = SessionTrigger("XNYS", offset=timedelta(minutes=30))
+    # Saturday: the latest fire is Friday's.
+    last = session.last_fire_at_or_before(_utc(2026, 9, 26, 12), lookback)
+    assert last.scheduled_for == _utc(2026, 9, 25, 20, 30)
+    at = _utc(2026, 9, 25, 20, 30)
+    assert session.last_fire_at_or_before(at, lookback).scheduled_for == at
+    interval = IntervalTrigger(timedelta(hours=4))
+    assert interval.last_fire_at_or_before(_utc(2026, 9, 25, 9), lookback).scheduled_for == _utc(
+        2026, 9, 25, 8
+    )
+    assert interval.last_fire_at_or_before(_utc(2026, 9, 25, 8), lookback).scheduled_for == _utc(
+        2026, 9, 25, 8
+    )
+    assert interval.last_fire_at_or_before(_utc(2026, 9, 25, 9), timedelta(minutes=30)) is None
