@@ -14,13 +14,16 @@ from collections.abc import Callable
 
 import pandas as pd
 
+from stonks.features.indicators import efficiency_ratio, kama
 from stonks.features.library import rolling_zscore, rsi, trailing_return
 from stonks.strategies.rules.spec import (
     AtrIndicator,
     CloseIndicator,
     DonchianHighIndicator,
     DonchianLowIndicator,
+    EfficiencyRatioIndicator,
     EmaIndicator,
+    KamaIndicator,
     RocIndicator,
     RsiIndicator,
     SmaIndicator,
@@ -85,6 +88,14 @@ def _donchian_low(ind: DonchianLowIndicator, bars: pd.DataFrame) -> pd.Series:
     return _col(bars, "low").rolling(ind.period, min_periods=ind.period).min().shift(1)
 
 
+def _efficiency_ratio(ind: EfficiencyRatioIndicator, bars: pd.DataFrame) -> pd.Series:
+    return efficiency_ratio(_col(bars, "close"), ind.period)
+
+
+def _kama(ind: KamaIndicator, bars: pd.DataFrame) -> pd.Series:
+    return kama(_col(bars, "close"), ind.period, ind.fast, ind.slow)
+
+
 _COMPUTE: dict[type, Callable[..., pd.Series]] = {
     CloseIndicator: _close,
     VolumeIndicator: _volume,
@@ -96,6 +107,8 @@ _COMPUTE: dict[type, Callable[..., pd.Series]] = {
     AtrIndicator: _atr,
     DonchianHighIndicator: _donchian_high,
     DonchianLowIndicator: _donchian_low,
+    EfficiencyRatioIndicator: _efficiency_ratio,
+    KamaIndicator: _kama,
 }
 
 
@@ -113,8 +126,17 @@ def required_bars(ind: object) -> int:
     period = int(ind.period)
     if isinstance(ind, EmaIndicator):
         return RECURSIVE_WARMUP * period
+    if isinstance(ind, KamaIndicator):
+        return ind.period + RECURSIVE_WARMUP * ind.slow
     if isinstance(ind, RsiIndicator):
         return RECURSIVE_WARMUP * period + 1
-    if isinstance(ind, RocIndicator | AtrIndicator | DonchianHighIndicator | DonchianLowIndicator):
+    if isinstance(
+        ind,
+        RocIndicator
+        | AtrIndicator
+        | DonchianHighIndicator
+        | DonchianLowIndicator
+        | EfficiencyRatioIndicator,
+    ):
         return period + 1
     return period

@@ -11,6 +11,15 @@ Signal at bar ``t`` (using bars at the configured :class:`Interval`):
 Our ``SimulatedBroker`` doesn't support shorts yet, so the -1 signal
 translates to "flat". A full long-short version can be added once the
 broker gains short-sell semantics without any change to this strategy.
+
+Asset classes (BL-43): Grimes's breakout studies find that on single
+stocks a close above an N-bar high is followed by no better than random
+returns, while futures and crypto do trend after breakouts. So the
+default universe is ``commodity``, ``crypto`` and ``bond`` and the
+default ticker is ``BTC-USD.CC``. Equities are an opt-in through the
+``asset_classes`` param (``{"asset_classes": ["equity"], "ticker":
+"AAPL.US"}``). A param set saved before BL-43 still loads, but a saved
+equity ticker needs that opt-in to keep trading.
 """
 
 from __future__ import annotations
@@ -30,6 +39,16 @@ from stonks.strategies.base import BaseStrategy
 
 class DonchianBreakout(BaseStrategy):
     id = "donchian_breakout"
+    applicable_asset_classes = ("commodity", "crypto", "bond")
+    hypothesis = (
+        "A close above the highest close of the last N bars starts a trend "
+        "in futures and crypto often enough that riding it pays for the "
+        "false breakouts. Late buyers and trapped sellers fuel the move. "
+        "Fails in ranges and, per Grimes, on single stocks."
+    )
+    alpha_family = "trend"
+    premise = "trend"
+    label_horizon_bars = 20
 
     def __init__(self, params: Any) -> None:
         super().__init__(params)
@@ -57,7 +76,7 @@ class DonchianBreakout(BaseStrategy):
             ParameterSpec(
                 name="ticker",
                 kind="categorical",
-                default="AAPL.US",
+                default="BTC-USD.CC",
                 bounds=None,
                 tunable=False,
                 description="Ticker the strategy trades.",

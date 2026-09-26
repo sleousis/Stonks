@@ -175,6 +175,15 @@ def replay_bull_harmonic(
 
 class HarmonicXABCDStrategy(SingleTickerLongFlat):
     id = "harmonic_xabcd"
+    hypothesis = (
+        "Swings that retrace in set Fibonacci ratios mark exhausted "
+        "selling, so price turns up at the D point. Buyers get in near "
+        "the low that late sellers created. Weak evidence: fails when the "
+        "ratios are coincidence."
+    )
+    alpha_family = "reversion"
+    premise = "mean_reversion"
+    label_horizon_bars = 10
 
     @classmethod
     def parameter_spec(cls):

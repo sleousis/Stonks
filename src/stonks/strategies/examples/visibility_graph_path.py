@@ -37,6 +37,14 @@ from stonks.strategies.examples._nt888_base import SingleTickerLongFlat, common_
 
 class VisibilityGraphPathStrategy(SingleTickerLongFlat):
     id = "visibility_graph_path"
+    hypothesis = (
+        "The visibility graph of recent closes tells a smooth rise from a "
+        "choppy one. A rise that is easier to see through tends to go on. "
+        "Weak evidence, it fails in noisy markets."
+    )
+    alpha_family = "trend"
+    premise = "trend"
+    label_horizon_bars = 12
 
     @classmethod
     def parameter_spec(cls):

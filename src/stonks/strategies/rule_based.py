@@ -19,7 +19,9 @@ Per bar:
   free slots, equal weight, never spending more than the cash on hand.
 
 Stop-loss / take-profit compare the latest close with the price seen when
-this instance decided the buy. That reference lives in memory: a
+this instance decided the buy. The trailing stops (vol or ATR multiple)
+sit below the highest close since that buy and never move down; their
+width comes from the bars ``estimate_return`` read on the same bar. That reference lives in memory: a
 production tick loads a fresh instance, so there the percentage exits
 only apply to positions opened within the same process (backtests, lab
 runs). Likewise the exit *condition* is only known for tickers this
@@ -39,9 +41,10 @@ from typing import Any, ClassVar
 from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec, Params, ParamSpace
 from stonks.core.types import AssetClass, Order, Portfolio
+from stonks.features.volatility import periods_per_year
 from stonks.strategies._common import LakeBarCaches, as_datetime, iso
 from stonks.strategies.base import BaseStrategy
-from stonks.strategies.rules.interpreter import evaluate, snapshot, window_size
+from stonks.strategies.rules.interpreter import evaluate, snapshot, stop_width, window_size
 from stonks.strategies.rules.spec import RuleSpec, validate_spec
 from stonks.strategies.rules.templates import SMA_TREND_FOLLOWING
 
@@ -54,6 +57,8 @@ _ALL_ASSET_CLASSES: tuple[AssetClass, ...] = ("equity", "crypto", "commodity", "
 class _Evaluation:
     entry: bool
     exit: bool
+    #: Trailing-stop distance below the high-water mark on this bar.
+    stop_width: float | None = None
 
 
 def _rank_score(value: float, order: str) -> float:
@@ -104,6 +109,8 @@ class RuleStrategy(BaseStrategy):
         self._evals_as_of: str | None = None
         self._evals: dict[str, _Evaluation] = {}
         self._entry_refs: dict[str, float] = {}
+        #: ticker -> [high-water mark since entry, trailing stop level]
+        self._trails: dict[str, list[float]] = {}
 
     @classmethod
     def bind(cls, spec: Any) -> type[RuleStrategy]:
@@ -135,12 +142,19 @@ class RuleStrategy(BaseStrategy):
         bars = self._bar_caches.for_lake(lake).last_n_bars(
             ticker, self._interval, as_of, self._window
         )
+        width = None
+        if self.spec.risk.has_trailing_stop:
+            per_year = periods_per_year(self._asset_class(ticker, lake), self._interval)  # type: ignore[arg-type]
+            width = stop_width(self.spec.risk, bars, per_year)
         values = snapshot(self.spec, bars)
         if values is None:
+            if width is not None:
+                self._remember(as_of, ticker, _Evaluation(False, False, width))
             return None
         ev = _Evaluation(
             entry=evaluate(self.spec.entry, values),
             exit=self.spec.exit is not None and evaluate(self.spec.exit, values),
+            stop_width=width,
         )
         self._remember(as_of, ticker, ev)
         if not ev.entry or ev.exit:
@@ -157,15 +171,17 @@ class RuleStrategy(BaseStrategy):
         evals = self._evals if self._evals_as_of == self._key(as_of) else {}
         picked = {t for _, t in my_picks}
         held = {t: q for t, q in portfolio.positions.items() if q > 0}
-        for ticker in list(self._entry_refs):
-            if ticker not in held:
-                del self._entry_refs[ticker]
+        for refs in (self._entry_refs, self._trails):
+            for ticker in list(refs):
+                if ticker not in held:
+                    del refs[ticker]
 
         orders: list[Order] = []
         for ticker, qty in held.items():
             if self._should_exit(ticker, prices.get(ticker), evals.get(ticker), picked):
                 orders.append(self._order("sell", ticker, qty, as_of))
                 self._entry_refs.pop(ticker, None)
+                self._trails.pop(ticker, None)
 
         sizing = self.spec.sizing
         remaining = len(held) - len(orders)
@@ -186,6 +202,7 @@ class RuleStrategy(BaseStrategy):
                 break
             orders.append(self._order("buy", ticker, spend / price, as_of))
             self._entry_refs[ticker] = float(price)
+            self._trails[ticker] = [float(price), -math.inf]
             cash -= spend
             slots -= 1
         return orders
@@ -222,7 +239,20 @@ class RuleStrategy(BaseStrategy):
         risk = self.spec.risk
         if risk.stop_loss_pct is not None and price <= ref * (1.0 - risk.stop_loss_pct):
             return True
+        if self._trailing_stop_hit(ticker, float(price), ev):
+            return True
         return risk.take_profit_pct is not None and price >= ref * (1.0 + risk.take_profit_pct)
+
+    def _trailing_stop_hit(self, ticker: str, price: float, ev: _Evaluation | None) -> bool:
+        """Raise the high-water mark and the (never lowered) stop level,
+        then test the close against it."""
+        trail = self._trails.get(ticker)
+        if trail is None:
+            return False
+        trail[0] = max(trail[0], price)
+        if ev is not None and ev.stop_width is not None:
+            trail[1] = max(trail[1], trail[0] - ev.stop_width)
+        return price <= trail[1]
 
     def _in_universe(self, ticker: str, lake: Any) -> bool:
         if self._tickers and ticker not in self._tickers:

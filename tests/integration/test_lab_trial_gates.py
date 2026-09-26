@@ -28,6 +28,9 @@ def _dataset(lake):
     )
 
 
+NO_SKIP = {"skip_days": 0}
+
+
 def _runner(ledger, budget=10):
     return LabRunner(
         tuner=RandomTuner(seed=3),
@@ -45,8 +48,9 @@ def test_trial_gates_see_the_run_and_prior_runs(tmp_path, lake_trending):
     ledger = TrialLedger(state, tmp_path / "artifacts")
     ds = _dataset(lake_trending)
 
-    first = _runner(ledger).run(Momentum, ds)
-    second = _runner(ledger).run(Momentum, ds)
+    # skip_days=0: the six-month window is too short for the skip month
+    first = _runner(ledger).run(Momentum, ds, fixed_params=NO_SKIP)
+    second = _runner(ledger).run(Momentum, ds, fixed_params=NO_SKIP)
 
     assert first.trial_matrix is not None
     reports = {r.test_id: r for r in second.survival_reports}

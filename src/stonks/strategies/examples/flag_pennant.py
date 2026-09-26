@@ -234,6 +234,15 @@ def replay_bull_flag(
 
 class FlagPennantStrategy(SingleTickerLongFlat):
     id = "flag_pennant"
+    hypothesis = (
+        "After a sharp rise a short, tight pause (a flag or pennant) "
+        "resolves upward more often than not, as buyers who missed the "
+        "pole step in. Fails when the pattern is noise, which is most of "
+        "the time on random walks."
+    )
+    alpha_family = "trend"
+    premise = "trend"
+    label_horizon_bars = 10
 
     @classmethod
     def parameter_spec(cls):

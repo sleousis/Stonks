@@ -61,6 +61,14 @@ from stonks.strategies.base import BaseStrategy
 
 class RSIPCAStrategy(BaseStrategy):
     id = "rsi_pca"
+    hypothesis = (
+        "The shape of RSI across many periods, compressed with PCA, "
+        "carries a small linear signal for the next few bars. Purely "
+        "statistical, it fails when that relation drifts."
+    )
+    alpha_family = "data_driven"
+    premise = "none"
+    label_horizon_bars = 6
 
     @classmethod
     def parameter_spec(cls):

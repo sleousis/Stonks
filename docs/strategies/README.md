@@ -1,6 +1,6 @@
 # Strategies
 
-Every strategy the lab can name, grouped by family. The list comes from `stonks.lab.catalog`: each public class in `strategies/examples/` plus three wrappers, 28 in all. All are long-only; short signals mean "flat".
+Every strategy the lab can name, grouped by family. The list comes from `stonks.lab.catalog`: each public class in `strategies/examples/` plus four wrappers, 29 in all. All are long-only. Short signals mean "flat".
 
 ## Run one
 
@@ -9,16 +9,16 @@ uv run stonks lab run momentum --start 2023-01-01 --end 2025-01-01 --tickers AAP
 uv run stonks lab run quant_momentum --start 2020-01-01 --end 2025-01-01 --preset promotion --register
 ```
 
-`--params '{"lookback_days": 126}'` sets parameters. Wrappers take the inner strategy in their params (`inner_class_path`, `inner_params`).
+`--params '{"lookback_days": 126}'` sets parameters. `--params '{"asset_classes": ["equity"]}'` runs a strategy on asset classes outside its default set. Wrappers take the inner strategy in their params (`inner_class_path`, `inner_params`).
 
 ## Reference
 
 | Id | What it does |
 |----|--------------|
 | `buy_and_hold` | Buys one ticker at a set allocation and holds it. |
-| `momentum` | Holds the ticker with the best trailing return; sells what drops out of the ranking. |
-| `donchian_breakout` | Long above the prior N-bar high, flat below the prior N-bar low. |
-| `trendline_breakout` | Long when the close breaks a fitted, sloped resistance line; flat below support. |
+| `momentum` | Holds the ticker with the best six-month return, skipping the last month. Sells what drops out of the ranking. |
+| `donchian_breakout` | Long above the prior N-bar high, flat below the prior N-bar low. Commodity, crypto and bond by default (equity is opt-in). |
+| `trendline_breakout` | Long when the close breaks a fitted, sloped resistance line, flat below support. Commodity, crypto and bond by default (equity is opt-in). |
 
 ## Fundamentals
 
@@ -85,11 +85,12 @@ A wrapper gates an inner strategy. It takes the inner strategy's asset classes.
 | `macro_regime_filter` | Goes flat when a point-in-time macro series (from `macro_indicators`) says risk off. |
 | `feature_regime_filter` | Goes flat per ticker when a complexity feature (permutation entropy, reversibility, runs) says risk off. [Details](nt888-filters-ml.md). |
 | `last_trade_filter` | Takes the inner strategy's entry only after its previous trade lost (or won). [Details](nt888-filters-ml.md). |
+| `regime_filter` | Blocks buys, exits or scales down when at least k of n regime conditions (macro, benchmark trend, volatility, yield curve, weekly trend) say risk off. [Details](book-strategies.md#regimefilter-bl-42). |
 
 ## Not in the catalog
 
 - **`TrailingStopWrapper`** (`strategies/trailing_stop.py`): a volatility-scaled trailing stop around any strategy. Used in code; `stonks lab run` cannot name it yet. [Details](book-strategies.md#trailingstopwrapper).
-- **`RuleStrategy`** (`strategies/rule_based.py`): a strategy defined by a JSON spec (indicators, entry and exit rules, sizing, stops). Built, backtested and registered from the Strategy Studio page in the console.
+- **`RuleStrategy`** (`strategies/rule_based.py`): a strategy defined by a JSON spec (indicators including efficiency ratio and KAMA, entry and exit rules, sizing, percentage stops and vol or ATR trailing stops). Built, backtested and registered from the Strategy Studio page in the console.
 
 ## Portfolio constructors
 

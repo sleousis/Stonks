@@ -67,6 +67,14 @@ def vol_breakout_states(
 
 class VolatilityHawkesStrategy(SingleTickerLongFlat):
     id = "volatility_hawkes"
+    hypothesis = (
+        "A burst of volatility after calm often starts a new move, and "
+        "joining in the direction of that move pays. Fails when bursts "
+        "come from news that reverses at once."
+    )
+    alpha_family = "trend"
+    premise = "trend"
+    label_horizon_bars = 24
 
     @classmethod
     def parameter_spec(cls):
