@@ -249,6 +249,36 @@ def test_zero_denominators_do_not_crash(lake, field):
         assert r is None  # no market cap, no value signal
 
 
+def test_stale_share_counts_are_ignored(lake):
+    _quarter(lake, "S.US", list(QUARTERS_2023), shares=None)
+    lake.upsert_shares_outstanding(
+        pd.DataFrame([{"ticker": "S.US", "date": date(2019, 12, 31), "shares": 200.0}])
+    )
+    _prices(lake, "S.US", 10.0)
+    f = QualityValue({}).extract_features("S.US", date(2024, 3, 1), lake).values
+    assert "market_cap" not in f
+
+
+def test_gross_margin_from_zero_cost_of_revenue(lake):
+    lake.upsert_income_statement(
+        pd.DataFrame(
+            [
+                {
+                    "ticker": "C.US",
+                    "period_end": date(2023, 12, 31),
+                    "frequency": "A",
+                    "filing_date": date(2024, 2, 1),
+                    "revenue": 100.0,
+                    "cost_of_revenue": 0.0,
+                    "net_income": 10.0,
+                }
+            ]
+        )
+    )
+    f = QualityValue({}).extract_features("C.US", date(2024, 3, 1), lake).values
+    assert f["gross_margin"] == pytest.approx(1.0)
+
+
 def test_share_count_falls_back_to_the_shares_table_with_lag(lake):
     _quarter(lake, "S.US", list(QUARTERS_2023), shares=None)
     lake.upsert_shares_outstanding(

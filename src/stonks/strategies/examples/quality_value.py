@@ -297,8 +297,9 @@ class QualityValue(BaseStrategy):
         net_income = income.get("net_income")
         revenue = income.get("revenue")
         gross_profit = income.get("gross_profit")
-        if gross_profit is None and revenue is not None and income.get("cost_of_revenue"):
-            gross_profit = revenue - abs(income["cost_of_revenue"])
+        cost_of_revenue = income.get("cost_of_revenue")
+        if gross_profit is None and revenue is not None and cost_of_revenue is not None:
+            gross_profit = revenue - abs(cost_of_revenue)
         fcf = cash.get("free_cash_flow")
         if fcf is None and cash.get("operating_cash_flow") is not None:
             capex = cash.get("capital_expenditures")
@@ -379,12 +380,15 @@ class QualityValue(BaseStrategy):
         shares = balance.get("common_stock_shares_outstanding")
         if shares is not None and shares > 0:
             return shares
-        # Fallback: the share-count table, lagged like an unfiled statement.
+        # Fallback: the share-count table, lagged like an unfiled statement
+        # and subject to the same staleness limit as the statements.
         lag = timedelta(days=int(self.params["missing_filing_lag_days"]))
+        oldest = day - timedelta(days=int(self.params["max_statement_age_days"]))
         hist = self._history_shares(lake, ticker)
         for d, s in reversed(hist):
             if d + lag <= day:
-                return s if s is not None and s > 0 else None
+                fresh = d >= oldest and s is not None and s > 0
+                return s if fresh else None
         return None
 
     def _history_shares(self, lake: Any, ticker: str) -> list[tuple[date, float | None]]:
