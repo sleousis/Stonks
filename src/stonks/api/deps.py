@@ -75,7 +75,9 @@ def get_auth(request: Request) -> AuthService:
 AuthDep = Annotated[AuthService, Depends(get_auth)]
 
 
-def _client_ip(request: Request) -> str | None:
+def client_ip(request: Request) -> str | None:
+    """The peer address (already the real client behind a trusted proxy:
+    ``stonks serve`` applies ``X-Forwarded-For`` from those only)."""
     return request.client.host if request.client else None
 
 
@@ -118,7 +120,7 @@ def authorize(
     """
     cfg = get_api_config(request)
     safe = request.method in _SAFE_METHODS
-    if safe and cfg.open_reads_on_loopback and _is_loopback(_client_ip(request)):
+    if safe and cfg.open_reads_on_loopback and _is_loopback(client_ip(request)):
         return
     principal = _resolve(request, creds)
     if not safe and not principal.can_write and not _route_allows_readers(request):

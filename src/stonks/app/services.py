@@ -9,14 +9,13 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from stonks.accounts import DEFAULT_OWNER_ID, NotFound, Scope, UserRepository
 from stonks.app.alerts import AlertService
 from stonks.app.backups import BackupService
 from stonks.app.brokers import BrokerConnector, BrokerService
 from stonks.app.catalog import CatalogService, LabCatalogSource, StrategySource
 from stonks.app.connections import ConnectionsAppService
 from stonks.app.context import AppContext
-from stonks.app.errors import ConfigurationError, ConflictError, NotFoundError
+from stonks.app.errors import ConflictError, NotFoundError
 from stonks.app.ingest import IngestService
 from stonks.app.jobs import Job, JobRunner, JobStore
 from stonks.app.lab import LabService
@@ -243,20 +242,6 @@ class Services:
         )
         services.schedule.bind(services)
         return services
-
-    def bootstrap_scope(self) -> Scope:
-        """The data scope of the bootstrap admin (``usr_owner``), who owns
-        the single API token until per-user login (step S2) lands."""
-        with self.context.state() as state:
-            try:
-                user = UserRepository(state).get(DEFAULT_OWNER_ID)
-            except NotFound:
-                user = None
-        if user is None or user.status != "active":
-            raise ConfigurationError(
-                "the bootstrap admin is missing or disabled; run `stonks db init`"
-            )
-        return Scope.for_user(user)
 
     def start(self) -> None:
         """Migrate both stores, fail jobs a previous process left behind and,
