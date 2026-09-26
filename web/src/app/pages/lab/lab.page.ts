@@ -5,6 +5,7 @@ import {
   type ElementRef,
   computed,
   inject,
+  input,
   resource,
   signal,
   viewChild,
@@ -19,6 +20,7 @@ import type {
   LabRunRequest,
   LabRunView,
 } from '../../api/models';
+import { StrategiesService } from '../../api/strategies.service';
 import { SystemService } from '../../api/system.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { type JobHandle, JobsService, isTerminal } from '../../core/jobs/jobs.service';
@@ -33,6 +35,7 @@ import { BacktestFormView } from './backtest-form';
 import { BacktestResultView } from './backtest-result';
 import { LabRunFormView } from './lab-run-form';
 import { LabRunResultView } from './lab-run-result';
+import { type StrategyPreset, presetFromStrategy } from './strategy-preset';
 
 export type LabKind = 'backtest' | 'lab_run';
 const LAB_KINDS: readonly LabKind[] = ['backtest', 'lab_run'];
@@ -91,6 +94,7 @@ export function canCancel(kind: string, status: string | null | undefined): bool
 export class LabPage {
   private readonly lab = inject(LabService);
   private readonly system = inject(SystemService);
+  private readonly strategiesApi = inject(StrategiesService);
   private readonly jobsApi = inject(JobsApiService);
   private readonly jobs = inject(JobsService);
   private readonly confirm = inject(ConfirmService);
@@ -98,6 +102,25 @@ export class LabPage {
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly mode = signal<LabKind>('backtest');
+
+  /** Query param `?strategy=<id>`: start both forms from a registered strategy. */
+  readonly strategy = input<string | undefined>();
+  protected readonly registered = resource({
+    params: () => {
+      const id = this.strategy();
+      return id ? { id } : undefined;
+    },
+    loader: ({ params }) => this.strategiesApi.get(params.id),
+  });
+  protected readonly preset = computed<StrategyPreset | null>(() =>
+    this.registered.hasValue() ? presetFromStrategy(this.registered.value()) : null,
+  );
+  /** The preset's class is not in the catalog (e.g. a code strategy that is off). */
+  protected readonly presetUncatalogued = computed(() => {
+    const p = this.preset();
+    if (!p || !this.classes.hasValue()) return false;
+    return !this.classes.value().some((c) => c.class_path === p.classPath);
+  });
   private readonly resultPanel = viewChild<ElementRef<HTMLElement>>('resultPanel');
 
   // Reference data --------------------------------------------------------

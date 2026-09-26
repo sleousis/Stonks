@@ -50,6 +50,26 @@
         message="The catalog lists classes from the configured strategy sources. Add a strategy module and restart the API."
       />
     } @else {
+      @if (strategy(); as id) {
+        <div class="preset panel-body" role="status">
+          @if (registered.error()) {
+            <p class="preset-warn">Could not load strategy “{{ id }}”, so the forms start empty.</p>
+          } @else if (preset(); as p) {
+            @if (presetUncatalogued()) {
+              <p class="preset-warn">
+                {{ p.strategyId }} runs {{ p.classPath }}, which is not in the strategy catalog, so
+                the forms start empty.
+              </p>
+            } @else {
+              <p>
+                Re-running <strong>{{ p.strategyId }}</strong
+                >: its class and registered parameters are filled in. A lab run searches the
+                parameters again.
+              </p>
+            }
+          }
+        </div>
+      }
       <div
         id="lab-panel-backtest"
         class="panel-body"
@@ -64,6 +84,7 @@
           [classes]="classes.value()"
           [intervals]="intervalList()"
           [costModels]="costModelList()"
+          [preset]="preset()"
           [busy]="starting()"
           (submitted)="startBacktest($event)"
         />
@@ -82,6 +103,7 @@
         <app-lab-run-form
           [classes]="classes.value()"
           [intervals]="intervalList()"
+          [preset]="preset()"
           [busy]="starting()"
           (submitted)="startLabRun($event)"
         />
