@@ -144,8 +144,10 @@ The lake must not be held by another writer: stop `stonks serve` or back up from
 
 Every `ingest prices` and `ingest intraday` batch is checked before it is stored:
 
-- **Quarantined** (kept out of `bars`, written to `quarantined_bars` with reasons): missing or non-positive prices, high below low, close outside the bar's range, duplicate timestamps, one-bar spikes that revert.
-- **Warnings** (kept): extreme moves that stick, stale series, flat price streaks, zero-volume streaks.
+- **Quarantined** (kept out of `bars`, written to `quarantined_bars` with reasons): missing or non-positive prices, high below low, close outside the bar's range, duplicate timestamps, one-bar spikes that revert. A vendor row with a null or missing price costs only that row, not the ticker.
+- **Stored spikes**: a daily ingest stores one bar at a time, so a bad tick is stored before the next bar shows it up. When the next batch takes its move back, the stored bar moves to `quarantined_bars` and leaves `bars`.
+- **Warnings** (kept): extreme moves that stick, stale series, flat price streaks, zero-volume streaks, calendar gaps (a day whose only bar was quarantined counts), and `no_data` when the source returned nothing.
+- **Unfinished bars**: a daily bar whose session has not closed yet is dropped. The next ingest after the close stores it.
 
 Each run stores a summary in `ingest_runs.quality_json` and alerts when it quarantines a bar, when 5 or more tickers warn, or when a fallback source supplied data. Thresholds use the defaults in `ingest/quality_config.py`; `[ingest.quality]` and `[ingest.fallback]` are not read from the config file yet, and no command wires a fallback source today. Triage: [runbooks/data-stale.md](runbooks/data-stale.md).
 
