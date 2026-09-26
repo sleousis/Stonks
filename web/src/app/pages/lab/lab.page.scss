@@ -1,0 +1,155 @@
+@use 'breakpoints' as bp;
+
+.lead {
+  margin-bottom: var(--space-4);
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+  max-width: 60ch;
+}
+
+// Segmented tabs in the form panel head.
+.tabs {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+
+  button {
+    min-height: calc(var(--control-h) - 6px);
+    padding: 0 var(--space-3);
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--color-ink-2);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+    transition:
+      background-color var(--dur-fast) var(--ease),
+      color var(--dur-fast) var(--ease);
+
+    &:hover {
+      color: var(--color-ink);
+    }
+
+    &[aria-selected='true'] {
+      background: var(--color-surface);
+      color: var(--color-ink);
+      box-shadow:
+        var(--shadow-1),
+        inset 0 -2px 0 var(--color-brass);
+    }
+  }
+
+  @include bp.phone {
+    button {
+      min-height: calc(var(--touch-min) - 6px);
+    }
+  }
+
+  @include bp.coarse {
+    button {
+      min-height: calc(var(--touch-min) - 6px);
+    }
+  }
+}
+
+// The result panel follows the form on desktop so results stay in view.
+.result-panel {
+  align-self: start;
+
+  @include bp.from-desktop {
+    position: sticky;
+    top: var(--space-4);
+  }
+}
+
+.form-panel {
+  align-self: start;
+}
+
+.head-meta {
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.job {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+}
+
+.job-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.job-id {
+  font-size: var(--text-xs);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.progress {
+  display: grid;
+  gap: var(--space-1);
+  width: 100%;
+}
+
+.progress-label {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-ink-2);
+}
+
+progress {
+  width: 100%;
+  height: 8px;
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-surface-3);
+  overflow: hidden;
+
+  &::-webkit-progress-bar {
+    background: var(--color-surface-3);
+    border-radius: 999px;
+  }
+
+  &::-webkit-progress-value {
+    background: var(--color-brass);
+    border-radius: 999px;
+    transition: width var(--dur) var(--ease);
+  }
+
+  &::-moz-progress-bar {
+    background: var(--color-brass);
+    border-radius: 999px;
+  }
+}
+
+.job-error {
+  color: var(--color-loss);
+  overflow-wrap: anywhere;
+}
+
+.row-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.cancel {
+  color: var(--color-loss);
+}
