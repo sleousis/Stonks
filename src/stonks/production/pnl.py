@@ -3,7 +3,8 @@
 Both the real portfolio and a shadow strategy's virtual portfolio are keyed
 by the tick's trading date (``as_of``), so their rows line up day for day:
 
-- real: the last ``portfolio_snapshots`` row per ``as_of`` (a same-day
+- real: one portfolio's (``portfolio_id``, default the default portfolio;
+  its broker-sync snapshots included) last ``portfolio_snapshots`` row per ``as_of`` (a same-day
   rerun supersedes the earlier run). Rows written before ``as_of`` existed
   fall back to the UTC date of ``taken_at``;
 - shadow: ``shadow_portfolio_snapshots`` already has one row per ``as_of``.
@@ -24,6 +25,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 
+from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
+from stonks.production.ledger import ledger_filter
 from stonks.store.state import SqliteState
 
 DEFAULT_MAX_GAP_DAYS = 4
@@ -79,9 +82,13 @@ def daily_pnl(
 
 
 def load_pnl(
-    state: SqliteState, since: date | None = None, strategy_id: str | None = None
+    state: SqliteState,
+    since: date | None = None,
+    strategy_id: str | None = None,
+    *,
+    portfolio_id: str = DEFAULT_PORTFOLIO_ID,
 ) -> list[PnlRow]:
-    """Real portfolio P&L, or a shadow strategy's virtual P&L when
+    """``portfolio_id``'s P&L, or a shadow strategy's virtual P&L when
     ``strategy_id`` is given."""
     if strategy_id is not None:
         rows = state.sql(
@@ -92,7 +99,11 @@ def load_pnl(
         points = [(date.fromisoformat(r["as_of"]), float(r["total_value"])) for r in rows]
         return daily_pnl(points, since=since)
 
-    rows = state.sql("SELECT as_of, taken_at, total_value FROM portfolio_snapshots ORDER BY id")
+    where, params = ledger_filter(state, "portfolio_snapshots", portfolio_id)
+    rows = state.sql(
+        f"SELECT as_of, taken_at, total_value FROM portfolio_snapshots WHERE {where} ORDER BY id",
+        params,
+    )
     by_day: dict[date, float] = {}
     for r in rows:
         # Later ids win: a same-as_of rerun supersedes the earlier run.

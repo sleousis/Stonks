@@ -16,6 +16,11 @@ Two paths, picked by broker capability:
   (same order, quantity, price, timestamp) is already recorded. Such brokers
   report completed fills only, so an order with a fill becomes ``filled``.
 
+Both paths only touch the orders of one portfolio (``portfolio_id``,
+default the default portfolio): a broker account backs exactly one
+portfolio, so another portfolio's pending order must never be looked up
+there (and rejected as "never received") nor receive its fills.
+
 Per-order broker failures are soft: logged, reported in the summary, and
 the order is left untouched for the next run.
 """
@@ -25,10 +30,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
 from stonks.core.protocols import Broker
 from stonks.core.types import Fill
 from stonks.execution.brokers.base import OrderStateSource, delta_fill
 from stonks.logging import get_logger
+from stonks.production.ledger import ledger_filter
 from stonks.store.state import SqliteState
 
 _log = get_logger("stonks.execution.reconcile")
@@ -52,12 +59,14 @@ def reconcile_orders(
     state: SqliteState,
     *,
     now: datetime | None = None,
+    portfolio_id: str = DEFAULT_PORTFOLIO_ID,
 ) -> ReconcileSummary:
+    """Sync the orders of ``portfolio_id`` (the portfolio ``broker`` trades)."""
     now = now or datetime.now(UTC)
     if isinstance(broker, OrderStateSource):
-        summary = _reconcile_by_order_state(broker, state, now)
+        summary = _reconcile_by_order_state(broker, state, now, portfolio_id)
     else:
-        summary = _reconcile_by_fill_list(broker, state, now)
+        summary = _reconcile_by_fill_list(broker, state, now, portfolio_id)
     _log.info(
         "reconcile.done",
         orders_checked=summary.orders_checked,
@@ -74,12 +83,14 @@ def reconcile_orders(
 
 
 def _reconcile_by_order_state(
-    broker: OrderStateSource, state: SqliteState, now: datetime
+    broker: OrderStateSource, state: SqliteState, now: datetime, portfolio_id: str
 ) -> ReconcileSummary:
     placeholders = ",".join("?" for _ in NON_TERMINAL_STATUSES)
+    where, params = ledger_filter(state, "orders", portfolio_id)
     rows = state.sql(
-        f"SELECT client_id FROM orders WHERE status IN ({placeholders}) ORDER BY created_at",
-        list(NON_TERMINAL_STATUSES),
+        f"SELECT client_id FROM orders WHERE status IN ({placeholders}) AND {where}"
+        " ORDER BY created_at",
+        [*NON_TERMINAL_STATUSES, *params],
     )
     updated = inserted = 0
     unknown: list[str] = []
@@ -200,15 +211,20 @@ def _booked(state: SqliteState, client_id: str) -> tuple[float, float]:
 # ---- fill-list path -----------------------------------------------------------
 
 
-def _reconcile_by_fill_list(broker: Broker, state: SqliteState, now: datetime) -> ReconcileSummary:
+def _reconcile_by_fill_list(
+    broker: Broker, state: SqliteState, now: datetime, portfolio_id: str
+) -> ReconcileSummary:
     fills = broker.reconcile()
+    where, params = ledger_filter(state, "orders", portfolio_id)
     updated = inserted = 0
     orphans: list[str] = []
     checked: set[str] = set()
     for fill in fills:
         client_id = fill.order_client_id
         checked.add(client_id)
-        if not state.sql("SELECT 1 FROM orders WHERE client_id = ?", [client_id]):
+        if not state.sql(
+            f"SELECT 1 FROM orders WHERE client_id = ? AND {where}", [client_id, *params]
+        ):
             _log.warning("reconcile.fill_without_order", client_id=client_id)
             orphans.append(client_id)
             continue

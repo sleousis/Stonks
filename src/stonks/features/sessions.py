@@ -3,14 +3,15 @@
 Calendar-timed strategies (a quarterly rebalance on the last session of a
 month, a weekly trade on Wednesdays) need to know a session date *before*
 the bar arrives: deciding "today is the last session of May" from the data
-would mean peeking at the next bar. The holiday rules are known in advance,
-so answering from them is look-ahead free.
+would mean peeking at the next bar. Exchange calendars are published in
+advance, so answering from them is look-ahead free.
 
-Regular full-day closures only: New Year (a Saturday holiday is not moved
-to Friday), Martin Luther King Jr., Presidents, Good Friday, Memorial,
-Juneteenth (from 2022), Independence, Labor, Thanksgiving and Christmas.
-One-off closures (national mourning, weather) are not modelled; a strategy
-simply sees no bar that day.
+The sessions come from the scheduler's market calendar
+(:mod:`stonks.scheduling.calendar`, ``XNYS`` from ``exchange_calendars``),
+the one US calendar in the system: regular holidays and the one-off
+closures the exchange announced (national days of mourning, 9/11,
+Hurricane Sandy). Outside that calendar's window (before 1970, after 2040)
+every weekday counts as a session.
 """
 
 from __future__ import annotations
@@ -18,46 +19,29 @@ from __future__ import annotations
 from datetime import date, timedelta
 from functools import lru_cache
 
-from pandas.tseries.holiday import (
-    AbstractHolidayCalendar,
-    GoodFriday,
-    Holiday,
-    USLaborDay,
-    USMartinLutherKingJr,
-    USMemorialDay,
-    USPresidentsDay,
-    USThanksgivingDay,
-    nearest_workday,
-    sunday_to_monday,
-)
+from stonks.scheduling.calendar import US_CALENDAR, get_calendar
 
 __all__ = ["is_session", "last_session_of_month", "week_index", "weekly_session"]
 
 
-class _USExchangeHolidays(AbstractHolidayCalendar):
-    rules = [  # noqa: RUF012 - pandas reads this class attribute
-        Holiday("New Year", month=1, day=1, observance=sunday_to_monday),
-        USMartinLutherKingJr,
-        USPresidentsDay,
-        GoodFriday,
-        USMemorialDay,
-        Holiday("Juneteenth", month=6, day=19, start_date="2022-01-01", observance=nearest_workday),
-        Holiday("Independence", month=7, day=4, observance=nearest_workday),
-        USLaborDay,
-        USThanksgivingDay,
-        Holiday("Christmas", month=12, day=25, observance=nearest_workday),
-    ]
-
-
 @lru_cache(maxsize=256)
-def _holidays(year: int) -> frozenset[date]:
-    days = _USExchangeHolidays().holidays(start=date(year, 1, 1), end=date(year, 12, 31))
-    return frozenset(d.date() for d in days)
+def _sessions(year: int) -> frozenset[date] | None:
+    """The US session dates of ``year``; ``None`` when the calendar doesn't
+    cover the whole year."""
+    cal = get_calendar(US_CALENDAR)
+    first, last = date(year, 1, 1), date(year, 12, 31)
+    lo, hi = getattr(cal, "first_session", None), getattr(cal, "last_session", None)
+    if (lo is not None and first < lo.replace(month=1, day=1)) or (hi is not None and last > hi):
+        return None
+    return frozenset(s.date for s in cal.sessions(first, last))
 
 
 def is_session(day: date) -> bool:
-    """True when the US exchanges hold a regular session on ``day``."""
-    return day.weekday() < 5 and day not in _holidays(day.year)
+    """True when the US exchanges hold a session on ``day``."""
+    if day.weekday() >= 5:
+        return False
+    sessions = _sessions(day.year)
+    return True if sessions is None else day in sessions
 
 
 def last_session_of_month(year: int, month: int) -> date:

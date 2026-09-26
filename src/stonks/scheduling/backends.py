@@ -19,6 +19,15 @@ class BackendConfigError(ValueError):
     pass
 
 
+#: Comma-separated plain-http hosts the token may go to, on top of
+#: ``[scheduler].api_trusted_hosts`` (e.g. ``api`` on a Compose network).
+API_TRUSTED_HOSTS_ENV = "STONKS_API_TRUSTED_HOSTS"
+
+
+def _env_hosts(env: Mapping[str, str]) -> list[str]:
+    return [h.strip() for h in env.get(API_TRUSTED_HOSTS_ENV, "").split(",") if h.strip()]
+
+
 def build_executor(
     config: SchedulerConfig,
     env: Mapping[str, str] | None = None,
@@ -51,7 +60,7 @@ def build_executor(
         url,
         token=env.get(API_TOKEN_ENV) or None,
         timeout=config.api_timeout_seconds,
-        trusted_hosts=config.api_trusted_hosts,
+        trusted_hosts=[*config.api_trusted_hosts, *_env_hosts(env)],
         transport=transport,
     )
     return ApiExecutor(

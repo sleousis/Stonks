@@ -1,6 +1,5 @@
 """Shared helpers for the W3.1 risk-rule tests: a ``RiskPolicy`` carrying the
-rule settings (what the integration step adds to ``config.py``) and
-synthetic adjusted OHLCV history."""
+rule settings and synthetic adjusted OHLCV history."""
 
 from __future__ import annotations
 
@@ -18,10 +17,8 @@ from stonks.production.rules.settings import RuleSettings
 AS_OF = date(2025, 6, 30)
 
 
-class Policy(RiskPolicy):
-    """``RiskPolicy`` plus the ``rules`` field the integration step wires."""
-
-    rules: RuleSettings = RuleSettings()
+#: ``RiskPolicy`` carries ``rules`` itself now; the alias keeps the tests' name.
+Policy = RiskPolicy
 
 
 def policy(**rules) -> Policy:

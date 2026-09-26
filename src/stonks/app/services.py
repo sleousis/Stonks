@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from stonks.accounts import DEFAULT_OWNER_ID, NotFound, Scope, UserRepository
 from stonks.app.alerts import AlertService
+from stonks.app.backups import BackupService
 from stonks.app.brokers import BrokerConnector, BrokerService
 from stonks.app.catalog import CatalogService, LabCatalogSource, StrategySource
 from stonks.app.connections import ConnectionsAppService
@@ -129,6 +130,7 @@ class Services:
     brokers: BrokerService
     studio: StudioService
     alerts: AlertService
+    backups: BackupService
     connections: ConnectionsAppService
     notifications: NotificationsAppService
     schedule: ScheduleService
@@ -179,6 +181,7 @@ class Services:
             # before recover_interrupted() and the first request.
             studio=StudioService(context, lab, runner),
             alerts=AlertService(context),
+            backups=BackupService(context, runner),
             connections=ConnectionsAppService(context),
             notifications=NotificationsAppService(context),
             schedule=ScheduleService(context),

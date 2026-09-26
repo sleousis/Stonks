@@ -6,8 +6,10 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
 from stonks.app.context import AppContext
 from stonks.app.pagination import Page
+from stonks.production.ledger import ledger_filter
 
 
 class OrderView(BaseModel):
@@ -52,11 +54,14 @@ class OrdersService:
         status: str | None = None,
         limit: int,
         offset: int,
+        portfolio_id: str = DEFAULT_PORTFOLIO_ID,
     ) -> Page[OrderView]:
+        """One portfolio's orders (default: the default portfolio)."""
         clause, params = _where(
             {"tick_id": tick_id, "strategy_id": strategy_id, "ticker": ticker, "status": status}
         )
         with self._ctx.state() as state:
+            clause, params = _scoped(state, "orders", portfolio_id, None, clause, params)
             total = int(state.sql(f"SELECT COUNT(*) FROM orders{clause}", params)[0][0])
             rows = state.sql(
                 f"SELECT * FROM orders{clause} ORDER BY created_at DESC, rowid DESC "
@@ -74,12 +79,15 @@ class OrdersService:
         order_client_id: str | None = None,
         limit: int,
         offset: int,
+        portfolio_id: str = DEFAULT_PORTFOLIO_ID,
     ) -> Page[FillView]:
+        """One portfolio's fills (default: the default portfolio)."""
         clause, params = _where(
             {"o.tick_id": tick_id, "f.ticker": ticker, "f.order_client_id": order_client_id}
         )
-        base = f"FROM fills f LEFT JOIN orders o ON o.client_id = f.order_client_id{clause}"
         with self._ctx.state() as state:
+            clause, params = _scoped(state, "fills", portfolio_id, "f", clause, params)
+            base = f"FROM fills f LEFT JOIN orders o ON o.client_id = f.order_client_id{clause}"
             total = int(state.sql(f"SELECT COUNT(*) {base}", params)[0][0])
             rows = state.sql(
                 f"SELECT f.*, o.tick_id AS tick_id {base} "
@@ -88,6 +96,15 @@ class OrdersService:
             )
         items = [FillView(**dict(r)) for r in rows]
         return Page[FillView](items=items, total=total, limit=limit, offset=offset)
+
+
+def _scoped(
+    state: Any, table: Any, portfolio_id: str, alias: str | None, clause: str, params: list[Any]
+) -> tuple[str, list[Any]]:
+    """``clause`` narrowed to one portfolio's rows."""
+    where, extra = ledger_filter(state, table, portfolio_id, alias=alias)
+    joiner = " AND " if clause else " WHERE "
+    return f"{clause}{joiner}{where}", [*params, *extra]
 
 
 def _where(filters: dict[str, Any]) -> tuple[str, list[Any]]:

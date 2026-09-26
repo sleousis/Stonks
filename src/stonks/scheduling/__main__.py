@@ -13,7 +13,7 @@ Commands::
 ``--config PATH`` picks the TOML file (default ``config/default.toml``).
 Jobs run on the backend ``[scheduler].backend`` resolves to: ``api`` when
 ``STONKS_API_URL`` (or ``[scheduler].api_url``) is set, else ``local``.
-Stable until the ``stonks schedule ...`` CLI command wraps it.
+``stonks schedule ...`` is the same command in the main CLI.
 """
 
 from __future__ import annotations
@@ -83,6 +83,7 @@ def _scheduler(ld: _Loaded, store: RunStore, notifier: Any) -> Any:
 def _cmd_run(ld: _Loaded) -> int:
     from stonks.notify import notifier_from_settings
     from stonks.scheduling.deadman import DeadlineWatchdog
+    from stonks.scheduling.delivery import start_delivery_worker
     from stonks.scheduling.scheduler import (
         InstanceLock,
         SchedulerAlreadyRunningError,
@@ -104,7 +105,12 @@ def _cmd_run(ld: _Loaded) -> int:
         scheduler = _scheduler(ld, store, notifier)
         for sig in (signal.SIGINT, signal.SIGTERM):
             signal.signal(sig, lambda *_: scheduler.request_stop())
-        scheduler.run_forever(watchdog=DeadlineWatchdog(ld.specs, store, notifier))
+        delivery = start_delivery_worker(ld.settings)
+        try:
+            scheduler.run_forever(watchdog=DeadlineWatchdog(ld.specs, store, notifier))
+        finally:
+            if delivery is not None:
+                delivery.stop()
     finally:
         lock.release()
     return EXIT_OK
@@ -193,12 +199,18 @@ def _parser() -> argparse.ArgumentParser:
     return p
 
 
-def main(argv: Sequence[str] | None = None, *, transport: Any = None) -> int:
-    """``transport`` is an ``httpx2`` transport for the ``api`` backend (tests)."""
+def main(
+    argv: Sequence[str] | None = None, *, transport: Any = None, prog: str | None = None
+) -> int:
+    """``transport`` is an ``httpx2`` transport for the ``api`` backend (tests);
+    ``prog`` names the command in usage messages."""
     from stonks.scheduling.backends import BackendConfigError
     from stonks.scheduling.jobs import UnknownActionError
 
-    args = _parser().parse_args(argv)
+    parser = _parser()
+    if prog is not None:
+        parser.prog = prog
+    args = parser.parse_args(argv)
     try:
         ld = _load(args.config, transport)
     except (BackendConfigError, UnknownActionError, ValueError) as exc:

@@ -21,6 +21,7 @@ from stonks.logging import get_logger
 from stonks.scheduling.api_backend import (
     TERMINAL_JOB_STATUSES,
     JobWaitTimeoutError,
+    backup_job_outcome,
     health_view_outcome,
     ingest_job_outcome,
     ingest_window,
@@ -146,10 +147,14 @@ class SchedulerHandle:
     scheduler: Any
     thread: threading.Thread
     lock: Any
+    #: The notification delivery worker's thread (``None``: switched off).
+    delivery: Any = None
 
     def stop(self, timeout: float = 30.0) -> None:
         """Ask the loop to stop, wait for the running job, release the lock."""
         self.scheduler.request_stop()
+        if self.delivery is not None:
+            self.delivery.stop(timeout=timeout)
         self.thread.join(timeout=timeout)
         self.lock.release()
 
@@ -207,4 +212,23 @@ def start_in_process_scheduler(
         daemon=True,
     )
     thread.start()
-    return SchedulerHandle(scheduler, thread, lock)
+    from stonks.scheduling.delivery import start_delivery_worker
+
+    return SchedulerHandle(scheduler, thread, lock, delivery=start_delivery_worker(settings))
+
+
+@IN_PROCESS_ACTIONS.register("backup")
+def in_process_backup(ctx: RunContext) -> JobOutcome:
+    """On the server's ``lake_write`` lane, through its own lake connection."""
+    from stonks.app.backups import BACKUP_JOB, BackupResultView
+
+    ex = _executor(ctx)
+    job = ex.services.backups.submit()
+    return backup_job_outcome(*ex.run_job(job, BACKUP_JOB, BackupResultView))
+
+
+@IN_PROCESS_ACTIONS.register("connections_sync")
+def in_process_connections_sync(ctx: RunContext) -> JobOutcome:
+    from stonks.scheduling.local import connections_sync_action
+
+    return connections_sync_action(ctx)

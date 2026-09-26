@@ -1,6 +1,5 @@
-"""Backup settings (``[backup]``, roadmap 12.4). ``Settings`` mounts
-:class:`BackupConfig` as ``backup``; until then callers fall back to the
-defaults here."""
+"""Backup settings (``[backup]``, roadmap 12.4), mounted as
+``Settings.backup``."""
 
 from __future__ import annotations
 

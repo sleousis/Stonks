@@ -90,7 +90,7 @@ DuckDB allows one writer per lake, so `[scheduler].backend` picks where jobs run
 | `in_process` | Inside the API process, on its job runner. | A single-process install. `stonks serve` starts and stops it with the app. |
 | `local` | In the scheduler process, opening the stores like the CLI. | Nothing else holds the lake. |
 
-`auto` (default) picks `api` when `STONKS_API_URL` or `[scheduler].api_url` is set, else `local`. The `api` backend sends `STONKS_API_TOKEN`, only over https, to loopback, or to hosts in `[scheduler].api_trusted_hosts` (for example `["api"]` in Compose).
+`auto` (default) picks `api` when `STONKS_API_URL` or `[scheduler].api_url` is set, else `local`. The `api` backend sends `STONKS_API_TOKEN`, only over https, to loopback, or to hosts in `[scheduler].api_trusted_hosts` or the comma-separated `STONKS_API_TRUSTED_HOSTS` (Compose sets `api`).
 
 ### Runs and catch-up
 

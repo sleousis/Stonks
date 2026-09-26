@@ -31,6 +31,23 @@ shadow_enabled = true
 # Fraction of each cash dividend withheld as tax in the tick and shadow
 # books (0 = credited in full; e.g. 0.15 for a treaty withholding rate).
 dividend_withholding_rate = 0.0
+# Which strategies keep a model book each tick: "shadow" (shadow strategies
+# only) or "all" non-retired strategies.
+model_books = "shadow"
+# true: trade one book per portfolio from its paper/auto subscriptions (and
+# record notify-mode signals) instead of one book over every active strategy.
+# When on, a newly promoted strategy trades only once a subscription includes
+# it (e.g. subscribe pf_default to it).
+books_from_subscriptions = false
+
+[production.construction]
+# Portfolio constructor for every book (a portfolio's construction_json is
+# merged on top): single_winner (default: the best-ranked strategy decides),
+# equal_weight_top_n, inverse_vol, vol_target, atr_parity. The buffer applies
+# to the target-weight constructors only.
+method = "single_winner"
+buffer_fraction = 0.10
+min_trade_weight = 0.005
 
 [production.risk]
 # Risk layer between strategy.decide and the broker. Sells are never blocked.
@@ -43,6 +60,21 @@ min_order_notional = 0.0
 
 [production.risk.max_weight_per_asset_class]
 # crypto = 0.2                     # classes not listed are uncapped
+
+# History-aware risk rules (BL-27), all off by default. Portfolio and
+# subscription overrides can only tighten them. Examples:
+# [production.risk.rules.max_holding]
+# max_holding_bars = 60            # force-sell positions held 60+ bars
+# [production.risk.rules.sector_cap]
+# max_weight_per_sector = 0.3
+# [production.risk.rules.liquidity]
+# max_pct_adv = 0.05               # buys up to 5% of 20-day average volume
+# [production.risk.rules.portfolio_vol]
+# vol_cap = 0.20                   # scale buys down above 20% forecast vol
+# [production.risk.rules.risk_per_position]
+# max_risk = 0.01                  # k * ATR risk per position, fraction of equity
+# [production.risk.rules.drawdown_scaling]
+# schedule = [[0.10, 0.5], [0.20, 0.0]]   # size by drawdown from peak
 
 [production.health]
 # `stonks health` thresholds.
@@ -81,6 +113,24 @@ fee_flat = 1.0
 [backtest.costs.asset_classes.bond]
 half_spread_bps = 5.0
 fee_bps = 1.0
+
+[backtest.execution]
+# Cash-account settlement of sale proceeds in lab and API backtests, in
+# business days (0 = available at once, 1 = T+1).
+settlement_days = 0
+# Uncomment for the bar-range fill model (BL-30): participation cap, limit and
+# stop orders, gap guard. Absent = every order fills in full at the next open.
+# [backtest.execution.fill]
+# max_participation = 0.10         # largest share of the bar's volume per order
+# participation_basis = "bar_volume"   # or "adv"
+# carry_unfilled = true
+# honour_limits = true
+# max_gap_days = 7.0
+
+# Run lab and API backtests through the production construction pipeline
+# (omit: each strategy decides alone).
+# [backtest.construction]
+# method = "single_winner"
 
 [lab]
 # Benchmark every lab backtest, API backtest and tear sheet is compared

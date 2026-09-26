@@ -425,3 +425,23 @@ def test_cost_model_zero_differs_from_the_realistic_default(runner, lab_env):
     runs = _lab_runs(lab_env)
     costs = [json.loads(r["manifest_json"])["costs"] for r in runs]
     assert costs[0] != costs[1]
+
+
+def test_lab_ic_wraps_the_signal_eval_command(monkeypatch):
+    import stonks.lab.signal_eval as signal_eval
+
+    seen = {}
+
+    def fake_main(argv=None, *, prog=None):
+        seen["argv"], seen["prog"] = list(argv), prog
+        return 0
+
+    monkeypatch.setattr(signal_eval, "main", fake_main)
+    result = CliRunner().invoke(
+        app, ["lab", "ic", "--strategy", "momentum", "--tickers", "A.US,B.US", "--events"]
+    )
+    assert result.exit_code == 0, result.output
+    assert seen == {
+        "argv": ["--strategy", "momentum", "--tickers", "A.US,B.US", "--events"],
+        "prog": "stonks lab ic",
+    }

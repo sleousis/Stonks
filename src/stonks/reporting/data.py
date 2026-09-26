@@ -12,9 +12,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
 
+from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
 from stonks.config import GoLivePolicy
 from stonks.core.protocols import SurvivalReport
 from stonks.production.golive import GoLiveCheck, PaperPeriod, gate_checks, load_paper_period
+from stonks.production.ledger import ledger_filter
 from stonks.production.pnl import PnlRow, load_pnl
 from stonks.registry.store import StrategyHandle, StrategyRegistry
 from stonks.reporting.tearsheet import TearSheet
@@ -80,7 +82,10 @@ def build_report(
     since: date | None = None,
     now: datetime | None = None,
     tear_sheets: Sequence[TearSheet] = (),
+    portfolio_id: str = DEFAULT_PORTFOLIO_ID,
 ) -> ReportData:
+    """The report of one portfolio's ledger (``portfolio_id``, default the
+    default portfolio); the strategy panels are global."""
     handles = registry.list_all()
     unknown: list[str] = []
     if strategy_ids:
@@ -100,10 +105,10 @@ def build_report(
     return ReportData(
         generated_at=now or datetime.now(UTC),
         since=since,
-        portfolio=load_pnl(state, since=since),
-        positions=_latest_positions(state),
-        orders=_recent_orders(state, since),
-        fills=_recent_fills(state, since),
+        portfolio=load_pnl(state, since=since, portfolio_id=portfolio_id),
+        positions=_latest_positions(state, portfolio_id),
+        orders=_recent_orders(state, since, portfolio_id),
+        fills=_recent_fills(state, since, portfolio_id),
         strategies=panels,
         unknown_strategy_ids=unknown,
         policy=policy,
@@ -111,10 +116,12 @@ def build_report(
     )
 
 
-def _latest_positions(state: SqliteState) -> Positions | None:
+def _latest_positions(state: SqliteState, portfolio_id: str) -> Positions | None:
+    where, params = ledger_filter(state, "portfolio_snapshots", portfolio_id)
     rows = state.sql(
         "SELECT taken_at, cash, total_value, positions_json FROM portfolio_snapshots "
-        "ORDER BY id DESC LIMIT 1"
+        f"WHERE {where} ORDER BY id DESC LIMIT 1",
+        params,
     )
     if not rows:
         return None
@@ -132,22 +139,28 @@ def _latest_positions(state: SqliteState) -> Positions | None:
     )
 
 
-def _recent_orders(state: SqliteState, since: date | None) -> list[dict[str, Any]]:
+def _recent_orders(
+    state: SqliteState, since: date | None, portfolio_id: str
+) -> list[dict[str, Any]]:
+    where, params = ledger_filter(state, "orders", portfolio_id)
     rows = state.sql(
         "SELECT created_at, strategy_id, ticker, side, quantity, order_type, status "
-        "FROM orders WHERE substr(created_at, 1, 10) >= ? "
+        f"FROM orders WHERE substr(created_at, 1, 10) >= ? AND {where} "
         "ORDER BY created_at DESC, client_id DESC LIMIT ?",
-        [since.isoformat() if since else "", RECENT_LIMIT],
+        [since.isoformat() if since else "", *params, RECENT_LIMIT],
     )
     return [dict(r) for r in rows]
 
 
-def _recent_fills(state: SqliteState, since: date | None) -> list[dict[str, Any]]:
+def _recent_fills(
+    state: SqliteState, since: date | None, portfolio_id: str
+) -> list[dict[str, Any]]:
+    where, params = ledger_filter(state, "fills", portfolio_id, alias="f")
     rows = state.sql(
         "SELECT f.filled_at, o.strategy_id, f.ticker, o.side, f.quantity, f.price, f.fee "
         "FROM fills f LEFT JOIN orders o ON o.client_id = f.order_client_id "
-        "WHERE substr(f.filled_at, 1, 10) >= ? "
+        f"WHERE substr(f.filled_at, 1, 10) >= ? AND {where} "
         "ORDER BY f.filled_at DESC, f.id DESC LIMIT ?",
-        [since.isoformat() if since else "", RECENT_LIMIT],
+        [since.isoformat() if since else "", *params, RECENT_LIMIT],
     )
     return [dict(r) for r in rows]

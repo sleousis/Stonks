@@ -93,6 +93,7 @@ def test_integration_2_preset_contents():
         "walk_forward",
         "deflated_sharpe",
         "cost_stress",
+        "signal_ic",
     ]
     promotion = registry.resolve_preset("promotion")
     assert "cross_instrument" in promotion
@@ -106,6 +107,8 @@ def test_integration_2_preset_contents():
         "plateau",
         "benchmark_relative",
         "mcpt",
+        "event_study",
+        "vs_random",
     ):
         assert test_id in promotion
     # every preset id is registered: none is silently skipped

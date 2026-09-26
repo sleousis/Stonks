@@ -8,9 +8,11 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
+from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
 from stonks.app.context import AppContext
 from stonks.app.cost_basis import FillLot, average_costs
 from stonks.app.pagination import Page
+from stonks.production.ledger import ledger_filter
 
 #: Reporting currency when the held instruments don't agree on one (or the
 #: book is empty, or the lake has no currency for them).
@@ -79,9 +81,15 @@ class PortfolioService:
     def __init__(self, context: AppContext) -> None:
         self._ctx = context
 
-    def current(self) -> PortfolioView:
+    def current(self, portfolio_id: str = DEFAULT_PORTFOLIO_ID) -> PortfolioView:
+        """One portfolio's book (default: the default portfolio). Callers
+        resolve ``portfolio_id`` through ``accounts.owned_portfolio`` first."""
         with self._ctx.state() as state:
-            rows = state.sql("SELECT * FROM portfolio_snapshots ORDER BY id DESC LIMIT 1")
+            where, params = ledger_filter(state, "portfolio_snapshots", portfolio_id)
+            rows = state.sql(
+                f"SELECT * FROM portfolio_snapshots WHERE {where} ORDER BY id DESC LIMIT 1",
+                params,
+            )
         if not rows:
             cash = float(self._ctx.settings.production.initial_cash)
             return PortfolioView(
@@ -97,7 +105,7 @@ class PortfolioService:
         holdings: dict[str, float] = json.loads(row["positions_json"])
         latest = self._latest_closes(list(holdings))
         currencies = self._currencies(list(holdings))
-        costs = self._average_costs()
+        costs = self._average_costs(portfolio_id)
         cash = float(row["cash"])
 
         positions: list[PositionView] = []
@@ -126,12 +134,18 @@ class PortfolioService:
             snapshot_total_value=float(row["total_value"]),
         )
 
-    def snapshots(self, *, limit: int, offset: int) -> Page[SnapshotView]:
+    def snapshots(
+        self, *, limit: int, offset: int, portfolio_id: str = DEFAULT_PORTFOLIO_ID
+    ) -> Page[SnapshotView]:
         with self._ctx.state() as state:
-            total = int(state.sql("SELECT COUNT(*) FROM portfolio_snapshots")[0][0])
+            where, params = ledger_filter(state, "portfolio_snapshots", portfolio_id)
+            total = int(
+                state.sql(f"SELECT COUNT(*) FROM portfolio_snapshots WHERE {where}", params)[0][0]
+            )
             rows = state.sql(
-                "SELECT * FROM portfolio_snapshots ORDER BY id DESC LIMIT ? OFFSET ?",
-                [limit, offset],
+                f"SELECT * FROM portfolio_snapshots WHERE {where}"
+                " ORDER BY id DESC LIMIT ? OFFSET ?",
+                [*params, limit, offset],
             )
         items = [
             SnapshotView(
@@ -146,14 +160,17 @@ class PortfolioService:
         ]
         return Page[SnapshotView](items=items, total=total, limit=limit, offset=offset)
 
-    def _average_costs(self) -> dict[str, float]:
+    def _average_costs(self, portfolio_id: str) -> dict[str, float]:
         with self._ctx.state() as state:
+            where, params = ledger_filter(state, "fills", portfolio_id, alias="f")
             rows = state.sql(
-                """
+                f"""
                 SELECT f.ticker, f.quantity, f.price, f.fee, o.side
                   FROM fills f JOIN orders o ON o.client_id = f.order_client_id
+                 WHERE {where}
                  ORDER BY f.filled_at, f.id
-                """
+                """,
+                params,
             )
         return average_costs(
             FillLot(

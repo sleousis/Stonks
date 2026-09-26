@@ -1,7 +1,7 @@
 # Stonks production stack (Phase 14.2).
 #
 #   internet / tailnet --443--> caddy --8000--> api (REST + console)
-#                                               scheduler (python -m stonks.scheduling)
+#                                               scheduler (python -m stonks.scheduling run)
 #                               api + scheduler share the one `data` volume (/data)
 #
 # Run from this directory:  docker compose up -d
@@ -52,7 +52,16 @@ services:
 
   scheduler:
     <<: *app
-    command: ["python", "-m", "stonks.scheduling"]
+    command: ["python", "-m", "stonks.scheduling", "run"]
+    # The anchor's environment is replaced, not merged: repeat STONKS_DATA_DIR.
+    # Jobs run inside the api (it holds the lake); the token may travel over
+    # plain http only to the api service on the private Compose network.
+    environment:
+      STONKS_DATA_DIR: /data
+      STONKS_API_URL: http://api:8000
+      STONKS_API_TRUSTED_HOSTS: api
+    # Let a running job's wait finish (or time out cleanly) on shutdown.
+    stop_grace_period: 2m
     # On when COMPOSE_PROFILES includes "scheduler" (deploy/.env).
     profiles: ["scheduler"]
     depends_on:

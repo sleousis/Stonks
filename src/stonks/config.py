@@ -17,9 +17,15 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from stonks.backtest.costs import CostModelSettings
+from stonks.backtest.fills import ExecutionSettings
 from stonks.core.types import AssetClass
+from stonks.ingest.quality_config import DataQualityConfig, FallbackConfig
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
+from stonks.ops.config import BackupConfig
+from stonks.portfolio.settings import ConstructionSettings
+from stonks.production.rules.settings import RuleSettings
+from stonks.scheduling.config import SchedulerConfig
 from stonks.store.bars import BarBackend
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
@@ -158,6 +164,10 @@ class RiskPolicy(BaseModel):
     cash_buffer_fraction: float = Field(default=0.0, ge=0.0, le=1.0)
     # Buys whose (possibly clipped) notional falls below this are dropped.
     min_order_notional: float = Field(default=0.0, ge=0.0)
+    # ``[production.risk.rules.<rule>]``: the W3.1 rules (max_holding,
+    # drawdown_scaling, portfolio_vol, risk_per_position, sector_cap,
+    # liquidity), every one off by default.
+    rules: RuleSettings = RuleSettings()
 
     def tighter_of(self, *overrides: RiskPolicy | Mapping[str, Any] | None) -> RiskPolicy:
         """This policy tightened by each partial override (a ``RiskPolicy``
@@ -197,6 +207,18 @@ class ProductionConfig(BaseModel):
     dividend_withholding_rate: float = Field(default=0.0, ge=0.0, le=1.0)
     risk: RiskPolicy = RiskPolicy()
     health: HealthConfig = HealthConfig()
+    # ``[production.construction]``: the global constructor and no-trade
+    # buffer (default ``single_winner``, today's behaviour); a portfolio's
+    # ``construction_json`` is merged on top.
+    construction: ConstructionSettings = ConstructionSettings()
+    # Which strategies keep a model book: "shadow" (only shadow strategies)
+    # or "all" non-retired ones (design section 5).
+    model_books: Literal["shadow", "all"] = "shadow"
+    # Trade one book per portfolio from its paper/auto subscriptions (and
+    # record notify signals) instead of the single legacy book over every
+    # active strategy. Off by default. When on, a newly promoted strategy
+    # trades only once a subscription (e.g. on pf_default) includes it.
+    books_from_subscriptions: bool = False
 
 
 class GoLivePolicy(BaseModel):
@@ -328,6 +350,14 @@ class BacktestSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     costs: CostModelSettings = Field(default_factory=CostModelSettings.realistic)
+    #: ``[backtest.execution]``: the simulated broker's fill model
+    #: (``[backtest.execution.fill]``, BL-30; absent = immediate fills at the
+    #: next open) and cash settlement (``settlement_days``).
+    execution: ExecutionSettings = ExecutionSettings()
+    #: ``[backtest.construction]``: run lab and API backtests through the
+    #: production construction pipeline (``None``: each strategy decides
+    #: alone, today's behaviour).
+    construction: ConstructionSettings | None = None
 
 
 class LabSettings(BaseModel):
@@ -348,6 +378,16 @@ class LabSettings(BaseModel):
     parallel: ParallelSettings = ParallelSettings()
 
 
+class IngestConfig(BaseModel):
+    """``[ingest]``: bar validation (``[ingest.quality]``) and the fallback
+    source per primary (``[ingest.fallback]``, off by default)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    quality: DataQualityConfig = DataQualityConfig()
+    fallback: FallbackConfig = FallbackConfig()
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -364,6 +404,9 @@ class Settings(BaseSettings):
     lab: LabSettings = LabSettings()
     golive: GoLivePolicy = GoLivePolicy()
     mcp: McpConfig = McpConfig()
+    ingest: IngestConfig = IngestConfig()
+    backup: BackupConfig = BackupConfig()
+    scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
 
 
 def configured_secrets(settings: Settings) -> list[str]:

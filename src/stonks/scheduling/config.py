@@ -1,8 +1,6 @@
 """``[scheduler]`` settings (roadmap 12.2-12.3).
 
-A pydantic sub-model meant to become ``Settings.scheduler``. Until that
-field exists, :func:`scheduler_config_from` reads the ``[scheduler]``
-table straight from the TOML file ``load_settings`` uses.
+``Settings.scheduler`` (the ``[scheduler]`` table).
 
 Example::
 
@@ -92,7 +90,8 @@ class JobConfig(BaseModel):
 
 def default_jobs() -> list[JobConfig]:
     """The daily loop on the NYSE calendar: ingest, tick, report after the
-    close; health every four hours."""
+    close; health every four hours; a backup every night; due broker
+    syncs every hour."""
     return [
         JobConfig(
             name="ingest_prices",
@@ -115,6 +114,17 @@ def default_jobs() -> list[JobConfig]:
             name="health",
             action="health",
             trigger=IntervalTriggerConfig(every_minutes=240),
+        ),
+        JobConfig(
+            name="backup",
+            action="backup",
+            trigger=DailyTriggerConfig(at=time(5, 0)),
+            deadline_minutes=120,
+        ),
+        JobConfig(
+            name="connections_sync",
+            action="connections_sync",
+            trigger=IntervalTriggerConfig(every_minutes=60),
         ),
     ]
 
@@ -152,6 +162,11 @@ class SchedulerConfig(BaseModel):
     #: Single-instance lock file; default ``scheduler.lock`` next to the state DB.
     lock_path: Path | None = None
     ping_timeout_seconds: float = Field(default=5.0, gt=0)
+    #: Run the notification ``DeliveryWorker`` on its own thread next to
+    #: the scheduler (standalone or inside ``stonks serve``).
+    deliver_notifications: bool = True
+    #: Sleep between delivery passes that found nothing to send.
+    delivery_interval_seconds: float = Field(default=5.0, gt=0)
     jobs: list[JobConfig] = Field(default_factory=default_jobs)
 
     @model_validator(mode="after")
@@ -178,8 +193,8 @@ def resolve_backend(config: SchedulerConfig, env: Mapping[str, str]) -> Resolved
 
 
 def scheduler_config_from(settings: object, config_path: Path | None = None) -> SchedulerConfig:
-    """``settings.scheduler`` once the Settings field exists; until then
-    the ``[scheduler]`` table of the TOML config (default when absent)."""
+    """``settings.scheduler``; for a settings object without it, the
+    ``[scheduler]`` table of the TOML config (default when absent)."""
     existing = getattr(settings, "scheduler", None)
     if isinstance(existing, SchedulerConfig):
         return existing
