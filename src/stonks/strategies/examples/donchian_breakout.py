@@ -24,7 +24,7 @@ import pandas as pd
 from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
-from stonks.strategies._common import as_datetime, iso
+from stonks.strategies._common import get_last_n_bars, iso
 from stonks.strategies.base import BaseStrategy
 
 
@@ -150,11 +150,10 @@ class DonchianBreakout(BaseStrategy):
         interval = Interval.parse(self.params["interval"])
         lookback = int(self.params["lookback"])
 
-        span_td = interval.to_timedelta() * (lookback * 4 + 5)
-        start = as_datetime(as_of) - span_td
-
-        df = lake.get_bars(ticker, interval, start=start, end=as_of)
-        if df is None or df.empty or len(df) < lookback:
+        # Extra bars beyond ``lookback`` let the forward-filled signal carry
+        # a breakout that happened a while ago.
+        df = get_last_n_bars(lake, ticker, interval, as_of, lookback * 4 + 5)
+        if df.empty or len(df) < lookback:
             return None
 
         closes = df["close"].astype(float).to_numpy()

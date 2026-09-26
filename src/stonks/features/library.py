@@ -295,6 +295,65 @@ def trendline_breakout_signal(
     return s_tl, r_tl, sig
 
 
+def trendline_breakout_latest(
+    close: np.ndarray,
+    lookback: int,
+    cache: dict[bytes, tuple[float, float] | None] | None = None,
+) -> tuple[float, float, float]:
+    """Last-bar values of :func:`trendline_breakout_signal`, without the
+    full rolling pass. Returns ``(support, resistance, signal)`` for bar
+    ``len(close) - 1`` — bit-identical to the last element of each array
+    the full function returns.
+
+    The forward-filled signal at the last bar equals the signal of the most
+    recent bar that broke out, so we walk backwards and stop at the first
+    breakout instead of fitting every window. ``cache`` (optional, owned by
+    the caller) memoizes projected ``(support, resistance)`` per window's
+    raw bytes, so a caller stepping bar by bar over the same series fits
+    each window once.
+    """
+    close = np.asarray(close, dtype=float)
+    last = len(close) - 1
+    support = resistance = float("nan")
+    for i in range(last, lookback - 1, -1):
+        window = close[i - lookback : i]
+        projected = _projected_trendlines(window, lookback, cache)
+        if projected is None:
+            continue
+        s_val, r_val = projected
+        if i == last:
+            support, resistance = s_val, r_val
+        if close[i] > r_val:
+            return support, resistance, 1.0
+        if close[i] < s_val:
+            return support, resistance, -1.0
+    return support, resistance, 0.0
+
+
+def _projected_trendlines(
+    window: np.ndarray,
+    lookback: int,
+    cache: dict[bytes, tuple[float, float] | None] | None,
+) -> tuple[float, float] | None:
+    """Support + resistance fitted on ``window`` and projected one bar past
+    its end; ``None`` when the window can't be fitted (NaNs, invalid line)."""
+    key = window.tobytes() if cache is not None else b""
+    if cache is not None and key in cache:
+        return cache[key]
+    result: tuple[float, float] | None
+    if np.any(np.isnan(window)):
+        result = None
+    else:
+        try:
+            (s_slope, s_int), (r_slope, r_int) = fit_trendlines_single(window)
+            result = (s_int + lookback * s_slope, r_int + lookback * r_slope)
+        except ValueError:
+            result = None
+    if cache is not None:
+        cache[key] = result
+    return result
+
+
 # ---- Wald-Wolfowitz runs test ---------------------------------------------
 
 
