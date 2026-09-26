@@ -380,8 +380,30 @@ def ingest_fundamentals(
         lake.migrate()
         pipeline = build_ingest_pipeline(settings, source, lake)
         result = pipeline.run_fundamentals(ticker_list)
+        # BL-36: re-check the accounting identities of what just landed.
+        report = _audit(settings, lake, ticker_list)
 
     _print_result(result)
+    _print_audit(report)
+
+
+def _audit(settings: Settings, lake: DuckDBLake, tickers: list[str] | None) -> Any:
+    """Run the statement audit at the ``[audit]`` tolerances."""
+    from stonks.store.audit import audit_statements, build_checks
+
+    return audit_statements(lake, tickers, checks=build_checks(settings.audit.tolerances()))
+
+
+def _print_audit(report: Any) -> None:
+    if not report.counts:
+        console.print("statement audit: [green]no flags[/green]")
+        return
+    table = Table(title=f"statement audit: {report.n_flags} flag(s)")
+    for col in ("check", "flags"):
+        table.add_column(col)
+    for check_id, n in sorted(report.counts.items()):
+        table.add_row(check_id, str(n))
+    console.print(table)
 
 
 @ingest_app.command("metadata")
@@ -1095,6 +1117,25 @@ def serve(
 
 # ---- lab --------------------------------------------------------------------
 
+audit_app = typer.Typer(help="Data audits over the lake", no_args_is_help=True)
+app.add_typer(audit_app, name="audit")
+
+
+@audit_app.command("statements")
+def audit_statements_cmd(
+    tickers: str | None = typer.Option(
+        None, "--tickers", help="comma-separated tickers; default every ticker with statements"
+    ),
+) -> None:
+    """Check the three statements against each other (BL-36) and replace
+    the audited tickers' rows in statement_flags. Tolerances: [audit]."""
+    settings = _settings()
+    with _open_lake(settings.lake.path) as lake:
+        lake.migrate()
+        report = _audit(settings, lake, _parse_tickers(tickers) or None)
+    _print_audit(report)
+
+
 lab_app = typer.Typer(help="Strategy lab: tune, fit and run survival tests")
 app.add_typer(lab_app, name="lab")
 
@@ -1341,6 +1382,12 @@ def lab_run(
     ),
     test_option: list[str] | None = _TEST_OPTION,
     benchmark: str | None = _BENCHMARK,
+    strict: bool = typer.Option(
+        False, "--strict", help="treat data preflight warnings as errors ([lab] strict_preflight)"
+    ),
+    no_preflight: bool = typer.Option(
+        False, "--no-preflight", help="skip the data preflight ([lab] preflight)"
+    ),
     json_out: str | None = typer.Option(None, "--json-out", help="write the result as JSON"),
 ) -> None:
     """Tune a strategy on the train window, then run the survival suite.
@@ -1436,6 +1483,8 @@ def lab_run(
             test_options=test_options,
             benchmark=benchmark,
             embargo_bars=embargo_bars,
+            preflight=False if no_preflight else None,
+            strict_preflight=True if strict else None,
         )
     except ValueError as exc:  # pydantic ValidationError is a ValueError
         raise typer.BadParameter(str(exc)) from None
@@ -1459,6 +1508,9 @@ def lab_run(
         lake.close()
         state.close()
     result, registered_id = execution.result, execution.registered_id
+    preflight = execution.view().preflight
+    for issue in preflight.issues if preflight else []:
+        console.print(f"[yellow]preflight {issue.severity} [{issue.code}][/yellow] {issue.message}")
 
     table = Table(title=f"lab run: {strategy_cls.__name__}  verdict={result.verdict}")
     for col in ("test", "passed", "metrics"):
@@ -1512,6 +1564,7 @@ def lab_run(
             ],
             "registered_id": registered_id,
             "benchmark": execution.view().benchmark,
+            "preflight": preflight,
         }
         Path(json_out).write_text(json.dumps(to_jsonable(doc), indent=2, sort_keys=True))
 

@@ -165,6 +165,11 @@ benchmark = "auto"
 # serially correlated features and labels can't leak across it. A strategy's
 # label_horizon_bars raises it per run. `--embargo-bars` / `embargo_bars` override.
 embargo_bars = 0
+# Data preflight before tuning (BL-37): coverage, warm-up, quarantined bars,
+# statement flags, survivorship. Errors stop the run, warnings ride on the
+# result. `--no-preflight` / `--strict` and the API fields override these.
+preflight = true
+strict_preflight = false           # true: every warning is an error
 
 [lab.walk_forward]
 # Defaults for `stonks lab run --walk-forward` (CLI flags override).
@@ -185,6 +190,16 @@ matrix = false                     # also run the train x test matrix (--wf-matr
 max_workers = 0
 # BLAS/OpenMP threads per worker (the pool is the parallelism).
 blas_threads = 1
+
+[audit]
+# Statement audit tolerances (BL-36): relative gaps above which
+# `stonks audit statements` (also run after `stonks ingest fundamentals`)
+# flags a period. Flags land in the lake's statement_flags table.
+balance = 0.02                     # assets vs liabilities + equity
+net_income = 0.05                  # income statement vs cash flow
+cash = 0.05                        # cash flow end cash vs balance sheet
+gross_profit = 0.02                # vs revenue - cost of revenue
+quarterly_sum = 0.05               # four quarters vs the annual figure
 
 [notify]
 # Backends: "log" (structlog), "webhook" (JSON POST), "store" (the state DB's

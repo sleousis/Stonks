@@ -227,3 +227,33 @@ def test_the_default_config_keeps_the_breaker_off_and_the_quit_rule_alerting():
     assert s.production.quit_rule == QuitRuleSettings(
         quit_multiple=1.5, auto_demote=False, min_eval_days=126
     )
+
+
+def test_lab_preflight_and_audit_tolerances_read_from_toml(tmp_path):
+    from stonks.store.audit import AuditTolerances
+
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text(
+        """
+[lab]
+preflight = false
+strict_preflight = true
+
+[audit]
+balance = 0.01
+quarterly_sum = 0.10
+""".strip()
+    )
+    s = load_settings(config_path=cfg)
+    assert (s.lab.preflight, s.lab.strict_preflight) == (False, True)
+    assert s.audit.tolerances() == AuditTolerances(balance=0.01, quarterly_sum=0.10)
+
+
+def test_lab_preflight_and_audit_defaults(tmp_path):
+    from stonks.store.audit import AuditTolerances
+
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text("")
+    s = load_settings(config_path=cfg)
+    assert (s.lab.preflight, s.lab.strict_preflight) == (True, False)
+    assert s.audit.tolerances() == AuditTolerances()

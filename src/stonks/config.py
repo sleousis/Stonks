@@ -27,6 +27,7 @@ from stonks.portfolio.settings import ConstructionSettings
 from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.rules.settings import RuleSettings
 from stonks.scheduling.config import SchedulerConfig
+from stonks.store.audit import AuditTolerances
 from stonks.store.bars import BarBackend
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
@@ -384,6 +385,28 @@ class LabSettings(BaseModel):
     #: ``[lab.parallel]``: worker processes for tuning trials and sweeps
     #: (``max_workers = 0``: every core; 1: in-process) and BLAS threads each.
     parallel: ParallelSettings = ParallelSettings()
+    #: Run the BL-37 data preflight before tuning: errors stop the run,
+    #: warnings ride on the result (``--no-preflight``, request ``preflight``).
+    preflight: bool = True
+    #: Treat every preflight warning as an error (``--strict``, request
+    #: ``strict_preflight``).
+    strict_preflight: bool = False
+
+
+class AuditConfig(BaseModel):
+    """``[audit]``: relative gaps above which the statement audit (BL-36,
+    ``stonks audit statements``) flags a period."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    balance: float = Field(default=AuditTolerances.balance, gt=0.0)
+    net_income: float = Field(default=AuditTolerances.net_income, gt=0.0)
+    cash: float = Field(default=AuditTolerances.cash, gt=0.0)
+    gross_profit: float = Field(default=AuditTolerances.gross_profit, gt=0.0)
+    quarterly_sum: float = Field(default=AuditTolerances.quarterly_sum, gt=0.0)
+
+    def tolerances(self) -> AuditTolerances:
+        return AuditTolerances(**self.model_dump())
 
 
 class IngestConfig(BaseModel):
@@ -410,6 +433,7 @@ class Settings(BaseSettings):
     api: ApiConfig = Field(default_factory=ApiConfig)
     backtest: BacktestSettings = BacktestSettings()
     lab: LabSettings = LabSettings()
+    audit: AuditConfig = AuditConfig()
     golive: GoLivePolicy = GoLivePolicy()
     mcp: McpConfig = McpConfig()
     ingest: IngestConfig = IngestConfig()
