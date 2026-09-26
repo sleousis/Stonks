@@ -138,6 +138,7 @@ GUARDED_TOOLS = {
     "create_universe",
     "refresh_universe",
     "ensure_universe_data",
+    "delete_universe",
     "import_index_history",
     "promote_strategy",
     "retire_strategy",
