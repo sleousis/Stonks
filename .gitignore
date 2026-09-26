@@ -1,8 +1,6 @@
 .venv/
 .worktrees/
-data/
-# The console's Data page is source, not runtime data.
-!web/src/app/pages/data/
+/data/
 .env
 __pycache__/
 *.pyc

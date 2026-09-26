@@ -6,4 +6,9 @@ export default [
     title: 'Strategies',
     loadComponent: () => import('./strategies.page').then((m) => m.StrategiesPage),
   },
+  {
+    path: ':id',
+    title: 'Strategy',
+    loadComponent: () => import('./strategy-detail.page').then((m) => m.StrategyDetailPage),
+  },
 ] satisfies Routes;
