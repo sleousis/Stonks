@@ -7,6 +7,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from pydantic import BaseModel
+
 from stonks.app.catalog import (
     CatalogService,
     ClassListStrategySource,
@@ -14,6 +16,7 @@ from stonks.app.catalog import (
     StrategySource,
 )
 from stonks.app.context import AppContext
+from stonks.app.errors import ConflictError, NotFoundError
 from stonks.app.ingest import IngestService
 from stonks.app.jobs import Job, JobRunner, JobStore
 from stonks.app.lab import LabService
@@ -85,6 +88,21 @@ class JobService:
 
     def wait(self, job_id: str, timeout: float | None = None) -> Job:
         return self._runner.wait(job_id, timeout=timeout)
+
+    def typed_result[M: BaseModel](self, job_id: str, kind: str, model: type[M]) -> M:
+        """The result of a succeeded ``kind`` job, validated as ``model``.
+
+        ``NotFoundError`` when there is no such job of that kind;
+        ``ConflictError`` while it has not succeeded (queued, running,
+        failed or cancelled jobs have no result).
+        """
+        job = self._store.get(job_id)
+        if job.kind != kind:
+            raise NotFoundError(f"no {kind} job with id {job_id!r}")
+        if job.status != "succeeded":
+            detail = f": {job.error}" if job.error else ""
+            raise ConflictError(f"job {job_id} has no result; it is {job.status}{detail}")
+        return model.model_validate(job.result)
 
     def is_tracked(self, job_id: str) -> bool:
         """False once this process will never update the job again."""

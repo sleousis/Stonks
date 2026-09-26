@@ -68,6 +68,104 @@
         "title": "BacktestRequest",
         "type": "object"
       },
+      "BacktestResult": {
+        "properties": {
+          "cagr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cagr"
+          },
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "equity": {
+            "items": {
+              "$ref": "#/components/schemas/EquityPoint"
+            },
+            "title": "Equity",
+            "type": "array"
+          },
+          "final_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Return"
+          },
+          "interval": {
+            "title": "Interval",
+            "type": "string"
+          },
+          "max_drawdown": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Drawdown"
+          },
+          "profit_factor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profit Factor"
+          },
+          "sharpe": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharpe"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_id",
+          "interval",
+          "start",
+          "end",
+          "final_return",
+          "sharpe",
+          "max_drawdown",
+          "cagr",
+          "profit_factor",
+          "equity"
+        ],
+        "title": "BacktestResult",
+        "type": "object"
+      },
       "BarSeries": {
         "properties": {
           "bars": {
@@ -258,6 +356,25 @@
         "title": "DataSourceInfo",
         "type": "object"
       },
+      "EquityPoint": {
+        "properties": {
+          "timestamp": {
+            "format": "date-time",
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "timestamp",
+          "value"
+        ],
+        "title": "EquityPoint",
+        "type": "object"
+      },
       "FillView": {
         "properties": {
           "fee": {
@@ -411,6 +528,39 @@
           "kind"
         ],
         "title": "IngestRequest",
+        "type": "object"
+      },
+      "IngestResultView": {
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "tickers_failed": {
+            "title": "Tickers Failed",
+            "type": "integer"
+          },
+          "tickers_ok": {
+            "title": "Tickers Ok",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "kind",
+          "status",
+          "tickers_ok",
+          "tickers_failed"
+        ],
+        "title": "IngestResultView",
         "type": "object"
       },
       "IngestRunView": {
@@ -888,6 +1038,66 @@
         "title": "LabRunRequest",
         "type": "object"
       },
+      "LabRunView": {
+        "properties": {
+          "best_params": {
+            "additionalProperties": true,
+            "title": "Best Params",
+            "type": "object"
+          },
+          "best_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Score"
+          },
+          "class_path": {
+            "title": "Class Path",
+            "type": "string"
+          },
+          "registered_strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registered Strategy Id"
+          },
+          "survival_reports": {
+            "items": {
+              "$ref": "#/components/schemas/SurvivalReportView"
+            },
+            "title": "Survival Reports",
+            "type": "array"
+          },
+          "verdict": {
+            "enum": [
+              "pass",
+              "fail"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "class_path",
+          "best_params",
+          "best_score",
+          "verdict",
+          "survival_reports",
+          "registered_strategy_id"
+        ],
+        "title": "LabRunView",
+        "type": "object"
+      },
       "OrderView": {
         "properties": {
           "broker_order_id": {
@@ -1232,11 +1442,11 @@
         "title": "Page[StrategySummary]",
         "type": "object"
       },
-      "Page_TickRunView_": {
+      "Page_TickRun_": {
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/TickRunView"
+              "$ref": "#/components/schemas/TickRun"
             },
             "title": "Items",
             "type": "array"
@@ -1260,7 +1470,7 @@
           "limit",
           "offset"
         ],
-        "title": "Page[TickRunView]",
+        "title": "Page[TickRun]",
         "type": "object"
       },
       "ParameterInfo": {
@@ -1499,6 +1709,96 @@
           "status"
         ],
         "title": "ProblemDetails",
+        "type": "object"
+      },
+      "RiskAdjustmentView": {
+        "description": "One order the risk policy clipped or dropped.",
+        "properties": {
+          "adjusted_quantity": {
+            "title": "Adjusted Quantity",
+            "type": "number"
+          },
+          "original_quantity": {
+            "title": "Original Quantity",
+            "type": "number"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "side": {
+            "title": "Side",
+            "type": "string"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker",
+          "side",
+          "rule",
+          "original_quantity",
+          "adjusted_quantity",
+          "reason"
+        ],
+        "title": "RiskAdjustmentView",
+        "type": "object"
+      },
+      "ShadowOutcomeView": {
+        "description": "How one shadow strategy was evaluated during the tick.",
+        "properties": {
+          "decisions": {
+            "default": 0,
+            "title": "Decisions",
+            "type": "integer"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "fills": {
+            "default": 0,
+            "title": "Fills",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          },
+          "total_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Value"
+          }
+        },
+        "required": [
+          "strategy_id",
+          "status"
+        ],
+        "title": "ShadowOutcomeView",
         "type": "object"
       },
       "SnapshotView": {
@@ -1832,7 +2132,98 @@
         "title": "TickRequest",
         "type": "object"
       },
-      "TickRunDetail": {
+      "TickResultView": {
+        "properties": {
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "fills": {
+            "title": "Fills",
+            "type": "integer"
+          },
+          "orders_placed": {
+            "title": "Orders Placed",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "tick_id": {
+            "title": "Tick Id",
+            "type": "string"
+          },
+          "winner_strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Winner Strategy Id"
+          }
+        },
+        "required": [
+          "tick_id",
+          "status",
+          "winner_strategy_id",
+          "orders_placed",
+          "fills",
+          "dry_run"
+        ],
+        "title": "TickResultView",
+        "type": "object"
+      },
+      "TickRun": {
+        "properties": {
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TickSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "started_at",
+          "finished_at",
+          "status",
+          "summary"
+        ],
+        "title": "TickRun",
+        "type": "object"
+      },
+      "TickRunWithOrders": {
         "properties": {
           "finished_at": {
             "anyOf": [
@@ -1867,14 +2258,12 @@
           "summary": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/TickSummary"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Summary"
+            ]
           }
         },
         "required": [
@@ -1885,12 +2274,13 @@
           "summary",
           "orders"
         ],
-        "title": "TickRunDetail",
+        "title": "TickRunWithOrders",
         "type": "object"
       },
-      "TickRunView": {
+      "TickSummary": {
+        "additionalProperties": true,
         "properties": {
-          "finished_at": {
+          "error": {
             "anyOf": [
               {
                 "type": "string"
@@ -1899,41 +2289,103 @@
                 "type": "null"
               }
             ],
-            "title": "Finished At"
+            "title": "Error"
           },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "started_at": {
-            "title": "Started At",
-            "type": "string"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "summary": {
+          "error_type": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Summary"
+            "title": "Error Type"
+          },
+          "fills": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fills"
+          },
+          "orders_placed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orders Placed"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "risk_adjustments": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RiskAdjustmentView"
+            },
+            "title": "Risk Adjustments",
+            "type": "array"
+          },
+          "shadow": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ShadowOutcomeView"
+            },
+            "title": "Shadow",
+            "type": "array"
+          },
+          "shadow_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shadow Error"
+          },
+          "winner_expected_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Winner Expected Return"
+          },
+          "winner_strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Winner Strategy Id"
           }
         },
-        "required": [
-          "id",
-          "started_at",
-          "finished_at",
-          "status",
-          "summary"
-        ],
-        "title": "TickRunView",
+        "title": "TickSummary",
         "type": "object"
       }
     },
@@ -2210,6 +2662,94 @@
         "summary": "Liveness probe",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/ingest/jobs/{job_id}/result": {
+      "get": {
+        "description": "The result of a succeeded ingest job (409 until it has succeeded).",
+        "operationId": "getIngestResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResultView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Ingest Result",
+        "tags": [
+          "ingest"
         ]
       }
     },
@@ -2868,7 +3408,7 @@
     },
     "/api/lab/backtests": {
       "post": {
-        "description": "Queue a backtest; the job result is a ``BacktestResult``.",
+        "description": "Queue a backtest; fetch the typed result from\n``GET /api/lab/backtests/{job_id}/result`` once it succeeds.",
         "operationId": "startBacktest",
         "requestBody": {
           "content": {
@@ -2953,9 +3493,97 @@
         ]
       }
     },
+    "/api/lab/backtests/{job_id}/result": {
+      "get": {
+        "description": "The result of a succeeded backtest job (409 until it has succeeded).",
+        "operationId": "getBacktestResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Backtest Result",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
     "/api/lab/runs": {
       "post": {
-        "description": "Queue tune → fit → survival suite; the job result is a ``LabRunView``.",
+        "description": "Queue tune → fit → survival suite; fetch the typed result from\n``GET /api/lab/runs/{job_id}/result`` once it succeeds.",
         "operationId": "startLabRun",
         "requestBody": {
           "content": {
@@ -3035,6 +3663,94 @@
           }
         ],
         "summary": "Start Lab Run",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
+    "/api/lab/runs/{job_id}/result": {
+      "get": {
+        "description": "The result of a succeeded lab-run job (409 until it has succeeded).",
+        "operationId": "getLabRunResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabRunView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Lab Run Result",
         "tags": [
           "lab"
         ]
@@ -4601,7 +5317,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_TickRunView_"
+                  "$ref": "#/components/schemas/Page_TickRun_"
                 }
               }
             },
@@ -4754,6 +5470,94 @@
         ]
       }
     },
+    "/api/ticks/jobs/{job_id}/result": {
+      "get": {
+        "description": "The result of a succeeded tick job (409 until it has succeeded).",
+        "operationId": "getTickResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TickResultView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Tick Result",
+        "tags": [
+          "ticks"
+        ]
+      }
+    },
     "/api/ticks/{tick_id}": {
       "get": {
         "operationId": "getTick",
@@ -4773,7 +5577,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TickRunDetail"
+                  "$ref": "#/components/schemas/TickRunWithOrders"
                 }
               }
             },

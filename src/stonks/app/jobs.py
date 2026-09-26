@@ -83,6 +83,8 @@ class Job(BaseModel):
     status: JobStatus
     progress: float
     message: str | None = None
+    #: Untyped here (it depends on ``kind``); each kind has a typed
+    #: ``.../{job_id}/result`` route, e.g. ``GET /api/lab/backtests/{id}/result``.
     result: Any = None
     error: str | None = None
     created_at: datetime
