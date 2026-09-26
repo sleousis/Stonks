@@ -169,6 +169,8 @@ def _evaluate_one(
             settings.risk,
             slippage_bps=settings.slippage_bps,
             fee_per_trade=settings.fee_per_trade,
+            cost_model=settings.costs,
+            volumes=volumes,
         )
         orders = [
             replace(

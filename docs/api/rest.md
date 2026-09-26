@@ -212,7 +212,7 @@ Fee and spread for one asset class.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `cost_model` | "zero" \| "realistic" \| null | no |  |
+| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `end` | date | yes |  |
 | `fee_per_trade` | number | no |  |
 | `initial_cash` | number | no |  |
@@ -373,7 +373,7 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `register_strategy` | boolean | no |  |
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
-| `survival_tests` | list["oos" \| "period_stability" \| "perturbation" \| "drift" \| "runs_test" \| "permutation" \| "walk_forward"] | no |  |
+| `survival_tests` | list["drift" \| "mcpt" \| "oos" \| "period_stability" \| "permutation" \| "perturbation" \| "runs_test" \| "walk_forward" \| "walk_forward_mcpt"] | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" | no |  |
 | `universe` | list[string] | yes |  |
@@ -563,15 +563,18 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `budget` | integer | no |  |
+| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `end` | date | yes |  |
 | `interval` | string | no |  |
 | `mcpt` | [McptOptions](#mcptoptions) \| null | no |  |
 | `objective` | "sharpe" \| "cagr" \| "final_return" | no |  |
+| `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |
+| `register_if_passes` | boolean | no |  |
 | `register_strategy` | boolean | no |  |
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
 | `strategy` | [StrategyRef](#strategyref) | yes |  |
-| `survival_tests` | list["oos" \| "period_stability" \| "perturbation" \| "drift" \| "runs_test" \| "permutation" \| "walk_forward"] | no |  |
+| `survival_tests` | list["drift" \| "mcpt" \| "oos" \| "period_stability" \| "permutation" \| "perturbation" \| "runs_test" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" | no |  |
 | `universe` | list[string] | yes |  |
