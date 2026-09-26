@@ -870,8 +870,9 @@ def pnl(
         None, "--strategy", help="show a shadow strategy's virtual P&L instead of the real one"
     ),
 ) -> None:
-    """Daily P&L from portfolio snapshots: value, daily change, cumulative
-    return and drawdown from the running peak."""
+    """Daily P&L from portfolio snapshots, one row per tick as_of: value,
+    change since the previous row (blank when more than 4 days apart, see
+    ``days``), cumulative return and drawdown from the running peak."""
     from stonks.production.pnl import load_pnl
 
     settings = _settings()
@@ -891,11 +892,12 @@ def pnl(
 
     title = f"P&L ({'shadow ' + strategy if strategy else 'portfolio'})"
     table = Table(title=title)
-    for col in ("date", "value", "change", "daily", "cumulative", "drawdown"):
+    for col in ("date", "days", "value", "change", "daily", "cumulative", "drawdown"):
         table.add_column(col, justify="right")
     for r in rows:
         table.add_row(
             r.day.isoformat(),
+            "-" if r.days_elapsed is None else str(r.days_elapsed),
             f"{r.total_value:,.2f}",
             "-" if r.daily_change is None else f"{r.daily_change:+,.2f}",
             pct(r.daily_return),
