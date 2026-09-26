@@ -159,26 +159,58 @@ Every mutating action asks first, then calls the service, then says what
 happened with the same verb:
 
 ```ts
-async promote(s: StrategySummary) {
+async runTick(asOf: string) {
   const ok = await this.confirm.confirm({
-    title: `Promote ${s.id}?`,
-    message: 'It becomes active and trades from the next tick.',
-    confirmLabel: 'Promote',
-    typedConfirmation: s.id,          // required for promote and tick
+    title: `Run a tick for ${asOf}?`,
+    message: 'Active strategies decide and place orders through the broker.',
+    confirmLabel: 'Run tick',
+    typedConfirmation: asOf,          // required for ticks
   });
   if (!ok) return;
   try {
-    await this.strategiesApi.promote(s.id);
-    this.toasts.success(`Promoted ${s.id}.`);
-    this.list.reload();
+    await this.ticksApi.start({ as_of: asOf });
+    this.toasts.success(`Started the tick for ${asOf}.`);
   } catch {
     // The error interceptor already showed the API's message.
   }
 }
 ```
 
+Status changes (promote, retire, …) need a reason: see below.
+
 Use `tone: 'danger'` for retire/delete and anything touching a live broker.
 Disable the triggering button while the request runs.
+
+#### Status changes need a reason (governance)
+
+Promote, move to shadow, retire (Strategies) and enable, disable (Studio)
+send a `StatusChangeRequest` body: `{ reason, override }`. The API records it
+in the strategy's status history (`GET /api/strategies/{id}/history`, shown
+as a timeline on the strategy page). Use `<app-status-change-dialog>` instead
+of `ConfirmService` for these: host one in the page and call `open()`; it
+resolves to the body, or `null` when cancelled.
+
+```ts
+private readonly dialog = viewChild.required(StatusChangeDialog);
+
+const body = await this.dialog().open({
+  title: `Retire ${id}?`, message: '…', confirmLabel: 'Retire', tone: 'danger', minReason: 1,
+});
+if (body) await this.strategiesApi.retire(id, body);
+```
+
+Promotions go through `promoteThroughGate()` (`shared/governance.ts`):
+
+1. it loads the go-live report and shows its verdict and failing checks
+   above the reason field (typed id to confirm);
+2. it promotes silently; a **409** means the gate refused, so it opens the
+   dialog again with the failing checks and offers **Override and promote**,
+   which needs a reason of at least 20 characters and the typed word
+   `override`;
+3. it retries with `override: true`. Other errors are toasted.
+
+Check labels, measures and value/limit formatting for all go-live checks
+live in `shared/golive-checks.ts` (`checkRow`, `checklistItems`).
 
 ### Background jobs
 
@@ -248,6 +280,39 @@ Series: `{ id, label, kind: 'line' | 'area', color: 'brass' | 'primary' | 'gain'
 line in pane 0; drawdown is a `loss` area in pane 1. Always pass a one or two
 sentence `summary` (the canvas is invisible to screen readers). Tests use
 `provideFakeChart()` from `src/testing/fake-chart.ts`.
+
+With a benchmark, the strategy and the benchmark share pane 0, both rebased
+to 100 (`rebase()` in `pages/lab/result-figures.ts`, `format: 'number'`);
+the benchmark is a `muted` line and a small legend names it.
+
+### Results and missing figures
+
+The API sends non-finite figures (a Sharpe with no variance, a payoff ratio
+with no losing trades) as `null`. Show them as **n/a**, never 0 or a dash:
+`formatMetric(key, value)` and `metricLabel(key)` in `shared/metrics.ts` do
+this for survival-report metrics, and `pctOrNa` / `numOrNa` for fixed
+fields. Lab results group figures with `<app-figure-grid>`: risk (Sortino,
+Calmar, Ulcer, VaR/ES, longest drawdown), trades (count, win rate,
+expectancy, payoff, holding time, turnover, cost drag), the benchmark
+(excess CAGR, alpha, beta, IR, capture ratios) and trial counts. Each
+survival test shows its deciding figures first (`KEY_METRICS`: DSR, PBO,
+the Monte Carlo drawdown band, cost stress, walk-forward efficiency…) and
+folds the rest into "All figures".
+
+### Lab form
+
+The lab-run form sends a named suite (`preset`: quick, standard,
+promotion) unless the trader picks custom tests (`survival_tests`).
+Registering defaults to `register_if_passes` (the promotion suite, a
+required hypothesis); "Always" sends `register_strategy`. Walk-forward,
+MCPT and the per-test "advanced options" (`pages/lab/test-options.ts`,
+mirroring each test's `Options` model) start blank, meaning "the test's
+default", and only filled fields are sent, so presets keep their own
+settings. Field errors show next to the field; the advanced panel opens
+when one of its fields is wrong.
+
+`stonks lab sweep` has no API route yet, so the Lab page explains the
+command instead of showing results.
 
 ### Formatting and copy
 
@@ -460,9 +525,15 @@ a line is a bug.
 | SEO | at least 90 | 100 |
 | Performance | at least 90 | not measured yet |
 | Largest contentful paint | at most 2.5 s | not measured yet |
-| Cumulative layout shift | at most 0.1 | 0.44: error panels are taller than their skeletons; size skeletons like the content |
+| Cumulative layout shift | at most 0.1 | 0.44 before the fix below; not re-measured yet |
 | Total blocking time | at most 200 ms | not measured yet |
 | Initial JS + CSS | at most 600 kB raw (build warns), 1 MB (build fails) | 390 kB raw, 108 kB transferred |
+
+Layout shift: `app-loading-state`, `app-empty-state` and `app-error-state`
+all reserve at least 9.5rem (an error with a one-line message and a 44px
+retry button), so a failed load no longer pushes the page down when it
+replaces its skeleton. Still pass `rows` sized like the content it stands
+for.
 
 ## Security
 
