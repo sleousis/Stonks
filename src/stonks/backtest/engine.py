@@ -39,7 +39,7 @@ timestamps; see ``stonks.backtest.calendar``.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 
 import pandas as pd
@@ -184,19 +184,27 @@ class Backtester:
         return waiting
 
     def _decide(self, as_of: datetime, prices: dict[str, float]) -> list[Order]:
-        picks_by_strategy: dict[str, list[tuple[float, str]]] = {s.id: [] for s in self._strategies}
-        for strategy in self._strategies:
+        """Picks and orders are keyed by the strategy's *position* in the
+        engine, not its class-level ``id``, so two instances of one class
+        (different params) keep separate picks; each order's ``client_id``
+        is prefixed with ``"<index>:"`` so the broker's idempotency check
+        can't drop one instance's order as a duplicate of the other's."""
+        picks_by_strategy: list[list[tuple[float, str]]] = [[] for _ in self._strategies]
+        for index, strategy in enumerate(self._strategies):
             for ticker in self._config.universe:
                 r = strategy.estimate_return(ticker, as_of, self._lake)
                 if r is not None and r > self._config.threshold:
-                    picks_by_strategy[strategy.id].append((r, ticker))
+                    picks_by_strategy[index].append((r, ticker))
 
         portfolio = self._broker.fetch_portfolio()
         orders: list[Order] = []
-        for strategy in self._strategies:
-            picks = picks_by_strategy[strategy.id]
+        for index, strategy in enumerate(self._strategies):
+            picks = picks_by_strategy[index]
             picks.sort(key=lambda p: p[0], reverse=True)
-            orders.extend(strategy.decide(picks, portfolio, prices, as_of))
+            orders.extend(
+                replace(order, client_id=f"{index}:{order.client_id}")
+                for order in strategy.decide(picks, portfolio, prices, as_of)
+            )
         return orders
 
 
