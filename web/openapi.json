@@ -230,6 +230,24 @@
             ],
             "title": "Cagr"
           },
+          "calmar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calmar"
+          },
+          "drawdown": {
+            "items": {
+              "$ref": "#/components/schemas/EquityPoint"
+            },
+            "title": "Drawdown",
+            "type": "array"
+          },
           "end": {
             "format": "date",
             "title": "End",
@@ -242,6 +260,17 @@
             "title": "Equity",
             "type": "array"
           },
+          "es_95": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Es 95"
+          },
           "final_return": {
             "anyOf": [
               {
@@ -253,9 +282,36 @@
             ],
             "title": "Final Return"
           },
+          "fitness": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fitness"
+          },
           "interval": {
             "title": "Interval",
             "type": "string"
+          },
+          "kurtosis": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kurtosis"
+          },
+          "max_dd_duration_bars": {
+            "default": 0,
+            "title": "Max Dd Duration Bars",
+            "type": "integer"
           },
           "max_drawdown": {
             "anyOf": [
@@ -290,6 +346,28 @@
             ],
             "title": "Sharpe"
           },
+          "skew": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skew"
+          },
+          "sortino": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sortino"
+          },
           "start": {
             "format": "date",
             "title": "Start",
@@ -298,6 +376,50 @@
           "strategy_id": {
             "title": "Strategy Id",
             "type": "string"
+          },
+          "trade_count": {
+            "default": 0,
+            "title": "Trade Count",
+            "type": "integer"
+          },
+          "trade_stats": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TradeStatsView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trades": {
+            "items": {
+              "$ref": "#/components/schemas/TradeView"
+            },
+            "title": "Trades",
+            "type": "array"
+          },
+          "ulcer_index": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ulcer Index"
+          },
+          "var_95": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Var 95"
           }
         },
         "required": [
@@ -750,6 +872,24 @@
       "DraftBacktestRequest": {
         "description": "A :class:`~stonks.app.lab.BacktestRequest` without the strategy\n(the draft is the strategy).",
         "properties": {
+          "cost_model": {
+            "anyOf": [
+              {
+                "enum": [
+                  "zero",
+                  "realistic"
+                ],
+                "type": "string"
+              },
+              {
+                "$ref": "#/components/schemas/CostModelSettings"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Model"
+          },
           "end": {
             "format": "date",
             "title": "End",
@@ -853,7 +993,7 @@
         "type": "object"
       },
       "DraftLabRunRequest": {
-        "description": "A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A\nrule draft's spec is fixed (it has no tunable parameters); a code\ndraft's class is tuned over its parameter space.",
+        "description": "A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A\nrule draft's spec is fixed (it has no tunable parameters); a code\ndraft's class is tuned over its parameter space. Registering\n(``register_strategy`` always, ``register_if_passes`` only on a pass)\nlinks the new strategy to the draft.",
         "properties": {
           "budget": {
             "default": 20,
@@ -862,15 +1002,62 @@
             "title": "Budget",
             "type": "integer"
           },
+          "cost_model": {
+            "anyOf": [
+              {
+                "enum": [
+                  "zero",
+                  "realistic"
+                ],
+                "type": "string"
+              },
+              {
+                "$ref": "#/components/schemas/CostModelSettings"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Model"
+          },
           "end": {
             "format": "date",
             "title": "End",
             "type": "string"
           },
+          "grid_size": {
+            "default": 5,
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Grid Size",
+            "type": "integer"
+          },
+          "hypothesis": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hypothesis"
+          },
           "interval": {
             "default": "1d",
             "title": "Interval",
             "type": "string"
+          },
+          "mcpt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/McptOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "objective": {
             "default": "sharpe",
@@ -881,6 +1068,39 @@
             ],
             "title": "Objective",
             "type": "string"
+          },
+          "premortem": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premortem"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "enum": [
+                  "promotion",
+                  "quick",
+                  "standard"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
+          },
+          "register_if_passes": {
+            "default": false,
+            "title": "Register If Passes",
+            "type": "boolean"
           },
           "register_strategy": {
             "default": false,
@@ -898,23 +1118,30 @@
             "type": "string"
           },
           "survival_tests": {
-            "items": {
-              "enum": [
-                "drift",
-                "mcpt",
-                "oos",
-                "period_stability",
-                "permutation",
-                "perturbation",
-                "runs_test",
-                "walk_forward",
-                "walk_forward_mcpt"
-              ],
-              "type": "string"
-            },
-            "minItems": 1,
-            "title": "Survival Tests",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "drift",
+                    "mcpt",
+                    "oos",
+                    "period_stability",
+                    "permutation",
+                    "perturbation",
+                    "runs_test",
+                    "walk_forward",
+                    "walk_forward_mcpt"
+                  ],
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Survival Tests"
           },
           "train_ratio": {
             "default": 0.7,
@@ -939,6 +1166,16 @@
             "minItems": 1,
             "title": "Universe",
             "type": "array"
+          },
+          "walk_forward": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WalkForwardConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -1276,6 +1513,38 @@
         "title": "HealthCheckView",
         "type": "object"
       },
+      "HealthConfig": {
+        "additionalProperties": false,
+        "description": "Thresholds for ``stonks health`` (``[production.health]``).",
+        "properties": {
+          "ingest_failure_lookback_hours": {
+            "default": 24,
+            "minimum": 1.0,
+            "title": "Ingest Failure Lookback Hours",
+            "type": "integer"
+          },
+          "max_bar_age_days": {
+            "default": 4,
+            "minimum": 0.0,
+            "title": "Max Bar Age Days",
+            "type": "integer"
+          },
+          "stuck_ingest_minutes": {
+            "default": 180,
+            "minimum": 1.0,
+            "title": "Stuck Ingest Minutes",
+            "type": "integer"
+          },
+          "stuck_tick_minutes": {
+            "default": 60,
+            "minimum": 1.0,
+            "title": "Stuck Tick Minutes",
+            "type": "integer"
+          }
+        },
+        "title": "HealthConfig",
+        "type": "object"
+      },
       "HealthReportView": {
         "properties": {
           "checked_at": {
@@ -1293,12 +1562,16 @@
           "healthy": {
             "title": "Healthy",
             "type": "boolean"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/HealthConfig"
           }
         },
         "required": [
           "healthy",
           "checked_at",
-          "checks"
+          "checks",
+          "thresholds"
         ],
         "title": "HealthReportView",
         "type": "object"
@@ -1829,6 +2102,25 @@
             "title": "End",
             "type": "string"
           },
+          "grid_size": {
+            "default": 5,
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Grid Size",
+            "type": "integer"
+          },
+          "hypothesis": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hypothesis"
+          },
           "interval": {
             "default": "1d",
             "title": "Interval",
@@ -1853,6 +2145,18 @@
             ],
             "title": "Objective",
             "type": "string"
+          },
+          "premortem": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premortem"
           },
           "preset": {
             "anyOf": [
@@ -1985,6 +2289,16 @@
             "title": "Class Path",
             "type": "string"
           },
+          "n_trials_class": {
+            "default": 0,
+            "title": "N Trials Class",
+            "type": "integer"
+          },
+          "n_trials_run": {
+            "default": 0,
+            "title": "N Trials Run",
+            "type": "integer"
+          },
           "registered_strategy_id": {
             "anyOf": [
               {
@@ -1995,6 +2309,11 @@
               }
             ],
             "title": "Registered Strategy Id"
+          },
+          "run_id": {
+            "default": "",
+            "title": "Run Id",
+            "type": "string"
           },
           "survival_reports": {
             "items": {
@@ -4339,6 +4658,160 @@
           }
         },
         "title": "TickSummary",
+        "type": "object"
+      },
+      "TradeStatsView": {
+        "description": "Trade-level statistics of a backtest (``backtest.trades.TradeStats``).\nWin/loss figures are over closed round trips; ``None`` marks an\nunbounded ratio (no losing trades).",
+        "properties": {
+          "avg_bars_held": {
+            "title": "Avg Bars Held",
+            "type": "number"
+          },
+          "avg_loss": {
+            "title": "Avg Loss",
+            "type": "number"
+          },
+          "avg_win": {
+            "title": "Avg Win",
+            "type": "number"
+          },
+          "cost_drag_annual": {
+            "title": "Cost Drag Annual",
+            "type": "number"
+          },
+          "costs_paid": {
+            "title": "Costs Paid",
+            "type": "number"
+          },
+          "expectancy": {
+            "title": "Expectancy",
+            "type": "number"
+          },
+          "exposure": {
+            "title": "Exposure",
+            "type": "number"
+          },
+          "n_open": {
+            "title": "N Open",
+            "type": "integer"
+          },
+          "n_trades": {
+            "title": "N Trades",
+            "type": "integer"
+          },
+          "payoff_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payoff Ratio"
+          },
+          "trade_profit_factor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trade Profit Factor"
+          },
+          "turnover_annual": {
+            "title": "Turnover Annual",
+            "type": "number"
+          },
+          "win_rate": {
+            "title": "Win Rate",
+            "type": "number"
+          }
+        },
+        "required": [
+          "n_trades",
+          "n_open",
+          "win_rate",
+          "avg_win",
+          "avg_loss",
+          "payoff_ratio",
+          "expectancy",
+          "trade_profit_factor",
+          "avg_bars_held",
+          "exposure",
+          "turnover_annual",
+          "costs_paid",
+          "cost_drag_annual"
+        ],
+        "title": "TradeStatsView",
+        "type": "object"
+      },
+      "TradeView": {
+        "description": "One round trip (a lot, or part of one, from buy to sell or to the end).",
+        "properties": {
+          "bars_held": {
+            "title": "Bars Held",
+            "type": "integer"
+          },
+          "entry_px": {
+            "title": "Entry Px",
+            "type": "number"
+          },
+          "entry_ts": {
+            "format": "date-time",
+            "title": "Entry Ts",
+            "type": "string"
+          },
+          "exit_px": {
+            "title": "Exit Px",
+            "type": "number"
+          },
+          "exit_ts": {
+            "format": "date-time",
+            "title": "Exit Ts",
+            "type": "string"
+          },
+          "fees": {
+            "title": "Fees",
+            "type": "number"
+          },
+          "is_open": {
+            "title": "Is Open",
+            "type": "boolean"
+          },
+          "pnl": {
+            "title": "Pnl",
+            "type": "number"
+          },
+          "qty": {
+            "title": "Qty",
+            "type": "number"
+          },
+          "return_pct": {
+            "title": "Return Pct",
+            "type": "number"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker",
+          "entry_ts",
+          "exit_ts",
+          "qty",
+          "entry_px",
+          "exit_px",
+          "pnl",
+          "return_pct",
+          "bars_held",
+          "fees",
+          "is_open"
+        ],
+        "title": "TradeView",
         "type": "object"
       },
       "ValidateRequest": {

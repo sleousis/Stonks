@@ -21,6 +21,23 @@
       "description": "Queue a backtest of a draft. Returns the job; wait_for_job gives the\nBacktestResult. Simulated only: never places real orders.",
       "input_schema": {
         "properties": {
+          "cost_model": {
+            "anyOf": [
+              {
+                "enum": [
+                  "zero",
+                  "realistic"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "transaction-cost preset (see list_cost_models); default [backtest.costs]",
+            "title": "Cost Model"
+          },
           "draft_id": {
             "title": "Draft Id",
             "type": "string"
@@ -704,7 +721,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Queue tune -> fit -> survival suite for a draft (a rule draft's spec\nis fixed; a code draft is tuned). Returns the job; wait_for_job gives\nthe verdict and survival reports. With register_strategy=true it needs\nconfirm=true (preview otherwise), like register_draft.",
+      "description": "Queue tune -> fit -> survival suite for a draft (a rule draft's spec\nis fixed; a code draft is tuned). Returns the job; wait_for_job gives\nthe verdict and survival reports. Registering (register_strategy, or\nregister_if_passes for a passing run only) needs confirm=true\n(preview otherwise), like register_draft.",
       "input_schema": {
         "properties": {
           "budget": {
@@ -717,9 +734,26 @@
           },
           "confirm": {
             "default": false,
-            "description": "must be true with register_strategy=true; otherwise a preview",
+            "description": "must be true with register_strategy / register_if_passes; otherwise a preview",
             "title": "Confirm",
             "type": "boolean"
+          },
+          "cost_model": {
+            "anyOf": [
+              {
+                "enum": [
+                  "zero",
+                  "realistic"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "transaction-cost preset (see list_cost_models); default [backtest.costs]",
+            "title": "Cost Model"
           },
           "draft_id": {
             "title": "Draft Id",
@@ -730,6 +764,20 @@
             "format": "date",
             "title": "End",
             "type": "string"
+          },
+          "hypothesis": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "the edge and who pays for it; recorded before tuning (trial ledger)",
+            "title": "Hypothesis"
           },
           "interval": {
             "default": "1d",
@@ -746,9 +794,47 @@
             "title": "Objective",
             "type": "string"
           },
+          "premortem": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "how the strategy is expected to fail; recorded",
+            "title": "Premortem"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "enum": [
+                  "quick",
+                  "standard",
+                  "promotion"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "named survival suite when survival_tests is omitted (default: promotion when registering, else quick)",
+            "title": "Preset"
+          },
+          "register_if_passes": {
+            "default": false,
+            "description": "register the result in shadow only if every survival test passes (needs confirm=true)",
+            "title": "Register If Passes",
+            "type": "boolean"
+          },
           "register_strategy": {
             "default": false,
-            "description": "register the result in shadow status (needs confirm=true)",
+            "description": "register the result in shadow status whatever the verdict (needs confirm=true)",
             "title": "Register Strategy",
             "type": "boolean"
           },
@@ -1793,7 +1879,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Queue a lab run: tune a strategy class, fit, run the survival suite and\ngive a pass/fail verdict. Returns the job; use wait_for_job for the result.\nWith register_strategy=true it needs confirm=true (preview otherwise).",
+      "description": "Queue a lab run: tune a strategy class, fit, run the survival suite and\ngive a pass/fail verdict. Returns the job; use wait_for_job for the result.\nEvery run and trial is recorded in the trial ledger (with the hypothesis).\nRegistering (register_strategy, or register_if_passes to register only a\npassing run) needs confirm=true (preview otherwise).",
       "input_schema": {
         "$defs": {
           "McptOptions": {
@@ -1994,15 +2080,46 @@
           },
           "confirm": {
             "default": false,
-            "description": "must be true with register_strategy=true; otherwise a preview",
+            "description": "must be true with register_strategy / register_if_passes; otherwise a preview",
             "title": "Confirm",
             "type": "boolean"
+          },
+          "cost_model": {
+            "anyOf": [
+              {
+                "enum": [
+                  "zero",
+                  "realistic"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "transaction-cost preset (see list_cost_models); default [backtest.costs]",
+            "title": "Cost Model"
           },
           "end": {
             "description": "YYYY-MM-DD",
             "format": "date",
             "title": "End",
             "type": "string"
+          },
+          "hypothesis": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "the edge and who pays for it; recorded before tuning (trial ledger)",
+            "title": "Hypothesis"
           },
           "interval": {
             "default": "1d",
@@ -2031,9 +2148,47 @@
             "title": "Objective",
             "type": "string"
           },
+          "premortem": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "how the strategy is expected to fail; recorded",
+            "title": "Premortem"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "enum": [
+                  "quick",
+                  "standard",
+                  "promotion"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "named survival suite when survival_tests is omitted (default: promotion when registering, else quick)",
+            "title": "Preset"
+          },
+          "register_if_passes": {
+            "default": false,
+            "description": "register the result in shadow only if every survival test passes (needs confirm=true)",
+            "title": "Register If Passes",
+            "type": "boolean"
+          },
           "register_strategy": {
             "default": false,
-            "description": "register the result in shadow status (needs confirm=true)",
+            "description": "register the result in shadow status whatever the verdict (needs confirm=true)",
             "title": "Register Strategy",
             "type": "boolean"
           },

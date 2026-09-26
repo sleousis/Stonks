@@ -230,15 +230,28 @@ Fee and spread for one asset class.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `cagr` | number \| null | yes |  |
+| `calmar` | number \| null | no |  |
+| `drawdown` | list[[EquityPoint](#equitypoint)] | no |  |
 | `end` | date | yes |  |
 | `equity` | list[[EquityPoint](#equitypoint)] | yes |  |
+| `es_95` | number \| null | no |  |
 | `final_return` | number \| null | yes |  |
+| `fitness` | number \| null | no |  |
 | `interval` | string | yes |  |
+| `kurtosis` | number \| null | no |  |
+| `max_dd_duration_bars` | integer | no |  |
 | `max_drawdown` | number \| null | yes |  |
 | `profit_factor` | number \| null | yes |  |
 | `sharpe` | number \| null | yes |  |
+| `skew` | number \| null | no |  |
+| `sortino` | number \| null | no |  |
 | `start` | date | yes |  |
 | `strategy_id` | string | yes |  |
+| `trade_count` | integer | no |  |
+| `trade_stats` | [TradeStatsView](#tradestatsview) \| null | no |  |
+| `trades` | list[[TradeView](#tradeview)] | no |  |
+| `ulcer_index` | number \| null | no |  |
+| `var_95` | number \| null | no |  |
 
 ### BarSeries
 
@@ -342,6 +355,7 @@ A :class:`~stonks.app.lab.BacktestRequest` without the strategy (the draft is th
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `end` | date | yes |  |
 | `fee_per_trade` | number | no |  |
 | `initial_cash` | number | no |  |
@@ -363,21 +377,29 @@ A :class:`~stonks.app.lab.BacktestRequest` without the strategy (the draft is th
 
 ### DraftLabRunRequest
 
-A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's spec is fixed (it has no tunable parameters); a code draft's class is tuned over its parameter space.
+A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's spec is fixed (it has no tunable parameters); a code draft's class is tuned over its parameter space. Registering (``register_strategy`` always, ``register_if_passes`` only on a pass) links the new strategy to the draft.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `budget` | integer | no |  |
+| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `end` | date | yes |  |
+| `grid_size` | integer | no |  |
+| `hypothesis` | string \| null | no |  |
 | `interval` | string | no |  |
+| `mcpt` | [McptOptions](#mcptoptions) \| null | no |  |
 | `objective` | "sharpe" \| "cagr" \| "final_return" | no |  |
+| `premortem` | string \| null | no |  |
+| `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |
+| `register_if_passes` | boolean | no |  |
 | `register_strategy` | boolean | no |  |
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
-| `survival_tests` | list["drift" \| "mcpt" \| "oos" \| "period_stability" \| "permutation" \| "perturbation" \| "runs_test" \| "walk_forward" \| "walk_forward_mcpt"] | no |  |
+| `survival_tests` | list["drift" \| "mcpt" \| "oos" \| "period_stability" \| "permutation" \| "perturbation" \| "runs_test" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" | no |  |
 | `universe` | list[string] | yes |  |
+| `walk_forward` | [WalkForwardConfig](#walkforwardconfig) \| null | no |  |
 
 ### DraftUpdate
 
@@ -463,6 +485,17 @@ Limits a paper-trading period must meet before ``stonks golive check`` passes (`
 | `name` | string | yes |  |
 | `ok` | boolean | yes |  |
 
+### HealthConfig
+
+Thresholds for ``stonks health`` (``[production.health]``).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `ingest_failure_lookback_hours` | integer | no |  |
+| `max_bar_age_days` | integer | no |  |
+| `stuck_ingest_minutes` | integer | no |  |
+| `stuck_tick_minutes` | integer | no |  |
+
 ### HealthReportView
 
 | Field | Type | Required | Description |
@@ -470,6 +503,7 @@ Limits a paper-trading period must meet before ``stonks golive check`` passes (`
 | `checked_at` | date-time | yes |  |
 | `checks` | list[[HealthCheckView](#healthcheckview)] | yes |  |
 | `healthy` | boolean | yes |  |
+| `thresholds` | [HealthConfig](#healthconfig) | yes |  |
 
 ### IngestRequest
 
@@ -566,9 +600,12 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `budget` | integer | no |  |
 | `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `end` | date | yes |  |
+| `grid_size` | integer | no |  |
+| `hypothesis` | string \| null | no |  |
 | `interval` | string | no |  |
 | `mcpt` | [McptOptions](#mcptoptions) \| null | no |  |
 | `objective` | "sharpe" \| "cagr" \| "final_return" | no |  |
+| `premortem` | string \| null | no |  |
 | `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |
 | `register_if_passes` | boolean | no |  |
 | `register_strategy` | boolean | no |  |
@@ -588,7 +625,10 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `best_params` | object | yes |  |
 | `best_score` | number \| null | yes |  |
 | `class_path` | string | yes |  |
+| `n_trials_class` | integer | no |  |
+| `n_trials_run` | integer | no |  |
 | `registered_strategy_id` | string \| null | yes |  |
+| `run_id` | string | no |  |
 | `survival_reports` | list[[SurvivalReportView](#survivalreportview)] | yes |  |
 | `verdict` | "pass" \| "fail" | yes |  |
 
@@ -1109,6 +1149,44 @@ What this server lets the Studio do.
 | `stale_buys_dropped` | list[string] | no |  |
 | `winner_expected_return` | number \| null | no |  |
 | `winner_strategy_id` | string \| null | no |  |
+
+### TradeStatsView
+
+Trade-level statistics of a backtest (``backtest.trades.TradeStats``). Win/loss figures are over closed round trips; ``None`` marks an unbounded ratio (no losing trades).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `avg_bars_held` | number | yes |  |
+| `avg_loss` | number | yes |  |
+| `avg_win` | number | yes |  |
+| `cost_drag_annual` | number | yes |  |
+| `costs_paid` | number | yes |  |
+| `expectancy` | number | yes |  |
+| `exposure` | number | yes |  |
+| `n_open` | integer | yes |  |
+| `n_trades` | integer | yes |  |
+| `payoff_ratio` | number \| null | yes |  |
+| `trade_profit_factor` | number \| null | yes |  |
+| `turnover_annual` | number | yes |  |
+| `win_rate` | number | yes |  |
+
+### TradeView
+
+One round trip (a lot, or part of one, from buy to sell or to the end).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `bars_held` | integer | yes |  |
+| `entry_px` | number | yes |  |
+| `entry_ts` | date-time | yes |  |
+| `exit_px` | number | yes |  |
+| `exit_ts` | date-time | yes |  |
+| `fees` | number | yes |  |
+| `is_open` | boolean | yes |  |
+| `pnl` | number | yes |  |
+| `qty` | number | yes |  |
+| `return_pct` | number | yes |  |
+| `ticker` | string | yes |  |
 
 ### ValidateRequest
 

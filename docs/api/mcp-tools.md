@@ -434,6 +434,7 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 | `rebalance_every_bars` | integer | no | `1` |  |
 | `slippage_bps` | number | no | `0.0` |  |
 | `fee_per_trade` | number | no | `0.0` |  |
+| `cost_model` | "zero" \| "realistic" \| null | no | `null` | transaction-cost preset (see list_cost_models); default [backtest.costs] |
 
 ### `create_draft`
 
@@ -555,8 +556,9 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 
 Queue tune -> fit -> survival suite for a draft (a rule draft's spec
 is fixed; a code draft is tuned). Returns the job; wait_for_job gives
-the verdict and survival reports. With register_strategy=true it needs
-confirm=true (preview otherwise), like register_draft.
+the verdict and survival reports. Registering (register_strategy, or
+register_if_passes for a passing run only) needs confirm=true
+(preview otherwise), like register_draft.
 
 Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **yes**.
 
@@ -573,8 +575,13 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 | `train_ratio` | number | no | `0.7` |  |
 | `interval` | string | no | `"1d"` |  |
 | `seed` | integer | no | `0` |  |
-| `register_strategy` | boolean | no | `false` | register the result in shadow status (needs confirm=true) |
-| `confirm` | boolean | no | `false` | must be true with register_strategy=true; otherwise a preview |
+| `register_strategy` | boolean | no | `false` | register the result in shadow status whatever the verdict (needs confirm=true) |
+| `register_if_passes` | boolean | no | `false` | register the result in shadow only if every survival test passes (needs confirm=true) |
+| `confirm` | boolean | no | `false` | must be true with register_strategy / register_if_passes; otherwise a preview |
+| `preset` | "quick" \| "standard" \| "promotion" \| null | no | `null` | named survival suite when survival_tests is omitted (default: promotion when registering, else quick) |
+| `cost_model` | "zero" \| "realistic" \| null | no | `null` | transaction-cost preset (see list_cost_models); default [backtest.costs] |
+| `hypothesis` | string \| null | no | `null` | the edge and who pays for it; recorded before tuning (trial ledger) |
+| `premortem` | string \| null | no | `null` | how the strategy is expected to fail; recorded |
 
 ### `promote_strategy`
 
@@ -622,7 +629,9 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 
 Queue a lab run: tune a strategy class, fit, run the survival suite and
 give a pass/fail verdict. Returns the job; use wait_for_job for the result.
-With register_strategy=true it needs confirm=true (preview otherwise).
+Every run and trial is recorded in the trial ledger (with the hypothesis).
+Registering (register_strategy, or register_if_passes to register only a
+passing run) needs confirm=true (preview otherwise).
 
 Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **yes**.
 
@@ -639,8 +648,13 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 | `train_ratio` | number | no | `0.7` |  |
 | `interval` | string | no | `"1d"` |  |
 | `seed` | integer | no | `0` |  |
-| `register_strategy` | boolean | no | `false` | register the result in shadow status (needs confirm=true) |
-| `confirm` | boolean | no | `false` | must be true with register_strategy=true; otherwise a preview |
+| `register_strategy` | boolean | no | `false` | register the result in shadow status whatever the verdict (needs confirm=true) |
+| `register_if_passes` | boolean | no | `false` | register the result in shadow only if every survival test passes (needs confirm=true) |
+| `confirm` | boolean | no | `false` | must be true with register_strategy / register_if_passes; otherwise a preview |
+| `preset` | "quick" \| "standard" \| "promotion" \| null | no | `null` | named survival suite when survival_tests is omitted (default: promotion when registering, else quick) |
+| `cost_model` | "zero" \| "realistic" \| null | no | `null` | transaction-cost preset (see list_cost_models); default [backtest.costs] |
+| `hypothesis` | string \| null | no | `null` | the edge and who pays for it; recorded before tuning (trial ledger) |
+| `premortem` | string \| null | no | `null` | how the strategy is expected to fail; recorded |
 | `walk_forward` | any \| null | no | `null` | walk_forward test settings; add 'walk_forward' to survival_tests |
 | `mcpt` | any \| null | no | `null` | permutation (MCPT) settings; add 'permutation' to survival_tests |
 
