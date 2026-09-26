@@ -362,6 +362,42 @@ def test_retune_re_tunes_on_each_permuted_train_window(lake_gbm):
     assert "retune" in report.notes
 
 
+def test_retune_keeps_the_wrapped_inner_strategy(lake_gbm):
+    from stonks.lab.tuning.grid import GridTuner
+    from stonks.strategies.macro_regime import MacroRegimeFilter
+
+    class _InnerRecorder:
+        name = "inner_recorder"
+        direction = "maximize"
+
+        def __init__(self) -> None:
+            self.seen: list = []
+
+        def score(self, strategy, dataset):
+            self.seen.append((type(strategy.inner), dict(strategy.params["inner_params"])))
+            return 0.0
+
+    lake, dates = lake_gbm
+    objective = _InnerRecorder()
+    strategy = MacroRegimeFilter(
+        {
+            "inner_class_path": "stonks.strategies.examples.buy_and_hold:BuyAndHold",
+            "inner_params": {"ticker": "RND.US"},
+        }
+    )
+    test = MonteCarloPermutationTest(
+        n_permutations=2,
+        max_p_value=1.0,
+        retune=True,
+        tuning=TuningSetup(tuner=GridTuner(grid_size=2), objective=objective, budget=2),
+    )
+    test.run(strategy, _gbm_dataset(lake, dates))
+    assert objective.seen
+    for inner_cls, inner_params in objective.seen:
+        assert inner_cls is BuyAndHold
+        assert inner_params == {"ticker": "RND.US", "allocation": 1.0}
+
+
 def test_explicit_tuning_wins_over_the_runner_binding(lake_gbm):
     lake, dates = lake_gbm
     mine, runners = _WindowTuner(), _WindowTuner()

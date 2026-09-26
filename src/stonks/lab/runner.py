@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -42,9 +43,17 @@ class LabRunner:
         self._suite = suite
         self._budget = budget
 
-    def run(self, strategy_cls: type[Strategy], dataset: LabDataset) -> LabRunResult:
+    def run(
+        self,
+        strategy_cls: type[Strategy],
+        dataset: LabDataset,
+        fixed_params: Mapping[str, Any] | None = None,
+    ) -> LabRunResult:
+        """``fixed_params`` pin params for tuning (e.g. a
+        ``MacroRegimeFilter``'s inner strategy, a ticker); survival tests
+        that re-tune carry the tuned strategy's non-tunable params over."""
         setup = TuningSetup(tuner=self._tuner, objective=self._objective, budget=self._budget)
-        strategy, tuned = tune_and_fit(strategy_cls, dataset, setup)
+        strategy, tuned = tune_and_fit(strategy_cls, dataset, setup, fixed_params)
         _log.info(
             "lab.tune.done",
             best_params=tuned.best_params,

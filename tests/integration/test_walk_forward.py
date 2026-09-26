@@ -111,6 +111,44 @@ def test_thresholds_decide_pass_or_fail(lake_trending):
     assert lenient.metrics["oos_score_mean"] > 0
 
 
+def test_folds_keep_the_wrapped_inner_strategy_and_fixed_params(lake_trending, monkeypatch):
+    """Re-tuning a MacroRegimeFilter must not fall back to the class
+    defaults (a default Momentum inner, USA series): every fold trades the
+    wrapper the lab was handed."""
+    from stonks.lab.survival import walk_forward as wf
+    from stonks.strategies.examples.buy_and_hold import BuyAndHold
+    from stonks.strategies.macro_regime import MacroRegimeFilter
+
+    scored: list = []
+    real_backtest = wf.run_backtest
+
+    def recording_backtest(strategy, dataset, window, lake=None):
+        scored.append(strategy)
+        return real_backtest(strategy, dataset, window, lake)
+
+    monkeypatch.setattr(wf, "run_backtest", recording_backtest)
+    strategy = MacroRegimeFilter(
+        {
+            "inner_class_path": "stonks.strategies.examples.buy_and_hold:BuyAndHold",
+            "inner_params": {"ticker": "UP.US", "allocation": 0.5},
+            "country_iso": "DEU",
+        }
+    )
+    setup = TuningSetup(GridTuner(grid_size=2), SharpeObjective(), budget=4)
+    report = WalkForwardTest(WalkForwardConfig(n_splits=2, test_days=30), setup).run(
+        strategy, _ds(lake_trending)
+    )
+
+    assert len(scored) == 2
+    for fold_strategy in scored:
+        assert isinstance(fold_strategy, MacroRegimeFilter)
+        assert isinstance(fold_strategy.inner, BuyAndHold)
+        assert fold_strategy.params["inner_params"] == {"ticker": "UP.US", "allocation": 0.5}
+        assert fold_strategy.params["country_iso"] == "DEU"
+    # buy-and-hold UP.US (no macro data -> risk on) profits in every fold
+    assert report.metrics["positive_share"] == 1.0
+
+
 def test_requires_a_tuning_setup(lake_trending):
     with pytest.raises(ValueError, match="tuning"):
         WalkForwardTest().run(Momentum({}), _ds(lake_trending))
