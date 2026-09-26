@@ -101,6 +101,29 @@ longer a member is sold in full (client id ``universe:<bar>:<ticker>:sell``).
 A universe ticker with no span in that universe never trades. Without a
 ``universe_id`` every universe ticker trades on every bar, as before.
 
+Short selling (roadmap 16.1)
+----------------------------
+Off by default. With ``BacktestConfig.allow_short`` (and a broker built
+with ``allow_short`` and a margin model that allows shorts; the two must
+agree) the engine:
+
+- splits every order at zero when it fills
+  (:func:`stonks.execution.orders.classify` against the position then), so
+  the broker sees one close or one open per order;
+- keeps only the closing legs of strategies without ``supports_short``, and
+  passes negative scores of strategies that support shorts to the
+  construction pipeline (``|score| > threshold``);
+- calls ``broker.accrue`` on every bar after the closes are set (borrow
+  fees and debit interest; a no-op without shorts or debit cash, so it runs
+  for every book);
+- after each bar's decisions, checks the margin model: a maintenance
+  breach queues forced closes (``margin:<bar>:<ticker>:cover|sell``, most
+  losing positions first), and a short whose borrow was recalled queues a
+  forced cover (``recall:<bar>:<ticker>:cover``). They replace any other
+  order queued for the ticker, fill at the next open, and are listed in
+  ``forced_orders``;
+- covers shorts of tickers that leave a point-in-time universe.
+
 Annualization
 -------------
 Sharpe uses ``periods_per_year(interval, asset_classes)`` over the asset
@@ -138,7 +161,8 @@ from stonks.core.corporate_actions import CorporateActionsProvider, Split
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy
 from stonks.core.timeutil import as_datetime, day_end, day_start
-from stonks.core.types import AssetClass, Order, OrderSide
+from stonks.core.types import AssetClass, Order
+from stonks.execution.orders import SideToken, classify, classify_all
 from stonks.logging import get_logger
 from stonks.store.corporate_actions import LakeCorporateActions
 from stonks.store.lake import DuckDBLake
@@ -176,6 +200,9 @@ class BacktestConfig:
     #: Stored universe whose membership spans gate trading (see the module
     #: doc); ``None`` trades every universe ticker on every bar.
     universe_id: str | None = None
+    #: The book may hold short positions (see the module doc). The broker
+    #: must allow shorts too.
+    allow_short: bool = False
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.dividend_withholding_rate <= 1.0:
@@ -239,12 +266,22 @@ class Backtester:
         #: ``stonks.production.tca.backtest_shortfalls`` prices the fills
         #: against it exactly as live orders are priced).
         self.decision_prices: dict[str, float] = {}
+        #: Orders the engine forced (margin calls, borrow recalls), in order.
+        self.forced_orders: list[Order] = []
 
     def run(self) -> BacktestReport:
         self._decided_at, self._roots, self._parts = {}, {}, {}
         self._equity, self._attribution, self._fill_owner, self._fill_seq = [], {}, {}, 0
         self.target_books = {}
         self.decision_prices = {}
+        self.forced_orders = []
+        broker_short = bool(getattr(self._broker, "allow_short", False))
+        if broker_short != self._config.allow_short:
+            raise ValueError(
+                "BacktestConfig.allow_short and the broker's allow_short must agree "
+                f"(config {self._config.allow_short}, broker {broker_short})"
+            )
+        accrue = getattr(self._broker, "accrue", None)
         spec = getattr(self._broker, "market_stats_spec", None)
         bars_by_ts, asset_classes = self._load_bars(spec)
         self._asset_classes = asset_classes
@@ -277,6 +314,8 @@ class Backtester:
                 last_close[ticker] = bar.close
             marks = dict(last_close)
             self._broker.set_prices(marks, as_of=as_of)
+            if callable(accrue):
+                accrue(as_of)
 
             # 3. rebalance cadence — counted in bars, not calendar days, so
             # this is identical for daily and intraday intervals.
@@ -292,6 +331,8 @@ class Backtester:
                 bars_since_rebalance = 1
             else:
                 bars_since_rebalance += 1
+            if self._config.allow_short:
+                pending = self._force_closes(pending, as_of, marks)
 
             # 4. equity at close
             portfolio = self._broker.fetch_portfolio()
@@ -396,6 +437,9 @@ class Backtester:
             for action in schedule.due(ticker, bar_date):
                 if isinstance(action, Split):
                     pending = adjust_orders_for_split(pending, action)
+                    rescale = getattr(self._broker, "rescale_cost", None)
+                    if callable(rescale):
+                        rescale(ticker, action.ratio)
                 record = apply_to_portfolio(
                     portfolio,
                     action,
@@ -433,7 +477,7 @@ class Backtester:
             opens, as_of=as_of, volumes=volumes, highs=highs, lows=lows, stats=stats
         )
         waiting: list[Order] = []
-        for order in pending:
+        for order in self._legs(pending):
             if order.ticker not in opens:
                 waiting.append(order)
                 continue
@@ -445,6 +489,65 @@ class Backtester:
             if rest > 0:
                 waiting.append(self._carry(order, rest, as_of))
         return waiting
+
+    def _legs(self, pending: list[Order]) -> list[Order]:
+        """``pending`` as placed: unchanged in a long-only run; split at zero
+        against the position now in a run that allows shorts (a leg keeps
+        its root's decision time)."""
+        if not self._config.allow_short:
+            return pending
+        positions = self._broker.fetch_portfolio().positions
+        out: list[Order] = []
+        for order in pending:
+            if order.position_effect is not None:
+                out.append(order)
+                continue
+            for leg in classify(order, positions.get(order.ticker, 0.0)):
+                if leg.client_id != order.client_id and order.client_id in self._decided_at:
+                    self._decided_at[leg.client_id] = self._decided_at[order.client_id]
+                out.append(leg)
+        return out
+
+    def _force_closes(
+        self, pending: list[Order], as_of: datetime, marks: Mapping[str, float]
+    ) -> list[Order]:
+        """Queue the margin-call closes and recall covers (see the module
+        doc); they replace other orders queued for their tickers."""
+        forced: dict[str, Order] = {}
+        margin_call = getattr(self._broker, "margin_call", None)
+        plan = margin_call() if callable(margin_call) else []
+        if plan:
+            _log.warning("margin_call", bar=as_of.isoformat(), plan=plan)
+        for ticker, qty in plan:
+            side = "buy" if qty > 0 else "sell"
+            token = "cover" if qty > 0 else "sell"
+            forced[ticker] = Order(
+                client_id=f"margin:{as_of.isoformat()}:{ticker}:{token}",
+                ticker=ticker,
+                side=side,
+                quantity=abs(qty),
+                strategy_id="margin",
+                position_effect="close",
+            )
+        recalled = getattr(self._broker, "recalled", None)
+        positions = self._broker.fetch_portfolio().positions
+        for ticker in recalled(as_of) if callable(recalled) else []:
+            forced[ticker] = Order(
+                client_id=f"recall:{as_of.isoformat()}:{ticker}:cover",
+                ticker=ticker,
+                side="buy",
+                quantity=-positions[ticker],
+                strategy_id="recall",
+                position_effect="close",
+            )
+        if not forced:
+            return pending
+        for order in forced.values():
+            self._decided_at[order.client_id] = as_of
+            if order.ticker in marks:
+                self.decision_prices.setdefault(order.client_id, marks[order.ticker])
+        self.forced_orders.extend(forced.values())
+        return [o for o in pending if o.ticker not in forced] + list(forced.values())
 
     def _carry(self, order: Order, quantity: float, as_of: datetime) -> Order:
         """The deferred ``quantity`` of ``order`` as a new child order."""
@@ -508,7 +611,10 @@ class Backtester:
     def _enforce_membership(
         self, orders: list[Order], members: set[str], as_of: datetime
     ) -> list[Order]:
-        """Drop buys of non-members and sell every holding that left."""
+        """Drop buys of non-members and sell every holding that left (and
+        cover every short that left, in a run that allows shorts)."""
+        if self._config.allow_short:
+            return self._enforce_membership_long_short(orders, members, as_of)
         kept = [o for o in orders if o.side != "buy" or o.ticker in members]
         selling: dict[str, float] = {}
         for o in kept:
@@ -527,6 +633,34 @@ class Backtester:
                     quantity=rest,
                     order_type="market",
                     strategy_id="universe",
+                )
+            )
+        return kept
+
+    def _enforce_membership_long_short(
+        self, orders: list[Order], members: set[str], as_of: datetime
+    ) -> list[Order]:
+        portfolio = self._broker.fetch_portfolio()
+        legs = classify_all(orders, portfolio.positions)
+        kept = [o for o in legs if o.ticker in members or o.position_effect == "close"]
+        closing: dict[str, float] = {}
+        for o in kept:
+            if o.position_effect == "close":
+                closing[o.ticker] = closing.get(o.ticker, 0.0) + o.quantity
+        for ticker, qty in sorted(portfolio.positions.items()):
+            rest = abs(qty) - closing.get(ticker, 0.0)
+            if ticker in members or rest <= 1e-12:
+                continue
+            side, token = ("sell", "sell") if qty > 0 else ("buy", "cover")
+            kept.append(
+                Order(
+                    client_id=f"universe:{as_of.isoformat()}:{ticker}:{token}",
+                    ticker=ticker,
+                    side=side,
+                    quantity=rest,
+                    order_type="market",
+                    strategy_id="universe",
+                    position_effect="close",
                 )
             )
         return kept
@@ -551,9 +685,15 @@ class Backtester:
         for index, strategy in enumerate(self._strategies):
             picks = picks_by_strategy[index]
             picks.sort(key=lambda p: p[0], reverse=True)
+            decided = strategy.decide(picks, portfolio, prices, as_of)
+            if self._config.allow_short and not getattr(strategy, "supports_short", False):
+                decided = [
+                    o
+                    for o in classify_all(decided, portfolio.positions)
+                    if not (o.side == "sell" and o.position_effect == "open")
+                ]
             orders.extend(
-                replace(order, client_id=f"{index}:{order.client_id}")
-                for order in strategy.decide(picks, portfolio, prices, as_of)
+                replace(order, client_id=f"{index}:{order.client_id}") for order in decided
             )
         return orders
 
@@ -579,9 +719,12 @@ class Backtester:
         signals: dict[str, dict[str, float]] = {}
         for key, strategy in zip(keys, self._strategies, strict=True):
             scores: dict[str, float] = {}
+            shorts = self._config.allow_short and getattr(strategy, "supports_short", False)
             for ticker in tradable:
                 r = strategy.estimate_return(ticker, as_of, self._lake)
-                if r is not None and r > self._config.threshold:
+                if r is not None and (
+                    r > self._config.threshold or (shorts and r < -self._config.threshold)
+                ):
                     scores[ticker] = r
             signals[key] = scores
         portfolio = self._broker.fetch_portfolio()
@@ -607,6 +750,9 @@ class Backtester:
                     (f.ticker, f.side, f.quantity, as_datetime(f.filled_at).date())
                     for f in getattr(self._broker, "fills", ())
                 ),
+                allow_short=self._config.allow_short,
+                margin=getattr(self._broker, "margin", None),
+                borrow=getattr(self._broker, "borrow", None),
             )
         book = BookInput(
             portfolio=portfolio,
@@ -615,9 +761,10 @@ class Backtester:
             strategy_weights=None if weights is None else dict(zip(keys, weights, strict=True)),
             prior_attribution=self._attribution,
             risk_context=context,
+            allow_short=self._config.allow_short,
         )
 
-        def client_id(strategy_id: str | None, ticker: str, side: OrderSide) -> str:
+        def client_id(strategy_id: str | None, ticker: str, side: SideToken) -> str:
             return f"{strategy_id or PORTFOLIO_STRATEGY}:{as_of.isoformat()}:{ticker}:{side}"
 
         result = build_orders(
