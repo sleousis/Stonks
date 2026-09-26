@@ -217,9 +217,9 @@ def test_promote_gate_refuses_then_admin_overrides_and_trader_is_refused(browse,
     dialog = page.locator("dialog[open]")
     expect(dialog).to_contain_text("Go-live check failed")
     fill_status_dialog(dialog, sid, "First promotion attempt from e2e.")
-    dialog.get_by_role("button", name=re.compile("^Promote")).click()
+    hold(page, dialog.get_by_role("button", name="Go live"))
 
-    override = page.get_by_role("button", name="Override and promote")
+    override = page.get_by_role("button", name="Override and go live")
     expect(override).to_be_visible()
     admin.check_page("strategy-promote-override")
     dialog = page.locator("dialog[open]")
@@ -229,6 +229,15 @@ def test_promote_gate_refuses_then_admin_overrides_and_trader_is_refused(browse,
     history = admin.api("GET", f"/api/strategies/{sid}/history").json()
     rows = history if isinstance(history, list) else history["items"]
     assert any(r.get("override") and r.get("to_status") == "active" for r in rows), rows
+
+
+def hold(page, button) -> None:
+    """Press and hold a hold-to-confirm button for longer than its second."""
+    expect(button).to_be_enabled()
+    button.hover()
+    page.mouse.down()
+    page.wait_for_timeout(1_400)
+    page.mouse.up()
 
 
 def stack_cash() -> float:
