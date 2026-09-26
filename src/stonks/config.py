@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import tomllib
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -157,6 +158,15 @@ class RiskPolicy(BaseModel):
     cash_buffer_fraction: float = Field(default=0.0, ge=0.0, le=1.0)
     # Buys whose (possibly clipped) notional falls below this are dropped.
     min_order_notional: float = Field(default=0.0, ge=0.0)
+
+    def tighter_of(self, *overrides: RiskPolicy | Mapping[str, Any] | None) -> RiskPolicy:
+        """This policy tightened by each partial override (a ``RiskPolicy``
+        or a mapping of its fields): never looser on any field (P28). Same
+        as ``stonks.accounts.book.tighter_of``; ``RiskPolicy.tighter_of(base,
+        ...)`` works too."""
+        from stonks.accounts.book import tighter_of
+
+        return tighter_of(self, *overrides)
 
 
 class HealthConfig(BaseModel):
