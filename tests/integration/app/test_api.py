@@ -201,11 +201,11 @@ def test_orders_ticks_routes(client, seeded):
         "/api/orders/fills", params={"tick_id": seeded["tick_id"]}, headers=AUTH
     ).json()
     assert fills["total"] == 1
-    ticks = client.get("/api/ticks").json()
+    ticks = client.get("/api/ticks", headers=AUTH).json()
     assert ticks["total"] == 1
-    tick = client.get(f"/api/ticks/{seeded['tick_id']}").json()
+    tick = client.get(f"/api/ticks/{seeded['tick_id']}", headers=AUTH).json()
     assert len(tick["orders"]) == 1
-    assert client.get("/api/ticks/tick_missing").status_code == 404
+    assert client.get("/api/ticks/tick_missing", headers=AUTH).status_code == 404
 
 
 def test_catalog_routes(client):

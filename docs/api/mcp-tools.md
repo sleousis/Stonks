@@ -245,13 +245,15 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 ### `get_tick`
 
-One production tick run with the orders it placed.
+One production tick run with the orders it placed in your
+portfolios (or in ``portfolio_id`` only).
 
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `tick_id` | string | yes |  |  |
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
 
 ### `get_universe`
 
@@ -467,7 +469,8 @@ No inputs.
 
 ### `list_ticks`
 
-Production tick runs, newest first, with their summaries.
+Production tick runs, newest first. Summaries show the global
+outcome and the parts about your own portfolios only.
 
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 

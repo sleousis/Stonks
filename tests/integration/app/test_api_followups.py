@@ -154,7 +154,7 @@ def test_tick_route_exposes_stale_buys_dropped(client, settings, seeded):
                 seeded["tick_id"],
             ],
         )
-    summary = client.get(f"/api/ticks/{seeded['tick_id']}").json()["summary"]
+    summary = client.get(f"/api/ticks/{seeded['tick_id']}", headers=AUTH).json()["summary"]
     assert summary["exit_strategy_id"] == "x"
     assert summary["stale_buys_dropped"] == ["B.US"]
     schema = client.get("/openapi.json").json()["components"]["schemas"]["TickSummary"]

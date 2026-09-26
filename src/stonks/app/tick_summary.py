@@ -53,8 +53,15 @@ class TickSummary(BaseModel):
     winner_expected_return: float | None = None
     orders_placed: int | None = None
     fills: int | None = None
+    #: A single-book tick: the portfolio the book-level keys belong to.
+    #: Shown only to that portfolio's owner, like those keys.
+    portfolio_id: str | None = None
     #: Tickers whose buys were dropped because their latest close was stale.
     stale_buys_dropped: list[str] = []
+    #: A scoped tick: tickers outside its universe it left alone.
+    outside_universe_skipped: list[str] = []
+    #: Corporate actions waiting for their ex-date bar.
+    deferred_corporate_actions: list[dict[str, Any]] = []
     risk_adjustments: list[RiskAdjustmentView] = []
     shadow: list[ShadowOutcomeView] = []
     shadow_error: str | None = None

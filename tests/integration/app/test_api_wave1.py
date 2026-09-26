@@ -114,12 +114,12 @@ def test_typed_ingest_and_tick_result_routes(client):
 
 
 def test_tick_runs_have_a_typed_summary(client, seeded):
-    page = client.get("/api/ticks").json()
+    page = client.get("/api/ticks", headers=AUTH).json()
     summary = page["items"][0]["summary"]
     assert summary["orders_placed"] >= 0
     assert isinstance(summary["risk_adjustments"], list)
     assert {s["strategy_id"] for s in summary["shadow"]} == {"bah_shadow"}
-    detail = client.get(f"/api/ticks/{seeded['tick_id']}").json()
+    detail = client.get(f"/api/ticks/{seeded['tick_id']}", headers=AUTH).json()
     assert detail["summary"]["winner_strategy_id"] == seeded["active_id"]
 
 

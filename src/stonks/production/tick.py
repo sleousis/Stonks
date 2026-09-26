@@ -536,7 +536,9 @@ def _run_tick_body(
     status = _tick_status(results)
     if single:
         [only] = results
-        summary = dict(only.summary)
+        # the book's keys sit at the top level; name whose they are, so
+        # readers see them only for their own portfolio (AS-02)
+        summary = {"portfolio_id": only.portfolio_id, **only.summary}
         winner = only.winner_strategy_id
     else:
         summary = {

@@ -9282,6 +9282,15 @@
       "TickSummary": {
         "additionalProperties": true,
         "properties": {
+          "deferred_corporate_actions": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Deferred Corporate Actions",
+            "type": "array"
+          },
           "error": {
             "anyOf": [
               {
@@ -9336,6 +9345,25 @@
               }
             ],
             "title": "Orders Placed"
+          },
+          "outside_universe_skipped": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Outside Universe Skipped",
+            "type": "array"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio Id"
           },
           "reason": {
             "anyOf": [
@@ -22452,6 +22480,7 @@
     },
     "/api/ticks": {
       "get": {
+        "description": "Every tick run, newest first. Summaries keep the global outcome\nand the parts about your own portfolios only.",
         "operationId": "listTicks",
         "parameters": [
           {
@@ -22756,6 +22785,7 @@
     },
     "/api/ticks/{tick_id}": {
       "get": {
+        "description": "One tick run with the orders it placed in your portfolios (or in\n``portfolio_id`` only). Another user's portfolio is a 404.",
         "operationId": "getTick",
         "parameters": [
           {
@@ -22765,6 +22795,25 @@
             "schema": {
               "title": "Tick Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise).",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise).",
+              "title": "Portfolio Id"
             }
           }
         ],

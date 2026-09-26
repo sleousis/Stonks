@@ -2167,11 +2167,14 @@ Costs of a group of orders, weighted by notional, in bps.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `deferred_corporate_actions` | list[object] | no |  |
 | `error` | string \| null | no |  |
 | `error_type` | string \| null | no |  |
 | `exit_strategy_id` | string \| null | no |  |
 | `fills` | integer \| null | no |  |
 | `orders_placed` | integer \| null | no |  |
+| `outside_universe_skipped` | list[string] | no |  |
+| `portfolio_id` | string \| null | no |  |
 | `reason` | string \| null | no |  |
 | `risk_adjustments` | list[[RiskAdjustmentView](#riskadjustmentview)] | no |  |
 | `shadow` | list[[ShadowOutcomeView](#shadowoutcomeview)] | no |  |

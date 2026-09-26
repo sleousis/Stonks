@@ -10,11 +10,15 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from stonks.accounts import PortfolioRepository, Scope
+from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
 from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.app.orders import OrdersService, OrderView
 from stonks.app.pagination import Page
+from stonks.auth.policy import Permission, require
+from stonks.auth.principal import Principal
 from stonks.core.types import AssetClass
 from stonks.production.settings_builder import build_tick_runtime
 from stonks.production.tick import BackdatedTickError, run_tick
@@ -26,6 +30,10 @@ TICK_JOB = "tick"
 #: ``tick_runs.status`` (its CHECK constraint). A no-op tick is ``ok`` with
 #: ``summary.reason`` set.
 TickStatus = Literal["running", "ok", "partial", "error"]
+
+#: The caller: a :class:`Principal` (API, MCP) or a bare :class:`Scope`
+#: (the CLI and in-process services).
+Who = Scope | Principal
 
 _TICK_ID_DATE = re.compile(r"^tick_(\d{4}-\d{2}-\d{2})_")
 
@@ -96,10 +104,13 @@ class TickService:
         runner.register(TICK_JOB, self._handle, lock="tick")
 
     def list(
-        self, *, status: TickStatus | None = None, limit: int, offset: int
+        self, who: Who, *, status: TickStatus | None = None, limit: int, offset: int
     ) -> Page[TickRunView]:
+        """Every tick run, newest first, each summary cut to what ``who``
+        may see (:func:`scope_summary`)."""
         clause = " WHERE status = ?" if status else ""
         params: list[Any] = [status] if status else []
+        visible = self._visible(who)
         with self._ctx.state() as state:
             total = int(state.sql(f"SELECT COUNT(*) FROM tick_runs{clause}", params)[0][0])
             rows = state.sql(
@@ -108,16 +119,48 @@ class TickService:
                 [*params, limit, offset],
             )
         return Page[TickRunView](
-            items=[_row_to_view(r) for r in rows], total=total, limit=limit, offset=offset
+            items=[_row_to_view(r, visible) for r in rows],
+            total=total,
+            limit=limit,
+            offset=offset,
         )
 
-    def get(self, tick_id: str) -> TickRunDetail:
+    def get(self, who: Who, tick_id: str, *, portfolio_id: str | None = None) -> TickRunDetail:
+        """One tick run with the orders it placed in ``who``'s portfolios
+        (only ``portfolio_id`` when given; another user's is a 404)."""
+        visible = self._visible(who)
+        if portfolio_id is not None and visible is not None and portfolio_id not in visible:
+            raise NotFoundError(f"portfolio {portfolio_id!r} not found")
         with self._ctx.state() as state:
             rows = state.sql(f"SELECT t.*, {_AS_OF_SQL} FROM tick_runs t WHERE id = ?", [tick_id])
-        if not rows:
-            raise NotFoundError(f"no tick with id {tick_id!r}")
-        orders = self._orders.orders(tick_id=tick_id, limit=10_000, offset=0).items
-        return TickRunDetail(**_row_to_view(rows[0]).model_dump(), orders=orders)
+            if not rows:
+                raise NotFoundError(f"no tick with id {tick_id!r}")
+            if portfolio_id is not None:
+                books = [portfolio_id]
+            elif visible is not None:
+                books = sorted(visible)
+            else:
+                books = _order_books(state, tick_id)
+        orders = [
+            o
+            for pid in books
+            for o in self._orders.orders(
+                tick_id=tick_id, portfolio_id=pid, limit=10_000, offset=0
+            ).items
+        ]
+        orders.sort(key=lambda o: str(o.created_at), reverse=True)
+        return TickRunDetail(**_row_to_view(rows[0], visible).model_dump(), orders=orders)
+
+    def _visible(self, who: Who) -> set[str] | None:
+        """Ids of the portfolios ``who`` owns (``None``: a service, every
+        portfolio). Admins see their own books like anyone else."""
+        if isinstance(who, Principal):
+            require(who, Permission.READ)
+        scope = who.scope if isinstance(who, Principal) else who
+        if scope.is_service:
+            return None
+        with self._ctx.state() as state:
+            return {p.id for p in PortfolioRepository(state).list(scope)}
 
     def submit(self, request: TickRequest) -> Job:
         if not request.tickers and not self._ctx.settings.production.universe:
@@ -208,7 +251,7 @@ def _id_date(tick_id: str) -> str | None:
     return m.group(1) if m else None
 
 
-def _row_to_view(row: Any) -> TickRunView:
+def _row_to_view(row: Any, visible: set[str] | None) -> TickRunView:
     summary = row["summary_json"]
     return TickRunView(
         id=row["id"],
@@ -216,5 +259,50 @@ def _row_to_view(row: Any) -> TickRunView:
         started_at=row["started_at"],
         finished_at=row["finished_at"],
         status=row["status"],
-        summary=None if summary is None else json.loads(summary),
+        summary=None if summary is None else scope_summary(json.loads(summary), visible),
     )
+
+
+def _order_books(state: Any, tick_id: str) -> list[str]:
+    rows = state.sql(
+        "SELECT DISTINCT portfolio_id FROM orders WHERE tick_id = ? ORDER BY portfolio_id",
+        [tick_id],
+    )
+    return [r["portfolio_id"] or DEFAULT_PORTFOLIO_ID for r in rows]
+
+
+#: Summary keys about the whole tick, which every reader sees (AS-02):
+#: status and counts, the winner, the shadow outcomes and the quit rule.
+GLOBAL_SUMMARY_KEYS = frozenset(
+    {
+        "reason",
+        "error",
+        "error_type",
+        "winner_strategy_id",
+        "exit_strategy_id",
+        "winner_expected_return",
+        "orders_placed",
+        "fills",
+        "shadow",
+        "shadow_error",
+        "quit_rule",
+    }
+)
+
+
+def scope_summary(summary: dict[str, Any], visible: set[str] | None) -> dict[str, Any]:
+    """``summary`` as a reader who owns the portfolios ``visible`` may see
+    it (``None``: a service, everything). A multi-book tick keeps only the
+    reader's books under ``portfolios``. A single-book tick names its
+    portfolio in ``portfolio_id`` (rows written before it: the default
+    portfolio): its owner sees all of it, anyone else the global keys."""
+    if visible is None:
+        return summary
+    shown = {k: v for k, v in summary.items() if k in GLOBAL_SUMMARY_KEYS}
+    books = summary.get("portfolios")
+    if isinstance(books, dict):
+        shown["portfolios"] = {pid: v for pid, v in books.items() if pid in visible}
+        return shown
+    if summary.get("portfolio_id", DEFAULT_PORTFOLIO_ID) in visible:
+        return summary
+    return shown

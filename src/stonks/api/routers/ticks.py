@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Response
+from typing import Annotated
 
-from stonks.api.deps import PageDep, ServicesDep, needs
+from fastapi import APIRouter, Query, Response
+
+from stonks.api.deps import PageDep, PrincipalDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.api.routers._jobs_common import JOB_CREATED, accepted
 from stonks.app.jobs import Job
@@ -16,9 +18,14 @@ router = APIRouter(prefix="/api/ticks", tags=["ticks"], responses=PROBLEM_RESPON
 
 @router.get("", response_model=Page[TickRun], operation_id="listTicks")
 def list_ticks(
-    services: ServicesDep, page: PageDep, status: TickStatus | None = None
+    services: ServicesDep,
+    principal: PrincipalDep,
+    page: PageDep,
+    status: TickStatus | None = None,
 ) -> Page[TickRun]:
-    runs = services.ticks.list(status=status, limit=page.limit, offset=page.offset)
+    """Every tick run, newest first. Summaries keep the global outcome
+    and the parts about your own portfolios only."""
+    runs = services.ticks.list(principal, status=status, limit=page.limit, offset=page.offset)
     return Page[TickRun](
         items=[typed_tick_run(r) for r in runs.items],
         total=runs.total,
@@ -34,8 +41,18 @@ def get_tick_result(job_id: str, services: ServicesDep) -> TickResultView:
 
 
 @router.get("/{tick_id}", response_model=TickRunWithOrders, operation_id="getTick")
-def get_tick(tick_id: str, services: ServicesDep) -> TickRun:
-    return typed_tick_run(services.ticks.get(tick_id))
+def get_tick(
+    tick_id: str,
+    services: ServicesDep,
+    principal: PrincipalDep,
+    portfolio_id: Annotated[
+        str | None,
+        Query(max_length=64, description="One of your portfolios (404 otherwise)."),
+    ] = None,
+) -> TickRun:
+    """One tick run with the orders it placed in your portfolios (or in
+    ``portfolio_id`` only). Another user's portfolio is a 404."""
+    return typed_tick_run(services.ticks.get(principal, tick_id, portfolio_id=portfolio_id))
 
 
 @router.post(

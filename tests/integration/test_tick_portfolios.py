@@ -317,6 +317,20 @@ def test_one_failing_book_does_not_stop_the_others(env, monkeypatch):
     assert books[pf_b]["status"] == "error" and "corrupt" in books[pf_b]["error"]
 
 
+def test_a_single_book_tick_names_its_portfolio_in_the_summary(env):
+    """AS-02: readers see a single-book tick's details only for their own
+    portfolio, so the summary says whose they are."""
+    lake, state, registry = env
+    people = People(state)
+    pf_b = people.book(people.trader("Bob"), "Bob", {"bh_up": 1.0})
+    result = run_tick(
+        state, lake, registry, SETTINGS, as_of=AS_OF, plan=load_tick_plan(state, SETTINGS)
+    )
+    assert _summary(state, result.tick_id)["portfolio_id"] == pf_b
+    default = run_tick(state, lake, registry, SETTINGS, as_of=AS_OF)
+    assert _summary(state, default.tick_id)["portfolio_id"] == DEFAULT_PORTFOLIO_ID
+
+
 def test_the_partial_alert_names_the_failed_book(env, monkeypatch):
     """TO-12: the operator alert says which book failed and why, not only
     that "orders raised at the broker"."""
