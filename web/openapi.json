@@ -899,6 +899,12 @@
       "CostModelSettings": {
         "description": "Settings for ``AssetClassCostModel``. Zero costs by default;\n``CostModelSettings.realistic()`` is a sensible starting point.",
         "properties": {
+          "adv_window": {
+            "default": 20,
+            "minimum": 1.0,
+            "title": "Adv Window",
+            "type": "integer"
+          },
           "asset_classes": {
             "additionalProperties": {
               "$ref": "#/components/schemas/AssetClassCosts"
@@ -922,10 +928,54 @@
               "half_spread_bps": 0.0
             }
           },
+          "half_spread_model": {
+            "default": "class",
+            "enum": [
+              "class",
+              "corwin_schultz",
+              "abdi_ranaldo"
+            ],
+            "title": "Half Spread Model",
+            "type": "string"
+          },
           "impact_bps": {
             "default": 0.0,
             "minimum": 0.0,
             "title": "Impact Bps",
+            "type": "number"
+          },
+          "impact_gamma": {
+            "default": 1.0,
+            "minimum": 0.0,
+            "title": "Impact Gamma",
+            "type": "number"
+          },
+          "impact_model": {
+            "default": "sqrt",
+            "enum": [
+              "sqrt",
+              "sqrt_vol",
+              "istar"
+            ],
+            "title": "Impact Model",
+            "type": "string"
+          },
+          "istar": {
+            "$ref": "#/components/schemas/IStarSettings",
+            "default": {
+              "a1": 708.0,
+              "a2": 0.55,
+              "a3": 0.71,
+              "a4": 0.5,
+              "b1": 0.98,
+              "periods_per_year": 252.0,
+              "pov": 0.1
+            }
+          },
+          "max_half_spread_bps": {
+            "default": 200.0,
+            "minimum": 0.0,
+            "title": "Max Half Spread Bps",
             "type": "number"
           },
           "max_impact_bps": {
@@ -933,6 +983,18 @@
             "minimum": 0.0,
             "title": "Max Impact Bps",
             "type": "number"
+          },
+          "spread_window": {
+            "default": 20,
+            "minimum": 1.0,
+            "title": "Spread Window",
+            "type": "integer"
+          },
+          "vol_window": {
+            "default": 20,
+            "minimum": 2.0,
+            "title": "Vol Window",
+            "type": "integer"
           }
         },
         "title": "CostModelSettings",
@@ -1953,6 +2015,57 @@
           "thresholds"
         ],
         "title": "HealthReportView",
+        "type": "object"
+      },
+      "IStarSettings": {
+        "description": "Kissell's I-Star parameters: ``I = a1 (Q/ADV)^a2 sigma^a3`` bps, with\na temporary part ``b1 I pov^a4`` and a permanent part ``(1 - b1) I``.\nThe defaults are Kissell's published US-equity estimates, **not\ncalibrated** for this system; treat them as a starting point.",
+        "properties": {
+          "a1": {
+            "default": 708.0,
+            "minimum": 0.0,
+            "title": "A1",
+            "type": "number"
+          },
+          "a2": {
+            "default": 0.55,
+            "exclusiveMinimum": 0.0,
+            "title": "A2",
+            "type": "number"
+          },
+          "a3": {
+            "default": 0.71,
+            "minimum": 0.0,
+            "title": "A3",
+            "type": "number"
+          },
+          "a4": {
+            "default": 0.5,
+            "minimum": 0.0,
+            "title": "A4",
+            "type": "number"
+          },
+          "b1": {
+            "default": 0.98,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "B1",
+            "type": "number"
+          },
+          "periods_per_year": {
+            "default": 252.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Periods Per Year",
+            "type": "number"
+          },
+          "pov": {
+            "default": 0.1,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "Pov",
+            "type": "number"
+          }
+        },
+        "title": "IStarSettings",
         "type": "object"
       },
       "IngestRequest": {

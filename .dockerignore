@@ -1,0 +1,38 @@
+# Keep the build context small and secret-free.
+.git
+.github
+.claude
+.angular
+.playwright-mcp
+.worktrees
+.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov
+
+# Secrets and local data never go into an image.
+.env
+.env.*
+!.env.example
+data
+**/*.duckdb
+**/*.duckdb.wal
+**/*.sqlite
+**/*.sqlite-journal
+
+# Built in the console stage from source.
+web/node_modules
+web/dist
+web/.angular
+
+# Not needed at runtime.
+tests
+docs
+deploy
+infra
+*.md
+!README.md

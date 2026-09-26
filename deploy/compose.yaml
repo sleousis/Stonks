@@ -1,0 +1,113 @@
+# Stonks production stack (Phase 14.2).
+#
+#   internet / tailnet --443--> caddy --8000--> api (REST + console)
+#                                               scheduler (python -m stonks.scheduling)
+#                               api + scheduler share the one `data` volume (/data)
+#
+# Run from this directory:  docker compose up -d
+# Secrets and settings come from ./.env (copy .env.example; chmod 600).
+# Backups:                  docker compose --profile backup run --rm restic snapshots
+
+name: stonks
+
+x-app: &app
+  image: ${STONKS_IMAGE:-ghcr.io/OWNER/stonks}:${STONKS_IMAGE_TAG:-latest}
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    STONKS_DATA_DIR: /data
+  volumes:
+    - data:/data
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  logging: &logging
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "5"
+
+services:
+  api:
+    <<: *app
+    command: ["stonks", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4)
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  scheduler:
+    <<: *app
+    command: ["python", "-m", "stonks.scheduling"]
+    # On when COMPOSE_PROFILES includes "scheduler" (deploy/.env).
+    profiles: ["scheduler"]
+    depends_on:
+      api:
+        condition: service_healthy
+    # No HTTP server here; the image healthcheck would always fail.
+    healthcheck:
+      disable: true
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${STONKS_BIND_IP:-0.0.0.0}:80:80"
+      - "${STONKS_BIND_IP:-0.0.0.0}:443:443"
+      - "${STONKS_BIND_IP:-0.0.0.0}:443:443/udp"
+    environment:
+      STONKS_DOMAIN: ${STONKS_DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+
+  # One-shot backup tool, not started by `up`. See deploy/backup/.
+  restic:
+    image: restic/restic:0.18.0
+    profiles: ["backup"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      RESTIC_CACHE_DIR: /cache
+    volumes:
+      - data:/data:ro
+      - restic_cache:/cache
+      - restore:/restore
+    logging: *logging
+
+volumes:
+  # All Stonks state: lake.duckdb, Parquet bars, state.sqlite, artifacts,
+  # backups. Bound to a host path so it can sit on an attached block volume.
+  data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${STONKS_DATA_PATH:-/srv/stonks/data}
+  caddy_data:
+  caddy_config:
+  restic_cache:
+  # Scratch target for restore tests; wiped by restore-test.sh.
+  restore:

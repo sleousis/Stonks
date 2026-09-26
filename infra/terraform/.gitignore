@@ -1,0 +1,8 @@
+# State holds secrets (the Tailscale key, server details): never commit it.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+.terraform.tfstate.lock.info
