@@ -21,6 +21,7 @@ import {
 } from '@angular/router';
 import { filter, skip } from 'rxjs';
 
+import type { Role } from '../api/models';
 import { AuthTokenService } from '../core/auth/auth-token.service';
 import { SessionService } from '../core/auth/session.service';
 import { StepUpDialog } from '../core/auth/step-up-dialog';
@@ -77,6 +78,11 @@ export class Shell {
   private readonly main = viewChild.required<ElementRef<HTMLElement>>('main');
 
   protected readonly drawerOpen = signal(false);
+  protected readonly roleLabel: Readonly<Record<Role, string>> = {
+    viewer: 'Viewer',
+    trader: 'Trader',
+    admin: 'Admin',
+  };
   /** Pages with `data: { bare: true }` (sign-in) render without the app frame. */
   protected readonly bare = signal(false);
   protected readonly modKey = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '')

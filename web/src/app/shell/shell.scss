@@ -173,6 +173,22 @@ main.bare {
   padding-top: var(--space-4);
 }
 
+.who {
+  display: grid;
+  min-width: 0;
+  line-height: var(--leading-tight);
+}
+.who-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-ink);
+  font-weight: var(--weight-semibold);
+}
+.who-role {
+  color: var(--color-ink-3);
+}
+
 .token-status {
   display: flex;
   align-items: center;

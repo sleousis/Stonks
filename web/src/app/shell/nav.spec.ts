@@ -58,4 +58,26 @@ describe('Nav', () => {
     localStorage.setItem('stonks.navAdvanced', '1');
     expect(render(TRADER).querySelector('details')!.open).toBe(true);
   });
+
+  it('keeps ids unique when the sidebar and the drawer both render (UI-20)', () => {
+    me.set(ADMIN);
+    const host = document.createElement('div');
+    for (const prefix of ['sidebar', 'drawer']) {
+      const fixture = TestBed.createComponent(Nav);
+      fixture.componentRef.setInput('idPrefix', prefix);
+      fixture.detectChanges();
+      host.append(fixture.nativeElement as HTMLElement);
+    }
+    const ids = [...host.querySelectorAll('[id]')].map((e) => e.id);
+    expect(ids.length).toBeGreaterThan(0);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const list of host.querySelectorAll('ul[aria-labelledby]')) {
+      expect(host.querySelector('#' + list.getAttribute('aria-labelledby'))).not.toBeNull();
+    }
+  });
+
+  it('does not claim two-key sequences as aria-keyshortcuts (UI-20)', () => {
+    const el = render(ADMIN);
+    expect(el.querySelector('[aria-keyshortcuts]')).toBeNull();
+  });
 });
