@@ -650,6 +650,11 @@ async def test_token_never_in_tool_output_or_logs(test_client, seeded, caplog, c
                 ("promote_strategy", {"strategy_id": seeded["shadow_id"], "confirm": True}),
                 ("run_tick", {"confirm": True, "tickers": ["UP.US"]}),
                 ("run_ingest", {"kind": "prices", "tickers": ["NEW.US"]}),
+                ("get_broker", {}),
+                ("list_sources", {}),
+                ("get_health_report", {}),
+                ("create_draft", {"name": "c", "kind": "code", "source_code": "x = 1"}),
+                ("update_draft", {"draft_id": "d1", "name": "x"}),
             ):
                 result = await c.call_tool(name, args)
                 outputs.append(json.dumps(result.model_dump(mode="json")))
