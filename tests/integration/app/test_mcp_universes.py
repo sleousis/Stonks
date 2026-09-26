@@ -83,7 +83,6 @@ async def test_index_import_needs_confirm(mcp, test_client):
     assert imported["result"]["constituents"] == 1
 
 
-
 @pytest.mark.anyio
 async def test_delete_needs_confirm(mcp, test_client):
     args = {"universe_id": "gone", "kind": "list", "spec": {"tickers": ["UP.US"]}}
