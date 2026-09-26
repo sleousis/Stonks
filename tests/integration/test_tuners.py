@@ -23,7 +23,7 @@ def _dataset(lake):
         universe=["UP.US", "DOWN.US", "FLAT.US"],
         start=date(2025, 10, 1),
         end=date(2026, 4, 1),
-        train_ratio=1.0,
+        train_ratio=0.9,
     )
 
 
