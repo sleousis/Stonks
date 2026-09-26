@@ -189,3 +189,20 @@ def test_a_failing_notification_never_raises(state):
         raise RuntimeError("down")
 
     notify_trip(state, halt, publish=boom)
+
+
+def test_a_trip_queues_deliveries_on_the_configured_channels(state):
+    """Without an explicit publisher the trip goes through the channels
+    built from the environment, so the owner's own webhook gets it."""
+    from stonks.notify.prefs import PreferenceStore
+    from stonks.production.halts import notify_trip
+
+    PreferenceStore(state).set_webhook(
+        "usr_owner", "https://hooks.example.test/x", now=datetime.now(UTC)
+    )
+    halt, _ = trip_halt(
+        state, "drawdown", reason="dd", actor="system", portfolio_id="pf_default", on=DAY
+    )
+    notify_trip(state, halt)
+    channels = [r["channel"] for r in state.sql("SELECT channel FROM notification_deliveries")]
+    assert channels == ["webhook"]

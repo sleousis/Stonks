@@ -35,7 +35,7 @@ from stonks.logging import get_logger
 from stonks.notify.channels import Channel
 from stonks.notify.events import Audience, Event, Urgency
 from stonks.notify.prefs import PreferenceStore
-from stonks.notify.settings import OutboxSettings
+from stonks.notify.settings import NotifySettings, OutboxSettings
 from stonks.notify.store import redact_text
 from stonks.store.state import SqliteState
 
@@ -220,6 +220,21 @@ class NotificationRouter:
                     continue
                 out += [(name, t) for t in channel.targets(self._state, user_id)]
         return out
+
+
+def configured_router(
+    state: SqliteState, settings: NotifySettings | None = None
+) -> NotificationRouter:
+    """A router over every channel ``settings`` (default: the environment,
+    :meth:`NotifySettings.from_env`) configures, so producers outside a
+    request (halt trips, the quit rule, tick signals) queue real deliveries
+    and not only feed rows."""
+    from stonks.notify.channels import build_channels
+
+    notify = settings if settings is not None else NotifySettings.from_env()
+    return NotificationRouter(
+        state, build_channels(notify), notify.outbox, secrets=notify.secrets
+    )
 
 
 # ---- signals (called by the signal phase, step S5) -------------------------------

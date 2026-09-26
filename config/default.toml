@@ -187,8 +187,10 @@ max_workers = 0
 blas_threads = 1
 
 [notify]
-# Backends: "log" (structlog), "webhook" (JSON POST) and/or "store" (the
-# state DB's alerts table, read by GET /api/alerts). [] disables alerts.
+# Backends: "log" (structlog), "webhook" (JSON POST), "store" (the state DB's
+# alerts table, read by GET /api/alerts) and/or "outbox" (every active admin's
+# feed and devices: Web Push, email, their own webhook). [] disables alerts.
+# Halt trips and quit-rule alerts always go through the outbox channels.
 backends = ["log", "store"]
 # Drop notifications below this level: info | warning | error. "store" keeps
 # every level.

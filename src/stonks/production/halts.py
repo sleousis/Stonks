@@ -340,7 +340,7 @@ def notify_trip(state: SqliteState, halt: Halt, publish: Publish | None = None) 
     portfolio's owner, the user, or the admins for a global halt. A failed
     send is logged, never raised: the halt is already in force."""
     from stonks.notify.events import Audience, Event
-    from stonks.notify.router import NotificationRouter
+    from stonks.notify.router import configured_router
 
     if halt.scope == "portfolio":
         audience = Audience.owner_of(halt.portfolio_id or "")
@@ -360,6 +360,6 @@ def notify_trip(state: SqliteState, halt: Halt, publish: Publish | None = None) 
         portfolio_id=halt.portfolio_id,
     )
     try:
-        (publish or NotificationRouter(state, {}).publish)(event)
+        (publish or configured_router(state).publish)(event)
     except Exception as exc:
         _log.error("halt.notify_failed", halt_id=halt.id, error=str(exc))

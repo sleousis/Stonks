@@ -273,7 +273,7 @@ def _reason(check: QuitCheck) -> str:
 
 def _alert(state: SqliteState, check: QuitCheck, publish: Callable[[Any], Any] | None) -> None:
     from stonks.notify.events import Audience, Event
-    from stonks.notify.router import NotificationRouter
+    from stonks.notify.router import configured_router
 
     event = Event(
         category="risk",
@@ -286,7 +286,7 @@ def _alert(state: SqliteState, check: QuitCheck, publish: Callable[[Any], Any] |
         strategy_id=check.strategy_id,
     )
     try:
-        (publish or NotificationRouter(state, {}).publish)(event)
+        (publish or configured_router(state).publish)(event)
     except Exception as exc:
         _log.error("quit_rule.notify_failed", strategy_id=check.strategy_id, error=str(exc))
 

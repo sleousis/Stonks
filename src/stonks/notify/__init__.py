@@ -102,6 +102,19 @@ def build_notifier(
                 _log.warning("notify.store.unconfigured", hint="no state DB path given")
                 continue
             children.append(StoreNotifier(state_path, secrets=secrets))
+        elif backend == "outbox":
+            if state_path is None:
+                _log.warning("notify.outbox.unconfigured", hint="no state DB path given")
+                continue
+            notify = NotifySettings.from_env()
+            children.append(
+                OutboxNotifier(
+                    state_path,
+                    build_channels(notify),
+                    notify.outbox,
+                    secrets=lambda: [*secrets(), *notify.secrets()],
+                )
+            )
     return CompositeNotifier(children, min_level=config.min_level)
 
 

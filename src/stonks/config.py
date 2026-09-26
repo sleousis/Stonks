@@ -283,10 +283,12 @@ class NotifyConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # Any of "log", "webhook", "store". Empty list disables notifications.
-    # "store" persists every notification (all levels, redacted) to the
-    # state DB's ``alerts`` table, which ``GET /api/alerts`` reads.
-    backends: list[Literal["log", "webhook", "store"]] = ["log", "store"]
+    # Any of "log", "webhook", "store", "outbox". Empty list disables
+    # notifications. "store" persists every notification (all levels,
+    # redacted) to the state DB's ``alerts`` table, which ``GET /api/alerts``
+    # reads. "outbox" sends each one to every active admin through the
+    # per-user outbox (Web Push, email, their webhook; see stonks.notify).
+    backends: list[Literal["log", "webhook", "store", "outbox"]] = ["log", "store"]
     # Notifications below this level are dropped (except by "store").
     min_level: Literal["info", "warning", "error"] = "warning"
     webhook: WebhookConfig = WebhookConfig()
