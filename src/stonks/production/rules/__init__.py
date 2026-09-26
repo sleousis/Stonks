@@ -26,7 +26,9 @@ Order of application (``order``; lower first):
 2. ``drawdown_scaling`` (2): every opening buy times the drawdown size;
 3. ``portfolio_vol`` (3): opening buys scaled to the volatility caps,
    measured on the buys drawdown scaling left;
-4. one order-rule pass: ``sell_within_position`` (10), ``require_price``
+4. ``circuit_breaker`` (4) and ``operational_halt`` (5): every opening buy
+   dropped after a loss halt or when the data feed is stale (BL-28);
+5. one order-rule pass: ``sell_within_position`` (10), ``require_price``
    (20), ``max_open_positions`` (30), ``max_weight_per_ticker`` (40),
    ``max_weight_per_asset_class`` (50), ``risk_per_position`` (52),
    ``sector_cap`` (54), ``liquidity`` (56), ``cash_buffer`` (60) and
@@ -35,7 +37,7 @@ Order of application (``order``; lower first):
 
 Every step only shrinks buys, so the result is at most what any single
 rule allows. A rule may declare ``enabled(policy)``; disabled rules are
-left out. The W3.1 rules (BL-27) are off unless ``policy.rules`` (see
+left out. The W3.1 and W3.2 rules (BL-27, BL-28) are off unless ``policy.rules`` (see
 ``settings.py``) switches them on.
 """
 

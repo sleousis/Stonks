@@ -114,6 +114,7 @@ READ_TOOLS = {
     "get_draft",
     "list_connections",
     "get_connection_accounts",
+    "list_halts",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
@@ -137,6 +138,7 @@ GUARDED_TOOLS = {
     "enable_draft",
     "disable_draft",
     "sync_connection",
+    "engage_kill_switch",
 }
 
 

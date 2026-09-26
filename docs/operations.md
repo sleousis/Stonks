@@ -223,6 +223,40 @@ Risk rules run between construction and the broker, configured under `[productio
 
 Weights use portfolio value before the tick's orders. Sells are never blocked, only clipped to the held quantity, and go before buys. Portfolio and subscription overrides can only tighten the policy. The rules are a registry (`production/rules/`); the newer ones (`risk_per_position`, `portfolio_vol`, `drawdown_scaling`, `liquidity`, `sector_cap`, `max_holding`) are registered but off, since `[production.risk.rules]` is not read from the config yet.
 
+## Halts and the kill switch
+
+A halt stops new orders before they reach the broker. Every halt is a row in `risk_halts`, and the tick checks global, user and portfolio halts for each book.
+
+```mermaid
+flowchart LR
+  B[circuit breaker] --> H[(risk_halts)]
+  O[health: stale data or stuck run] --> H
+  K[kill switch] --> H
+  H --> G[tick gate]
+  G -->|buys| S[sells and exits only]
+  G -->|all| N[no orders]
+```
+
+| Halt | Trips when | Ends |
+|------|------------|------|
+| `month_loss` | Value is 6% below the month's first snapshot. | At the start of next month, or when cleared. |
+| `week_loss` | Value fell 4% over 5 snapshots. | At the start of next month, or when cleared. |
+| `drawdown` | Value is 20% below its peak. | Only when a person clears it. |
+| `operational` | `stonks health` finds stale data or a stuck run. | When health passes again. |
+| `kill` | A person turns on the kill switch. | Resume with the typed confirmation. |
+
+- The breaker limits live in `[production.risk.rules.circuit_breaker]` (`max_month_loss`, `max_week_loss`, `max_drawdown_halt`, `cooldown`). They are off until set. The same rule runs in backtests.
+- Breaker halts block buys. Sells and exits still go through.
+- The kill switch has three scopes: `global` (admins), `user` (all your portfolios) and `portfolio` (one of yours). It stops every order, or only buys with `flatten`.
+- Resume the kill switch with `POST /api/halts/{id}/resume` and the text `RESUME TRADING`. Clear other halts with `POST /api/halts/{id}/clear` and a reason.
+- Every action writes an `audit_log` row. Every clear also writes a `risk_reset` row in `status_changes`.
+- A trip sends a `risk` notification to the portfolio owner, or to the admins for a global halt.
+- MCP can list halts and turn the kill switch on (with `confirm=true`). It cannot resume.
+
+### Quit rule
+
+After each tick the quit rule checks every active strategy. It sums the strategy's share of each portfolio's P&L since promotion. When the drawdown of that P&L passes 1.5 times the backtest drawdown, or the Monte Carlo 95th percentile when it is lower, the admins get an `error` notification. With `auto_demote` on, the strategy also moves to `shadow` with a logged reason.
+
 ## Model books (shadow mode)
 
 `shadow` strategies are scored each tick and never traded. Each runs alone against a virtual portfolio seeded with `initial_cash`, with the same risk policy, always on a simulated broker:

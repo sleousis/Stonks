@@ -15,17 +15,21 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from stonks.production.rules.circuit_breaker import CircuitBreakerSettings, Cooldown
 from stonks.production.rules.drawdown_scaling import DrawdownScalingSettings, Schedule
 from stonks.production.rules.liquidity import LiquiditySettings
 from stonks.production.rules.max_holding import MaxHoldingSettings
+from stonks.production.rules.operational_halt import OperationalHaltSettings
 from stonks.production.rules.portfolio_vol import PortfolioVolSettings
 from stonks.production.rules.risk_per_position import RiskPerPositionSettings
 from stonks.production.rules.sector_cap import SectorCapSettings
 
 __all__ = [
+    "CircuitBreakerSettings",
     "DrawdownScalingSettings",
     "LiquiditySettings",
     "MaxHoldingSettings",
+    "OperationalHaltSettings",
     "PortfolioVolSettings",
     "RiskPerPositionSettings",
     "RuleSettings",
@@ -44,6 +48,8 @@ class RuleSettings(BaseModel):
     risk_per_position: RiskPerPositionSettings = RiskPerPositionSettings()
     sector_cap: SectorCapSettings = SectorCapSettings()
     liquidity: LiquiditySettings = LiquiditySettings()
+    circuit_breaker: CircuitBreakerSettings = CircuitBreakerSettings()
+    operational_halt: OperationalHaltSettings = OperationalHaltSettings()
 
 
 def _min_optional(a: float | None, b: float | None) -> float | None:
@@ -66,6 +72,11 @@ def _max_optional(a: float | None, b: float | None) -> float | None:
 
 def _size_at(schedule: Schedule, drawdown: float) -> float:
     return min((size for dd, size in schedule if dd <= drawdown), default=1.0)
+
+
+def _stricter_cooldown(a: Cooldown, b: Cooldown) -> Cooldown:
+    """Holding a halt for the rest of the month is the stricter cooldown."""
+    return "rest_of_month" if "rest_of_month" in (a, b) else "none"
 
 
 def merge_schedules(a: Schedule | None, b: Schedule | None) -> Schedule | None:
@@ -94,6 +105,14 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
         "min_median_dollar_volume": _max_optional,
         "max_amihud": _min_optional,
     },
+    "circuit_breaker": {
+        "max_month_loss": _min_optional,
+        "max_week_loss": _min_optional,
+        "max_drawdown_halt": _min_optional,
+        "week_sessions": max,
+        "cooldown": _stricter_cooldown,
+    },
+    "operational_halt": {"max_bar_age_days": _min_optional},
 }
 
 

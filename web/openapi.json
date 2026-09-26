@@ -833,6 +833,22 @@
         "title": "BrokerInfo",
         "type": "object"
       },
+      "ClearHaltRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ClearHaltRequest",
+        "type": "object"
+      },
       "ConnectWithKeysRequest": {
         "additionalProperties": false,
         "description": "API-key connect. ``fields`` are the provider's ``credential_fields``\n(plus ``paper`` for brokers with a paper endpoint). They are write-only:\nnever logged, stored only sealed, never returned.",
@@ -2189,6 +2205,143 @@
         "title": "GoLiveReport",
         "type": "object"
       },
+      "HaltView": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "clear_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clear Reason"
+          },
+          "cleared_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cleared At"
+          },
+          "cleared_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cleared By"
+          },
+          "expires_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires On"
+          },
+          "halt": {
+            "enum": [
+              "buys",
+              "all"
+            ],
+            "title": "Halt",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "month_loss",
+              "week_loss",
+              "drawdown",
+              "operational",
+              "kill"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio Id"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "global",
+              "user",
+              "portfolio"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "tripped_at": {
+            "title": "Tripped At",
+            "type": "string"
+          },
+          "tripped_by": {
+            "title": "Tripped By",
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "scope",
+          "user_id",
+          "portfolio_id",
+          "halt",
+          "reason",
+          "tripped_by",
+          "tripped_at",
+          "expires_on",
+          "cleared_at",
+          "cleared_by",
+          "clear_reason",
+          "active"
+        ],
+        "title": "HaltView",
+        "type": "object"
+      },
       "Health": {
         "properties": {
           "status": {
@@ -2981,6 +3134,49 @@
           "progress"
         ],
         "title": "JobEvent",
+        "type": "object"
+      },
+      "KillSwitchRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "flatten": {
+            "default": false,
+            "title": "Flatten",
+            "type": "boolean"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio Id"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "global",
+              "user",
+              "portfolio"
+            ],
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "reason"
+        ],
+        "title": "KillSwitchRequest",
         "type": "object"
       },
       "LabRunRequest": {
@@ -5219,6 +5415,28 @@
           "recovery_codes"
         ],
         "title": "RecoveryCodesView",
+        "type": "object"
+      },
+      "ResumeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmation": {
+            "maxLength": 64,
+            "title": "Confirmation",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirmation",
+          "reason"
+        ],
+        "title": "ResumeRequest",
         "type": "object"
       },
       "RiskAdjustmentView": {
@@ -11044,6 +11262,471 @@
         "summary": "Sync Connection",
         "tags": [
           "connections"
+        ]
+      }
+    },
+    "/api/halts": {
+      "get": {
+        "description": "Halts you can see, newest first: global ones, your own and those of\nyour portfolios. By default only those in force today.",
+        "operationId": "listHalts",
+        "parameters": [
+          {
+            "description": "also cleared and expired halts",
+            "in": "query",
+            "name": "include_cleared",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "also cleared and expired halts",
+              "title": "Include Cleared",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HaltView"
+                  },
+                  "title": "Response Listhalts",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Halts",
+        "tags": [
+          "halts"
+        ]
+      }
+    },
+    "/api/halts/kill": {
+      "post": {
+        "description": "Stop new orders: every portfolio (``global``, admins only), all of\nyours (``user``) or one of yours (``portfolio``). ``flatten`` stops buys\nonly, so sells and exits still go through. Returns the open kill switch\nwhen one is already on at that scope.",
+        "operationId": "engageKillSwitch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KillSwitchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HaltView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Engage Kill Switch",
+        "tags": [
+          "halts"
+        ]
+      }
+    },
+    "/api/halts/{halt_id}": {
+      "get": {
+        "operationId": "getHalt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "halt_id",
+            "required": true,
+            "schema": {
+              "title": "Halt Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HaltView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Halt",
+        "tags": [
+          "halts"
+        ]
+      }
+    },
+    "/api/halts/{halt_id}/clear": {
+      "post": {
+        "description": "The logged reset of a circuit-breaker or operational halt (not the\nkill switch). A latched drawdown halt stays until this is called.",
+        "operationId": "clearHalt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "halt_id",
+            "required": true,
+            "schema": {
+              "title": "Halt Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClearHaltRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HaltView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Clear Halt",
+        "tags": [
+          "halts"
+        ]
+      }
+    },
+    "/api/halts/{halt_id}/resume": {
+      "post": {
+        "description": "Turn a kill switch off. ``confirmation`` must be exactly\n``RESUME TRADING``; the reason is audited.",
+        "operationId": "resumeKillSwitch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "halt_id",
+            "required": true,
+            "schema": {
+              "title": "Halt Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResumeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HaltView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Resume Kill Switch",
+        "tags": [
+          "halts"
         ]
       }
     },
