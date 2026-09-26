@@ -13,7 +13,6 @@ from stonks.lab.preflight import PreflightError
 from stonks.lab.runner import LabRunner
 from stonks.lab.survival.base import SurvivalSuite
 from stonks.lab.trials import TrialLedger
-from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
 
@@ -43,14 +42,6 @@ class _Objective:
 
     def score(self, strategy, dataset):
         return 0.0
-
-
-@pytest.fixture
-def lake(tmp_path):
-    lk = DuckDBLake(tmp_path / "lake.duckdb")
-    lk.migrate()
-    yield lk
-    lk.close()
 
 
 def _bars(lake, ticker):

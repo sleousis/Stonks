@@ -9,14 +9,6 @@ import pytest
 from stonks.store.lake import DuckDBLake
 
 
-@pytest.fixture
-def lake(tmp_path):
-    lake = DuckDBLake(tmp_path / "lake.duckdb")
-    lake.migrate()
-    yield lake
-    lake.close()
-
-
 def _prices_df(rows):
     return pd.DataFrame(
         rows,

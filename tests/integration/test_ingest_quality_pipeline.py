@@ -8,7 +8,6 @@ from datetime import date, datetime, timedelta
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from stonks.core.interval import Interval
 from stonks.ingest.pipeline import IngestPipeline
@@ -21,7 +20,6 @@ from stonks.ingest.quality_config import DataQualityConfig
 from stonks.ingest.schemas import FinancialStatementsBundle, IntradayBar, RawPriceBar
 from stonks.ingest.sources.base import DataSource, DataSourceError
 from stonks.notify.base import Notification, Notifier
-from stonks.store.lake import DuckDBLake
 
 START = date(2025, 1, 1)
 
@@ -86,14 +84,6 @@ def _bars(ticker, closes, start=START):
         )
         for i, c in enumerate(closes)
     ]
-
-
-@pytest.fixture
-def lake(tmp_path):
-    lk = DuckDBLake(tmp_path / "lake.duckdb")
-    lk.migrate()
-    yield lk
-    lk.close()
 
 
 def _stored(lake, ticker):

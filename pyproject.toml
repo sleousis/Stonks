@@ -43,15 +43,19 @@ packages = ["src/stonks"]
 [dependency-groups]
 dev = [
     "httpx2>=2.13.1",
+    "pyright>=1.1.414",
     "pytest>=8.3",
     "pytest-cov>=5.0",
+    "pytest-socket>=0.8.1",
     "pytest-xdist>=3.8.0",
     "ruff>=0.7",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+# --allow-hosts: sockets may only connect to loopback (TT-05, pytest-socket).
+# Tests marked live get the network back (tests/conftest.py).
+addopts = "-ra --strict-markers --allow-hosts=127.0.0.1,::1,localhost"
 markers = [
     "live: tests that hit real external APIs (gated by STONKS_RUN_LIVE_TESTS=1)",
 ]
@@ -67,3 +71,33 @@ ignore = ["E501"]  # line length handled by formatter
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B011"]
+
+[tool.pyright]
+# TT-02: basic mode over src/stonks. CI fails only on errors that are not in
+# tools/pyright-baseline.json (see tools/pyright_gate.py). Plan: strict mode
+# for core, production, execution, auth and portfolio (docs/roadmap.md 18.3).
+include = ["src/stonks"]
+typeCheckingMode = "basic"
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+
+[tool.coverage.run]
+# TT-01: line and branch coverage of the package. pytest-cov combines the
+# xdist workers.
+branch = true
+source = ["stonks"]
+
+[tool.coverage.report]
+# The gate is coverage.py's combined line-and-branch number. Target 90
+# overall (measured 94 on 2026-09-26). The five strict packages have their
+# own floors (target 95) in tools/coverage_gate.py.
+fail_under = 90
+skip_covered = true
+show_missing = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    '@(abc\.)?abstractmethod',
+    "if __name__ == .__main__.:",
+]

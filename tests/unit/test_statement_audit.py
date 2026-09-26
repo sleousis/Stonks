@@ -11,14 +11,6 @@ from stonks.store.audit import CHECKS, audit_statements
 from stonks.store.lake import DuckDBLake
 
 
-@pytest.fixture
-def lake(tmp_path):
-    lk = DuckDBLake(tmp_path / "lake.duckdb")
-    lk.migrate()
-    yield lk
-    lk.close()
-
-
 def _clean(lake: DuckDBLake, ticker: str = "GOOD.US", period_end=date(2024, 12, 31)) -> None:
     """One annual period plus its four quarters, all internally consistent."""
     key = {"ticker": ticker, "period_end": period_end, "frequency": "A"}
