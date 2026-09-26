@@ -317,7 +317,12 @@ class RSIPCAStrategy(BaseStrategy):
 
     @classmethod
     def load(cls, path) -> RSIPCAStrategy:
-        instance: RSIPCAStrategy = super().load(path)  # type: ignore[assignment]
+        params = json.loads((Path(path) / "params.json").read_text())
+        # Artifacts saved before ``hold_bars`` existed exited on the first
+        # bar below the threshold; keep that rule (their survival reports
+        # were made with it) instead of the lookahead default.
+        params.setdefault("hold_bars", 1)
+        instance = cls(params)
         state_file = Path(path) / "fitted_state.json"
         if state_file.exists():
             state = json.loads(state_file.read_text())

@@ -295,6 +295,17 @@ def test_hold_bars_defaults_to_lookahead():
     assert RSIPCAStrategy({"lookahead": 11, "hold_bars": 2}).params["hold_bars"] == 2
 
 
+def test_artifacts_saved_before_hold_bars_load_with_the_old_exit_rule(tmp_path):
+    s = RSIPCAStrategy({"ticker": "X.US", "lookahead": 9, "hold_bars": 4})
+    s.save(tmp_path)
+    assert RSIPCAStrategy.load(tmp_path).params["hold_bars"] == 4
+    params = json.loads((tmp_path / "params.json").read_text())
+    del params["hold_bars"]  # what an artifact saved before this param looks like
+    (tmp_path / "params.json").write_text(json.dumps(params))
+    # a registered strategy keeps the behavior its survival reports were made with
+    assert RSIPCAStrategy.load(tmp_path).params["hold_bars"] == 1
+
+
 def test_hold_bars_one_exits_on_first_bar_below_threshold(lake_500d):
     lake, dates = lake_500d
     s = _fitted(lake, dates, hold_bars=1)
