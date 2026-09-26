@@ -90,7 +90,9 @@ def test_db_info_lists_tables_from_both_stores(runner, cli_env):
 def test_ingest_prices_via_fake_source(runner, cli_env, monkeypatch):
     from stonks import cli as cli_module
 
-    monkeypatch.setattr(cli_module, "_build_source", lambda settings: _FakeSource())
+    monkeypatch.setattr(
+        cli_module, "_build_source", lambda settings, source_id="eodhd": _FakeSource()
+    )
 
     runner.invoke(app, ["db", "init"])
     result = runner.invoke(
@@ -114,7 +116,9 @@ def test_ingest_prices_via_fake_source(runner, cli_env, monkeypatch):
 def test_bad_date_options_give_usage_error_not_traceback(runner, cli_env, monkeypatch, args):
     from stonks import cli as cli_module
 
-    monkeypatch.setattr(cli_module, "_build_source", lambda settings: _FakeSource())
+    monkeypatch.setattr(
+        cli_module, "_build_source", lambda settings, source_id="eodhd": _FakeSource()
+    )
     runner.invoke(app, ["db", "init"])
     result = runner.invoke(app, args)
     assert result.exit_code == 2, result.output
@@ -145,7 +149,9 @@ def test_ingest_metadata_via_fake_source(runner, cli_env, monkeypatch):
                 ),
             )
 
-    monkeypatch.setattr(cli_module, "_build_source", lambda settings: _FakeMetaSource())
+    monkeypatch.setattr(
+        cli_module, "_build_source", lambda settings, source_id="eodhd": _FakeMetaSource()
+    )
 
     runner.invoke(app, ["db", "init"])
     result = runner.invoke(app, ["ingest", "metadata", "--tickers", "AAPL.US"])
@@ -164,7 +170,9 @@ def test_ingest_exchanges_exits_cleanly_on_free_tier(runner, cli_env, monkeypatc
         def list_exchanges(self):
             raise EodhdFreeTierError("exchanges-list endpoint requires a paid plan")
 
-    monkeypatch.setattr(cli_module, "_build_source", lambda settings: _FreeTierSource())
+    monkeypatch.setattr(
+        cli_module, "_build_source", lambda settings, source_id="eodhd": _FreeTierSource()
+    )
 
     result = runner.invoke(app, ["ingest", "exchanges"])
     assert result.exit_code == 2, result.output
@@ -193,7 +201,9 @@ def test_ingest_macro_via_fake_source(runner, cli_env, monkeypatch):
                 ),
             ]
 
-    monkeypatch.setattr(cli_module, "_build_source", lambda settings: _FakeMacroSource())
+    monkeypatch.setattr(
+        cli_module, "_build_source", lambda settings, source_id="eodhd": _FakeMacroSource()
+    )
 
     runner.invoke(app, ["db", "init"])
     result = runner.invoke(
@@ -209,7 +219,9 @@ def test_ingest_macro_rejects_non_iso3_country(runner, cli_env, monkeypatch):
     BadParameter exit, not bubble through to the HTTP client."""
     from stonks import cli as cli_module
 
-    monkeypatch.setattr(cli_module, "_build_source", lambda settings: _FakeSource())
+    monkeypatch.setattr(
+        cli_module, "_build_source", lambda settings, source_id="eodhd": _FakeSource()
+    )
 
     runner.invoke(app, ["db", "init"])
     result = runner.invoke(
@@ -242,7 +254,9 @@ def test_ingest_macro_defaults_to_vendor_default_indicator(runner, cli_env, monk
                 ),
             ]
 
-    monkeypatch.setattr(cli_module, "_build_source", lambda settings: _CapturingSource())
+    monkeypatch.setattr(
+        cli_module, "_build_source", lambda settings, source_id="eodhd": _CapturingSource()
+    )
 
     runner.invoke(app, ["db", "init"])
     result = runner.invoke(app, ["ingest", "macro", "--countries", "USA"])
@@ -261,7 +275,9 @@ def test_ingest_exchanges_exits_with_error_on_request_failure(runner, cli_env, m
         def list_exchanges(self):
             raise requests.ConnectionError("DNS failure")
 
-    monkeypatch.setattr(cli_module, "_build_source", lambda settings: _FailingSource())
+    monkeypatch.setattr(
+        cli_module, "_build_source", lambda settings, source_id="eodhd": _FailingSource()
+    )
 
     result = runner.invoke(app, ["ingest", "exchanges"])
     assert result.exit_code == 1, result.output
