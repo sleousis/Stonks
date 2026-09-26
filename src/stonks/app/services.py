@@ -17,6 +17,7 @@ from stonks.app.connections import ConnectionsAppService
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError
 from stonks.app.ingest import IngestService
+from stonks.app.insights import InsightsService
 from stonks.app.jobs import Job, JobRunner, JobStore
 from stonks.app.lab import LabService
 from stonks.app.market import MarketDataService
@@ -186,6 +187,7 @@ class Services:
     universes: UniverseService
     auth: AuthService
     subscriptions: SubscriptionService
+    insights: InsightsService
     _user_finder: UserStrategyFinder | None = field(default=None, repr=False)
 
     @classmethod
@@ -210,6 +212,7 @@ class Services:
         strategies = StrategyService(context, catalog)
         orders = OrdersService(context)
         lab = LabService(context, strategies, runner)
+        portfolio = PortfolioService(context)
         services = cls(
             context=context,
             runner=runner,
@@ -217,7 +220,7 @@ class Services:
                 runner, StreamTokenSigner(ttl_seconds=settings.api.stream_token_ttl_seconds)
             ),
             catalog=catalog,
-            portfolio=PortfolioService(context),
+            portfolio=portfolio,
             strategies=strategies,
             market=MarketDataService(context),
             orders=orders,
@@ -240,6 +243,7 @@ class Services:
             universes=UniverseService(context, runner),
             auth=_auth_service(context),
             subscriptions=SubscriptionService(context),
+            insights=InsightsService(context, portfolio),
         )
         services.schedule.bind(services)
         return services
