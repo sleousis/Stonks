@@ -10,8 +10,9 @@ from __future__ import annotations
 import os
 import tomllib
 from pathlib import Path
+from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
@@ -27,6 +28,36 @@ class EodhdSourceConfig(BaseModel):
 
 class SourcesConfig(BaseModel):
     eodhd: EodhdSourceConfig = EodhdSourceConfig()
+
+
+class AlpacaBrokerConfig(BaseModel):
+    """Alpaca trading API. Paper by default; the live endpoint additionally
+    requires ``allow_live = true``. Keys come from ``ALPACA_API_KEY`` /
+    ``ALPACA_SECRET_KEY`` (env wins over TOML) and are kept as SecretStr so
+    they never show up in reprs or logs."""
+
+    paper: bool = True
+    allow_live: bool = False
+    max_retries: int = 3
+    retry_backoff_seconds: float = 1.0
+    api_key: SecretStr | None = None
+    secret_key: SecretStr | None = None
+
+    @model_validator(mode="after")
+    def _keys_from_env(self) -> AlpacaBrokerConfig:
+        api_key = os.environ.get("ALPACA_API_KEY")
+        secret_key = os.environ.get("ALPACA_SECRET_KEY")
+        if api_key:
+            self.api_key = SecretStr(api_key)
+        if secret_key:
+            self.secret_key = SecretStr(secret_key)
+        return self
+
+
+class BrokersConfig(BaseModel):
+    # Which broker the production tick trades through.
+    kind: Literal["simulated", "alpaca"] = "simulated"
+    alpaca: AlpacaBrokerConfig = Field(default_factory=AlpacaBrokerConfig)
 
 
 class LakeConfig(BaseModel):
@@ -61,6 +92,7 @@ class Settings(BaseSettings):
     state: StateConfig = StateConfig()
     registry: RegistryConfig = RegistryConfig()
     logging: LoggingConfig = LoggingConfig()
+    brokers: BrokersConfig = Field(default_factory=BrokersConfig)
     sources: SourcesConfig = SourcesConfig()
     production: ProductionConfig = ProductionConfig()
 
