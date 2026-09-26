@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from stonks.backtest.engine import BacktestConfig, Backtester
-from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.protocols import Strategy, SurvivalReport
-from stonks.core.types import Portfolio
+from stonks.lab.backtesting import run_backtest
 from stonks.lab.dataset import LabDataset
 
 
@@ -17,19 +15,7 @@ class OutOfSampleTest:
         self._max_dd = max_drawdown_limit  # inclusive lower bound (e.g. -0.3)
 
     def run(self, strategy: Strategy, context: LabDataset) -> SurvivalReport:
-        start, end = context.val_window
-        broker = SimulatedBroker(portfolio=Portfolio(cash=10_000.0, positions={}))
-        report = Backtester(
-            strategies=[strategy],
-            broker=broker,
-            lake=context.lake,
-            config=BacktestConfig(
-                start=start,
-                end=end,
-                universe=list(context.universe),
-                threshold=0.0,
-            ),
-        ).run()
+        report = run_backtest(strategy, context, context.val_window)
 
         metrics = {
             "sharpe_oos": report.sharpe,

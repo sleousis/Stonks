@@ -22,19 +22,15 @@ back into price space.
 from __future__ import annotations
 
 import copy
-from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from stonks.backtest.engine import BacktestConfig, Backtester
-from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy, SurvivalReport
-from stonks.core.types import Portfolio
+from stonks.lab.backtesting import run_backtest
 from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
 
@@ -83,17 +79,25 @@ def permute_bars(bars: pd.DataFrame, start_index: int = 0, seed: int | None = No
     shuffled_c = r_c[perm_index:][perm1]
     shuffled_o = r_o[perm_index:][perm2]
 
+    # Rebuild the path as one running sum: close[i-1] -> +gap -> open[i]
+    # -> +body -> close[i]. Interleaving [anchor, o1, c1, o2, c2, ...] and
+    # accumulating (np.add.accumulate is strictly left-to-right) performs
+    # exactly the same float additions as the bar-by-bar loop, so outputs
+    # are bit-identical to it for a given seed.
+    steps = np.empty(2 * perm_n + 1)
+    steps[0] = log_close[perm_index - 1]
+    steps[1::2] = shuffled_o
+    steps[2::2] = shuffled_c
+    path = np.cumsum(steps)
+
     new_log_open = log_open.copy()
+    new_log_close = log_close.copy()
+    new_log_open[perm_index:] = path[1::2]
+    new_log_close[perm_index:] = path[2::2]
     new_log_high = log_high.copy()
     new_log_low = log_low.copy()
-    new_log_close = log_close.copy()
-
-    for i in range(perm_n):
-        idx = perm_index + i
-        new_log_open[idx] = new_log_close[idx - 1] + shuffled_o[i]
-        new_log_high[idx] = new_log_open[idx] + shuffled_h[i]
-        new_log_low[idx] = new_log_open[idx] + shuffled_l[i]
-        new_log_close[idx] = new_log_open[idx] + shuffled_c[i]
+    new_log_high[perm_index:] = new_log_open[perm_index:] + shuffled_h
+    new_log_low[perm_index:] = new_log_open[perm_index:] + shuffled_l
 
     out = df.copy()
     out["open"] = np.exp(new_log_open)
@@ -125,6 +129,13 @@ class MonteCarloPermutationTest:
     fraction of permuted scores greater-or-equal to the real score
     (conservatively +1-smoothed). The test passes when ``p_value`` falls
     below ``max_p_value``.
+
+    Known limitation: this is an in-sample test without re-tuning. The
+    strategy keeps the params (and fitted state) chosen on the real bars
+    and is only re-scored on each permutation; it is not re-tuned or
+    re-fitted per permutation. It therefore asks "does this fixed
+    configuration beat noise?", not "does the whole tune-then-trade
+    process beat noise?", and understates the selection bias of tuning.
     """
 
     id = "mcpt"
@@ -170,7 +181,7 @@ class MonteCarloPermutationTest:
                 notes="no bars available for the universe; test skipped",
             )
 
-        real_score = _score(strategy, context.lake, start, end, universe, interval, self._metric)
+        real_score = _score(strategy, context, context.lake, self._metric)
 
         master_rng = np.random.default_rng(self._seed)
         perm_scores: list[float] = []
@@ -185,9 +196,7 @@ class MonteCarloPermutationTest:
                 for ticker, bars in real_bars_by_ticker.items()
             }
             with _build_permuted_lake(permuted, interval) as perm_lake:
-                perm_score = _score(
-                    strategy, perm_lake, start, end, universe, interval, self._metric
-                )
+                perm_score = _score(strategy, context, perm_lake, self._metric)
             perm_scores.append(perm_score)
             if perm_score >= real_score:
                 worse_or_equal += 1
@@ -211,28 +220,8 @@ class MonteCarloPermutationTest:
         )
 
 
-def _score(
-    strategy: Strategy,
-    lake: DuckDBLake,
-    start: datetime,
-    end: datetime,
-    universe: Sequence[str],
-    interval: Interval,
-    metric: str,
-) -> float:
-    broker = SimulatedBroker(portfolio=Portfolio(cash=10_000.0, positions={}))
-    report = Backtester(
-        strategies=[strategy],
-        broker=broker,
-        lake=lake,
-        config=BacktestConfig(
-            start=start,
-            end=end,
-            universe=list(universe),
-            interval=interval,
-            threshold=0.0,
-        ),
-    ).run()
+def _score(strategy: Strategy, context, lake: DuckDBLake, metric: str) -> float:
+    report = run_backtest(strategy, context, context.full_window, lake=lake)
     return float(getattr(report, metric))
 
 

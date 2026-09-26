@@ -1,18 +1,44 @@
-"""Perturbation test: run a baseline backtest, then repeat with gaussian
-noise added to prices and check how correlated the equity curves stay."""
+"""Perturbation test: run a baseline backtest, then repeat against copies of
+the universe's bars with multiplicative gaussian noise and check how
+correlated the equity curves stay.
+
+Like the MCPT, each noise level gets its own in-memory ``DuckDBLake``
+holding a perturbed copy of the ``bars`` table for the universe (every
+interval, full history so strategy look-backs still have data). Because
+the noise is baked into the table once, every read path sees it —
+``get_bars``, ``get_prices`` and the engine's own SQL — and the same bar
+always reads back the same perturbed price.
+
+Noise model: one standard-normal draw ``z`` per bar row (fixed by
+``seed``), shared across noise levels; at level ``sigma`` the bar's
+``open/high/low/close/adj_close`` are all scaled by ``exp(sigma * z)``,
+so OHLC ordering is preserved and prices stay positive. Volume is left
+untouched.
+
+Limitation: only ``bars`` is copied. Strategies that also read other lake
+tables (fundamentals, dividends, …) see them as empty in the perturbed
+runs.
+"""
 
 from __future__ import annotations
 
 import math
-import random
 from collections.abc import Sequence
+from pathlib import Path
 
-from stonks.backtest.engine import BacktestConfig, Backtester
-from stonks.backtest.simulated_broker import SimulatedBroker
+import numpy as np
+import pandas as pd
+
+from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy, SurvivalReport
-from stonks.core.types import Portfolio
+from stonks.lab.backtesting import run_backtest
 from stonks.lab.dataset import LabDataset
+from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
+
+_log = get_logger("stonks.lab.survival.perturbation")
+
+_PRICE_COLS = ("open", "high", "low", "close", "adj_close")
 
 
 class PerturbationTest:
@@ -22,21 +48,30 @@ class PerturbationTest:
         self,
         noise_sigmas: Sequence[float] = (0.0, 0.005, 0.01),
         min_correlation: float = 0.8,
-        seed: int | None = None,
+        seed: int = 0,
     ) -> None:
         self._sigmas = list(noise_sigmas)
         self._min_corr = min_correlation
         self._seed = seed
 
     def run(self, strategy: Strategy, context: LabDataset) -> SurvivalReport:
-        baseline = _run(strategy, context, noise=0.0, seed=self._seed)
+        _log.info("perturbation.start", seed=self._seed, sigmas=self._sigmas)
+        baseline = list(run_backtest(strategy, context, context.full_window).equity_curve)
+
+        bars = _universe_bars(context)
+        z = np.random.default_rng(self._seed).standard_normal(len(bars))
+
         correlations: list[float] = []
         for sigma in self._sigmas:
             if sigma == 0.0:
                 correlations.append(1.0)
                 continue
-            curve = _run(strategy, context, noise=sigma, seed=self._seed)
-            correlations.append(_pearson(baseline, curve))
+            lake = _perturbed_lake(bars, z, sigma)
+            try:
+                report = run_backtest(strategy, context, context.full_window, lake=lake)
+            finally:
+                lake.close()
+            correlations.append(_pearson(baseline, list(report.equity_curve)))
 
         mean_corr = sum(correlations) / len(correlations) if correlations else 0.0
         min_corr = min(correlations) if correlations else 0.0
@@ -46,42 +81,38 @@ class PerturbationTest:
             "levels_tested": float(len(self._sigmas)),
         }
         passed = min_corr >= self._min_corr
-        return SurvivalReport(test_id=self.id, passed=passed, metrics=metrics)
+        return SurvivalReport(
+            test_id=self.id, passed=passed, metrics=metrics, notes=f"seed={self._seed}"
+        )
 
 
-def _run(strategy: Strategy, context: LabDataset, noise: float, seed: int | None) -> list[float]:
-    lake: DuckDBLake = context.lake
-    # wrap lake.get_prices to inject noise at read time
-    if noise > 0.0:
-        rng = random.Random(seed)
-        original = lake.get_prices
+def _universe_bars(context: LabDataset) -> pd.DataFrame:
+    """Every bar (all intervals, all history up to the window end) for the
+    universe, in a deterministic row order so noise draws are stable."""
+    _, end = context.full_window
+    return context.lake.sql(
+        """
+        SELECT ticker, timestamp, interval, open, high, low, close, adj_close, volume
+          FROM bars
+         WHERE ticker = ANY(?) AND CAST(timestamp AS DATE) <= ?
+         ORDER BY ticker, interval, timestamp
+        """,
+        [list(context.universe), end],
+    )
 
-        def noisy_get_prices(ticker, start, end):
-            df = original(ticker, start, end).copy()
-            df["close"] = df["close"] * df["close"].apply(
-                lambda _x, rng=rng, n=noise: 1.0 + rng.gauss(0.0, n)
-            )
-            return df
 
-        lake.get_prices = noisy_get_prices  # type: ignore[method-assign]
-
-    try:
-        broker = SimulatedBroker(portfolio=Portfolio(cash=10_000.0, positions={}))
-        report = Backtester(
-            strategies=[strategy],
-            broker=broker,
-            lake=lake,
-            config=BacktestConfig(
-                start=context.start,
-                end=context.end,
-                universe=list(context.universe),
-                threshold=0.0,
-            ),
-        ).run()
-        return list(report.equity_curve)
-    finally:
-        if noise > 0.0:
-            lake.get_prices = original  # type: ignore[method-assign]
+def _perturbed_lake(bars: pd.DataFrame, z: np.ndarray, sigma: float) -> DuckDBLake:
+    lake = DuckDBLake(Path(":memory:"))
+    lake.migrate()
+    if bars.empty:
+        return lake
+    noisy = bars.copy()
+    factor = np.exp(sigma * z)
+    for col in _PRICE_COLS:
+        noisy[col] = noisy[col].astype(float) * factor
+    for code, frame in noisy.groupby("interval", sort=False):
+        lake.upsert_bars(frame, interval=Interval.parse(code))
+    return lake
 
 
 def _pearson(a: Sequence[float], b: Sequence[float]) -> float:
