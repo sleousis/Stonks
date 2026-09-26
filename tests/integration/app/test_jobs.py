@@ -463,3 +463,62 @@ def test_shutdown_requests_cancellation_of_running_cancellable_jobs(store):
     runner.shutdown(wait=True)
     assert time.monotonic() - started < 5
     assert store.get(job.id).status == "cancelled"
+
+
+# ---- AS-07: short writes on a lane -------------------------------------------------
+
+
+def test_run_in_lane_waits_for_the_lane_job_and_returns_the_value(store):
+    runner = JobRunner(store, max_workers=2)
+    gate = threading.Event()
+    order: list[str] = []
+
+    def writer(params: dict, ctx: JobContext) -> None:
+        order.append("job-start")
+        gate.wait(10)
+        order.append("job-end")
+
+    runner.register("writer", writer, lock="lake_write")
+    try:
+        runner.submit("writer", {})
+        deadline = time.monotonic() + 5
+        while "job-start" not in order and time.monotonic() < deadline:
+            time.sleep(0.01)
+        threading.Timer(0.2, gate.set).start()
+        value = runner.run_in_lane("lake_write", lambda: order.append("write") or 42)
+        assert value == 42
+        assert order == ["job-start", "job-end", "write"]
+    finally:
+        gate.set()
+        runner.shutdown()
+
+
+def test_run_in_lane_gives_up_with_a_conflict_while_the_lane_stays_busy(store):
+    runner = JobRunner(store, max_workers=2)
+    gate = threading.Event()
+    ran: list[str] = []
+    runner.register("writer", lambda p, c: gate.wait(10), lock="lake_write")
+    try:
+        runner.submit("writer", {})
+        with pytest.raises(ConflictError, match="busy"):
+            runner.run_in_lane("lake_write", lambda: ran.append("x"), timeout=0.2)
+        gate.set()
+        time.sleep(0.2)
+        assert ran == []  # the refused write never runs later
+    finally:
+        gate.set()
+        runner.shutdown()
+
+
+def test_run_in_lane_raises_the_functions_error(store):
+    runner = JobRunner(store, max_workers=1)
+    runner.register("writer", lambda p, c: None, lock="lake_write")
+
+    def boom() -> None:
+        raise ValidationError("bad")
+
+    try:
+        with pytest.raises(ValidationError, match="bad"):
+            runner.run_in_lane("lake_write", boom)
+    finally:
+        runner.shutdown()

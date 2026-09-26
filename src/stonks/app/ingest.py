@@ -118,10 +118,10 @@ class IngestService:
         items = [IngestRunView(**_clean(r)) for r in df.to_dict(orient="records")]
         return Page[IngestRunView](items=items, total=total, limit=limit, offset=offset)
 
-    def submit(self, request: IngestRequest) -> Job:
+    def submit(self, request: IngestRequest, *, owner_id: str | None = None) -> Job:
         self._validate(request)
         self._ctx.build_source(request.source)  # fail fast when it isn't configured
-        return self._runner.submit(INGEST_JOB, request.model_dump(mode="json"))
+        return self._runner.submit(INGEST_JOB, request.model_dump(mode="json"), owner_id=owner_id)
 
     def run(self, request: IngestRequest, progress: JobContext | None = None) -> IngestResultView:
         self._validate(request)

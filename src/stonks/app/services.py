@@ -24,6 +24,7 @@ from stonks.app.market import MarketDataService
 from stonks.app.notifications import NotificationsAppService
 from stonks.app.operations import OperationsService
 from stonks.app.orders import OrdersService
+from stonks.app.ownership import check_owner, owner_filter, owner_of
 from stonks.app.pagination import Page
 from stonks.app.portfolio import PortfolioService
 from stonks.app.schedule import ScheduleService
@@ -77,12 +78,28 @@ class JobService:
         return self._runner.kinds
 
     def list(
-        self, *, status: str | None = None, kind: str | None = None, limit: int, offset: int
+        self,
+        principal: Principal | None = None,
+        *,
+        status: str | None = None,
+        kind: str | None = None,
+        limit: int,
+        offset: int,
     ) -> Page[Job]:
-        return self._store.list(status=status, kind=kind, limit=limit, offset=offset)
+        """Jobs the caller may see: their own, or every job for admins."""
+        return self._store.list(
+            status=status,
+            kind=kind,
+            owner_id=owner_filter(principal),
+            limit=limit,
+            offset=offset,
+        )
 
-    def get(self, job_id: str) -> Job:
-        return self._store.get(job_id)
+    def get(self, job_id: str, principal: Principal | None = None) -> Job:
+        """One job; another user's job is ``NotFoundError`` (admins see all)."""
+        job = self._store.get(job_id)
+        check_owner(job.owner_id, principal, f"no job with id {job_id!r}")
+        return job
 
     def cancel(self, job_id: str, principal: Principal | None = None) -> Job:
         """Cancel a queued job, or ask a running cancellable one (lab run)
@@ -90,7 +107,7 @@ class JobService:
         Operator jobs (ticks, ingests, backups) need
         ``Permission.OPERATIONS_RUN``; ``principal=None`` is in-process."""
         if principal is not None:
-            kind = self._store.get(job_id).kind
+            kind = self.get(job_id, principal).kind
             require(
                 principal,
                 Permission.OPERATIONS_RUN
@@ -101,20 +118,22 @@ class JobService:
         _log.info("job.cancel", job_id=job_id, status=job.status)
         return job
 
-    def submit(self, kind: str, params: dict[str, Any]) -> Job:
-        return self._runner.submit(kind, params)
+    def submit(self, kind: str, params: dict[str, Any], principal: Principal | None = None) -> Job:
+        return self._runner.submit(kind, params, owner_id=owner_of(principal))
 
     def wait(self, job_id: str, timeout: float | None = None) -> Job:
         return self._runner.wait(job_id, timeout=timeout)
 
-    def typed_result[M: BaseModel](self, job_id: str, kind: str, model: type[M]) -> M:
+    def typed_result[M: BaseModel](
+        self, job_id: str, kind: str, model: type[M], principal: Principal | None = None
+    ) -> M:
         """The result of a succeeded ``kind`` job, validated as ``model``.
 
         ``NotFoundError`` when there is no such job of that kind;
         ``ConflictError`` while it has not succeeded (queued, running,
         failed or cancelled jobs have no result).
         """
-        job = self._store.get(job_id)
+        job = self.get(job_id, principal)
         if job.kind != kind:
             raise NotFoundError(f"no {kind} job with id {job_id!r}")
         if job.status != "succeeded":
@@ -127,7 +146,7 @@ class JobService:
         stream only, for ``principal``'s user (see
         :mod:`stonks.app.stream_tokens`)."""
         require(principal, Permission.READ)
-        self._store.get(job_id)  # NotFoundError for an unknown job
+        self.get(job_id, principal)  # NotFoundError for an unknown or someone else's job
         token = self._tokens.issue(job_id, principal.user_id)
         _log.info("job.stream_token_issued", job_id=job_id, expires_at=token.expires_at)
         return token

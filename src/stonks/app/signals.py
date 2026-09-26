@@ -106,10 +106,12 @@ class SignalService:
         self._runner = runner
         runner.register(SIGNAL_IC_JOB, self._handle_signal_ic)
 
-    def submit_signal_ic(self, request: SignalICRequest) -> Job:
+    def submit_signal_ic(self, request: SignalICRequest, *, owner_id: str | None = None) -> Job:
         _interval(request.interval)
         self._strategies.resolve(request.strategy)  # validate before queueing
-        return self._runner.submit(SIGNAL_IC_JOB, request.model_dump(mode="json"))
+        return self._runner.submit(
+            SIGNAL_IC_JOB, request.model_dump(mode="json"), owner_id=owner_id
+        )
 
     def run_signal_ic(self, request: SignalICRequest) -> SignalICView:
         strategy = self._strategies.resolve(request.strategy)

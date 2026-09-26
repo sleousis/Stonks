@@ -32,8 +32,8 @@ class BackupService:
         self._runner = runner
         runner.register(BACKUP_JOB, self._handle, lock="lake_write")
 
-    def submit(self) -> Job:
-        return self._runner.submit(BACKUP_JOB, {})
+    def submit(self, *, owner_id: str | None = None) -> Job:
+        return self._runner.submit(BACKUP_JOB, {}, owner_id=owner_id)
 
     def run(self) -> BackupResultView:
         with self._ctx.lake() as lake:

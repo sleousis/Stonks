@@ -210,3 +210,98 @@ def test_as10_a_trader_refused_a_global_action_gets_403_not_422(client, settings
     halt_id = _global_breaker(settings.state.path)
     clear = client.post(f"/api/halts/{halt_id}/clear", json={"reason": "r"}, headers=alice)
     assert clear.status_code == 403
+
+
+# ---- AS-06 job and draft owners --------------------------------------------------
+
+from tests.integration.app.test_studio import TREND as TREND_SPEC  # noqa: E402
+
+
+def test_as06_a_job_records_its_owner_and_only_the_owner_or_an_admin_sees_it(client, app, people):
+    from tests.integration.app.test_api import _backtest_body
+
+    alice, bob, ada = (people[n]["headers"] for n in ("alice", "bob", "ada"))
+    resp = client.post("/api/lab/backtests", json=_backtest_body(), headers=alice)
+    assert resp.status_code == 202, resp.text
+    job = resp.json()
+    assert job["owner_id"] == people["alice"]["id"]
+
+    assert client.get(f"/api/jobs/{job['id']}", headers=alice).status_code == 200
+    assert client.get(f"/api/jobs/{job['id']}", headers=bob).status_code == 404
+    assert client.get(f"/api/jobs/{job['id']}", headers=ada).status_code == 200
+    assert job["id"] not in client.get("/api/jobs", headers=bob).text
+    assert job["id"] in client.get("/api/jobs", headers=ada).text
+    token = client.post(f"/api/jobs/{job['id']}/stream-token", headers=bob)
+    assert token.status_code == 404
+    result = client.get(f"/api/lab/backtests/{job['id']}/result", headers=bob)
+    assert result.status_code == 404
+
+
+def test_as06_another_trader_cannot_cancel_a_job(client, app, people):
+    store = app.state.services.runner.store
+    queued = store.create("backtest", {}, owner_id=people["alice"]["id"])
+    bob, ada = people["bob"]["headers"], people["ada"]["headers"]
+    assert client.post(f"/api/jobs/{queued.id}/cancel", headers=bob).status_code == 404
+    assert store.get(queued.id).status == "queued"
+    assert client.post(f"/api/jobs/{queued.id}/cancel", headers=ada).status_code == 200
+
+
+def test_as06_drafts_record_an_owner_and_other_traders_get_404(client, people):
+    alice, bob, ada = (people[n]["headers"] for n in ("alice", "bob", "ada"))
+    created = client.post(
+        "/api/studio/drafts", json={"name": "mine", "spec": TREND_SPEC}, headers=alice
+    )
+    assert created.status_code == 201, created.text
+    draft = created.json()
+    assert draft["owner_id"] == people["alice"]["id"]
+    url = f"/api/studio/drafts/{draft['id']}"
+    assert client.get(url, headers=bob).status_code == 404
+    assert client.patch(url, json={"name": "x"}, headers=bob).status_code == 404
+    assert client.post(f"{url}/validate", json={}, headers=bob).status_code == 404
+    assert client.delete(url, headers=bob).status_code == 404
+    assert draft["id"] not in client.get("/api/studio/drafts", headers=bob).text
+    assert draft["id"] in client.get("/api/studio/drafts", headers=ada).text
+    assert client.patch(url, json={"name": "y"}, headers=ada).status_code == 200
+    assert client.delete(url, headers=ada).status_code == 200
+
+
+# ---- AS-07 universe writes on the lake_write lane -----------------------------------
+
+
+def test_as07_universe_writes_run_on_the_lake_write_lane(client, app, monkeypatch):
+    from tests.integration.app.test_api import AUTH
+
+    runner = app.state.services.runner
+    lanes: list[str] = []
+    real = runner.run_in_lane
+
+    def spy(lane, fn, **kwargs):
+        lanes.append(lane)
+        return real(lane, fn, **kwargs)
+
+    monkeypatch.setattr(runner, "run_in_lane", spy)
+    body = {"id": "mine", "kind": "list", "spec": {"tickers": ["UP.US"]}}
+    assert client.post("/api/universes", json=body, headers=AUTH).status_code == 201
+    content = "date,ticker,action\n2026-01-02,UP.US,member\n"
+    imported = client.post(
+        "/api/universes/index-history",
+        json={"index_id": "toy", "format": "csv", "content": content},
+        headers=AUTH,
+    )
+    assert imported.status_code == 200, imported.text
+    assert client.delete("/api/universes/mine", headers=AUTH).status_code == 200
+    assert lanes == ["lake_write"] * 3
+
+
+def test_as07_a_universe_cannot_be_deleted_while_its_refresh_is_pending(client, app):
+    from stonks.app.universes import UNIVERSE_REFRESH_JOB
+    from tests.integration.app.test_api import AUTH
+
+    body = {"id": "busy", "kind": "list", "spec": {"tickers": ["UP.US"]}}
+    assert client.post("/api/universes", json=body, headers=AUTH).status_code == 201
+    store = app.state.services.runner.store
+    queued = store.create(UNIVERSE_REFRESH_JOB, {"universe_id": "busy"})
+    resp = client.delete("/api/universes/busy", headers=AUTH)
+    assert resp.status_code == 409 and queued.id in resp.json()["detail"]
+    store.cancel(queued.id)
+    assert client.delete("/api/universes/busy", headers=AUTH).status_code == 200

@@ -126,12 +126,17 @@ def _view(d: UniverseDefinition) -> UniverseView:
     return UniverseView(**d.model_dump())
 
 
+#: Lake writers share one lane so DuckDB never sees two writers on the same
+#: rows (see :mod:`stonks.app.jobs`). Short request writes join it too.
+LAKE_WRITE_LANE = "lake_write"
+
+
 class UniverseService:
     def __init__(self, context: AppContext, runner: JobRunner) -> None:
         self._ctx = context
         self._runner = runner
-        runner.register(UNIVERSE_REFRESH_JOB, self._handle_refresh, lock="lake_write")
-        runner.register(UNIVERSE_ENSURE_JOB, self._handle_ensure, lock="lake_write")
+        runner.register(UNIVERSE_REFRESH_JOB, self._handle_refresh, lock=LAKE_WRITE_LANE)
+        runner.register(UNIVERSE_ENSURE_JOB, self._handle_ensure, lock=LAKE_WRITE_LANE)
 
     # ---- definitions -------------------------------------------------------------
 
@@ -158,19 +163,41 @@ class UniverseService:
             definition.validated()
         except ValueError as exc:
             raise ValidationError(str(exc)) from None
-        with self._ctx.lake() as lake:
-            store = UniverseStore(lake)
-            if store.exists(request.id):
-                raise ConflictError(f"universe {request.id!r} already exists")
-            saved = store.save(definition)
+
+        def write() -> UniverseDefinition:
+            with self._ctx.lake() as lake:
+                store = UniverseStore(lake)
+                if store.exists(request.id):
+                    raise ConflictError(f"universe {request.id!r} already exists")
+                return store.save(definition)
+
+        saved = self._runner.run_in_lane(LAKE_WRITE_LANE, write)
         _log.info("universe.created", universe_id=saved.id, kind=saved.kind)
         return _view(saved)
 
     def delete(self, universe_id: str) -> UniverseView:
-        with self._ctx.lake() as lake:
-            store = UniverseStore(lake)
-            definition = self._definition(store, universe_id)
-            store.delete(universe_id)
+        """Delete the definition and its members. 409 while a refresh or
+        ensure job for it is queued or running, so it can't write the
+        members back afterwards."""
+        busy = [
+            job.id
+            for job in self._runner.store.pending((UNIVERSE_REFRESH_JOB, UNIVERSE_ENSURE_JOB))
+            if job.params.get("universe_id") == universe_id
+        ]
+        if busy:
+            raise ConflictError(
+                f"universe {universe_id!r} has pending jobs ({', '.join(busy)}); "
+                "wait for them or cancel them first"
+            )
+
+        def write() -> UniverseDefinition:
+            with self._ctx.lake() as lake:
+                store = UniverseStore(lake)
+                definition = self._definition(store, universe_id)
+                store.delete(universe_id)
+                return definition
+
+        definition = self._runner.run_in_lane(LAKE_WRITE_LANE, write)
         _log.info("universe.deleted", universe_id=universe_id)
         return _view(definition)
 
@@ -190,8 +217,12 @@ class UniverseService:
             )
         except ValueError as exc:
             raise ValidationError(str(exc)) from None
-        with self._ctx.lake() as lake:
-            UniverseStore(lake).save_index_history(history)
+
+        def write() -> None:
+            with self._ctx.lake() as lake:
+                UniverseStore(lake).save_index_history(history)
+
+        self._runner.run_in_lane(LAKE_WRITE_LANE, write)
         return IndexHistoryView(
             index_id=history.index_id,
             as_of=history.as_of,
@@ -201,9 +232,11 @@ class UniverseService:
 
     # ---- refresh -------------------------------------------------------------------
 
-    def submit_refresh(self, universe_id: str) -> Job:
+    def submit_refresh(self, universe_id: str, *, owner_id: str | None = None) -> Job:
         self.get(universe_id)  # NotFoundError before queueing
-        return self._runner.submit(UNIVERSE_REFRESH_JOB, {"universe_id": universe_id})
+        return self._runner.submit(
+            UNIVERSE_REFRESH_JOB, {"universe_id": universe_id}, owner_id=owner_id
+        )
 
     def refresh(self, universe_id: str) -> UniverseRefreshView:
         with self._ctx.lake() as lake:
@@ -218,12 +251,14 @@ class UniverseService:
 
     # ---- ensure data ---------------------------------------------------------------
 
-    def submit_ensure(self, universe_id: str, request: EnsureDataRequest) -> Job:
+    def submit_ensure(
+        self, universe_id: str, request: EnsureDataRequest, *, owner_id: str | None = None
+    ) -> Job:
         self.get(universe_id)
         _interval(request.interval)
         self._ctx.build_source(request.source)  # fail fast when it isn't configured
         body = {"universe_id": universe_id, **request.model_dump(mode="json")}
-        return self._runner.submit(UNIVERSE_ENSURE_JOB, body)
+        return self._runner.submit(UNIVERSE_ENSURE_JOB, body, owner_id=owner_id)
 
     def ensure(
         self, universe_id: str, request: EnsureDataRequest, progress: JobContext | None = None

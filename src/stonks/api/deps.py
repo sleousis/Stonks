@@ -168,6 +168,21 @@ def current_principal(
 PrincipalDep = Annotated[Principal, Depends(current_principal)]
 
 
+def optional_principal(
+    request: Request,
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+) -> Principal | None:
+    """The caller, or ``None`` for a credential-less loopback read that
+    :func:`authorize` let through (``open_reads_on_loopback``, dev only).
+    Routes over "global, attributed" rows (jobs, drafts) scope by it."""
+    if creds is None and not request.cookies.get(SESSION_COOKIE):
+        return getattr(request.state, "principal", None)
+    return _resolve(request, creds)
+
+
+OptionalPrincipalDep = Annotated[Principal | None, Depends(optional_principal)]
+
+
 def current_scope(principal: PrincipalDep) -> Scope:
     """The principal's data scope, for user-scoped routes (connections,
     push, notifications, audited runs)."""

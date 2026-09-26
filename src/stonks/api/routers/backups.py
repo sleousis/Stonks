@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Response
 
-from stonks.api.deps import ServicesDep, require_permission
+from stonks.api.deps import OptionalPrincipalDep, PrincipalDep, ServicesDep, require_permission
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.api.routers._jobs_common import JOB_CREATED, accepted
 from stonks.app.backups import BACKUP_JOB, BackupResultView
@@ -20,10 +20,10 @@ ADMIN_ONLY = [Depends(require_permission(Permission.RISK_GLOBAL))]
 
 
 @router.post("", **JOB_CREATED, operation_id="startBackup", dependencies=ADMIN_ONLY)
-def start_backup(services: ServicesDep, response: Response) -> Job:
+def start_backup(services: ServicesDep, principal: PrincipalDep, response: Response) -> Job:
     """Queue a backup of the lake, state DB and artifacts to ``[backup]``'s
     target, pruned by its retention. Runs beside no ingest (lake lock)."""
-    return accepted(services.backups.submit(), response)
+    return accepted(services.backups.submit(owner_id=principal.user_id), response)
 
 
 @router.get(
@@ -32,6 +32,8 @@ def start_backup(services: ServicesDep, response: Response) -> Job:
     operation_id="getBackupResult",
     dependencies=ADMIN_ONLY,
 )
-def get_backup_result(job_id: str, services: ServicesDep) -> BackupResultView:
+def get_backup_result(
+    job_id: str, services: ServicesDep, principal: OptionalPrincipalDep
+) -> BackupResultView:
     """The result of a succeeded backup job (409 until it has succeeded)."""
-    return services.jobs.typed_result(job_id, BACKUP_JOB, BackupResultView)
+    return services.jobs.typed_result(job_id, BACKUP_JOB, BackupResultView, principal)
