@@ -1096,6 +1096,25 @@ def serve(
 lab_app = typer.Typer(help="Strategy lab: tune, fit and run survival tests")
 app.add_typer(lab_app, name="lab")
 
+
+@lab_app.command(
+    "ic",
+    context_settings={
+        "allow_extra_args": True,
+        "ignore_unknown_options": True,
+        "help_option_names": [],
+    },
+    add_help_option=False,
+)
+def lab_ic(ctx: typer.Context) -> None:
+    """Signal IC (and with --events an event study) of a strategy (BL-33/34):
+    --strategy ID --tickers A,B [--params JSON --start --end --horizons 1,5,20
+    --events --json F --html F]; ``stonks lab ic --help`` for all options."""
+    from stonks.lab import signal_eval
+
+    raise typer.Exit(code=signal_eval.main(list(ctx.args), prog="stonks lab ic"))
+
+
 _LAB_TUNERS = ("grid", "random")
 _LAB_OBJECTIVES = ("sharpe", "cagr", "final_return")
 _LAB_COST_MODELS = ("config", "zero", "realistic")
