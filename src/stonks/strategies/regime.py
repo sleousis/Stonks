@@ -40,7 +40,7 @@ from typing import Any
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
 from stonks.features.regime_conditions import ConditionContext, RegimeCondition, build_condition
-from stonks.strategies._common import LakeBarCaches, as_datetime, iso
+from stonks.strategies._common import LakeBarCaches, as_datetime, iso, sell_all_longs
 from stonks.strategies._wrapping import InnerStrategyWrapper, inner_param_specs
 
 DEFAULT_CONDITIONS: list[dict[str, Any]] = [{"kind": "price_trend", "ticker": "SPY.US"}]
@@ -224,18 +224,7 @@ class RegimeFilter(InnerStrategyWrapper):
             return self._inner.decide(my_picks, portfolio, prices, as_of)
         mode = self.params["mode"]
         if mode == "exit_all":
-            return [
-                Order(
-                    client_id=f"{self.id}:sell:{ticker}:{iso(as_of)}",
-                    ticker=ticker,
-                    side="sell",
-                    quantity=qty,
-                    order_type="market",
-                    strategy_id=self.id,
-                )
-                for ticker, qty in portfolio.positions.items()
-                if qty > 0
-            ]
+            return sell_all_longs(self.id, portfolio, as_of)
         orders = self._inner.decide(my_picks, portfolio, prices, as_of)
         if mode == "block_new_buys":
             return [o for o in orders if o.side != "buy"]

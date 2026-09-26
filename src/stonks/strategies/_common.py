@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import math
 import weakref
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, time, timedelta
@@ -52,6 +52,7 @@ import pandas as pd
 from stonks.core.corporate_actions import CorporateAction, PriceBasis
 from stonks.core.interval import Interval
 from stonks.core.timeutil import as_datetime, iso
+from stonks.core.types import Order, Portfolio
 from stonks.features.price_adjustment import SeriesAdjustment
 from stonks.store.corporate_actions import LakeCorporateActions
 
@@ -62,6 +63,8 @@ __all__ = [
     "decision_interval",
     "get_last_n_bars",
     "iso",
+    "long_only_decide",
+    "sell_all_longs",
     "visible_cutoff",
 ]
 
@@ -359,3 +362,57 @@ class LakeBarCaches:
 
     def __len__(self) -> int:
         return len(self._caches)
+
+
+# ---- shared decide helpers (RS-37) ------------------------------------------
+
+
+def long_only_decide(
+    strategy_id: str,
+    target: str,
+    allocation: float,
+    my_picks: Sequence[tuple[float, str]],
+    portfolio: Portfolio,
+    prices: Mapping[str, float],
+    as_of: Any,
+) -> list[Order]:
+    """Buy ``allocation`` of cash when picked and flat; sell everything when
+    not picked and holding."""
+    price = prices.get(target)
+    holding = portfolio.positions.get(target, 0.0)
+    picked = any(t == target for _, t in my_picks)
+    if picked and price and price > 0 and holding <= 0 and portfolio.cash > 0:
+        qty = portfolio.cash * float(allocation) / price
+        if qty <= 0:
+            return []
+        side, quantity = "buy", qty
+    elif not picked and holding > 0:
+        side, quantity = "sell", holding
+    else:
+        return []
+    return [
+        Order(
+            client_id=f"{strategy_id}:{side}:{target}:{iso(as_of)}",
+            ticker=target,
+            side=side,
+            quantity=quantity,
+            order_type="market",
+            strategy_id=strategy_id,
+        )
+    ]
+
+
+def sell_all_longs(strategy_id: str, portfolio: Portfolio, as_of: Any) -> list[Order]:
+    """A market sell of every long position (a wrapper's risk-off exit)."""
+    return [
+        Order(
+            client_id=f"{strategy_id}:sell:{ticker}:{iso(as_of)}",
+            ticker=ticker,
+            side="sell",
+            quantity=qty,
+            order_type="market",
+            strategy_id=strategy_id,
+        )
+        for ticker, qty in portfolio.positions.items()
+        if qty > 0
+    ]

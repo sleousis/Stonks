@@ -33,7 +33,7 @@ import pandas as pd
 from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
-from stonks.strategies._common import LakeBarCaches, iso
+from stonks.strategies._common import LakeBarCaches, long_only_decide
 from stonks.strategies.base import BaseStrategy
 
 
@@ -134,40 +134,15 @@ class DonchianBreakout(BaseStrategy):
         prices: Mapping[str, float],
         as_of,
     ) -> list[Order]:
-        target = self.params["ticker"]
-        price = prices.get(target)
-        holding = portfolio.positions.get(target, 0.0)
-        orders: list[Order] = []
-
-        # breakout up (in my_picks): buy if flat
-        if my_picks and price and price > 0 and holding <= 0 and portfolio.cash > 0:
-            qty = (portfolio.cash * float(self.params["allocation"])) / price
-            if qty > 0:
-                orders.append(
-                    Order(
-                        client_id=f"{self.id}:buy:{target}:{iso(as_of)}",
-                        ticker=target,
-                        side="buy",
-                        quantity=qty,
-                        order_type="market",
-                        strategy_id=self.id,
-                    )
-                )
-            return orders
-
-        # no breakout (picks empty): if we were holding, flatten.
-        if not my_picks and holding > 0:
-            orders.append(
-                Order(
-                    client_id=f"{self.id}:sell:{target}:{iso(as_of)}",
-                    ticker=target,
-                    side="sell",
-                    quantity=holding,
-                    order_type="market",
-                    strategy_id=self.id,
-                )
-            )
-        return orders
+        return long_only_decide(
+            self.id,
+            self.params["ticker"],
+            float(self.params["allocation"]),
+            my_picks,
+            portfolio,
+            prices,
+            as_of,
+        )
 
     # ---- internals ---------------------------------------------------------
 
