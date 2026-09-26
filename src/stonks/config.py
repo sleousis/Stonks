@@ -210,6 +210,18 @@ class ApiConfig(BaseModel):
         return data
 
 
+class McpConfig(BaseModel):
+    """MCP server (``stonks mcp``): a client of the running REST API, never
+    of the lake. The bearer token comes from ``STONKS_API_TOKEN`` only."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    api_url: str = "http://127.0.0.1:8000"
+    timeout_seconds: float = Field(default=30.0, gt=0)
+    # Upper bound for the wait_for_job tool's timeout argument.
+    max_wait_seconds: float = Field(default=600.0, gt=0)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -223,6 +235,7 @@ class Settings(BaseSettings):
     notify: NotifyConfig = NotifyConfig()
     api: ApiConfig = Field(default_factory=ApiConfig)
     golive: GoLivePolicy = GoLivePolicy()
+    mcp: McpConfig = McpConfig()
 
 
 def load_settings(config_path: Path | None = None) -> Settings:

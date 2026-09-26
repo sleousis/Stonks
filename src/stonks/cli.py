@@ -1023,5 +1023,26 @@ def report(
     console.print(f"[green]wrote[/green] {out}")
 
 
+# ---- MCP server -------------------------------------------------------------
+
+
+@app.command("mcp")
+def mcp_server() -> None:
+    """Run the MCP server over stdio for Claude Code / Claude Desktop.
+
+    A client of the running REST API ([mcp].api_url, start it with
+    `stonks serve`); it never opens the lake. Write and job tools send
+    STONKS_API_TOKEN. See docs/mcp.md.
+    """
+    from stonks.mcp.entry import McpConfigError, run
+
+    try:
+        run(_settings())
+    except McpConfigError as exc:
+        # stdout belongs to the MCP protocol; report on stderr.
+        typer.echo(f"stonks mcp: {exc}", err=True)
+        raise typer.Exit(code=2) from None
+
+
 if __name__ == "__main__":
     app()

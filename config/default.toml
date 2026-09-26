@@ -99,3 +99,10 @@ max_drawdown = 0.15               # deepest allowed drawdown, positive fraction
 max_drift = 0.10                  # max |paper return - backtest-expected return|
 min_trades = 5
 require_all_survival_passed = true
+
+[mcp]
+# `stonks mcp` talks to the running REST API (`stonks serve`); it never opens
+# the lake. Write and job tools send STONKS_API_TOKEN (env only).
+api_url = "http://127.0.0.1:8000"
+timeout_seconds = 30.0
+max_wait_seconds = 600.0
