@@ -55,8 +55,9 @@ from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
 from stonks.features.library import rsi
-from stonks.strategies._common import LakeBarCaches, as_datetime, iso
+from stonks.strategies._common import LakeBarCaches, iso
 from stonks.strategies.base import BaseStrategy
+from stonks.strategies.examples._nt888_common import train_bars
 
 
 class RSIPCAStrategy(BaseStrategy):
@@ -185,16 +186,9 @@ class RSIPCAStrategy(BaseStrategy):
     def fit(self, dataset) -> None:
         ticker = self.params["ticker"]
         interval = Interval.parse(self.params["interval"])
-        train_start, train_end = dataset.train_window
-
-        bars = dataset.lake.get_bars(
-            ticker,
-            interval,
-            start=as_datetime(train_start),
-            end=as_datetime(train_end),
-        )
-        if bars.empty:
-            raise ValueError(f"no bars for {ticker!r} in training window")
+        # RS-12: the adjusted basis the predictions use, and the whole last
+        # training day (intraday bars included), like the other nt888 fits.
+        bars = train_bars(dataset, ticker, interval, caches=self._bar_caches)
 
         closes = bars["close"].astype(float).reset_index(drop=True)
         periods = list(

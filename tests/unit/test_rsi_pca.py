@@ -157,9 +157,20 @@ def test_estimate_return_returns_float_or_none_after_fit(lake_500d):
     # Sample several dates in the validation window. At least one should
     # either exceed the long threshold (float return) or fall below it (None).
     val_dates = [dates[-i].date() for i in range(1, 40)]
+    preds = [s._predict_current("X.US", d, lake) for d in val_dates]
+    # RS-38: the model predicts on every validation bar (no silent None)
+    assert all(isinstance(p, float) for p in preds)
     results = [s.estimate_return("X.US", d, lake) for d in val_dates]
-    # All results are either None or floats; nothing crashes
     assert all(r is None or isinstance(r, float) for r in results)
+    # a long is only ever reported while some recent prediction beat the threshold
+    for d, r in zip(val_dates, results, strict=True):
+        if r is not None:
+            assert r > s._long_thresh or any(
+                (p := s._predict_current("X.US", b.date(), lake)) is not None and p > s._long_thresh
+                for b in dates[
+                    dates.get_loc(pd.Timestamp(d)) - 4 : dates.get_loc(pd.Timestamp(d)) + 1
+                ]
+            )
 
 
 def test_decide_buys_on_long_signal_when_flat(lake_500d):
@@ -344,3 +355,60 @@ def test_hold_bars_replays_causally_so_a_fresh_instance_agrees(lake_500d, tmp_pa
         assert (got is None) == (want is None)
         if want is not None:
             assert got == pytest.approx(want, rel=1e-9)
+
+
+# ---- RS-12: fit on the adjusted basis --------------------------------------
+
+
+def _split_lakes(tmp_path):
+    """Two lakes with the same economics: one quotes raw prices with a 4:1
+    split inside the training window, the other is already back-adjusted."""
+    rng = np.random.default_rng(5)
+    dates = pd.bdate_range(start="2024-01-02", periods=500)
+    adjusted = np.exp(np.log(100.0) + np.cumsum(rng.normal(0.0005, 0.015, len(dates))))
+    split_at = 150  # inside the 70% training window
+    raw = adjusted.copy()
+    raw[:split_at] *= 4.0
+
+    def build(path, closes, with_split):
+        lake = DuckDBLake(path)
+        lake.migrate()
+        lake.upsert_prices(
+            pd.DataFrame(
+                {
+                    "ticker": "X.US",
+                    "date": [d.date() for d in dates],
+                    "open": closes,
+                    "high": closes * 1.003,
+                    "low": closes * 0.997,
+                    "close": closes,
+                    "adj_close": closes,
+                    "volume": 1_000_000.0,
+                }
+            )
+        )
+        if with_split:
+            lake.upsert_stock_splits(
+                pd.DataFrame([{"ticker": "X.US", "date": dates[split_at].date(), "ratio": 4.0}])
+            )
+        return lake
+
+    return (
+        build(tmp_path / "raw.duckdb", raw, True),
+        build(tmp_path / "adj.duckdb", adjusted, False),
+        dates,
+    )
+
+
+def test_fit_uses_split_adjusted_training_bars(tmp_path):
+    raw_lake, adj_lake, dates = _split_lakes(tmp_path)
+    try:
+        on_raw = RSIPCAStrategy({"ticker": "X.US"})
+        on_raw.fit(_dataset(raw_lake, dates))
+        on_adj = RSIPCAStrategy({"ticker": "X.US"})
+        on_adj.fit(_dataset(adj_lake, dates))
+        np.testing.assert_allclose(on_raw._rsi_means, on_adj._rsi_means, rtol=1e-9)
+        np.testing.assert_allclose(on_raw._coefs, on_adj._coefs, rtol=1e-6, atol=1e-12)
+    finally:
+        raw_lake.close()
+        adj_lake.close()
