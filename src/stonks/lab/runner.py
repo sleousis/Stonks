@@ -1,6 +1,8 @@
 """Lab orchestration: pre-register → tune → fit → survival suite → verdict.
 
-Every run gets a ``run_id`` and a reproducibility manifest (BL-06). With a
+Every run gets a ``run_id`` and a reproducibility manifest (BL-06). The
+suite runs on a fresh copy of the dataset embargoed for the fitted
+strategy (:func:`suite_dataset`). With a
 :class:`~stonks.lab.trials.TrialLedger` the run is pre-registered (hypothesis,
 premortem, tuner, budget, dataset, manifest) **before** tuning, every trial
 is recorded after it, and the verdict at the end (``error`` when it
@@ -10,6 +12,7 @@ crashes). Survival tests with a ``bind_run(ctx)`` hook receive a
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -47,6 +50,17 @@ def costs_are_zero(costs: Any) -> bool:
         return False
     classes = [costs.default, *getattr(costs, "asset_classes", {}).values()]
     return not any(c.fee_flat or c.half_spread_bps or c.fee_bps for c in classes)
+
+
+def suite_dataset(dataset: Any, strategy: Strategy) -> Any:
+    """What the survival suite runs on: a fresh copy of ``dataset`` (so a
+    per-run attribute such as ``stitched_oos_report`` never leaks into the
+    next run) with the embargo ``strategy``'s label horizon needs
+    (``LabDataset.for_strategy``, BL-20)."""
+    if dataclasses.is_dataclass(dataset) and not isinstance(dataset, type):
+        dataset = dataclasses.replace(dataset)
+    for_strategy = getattr(dataset, "for_strategy", None)
+    return for_strategy(strategy) if callable(for_strategy) else dataset
 
 
 @dataclass
@@ -211,7 +225,7 @@ class LabRunner:
             if callable(bind_run):
                 bind_run(ctx)
 
-        reports = self._suite.run(strategy, dataset)
+        reports = self._suite.run(strategy, suite_dataset(dataset, strategy))
         verdict = "pass" if all(r.passed for r in reports) else "fail"
 
         _log.info(

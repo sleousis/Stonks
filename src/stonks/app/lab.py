@@ -34,7 +34,7 @@ from stonks.core.interval import Interval
 from stonks.core.protocols import Objective, Strategy, SurvivalReport, SurvivalTest, Tuner
 from stonks.core.types import Portfolio
 from stonks.lab.backtesting import run_backtest
-from stonks.lab.dataset import LabDataset
+from stonks.lab.dataset import LabDataset, scoring_window
 from stonks.lab.objectives import CAGRObjective, FinalReturnObjective, SharpeObjective
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.runner import LabRunner, LabRunResult, costs_are_zero
@@ -574,8 +574,9 @@ def lab_dataset(*, benchmark: str, **fields: Any) -> LabDataset:
 
 def _validation_benchmark(result: LabRunResult, dataset: LabDataset) -> BenchmarkResult | None:
     """The fitted strategy against the dataset's benchmark over the
-    validation window (one more backtest; ``None`` when off or unpriced)."""
-    report = run_backtest(result.strategy, dataset, dataset.val_window)
+    validation window, embargoed for it (one more backtest; ``None`` when
+    off or unpriced)."""
+    report = run_backtest(result.strategy, dataset, scoring_window(dataset, result.strategy))
     return getattr(report, "benchmark", None)
 
 

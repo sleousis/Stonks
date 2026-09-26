@@ -221,6 +221,45 @@ def test_plain_tuner_result_still_works(ledger):
     assert result.manifest["seeds"]["tuner"] is None
 
 
+class _Labelled(BuyAndHold):
+    """A strategy whose labels look five bars ahead (BL-20)."""
+
+    label_horizon_bars = 5
+
+
+class _ContextSpy:
+    id = "spy"
+
+    def __init__(self):
+        self.contexts: list = []
+
+    def run(self, strategy, context):
+        self.contexts.append(context)
+        context.stitched_oos_report = object()  # what walk-forward leaves behind
+        return SurvivalReport(test_id=self.id, passed=True, metrics={})
+
+
+def test_suite_sees_the_dataset_embargoed_for_the_strategy():
+    spy = _ContextSpy()
+    ds = _ds()
+    _runner(_Tuner(n=1), tests=[spy]).run(_Labelled, ds)
+    (context,) = spy.contexts
+    assert context.embargo_bars == 5
+    assert ds.embargo_bars == 0
+
+
+def test_each_run_gets_a_fresh_dataset_so_nothing_leaks_between_runs():
+    spy = _ContextSpy()
+    ds = _ds()
+    runner = _runner(_Tuner(n=1), tests=[spy])
+    runner.run(BuyAndHold, ds)
+    runner.run(BuyAndHold, ds)
+    first, second = spy.contexts
+    assert first is not ds and second is not first
+    assert ds.stitched_oos_report is None
+    assert second.benchmark == ds.benchmark and second.universe == ds.universe
+
+
 def test_a_ledger_failure_while_recording_an_error_keeps_the_original_exception(ledger):
     def _broken(run_id, verdict):
         raise OSError("disk full")
