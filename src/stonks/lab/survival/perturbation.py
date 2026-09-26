@@ -7,19 +7,16 @@ holding a perturbed copy of the ``bars`` table for the universe (every
 interval, full history so strategy look-backs still have data) plus an
 unmodified copy of every other table a strategy may read (instruments,
 statements, dividends, macro series, …; see ``lab.lake_copy``). Because
-the noise is baked into the table once, every read path sees it â€”
-``get_bars``, ``get_prices`` and the engine's own SQL â€” and the same bar
-always reads back the same perturbed price.
+the noise is baked into the table once, every read path sees it:
+``get_bars``, ``get_prices`` and the engine's own SQL all read the same
+perturbed bars, and the same bar always reads back the same perturbed
+price. Only prices are noised; the non-bar tables are exact copies.
 
 Noise model: one standard-normal draw ``z`` per bar row (fixed by
 ``seed``), shared across noise levels; at level ``sigma`` the bar's
 ``open/high/low/close/adj_close`` are all scaled by ``exp(sigma * z)``,
 so OHLC ordering is preserved and prices stay positive. Volume is left
 untouched.
-
-Limitation: only ``bars`` is copied. Strategies that also read other lake
-tables (fundamentals, dividends, â€¦) see them as empty in the perturbed
-runs.
 """
 
 from __future__ import annotations
