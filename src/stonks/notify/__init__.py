@@ -106,16 +106,21 @@ def build_notifier(
             if state_path is None:
                 _log.warning("notify.outbox.unconfigured", hint="no state DB path given")
                 continue
-            notify = NotifySettings.from_env()
-            children.append(
-                OutboxNotifier(
-                    state_path,
-                    build_channels(notify),
-                    notify.outbox,
-                    secrets=lambda: [*secrets(), *notify.secrets()],
-                )
-            )
+            children.append(_outbox_notifier(state_path, secrets))
     return CompositeNotifier(children, min_level=config.min_level)
+
+
+def _outbox_notifier(
+    state_path: str | Path, secrets: Callable[[], Iterable[str]]
+) -> OutboxNotifier:
+    """Admins' outbox over the channels the environment configures."""
+    notify = NotifySettings.from_env()
+    return OutboxNotifier(
+        state_path,
+        build_channels(notify),
+        notify.outbox,
+        secrets=lambda: [*secrets(), *notify.secrets()],
+    )
 
 
 def notifier_from_settings(settings: Settings) -> CompositeNotifier:

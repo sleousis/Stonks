@@ -232,9 +232,7 @@ def configured_router(
     from stonks.notify.channels import build_channels
 
     notify = settings if settings is not None else NotifySettings.from_env()
-    return NotificationRouter(
-        state, build_channels(notify), notify.outbox, secrets=notify.secrets
-    )
+    return NotificationRouter(state, build_channels(notify), notify.outbox, secrets=notify.secrets)
 
 
 # ---- signals (called by the signal phase, step S5) -------------------------------

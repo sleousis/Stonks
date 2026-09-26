@@ -109,8 +109,8 @@ from stonks.production.hooks import (
 from stonks.production.hooks.attribution import load_attribution
 from stonks.production.ledger import ledger_filter
 from stonks.production.prices import held_tickers, load_history, load_prices
-from stonks.production.ranker import Ranker, SignalSet, StrategyPool
 from stonks.production.quit_rule import QuitRuleSettings
+from stonks.production.ranker import Ranker, SignalSet, StrategyPool
 from stonks.production.risk import RiskPolicy, build_risk_context, needs_risk_context
 from stonks.production.shadow import evaluate_shadow_strategies, shadow_held_tickers
 from stonks.registry.store import StrategyRegistry
