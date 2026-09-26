@@ -6,6 +6,7 @@ import {
   getGoLiveReport,
   getStrategy,
   getStrategyHistory,
+  getStrategySummary,
   listStrategies,
   promoteStrategy,
   retireStrategy,
@@ -24,6 +25,11 @@ export class StrategiesService {
   async count(status: StrategyStatus): Promise<number> {
     const page = await this.list({ status, limit: 1 });
     return page.total;
+  }
+
+  /** How many strategies are active, in shadow and retired, in one call. */
+  summary() {
+    return unwrap(getStrategySummary());
   }
 
   get(strategyId: string) {
