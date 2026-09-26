@@ -363,7 +363,12 @@ class AuthService:
     ) -> Principal:
         info = self.session(token, csrf=csrf, unsafe=unsafe)
         if info.pending:
-            raise MfaRequired("finish signing in with your second factor")
+            with self._state() as state:
+                enrolled = self._auth_row(state, info.user.id)["mfa_enrolled_at"] is not None
+            raise MfaRequired(
+                "finish signing in with your second factor",
+                next_step="verify" if enrolled else "enrol",
+            )
         window = timedelta(minutes=self.settings.step_up_minutes)
         fresh = info.mfa_verified_at is not None and self._now() - info.mfa_verified_at < window
         return Principal.create(

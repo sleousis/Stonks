@@ -131,6 +131,17 @@ def channel_names() -> list[str]:
     return sorted(_REGISTRY)
 
 
+def channel_defaults() -> dict[str, tuple[bool, bool]]:
+    """Each channel's ``(default_enabled, fallback)``: whether it is on for
+    a category the user never set, and whether it stands in for push on
+    ``high`` urgency."""
+    _load_builtins()
+    return {
+        name: (bool(cls.default_enabled), bool(cls.fallback))
+        for name, cls in sorted(_REGISTRY.items())
+    }
+
+
 def build_channels(settings: NotifySettings) -> dict[str, Channel]:
     """Every registered channel that is configured, by name."""
     _load_builtins()

@@ -26,7 +26,7 @@ from urllib.parse import urlsplit
 
 from stonks.accounts import AccountsError, AuditLog, NotFound, Scope
 from stonks.notify.base import redact_url
-from stonks.notify.channels import channel_names
+from stonks.notify.channels import channel_defaults, channel_names
 from stonks.notify.prefs import Preference, PreferenceStore
 from stonks.notify.settings import OutboxSettings
 from stonks.security.netguard import UnsafeAddress, check_public_host
@@ -67,6 +67,8 @@ class NotificationPreferences:
     timezone: str
     webhook: str | None  # redacted: scheme and host only
     channels: tuple[str, ...] = field(default_factory=tuple)
+    #: ``(channel, default_enabled, fallback)`` for every channel.
+    channel_defaults: tuple[tuple[str, bool, bool], ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)
@@ -318,6 +320,9 @@ def get_preferences(state: SqliteState, scope: Scope) -> NotificationPreferences
         timezone=s.timezone,
         webhook=redact_url(s.webhook_url) if s.webhook_url else None,
         channels=tuple(channel_names()),
+        channel_defaults=tuple(
+            (name, enabled, fallback) for name, (enabled, fallback) in channel_defaults().items()
+        ),
     )
 
 
