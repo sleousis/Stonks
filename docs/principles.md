@@ -12,7 +12,7 @@ Enforced: BL-26 adds a `hypothesis` card to every strategy. BL-04 stores it with
 
 **P2. Every trial is counted, and a Sharpe ratio is never reported without its trial count.**
 Why: search a big enough parameter space and a high Sharpe always turns up. Overfitting is what normally happens, not a rare accident (López de Prado, *AFML*; Bailey et al.; Kahneman's "what you see is all there is").
-Enforced: today `LabRunner.run` logs the trial count and then throws the history away (`lab/runner.py:62-67`). BL-04 keeps a trial ledger, with a running count for each strategy class. BL-14 uses it.
+Enforced: BL-04's trial ledger (`lab/trials.py`, tables `lab_runs` and `lab_trials`) records every lab run with a running trial count for each strategy class. BL-14's deflated Sharpe reads that count.
 
 **P3. The best of many noisy estimates is biased upward, so it is shrunk before anyone acts on it.**
 Why: the winner's curse applies to tuner winners and to the top-ranked pick each tick alike (Kahneman; Bailey and López de Prado, deflated Sharpe).
@@ -38,7 +38,7 @@ Enforced: `oos`, `walk_forward` and OOS-mode MCPT score only data the tuner neve
 
 **P8. Pass/fail gates are statistical, not fixed thresholds.**
 Why: six months at Sharpe 0.5 can't be told apart from zero. A gate has to account for sample length, skew, fat tails and autocorrelation (Bailey and López de Prado, PSR and MinTRL; Lo 2002; Carver).
-Enforced: today `OutOfSampleTest` passes at a flat Sharpe of 0.5 (`lab/survival/oos.py:12,26`). BL-16 switches it to PSR ≥ 0.95 with a minimum trade count.
+Enforced: BL-16. `OutOfSampleTest` gates on the probabilistic Sharpe ratio by default: PSR of at least 0.95 and at least 20 closed trades (`lab/survival/oos.py`). `mode="sharpe"` keeps the old flat-Sharpe gate as an explicit opt-out.
 
 **P9. Train and test windows are separated by an embargo at least as long as the label horizon.**
 Why: overlapping labels and serially correlated features leak across a boundary with no gap (López de Prado, *AFML* ch. 7; Chan, *Machine Trading*).
@@ -82,7 +82,7 @@ Enforced: BL-47 (correlation-to-pool check) and BL-12 (per-strategy attribution)
 
 **P18. Costs are on by default in the lab, the tick and the API.**
 Why: a strategy that dies once costs are counted was never a strategy (Chan; Bogle; Carver).
-Enforced: today `[backtest.costs]` is all zeros (`config/default.toml`), and the tick builds a flat-slippage broker (`production/tick.py:439-454`). Roadmap 8.2 is putting the cost model into the tick now. BL-13 then makes realistic costs the default.
+Enforced: BL-13. `[backtest.costs]` in `config/default.toml` holds realistic costs by default, and the lab, backtests and the simulated tick broker all use that cost model. A run with all-zero costs logs a `zero_costs` warning and has to ask for it (`--cost-model zero`).
 
 **P19. A strategy must survive twice the modelled costs, and costs may eat at most a third of the pre-cost Sharpe.**
 Why: cost estimates are uncertain, and Carver's "speed limit" caps turnover (Chan; Carver; Wilmott).
@@ -94,7 +94,7 @@ Enforced: today impact is `impact_bps·sqrt(q/volume)` with no volatility term a
 
 **P21. The backtest fills orders the way we trade live.**
 Why: a backtest filled at the open and a live order filled at some intraday price measure different things (Johnson).
-Enforced: today the backtest fills at the next open, but the simulated tick fills at the latest close (`production/tick.py:450-456`). Roadmap 8.2 (in progress) brings cost-model parity. BL-32 records any remaining convention gap in TCA. Alpaca auction orders are deferred because the owner does not want Alpaca yet.
+Enforced: the backtest and the simulated tick share one cost model. The one convention gap left is the fill price: the backtest fills at the next bar's open, and the simulated tick fills at the latest close (the tick's broker factory in `production/tick.py`). BL-32 records that gap in TCA. Alpaca auction orders are deferred because the owner does not want Alpaca yet.
 
 **P22. Every order records what it was supposed to cost and what it did cost.**
 Why: you can't calibrate a cost model you never measure (Kissell; Bacidore; Perold's implementation shortfall).
@@ -138,7 +138,7 @@ Enforced: today alpha and sizing are fused in each strategy's `decide`. BL-08 ad
 
 **P31. Strategies are combined, never picked winner-take-all.**
 Why: IR ≈ IC·√breadth. One winner per tick means a breadth of about one, and the book churns whenever the winner changes (Grinold and Kahn; Carver; Dalio).
-Enforced: today the tick trades only the owner of `ranked[0]` (`production/tick.py:237-244`). BL-12 fixes this.
+Enforced: BL-12. The tick and the backtest share `portfolio.pipeline.build_orders`, and every book picks a `PortfolioConstructor`. The default `single_winner` still trades one strategy. `equal_weight_top_n`, `inverse_vol`, `vol_target`, `atr_parity` and the optimising constructors combine several.
 
 **P32. Scores go on one scale before they are compared.**
 Why: raw `estimate_return` units differ by strategy. `BuyAndHold` returns 1.0 (`strategies/examples/buy_and_hold.py:44`) and beats any realistic forecast (Grinold and Kahn: α = σ·IC·z; Carver's forecast scaling, mean |f| = 10, capped at 20).

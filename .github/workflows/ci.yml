@@ -19,8 +19,25 @@ jobs:
         run: uv run ruff check .
       - name: Format
         run: uv run ruff format --check .
-      - name: Test
-        run: uv run pytest -q -n auto
+      # TT-02: pyright basic over src/stonks; fails only on errors that are
+      # not in tools/pyright-baseline.json.
+      - name: Type check (new pyright errors only)
+        run: uv run python -m tools.pyright_gate
+      # TT-01: coverage.py's combined line-and-branch number. fail_under
+      # (pyproject.toml) holds the overall gate of 90; tools/coverage_gate.py
+      # holds the per-package floors for core, production, execution, auth
+      # and portfolio (target 95, floors at today's value where lower).
+      - name: Test with coverage
+        run: uv run pytest -q -n auto --cov --cov-report=json --cov-report=term
+      - name: Coverage floors per package
+        run: uv run python -m tools.coverage_gate coverage.json
+      - name: Upload the coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage
+          path: coverage.json
+          if-no-files-found: ignore
 
   ui:
     runs-on: ubuntu-latest
@@ -42,8 +59,21 @@ jobs:
         run: npm run lint
       - name: Format
         run: npm run format:check
-      - name: Test
-        run: npm test
+      # Vitest coverage through the Angular unit-test builder. The v8
+      # provider is installed for this run only, at vitest's own version, so
+      # web/package.json is unchanged. Report only, no threshold yet
+      # (measured 2026-09-26: 87.4 lines, 76.6 branches).
+      - name: Test with coverage
+        run: |
+          npm install --no-save --no-audit --no-fund "@vitest/coverage-v8@$(node -p "require('vitest/package.json').version")"
+          npx ng test --watch=false --coverage --coverage-reporters=text-summary --coverage-reporters=lcov
+      - name: Upload the coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-coverage
+          path: web/coverage
+          if-no-files-found: ignore
       - name: Build
         run: npm run build
 

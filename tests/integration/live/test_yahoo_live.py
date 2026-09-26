@@ -4,7 +4,7 @@ STONKS_RUN_LIVE_TESTS=1 so the default pytest run is hermetic."""
 from __future__ import annotations
 
 import os
-from datetime import date, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -26,7 +26,7 @@ def source():
 
 
 def test_live_daily_prices(source):
-    since = date.today() - timedelta(days=14)
+    since = datetime.now(UTC).date() - timedelta(days=14)
     bars = list(source.fetch_prices("AAPL.US", since=since))
     assert bars
     assert all(b.ticker == "AAPL.US" and b.date >= since for b in bars)
@@ -36,7 +36,7 @@ def test_live_daily_prices(source):
 def test_live_intraday_bars_are_naive_utc(source):
     bars = list(
         source.fetch_intraday_bars(
-            "BMW.XETRA", Interval.HOUR_1, since=date.today() - timedelta(days=7)
+            "BMW.XETRA", Interval.HOUR_1, since=datetime.now(UTC).date() - timedelta(days=7)
         )
     )
     assert bars

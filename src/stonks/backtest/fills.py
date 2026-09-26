@@ -147,7 +147,7 @@ def lagged_market_stats(bars: pd.DataFrame, spec: MarketStatsSpec) -> pd.DataFra
     if spec.spread_estimator is not None:
         estimator = corwin_schultz if spec.spread_estimator == "corwin_schultz" else abdi_ranaldo
         parts = []
-        for _, idx in frame.groupby("ticker", sort=False).groups.items():
+        for idx in frame.groupby("ticker", sort=False).groups.values():
             parts.append(
                 half_spread_bps(
                     estimator(high.loc[idx], low.loc[idx], adj_close.loc[idx], spec.spread_window)
@@ -294,7 +294,7 @@ class BarFillModel:
             stop = order.limit_price
         if stop is None:
             return None, "missing_stop_price"
-        if buy and high < stop or not buy and low > stop:
+        if (buy and high < stop) or (not buy and low > stop):
             return None, "stop_not_triggered"
         triggered = max(o, stop) if buy else min(o, stop)
         if kind == "stop":

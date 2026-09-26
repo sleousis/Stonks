@@ -107,7 +107,7 @@ def demo_book() -> FakeBook:
                     amount=2.5,
                     currency="USD",
                 ),
-            ]  # fmt: skip
+            ]
         },
     )
 

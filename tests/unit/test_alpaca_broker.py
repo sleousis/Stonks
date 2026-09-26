@@ -653,3 +653,33 @@ def test_retry_backoff_is_capped(client):
     client.submit_errors = [api_error(503)] * 3
     b.place_order(order())
     assert max(delays) <= 30.0
+
+
+# ---- pyright findings (TT-02) ------------------------------------------------
+
+
+def test_sell_is_checked_against_the_fitted_quantity(broker, client):
+    """The short guard compares the quantity actually sent (floored to whole
+    shares), not the requested one: 3.7 GME against 3 available is a sell of 3."""
+    client.assets["GME"] = GME_NON_FRACTIONABLE
+    client.positions = [
+        {
+            "symbol": "GME",
+            "qty": "3",
+            "qty_available": "3",
+            "side": "long",
+            "asset_class": "us_equity",
+        }
+    ]
+    broker.place_order(order(cid="s", ticker="GME.US", side="sell", quantity=3.7))
+    assert client.submitted[0].qty == 3
+
+
+def test_limit_order_without_a_limit_price_is_rejected_cleanly(broker, client):
+    """``Order`` refuses this at construction. A mutated order must still be
+    rejected with a broker error, not a ``TypeError`` from ``float(None)``."""
+    bad = order(order_type="limit", limit_price=100.0)
+    object.__setattr__(bad, "limit_price", None)
+    with pytest.raises(OrderRejectedError, match="limit price"):
+        broker.place_order(bad)
+    assert client.submitted == []

@@ -15,15 +15,6 @@ from stonks.ingest.schemas import (
     MacroIndicatorRow,
 )
 from stonks.ingest.sources.base import DataSource
-from stonks.store.lake import DuckDBLake
-
-
-@pytest.fixture()
-def lake(tmp_path):
-    db = DuckDBLake(tmp_path / "lake.duckdb")
-    db.migrate()
-    yield db
-    db.close()
 
 
 def _frame(rows: list[MacroIndicatorRow]) -> pd.DataFrame:

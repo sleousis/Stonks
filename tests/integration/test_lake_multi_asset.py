@@ -6,7 +6,6 @@ Uses a temp on-disk DB so we exercise the actual migration path."""
 from datetime import date
 
 import pandas as pd
-import pytest
 
 from stonks.ingest.schemas import (
     BondProfileRow,
@@ -16,14 +15,6 @@ from stonks.ingest.schemas import (
     TickerProfile,
 )
 from stonks.store.lake import DuckDBLake
-
-
-@pytest.fixture
-def lake(tmp_path):
-    lake = DuckDBLake(tmp_path / "lake.duckdb")
-    lake.migrate()
-    yield lake
-    lake.close()
 
 
 def _rows_to_df(rows):

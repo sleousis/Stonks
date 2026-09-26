@@ -9,6 +9,9 @@
   and API server call it themselves), so an absolute ``STONKS_DATA_DIR`` or
   a real broker key can never reach a hermetic test. Tests that need one
   set it with ``monkeypatch.setenv``.
+- No network (TT-05): ``pytest-socket`` lets sockets connect only to
+  loopback (``--allow-hosts`` in ``pyproject.toml``). Tests marked ``live``
+  get the network back.
 - CLI output is plain text everywhere. Typer forces colored output when it
   sees ``GITHUB_ACTIONS`` and decides at import time, so colors are turned
   off here, before any test imports the CLI.
@@ -17,10 +20,13 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import dotenv
 import pytest
+
+from stonks.store.lake import DuckDBLake
 
 _LIVE_FLAG = "STONKS_RUN_LIVE_TESTS"
 
@@ -35,6 +41,28 @@ if _ENV.is_file() and "1" in (
     dotenv.dotenv_values(_ENV).get(_LIVE_FLAG),
 ):
     dotenv.load_dotenv(_ENV, override=False)
+
+
+def enable_network_for_live_tests(items) -> None:
+    """Give tests marked ``live`` the network; every other test may only
+    connect to loopback."""
+    for item in items:
+        if item.get_closest_marker("live") is not None:
+            item.add_marker(pytest.mark.enable_socket)
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    enable_network_for_live_tests(items)
+
+
+@pytest.fixture
+def lake(tmp_path: Path) -> Iterator[DuckDBLake]:
+    """An empty, migrated lake in the test's temp folder (TT-09). A test
+    module that needs seeded data or another bar backend overrides it."""
+    db = DuckDBLake(tmp_path / "lake.duckdb")
+    db.migrate()
+    yield db
+    db.close()
 
 
 def _is_isolated_var(name: str) -> bool:

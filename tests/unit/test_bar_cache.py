@@ -183,7 +183,7 @@ def test_lake_bar_caches_drop_entries_when_the_lake_goes_away():
 
 def test_lake_bar_caches_fall_back_to_uncached_reads_for_unweakrefable_lakes(lake):
     class Slotted:
-        __slots__ = ("inner", "calls")
+        __slots__ = ("calls", "inner")
 
         def __init__(self, inner):
             self.inner = inner

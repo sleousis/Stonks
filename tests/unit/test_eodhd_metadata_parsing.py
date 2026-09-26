@@ -421,7 +421,7 @@ def test_insider_parse_handles_partial_rows():
 
 
 @pytest.mark.parametrize(
-    "vendor_raw,expected",
+    ("vendor_raw", "expected"),
     [
         # Single-role keyword matches
         ("Chief Executive Officer", "officer"),

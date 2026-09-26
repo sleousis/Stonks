@@ -122,11 +122,8 @@ def occupied_paths(target: DataPaths) -> list[Path]:
         target.state.with_name(target.state.name + "-shm"),
     ]
     out = [p for p in candidates if p.exists()]
-    if (
-        target.artifacts.is_dir()
-        and any(target.artifacts.iterdir())
-        or target.artifacts.exists()
-        and not target.artifacts.is_dir()
+    if (target.artifacts.is_dir() and any(target.artifacts.iterdir())) or (
+        target.artifacts.exists() and not target.artifacts.is_dir()
     ):
         out.append(target.artifacts)
     return out

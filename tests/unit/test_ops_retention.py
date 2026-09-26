@@ -28,7 +28,7 @@ def test_daily_keeps_newest_per_day():
 
 def test_weekly_and_monthly_reach_further_back():
     base = datetime(2026, 1, 1, tzinfo=UTC)
-    times = [base + timedelta(days=d) for d in range(0, 120)]
+    times = [base + timedelta(days=d) for d in range(120)]
     refs = _refs(times)
     kept = set(_kept(refs, BackupRetention(daily=2, weekly=2, monthly=3)))
     newest = refs[-1]

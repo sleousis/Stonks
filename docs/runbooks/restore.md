@@ -49,7 +49,7 @@ It re-hashes every file, runs SQLite's `integrity_check`, opens the lake read-on
    Without `--data-dir` the restore goes to the configured paths (`STONKS_DATA_DIR` or `[lake]`, `[state]`, `[registry]`). It refuses when they already hold data.
 4. To restore over existing data, add `--force`. The existing files are renamed to `<name>.pre-restore-<time>`, not deleted. If anything fails part way, the restore is rolled back and the old files are moved back.
 5. The restore runs both stores' migrations, so an older backup comes up on the current schema. A backup made by a newer Stonks is refused; restore it with that version.
-6. Point Stonks at the restored folder (if you used `--data-dir`) and start it. Run `uv run stonks db info` and `uv run stonks health` to check.
+6. Point Stonks at the restored folder (if you used `--data-dir`) and start it. Run `uv run stonks db info` and `uv run stonks health` to check. Strategies load their artifacts from the new folder: the registry stores artifact paths relative to the artifacts folder, and older absolute paths resolve to the same bundle there.
 7. Once you are satisfied, delete the `*.pre-restore-*` files.
 
 ## Monthly drill

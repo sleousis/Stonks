@@ -106,7 +106,7 @@ app.add_typer(universe_app, name="universe")
 )
 def schedule(ctx: typer.Context) -> None:
     """Built-in scheduler: run | next | runs | run-now JOB | check | metrics
-    (``stonks schedule --help`` for options; ``[scheduler]`` in the config)."""
+    (``stonks schedule --help`` for options; ``\\[scheduler]`` in the config)."""
     from stonks.scheduling.__main__ import main as schedule_main
 
     raise typer.Exit(code=schedule_main(list(ctx.args), prog="stonks schedule"))
@@ -515,7 +515,7 @@ def ingest_macro(
     ),
     source_id: str = _source_option(),
 ) -> None:
-    """Pull macroeconomic time series for one or more countries × indicators.
+    """Pull macroeconomic time series for one or more countries and indicators.
 
     Each (country, indicator) pair is one EODHD call; rows are upserted into
     the ``macro_indicators`` lake table keyed by
@@ -725,6 +725,7 @@ def registry_list(
         callback=_validate_asset_class,
     ),
 ) -> None:
+    """List registered strategies with their status."""
     settings = _settings()
     state, registry = _open_registry(settings)
     try:
@@ -758,6 +759,7 @@ def registry_list(
 
 @registry_app.command("show")
 def registry_show(strategy_id: str) -> None:
+    """Show one strategy: status, class, artifact folder and params."""
     settings = _settings()
     state, registry = _open_registry(settings)
     try:
@@ -951,9 +953,11 @@ def tick(
         callback=_validate_asset_class,
     ),
 ) -> None:
-    """One-shot production tick. Rank active strategies × universe, pick a
-    winner, let it decide, execute idempotently through the broker, and
-    record everything in state. Designed to be invoked by cron/systemd."""
+    """One-shot production tick. Score every active strategy on the
+    universe, build each portfolio's orders with its constructor (the
+    default single_winner lets the top strategy decide), execute them
+    idempotently through the broker, and record everything in state.
+    Designed to be invoked by cron or systemd."""
     settings = _settings()
 
     configured = settings.production.universe
@@ -1021,7 +1025,7 @@ def health(
         help="comma-separated tickers to check for fresh bars; overrides config.production.universe",
     ),
     notify: bool = typer.Option(
-        False, "--notify/--no-notify", help="send an alert through [notify] when unhealthy"
+        False, "--notify/--no-notify", help="send an alert through \\[notify] when unhealthy"
     ),
 ) -> None:
     """Check data freshness, stuck/failed runs and open risk halts. Stale data
@@ -1113,15 +1117,15 @@ log = get_logger("stonks.cli")
 
 @app.command("serve")
 def serve(
-    host: str | None = typer.Option(None, "--host", help="bind address; default [api].host"),
-    port: int | None = typer.Option(None, "--port", help="bind port; default [api].port"),
+    host: str | None = typer.Option(None, "--host", help="bind address; default \\[api].host"),
+    port: int | None = typer.Option(None, "--port", help="bind port; default \\[api].port"),
     reload: bool = typer.Option(False, "--reload", help="auto-reload on code changes (dev)"),
 ) -> None:
     """Run the REST API (and the built UI from web/dist, if present) with uvicorn.
 
     Binds 127.0.0.1 by default. Every call needs a sign-in or an API token
     (docs/security.md). X-Forwarded-For is trusted only from
-    [api].trusted_proxies (env STONKS_API_TRUSTED_PROXIES).
+    \\[api].trusted_proxies (env STONKS_API_TRUSTED_PROXIES).
     """
     import uvicorn
 
@@ -1250,7 +1254,7 @@ def audit_statements_cmd(
     ),
 ) -> None:
     """Check the three statements against each other (BL-36) and replace
-    the audited tickers' rows in statement_flags. Tolerances: [audit]."""
+    the audited tickers' rows in statement_flags. Tolerances: \\[audit]."""
     settings = _settings()
     with _open_lake(settings.lake.path) as lake:
         lake.migrate()
@@ -1361,7 +1365,7 @@ _TEST_OPTION = typer.Option(
 _BENCHMARK = typer.Option(
     None,
     "--benchmark",
-    help="auto|EW|<ticker>|none; default [lab] benchmark",
+    help="auto|EW|<ticker>|none; default \\[lab] benchmark",
 )
 
 
@@ -1411,7 +1415,7 @@ def lab_run(
         help="JSON object of params to pin; tunable params left out are tuned",
     ),
     tickers: str | None = typer.Option(
-        None, "--tickers", help="comma-separated universe; default [production].universe"
+        None, "--tickers", help="comma-separated universe; default \\[production].universe"
     ),
     universe_id: str | None = typer.Option(
         None,
@@ -1419,7 +1423,7 @@ def lab_run(
         help="stored universe: every member during the window, delisted names included",
     ),
     ensure_data: bool = typer.Option(
-        False, "--ensure-data", help="fetch missing bars first ([ensure] settings, --source)"
+        False, "--ensure-data", help="fetch missing bars first (\\[ensure] settings, --source)"
     ),
     source_id: str = typer.Option(
         DEFAULT_SOURCE_ID,
@@ -1468,40 +1472,40 @@ def lab_run(
     mcpt_seed: int | None = typer.Option(None, "--mcpt-seed", help="default 17"),
     walk_forward: bool = typer.Option(False, "--walk-forward", help="add walk-forward test"),
     wf_splits: int | None = typer.Option(
-        None, "--wf-splits", min=1, help="default [lab.walk_forward].n_splits"
+        None, "--wf-splits", min=1, help="default \\[lab.walk_forward].n_splits"
     ),
     wf_test_days: int | None = typer.Option(
-        None, "--wf-test-days", min=1, help="default [lab.walk_forward].test_days"
+        None, "--wf-test-days", min=1, help="default \\[lab.walk_forward].test_days"
     ),
     wf_anchored: bool | None = typer.Option(
-        None, "--wf-anchored/--wf-rolling", help="default [lab.walk_forward].anchored"
+        None, "--wf-anchored/--wf-rolling", help="default \\[lab.walk_forward].anchored"
     ),
     wf_min_wfe: float | None = typer.Option(
         None,
         "--wf-min-wfe",
         min=0.0,
         max=1.0,
-        help="walk-forward efficiency gate; default [lab.walk_forward].min_wfe",
+        help="walk-forward efficiency gate; default \\[lab.walk_forward].min_wfe",
     ),
     wf_matrix: bool | None = typer.Option(
         None,
         "--wf-matrix/--no-wf-matrix",
-        help="also run the train x test matrix; default [lab.walk_forward].matrix",
+        help="also run the train x test matrix; default \\[lab.walk_forward].matrix",
     ),
     embargo_bars: int | None = typer.Option(
         None,
         "--embargo-bars",
         min=0,
-        help="bars between train and validation windows; default [lab] embargo_bars",
+        help="bars between train and validation windows; default \\[lab] embargo_bars",
     ),
     cost_model: str = typer.Option(
         "config",
         "--cost-model",
         callback=_choice("--cost-model", _LAB_COST_MODELS),
-        help="config ([backtest.costs], default)|zero|realistic",
+        help="config (\\[backtest.costs], default)|zero|realistic",
     ),
     workers: int | None = typer.Option(
-        None, "--workers", min=0, help="tuning processes; default [lab.parallel] (0 = all cores)"
+        None, "--workers", min=0, help="tuning processes; default \\[lab.parallel] (0 = all cores)"
     ),
     hypothesis: str | None = typer.Option(
         None, "--hypothesis", help="the edge and who pays for it (recorded before tuning, P1)"
@@ -1519,20 +1523,20 @@ def lab_run(
     test_option: list[str] | None = _TEST_OPTION,
     benchmark: str | None = _BENCHMARK,
     strict: bool = typer.Option(
-        False, "--strict", help="treat data preflight warnings as errors ([lab] strict_preflight)"
+        False, "--strict", help="treat data preflight warnings as errors (\\[lab] strict_preflight)"
     ),
     no_preflight: bool = typer.Option(
-        False, "--no-preflight", help="skip the data preflight ([lab] preflight)"
+        False, "--no-preflight", help="skip the data preflight (\\[lab] preflight)"
     ),
     json_out: str | None = typer.Option(None, "--json-out", help="write the result as JSON"),
 ) -> None:
     """Tune a strategy on the train window, then run the survival suite.
 
     Every run is pre-registered in the trial ledger (with --hypothesis /
-    --premortem). Transaction costs come from [backtest.costs] unless
+    --premortem). Transaction costs come from \\[backtest.costs] unless
     --cost-model says otherwise; walk-forward defaults from
-    [lab.walk_forward]; tuning workers from [lab.parallel]; the benchmark
-    from [lab] benchmark. --test-option tunes any survival test.
+    \\[lab.walk_forward]; tuning workers from \\[lab.parallel]; the benchmark
+    from \\[lab] benchmark. --test-option tunes any survival test.
     """
     import json
 
@@ -1738,7 +1742,7 @@ def lab_run(
 @lab_app.command("sweep")
 def lab_sweep(
     tickers: str | None = typer.Option(
-        None, "--tickers", help="comma-separated basket; default [production].universe"
+        None, "--tickers", help="comma-separated basket; default \\[production].universe"
     ),
     start: str = typer.Option(..., "--start", callback=_validate_iso_date, help="YYYY-MM-DD"),
     end: str = typer.Option(..., "--end", callback=_validate_iso_date, help="YYYY-MM-DD"),
@@ -1775,10 +1779,10 @@ def lab_sweep(
         "config",
         "--cost-model",
         callback=_choice("--cost-model", _LAB_COST_MODELS),
-        help="config ([backtest.costs], default)|zero|realistic",
+        help="config (\\[backtest.costs], default)|zero|realistic",
     ),
     workers: int | None = typer.Option(
-        None, "--workers", min=0, help="processes; default [lab.parallel] (0 = all cores)"
+        None, "--workers", min=0, help="processes; default \\[lab.parallel] (0 = all cores)"
     ),
     test_option: list[str] | None = _TEST_OPTION,
     benchmark: str | None = _BENCHMARK,
@@ -1884,7 +1888,7 @@ def lab_sweep(
 
 # ---- risk halts and the kill switch ------------------------------------------
 
-halts_app = typer.Typer(help="Kill switch and risk halts (roadmap 12.6)", no_args_is_help=True)
+halts_app = typer.Typer(help="Kill switch and risk halts", no_args_is_help=True)
 app.add_typer(halts_app, name="halts")
 
 _HALT_USER = typer.Option(
@@ -1987,12 +1991,15 @@ def halts_kill(
         None, "--portfolio", help="portfolio id (--scope portfolio)"
     ),
     flatten: bool = typer.Option(
-        False, "--flatten", help="stop buys only; sells and exits still go through"
+        False,
+        "--flatten",
+        help="only stops buys: sells and exits still go through, and no position is closed",
     ),
     reason: str = typer.Option(..., "--reason", help="why (audited)"),
     user: str | None = _HALT_USER,
 ) -> None:
-    """Engage the kill switch: no new orders (with --flatten, no new buys)."""
+    """Engage the kill switch: no new orders. With --flatten it only stops
+    buys and leaves open positions as they are."""
     from stonks.app.halts import KillSwitchRequest
 
     context, service = _halt_service()
@@ -2064,7 +2071,7 @@ def golive_check(
         callback=_validate_iso_date,
     ),
 ) -> None:
-    """Evaluate a strategy's paper period against [golive]. Exit code 1 when
+    """Evaluate a strategy's paper period against \\[golive]. Exit code 1 when
     any check fails. Never changes the strategy's status."""
     from stonks.production.golive import evaluate_golive
 
@@ -2186,7 +2193,7 @@ def report(
         None, "--end", callback=_validate_iso_date, help="tear sheet end (YYYY-MM-DD)"
     ),
     tickers: str | None = typer.Option(
-        None, "--tickers", help="tear sheet universe; default [production].universe"
+        None, "--tickers", help="tear sheet universe; default \\[production].universe"
     ),
     params: str = typer.Option(
         "{}", "--params", help="JSON params for a catalog strategy's tear sheet"
@@ -2224,7 +2231,7 @@ def report(
 def mcp_server() -> None:
     """Run the MCP server over stdio for Claude Code / Claude Desktop.
 
-    A client of the running REST API ([mcp].api_url, start it with
+    A client of the running REST API (\\[mcp].api_url, start it with
     `stonks serve`); it never opens the lake. Write and job tools send
     STONKS_API_TOKEN. See docs/mcp.md.
     """

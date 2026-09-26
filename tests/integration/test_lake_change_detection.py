@@ -18,14 +18,6 @@ import pytest
 from stonks.store.lake import DuckDBLake
 
 
-@pytest.fixture
-def lake(tmp_path):
-    lake = DuckDBLake(tmp_path / "lake.duckdb")
-    lake.migrate()
-    yield lake
-    lake.close()
-
-
 def _row(snapshot: date, *, beta=1.25, short=0.6, ins=7.0, inst=61.0):
     return {
         "ticker": "AAPL.US",

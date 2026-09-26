@@ -88,14 +88,6 @@ def _bars(ticker, closes, start=START):
     ]
 
 
-@pytest.fixture
-def lake(tmp_path):
-    lk = DuckDBLake(tmp_path / "lake.duckdb")
-    lk.migrate()
-    yield lk
-    lk.close()
-
-
 def _stored(lake, ticker):
     return lake.get_prices(ticker, START - timedelta(days=400), START + timedelta(days=400))
 
