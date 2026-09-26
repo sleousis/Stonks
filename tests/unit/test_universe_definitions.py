@@ -354,3 +354,90 @@ def test_refresh_result_counts_current_members(lake):
     assert result.current_members == 1
     frame = lake.get_universe_membership("m")
     assert isinstance(frame, pd.DataFrame) and len(frame) == 2
+
+
+# ---- edge cases (review 18.1) -------------------------------------------------------
+
+
+def _member_on(spans, ticker, day):
+    return any(
+        s.ticker == ticker and s.start_date <= day and (s.end_date is None or day < s.end_date)
+        for s in spans
+    )
+
+
+def test_index_remove_and_readd_on_the_same_day_keeps_the_name_a_member():
+    history = IndexHistory(
+        index_id="toy",
+        as_of=date(2024, 1, 1),
+        constituents=("A.US",),
+        changes=(
+            IndexChange("A.US", date(2020, 6, 1), "remove"),
+            IndexChange("A.US", date(2020, 6, 1), "add"),
+        ),
+        source="test",
+    )
+    spans, warnings = spans_from_index_history(history, start_date=date(2019, 1, 1))
+    assert warnings == []
+    for day in (date(2019, 1, 1), date(2020, 5, 31), date(2020, 6, 1), date(2023, 12, 31)):
+        assert _member_on(spans, "A.US", day)
+
+
+def test_index_change_dated_on_the_snapshot_day_is_already_in_the_snapshot():
+    # the snapshot is taken after that day's changes: N joined, B left
+    history = IndexHistory(
+        index_id="toy",
+        as_of=date(2024, 1, 1),
+        constituents=("A.US", "N.US"),
+        changes=(
+            IndexChange("N.US", date(2024, 1, 1), "add"),
+            IndexChange("B.US", date(2024, 1, 1), "remove"),
+        ),
+        source="test",
+    )
+    spans, warnings = spans_from_index_history(history, start_date=date(2023, 1, 1))
+    assert warnings == []
+    by = {(s.ticker, s.start_date, s.end_date) for s in spans}
+    assert by == {
+        ("A.US", date(2023, 1, 1), None),
+        ("N.US", date(2024, 1, 1), None),
+        ("B.US", date(2023, 1, 1), date(2024, 1, 1)),
+    }
+
+
+def test_quarterly_rebalance_from_the_middle_of_a_quarter():
+    from stonks.universes.providers.rule import rebalance_dates
+
+    assert rebalance_dates(date(2024, 2, 15), date(2024, 8, 10), "quarterly") == [
+        date(2024, 2, 15),
+        date(2024, 4, 1),
+        date(2024, 7, 1),
+        date(2024, 8, 10),
+    ]
+    # the window ends before the first quarter boundary
+    assert rebalance_dates(date(2024, 2, 15), date(2024, 3, 20), "quarterly") == [
+        date(2024, 2, 15),
+        date(2024, 3, 20),
+    ]
+    assert rebalance_dates(date(2024, 2, 15), date(2024, 2, 15), "quarterly") == [date(2024, 2, 15)]
+    # a start on a boundary is not listed twice; the year rolls over
+    assert rebalance_dates(date(2024, 10, 1), date(2025, 1, 1), "quarterly") == [
+        date(2024, 10, 1),
+        date(2025, 1, 1),
+    ]
+
+
+def test_exchange_symbol_delisted_before_its_ipo_is_skipped_with_a_warning(lake):
+    source = FakeListingSource(
+        [SymbolListing(ticker="AAA.US"), SymbolListing(ticker="ODD.US", is_delisted=True)]
+    )
+    lake.upsert_instrument_profile(
+        _rows_to_df(
+            [TickerProfile(id="ODD.US", ipo_date=date(2015, 1, 1), delisted_date=date(2010, 1, 1))]
+        )
+    )
+    UniverseStore(lake).save(UniverseDefinition(id="x", kind="exchange", spec={"exchange": "US"}))
+    result = refresh_universe(lake, "x", as_of=date(2025, 1, 1), source_factory=lambda _s: source)
+    tickers = set(lake.get_universe_membership("x")["ticker"])
+    assert tickers == {"AAA.US"}
+    assert any("ODD.US" in w and "before they listed" in w for w in result.warnings)

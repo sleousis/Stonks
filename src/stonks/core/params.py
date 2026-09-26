@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from numbers import Integral, Real
 from typing import Any, Literal
 
 ParamKind = Literal["float", "int", "categorical", "bool"]
@@ -37,7 +38,8 @@ def validate_params(params: Params, space: ParamSpace) -> None:
 
     Rules:
       - every key in `params` must have a matching spec by name
-      - the value's python type must match spec.kind
+      - the value's type must match spec.kind (numpy scalars count:
+        ``np.int64`` is an int, ``np.float64`` a float, ``np.bool_`` a bool)
       - numeric values must fall inside spec.bounds (when bounds is set)
       - categorical values must be in spec.bounds
     Missing keys are allowed; callers are expected to fill defaults.
@@ -49,18 +51,18 @@ def validate_params(params: Params, space: ParamSpace) -> None:
         spec = specs_by_name[name]
 
         if spec.kind == "bool":
-            if not isinstance(value, bool):
+            if not _is_bool(value):
                 raise ValueError(f"{name}: expected bool, got {type(value).__name__}")
             continue
 
         if spec.kind == "int":
-            if isinstance(value, bool) or not isinstance(value, int):
+            if _is_bool(value) or not isinstance(value, Integral):
                 raise ValueError(f"{name}: expected int, got {type(value).__name__}")
             _check_numeric_bounds(name, value, spec.bounds)
             continue
 
         if spec.kind == "float":
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
+            if _is_bool(value) or not isinstance(value, Real):
                 raise ValueError(f"{name}: expected float, got {type(value).__name__}")
             _check_numeric_bounds(name, value, spec.bounds)
             continue
@@ -75,6 +77,11 @@ def validate_params(params: Params, space: ParamSpace) -> None:
             if value not in spec.bounds:
                 raise ValueError(f"{name}={value!r} not in choices {list(spec.bounds)}")
             continue
+
+
+def _is_bool(value: Any) -> bool:
+    """A Python or numpy bool (``np.bool_`` is not a Python ``bool``)."""
+    return isinstance(value, bool) or type(value).__name__ in ("bool_", "bool")
 
 
 def _check_numeric_bounds(name: str, value: int | float, bounds: Any) -> None:

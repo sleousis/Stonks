@@ -158,8 +158,12 @@ def test_recover_interrupted_marks_unfinished_jobs_failed(store):
 
 
 def test_bounded_concurrency(store):
+    """Events, not sleeps (TT-07): the first two jobs hold their workers
+    until the test has seen both running and the rest still queued."""
     runner = JobRunner(store, max_workers=2)
     lock = threading.Lock()
+    two_running = threading.Event()
+    release = threading.Event()
     active = 0
     peak = 0
 
@@ -168,23 +172,32 @@ def test_bounded_concurrency(store):
         with lock:
             active += 1
             peak = max(peak, active)
-        time.sleep(0.15)
+            if active == 2:
+                two_running.set()
+        release.wait(20)
         with lock:
             active -= 1
 
     runner.register("work", work)
     try:
         ids = [runner.submit("work", {}).id for _ in range(5)]
+        assert two_running.wait(20)
+        assert sorted(store.get(j).status for j in ids) == ["queued"] * 3 + ["running"] * 2
+        release.set()
         for jid in ids:
             assert runner.wait(jid, timeout=20).status == "succeeded"
     finally:
+        release.set()
         runner.shutdown()
     assert peak == 2
 
 
 def test_jobs_sharing_a_lock_never_overlap(store):
+    """The first writer holds the lock until the test has seen the other
+    two still queued behind it (TT-07: no sleeps)."""
     runner = JobRunner(store, max_workers=4)
     guard = threading.Lock()
+    release = threading.Event()
     active = 0
     peak = 0
 
@@ -193,16 +206,20 @@ def test_jobs_sharing_a_lock_never_overlap(store):
         with guard:
             active += 1
             peak = max(peak, active)
-        time.sleep(0.1)
+        release.wait(20)
         with guard:
             active -= 1
 
     runner.register("writer", work, lock="lake_write")
     try:
         ids = [runner.submit("writer", {}).id for _ in range(3)]
+        _wait_for_status(store, ids[0], "running")
+        assert [store.get(j).status for j in ids[1:]] == ["queued", "queued"]
+        release.set()
         for jid in ids:
             assert runner.wait(jid, timeout=20).status == "succeeded"
     finally:
+        release.set()
         runner.shutdown()
     assert peak == 1
 
@@ -263,7 +280,9 @@ def test_job_waiting_on_lock_at_shutdown_is_cancelled_not_run(store):
     first = runner.submit("writer", {"name": "first"})
     _wait_for_status(store, first.id, "running")
     second = runner.submit("writer", {"name": "second"})
-    time.sleep(0.1)  # second is now blocked on the lock inside a worker
+    # The lock's lane has one worker, held by the first job: the second waits
+    # in the lane's queue (no sleep needed, TT-07).
+    assert store.get(second.id).status == "queued"
     runner.shutdown(wait=False)
     gate.set()
     _wait_for_status(store, first.id, "succeeded")

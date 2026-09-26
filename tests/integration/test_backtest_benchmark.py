@@ -11,17 +11,8 @@ import pytest
 
 from stonks.backtest.benchmark import AUTO_BENCHMARK_TICKER, benchmark_curve
 from stonks.core.interval import Interval
-from stonks.store.lake import DuckDBLake
 
 DAYS = [d.to_pydatetime() for d in pd.bdate_range("2024-06-03", periods=8)]
-
-
-@pytest.fixture
-def lake(tmp_path):
-    lake = DuckDBLake(tmp_path / "lake.duckdb")
-    lake.migrate()
-    yield lake
-    lake.close()
 
 
 def _bars(lake, ticker, timestamps, closes, *, adj=None, interval=Interval.DAY_1):

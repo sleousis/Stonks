@@ -124,12 +124,12 @@ class ForestClassifier(Classifier):
             joblib.dump(self._model, blob)
             meta["file"] = _MODEL_FILE
             meta["sha256"] = _sha256(blob)
-        (path / _META_FILE).write_text(json.dumps(meta, indent=2, sort_keys=True))
+        (path / _META_FILE).write_text(json.dumps(meta, indent=2, sort_keys=True), encoding="utf-8")
 
     @classmethod
     def load(cls, path: Path) -> ForestClassifier:
         path = Path(path)
-        meta = json.loads((path / _META_FILE).read_text())
+        meta = json.loads((path / _META_FILE).read_text(encoding="utf-8"))
         if meta.get("kind") != cls.kind:
             raise ValueError(f"not a {cls.kind} model: {meta.get('kind')!r}")
         instance = cls(meta["n_estimators"], meta["max_depth"], meta["seed"])

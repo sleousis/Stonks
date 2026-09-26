@@ -41,14 +41,6 @@ def _row(**overrides):
     return row
 
 
-@pytest.fixture
-def lake(tmp_path):
-    lk = DuckDBLake(tmp_path / "lake.duckdb")
-    lk.migrate()
-    yield lk
-    lk.close()
-
-
 def test_duckdb_unique_index_treats_nulls_as_distinct():
     """Documents the DuckDB behaviour that motivates migration 010."""
     import duckdb

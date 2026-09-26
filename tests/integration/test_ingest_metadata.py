@@ -38,7 +38,6 @@ from stonks.ingest.schemas import (
     TickerSnapshotRow,
 )
 from stonks.ingest.sources.base import DataSource, DataSourceError
-from stonks.store.lake import DuckDBLake
 
 
 class _FakeMetadataSource(DataSource):
@@ -223,14 +222,6 @@ def _sample_bundle() -> MetadataBundle:
             ),
         ),
     )
-
-
-@pytest.fixture
-def lake(tmp_path):
-    lake = DuckDBLake(tmp_path / "lake.duckdb")
-    lake.migrate()
-    yield lake
-    lake.close()
 
 
 def test_run_metadata_populates_every_table(lake):

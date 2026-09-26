@@ -189,6 +189,22 @@ def test_fetch_prices_undoes_yahoo_split_adjustment_on_ohlcv():
     assert (on.close, on.volume, on.adj_close) == (102.0, 900_000, 101.5)
 
 
+def test_a_split_on_the_last_bar_of_the_window_unadjusts_only_earlier_bars():
+    frame = daily_frame().iloc[:2]  # the window ends on the split day
+    fake = FakeYF(frames=[frame], splits=_splits(datetime(2026, 4, 2), 2.0))
+    bars = list(
+        make_source(fake).fetch_prices("AAPL.US", since=date(2026, 4, 1), until=date(2026, 4, 2))
+    )
+    assert [b.close for b in bars] == [208.0, 102.0]
+    assert [b.adj_close for b in bars] == [103.0, 101.5]
+
+
+def test_a_split_on_the_first_bar_of_the_window_changes_nothing():
+    fake = FakeYF(frames=[daily_frame()], splits=_splits(datetime(2026, 4, 1), 3.0))
+    bars = list(make_source(fake).fetch_prices("AAPL.US", since=date(2026, 4, 1)))
+    assert [b.close for b in bars] == [104.0, 102.0]
+
+
 def test_splits_after_the_window_still_unadjust():
     fake = FakeYF(frames=[daily_frame()], splits=_splits(datetime(2027, 1, 5), 2.0))
     bars = list(

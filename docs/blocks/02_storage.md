@@ -27,6 +27,7 @@ lake.migrate()
 lake.upsert_bars(df, Interval.DAY_1)
 lake.get_bars(ticker, interval, start, end)
 lake.aggregate_bars(...)                      # build 1w from 1d, 4h from 1h, ...
+lake.delete_bars(ticker, interval, stamps)    # drop bars (a stored spike)
 lake.upsert_prices(df) / lake.get_prices(...) # daily shims over bars
 lake.get_statement_history(...)               # point in time, by filing_date
 lake.get_corporate_actions(tickers)           # splits and dividends
@@ -54,6 +55,10 @@ uv run python -m stonks.store.bars_migrate --to parquet   # stop stonks serve fi
 ```
 
 The copy is checked per ticker and interval (row count and checksum) before the lake switches.
+
+- Aggregated bars keep the adjustment: a weekly bar's `adj_close` is the last daily `adj_close` of the week, not its raw close.
+- A reader (`open_bar_reader`) opened on an empty store writes the empty sentinel file first, so it sees bars written later. Only on a read-only disk does its view stay empty.
+- Date windows end at 23:59:59.999999, so a bar in the last second of a day counts in that day.
 
 ## Lake migrations (`store/migrations_duckdb/`)
 
@@ -88,7 +93,9 @@ The copy is checked per ticker and interval (row count and checksum) before the 
 Deliberately thin: connection, migrations, introspection, `execute`, `sql` and `transaction()`. Domain helpers belong to the block that owns each table (registry, production, accounts, scheduling, notify, connections).
 
 - Opens with `PRAGMA journal_mode=WAL` (several processes can share it) and `PRAGMA foreign_keys=ON`.
-- `transaction()` is an explicit `BEGIN` / `COMMIT` / `ROLLBACK`.
+- `transaction()` is `BEGIN IMMEDIATE` / `COMMIT` / `ROLLBACK`. It takes the write lock first, so a read-then-write block waits for another writer instead of failing with `database is locked`. Connections wait up to 10 seconds for a lock.
+- Both stores roll back on any exit by exception, Ctrl-C included, so the next transaction starts clean.
+- Migration files are read as UTF-8 on every platform.
 
 ## State migrations (`store/migrations_sqlite/`)
 

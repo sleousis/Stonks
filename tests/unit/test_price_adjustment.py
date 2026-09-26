@@ -145,3 +145,31 @@ def test_same_day_split_then_dividend_uses_post_split_prior_close():
     )
     adj = SeriesAdjustment.build(frame, events=events)
     assert adj.apply(frame, 0, 4)["close"].tolist() == pytest.approx([99, 99, 99, 99])
+
+
+# ---- edge cases (review 18.1) ------------------------------------------------------
+
+
+def test_an_event_on_the_first_bar_has_nothing_to_adjust():
+    # the first bar is already post-split; no earlier bar in the frame
+    frame = _frame([25, 26, 27])
+    adj = SeriesAdjustment.build(frame, events=(Split("X.US", date(2024, 6, 3), 4.0),))
+    assert adj.is_identity
+    assert adj.apply(frame, 0, 3)["close"].tolist() == pytest.approx([25, 26, 27])
+
+
+def test_adj_close_restated_after_a_split_gives_a_continuous_series():
+    # what the data ensurer stores once it re-fetches a history after a
+    # new split (DS-01): old bars carry the new ratio, 0.25
+    frame = _frame([100, 100, 25, 25], adj=[25, 25, 25, 25])
+    adj = SeriesAdjustment.build(frame, events=())
+    assert adj.closes(frame["close"].to_numpy(), 0, 4) == pytest.approx([25, 25, 25, 25])
+
+
+def test_adj_close_ratios_from_two_stale_fetches_cannot_see_the_split():
+    # old bars fetched before the split (ratio 1) and new bars after it
+    # (ratio 1): the ratio path cannot tell a split from a crash, which is
+    # why the data ensurer re-fetches the history when the ratio moves
+    frame = _frame([100, 100, 25, 25])
+    adj = SeriesAdjustment.build(frame, events=())
+    assert adj.is_identity

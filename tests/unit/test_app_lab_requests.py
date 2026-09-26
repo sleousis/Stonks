@@ -139,7 +139,7 @@ def test_unknown_or_invalid_option_names_are_rejected():
 
 
 @pytest.mark.parametrize(
-    "test_id,options,needle",
+    ("test_id", "options", "needle"),
     [
         ("walk_forward", {"config": {"n_splits": 2}}, "walk_forward field"),
         ("mcpt", {"tuning": {}}, "tuning"),
@@ -163,7 +163,7 @@ def test_test_options_accept_the_legacy_permutation_name():
 
 
 @pytest.mark.parametrize(
-    "test_id,options",
+    ("test_id", "options"),
     [
         ("deflated_sharpe", {"min_dsr": 0.9, "include_prior_runs": False}),
         ("pbo", {"n_blocks": 8, "max_pbo": 0.3}),

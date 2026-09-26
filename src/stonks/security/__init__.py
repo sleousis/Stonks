@@ -15,9 +15,9 @@ __all__ = [
     "KEYS_ENV",
     "KEY_FILE_ENV",
     "KeyRing",
+    "Sealed",
     "SecretBox",
     "SecretBoxError",
     "SecretKeyMissing",
-    "Sealed",
     "generate_key",
 ]

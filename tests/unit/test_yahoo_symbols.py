@@ -37,6 +37,30 @@ def test_round_trip(canonical, yahoo):
     assert from_yahoo_symbol(yahoo, asset_class=asset_class) == canonical
 
 
+@pytest.mark.parametrize(
+    ("canonical", "yahoo"),
+    [
+        ("NESTLÉ.SW", "NESTLÉ.SW"),  # non-ASCII survives both ways
+        ("BT.A.LSE", "BT.A.L"),  # a dot inside the symbol
+        ("7203.TSE", None),  # an exchange with no mapping
+    ],
+)
+def test_odd_tickers(canonical, yahoo):
+    if yahoo is None:
+        with pytest.raises(YahooUnsupportedTickerError):
+            to_yahoo_symbol(canonical)
+        return
+    assert to_yahoo_symbol(canonical) == yahoo
+    assert from_yahoo_symbol(yahoo) == canonical
+
+
+@pytest.mark.parametrize("symbol", ["ES=F", "^GSPC", "BRK.B"])
+def test_yahoo_only_symbols_never_map_to_a_wrong_ticker(symbol):
+    # futures, indices and a class-share dot are not guessed: soft fail
+    with pytest.raises(YahooUnsupportedTickerError):
+        from_yahoo_symbol(symbol)
+
+
 def test_exchange_suffix_is_case_insensitive():
     assert to_yahoo_symbol("bmw.xetra") == "bmw.DE"
 

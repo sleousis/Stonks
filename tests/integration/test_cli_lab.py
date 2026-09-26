@@ -126,7 +126,7 @@ def test_walk_forward_flags_override_config(runner, lab_env):
     assert "anchored" in wf["notes"]
 
 
-@pytest.mark.parametrize("flag,mode", [("--mcpt", "oos"), ("--mcpt-retune", "retune")])
+@pytest.mark.parametrize(("flag", "mode"), [("--mcpt", "oos"), ("--mcpt-retune", "retune")])
 def test_mcpt_options(runner, lab_env, flag, mode):
     out = lab_env / "result.json"
     r = _run(
@@ -200,7 +200,7 @@ def test_register_skips_a_failing_strategy(runner, lab_env):
 
 
 @pytest.mark.parametrize(
-    "args,needle",
+    ("args", "needle"),
     [
         (["nope", *UNIVERSE, *WINDOW], "unknown strategy"),
         (["momentum", "--params", "{bad", *UNIVERSE, *WINDOW], "--params"),
@@ -234,7 +234,7 @@ def test_test_options_reach_the_survival_test(runner, lab_env):
     assert rep["passed"], rep["notes"]  # 0 trades pass once min_trades=0
 
 
-@pytest.mark.parametrize("flag,name", [([], "EW"), (["--benchmark", "UP.US"], "UP.US")])
+@pytest.mark.parametrize(("flag", "name"), [([], "EW"), (["--benchmark", "UP.US"], "UP.US")])
 def test_benchmark_reaches_the_result(runner, lab_env, flag, name):
     out = lab_env / "result.json"
     r = _run(runner, "momentum", *UNIVERSE, *WINDOW, *FAST, "--tests", "oos", *flag,

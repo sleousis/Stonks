@@ -214,6 +214,8 @@ bulk_max_days = 5
 bulk_min_tickers = 20
 prefetch_window = 64               # fetches kept ahead of the writer
 settle_days = 14                   # empty recent answers are asked again
+overlap_bars = 5                   # stored bars re-read to notice new splits and dividends
+adjustment_tolerance = 0.0005      # adj_close/close drift that triggers a full re-fetch
 
 [ensure.requests_per_second]
 eodhd = 10.0

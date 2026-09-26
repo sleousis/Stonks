@@ -87,7 +87,7 @@ class BacktestReport:
     # ---- trade ledger (``stonks.backtest.trades.with_trades``) ----
     #: Round trips; empty until a caller attaches the ledger.
     trades: tuple[RoundTrip, ...] = ()
-    trade_stats: TradeStats = TradeStats()
+    trade_stats: TradeStats = TradeStats()  # noqa: RUF009 - frozen, safe to share
     #: Tulchinsky fitness; needs turnover, so ``None`` until trades attach.
     fitness: float | None = None
 

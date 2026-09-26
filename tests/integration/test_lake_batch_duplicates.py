@@ -12,18 +12,8 @@ from __future__ import annotations
 from datetime import date, datetime
 
 import pandas as pd
-import pytest
 
 from stonks.core.interval import Interval
-from stonks.store.lake import DuckDBLake
-
-
-@pytest.fixture
-def lake(tmp_path):
-    lk = DuckDBLake(tmp_path / "lake.duckdb")
-    lk.migrate()
-    yield lk
-    lk.close()
 
 
 def _shares(rows):

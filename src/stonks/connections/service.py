@@ -622,7 +622,7 @@ class ConnectionService:
                     results.append(
                         PortfolioSyncResult(
                             pf.target.portfolio_id, pf.target.account_id, error=pf.error
-                        )  # fmt: skip
+                        )
                     )
                     continue
                 results.append(self._write_portfolio(record.id, pf, as_of, now))

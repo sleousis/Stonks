@@ -74,13 +74,15 @@ def test_lab_run_records_ledger_and_hypothesis(services, settings):
     assert again.n_trials_class == 6
 
 
-def test_registered_artifact_carries_lab_provenance(services):
+def test_registered_artifact_carries_lab_provenance(services, settings):
     view = services.lab.run_lab(_request(register_strategy=True, hypothesis="h1"))
     with services.context.state() as state:
         (row,) = state.sql(
             "SELECT artifact_path FROM strategies WHERE id = ?", [view.registered_strategy_id]
         )
-    meta = json.loads((Path(row["artifact_path"]) / "meta.json").read_text())
+    # Stored relative to the artifacts folder (TO-09).
+    artifact = Path(settings.registry.artifacts_dir) / row["artifact_path"]
+    meta = json.loads((artifact / "meta.json").read_text())
     assert meta["lab_run_id"] == view.run_id
     assert meta["hypothesis"] == "h1"
     assert meta["n_trials_total"] == view.n_trials_class

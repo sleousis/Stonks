@@ -34,3 +34,10 @@ class EnsureSettings(BaseModel):
     #: Empty answers for the last this-many days are asked again next time
     #: (the vendor may not have published them yet).
     settle_days: int = Field(default=14, ge=0)
+    #: Stored daily bars fetched again before each trailing gap. Their
+    #: ``adj_close / close`` is compared with the stored one, so a split or
+    #: dividend the vendor applied since the last fetch is noticed (DS-01).
+    overlap_bars: int = Field(default=5, ge=0, le=100)
+    #: Relative change of ``adj_close / close`` on an overlapping bar that
+    #: counts as a new adjustment and triggers a full history re-fetch.
+    adjustment_tolerance: float = Field(default=5e-4, gt=0)

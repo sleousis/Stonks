@@ -676,6 +676,7 @@ What an ensure did. ``run_id`` is the ``ingest_runs`` row (``None`` when nothing
 | `failed` | list[string] | no |  |
 | `gaps` | integer | no |  |
 | `interval` | string | yes |  |
+| `readjusted` | list[string] | no |  |
 | `run_id` | integer \| null | no |  |
 | `source` | string | yes |  |
 | `start` | date | yes |  |

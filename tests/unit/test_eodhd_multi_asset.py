@@ -260,7 +260,7 @@ class _StubSession:
         self._response_json = response_json
         self._raise_exc = raise_exc
 
-    def get(self, url, params=None, timeout=None):  # noqa: ARG002
+    def get(self, url, params=None, timeout=None):
         if self._raise_exc is not None:
             raise self._raise_exc
         return _StubResponse(self._response_json)

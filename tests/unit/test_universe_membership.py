@@ -12,14 +12,6 @@ from stonks.lab.universe import UniverseRule, resolve, resolve_window
 from stonks.store.lake import DuckDBLake
 
 
-@pytest.fixture
-def lake(tmp_path):
-    lk = DuckDBLake(tmp_path / "lake.duckdb")
-    lk.migrate()
-    yield lk
-    lk.close()
-
-
 def _membership(lake: DuckDBLake) -> None:
     lake.upsert_universe_membership(
         pd.DataFrame(

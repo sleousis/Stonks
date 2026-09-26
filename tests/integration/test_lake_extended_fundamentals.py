@@ -7,17 +7,6 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 
 import pandas as pd
-import pytest
-
-from stonks.store.lake import DuckDBLake
-
-
-@pytest.fixture
-def lake(tmp_path):
-    lake = DuckDBLake(tmp_path / "lake.duckdb")
-    lake.migrate()
-    yield lake
-    lake.close()
 
 
 def test_migrations_create_all_extended_tables(lake):

@@ -61,7 +61,7 @@ import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, time
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from stonks.accounts.book import BookSpec
 from stonks.accounts.models import DEFAULT_PORTFOLIO_ID, Mode, Subscription
@@ -1359,9 +1359,10 @@ def _asset_classes(lake: DuckDBLake, tickers: Sequence[str]) -> dict[str, str]:
     return lake.get_asset_classes(unique) if unique else {}
 
 
-def utc_today() -> date:
-    """Today's date in UTC — the calendar all stored timestamps use."""
-    return datetime.now(UTC).date()
+def utc_today(clock: Callable[[], datetime] | None = None) -> date:
+    """Today's date in UTC, the calendar all stored timestamps use.
+    ``clock`` returns an aware datetime (default: the system clock)."""
+    return (clock() if clock is not None else datetime.now(UTC)).astimezone(UTC).date()
 
 
 def _new_tick_id(as_of: date) -> str:
@@ -1517,7 +1518,12 @@ def _drop_open_order_conflicts(
     return kept, conflicts
 
 
-def _order_statuses(state: SqliteState, client_ids: Sequence[str | None]) -> dict[str, str]:
+_ORDER_STATUSES: frozenset[str] = frozenset(get_args(OrderStatus))
+
+
+def _order_statuses(state: SqliteState, client_ids: Sequence[str | None]) -> dict[str, OrderStatus]:
+    """Booked status per client id. Only known ``OrderStatus`` values are
+    returned, so the caller falls back to the submission's own status."""
     ids = [c for c in client_ids if c]
     if not ids:
         return {}
@@ -1525,7 +1531,7 @@ def _order_statuses(state: SqliteState, client_ids: Sequence[str | None]) -> dic
     rows = state.sql(
         f"SELECT client_id, status FROM orders WHERE client_id IN ({placeholders})", ids
     )
-    return {r["client_id"]: r["status"] for r in rows}
+    return {r["client_id"]: r["status"] for r in rows if r["status"] in _ORDER_STATUSES}
 
 
 def _live_order_status(state: SqliteState, client_id: str | None) -> str | None:

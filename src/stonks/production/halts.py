@@ -40,12 +40,12 @@ if TYPE_CHECKING:
 
 __all__ = [
     "HALT_KINDS",
+    "OPERATIONAL_CHECKS",
     "Halt",
     "HaltError",
     "HaltKind",
     "HaltMode",
     "HaltScope",
-    "OPERATIONAL_CHECKS",
     "active_halts",
     "clear_halt",
     "escalate_halt",

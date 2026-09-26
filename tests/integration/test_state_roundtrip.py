@@ -7,7 +7,7 @@ blocks that own each table (registry, execution, production).
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 
@@ -23,7 +23,7 @@ def state(tmp_path):
 
 
 def _now() -> str:
-    return datetime.now().isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 # ---- migrations -------------------------------------------------------------
@@ -45,7 +45,8 @@ def test_migrate_creates_expected_tables(state):
 
 def test_migrate_is_idempotent(tmp_path):
     path = tmp_path / "state.sqlite"
-    SqliteState(path).migrate()
+    with SqliteState(path) as first:
+        first.migrate()
     with SqliteState(path) as s:
         s.migrate()  # must not raise on second run
         versions = s.applied_migrations()

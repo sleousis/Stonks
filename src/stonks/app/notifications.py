@@ -44,7 +44,7 @@ class PushSubscriptionRequest(BaseModel):
 
     endpoint: str = Field(min_length=1, max_length=ENDPOINT_MAX)
     keys: PushKeys
-    expirationTime: float | None = None  # noqa: N815 - the browser's field name
+    expirationTime: float | None = None  # the browser's field name
     user_agent: str | None = Field(default=None, max_length=USER_AGENT_MAX)
 
 

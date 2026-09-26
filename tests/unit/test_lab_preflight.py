@@ -11,19 +11,10 @@ from stonks.backtest.costs import CostModelSettings
 from stonks.core.interval import Interval
 from stonks.lab.dataset import LabDataset
 from stonks.lab.preflight import PreflightError, run_preflight
-from stonks.store.lake import DuckDBLake
 
 
 class _Needs60:
     required_history_bars = 60
-
-
-@pytest.fixture
-def lake(tmp_path):
-    lk = DuckDBLake(tmp_path / "lake.duckdb")
-    lk.migrate()
-    yield lk
-    lk.close()
 
 
 def _bars(lake, ticker, start, periods):

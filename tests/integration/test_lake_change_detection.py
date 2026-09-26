@@ -18,14 +18,6 @@ import pytest
 from stonks.store.lake import DuckDBLake
 
 
-@pytest.fixture
-def lake(tmp_path):
-    lake = DuckDBLake(tmp_path / "lake.duckdb")
-    lake.migrate()
-    yield lake
-    lake.close()
-
-
 def _row(snapshot: date, *, beta=1.25, short=0.6, ins=7.0, inst=61.0):
     return {
         "ticker": "AAPL.US",
@@ -191,3 +183,42 @@ def test_full_sequence_idempotent_then_drift(lake):
     )
     # Only the dates where data actually changed are stored.
     assert list(rows["d"]) == ["2026-01-01", "2026-01-15"]
+
+
+# ---- several snapshots in one batch (DS-16) ------------------------------------------
+
+
+def test_one_batch_of_identical_snapshots_inserts_one_row(lake):
+    batch = pd.DataFrame([_row(date(2026, 1, d)) for d in (1, 8, 15)])
+    assert lake.upsert_ticker_snapshots(batch) == 1
+    assert lake.count_rows("ticker_snapshots") == 1
+
+
+def test_one_batch_matches_the_same_data_sent_one_poll_at_a_time(tmp_path):
+    sequence = [
+        _row(date(2026, 1, 1), beta=1.25),
+        _row(date(2026, 1, 8), beta=1.25),
+        _row(date(2026, 1, 15), beta=1.27),
+        _row(date(2026, 1, 22), beta=None),  # a vendor blip, not a change
+        _row(date(2026, 1, 29), beta=1.27),
+        _row(date(2026, 2, 5), beta=1.25),  # back to an earlier value: a change
+    ]
+    one_by_one = DuckDBLake(tmp_path / "a.duckdb")
+    batched = DuckDBLake(tmp_path / "b.duckdb")
+    try:
+        for lk in (one_by_one, batched):
+            lk.migrate()
+        for r in sequence:
+            one_by_one.upsert_ticker_snapshots(pd.DataFrame([r]))
+        assert batched.upsert_ticker_snapshots(pd.DataFrame(sequence)) == 3
+        q = "SELECT CAST(snapshot_date AS VARCHAR) AS d, beta FROM ticker_snapshots ORDER BY 1"
+        assert one_by_one.sql(q).to_dict("records") == batched.sql(q).to_dict("records")
+    finally:
+        one_by_one.close()
+        batched.close()
+
+
+def test_a_batch_newer_than_the_stored_row_compares_against_it(lake):
+    lake.upsert_ticker_snapshots(pd.DataFrame([_row(date(2026, 1, 1), beta=1.0)]))
+    batch = pd.DataFrame([_row(date(2026, 1, 8), beta=1.0), _row(date(2026, 1, 15), beta=2.0)])
+    assert lake.upsert_ticker_snapshots(batch) == 1

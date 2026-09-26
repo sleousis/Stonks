@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Disaster restore from the off-server backup (Phase 14.5).
-# Replaces the live data volume with a restic snapshot. A local snapshot of
-# the current data is taken first.
+# Restores the state DB, the artifacts and the lake from a restic snapshot
+# with `python -m stonks.ops restore-snapshot`. A local snapshot of the
+# current data is taken first, and the current files are moved aside, not
+# deleted.
 #
 # Usage: deploy/backup/restore.sh [restic-snapshot-id]   (default: latest)
 #        restic snapshots:  docker compose --profile backup run --rm restic snapshots
@@ -26,20 +28,23 @@ read -r -p "Replace ALL live data with restic snapshot '$snap'? Type RESTORE: " 
 stop_writers
 snapshot_create "before-restore-$(date -u +%Y%m%dT%H%M%SZ)"
 
-compose --profile backup run --rm -T --entrypoint sh restic -c 'rm -rf /restore/* /restore/.[!.]*'
-restic restore "$snap" --host stonks --target /restore
-
-lake="$(compose --profile backup run --rm -T --entrypoint sh restic -c \
-	'find /restore -name lake.duckdb -exec dirname {} \; | sort -r | head -n 1')"
-lake="$(printf '%s' "$lake" | tr -d '\r')"
-[ -n "$lake" ] || {
-	log "no lake.duckdb in snapshot $snap; nothing changed (restart with: docker compose up -d)"
-	exit 1
+clear_scratch() {
+	compose --profile backup run --rm -T --entrypoint sh restic -c 'rm -rf /restore/* /restore/.[!.]*'
 }
-log "copying $lake into the data volume"
-docker run --rm -v stonks_restore:/restore:ro -v "$(data_path):/data" "$ALPINE_IMAGE" sh -c \
-	"find /data -mindepth 1 -maxdepth 1 ! -name backups -exec rm -rf {} + && cp -a '$lake'/. /data/ && chown -R 10001:10001 /data"
-compose --profile backup run --rm -T --entrypoint sh restic -c 'rm -rf /restore/* /restore/.[!.]*'
+clear_scratch
+restic restore "$snap" --host stonks --target /restore/snapshot
+
+# The app restores the state DB, the artifacts and the lake together, checks
+# the users, strategies and orders row counts, and moves what was in /data
+# aside (<name>.pre-restore-<stamp>). It never deletes data, and it refuses a
+# snapshot without the state DB or the lake before touching anything.
+if ! compose run --rm --no-deps -T --user 0 -v "stonks_restore:/restore:ro" api \
+	python -m stonks.ops restore-snapshot /restore/snapshot --data-dir /data; then
+	log "restore refused or failed; /data is unchanged (restart with: docker compose up -d)"
+	exit 1
+fi
+docker run --rm -v "$(data_path):/data" "$ALPINE_IMAGE" chown -R 10001:10001 /data
+clear_scratch
 
 compose up -d
 wait_healthy 180

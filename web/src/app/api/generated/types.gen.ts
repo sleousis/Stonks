@@ -1038,6 +1038,10 @@ export type EnsureReport = {
      */
     interval: string;
     /**
+     * Readjusted
+     */
+    readjusted?: Array<string>;
+    /**
      * Run Id
      */
     run_id?: number | null;

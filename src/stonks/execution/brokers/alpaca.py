@@ -169,10 +169,10 @@ class AlpacaBroker:
         if raw is not None:
             _log.info("alpaca.order.already_submitted", client_id=order.client_id)
         else:
-            request = self._build_request(order, symbol)
+            request, qty = self._build_request(order, symbol)
             self._ensure_account_can_trade()
             if order.side == "sell":
-                self._ensure_sellable(order, symbol, request.qty)
+                self._ensure_sellable(order, symbol, qty)
             raw = self._submit(order, request)
         state = self._to_state(raw)
         self._warn_on_mismatch(order, state)
@@ -332,7 +332,10 @@ class AlpacaBroker:
         except _Unprocessable as exc:
             raise OrderRejectedError(f"Alpaca rejected order {order.client_id!r}: {exc}") from None
 
-    def _build_request(self, order: Order, symbol: str) -> MarketOrderRequest | LimitOrderRequest:
+    def _build_request(
+        self, order: Order, symbol: str
+    ) -> tuple[MarketOrderRequest | LimitOrderRequest, float]:
+        """The Alpaca request and the fitted quantity it sends."""
         crypto = is_crypto_ticker(order.ticker)
         asset = self._asset(symbol)
         if not asset.get("tradable", False) or str(asset.get("status", "")).lower() != "active":
@@ -348,9 +351,11 @@ class AlpacaBroker:
             "client_order_id": order.client_id,
         }
         if order.order_type == "market":
-            return MarketOrderRequest(**common)
+            return MarketOrderRequest(**common), qty
+        if order.limit_price is None:
+            raise OrderRejectedError(f"limit order {order.client_id!r} has no limit price")
         limit_price = _fit_limit_price(float(order.limit_price), asset, crypto, order.side)
-        return LimitOrderRequest(limit_price=limit_price, **common)
+        return LimitOrderRequest(limit_price=limit_price, **common), qty
 
     def _fetch_order(self, client_id: str) -> dict | None:
         try:

@@ -213,7 +213,7 @@ class JobStore:
         )
 
 
-class JobCancelled(BaseException):  # noqa: N818 - a signal, not an error
+class JobCancelled(BaseException):  # a signal, not an error
     """Raised by :meth:`JobContext.check_cancelled` once cancellation of a
     running job was requested; the runner records the job ``cancelled``.
 

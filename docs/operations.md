@@ -144,23 +144,27 @@ With `[scheduler] backend = "in_process"`, `stonks serve` starts the scheduler w
 ## Backups and restore
 
 ```bash
-uv run python -m stonks.ops backup             # backup, verify, prune
-uv run python -m stonks.ops list
-uv run python -m stonks.ops verify <backup-id>
-uv run python -m stonks.ops restore <backup-id> --data-dir /srv/stonks/data-restored
-uv run python -m stonks.ops prune
+uv run stonks backup backup             # backup, verify, prune
+uv run stonks backup list
+uv run stonks backup verify <backup-id>
+uv run stonks backup restore <backup-id> --data-dir /srv/stonks/data-restored
+uv run stonks backup prune
 ```
+
+`python -m stonks.ops <command>` is the same tool without the rest of the CLI. It also has `restore-snapshot` and `check-restore`, which the off-server restore scripts use.
 
 A backup is one folder `stonks-<UTC time>Z` with the state DB, the lake, Parquet bars (hard-linked), artifacts and a `manifest.json` of hashes and row counts. It goes to `[backup].dir`, or `backups/` next to the lake. Pruning keeps the newest backup of each of the last 7 days, 4 weeks and 12 months.
 
-The lake must not be held by another writer: stop `stonks serve` or back up from the server's own copy. `[backup]` sets `dir` and the retention counts. Off-server encrypted copies (restic) are covered in [deploy.md](deploy.md#6-backups). Full steps: [runbooks/restore.md](runbooks/restore.md).
+The lake must not be held by another writer: stop `stonks serve` or back up from the server's own copy. `[backup]` in the config sets the folder and the retention. Off-server encrypted copies (restic) are covered in [deploy.md](deploy.md#6-backups). Full steps: [runbooks/restore.md](runbooks/restore.md).
 
 ## Data quality
 
 Every `ingest prices` and `ingest intraday` batch is checked before it is stored:
 
-- **Quarantined** (kept out of `bars`, written to `quarantined_bars` with reasons): missing or non-positive prices, high below low, close outside the bar's range, duplicate timestamps, one-bar spikes that revert.
-- **Warnings** (kept): extreme moves that stick, stale series, flat price streaks, zero-volume streaks.
+- **Quarantined** (kept out of `bars`, written to `quarantined_bars` with reasons): missing or non-positive prices, high below low, close outside the bar's range, duplicate timestamps, one-bar spikes that revert. A vendor row with a null or missing price costs only that row, not the ticker.
+- **Stored spikes**: a daily ingest stores one bar at a time, so a bad tick is stored before the next bar shows it up. When the next batch takes its move back, the stored bar moves to `quarantined_bars` and leaves `bars`.
+- **Warnings** (kept): extreme moves that stick, stale series, flat price streaks, zero-volume streaks, calendar gaps (a day whose only bar was quarantined counts), and `no_data` when the source returned nothing.
+- **Unfinished bars**: a daily bar whose session has not closed yet is dropped. The next ingest after the close stores it.
 
 Each run stores a summary in `ingest_runs.quality_json` and alerts when it quarantines a bar, when 5 or more tickers warn, or when a fallback source supplied data. Thresholds use the defaults in `ingest/quality_config.py`; `[ingest.quality]` and `[ingest.fallback]` are not read from the config file yet, and no command wires a fallback source today. Triage: [runbooks/data-stale.md](runbooks/data-stale.md).
 
@@ -237,7 +241,7 @@ Risk rules run between construction and the broker, configured under `[productio
 | `cash_buffer_fraction` | Buys are clipped so this fraction stays in cash, net of costs. |
 | `min_order_notional` | Smaller buys are dropped. |
 
-Weights use portfolio value before the tick's orders. Sells are never blocked, only clipped to the held quantity, and go before buys. Portfolio and subscription overrides can only tighten the policy. The rules are a registry (`production/rules/`); the newer ones (`risk_per_position`, `portfolio_vol`, `drawdown_scaling`, `liquidity`, `sector_cap`, `max_holding`) are registered but off, since `[production.risk.rules]` is not read from the config yet.
+Weights use portfolio value before the tick's orders. Sells are never blocked, only clipped to the held quantity, and go before buys. Portfolio and subscription overrides can only tighten the policy. The rules are a registry (`production/rules/`); the newer ones (`risk_per_position`, `portfolio_vol`, `drawdown_scaling`, `liquidity`, `sector_cap`, `max_holding`, `circuit_breaker`, `operational_halt`) are set under `[production.risk.rules.<name>]` and stay off until a limit is set there (see `config/default.toml`).
 
 ## Halts and the kill switch
 

@@ -70,6 +70,7 @@ The CLI opens the stores itself and reuses the services for lab and registry wor
 |---|---|
 | `core` | Types (`Bar`, `Order`, `Fill`, `Portfolio`), intervals, parameter specs, protocols. No dependencies. |
 | `ingest` | `DataSource` adapters (`eodhd`, `yahoo`, `defillama`), bar quality checks and quarantine, idempotent upserts, on-demand fetching of missing bars (`ensure.py`). |
+| `auth` | Sign-in, sessions, TOTP 2FA, recovery codes, API tokens and role permissions (`stonks users`). |
 | `universes` | Stored universe definitions (list, exchange, rule, index) refreshed into point-in-time membership. See [universes](universes.md). |
 | `store` | `DuckDBLake` (market data) and `SqliteState` (everything that changes), migrations, the `BarStore` seam. |
 | `features` | Optional indicator and scoring helpers that strategies call. |
@@ -179,7 +180,7 @@ flowchart TD
 - **Modes:** `notify` sends signals only, `paper` trades a simulated portfolio, `auto` trades a broker portfolio. Auto needs 20 completed paper days first. Subscriptions are stored, but the tick does not read them yet (it trades `pf_default` over every active strategy).
 - **Enforcement:** `accounts/scope.py` checks ownership and answers "not found" for other users' rows. Portfolio and subscription risk settings can only tighten the global policy.
 
-Today the API still uses one bearer token (`STONKS_API_TOKEN`); users and roles exist in the data model, and logins are planned (roadmap 13.1). Full design: [design/accounts-and-modes.md](design/accounts-and-modes.md).
+Sign-in lives in `auth/`: passwords, sessions, mandatory TOTP 2FA with recovery codes, API tokens and the viewer, trader and admin roles (state migration 015, `stonks users`). Every API route checks a permission. `STONKS_API_TOKEN` is kept only as a legacy credential. See [security.md](security.md). Full design: [design/accounts-and-modes.md](design/accounts-and-modes.md).
 
 ## Stores and processes
 

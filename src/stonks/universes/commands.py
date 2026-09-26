@@ -243,7 +243,7 @@ def ensure(
     source: str = typer.Option(DEFAULT_SOURCE_ID, "--source", help="|".join(SOURCE_IDS)),
 ) -> None:
     """Fetch the missing bars of every member over the window, delisted
-    names included. Only the gaps are fetched ([ensure] settings)."""
+    names included. Only the gaps are fetched (\\[ensure] settings)."""
     from stonks.app.lab import build_data_ensurer
 
     start_d, end_d = _date(start, "--start"), _date(end, "--end")

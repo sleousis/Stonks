@@ -158,3 +158,18 @@ def test_load_pnl_same_as_of_rerun_keeps_the_latest_row(state):
     _snap_as_of(state, "t1", "2026-01-05", "2026-01-05T22:45:00+00:00", 100.0)
     _snap_as_of(state, "t2", "2026-01-05", "2026-01-05T23:10:00+00:00", 101.0)
     assert [r.total_value for r in load_pnl(state)] == [101.0]
+
+
+def test_gap_limit_compares_rows_up_to_and_including_the_limit():
+    """TT-02: ``elapsed`` is None only on the first row. Later rows compare
+    with the previous one while the gap is within the limit."""
+    rows = daily_pnl(
+        [(date(2026, 1, 1), 100.0), (date(2026, 1, 4), 110.0), (date(2026, 1, 8), 121.0)],
+        max_gap_days=3,
+    )
+    assert rows[0].days_elapsed is None
+    assert rows[0].daily_change is None
+    assert rows[1].days_elapsed == 3
+    assert rows[1].daily_change == pytest.approx(10.0)
+    assert rows[2].days_elapsed == 4
+    assert rows[2].daily_change is None
