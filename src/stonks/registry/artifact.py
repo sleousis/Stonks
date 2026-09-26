@@ -3,13 +3,18 @@
 Layout::
 
     data/artifacts/<strategy_id>/
-    ├── meta.json            # class_path, created_at, stonks version
+    ├── meta.json            # class_path, created_at, stonks version (+ strategy's own keys)
     ├── params.json          # the Params dict
-    ├── fitted_state.joblib  # optional; rule-based strategies skip
+    ├── fitted_state.*       # optional, written by Strategy.save; rule-based strategies skip
     └── reports/
         ├── oos.json
         ├── drift.json
         └── ...
+
+``StrategyRegistry.register`` calls ``Strategy.save`` into the directory
+first, then ``ArtifactBundle.save``; the bundle merges into an existing
+``meta.json`` rather than replacing it, and rewrites ``params.json`` with the
+same params the strategy holds.
 """
 
 from __future__ import annotations
@@ -45,7 +50,20 @@ class ArtifactBundle:
         created_at = self.created_at or _iso_now()
         self.created_at = created_at
 
+        # A strategy may already have written its own meta.json into this
+        # directory (``Strategy.save``); keep its keys and let the bundle's
+        # registry-owned keys win on overlap.
+        meta_path = base / "meta.json"
+        existing: dict[str, Any] = {}
+        if meta_path.exists():
+            try:
+                loaded = json.loads(meta_path.read_text())
+            except json.JSONDecodeError:
+                loaded = {}
+            if isinstance(loaded, dict):
+                existing = loaded
         meta = {
+            **existing,
             "class_path": self.class_path,
             "created_at": created_at,
             "stonks_version": _STONKS_VERSION,

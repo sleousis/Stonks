@@ -54,6 +54,14 @@ class StrategyRegistry:
         now = _iso_now()
         artifact_path = self._artifacts_dir / sid
 
+        # The strategy persists itself first (params + any fitted state such
+        # as ``fitted_state.json``); the bundle then adds reports and merges
+        # its registry metadata into ``meta.json`` without dropping the
+        # strategy's own keys.
+        save = getattr(strategy, "save", None)
+        if callable(save):
+            artifact_path.mkdir(parents=True, exist_ok=True)
+            save(artifact_path)
         ArtifactBundle(
             path=artifact_path,
             class_path=class_path,
@@ -104,6 +112,11 @@ class StrategyRegistry:
         module_name, cls_name = handle.class_path.split(":", 1)
         module = importlib.import_module(module_name)
         cls = getattr(module, cls_name)
+        # Prefer the class's own loader so fitted state saved at register
+        # time is restored; bare constructors only get the params.
+        loader = getattr(cls, "load", None)
+        if callable(loader):
+            return loader(handle.artifact_path)
         return cls(handle.params)
 
     def list_active(self) -> list[StrategyHandle]:
