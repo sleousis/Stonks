@@ -117,10 +117,8 @@ def simulate_trade_paths(
     max_dd = np.where(cols[None, :] <= stop[:, None], drawdown, 0.0).max(axis=1)
     median_dd = float(np.median(max_dd))
     median_ret = float(np.median(final) - 1.0)
-    if median_dd > 0:
-        ratio = median_ret / median_dd
-    else:
-        ratio = float("inf") if median_ret > 0 else 0.0
+    no_dd_ratio = float("inf") if median_ret > 0 else 0.0
+    ratio = median_ret / median_dd if median_dd > 0 else no_dd_ratio
     return TradePathsResult(
         risk_of_ruin=float(ruined.mean()),
         median_max_dd=median_dd,
