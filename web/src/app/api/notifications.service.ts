@@ -63,8 +63,9 @@ export class NotificationsService {
     return unwrap(setNotificationWebhook({ body: { url } }));
   }
 
-  feed(query?: ListNotificationsData['query']) {
-    return unwrap(listNotifications({ query }));
+  /** `silent` skips error toasts (the bell's background refresh). */
+  feed(query?: ListNotificationsData['query'], silent = false) {
+    return unwrap(listNotifications({ query, headers: silent ? SILENT_HEADERS : undefined }));
   }
 
   /** Mark these ids read, or every notification when `ids` is omitted. */
