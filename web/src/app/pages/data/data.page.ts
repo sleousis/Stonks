@@ -1,32 +1,65 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  resource,
+  signal,
+  viewChild,
+} from '@angular/core';
 
-import { PlannedPage } from '../../shared/ui/planned-page';
+import { SystemService } from '../../api/system.service';
+import { PageHeader } from '../../shared/ui/page-header';
+import { type CoveragePick, CoveragePanel } from './coverage-panel';
+import { IngestPanel } from './ingest-panel';
+import { IngestRunsPanel } from './ingest-runs-panel';
+import { InstrumentSearch } from './instrument-search';
+import { PricePanel } from './price-panel';
 
-/** Placeholder: replace the body with the real page (see docs/ui.md, "Add a page"). */
+const FALLBACK_INTERVALS = [{ code: '1d', is_intraday: false, seconds: 86_400 }];
+
+/**
+ * What is in the lake and how fresh it is, plus ingest. The page owns the
+ * selected ticker and interval; each panel owns its own resource so one
+ * failing route never blanks the rest.
+ */
 @Component({
   selector: 'app-data-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PlannedPage],
-  template: `<app-planned-page
-    [title]="title"
-    [description]="description"
-    [plans]="plans"
-    [routes]="routes"
-  />`,
+  imports: [PageHeader, InstrumentSearch, CoveragePanel, PricePanel, IngestPanel, IngestRunsPanel],
+  templateUrl: './data.page.html',
+  styleUrl: './data.page.scss',
 })
 export class DataPage {
-  protected readonly title = 'Data';
-  protected readonly description = 'What is in the lake, how fresh it is, and ingest runs.';
-  protected readonly plans = [
-    'Coverage per ticker and interval: first and last bar, row count, staleness.',
-    'Ingest run history with tickers ok and failed.',
-    'Trigger an ingest (confirmation) and follow its progress; price chart per instrument.',
-  ];
-  protected readonly routes = [
-    'GET /api/market/coverage',
-    'GET /api/market/instruments',
-    'GET /api/market/bars',
-    'GET/POST /api/ingest/runs',
-    'GET /api/sources',
-  ];
+  private readonly system = inject(SystemService);
+
+  protected readonly ticker = signal<string | null>(null);
+  protected readonly interval = signal('1d');
+  /** Bumped after an ingest or on Refresh; panels refetch when it changes. */
+  protected readonly refreshKey = signal(0);
+
+  private readonly search = viewChild(InstrumentSearch);
+
+  protected readonly intervalInfo = resource({ loader: () => this.system.intervals() });
+  protected readonly intervals = computed(() =>
+    this.intervalInfo.hasValue() && this.intervalInfo.value().length
+      ? this.intervalInfo.value()
+      : FALLBACK_INTERVALS,
+  );
+  protected readonly intervalCodes = computed(() => this.intervals().map((i) => i.code));
+
+  protected pickTicker(ticker: string): void {
+    this.ticker.set(ticker);
+  }
+
+  protected pickSeries(pick: CoveragePick): void {
+    this.ticker.set(pick.ticker);
+    this.interval.set(pick.interval);
+  }
+
+  protected refresh(): void {
+    this.refreshKey.update((n) => n + 1);
+    this.search()?.reload();
+    this.intervalInfo.reload();
+  }
 }

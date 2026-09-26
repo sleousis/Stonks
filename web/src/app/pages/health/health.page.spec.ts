@@ -97,7 +97,11 @@ describe('HealthPage', () => {
   });
 
   it('is good when every check passes', async () => {
-    await flushAll({ ...REPORT, healthy: true, checks: [{ name: 'stuck_ticks', ok: true, detail: 'none' }] });
+    await flushAll({
+      ...REPORT,
+      healthy: true,
+      checks: [{ name: 'stuck_ticks', ok: true, detail: 'none' }],
+    });
     expect(el.querySelector('.overall')!.getAttribute('data-level')).toBe('good');
     expect(el.textContent).toContain('The check passes');
   });
@@ -116,7 +120,9 @@ describe('HealthPage', () => {
 
   it('refreshes every panel', async () => {
     await flushAll();
-    const refresh = [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Refresh')!;
+    const refresh = [...el.querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === 'Refresh',
+    )!;
     refresh.click();
     await flushAll();
     http.verify();

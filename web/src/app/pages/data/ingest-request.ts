@@ -1,7 +1,11 @@
 import type { IngestRequest } from '../../api/models';
 
 export type IngestKind = IngestRequest['kind'];
-export type IngestSource = NonNullable<IngestRequest['source']>;
+/**
+ * A source id from GET /api/sources. Kept as a string: the server lists its
+ * sources at runtime, and the generated union can lag behind it.
+ */
+export type IngestSource = string;
 
 export const INGEST_KINDS: readonly { value: IngestKind; label: string }[] = [
   { value: 'prices', label: 'Daily prices' },
@@ -47,7 +51,7 @@ export function parseTickers(text: string): string[] {
  */
 export function buildIngestRequest(v: IngestFormValue): IngestRequest {
   const request: IngestRequest = {
-    source: v.source,
+    source: v.source as IngestRequest['source'],
     kind: v.kind,
     tickers: parseTickers(v.tickers),
   };
@@ -91,7 +95,6 @@ export function describeIngest(r: IngestRequest): string {
   } else {
     scope = `every ticker on ${r.exchange}`;
   }
-  const range =
-    (r.since ? ` since ${r.since}` : '') + (r.until ? ` until ${r.until}` : '');
+  const range = (r.since ? ` since ${r.since}` : '') + (r.until ? ` until ${r.until}` : '');
   return `Fetches ${what} for ${scope} from ${r.source ?? 'eodhd'}${range} and writes them to the lake.`;
 }

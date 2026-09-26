@@ -42,16 +42,22 @@ describe('buildIngestRequest', () => {
       buildIngestRequest(
         form({ source: 'yahoo', kind: 'prices', exchange: ' us ', until: '2026-02-01' }),
       ),
-    ).toEqual({ source: 'yahoo', kind: 'prices', tickers: [], exchange: 'US', until: '2026-02-01' });
+    ).toEqual({
+      source: 'yahoo',
+      kind: 'prices',
+      tickers: [],
+      exchange: 'US',
+      until: '2026-02-01',
+    });
   });
 
   it('sends the interval only for intraday', () => {
-    expect(buildIngestRequest(form({ kind: 'intraday', tickers: 'x', interval: '5m' })).interval).toBe(
-      '5m',
-    );
-    expect(buildIngestRequest(form({ kind: 'prices', tickers: 'x', interval: '5m' }))).not.toHaveProperty(
-      'interval',
-    );
+    expect(
+      buildIngestRequest(form({ kind: 'intraday', tickers: 'x', interval: '5m' })).interval,
+    ).toBe('5m');
+    expect(
+      buildIngestRequest(form({ kind: 'prices', tickers: 'x', interval: '5m' })),
+    ).not.toHaveProperty('interval');
   });
 
   it('drops the exchange for kinds other than prices', () => {
@@ -88,7 +94,9 @@ describe('describeIngest', () => {
   it('says what will be fetched, from where and from when', () => {
     expect(
       describeIngest({ source: 'eodhd', kind: 'prices', tickers: ['A', 'B'], since: '2026-01-02' }),
-    ).toBe('Fetches prices for 2 tickers (A, B) from eodhd since 2026-01-02 and writes them to the lake.');
+    ).toBe(
+      'Fetches prices for 2 tickers (A, B) from eodhd since 2026-01-02 and writes them to the lake.',
+    );
   });
 
   it('describes exchange discovery and intraday intervals', () => {

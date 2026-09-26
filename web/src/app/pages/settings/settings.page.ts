@@ -76,7 +76,9 @@ export class SettingsPage {
   /** Only asked for when the broker is Alpaca (the route is 409 otherwise). */
   protected readonly alpaca = resource({
     params: () =>
-      this.broker.hasValue() && this.broker.value().kind === 'alpaca' ? { kind: 'alpaca' } : undefined,
+      this.broker.hasValue() && this.broker.value().kind === 'alpaca'
+        ? { kind: 'alpaca' }
+        : undefined,
     loader: () => this.system.alpacaStatus(),
   });
   protected readonly risk = resource({ loader: () => this.system.riskPolicy() });
@@ -106,7 +108,11 @@ export class SettingsPage {
         { label: 'Buying power', value: formatMoney(account.buying_power) },
         {
           label: 'Trading',
-          value: account.trading_blocked ? 'Blocked' : account.can_trade ? 'Allowed' : 'Not allowed',
+          value: account.trading_blocked
+            ? 'Blocked'
+            : account.can_trade
+              ? 'Allowed'
+              : 'Not allowed',
         },
       );
     }
@@ -195,7 +201,10 @@ export class SettingsPage {
 function riskFacts(r: RiskPolicy): Fact[] {
   const facts: Fact[] = [
     { label: 'Limits', value: r.enabled === false ? 'Off' : 'On' },
-    { label: 'Max weight per ticker', value: formatPercent(r.max_weight_per_ticker ?? 1, { digits: 1 }) },
+    {
+      label: 'Max weight per ticker',
+      value: formatPercent(r.max_weight_per_ticker ?? 1, { digits: 1 }),
+    },
     {
       label: 'Max open positions',
       value: r.max_open_positions == null ? 'No limit' : formatNumber(r.max_open_positions),

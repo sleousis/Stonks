@@ -8,9 +8,9 @@ function check(name: string, ok: boolean, detail = 'none'): HealthCheckView {
 describe('checkLevel', () => {
   it('is good when the check passes', () => {
     expect(checkLevel(check('stuck_ticks', true))).toBe('good');
-    expect(checkLevel(check('freshness:AAPL.US', true, 'latest bar 2026-09-25 (1d old, max 4d)'))).toBe(
-      'good',
-    );
+    expect(
+      checkLevel(check('freshness:AAPL.US', true, 'latest bar 2026-09-25 (1d old, max 4d)')),
+    ).toBe('good');
   });
 
   it('is a warning for data a little past its limit', () => {

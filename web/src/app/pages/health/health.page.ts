@@ -69,8 +69,7 @@ export class HealthPage {
   });
 
   protected readonly refreshing = computed(
-    () =>
-      this.report.isLoading() || this.failedIngest.isLoading() || this.failedTicks.isLoading(),
+    () => this.report.isLoading() || this.failedIngest.isLoading() || this.failedTicks.isLoading(),
   );
 
   protected readonly levelTone = LEVEL_TONE;

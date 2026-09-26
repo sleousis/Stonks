@@ -74,10 +74,7 @@
         {{ tickers().length ? tickers().length + ' chosen tickers' : 'Production universe' }}
       </span>
     </div>
-    <form
-      class="ticker-form"
-      (submit)="$event.preventDefault(); applyTickers(tickerInput.value)"
-    >
+    <form class="ticker-form" (submit)="$event.preventDefault(); applyTickers(tickerInput.value)">
       <div class="field">
         <label for="health-tickers">Tickers to check</label>
         <input
@@ -161,7 +158,9 @@
   <section class="panel span-7" aria-labelledby="ingest-fail-title">
     <div class="panel-head">
       <h2 id="ingest-fail-title">Recent ingest failures</h2>
-      @if (failedIngest.hasValue() && failedIngest.value().total > failedIngest.value().items.length) {
+      @if (
+        failedIngest.hasValue() && failedIngest.value().total > failedIngest.value().items.length
+      ) {
         <span class="muted num">
           Latest {{ failedIngest.value().items.length }} of {{ failedIngest.value().total }}
         </span>
@@ -220,7 +219,9 @@
           <app-status-pill [status]="t.status" />
         </ng-template>
         <ng-template appCell="error" [appCellOf]="failedTicks.value().items" let-t>
-          <span class="error-text">{{ t.summary?.error || t.summary?.reason || 'No reason recorded.' }}</span>
+          <span class="error-text">{{
+            t.summary?.error || t.summary?.reason || 'No reason recorded.'
+          }}</span>
         </ng-template>
       </app-data-table>
     }

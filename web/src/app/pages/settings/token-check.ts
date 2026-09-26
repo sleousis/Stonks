@@ -43,7 +43,8 @@ export function tokenCheckFromError(err: unknown): TokenCheck {
     case 0:
       return {
         state: 'unverified',
-        message: "Cannot reach the API, so the token can't be verified yet. Is `stonks serve` running?",
+        message:
+          "Cannot reach the API, so the token can't be verified yet. Is `stonks serve` running?",
       };
     default:
       return {

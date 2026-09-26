@@ -167,7 +167,11 @@
         }
       </div>
       @if (broker.error(); as err) {
-        <app-error-state title="Could not load the broker" [error]="err" (retry)="broker.reload()" />
+        <app-error-state
+          title="Could not load the broker"
+          [error]="err"
+          (retry)="broker.reload()"
+        />
       } @else if (!broker.hasValue()) {
         <app-loading-state label="Loading broker" [rows]="4" />
       } @else {
@@ -223,7 +227,11 @@
         <span class="muted">[production.risk]</span>
       </div>
       @if (risk.error(); as err) {
-        <app-error-state title="Could not load the risk policy" [error]="err" (retry)="risk.reload()" />
+        <app-error-state
+          title="Could not load the risk policy"
+          [error]="err"
+          (retry)="risk.reload()"
+        />
       } @else if (!risk.hasValue()) {
         <app-loading-state label="Loading risk policy" [rows]="5" />
       } @else {
@@ -244,7 +252,11 @@
         <h2 id="sources-title">Data sources</h2>
       </div>
       @if (sources.error(); as err) {
-        <app-error-state title="Could not load data sources" [error]="err" (retry)="sources.reload()" />
+        <app-error-state
+          title="Could not load data sources"
+          [error]="err"
+          (retry)="sources.reload()"
+        />
       } @else if (!sources.hasValue()) {
         <app-loading-state label="Loading data sources" [rows]="3" />
       } @else if (sources.value().length === 0) {
@@ -294,7 +306,10 @@
             <p class="list-detail">{{ preset.description }}</p>
             <table class="mini">
               <caption class="visually-hidden">
-                {{ preset.name }} costs by asset class
+                {{
+                  preset.name
+                }}
+                costs by asset class
               </caption>
               <thead>
                 <tr>
