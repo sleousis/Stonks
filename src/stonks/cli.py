@@ -42,6 +42,22 @@ def _validate_asset_class(value: str | None) -> str | None:
     )
 
 
+def _validate_iso_date(
+    ctx: typer.Context, param: typer.CallbackParam, value: str | None
+) -> str | None:
+    """Reject malformed date options at parse time with a usage error
+    instead of letting ``date.fromisoformat`` raise a traceback later."""
+    if value is None:
+        return value
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        raise typer.BadParameter(
+            f"expected a date in YYYY-MM-DD format, got {value!r}", ctx=ctx, param=param
+        ) from None
+    return value
+
+
 def _strategy_applicable_classes(class_path: str) -> tuple[AssetClass, ...]:
     """Read ``applicable_asset_classes`` off a registered strategy's class
     object without instantiating it. Falls back to ``("equity",)`` when
@@ -220,9 +236,14 @@ def ingest_prices(
         callback=_validate_asset_class,
     ),
     since: str | None = typer.Option(
-        None, "--since", help="earliest date (YYYY-MM-DD); omit to fetch full history"
+        None,
+        "--since",
+        help="earliest date (YYYY-MM-DD); omit to fetch full history",
+        callback=_validate_iso_date,
     ),
-    until: str | None = typer.Option(None, "--until", help="latest date (YYYY-MM-DD)"),
+    until: str | None = typer.Option(
+        None, "--until", help="latest date (YYYY-MM-DD)", callback=_validate_iso_date
+    ),
 ) -> None:
     settings = _settings()
     source = _build_source(settings)
@@ -369,8 +390,12 @@ def ingest_metadata(
 def ingest_intraday(
     tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),
     interval: str = typer.Option("5m", "--interval", help="native intraday: 1m | 5m | 1h"),
-    since: str | None = typer.Option(None, "--since", help="earliest date (YYYY-MM-DD)"),
-    until: str | None = typer.Option(None, "--until", help="latest date (YYYY-MM-DD)"),
+    since: str | None = typer.Option(
+        None, "--since", help="earliest date (YYYY-MM-DD)", callback=_validate_iso_date
+    ),
+    until: str | None = typer.Option(
+        None, "--until", help="latest date (YYYY-MM-DD)", callback=_validate_iso_date
+    ),
 ) -> None:
     """Pull sub-daily OHLCV bars at a native intraday interval. Only 1m,
     5m, and 1h are available from EODHD; coarser sub-daily bars (4h, 6h,
@@ -421,14 +446,20 @@ def ingest_aggregate(
 def ingest_all_intervals(
     tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),
     since: str | None = typer.Option(
-        None, "--since", help="earliest date (YYYY-MM-DD); applies to daily + intraday fetches"
+        None,
+        "--since",
+        help="earliest date (YYYY-MM-DD); applies to daily + intraday fetches",
+        callback=_validate_iso_date,
     ),
-    until: str | None = typer.Option(None, "--until", help="latest date (YYYY-MM-DD)"),
+    until: str | None = typer.Option(
+        None, "--until", help="latest date (YYYY-MM-DD)", callback=_validate_iso_date
+    ),
     intraday_since: str | None = typer.Option(
         None,
         "--intraday-since",
         help="separate start date for intraday pulls (1m/5m/1h); defaults to --since if omitted, "
         "but EODHD caps 1m history at ~120 days so setting this explicitly avoids long failing fetches",
+        callback=_validate_iso_date,
     ),
 ) -> None:
     """Populate every canonical interval for each ticker: native 1m / 5m /
@@ -603,7 +634,10 @@ def registry_retire(strategy_id: str) -> None:
 def tick(
     dry_run: bool = typer.Option(False, "--dry-run", help="rank + log, place no orders"),
     as_of: str | None = typer.Option(
-        None, "--as-of", help="override date (YYYY-MM-DD); default is today in UTC"
+        None,
+        "--as-of",
+        help="override date (YYYY-MM-DD); default is today in UTC",
+        callback=_validate_iso_date,
     ),
     tickers: str | None = typer.Option(
         None,
