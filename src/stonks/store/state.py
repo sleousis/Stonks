@@ -17,6 +17,10 @@ from typing import Any
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations_sqlite"
 
+#: How long a connection waits for another one's write lock before
+#: ``database is locked``. The API, the scheduler and the tick all write.
+BUSY_TIMEOUT_SECONDS = 10.0
+
 
 class SqliteState:
     def __init__(self, path: str | Path):
@@ -26,6 +30,7 @@ class SqliteState:
             str(self._path),
             isolation_level=None,  # autocommit; explicit BEGIN when we want a tx
             detect_types=sqlite3.PARSE_DECLTYPES,
+            timeout=BUSY_TIMEOUT_SECONDS,
         )
         self._con.row_factory = sqlite3.Row
         self._con.execute("PRAGMA journal_mode=WAL")
@@ -70,7 +75,7 @@ class SqliteState:
             applied_at = datetime.now(UTC).isoformat(timespec="seconds")
             script = (
                 "BEGIN;\n"
-                f"{path.read_text()}\n;\n"
+                f"{path.read_text(encoding='utf-8')}\n;\n"
                 f"INSERT INTO schema_migrations VALUES ({version}, '{applied_at}');\n"
                 "COMMIT;\n"
             )
@@ -128,15 +133,23 @@ class SqliteState:
         and the outermost owner keeps the COMMIT/ROLLBACK responsibility —
         an exception escaping the inner block rolls back everything once
         it reaches the outer one. Mirrors ``DuckDBLake.transaction()``.
+
+        ``BEGIN IMMEDIATE`` takes the write lock up front. A deferred
+        transaction that reads and then writes cannot upgrade its lock
+        once another connection has committed (WAL): SQLite then fails at
+        once with ``database is locked`` instead of waiting. Taking the lock
+        first makes a concurrent writer wait (``busy_timeout``) instead.
+        Any exit by exception, ``KeyboardInterrupt`` included, rolls back.
         """
         if self.con.in_transaction:
             yield
             return
-        self.con.execute("BEGIN")
+        self.con.execute("BEGIN IMMEDIATE")
         try:
             yield
-        except Exception:
-            self.con.execute("ROLLBACK")
+        except BaseException:
+            if self.con.in_transaction:
+                self.con.execute("ROLLBACK")
             raise
         else:
             self.con.execute("COMMIT")

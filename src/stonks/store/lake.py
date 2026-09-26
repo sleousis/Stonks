@@ -628,7 +628,7 @@ class DuckDBLake:
             version = int(path.stem.split("_", 1)[0])
             if version in applied:
                 continue
-            sql = path.read_text()
+            sql = path.read_text(encoding="utf-8")
             self._guard_destructive_drops(sql, version=version, name=path.stem, log=log)
             self.con.execute("BEGIN")
             try:
@@ -744,7 +744,9 @@ class DuckDBLake:
         self._in_transaction = True
         try:
             yield
-        except Exception:
+        except BaseException:
+            # BaseException on purpose: after Ctrl-C an open DuckDB
+            # transaction would make the next ``transaction()`` fail
             self.con.execute("ROLLBACK")
             raise
         else:

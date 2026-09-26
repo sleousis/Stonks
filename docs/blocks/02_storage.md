@@ -93,7 +93,9 @@ The copy is checked per ticker and interval (row count and checksum) before the 
 Deliberately thin: connection, migrations, introspection, `execute`, `sql` and `transaction()`. Domain helpers belong to the block that owns each table (registry, production, accounts, scheduling, notify, connections).
 
 - Opens with `PRAGMA journal_mode=WAL` (several processes can share it) and `PRAGMA foreign_keys=ON`.
-- `transaction()` is an explicit `BEGIN` / `COMMIT` / `ROLLBACK`.
+- `transaction()` is `BEGIN IMMEDIATE` / `COMMIT` / `ROLLBACK`. It takes the write lock first, so a read-then-write block waits for another writer instead of failing with `database is locked`. Connections wait up to 10 seconds for a lock.
+- Both stores roll back on any exit by exception, Ctrl-C included, so the next transaction starts clean.
+- Migration files are read as UTF-8 on every platform.
 
 ## State migrations (`store/migrations_sqlite/`)
 
