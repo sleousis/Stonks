@@ -208,8 +208,11 @@ def _record_one(
             [sid, sid, day],
         )
         previous = {r["ticker"] for r in prev}
-        changes = [(t, "entry") for t in scores if t not in previous]
-        changes += [(t, "exit") for t in sorted(previous) if t not in scores]
+        entries: list[tuple[str, EventKind]] = [(t, "entry") for t in scores if t not in previous]
+        exits: list[tuple[str, EventKind]] = [
+            (t, "exit") for t in sorted(previous) if t not in scores
+        ]
+        changes = entries + exits
         tickers = list(scores)
     for t in tickers:
         state.execute(
@@ -308,7 +311,8 @@ def _reason(
     if callable(explain):
         try:
             extra = explain(ticker, as_of, lake)
-            reason.update(dict(extra or {}))
+            if isinstance(extra, Mapping):
+                reason.update({str(k): v for k, v in extra.items()})
         except Exception as exc:
             reason["explain_error"] = f"{type(exc).__name__}: {exc}"
     return reason

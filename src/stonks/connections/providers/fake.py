@@ -290,10 +290,11 @@ class FakeTrader:
         return []
 
 
-@register_provider("fake_trading")
-class FakeTradingConnection(FakeConnection):
+class FakeTradingConnection(_FakeBase):
     """``fake`` plus trading: :meth:`trader` returns a :class:`FakeTrader`."""
 
+    auth_flow = "api_key"
+    credential_fields = ("token",)
     display_name: ClassVar[str] = "Fake trading broker"
     capabilities: ClassVar[frozenset[Capability]] = _FakeBase.capabilities | {Capability.TRADE}
 
@@ -309,3 +310,6 @@ class FakeTradingConnection(FakeConnection):
         self._call("trader")
         self._account(account_id)
         return FakeTrader(self, account_id)
+
+
+register_provider("fake_trading")(FakeTradingConnection)

@@ -1273,7 +1273,9 @@ def load_tick_plan(
                 spec=spec,
                 owner_id=portfolio.owner_id,
                 subscription_ids={
-                    s.strategy_id: s.id for s in own if s.strategy_id in spec.strategy_weights
+                    s.strategy_id: s.id
+                    for s in own
+                    if s.strategy_id in (spec.strategy_weights or {})
                 },
                 mode=mode,
                 account=account,
