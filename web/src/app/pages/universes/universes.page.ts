@@ -10,11 +10,13 @@ import { Router, RouterLink } from '@angular/router';
 
 import type { IndexHistoryImport, UniverseView } from '../../api/models';
 import { UniversesService } from '../../api/universes.service';
+import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { DateTimePipe } from '../../shared/format.pipes';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { PageHeader } from '../../shared/ui/page-header';
+import { PermissionNote } from '../../shared/ui/permission-note';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import {
   KIND_HINT,
@@ -44,6 +46,7 @@ import {
     ErrorState,
     RouterLink,
     DateTimePipe,
+    PermissionNote,
   ],
   templateUrl: './universes.page.html',
   styleUrl: './universes.page.scss',
@@ -53,6 +56,10 @@ export class UniversesPage {
   private readonly confirm = inject(ConfirmService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly session = inject(SessionService);
+
+  /** Creating universes and importing index history (lab work). */
+  protected readonly canEdit = computed(() => this.session.can('lab.run'));
 
   protected readonly universes = resource({ loader: () => this.api.list() });
 
@@ -62,8 +69,8 @@ export class UniversesPage {
   protected readonly universeKey = (u: UniverseView) => u.id;
 
   protected readonly columns: TableColumn<UniverseView>[] = [
-    { key: 'id', label: 'Universe', mobile: 'title' },
-    { key: 'name', label: 'Name', value: (u) => u.name ?? '', mobile: 'hide' },
+    { key: 'name', label: 'Universe', value: (u) => u.name || u.id, mobile: 'title' },
+    { key: 'id', label: 'Id', mobile: 'hide' },
     { key: 'kind', label: 'Kind', value: (u) => KIND_LABEL[u.kind] },
     { key: 'member_count', label: 'Members', format: 'number' },
     { key: 'refreshed_at', label: 'Last refresh', format: 'datetime' },
@@ -113,7 +120,7 @@ export class UniversesPage {
 
   async create(): Promise<void> {
     this.submitted.set(true);
-    if (this.hasErrors() || this.saving()) return;
+    if (!this.canEdit() || this.hasErrors() || this.saving()) return;
     const body = universeCreateBody(this.form());
     this.saving.set(true);
     try {
@@ -153,7 +160,7 @@ export class UniversesPage {
   async importHistory(): Promise<void> {
     this.indexSubmitted.set(true);
     const errs = this.indexErrors();
-    if (errs.id || errs.content || this.importing()) return;
+    if (!this.canEdit() || errs.id || errs.content || this.importing()) return;
     const indexId = this.indexId().trim();
     const ok = await this.confirm.confirm({
       title: `Import history for ${indexId}?`,

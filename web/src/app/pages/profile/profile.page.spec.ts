@@ -63,6 +63,8 @@ describe('ProfilePage', () => {
     expect(el.textContent).toContain('Trader');
     expect(el.textContent).toContain('laptop');
     expect(el.textContent).toContain('never used');
+    expect(el.textContent).toContain('For scripts and assistant tools.');
+    expect(el.textContent).not.toContain('MCP');
   });
 
   it('checks the new password before sending', async () => {

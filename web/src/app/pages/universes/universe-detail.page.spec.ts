@@ -3,11 +3,13 @@ import { signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
-import type { UniverseView } from '../../api/models';
+import type { MeView, UniverseView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
+import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
+import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
 import { UniverseDetailPage } from './universe-detail.page';
 
@@ -41,6 +43,8 @@ describe('UniverseDetailPage', () => {
   let http: HttpTestingController;
   let el: HTMLElement;
   let confirm: ReturnType<typeof vi.fn>;
+  /** Who is signed in; a describe block can change it in beforeAll. */
+  let me: MeView = ADMIN;
 
   async function settle(): Promise<void> {
     for (let i = 0; i < 4; i++) {
@@ -70,6 +74,9 @@ describe('UniverseDetailPage', () => {
       ],
     });
     http = TestBed.inject(HttpTestingController);
+    const signingIn = TestBed.inject(SessionService).load();
+    (await nextRequest(http, '/api/auth/me')).flush(me);
+    await signingIn;
     fixture = TestBed.createComponent(UniverseDetailPage);
     fixture.componentRef.setInput('id', 'us-big');
     el = fixture.nativeElement;
@@ -116,7 +123,7 @@ describe('UniverseDetailPage', () => {
     (await nextRequest(http, '/api/universes/us-big')).flush({ ...UNIVERSE, member_count: 5 });
     await flushMembers(['AAPL.US', 'MSFT.US', 'NVDA.US']);
     await settle();
-    expect(success).toHaveBeenCalledWith('Refreshed us-big: 3 members today.');
+    expect(success).toHaveBeenCalledWith('Refreshed US large caps: 3 members today.');
     const result = el.querySelector('[aria-label="Refresh result"]')!;
     expect(result.textContent).toContain('6');
     expect(el.textContent).toContain('OLD.US has no dates');
@@ -180,5 +187,18 @@ describe('UniverseDetailPage', () => {
     del.flush(UNIVERSE);
     await settle();
     expect(navigate).toHaveBeenCalledWith(['/universes']);
+  });
+
+  describe('as a trader', () => {
+    beforeAll(() => (me = TRADER));
+    afterAll(() => (me = ADMIN));
+
+    it('can refresh and fetch data, but only admins delete', () => {
+      expect(button('Refresh')!.disabled).toBe(false);
+      expect(button('Ensure data')!.disabled).toBe(false);
+      expect(button('Delete')!.disabled).toBe(true);
+      expect(el.querySelector('app-page-header')!.textContent).toContain('Admins only.');
+      expect(el.textContent).not.toContain('the lake');
+    });
   });
 });

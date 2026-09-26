@@ -90,7 +90,7 @@ describe('HealthPage', () => {
   it('shows recent ingest failures with their error text', async () => {
     await flushAll();
     expect(el.textContent).toContain('HTTP 402 payment required');
-    expect(el.textContent).toContain('No failed ticks');
+    expect(el.textContent).toContain('No failed trading runs');
   });
 
   it('is critical when a run is stuck', async () => {
@@ -135,5 +135,16 @@ describe('HealthPage', () => {
     refresh.click();
     await flushAll();
     http.verify();
+  });
+
+  it('explains a missing trading universe in plain words', async () => {
+    await flushAll({
+      ...REPORT,
+      checks: REPORT.checks.filter((c) => !c.name.startsWith('freshness:')),
+    });
+    const text = el.querySelector('[aria-labelledby="fresh-title"]')!.textContent!;
+    expect(text).toContain('No universe is set for trading yet. Ask your admin');
+    expect(el.textContent).not.toMatch(/\[[a-z_.]+\]/);
+    expect(el.textContent).not.toContain('ingest');
   });
 });

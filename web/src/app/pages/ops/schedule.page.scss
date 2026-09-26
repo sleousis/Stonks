@@ -1,6 +1,28 @@
 @use 'breakpoints' as bp;
 
+.head-action {
+  display: grid;
+  justify-items: end;
+  min-width: 0;
+}
+
+// "Next run": the time in tabular figures, the countdown under it.
+.next {
+  display: inline-grid;
+  justify-items: start;
+}
+
+.until {
+  font-size: var(--text-xs);
+  color: var(--color-ink-2);
+}
+
 @include bp.phone {
+  .head-action {
+    width: 100%;
+    justify-items: stretch;
+  }
+
   .panel-head .btn {
     width: 100%;
   }

@@ -21,8 +21,7 @@
       <h2 id="jobs-title">Scheduled jobs</h2>
       @if (schedule.hasValue()) {
         <span class="muted">
-          {{ schedule.value().hosted ? 'Runs inside the server' : 'Runs in its own process' }}
-          ({{ schedule.value().backend }})
+          {{ schedule.value().hosted ? 'Runs inside the server' : 'Runs on its own' }}
         </span>
       }
     </div>
@@ -37,16 +36,27 @@
     } @else if (jobRows().length === 0) {
       <app-empty-state
         title="No scheduled jobs"
-        message="Jobs come from [scheduler] in the config. The defaults are ingest, tick, report and health."
+        message="Nothing runs on a timetable yet. Ask your admin to set up the daily jobs: the data update, the trading run, the report and the health check."
       />
     } @else {
+      <app-permission-note permission="operations.run" />
       <app-data-table
         caption="Scheduled jobs with their next run"
         [rows]="jobRows()"
-        [columns]="jobColumns"
+        [columns]="jobColumns()"
         [rowKey]="jobKey"
         [initialSort]="{ key: 'next_run_at', dir: 'asc' }"
       >
+        <ng-template appCell="next_run_at" [appCellOf]="jobRows()" let-j>
+          @if (j.next_run_at) {
+            <span class="next">
+              <span class="num">{{ when(j.next_run_at) }}</span>
+              <span class="num until">{{ untilNext(j.next_run_at) }}</span>
+            </span>
+          } @else {
+            <span class="muted">Not scheduled</span>
+          }
+        </ng-template>
         <ng-template appCell="last_status" [appCellOf]="jobRows()" let-j>
           @if (j.last_status) {
             <app-status-pill [status]="j.last_status" />
@@ -60,7 +70,7 @@
             class="btn"
             [disabled]="running() === j.name"
             [attr.aria-busy]="running() === j.name"
-            [attr.aria-label]="'Run ' + j.name + ' now'"
+            [attr.aria-label]="'Run ' + jobName(j.name) + ' now'"
             (click)="runNow(j)"
           >
             Run now
@@ -104,15 +114,18 @@
   <section class="panel span-12" aria-labelledby="backups-title">
     <div class="panel-head">
       <h2 id="backups-title">Backups</h2>
-      <button
-        type="button"
-        class="btn btn-primary"
-        [disabled]="backingUp()"
-        [attr.aria-busy]="backingUp()"
-        (click)="backUpNow()"
-      >
-        {{ backingUp() ? 'Backing up…' : 'Back up now' }}
-      </button>
+      <div class="head-action">
+        <button
+          type="button"
+          class="btn btn-primary"
+          [disabled]="backingUp() || !canBackUp()"
+          [attr.aria-busy]="backingUp()"
+          (click)="backUpNow()"
+        >
+          {{ backingUp() ? 'Backing up…' : 'Back up now' }}
+        </button>
+        <app-permission-note permission="risk.global" />
+      </div>
     </div>
     @if (backupRun(); as run) {
       <app-job-progress label="Backup" [handle]="run" />
@@ -124,7 +137,7 @@
     } @else if (backupRows().length === 0) {
       <app-empty-state
         title="No backups from the server yet"
-        message="Back up now, or let the scheduler run its backup job. Backups made from the command line are not listed here."
+        message="Backups made here or by the nightly backup job are listed with their result."
       />
     } @else {
       <app-data-table

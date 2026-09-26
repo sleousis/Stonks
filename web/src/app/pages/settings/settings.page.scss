@@ -7,6 +7,27 @@
   min-width: 0;
 }
 
+.group-title {
+  font-size: var(--text-lg);
+}
+
+.group-note {
+  margin-top: calc(-1 * var(--space-2));
+  font-size: var(--text-sm);
+  color: var(--color-ink-2);
+}
+
+// Traders see only their account: use the full width in two columns.
+.wide {
+  @include bp.from-desktop {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    .group-title {
+      grid-column: 1 / -1;
+    }
+  }
+}
+
 .lead {
   margin-bottom: var(--space-4);
   color: var(--color-ink-2);

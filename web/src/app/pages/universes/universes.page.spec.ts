@@ -2,10 +2,12 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
-import type { UniverseView } from '../../api/models';
+import type { MeView, UniverseView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
+import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
+import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
 import { UniversesPage } from './universes.page';
 
@@ -26,6 +28,8 @@ describe('UniversesPage', () => {
   let http: HttpTestingController;
   let el: HTMLElement;
   let confirm: ReturnType<typeof vi.fn>;
+  /** Who is signed in; a describe block can change it in beforeAll. */
+  let me: MeView = ADMIN;
 
   async function settle(): Promise<void> {
     for (let i = 0; i < 3; i++) {
@@ -56,6 +60,9 @@ describe('UniversesPage', () => {
       ],
     });
     http = TestBed.inject(HttpTestingController);
+    const signingIn = TestBed.inject(SessionService).load();
+    (await nextRequest(http, '/api/auth/me')).flush(me);
+    await signingIn;
     fixture = TestBed.createComponent(UniversesPage);
     el = fixture.nativeElement;
     fixture.detectChanges();
@@ -151,5 +158,25 @@ describe('UniversesPage', () => {
     post.flush({ index_id: 'sp500', as_of: '2024-01-02', constituents: 1, changes: 0 });
     await settle();
     expect(success).toHaveBeenCalledWith('Imported 1 members and 0 changes for sp500.');
+  });
+
+  it('names universes, with the id only as a detail', () => {
+    const titles = [...el.querySelectorAll('[aria-labelledby="list-title"] a')].map((a) =>
+      a.textContent?.trim(),
+    );
+    expect(titles).toContain('US large caps');
+    expect(titles).toContain('watch');
+    expect(el.textContent).not.toContain('the lake');
+  });
+
+  describe('as a viewer', () => {
+    beforeAll(() => (me = { ...TRADER, role: 'viewer', scopes: ['read'] }));
+    afterAll(() => (me = ADMIN));
+
+    it('sees why New universe and Import history are off', () => {
+      expect(button('New universe')!.disabled).toBe(true);
+      expect(button('Import history')!.disabled).toBe(true);
+      expect(el.textContent).toContain('Traders and admins only.');
+    });
   });
 });

@@ -2,11 +2,13 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 
-import type { Job, ScheduleView } from '../../api/models';
+import type { Job, MeView, ScheduleView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
+import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
+import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
 import { SchedulePage, backupRow, jobRows } from './schedule.page';
 
@@ -126,7 +128,7 @@ describe('SchedulePage', () => {
     return [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === text);
   }
 
-  beforeEach(async () => {
+  async function setup(me: MeView): Promise<void> {
     confirm = vi.fn().mockResolvedValue(true);
     track = vi.fn((id: string) => finished(id));
     TestBed.configureTestingModule({
@@ -138,6 +140,9 @@ describe('SchedulePage', () => {
       ],
     });
     http = TestBed.inject(HttpTestingController);
+    const signingIn = TestBed.inject(SessionService).load();
+    (await nextRequest(http, '/api/auth/me')).flush(me);
+    await signingIn;
     fixture = TestBed.createComponent(SchedulePage);
     el = fixture.nativeElement;
     fixture.detectChanges();
@@ -151,60 +156,87 @@ describe('SchedulePage', () => {
       offset: 0,
     });
     await settle();
-  });
+  }
 
   afterEach(() => http.verify());
 
-  it('shows jobs, recent runs and backups', () => {
-    const jobs = el.querySelector('[aria-labelledby="jobs-title"]')!;
-    expect(jobs.textContent).toContain('Runs inside the server');
-    expect(jobs.textContent).toContain('XNYS close +45m');
-    expect(jobs.textContent).toContain('Never');
-    const runs = el.querySelector('[aria-labelledby="runs-title"]')!;
-    expect(runs.textContent).toContain('broker down');
-    const backups = el.querySelector('[aria-labelledby="backups-title"]')!;
-    expect(backups.textContent).toContain('stonks-20260925T020000Z');
-  });
+  describe('as an admin', () => {
+    beforeEach(() => setup(ADMIN));
 
-  it('runs a tick now only after typing its name', async () => {
-    const runButtons = [...el.querySelectorAll<HTMLButtonElement>('button[aria-label^="Run "]')];
-    runButtons.find((b) => b.getAttribute('aria-label') === 'Run tick now')!.click();
-    const post = await nextRequest(http, '/api/schedule/tick/run-now', 'POST');
-    expect(confirm).toHaveBeenCalledWith(
-      expect.objectContaining({ typedConfirmation: 'tick', tone: 'danger' }),
-    );
-    post.flush({ job: 'tick', run_key: 'manual:x', as_of: '2026-09-26', status: 'started' });
-    (await nextRequest(http, '/api/schedule')).flush(SCHEDULE);
-    await settle();
-  });
-
-  it('backs up now, follows the job and names the backup', async () => {
-    const success = vi.spyOn(TestBed.inject(ToastService), 'success');
-    button('Back up now')!.click();
-    const post = await nextRequest(http, '/api/backups', 'POST');
-    post.flush(backupJob({ id: 'job_b2', status: 'queued', result: null }));
-    await tick();
-    for (const r of http.match((x) => x.url.split('?')[0] === '/api/jobs')) {
-      r.flush({ items: [], total: 0, limit: 20, offset: 0 });
-    }
-    (await nextRequest(http, '/api/backups/jobs/job_b2/result')).flush({
-      backup_id: 'stonks-20260926T120000Z',
-      pruned: [],
+    it('shows jobs, recent runs and backups', () => {
+      const jobs = el.querySelector('[aria-labelledby="jobs-title"]')!;
+      expect(jobs.textContent).toContain('Runs inside the server');
+      expect(jobs.textContent).toContain('XNYS close +45m');
+      expect(jobs.textContent).toContain('Never');
+      // Names read as words; the next run shows its time and a countdown.
+      expect(jobs.textContent).toContain('Health');
+      expect(jobs.querySelector('.next .num')).not.toBeNull();
+      expect(jobs.querySelector('.until')!.textContent).toMatch(/in |due now/);
+      expect(jobs.textContent).not.toContain('in_process');
+      const runs = el.querySelector('[aria-labelledby="runs-title"]')!;
+      expect(runs.textContent).toContain('broker down');
+      const backups = el.querySelector('[aria-labelledby="backups-title"]')!;
+      expect(backups.textContent).not.toContain('stonks-20260925T020000Z');
+      expect(el.textContent).not.toContain('command line');
+      expect(el.textContent).not.toContain('[scheduler]');
     });
-    await tick();
-    for (const r of http.match((x) => x.url.split('?')[0] === '/api/jobs')) {
-      r.flush({
-        items: [
-          backupJob({ id: 'job_b2', result: { backup_id: 'stonks-20260926T120000Z', pruned: [] } }),
-        ],
-        total: 1,
-        limit: 20,
-        offset: 0,
+
+    it('runs a tick now only after typing its name', async () => {
+      const runButtons = [...el.querySelectorAll<HTMLButtonElement>('button[aria-label^="Run "]')];
+      runButtons.find((b) => b.getAttribute('aria-label') === 'Run Tick now')!.click();
+      const post = await nextRequest(http, '/api/schedule/tick/run-now', 'POST');
+      expect(confirm).toHaveBeenCalledWith(
+        expect.objectContaining({ typedConfirmation: 'tick', tone: 'danger' }),
+      );
+      post.flush({ job: 'tick', run_key: 'manual:x', as_of: '2026-09-26', status: 'started' });
+      (await nextRequest(http, '/api/schedule')).flush(SCHEDULE);
+      await settle();
+    });
+
+    it('backs up now, follows the job and names the backup', async () => {
+      const success = vi.spyOn(TestBed.inject(ToastService), 'success');
+      button('Back up now')!.click();
+      const post = await nextRequest(http, '/api/backups', 'POST');
+      post.flush(backupJob({ id: 'job_b2', status: 'queued', result: null }));
+      await tick();
+      for (const r of http.match((x) => x.url.split('?')[0] === '/api/jobs')) {
+        r.flush({ items: [], total: 0, limit: 20, offset: 0 });
+      }
+      (await nextRequest(http, '/api/backups/jobs/job_b2/result')).flush({
+        backup_id: 'stonks-20260926T120000Z',
+        pruned: [],
       });
-    }
-    await settle();
-    expect(track).toHaveBeenCalledWith('job_b2', expect.anything());
-    expect(success).toHaveBeenCalledWith('Backed up as stonks-20260926T120000Z.');
-    expect(el.querySelector('app-job-progress')!.textContent).toContain('Backup: Finished.');
+      await tick();
+      for (const r of http.match((x) => x.url.split('?')[0] === '/api/jobs')) {
+        r.flush({
+          items: [
+            backupJob({
+              id: 'job_b2',
+              result: { backup_id: 'stonks-20260926T120000Z', pruned: [] },
+            }),
+          ],
+          total: 1,
+          limit: 20,
+          offset: 0,
+        });
+      }
+      await settle();
+      expect(track).toHaveBeenCalledWith('job_b2', expect.anything());
+      expect(success).toHaveBeenCalledWith('Backed up the system.');
+      expect(el.querySelector('app-job-progress')!.textContent).toContain('Backup: Finished.');
+    });
+  });
+
+  describe('as a trader', () => {
+    beforeEach(() => setup(TRADER));
+
+    it('sees the schedule but cannot run jobs or back up', () => {
+      const jobs = el.querySelector('[aria-labelledby="jobs-title"]')!;
+      expect(jobs.querySelector('button[aria-label^="Run "]')).toBeNull();
+      expect(jobs.textContent).toContain('Admins only.');
+      const backUp = button('Back up now')!;
+      expect(backUp.disabled).toBe(true);
+      expect(backUp.parentElement!.textContent).toContain('Admins only.');
+    });
   });
 });

@@ -111,4 +111,19 @@ describe('StrategiesCard', () => {
     const el = await render([]);
     expect(el.textContent).toContain('You follow no strategies yet');
   });
+
+  it('shows a viewer why the switches are off', async () => {
+    const session = TestBed.inject(SessionService);
+    const loading = session.load(true);
+    (await nextRequest(controller, '/api/auth/me')).flush({
+      ...TRADER,
+      role: 'viewer',
+      scopes: ['read'],
+    });
+    await loading;
+    const el = await render([sub()]);
+    expect(el.querySelector<HTMLButtonElement>('[role="switch"]')!.disabled).toBe(true);
+    expect(el.querySelector<HTMLFieldSetElement>('fieldset.modes')!.disabled).toBe(true);
+    expect(el.textContent).toContain('Traders and admins only.');
+  });
 });

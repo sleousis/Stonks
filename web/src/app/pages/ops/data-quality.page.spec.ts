@@ -83,4 +83,12 @@ describe('DataQualityPage', () => {
     bySeverity.flush({ ...FLAGS, items: [], total: 0 });
     await settle();
   });
+
+  it('explains an empty list in plain words', async () => {
+    (await nextRequest(http, '/api/statements/flags')).flush({ ...FLAGS, items: [], total: 0 });
+    await settle();
+    expect(el.textContent).toContain('No statement flags');
+    expect(el.textContent).toContain('checked each time their figures are updated');
+    expect(el.textContent).not.toContain('stonks');
+  });
 });
