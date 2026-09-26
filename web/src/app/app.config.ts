@@ -2,6 +2,7 @@ import {
   type ApplicationConfig,
   Injectable,
   inject,
+  provideAppInitializer,
   provideBrowserGlobalErrorListeners,
 } from '@angular/core';
 import { Title } from '@angular/platform-browser';
@@ -15,6 +16,7 @@ import {
 
 import { provideApi } from './api/provide-api';
 import { routes } from './app.routes';
+import { FormatService } from './core/format/format.service';
 
 /** "Dashboard – Stonks" */
 @Injectable({ providedIn: 'root' })
@@ -37,5 +39,7 @@ export const appConfig: ApplicationConfig = {
     ),
     { provide: TitleStrategy, useClass: StonksTitleStrategy },
     ...provideApi(),
+    // Apply the stored locale / time zone before the first page renders.
+    provideAppInitializer(() => void inject(FormatService)),
   ],
 };
