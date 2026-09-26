@@ -71,6 +71,19 @@ def test_config_splits_the_validation_window_over_the_folds_by_default():
     assert WalkForwardConfig(test_days=10).resolved_test_days(ratio.val_window) == 10
 
 
+def test_config_lays_its_folds_over_a_dataset():
+    ds = LabDataset(lake=None, start=START, end=END, train_ratio=0.7)
+    cfg = WalkForwardConfig(n_splits=3, train_days=60, anchored=False)
+    assert cfg.folds_for(ds) == walk_forward_folds(
+        START,
+        END,
+        n_splits=3,
+        test_days=cfg.resolved_test_days(ds.val_window),
+        train_days=60,
+        anchored=False,
+    )
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [

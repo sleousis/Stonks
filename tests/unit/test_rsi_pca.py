@@ -266,3 +266,81 @@ def test_load_without_fitted_state_returns_unfitted_instance(tmp_path: Path):
         state_path.unlink()
     loaded = RSIPCAStrategy.load(tmp_path)
     assert loaded.is_fitted is False
+
+
+# ---- holding period (hold_bars) --------------------------------------------
+
+
+def _fitted(lake, dates, **params):
+    s = RSIPCAStrategy({"ticker": "X.US", "n_components": 3, "long_quantile": 0.9, **params})
+    s.fit(_dataset(lake, dates))
+    return s
+
+
+def _raw_long(s, lake, as_of):
+    pred = s._predict_current("X.US", as_of, lake)
+    return pred is not None and pred > s._long_thresh
+
+
+def test_hold_bars_spec_is_tunable_int_1_to_48():
+    spec = {s.name: s for s in RSIPCAStrategy.parameter_spec()}["hold_bars"]
+    assert spec.kind == "int"
+    assert spec.bounds == (1, 48)
+    assert spec.tunable is True
+
+
+def test_hold_bars_defaults_to_lookahead():
+    assert RSIPCAStrategy({"lookahead": 11}).params["hold_bars"] == 11
+    assert RSIPCAStrategy({}).params["hold_bars"] == RSIPCAStrategy({}).params["lookahead"]
+    assert RSIPCAStrategy({"lookahead": 11, "hold_bars": 2}).params["hold_bars"] == 2
+
+
+def test_artifacts_saved_before_hold_bars_load_with_the_old_exit_rule(tmp_path):
+    s = RSIPCAStrategy({"ticker": "X.US", "lookahead": 9, "hold_bars": 4})
+    s.save(tmp_path)
+    assert RSIPCAStrategy.load(tmp_path).params["hold_bars"] == 4
+    params = json.loads((tmp_path / "params.json").read_text())
+    del params["hold_bars"]  # what an artifact saved before this param looks like
+    (tmp_path / "params.json").write_text(json.dumps(params))
+    # a registered strategy keeps the behavior its survival reports were made with
+    assert RSIPCAStrategy.load(tmp_path).params["hold_bars"] == 1
+
+
+def test_hold_bars_one_exits_on_first_bar_below_threshold(lake_500d):
+    lake, dates = lake_500d
+    s = _fitted(lake, dates, hold_bars=1)
+    for d in dates[-60:]:
+        pred = s._predict_current("X.US", d.date(), lake)
+        expected = pred if pred is not None and pred > s._long_thresh else None
+        assert s.estimate_return("X.US", d.date(), lake) == expected
+
+
+def test_hold_bars_keeps_a_long_for_hold_bars_bars_after_each_signal(lake_500d):
+    lake, dates = lake_500d
+    k = 4
+    s = _fitted(lake, dates, lookahead=5, hold_bars=k)
+    val = list(dates[-120:])
+    raw = [_raw_long(s, lake, d.date()) for d in val]
+    held_without_signal = 0
+    for i in range(k, len(val)):
+        expected = any(raw[i - k + 1 : i + 1])
+        got = s.estimate_return("X.US", val[i].date(), lake)
+        assert (got is not None) == expected, val[i]
+        if expected and not raw[i]:
+            held_without_signal += 1
+    assert held_without_signal > 0  # the hold actually extends positions
+
+
+def test_hold_bars_replays_causally_so_a_fresh_instance_agrees(lake_500d, tmp_path):
+    lake, dates = lake_500d
+    walked = _fitted(lake, dates, lookahead=5, hold_bars=6)
+    walked_out = {d.date(): walked.estimate_return("X.US", d.date(), lake) for d in dates[-80:]}
+
+    walked.save(tmp_path / "a")
+    for d in list(dates[-80:])[::7]:
+        fresh = RSIPCAStrategy.load(tmp_path / "a")  # no history of earlier calls
+        got = fresh.estimate_return("X.US", d.date(), lake)
+        want = walked_out[d.date()]
+        assert (got is None) == (want is None)
+        if want is not None:
+            assert got == pytest.approx(want, rel=1e-9)

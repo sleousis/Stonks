@@ -456,3 +456,102 @@ def test_explicit_tuning_wins_over_the_runner_binding(lake_gbm):
     test.run(BuyAndHold({"ticker": "RND.US"}), _gbm_dataset(lake, dates))
     assert len(mine.datasets) == 2
     assert runners.datasets == []
+
+
+# ---- parallel permutations ---------------------------------------------------
+
+
+def _multi_ticker_dataset(tmp_path):
+    rng = np.random.default_rng(8)
+    dates = pd.bdate_range(start="2025-01-02", periods=220)
+    lake = DuckDBLake(tmp_path / "multi.duckdb")
+    lake.migrate()
+    rows = []
+    for ticker in ("A.US", "B.US"):
+        close = np.exp(np.log(80.0) + np.cumsum(rng.normal(0.0004, 0.02, len(dates))))
+        rows += [
+            {
+                "ticker": ticker,
+                "date": d.date(),
+                "open": c * 0.999,
+                "high": c * 1.01,
+                "low": c * 0.99,
+                "close": c,
+                "adj_close": c,
+                "volume": 1_000,
+            }
+            for d, c in zip(dates, close, strict=False)
+        ]
+    lake.upsert_prices(pd.DataFrame(rows))
+    ds = LabDataset(
+        lake=lake,
+        universe=["A.US", "B.US"],
+        start=dates[30].date(),
+        end=dates[-1].date(),
+        train_ratio=0.6,
+        interval=Interval.DAY_1,
+    )
+    return lake, ds
+
+
+def test_parallel_permutations_are_bit_identical_to_serial(tmp_path):
+    lake, ds = _multi_ticker_dataset(tmp_path)
+    try:
+        strategy = Momentum({"lookback_days": 5})
+        reports = [
+            MonteCarloPermutationTest(
+                n_permutations=6, max_p_value=1.0, metric="sharpe", seed=3, max_workers=w
+            ).run(strategy, ds)
+            for w in (1, 3)
+        ]
+        assert reports[0].metrics == reports[1].metrics
+        assert reports[0].metrics["perm_score_max"] != reports[0].metrics["perm_score_mean"]
+    finally:
+        lake.close()
+
+
+def test_parallel_retune_is_bit_identical_to_serial(tmp_path):
+    from stonks.lab.tuning.grid import GridTuner
+
+    lake, ds = _multi_ticker_dataset(tmp_path)
+    try:
+        setup = TuningSetup(tuner=GridTuner(grid_size=3), objective=SharpeObjective(), budget=3)
+        reports = [
+            MonteCarloPermutationTest(
+                n_permutations=4, max_p_value=1.0, retune=True, seed=5, tuning=setup, max_workers=w
+            ).run(Momentum({"lookback_days": 5}), ds)
+            for w in (1, 2)
+        ]
+        assert reports[0].metrics == reports[1].metrics
+    finally:
+        lake.close()
+
+
+def test_parallel_scores_a_fitted_strategy_like_serial(lake_gbm):
+    from stonks.strategies.examples.rsi_pca import RSIPCAStrategy
+
+    lake, dates = lake_gbm
+    ds = _gbm_dataset(lake, dates)
+    strategy = RSIPCAStrategy(
+        {
+            "ticker": "RND.US",
+            "n_components": 2,
+            "long_quantile": 0.8,
+            "lookahead": 3,
+            "rsi_period_max": 8,
+        }
+    )
+    strategy.fit(ds)
+    reports = [
+        MonteCarloPermutationTest(
+            n_permutations=3, max_p_value=1.0, metric="sharpe", seed=9, max_workers=w
+        ).run(strategy, ds)
+        for w in (1, 2)
+    ]
+    assert reports[0].metrics == reports[1].metrics
+    assert reports[0].metrics["real_score"] != 0.0  # it actually traded
+
+
+def test_max_workers_must_be_positive():
+    with pytest.raises(ValueError):
+        MonteCarloPermutationTest(max_workers=0)
