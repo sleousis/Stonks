@@ -69,3 +69,17 @@
   color: var(--color-ink-3);
   overflow-wrap: anywhere;
 }
+
+.cell-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+
+  @include bp.phone {
+    min-height: var(--touch-min);
+  }
+
+  @include bp.coarse {
+    min-height: var(--touch-min);
+  }
+}
