@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal
 
@@ -23,6 +23,7 @@ from stonks.core.types import Fill, Order, OrderStatus, Portfolio
 from stonks.execution.orders import make_client_id
 from stonks.logging import get_logger
 from stonks.production.ranker import Ranker
+from stonks.production.risk import RiskPolicy, apply_risk
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
@@ -43,6 +44,7 @@ class TickSettings:
     # Closes older than this many calendar days before ``as_of`` are ignored,
     # so delisted / failed-ingest tickers never fill at months-old prices.
     max_price_staleness_days: int = 7
+    risk: RiskPolicy = field(default_factory=RiskPolicy)
 
 
 @dataclass(frozen=True)
@@ -142,15 +144,21 @@ def _run_tick_body(
         max_staleness_days=settings.max_price_staleness_days,
     )
 
-    broker = SimulatedBroker(
-        portfolio=portfolio,
+    # 3. decide, then let the risk layer clip/drop before anything reaches
+    #    the broker.
+    proposed = strategy.decide(my_picks, portfolio, prices, as_of)
+    risk_result = apply_risk(
+        proposed,
+        portfolio,
+        prices,
+        _asset_classes(lake, [*settings.universe, *portfolio.positions]),
+        settings.risk,
         slippage_bps=settings.slippage_bps,
         fee_per_trade=settings.fee_per_trade,
     )
-    broker.set_prices(prices, as_of=as_of)
+    orders = risk_result.orders
 
-    # 3. decide + place
-    orders = strategy.decide(my_picks, portfolio, prices, as_of)
+    broker = _build_broker(portfolio, settings, prices, as_of)
     orders_with_tick = [
         replace(
             o,
@@ -207,6 +215,7 @@ def _run_tick_body(
             "winner_expected_return": winner_return,
             "orders_placed": placed,
             "fills": fills_count,
+            "risk_adjustments": [a.as_dict() for a in risk_result.adjustments],
         },
     )
     return TickResult(
@@ -219,6 +228,28 @@ def _run_tick_body(
 
 
 # ---- helpers ---------------------------------------------------------------
+
+
+def _build_broker(
+    portfolio: Portfolio,
+    settings: TickSettings,
+    prices: dict[str, float],
+    as_of: date,
+) -> SimulatedBroker:
+    """The one place the tick constructs its broker; swap here for a real
+    broker (roadmap 2.6)."""
+    broker = SimulatedBroker(
+        portfolio=portfolio,
+        slippage_bps=settings.slippage_bps,
+        fee_per_trade=settings.fee_per_trade,
+    )
+    broker.set_prices(prices, as_of=as_of)
+    return broker
+
+
+def _asset_classes(lake: DuckDBLake, tickers: Sequence[str]) -> dict[str, str]:
+    unique = sorted(set(tickers))
+    return lake.get_asset_classes(unique) if unique else {}
 
 
 def utc_today() -> date:

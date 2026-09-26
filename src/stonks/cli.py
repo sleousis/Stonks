@@ -751,6 +751,7 @@ def tick(
                 slippage_bps=settings.production.slippage_bps,
                 fee_per_trade=settings.production.fee_per_trade,
                 max_price_staleness_days=settings.production.max_price_staleness_days,
+                risk=settings.production.risk,
             )
 
             result = run_tick(

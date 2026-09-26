@@ -159,3 +159,16 @@ def test_tick_asset_class_filter_rejects_invalid_class(runner, seeded):
     )
     assert result.exit_code != 0, result.output
     assert "must be one of" in result.output
+
+
+def test_tick_applies_risk_policy_from_config(runner, seeded):
+    tmp_path, _ = seeded
+    cfg = tmp_path / "config" / "default.toml"
+    cfg.write_text(
+        cfg.read_text().replace(
+            "[sources.eodhd]", "[production.risk]\nmax_open_positions = 0\n\n[sources.eodhd]"
+        )
+    )
+    result = runner.invoke(app, ["tick", "--as-of", "2026-03-20"])
+    assert result.exit_code == 0, result.output
+    assert "orders=0" in result.output
