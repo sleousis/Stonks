@@ -10,6 +10,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from stonks.accounts import Scope
 from stonks.app.services import Services
 from stonks.config import ApiConfig
 
@@ -103,6 +104,25 @@ def authorize_stream(
             return
         raise HTTPException(status_code=401, detail="invalid or expired stream token")
     authorize(request, creds)
+
+
+def current_scope(
+    request: Request,
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+) -> Scope:
+    """The authenticated principal's data scope, for user-scoped routes
+    (connections, push, notifications, audited runs).
+
+    Always demands the bearer token: loopback reads carry no principal, so
+    personal data has no open-reads exemption. Until login and per-user
+    tokens land (step S2, which swaps this one function), the token belongs
+    to the bootstrap admin ``usr_owner``.
+    """
+    _check_token(get_api_config(request), creds)
+    return get_services(request).bootstrap_scope()
+
+
+ScopeDep = Annotated[Scope, Depends(current_scope)]
 
 
 @dataclass(frozen=True)

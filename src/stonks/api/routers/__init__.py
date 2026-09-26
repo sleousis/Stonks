@@ -10,6 +10,7 @@ from stonks.api.routers import (
     auth,
     brokers,
     catalog,
+    connections,
     golive,
     health,
     ingest,
@@ -47,6 +48,7 @@ API_ROUTERS: list[APIRouter] = [
     health.report_router,
     brokers.router,
     alerts.router,
+    connections.router,
 ]
 
 #: Routers that always need the bearer token, even for reads on loopback.
