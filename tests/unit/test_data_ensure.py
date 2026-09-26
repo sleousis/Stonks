@@ -211,3 +211,18 @@ def test_refresh_exchange_day(lake):
     assert source.bulk_calls == [("US", date(2025, 6, 27))]
     assert report.tickers_fetched == 2
     assert lake.count_rows("bars") == 2
+
+
+def test_writes_go_through_the_pipeline_factory(lake):
+    from stonks.ingest.pipeline import IngestPipeline
+
+    built = []
+
+    def factory(src, lk):
+        built.append(src.source_id)
+        return IngestPipeline(src, lk)
+
+    source = _source("A.US")
+    ensurer = DataEnsurer(lake, source, EnsureSettings(), pipeline_factory=factory, today=TODAY)
+    report = ensurer.ensure(["A.US"], date(2024, 1, 1), date(2024, 2, 1))
+    assert built == ["fake"] and report.tickers_fetched == 1

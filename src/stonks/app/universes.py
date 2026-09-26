@@ -21,6 +21,7 @@ from stonks.app.ingest import SourceId
 from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.core.interval import Interval
 from stonks.ingest.ensure import DataEnsurer, EnsureReport, EnsureSettings
+from stonks.ingest.wiring import build_ingest_pipeline
 from stonks.logging import get_logger
 from stonks.universes import (
     UniverseDefinition,
@@ -236,7 +237,13 @@ class UniverseService:
                 progress.progress(
                     0.05, f"{len(tickers)} members between {request.start} and {request.end}"
                 )
-            ensurer = DataEnsurer(lake, source, ensure_settings(self._ctx.settings))
+            settings = self._ctx.settings
+            ensurer = DataEnsurer(
+                lake,
+                source,
+                ensure_settings(settings),
+                pipeline_factory=lambda src, lk: build_ingest_pipeline(settings, src, lk),
+            )
             return ensurer.ensure(tickers, request.start, request.end, interval)
 
     # ---- helpers ----------------------------------------------------------------------

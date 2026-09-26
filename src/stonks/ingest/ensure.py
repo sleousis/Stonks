@@ -41,17 +41,16 @@ from pydantic import BaseModel, Field
 
 from stonks.core.interval import Interval
 from stonks.ingest.pipeline import _SOFT_FAIL_EXCEPTIONS, IngestPipeline
-from stonks.ingest.quality import BarQualityChecker
 from stonks.ingest.redact import format_exception
 from stonks.ingest.schemas import FinancialStatementsBundle, RawPriceBar
 from stonks.ingest.sources.base import DataSource, DataSourceError
 from stonks.logging import get_logger
-from stonks.notify.base import Notifier
 from stonks.store.lake import DuckDBLake
 
 _log = get_logger("stonks.ingest.ensure")
 
 DateRange = tuple[date, date]
+PipelineFactory = Callable[[DataSource, DuckDBLake], IngestPipeline]
 
 
 # ---- settings and vendor limits ------------------------------------------------------
@@ -219,7 +218,11 @@ class _Plan:
 
 
 class DataEnsurer:
-    """See the module doc. ``today`` pins the clock for tests."""
+    """See the module doc. ``pipeline_factory`` builds the write pipeline
+    for a source and the lake; entrypoints pass
+    :func:`stonks.ingest.wiring.build_ingest_pipeline` so quality checks,
+    the fallback source and the notifier come from settings (default: a
+    plain :class:`IngestPipeline`). ``today`` pins the clock for tests."""
 
     def __init__(
         self,
@@ -227,15 +230,13 @@ class DataEnsurer:
         source: DataSource,
         settings: EnsureSettings | None = None,
         *,
-        quality: BarQualityChecker | None = None,
-        notifier: Notifier | None = None,
+        pipeline_factory: PipelineFactory | None = None,
         today: date | None = None,
     ) -> None:
         self._lake = lake
         self._source = source
         self._settings = settings or EnsureSettings()
-        self._quality = quality
-        self._notifier = notifier
+        self._pipeline_factory = pipeline_factory or (lambda src, lk: IngestPipeline(src, lk))
         self._today = today
         sid = source.source_id
         self._limits = vendor_limits(sid, self._settings.plans.get(sid))
@@ -453,14 +454,16 @@ class DataEnsurer:
                 fetched=fetched,
             )
             source = _PrefetchedSource(self._source.source_id, prefetcher)
-            pipeline = IngestPipeline(
-                source, self._lake, quality=self._quality, notifier=self._notifier
-            )
+            pipeline = self._pipeline_factory(source, self._lake)
+            # the prefetched source ignores the window; a fallback source
+            # (retrying a failed ticker) gets the span of all gaps
+            since = min(g[0] for gs in gaps.values() for g in gs)
+            until = max(g[1] for gs in gaps.values() for g in gs)
             try:
                 if interval == Interval.DAY_1:
-                    result = pipeline.run_prices(tickers)
+                    result = pipeline.run_prices(tickers, since=since, until=until)
                 else:
-                    result = pipeline.run_intraday_bars(tickers, interval)
+                    result = pipeline.run_intraday_bars(tickers, interval, since=since, until=until)
             finally:
                 prefetcher.cancel()
         self._record_ranges(gaps, fetched, interval)

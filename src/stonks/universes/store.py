@@ -1,5 +1,5 @@
 """Lake persistence for universe definitions, index histories and the
-membership rows a refresh writes (migrations 015 and 017)."""
+membership rows a refresh writes (migrations 015 and 016)."""
 
 from __future__ import annotations
 

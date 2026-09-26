@@ -157,3 +157,27 @@ def test_delete(client):
     resp = client.delete("/api/universes/gone", headers=AUTH)
     assert resp.status_code == 200
     assert client.get("/api/universes/gone").status_code == 404
+
+
+def test_viewers_cannot_change_universes(settings, seeded, listing_source):
+    from datetime import UTC, datetime
+
+    from stonks.accounts import Role
+    from tests.integration.auth.helpers import add_user, make_service, session_principal
+
+    settings.api.allowed_hosts = ["testserver"]
+    auth = make_service(settings.state.path, legacy=API_TOKEN, clock=lambda: datetime.now(UTC))
+    app = create_app(settings, source_factory=lambda: listing_source)
+    app.state.auth = auth
+    viewer_id = add_user(settings.state.path, "viewer@example.com", role=Role.VIEWER)
+    _, token = auth.create_token(
+        session_principal(viewer_id, Role.VIEWER), name="v", scopes=["read"]
+    )
+    viewer = {"Authorization": f"Bearer {token}"}
+    body = {"id": "mine", "kind": "list", "spec": {"tickers": ["UP.US"]}}
+    with TestClient(app, client=LOOPBACK) as c:
+        assert c.post("/api/universes", json=body, headers=viewer).status_code == 403
+        assert c.post("/api/universes", json=body, headers=AUTH).status_code == 201
+        assert c.get("/api/universes", headers=viewer).status_code == 200
+        assert c.post("/api/universes/mine/refresh", headers=viewer).status_code == 403
+        assert c.delete("/api/universes/mine", headers=viewer).status_code == 403
