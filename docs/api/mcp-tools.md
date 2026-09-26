@@ -10,6 +10,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`backtest_draft`](#backtest_draft) | job | no |
 | [`create_draft`](#create_draft) | job | no |
 | [`create_universe`](#create_universe) | guarded | yes |
+| [`delete_universe`](#delete_universe) | guarded | yes |
 | [`disable_draft`](#disable_draft) | guarded | yes |
 | [`enable_draft`](#enable_draft) | guarded | yes |
 | [`engage_kill_switch`](#engage_kill_switch) | guarded | yes |
@@ -719,6 +720,19 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 | `name` | string \| null | no | `null` |  |
 | `description` | string \| null | no | `null` |  |
 | `csv` | string \| null | no | `null` | list only: CSV with a ticker column (replaces spec) |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
+### `delete_universe`
+
+Delete a stored universe and its membership rows (admins only).
+Lab runs, ticks and scheduled jobs that name it stop resolving.
+Without confirm=true returns a preview.
+
+Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `universe_id` | string | yes |  | universe id, e.g. sp500 or us_common |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
 ### `disable_draft`

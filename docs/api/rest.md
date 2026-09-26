@@ -128,10 +128,15 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | POST | `/api/lab/backtests` | Start Backtest | `lab.run` | [BacktestRequest](#backtestrequest) | [Job](#job) |
 | GET | `/api/lab/backtests/{job_id}/result` | Get Backtest Result | sign-in |  | [BacktestResult](#backtestresult) |
 | GET | `/api/lab/cost-models` | List Cost Models | sign-in |  | list[[CostModelPreset](#costmodelpreset)] |
+| GET | `/api/lab/ensure/{job_id}/result` | Get Lab Ensure Result | sign-in |  | [EnsureReport](#ensurereport) |
 | POST | `/api/lab/runs` | Start Lab Run | `lab.run` | [LabRunRequest](#labrunrequest) | [Job](#job) |
 | GET | `/api/lab/runs/{job_id}/result` | Get Lab Run Result | sign-in |  | [LabRunView](#labrunview) |
 | POST | `/api/lab/signal-ic` | Start Signal Ic | `lab.run` | [SignalICRequest](#signalicrequest) | [Job](#job) |
 | GET | `/api/lab/signal-ic/{job_id}/result` | Get Signal Ic Result | sign-in |  | [SignalICView](#signalicview) |
+| GET | `/api/lab/survival-presets` | List Survival Presets | sign-in |  | list[[SurvivalPresetInfo](#survivalpresetinfo)] |
+| GET | `/api/lab/survival-tests` | List Survival Tests | sign-in |  | list[[SurvivalTestInfo](#survivaltestinfo)] |
+| POST | `/api/lab/sweeps` | Start Sweep | `lab.run` | [SweepRequest](#sweeprequest) | [Job](#job) |
+| GET | `/api/lab/sweeps/{job_id}/result` | Get Sweep Result | sign-in |  | [SweepResultView](#sweepresultview) |
 
 ## market endpoints
 
@@ -687,6 +692,17 @@ What an ensure did. ``run_id`` is the ``ingest_runs`` row (``None`` when nothing
 | `timestamp` | date-time | yes |  |
 | `value` | number | yes |  |
 
+### FailingCheck
+
+One go-live check that failed (``GoLiveCheck`` without ``passed``).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `detail` | string | no |  |
+| `limit` | number \| null | no |  |
+| `name` | string | yes |  |
+| `value` | number \| null | no |  |
+
 ### FeedItemView
 
 | Field | Type | Required | Description |
@@ -1009,6 +1025,7 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `embargo_bars` | integer \| null | no |  |
 | `end` | date | yes |  |
+| `ensure_data` | boolean | no |  |
 | `grid_size` | integer | no |  |
 | `hypothesis` | string \| null | no |  |
 | `interval` | string | no |  |
@@ -1027,7 +1044,8 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" | no |  |
-| `universe` | list[string] | yes |  |
+| `universe` | list[string] | no |  |
+| `universe_id` | string \| null | no |  |
 | `walk_forward` | [WalkForwardConfig](#walkforwardconfig) \| null | no |  |
 
 ### LabRunView
@@ -1038,6 +1056,7 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `best_params` | object | yes |  |
 | `best_score` | number \| null | yes |  |
 | `class_path` | string | yes |  |
+| `ensure_job_id` | string \| null | no |  |
 | `n_trials_class` | integer | no |  |
 | `n_trials_run` | integer | no |  |
 | `preflight` | [PreflightView](#preflightview) \| null | no |  |
@@ -1493,6 +1512,7 @@ The BL-37 data preflight of a lab run. A run only starts with no errors, so a re
 |-------|------|----------|-------------|
 | `detail` | string \| null | no |  |
 | `errors` | list[object] \| null | no |  |
+| `failing_checks` | list[[FailingCheck](#failingcheck)] \| null | no |  |
 | `instance` | string \| null | no |  |
 | `status` | integer | yes |  |
 | `title` | string | yes |  |
@@ -1961,6 +1981,14 @@ What this server lets the Studio do.
 |-------|------|----------|-------------|
 | `code_strategies` | boolean | yes |  |
 
+### SurvivalPresetInfo
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes |  |
+| `options` | dict[str, object] | yes |  |
+| `tests` | list[string] | yes |  |
+
 ### SurvivalReportView
 
 | Field | Type | Required | Description |
@@ -1969,6 +1997,77 @@ What this server lets the Studio do.
 | `notes` | string | yes |  |
 | `passed` | boolean | yes |  |
 | `test_id` | string | yes |  |
+
+### SurvivalTestInfo
+
+A survival test and the options a request's ``test_options[id]`` may set, as JSON Schema from the backend's own options model.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `config_schema` | object \| null | no |  |
+| `description` | string | yes |  |
+| `id` | string | yes |  |
+| `options_schema` | object | yes |  |
+| `presets` | list[string] | yes |  |
+
+### SweepRequest
+
+A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member during the window). ``strategies`` default to every catalogued non-wrapper strategy. The lab options apply to every run; sweeps never register strategies.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `benchmark` | string \| null | no |  |
+| `budget` | integer | no |  |
+| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
+| `embargo_bars` | integer \| null | no |  |
+| `end` | date | yes |  |
+| `exclude` | list[string] | no |  |
+| `grid_size` | integer | no |  |
+| `hypothesis` | string \| null | no |  |
+| `interval` | string | no |  |
+| `mcpt` | [McptOptions](#mcptoptions) \| null | no |  |
+| `objective` | "sharpe" \| "cagr" \| "final_return" | no |  |
+| `preflight` | boolean \| null | no |  |
+| `premortem` | string \| null | no |  |
+| `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |
+| `register_if_passes` | boolean | no |  |
+| `register_strategy` | boolean | no |  |
+| `seed` | integer | no |  |
+| `start` | date | yes |  |
+| `strategies` | list[string] \| null | no |  |
+| `strict_preflight` | boolean \| null | no |  |
+| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "signal_ic" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
+| `test_options` | dict[str, object] \| null | no |  |
+| `train_ratio` | number | no |  |
+| `tuner` | "grid" \| "random" | no |  |
+| `universe` | list[string] | no |  |
+| `universe_id` | string \| null | no |  |
+| `walk_forward` | [WalkForwardConfig](#walkforwardconfig) \| null | no |  |
+
+### SweepResultView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `errors` | integer | yes |  |
+| `failed` | integer | yes |  |
+| `passed` | integer | yes |  |
+| `rows` | list[[SweepRowView](#sweeprowview)] | yes |  |
+| `universe` | list[string] | yes |  |
+| `universe_id` | string \| null | no |  |
+
+### SweepRowView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `best_params` | object | no |  |
+| `best_score` | number \| null | no |  |
+| `error` | string \| null | no |  |
+| `n_trials` | integer | no |  |
+| `run_id` | string | no |  |
+| `strategy` | string | yes |  |
+| `survival` | dict[str, object] | no |  |
+| `ticker` | string \| null | yes |  |
+| `verdict` | "pass" \| "fail" \| "error" | yes |  |
 
 ### SyncResultView
 

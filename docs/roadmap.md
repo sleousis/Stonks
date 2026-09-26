@@ -8,6 +8,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 |-------|--------|
 | 1 to 8 | Done, except 5.4 end-to-end tests (now 13.14). 8.4 moved to 11.8. |
 | 9 | Waves 1 to 4 done. Wave 5: 9.5.1 done. Details under Phase 9. |
+| 10 | Done: 10.1 to 10.5. |
 | 11 | Done except parts of 11.6. 11.8 is this docs refresh. |
 | 12 | Mostly done. Open: 12.10 soak test, three runbooks (tick failed, broker unreachable, disk full). |
 | 13 | Partly done: PWA and push, command palette, in-app help, accessibility and locale. The rest is planned. |
@@ -199,6 +200,18 @@ Integration 1: realistic costs by default (BL-13), `[lab.parallel]`, the CLI and
 | 9.5.5 Stress (BL-48) | Crisis windows, stress simulation, `VolForecaster` with GARCH (arch, wrapped). | `lab/survival/crisis.py`, `lab/survival/stress.py`, `features/vol_forecast.py` |
 | 9.5.6 Engineering guards (BL-49) | Point-in-time lake proxy, universe membership in engine and ranker, pyright, Hypothesis property tests, vectorised pre-screen. | `store/pit.py`, `lab/vectorized.py`, `pyrightconfig.json`, `backtest/engine.py`, `production/ranker.py`, `.github/workflows/ci.yml`, `tests/property/*` |
 
+## Phase 10: Repository, docs and data scale
+
+**Status:** 10.1 to 10.5 done.
+
+| WP | Scope | Status | Owns |
+|----|-------|--------|------|
+| 10.1 Public repo and branch protection | Protect `main`: changes land as squash PRs from `feat/roadmap` with CI green. Open the repo to the public. | Done. The repo is public after a full secret scan, and `main` needs a PR with passing `test` and `ui` checks, with no force push or deletion. | GitHub settings, `.github/workflows/` |
+| 10.2 GitHub wiki | Guides and the glossary on the wiki. `docs.yml` syncs the API and MCP references there. | Done. The wiki holds the guides and glossary, and `docs.yml` syncs the API and MCP references on every merge to `main`. | `.github/workflows/docs.yml`, wiki |
+| 10.3 API docs from code | `docs/api/rest.md` from the OpenAPI spec, `docs/api/mcp-tools.{json,md}` from the MCP tools, each route's permission as `x-permission`, Swagger UI on Pages. Tests fail when a checked-in copy is stale. | Done. | `api/openapi.py`, `api/docs.py`, `mcp/docs.py`, `docs/api/` |
+| 10.4 Parquet bar store | `BarStore` seam with the DuckDB table and hive-partitioned Parquet files that other processes can read while `stonks serve` holds the lake. `bars_migrate` moves the bars and switches. | Done. | `store/bars.py`, `store/bars_migrate.py`, `[lake.bars]` |
+| 10.5 Dynamic universes and on-demand tickers | Stored universes (list, exchange, rule, index) with point-in-time membership, index history import, and `DataEnsurer` that fetches only missing bars. Wired into settings (`[ensure]`, `[production].universe` as an id), the tick, `stonks universe` and `stonks lab run --universe-id --ensure-data`, API lab runs (`universe_id`, `ensure_data`), MCP and a daily scheduled refresh. | Done. The console universes page is still open. | `universes/`, `ingest/ensure.py`, `production/universe.py`, `app/universes.py`, `docs/universes.md` |
+
 ## Phase 11: Console and platform follow-ups
 
 **Status:** 11.1 to 11.5 and 11.7 done; 11.6 mostly done; 11.8 is this refresh.
@@ -243,7 +256,7 @@ What it takes to run Stonks unattended every day and trust it.
 
 ## Phase 13: Trader-ready UX
 
-**Status:** done: 13.3 (PWA and push opt-in; live job updates), 13.10, 13.11, 13.13. 13.1 has its data model (users, roles) but no login yet. The rest is planned.
+**Status:** done: 13.3 (PWA and push opt-in; live job updates), 13.10, 13.11, 13.13. 13.1 has its data model (users, roles) but no login yet. The rest is planned. 13.4 and 13.6 have their API (`/api/universes`, `/api/lab/sweeps`); their pages are open.
 
 What a trader needs to use the console daily without the CLI.
 

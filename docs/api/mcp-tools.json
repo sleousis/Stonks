@@ -283,6 +283,37 @@
     {
       "annotations": {
         "destructive": true,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Delete a stored universe and its membership rows (admins only).\nLab runs, ticks and scheduled jobs that name it stop resolving.\nWithout confirm=true returns a preview.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "universe_id": {
+            "description": "universe id, e.g. sp500 or us_common",
+            "title": "Universe Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "universe_id"
+        ],
+        "title": "delete_universeArguments",
+        "type": "object"
+      },
+      "name": "delete_universe",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
         "idempotent": true,
         "open_world": false,
         "read_only": false

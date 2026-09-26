@@ -171,10 +171,17 @@ def _cmd_metrics(ld: _Loaded, data_age: bool) -> int:
     bars = None
     if data_age:
         # Opens the lake: only while no `stonks serve` holds it.
+        from stonks.production.universe import EmptyUniverseError, production_tickers
         from stonks.store.lake import DuckDBLake
 
         with DuckDBLake(ld.settings.lake.path) as lake:
-            bars = latest_daily_bars(lake, list(ld.settings.production.universe))
+            try:
+                universe = production_tickers(
+                    lake, ld.settings.production.universe, datetime.now(UTC).date()
+                )
+            except EmptyUniverseError:
+                universe = []
+            bars = latest_daily_bars(lake, universe)
     sys.stdout.write(metrics_text(ld.settings.state.path, specs=ld.specs, latest_bars=bars))
     return EXIT_OK
 

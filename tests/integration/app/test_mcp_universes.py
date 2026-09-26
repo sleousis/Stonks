@@ -81,3 +81,23 @@ async def test_index_import_needs_confirm(mcp, test_client):
     assert (await call(mcp, "import_index_history", args))["preview"] is True
     imported = await call(mcp, "import_index_history", {**args, "confirm": True})
     assert imported["result"]["constituents"] == 1
+
+
+@pytest.mark.anyio
+async def test_delete_needs_confirm(mcp, test_client):
+    args = {"universe_id": "gone", "kind": "list", "spec": {"tickers": ["UP.US"]}}
+    await call(mcp, "create_universe", {**args, "confirm": True})
+    preview = await call(mcp, "delete_universe", {"universe_id": "gone"})
+    assert preview["preview"] is True and preview["target"]["id"] == "gone"
+    assert [u["id"] for u in (await call(mcp, "list_universes"))["items"]] == ["gone"]
+    deleted = await call(mcp, "delete_universe", {"universe_id": "gone", "confirm": True})
+    assert deleted["applied"] is True and deleted["universe"]["id"] == "gone"
+    assert (await call(mcp, "list_universes")) == {"items": []}
+
+
+def test_universe_and_lab_ensure_jobs_have_typed_result_routes():
+    from stonks.mcp.tools.jobs import RESULT_ROUTES
+
+    assert RESULT_ROUTES["universe_refresh"] == "/api/universes/refresh/{id}/result"
+    assert RESULT_ROUTES["universe_ensure"] == "/api/universes/ensure/{id}/result"
+    assert RESULT_ROUTES["lab_ensure"] == "/api/lab/ensure/{id}/result"

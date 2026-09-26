@@ -202,3 +202,31 @@ def test_preset_options_are_valid_for_their_tests():
     # callers get a copy, never the table itself
     registry.preset_options("promotion")["mcpt"]["retune"] = False
     assert registry.preset_options("promotion")["mcpt"]["retune"] == "auto"
+
+
+def test_every_test_has_an_options_model_that_builds_it():
+    for name in registry.survival_test_names():
+        model = registry.options_model(name)
+        assert model.model_json_schema()["type"] == "object", name
+        registry.build_survival_test(name, model().model_dump(exclude_unset=True))
+
+
+def test_options_model_follows_the_three_declaration_styles():
+    # an Options class
+    assert "mode" in registry.options_model("oos").model_fields
+    # an options= constructor parameter typed as a model
+    from stonks.lab.survival.cost_stress import CostStressOptions
+
+    assert registry.options_model("cost_stress") is CostStressOptions
+    # plain keyword arguments
+    fields = set(registry.options_model("period_stability").model_fields)
+    assert {"n_windows", "max_sharpe_std"} <= fields
+    # objects the lab builds are not options
+    assert "config" not in registry.options_model("walk_forward").model_fields
+    assert registry.config_model("walk_forward") is WalkForwardConfig
+    assert registry.config_model("oos") is None
+
+
+def test_describe_gives_the_first_docstring_paragraph():
+    assert registry.describe("oos")
+    assert "\n\n" not in registry.describe("oos")

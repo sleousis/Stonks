@@ -20,6 +20,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from stonks.backtest.costs import CostModelSettings
 from stonks.backtest.fills import ExecutionSettings
 from stonks.core.types import AssetClass
+from stonks.ingest.ensure_settings import EnsureSettings
 from stonks.ingest.quality_config import DataQualityConfig, FallbackConfig
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
@@ -32,6 +33,10 @@ from stonks.store.audit import AuditTolerances
 from stonks.store.bars import BarBackend
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
+
+#: Same as ``stonks.universes.base.UNIVERSE_ID_PATTERN`` (importing the
+#: universes package here would be an import cycle; a test keeps them equal).
+UNIVERSE_ID_PATTERN = r"^[a-z0-9][a-z0-9_.-]{0,63}$"
 
 
 class EodhdSourceConfig(BaseModel):
@@ -198,7 +203,9 @@ class HealthConfig(BaseModel):
 
 
 class ProductionConfig(BaseModel):
-    universe: list[str] = []
+    # A ticker list, or the id of a stored universe (roadmap 10.5) whose
+    # members on the tick's date are traded (stonks.production.universe).
+    universe: list[str] | Annotated[str, Field(pattern=UNIVERSE_ID_PATTERN)] = []
     threshold: float = 0.0
     initial_cash: float = 10_000.0
     slippage_bps: float = 0.0
@@ -481,6 +488,8 @@ class Settings(BaseSettings):
     golive: GoLivePolicy = GoLivePolicy()
     mcp: McpConfig = McpConfig()
     ingest: IngestConfig = IngestConfig()
+    # ``[ensure]``: how on-demand bar fetches run (docs/universes.md).
+    ensure: EnsureSettings = Field(default_factory=EnsureSettings)
     backup: BackupConfig = BackupConfig()
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
 

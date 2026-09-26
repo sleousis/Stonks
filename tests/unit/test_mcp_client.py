@@ -92,6 +92,21 @@ async def test_patch_without_token_fails_before_sending():
 
 
 @pytest.mark.anyio
+async def test_delete_sends_the_token_and_needs_one():
+    seen = {}
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen["method"] = request.method
+        seen["auth"] = request.headers.get("authorization")
+        return httpx2.Response(200, json={"id": "u"})
+
+    assert await _client(handler).delete("/api/universes/u") == {"id": "u"}
+    assert seen == {"method": "DELETE", "auth": f"Bearer {TOKEN}"}
+    with pytest.raises(ApiError, match="STONKS_API_TOKEN"):
+        await _client(handler, token=None).delete("/api/universes/u")
+
+
+@pytest.mark.anyio
 async def test_get_without_token_sends_no_auth_header():
     seen = {}
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -18,6 +18,7 @@ from stonks.app.pagination import Page
 from stonks.core.types import AssetClass
 from stonks.production.settings_builder import build_tick_runtime
 from stonks.production.tick import BackdatedTickError, run_tick
+from stonks.production.universe import EmptyUniverseError, production_tickers
 
 TICK_JOB = "tick"
 
@@ -95,12 +96,13 @@ class TickService:
         return TickRunDetail(**_row_to_view(rows[0]).model_dump(), orders=orders)
 
     def submit(self, request: TickRequest) -> Job:
-        self._universe(request)  # fail fast on an empty universe
+        if not request.tickers and not self._ctx.settings.production.universe:
+            self._universe(None, request)  # fail fast on an empty universe
         return self._runner.submit(TICK_JOB, request.model_dump(mode="json"))
 
     def run(self, request: TickRequest) -> TickResultView:
-        universe = self._universe(request)
         with self._ctx.state() as state, self._ctx.lake() as lake:
+            universe = self._universe(lake, request)
             registry = self._ctx.registry_on(state)
             if request.asset_class is not None:
                 classes = lake.get_asset_classes(universe)
@@ -133,13 +135,16 @@ class TickService:
             dry_run=request.dry_run,
         )
 
-    def _universe(self, request: TickRequest) -> list[str]:
-        universe = list(request.tickers or self._ctx.settings.production.universe)
-        if not universe:
-            raise ValidationError(
-                "production universe is empty; pass tickers or set [production].universe"
+    def _universe(self, lake: Any, request: TickRequest) -> list[str]:
+        """``request.tickers``, else ``[production].universe`` (a list, or a
+        universe id resolved on the tick's date)."""
+        as_of = request.as_of or datetime.now(UTC).date()
+        try:
+            return production_tickers(
+                lake, self._ctx.settings.production.universe, as_of, tickers=request.tickers
             )
-        return universe
+        except EmptyUniverseError as exc:
+            raise ValidationError(str(exc)) from None
 
     def _handle(self, params: dict[str, Any], ctx: JobContext) -> TickResultView:
         return self.run(TickRequest.model_validate(params))

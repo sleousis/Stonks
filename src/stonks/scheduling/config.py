@@ -72,7 +72,8 @@ class JobConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
 
     name: str = Field(min_length=1, pattern=r"^[A-Za-z0-9_.-]+$")
-    #: A registered job action (``ingest_prices``, ``tick``, ``health``, ``report``).
+    #: A registered job action (``ingest_prices``, ``tick``, ``health``,
+    #: ``report``, ``universes_refresh``, ``backup``, ``connections_sync``).
     action: str
     trigger: TriggerConfig
     params: dict[str, Any] = Field(default_factory=dict)
@@ -89,10 +90,16 @@ class JobConfig(BaseModel):
 
 
 def default_jobs() -> list[JobConfig]:
-    """The daily loop on the NYSE calendar: ingest, tick, report after the
-    close; health every four hours; a backup every night; due broker
-    syncs every hour."""
+    """The daily loop on the NYSE calendar: refresh stored universes and
+    fill their recent bars, ingest, tick, report after the close; health
+    every four hours; a backup every night; due broker syncs every hour.
+    ``universes_refresh`` skips while no universe is stored."""
     return [
+        JobConfig(
+            name="universes_refresh",
+            action="universes_refresh",
+            trigger=SessionTriggerConfig(offset_minutes=20),
+        ),
         JobConfig(
             name="ingest_prices",
             action="ingest_prices",

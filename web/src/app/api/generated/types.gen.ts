@@ -1090,6 +1090,30 @@ export type EquityPoint = {
 };
 
 /**
+ * FailingCheck
+ *
+ * One go-live check that failed (``GoLiveCheck`` without ``passed``).
+ */
+export type FailingCheck = {
+    /**
+     * Detail
+     */
+    detail?: string;
+    /**
+     * Limit
+     */
+    limit?: number | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Value
+     */
+    value?: number | null;
+};
+
+/**
  * FeedItemView
  */
 export type FeedItemView = {
@@ -1950,6 +1974,10 @@ export type KillSwitchRequest = {
  *
  * Tunes the class the ``strategy`` ref points at (its ``params`` are
  * ignored: the tuner searches the class's parameter space).
+ *
+ * Give ``universe`` (tickers), ``universe_id`` (a stored universe: every
+ * member on any day of the window, delisted names included), or both
+ * (the preflight then reports members missing from the list).
  */
 export type LabRunRequest = {
     /**
@@ -1972,6 +2000,10 @@ export type LabRunRequest = {
      * End
      */
     end: string;
+    /**
+     * Ensure Data
+     */
+    ensure_data?: boolean;
     /**
      * Grid Size
      */
@@ -2045,7 +2077,11 @@ export type LabRunRequest = {
     /**
      * Universe
      */
-    universe: Array<string>;
+    universe?: Array<string>;
+    /**
+     * Universe Id
+     */
+    universe_id?: string | null;
     walk_forward?: WalkForwardConfig | null;
 };
 
@@ -2068,6 +2104,10 @@ export type LabRunView = {
      * Class Path
      */
     class_path: string;
+    /**
+     * Ensure Job Id
+     */
+    ensure_job_id?: string | null;
     /**
      * N Trials Class
      */
@@ -3203,6 +3243,10 @@ export type ProblemDetails = {
     errors?: Array<{
         [key: string]: unknown;
     }> | null;
+    /**
+     * Failing Checks
+     */
+    failing_checks?: Array<FailingCheck> | null;
     /**
      * Instance
      */
@@ -4403,6 +4447,28 @@ export type StudioCapabilities = {
 };
 
 /**
+ * SurvivalPresetInfo
+ */
+export type SurvivalPresetInfo = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Options
+     */
+    options: {
+        [key: string]: {
+            [key: string]: unknown;
+        };
+    };
+    /**
+     * Tests
+     */
+    tests: Array<string>;
+};
+
+/**
  * SurvivalReportView
  */
 export type SurvivalReportView = {
@@ -4424,6 +4490,234 @@ export type SurvivalReportView = {
      * Test Id
      */
     test_id: string;
+};
+
+/**
+ * SurvivalTestInfo
+ *
+ * A survival test and the options a request's ``test_options[id]`` may
+ * set, as JSON Schema from the backend's own options model.
+ */
+export type SurvivalTestInfo = {
+    /**
+     * Config Schema
+     */
+    config_schema?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Options Schema
+     */
+    options_schema: {
+        [key: string]: unknown;
+    };
+    /**
+     * Presets
+     */
+    presets: Array<string>;
+};
+
+/**
+ * SweepRequest
+ *
+ * A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every
+ * member during the window). ``strategies`` default to every catalogued
+ * non-wrapper strategy. The lab options apply to every run; sweeps never
+ * register strategies.
+ */
+export type SweepRequest = {
+    /**
+     * Benchmark
+     */
+    benchmark?: string | null;
+    /**
+     * Budget
+     */
+    budget?: number;
+    /**
+     * Cost Model
+     */
+    cost_model?: 'zero' | 'realistic' | CostModelSettings | null;
+    /**
+     * Embargo Bars
+     */
+    embargo_bars?: number | null;
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Exclude
+     */
+    exclude?: Array<string>;
+    /**
+     * Grid Size
+     */
+    grid_size?: number;
+    /**
+     * Hypothesis
+     */
+    hypothesis?: string | null;
+    /**
+     * Interval
+     */
+    interval?: string;
+    mcpt?: McptOptions | null;
+    /**
+     * Objective
+     */
+    objective?: 'sharpe' | 'cagr' | 'final_return';
+    /**
+     * Preflight
+     */
+    preflight?: boolean | null;
+    /**
+     * Premortem
+     */
+    premortem?: string | null;
+    /**
+     * Preset
+     */
+    preset?: 'promotion' | 'quick' | 'standard' | null;
+    /**
+     * Register If Passes
+     */
+    register_if_passes?: boolean;
+    /**
+     * Register Strategy
+     */
+    register_strategy?: boolean;
+    /**
+     * Seed
+     */
+    seed?: number;
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * Strategies
+     */
+    strategies?: Array<string> | null;
+    /**
+     * Strict Preflight
+     */
+    strict_preflight?: boolean | null;
+    /**
+     * Survival Tests
+     */
+    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'runs_test' | 'signal_ic' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
+    /**
+     * Test Options
+     */
+    test_options?: {
+        [key: string]: {
+            [key: string]: unknown;
+        };
+    } | null;
+    /**
+     * Train Ratio
+     */
+    train_ratio?: number;
+    /**
+     * Tuner
+     */
+    tuner?: 'grid' | 'random';
+    /**
+     * Universe
+     */
+    universe?: Array<string>;
+    /**
+     * Universe Id
+     */
+    universe_id?: string | null;
+    walk_forward?: WalkForwardConfig | null;
+};
+
+/**
+ * SweepResultView
+ */
+export type SweepResultView = {
+    /**
+     * Errors
+     */
+    errors: number;
+    /**
+     * Failed
+     */
+    failed: number;
+    /**
+     * Passed
+     */
+    passed: number;
+    /**
+     * Rows
+     */
+    rows: Array<SweepRowView>;
+    /**
+     * Universe
+     */
+    universe: Array<string>;
+    /**
+     * Universe Id
+     */
+    universe_id?: string | null;
+};
+
+/**
+ * SweepRowView
+ */
+export type SweepRowView = {
+    /**
+     * Best Params
+     */
+    best_params?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Best Score
+     */
+    best_score?: number | null;
+    /**
+     * Error
+     */
+    error?: string | null;
+    /**
+     * N Trials
+     */
+    n_trials?: number;
+    /**
+     * Run Id
+     */
+    run_id?: string;
+    /**
+     * Strategy
+     */
+    strategy: string;
+    /**
+     * Survival
+     */
+    survival?: {
+        [key: string]: {
+            [key: string]: unknown;
+        };
+    };
+    /**
+     * Ticker
+     */
+    ticker: string | null;
+    /**
+     * Verdict
+     */
+    verdict: 'pass' | 'fail' | 'error';
 };
 
 /**
@@ -7860,6 +8154,52 @@ export type ListCostModelsResponses = {
 
 export type ListCostModelsResponse = ListCostModelsResponses[keyof ListCostModelsResponses];
 
+export type GetLabEnsureResultData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/lab/ensure/{job_id}/result';
+};
+
+export type GetLabEnsureResultErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetLabEnsureResultError = GetLabEnsureResultErrors[keyof GetLabEnsureResultErrors];
+
+export type GetLabEnsureResultResponses = {
+    /**
+     * Successful Response
+     */
+    200: EnsureReport;
+};
+
+export type GetLabEnsureResultResponse = GetLabEnsureResultResponses[keyof GetLabEnsureResultResponses];
+
 export type StartLabRunData = {
     body: LabRunRequest;
     path?: never;
@@ -8033,6 +8373,179 @@ export type GetSignalIcResultResponses = {
 };
 
 export type GetSignalIcResultResponse = GetSignalIcResultResponses[keyof GetSignalIcResultResponses];
+
+export type ListSurvivalPresetsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/lab/survival-presets';
+};
+
+export type ListSurvivalPresetsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListSurvivalPresetsError = ListSurvivalPresetsErrors[keyof ListSurvivalPresetsErrors];
+
+export type ListSurvivalPresetsResponses = {
+    /**
+     * Response Listsurvivalpresets
+     *
+     * Successful Response
+     */
+    200: Array<SurvivalPresetInfo>;
+};
+
+export type ListSurvivalPresetsResponse = ListSurvivalPresetsResponses[keyof ListSurvivalPresetsResponses];
+
+export type ListSurvivalTestsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/lab/survival-tests';
+};
+
+export type ListSurvivalTestsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListSurvivalTestsError = ListSurvivalTestsErrors[keyof ListSurvivalTestsErrors];
+
+export type ListSurvivalTestsResponses = {
+    /**
+     * Response Listsurvivaltests
+     *
+     * Successful Response
+     */
+    200: Array<SurvivalTestInfo>;
+};
+
+export type ListSurvivalTestsResponse = ListSurvivalTestsResponses[keyof ListSurvivalTestsResponses];
+
+export type StartSweepData = {
+    body: SweepRequest;
+    path?: never;
+    query?: never;
+    url: '/api/lab/sweeps';
+};
+
+export type StartSweepErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type StartSweepError = StartSweepErrors[keyof StartSweepErrors];
+
+export type StartSweepResponses = {
+    /**
+     * Successful Response
+     */
+    202: Job;
+};
+
+export type StartSweepResponse = StartSweepResponses[keyof StartSweepResponses];
+
+export type GetSweepResultData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/lab/sweeps/{job_id}/result';
+};
+
+export type GetSweepResultErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetSweepResultError = GetSweepResultErrors[keyof GetSweepResultErrors];
+
+export type GetSweepResultResponses = {
+    /**
+     * Successful Response
+     */
+    200: SweepResultView;
+};
+
+export type GetSweepResultResponse = GetSweepResultResponses[keyof GetSweepResultResponses];
 
 export type GetBarsData = {
     body?: never;

@@ -34,9 +34,16 @@ uv run stonks ingest aggregate --tickers AAPL.US --from 1h --to 4h
 uv run stonks ingest all-intervals --tickers AAPL.US
 uv run stonks audit statements [--tickers AAPL.US]   # statement audit (also runs after ingest fundamentals)
 
+# Universes and on-demand data (docs/universes.md)
+uv run stonks universe list | show ID | members ID --as-of YYYY-MM-DD
+uv run stonks universe create ID [--kind list|exchange|rule|index] [--tickers ...|--csv FILE|--spec JSON]
+uv run stonks universe refresh ID | delete ID --yes | import-index INDEX FILE
+uv run stonks universe ensure ID --start ... --end ... [--interval 1d --source eodhd]
+
 # Lab and registry
 uv run stonks lab run momentum --start 2023-01-01 --end 2025-01-01 --tickers AAPL.US,MSFT.US --preset promotion
 uv run stonks lab run ... --strict | --no-preflight   # data preflight: warnings as errors, or skip it
+uv run stonks lab run ... --universe-id ID [--ensure-data]   # a stored universe, fetching missing bars first
 uv run stonks lab sweep --start 2023-01-01 --end 2025-01-01
 uv run stonks lab ic --strategy momentum --tickers AAPL.US [--events]   # signal IC and event study
 uv run stonks registry list [--status active|shadow|retired]
@@ -142,7 +149,7 @@ uv run python -m stonks.security keygen
 
 ## Conventions to match
 
-- Settings are pydantic models (`config.py`, `config/default.toml`, env overrides); never long kwarg lists. Some blocks own their settings models (`scheduling/config.py`, `ops/config.py`, `ingest/quality_config.py`, `connections/settings.py`, `notify/settings.py`, `production/rules/settings.py`).
+- Settings are pydantic models (`config.py`, `config/default.toml`, env overrides); never long kwarg lists. Some blocks own their settings models (`scheduling/config.py`, `ops/config.py`, `ingest/quality_config.py`, `ingest/ensure_settings.py`, `connections/settings.py`, `notify/settings.py`, `production/rules/settings.py`).
 - ABCs, Protocols and registries are the seams for new behavior (see the third-party rule above).
 - Logging via `stonks.logging.get_logger(name)` (structlog JSON). Cross-block actions carry a `run_id` / `tick_id` so logs correlate.
 - Free-tier EODHD only returns EOD prices; the fundamentals endpoint returns a text error. Live fundamentals tests skip on that signal, never fail.

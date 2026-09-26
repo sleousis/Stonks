@@ -22,6 +22,8 @@ from stonks.scheduling.api_backend import (
     TERMINAL_JOB_STATUSES,
     JobWaitTimeoutError,
     backup_job_outcome,
+    ensure_body,
+    ensure_step,
     health_view_outcome,
     ingest_job_outcome,
     ingest_window,
@@ -36,6 +38,7 @@ from stonks.scheduling.jobs import (
     build_job_specs,
     closed_day_outcome,
     job_universe,
+    universes_outcome,
 )
 
 IN_PROCESS_ACTIONS = ActionRegistry("in_process")
@@ -69,6 +72,10 @@ class InProcessExecutor(JobExecutor):
             )
         return final.status, final.error, result, job.id
 
+    def members(self, universe_id: str, day: Any) -> list[str]:
+        """A stored universe's members on ``day`` (``job_universe`` resolver)."""
+        return self.services.universes.members(universe_id, day).tickers
+
     def asset_classes(self, universe: list[str]) -> dict[str, str]:
         with self.services.context.lake() as lake:
             return lake.get_asset_classes(universe)
@@ -86,7 +93,7 @@ def in_process_ingest_prices(ctx: RunContext) -> JobOutcome:
     from stonks.app.ingest import INGEST_JOB, IngestRequest, IngestResultView
 
     ex = _executor(ctx)
-    universe = job_universe(ctx)
+    universe = job_universe(ctx, ex.members)
     if not universe:
         return JobOutcome("skipped", {"reason": "empty_universe"})
     closed = closed_day_outcome(ctx, universe, ex.asset_classes(universe))
@@ -110,7 +117,7 @@ def in_process_tick(ctx: RunContext) -> JobOutcome:
     from stonks.app.ticks import TICK_JOB, TickRequest, TickResultView
 
     ex = _executor(ctx)
-    universe = job_universe(ctx)
+    universe = job_universe(ctx, ex.members)
     if not universe:
         return JobOutcome("skipped", {"reason": "empty_universe"})
     closed = closed_day_outcome(ctx, universe, ex.asset_classes(universe))
@@ -128,7 +135,8 @@ def in_process_tick(ctx: RunContext) -> JobOutcome:
 
 @IN_PROCESS_ACTIONS.register("health")
 def in_process_health(ctx: RunContext) -> JobOutcome:
-    view = _executor(ctx).services.operations.health_report(job_universe(ctx))
+    ex = _executor(ctx)
+    view = ex.services.operations.health_report(job_universe(ctx, ex.members))
     return health_view_outcome(ctx, view.model_dump(mode="json"))
 
 
@@ -232,3 +240,34 @@ def in_process_connections_sync(ctx: RunContext) -> JobOutcome:
     from stonks.scheduling.local import connections_sync_action
 
     return connections_sync_action(ctx)
+
+
+@IN_PROCESS_ACTIONS.register("universes_refresh")
+def in_process_universes_refresh(ctx: RunContext) -> JobOutcome:
+    """Like the ``api`` action, on the server's ``lake_write`` lane."""
+    from stonks.app.universes import (
+        UNIVERSE_ENSURE_JOB,
+        UNIVERSE_REFRESH_JOB,
+        EnsureDataRequest,
+        UniverseRefreshView,
+    )
+    from stonks.ingest.ensure import EnsureReport
+
+    ex = _executor(ctx)
+    service = ex.services.universes
+    results: dict[str, dict[str, Any]] = {}
+    for universe in service.list():
+        job = service.submit_refresh(universe.id)
+        status, error, result, _ = ex.run_job(job, UNIVERSE_REFRESH_JOB, UniverseRefreshView)
+        step: dict[str, Any] = {"refresh": status}
+        if error:
+            step["refresh_error"] = error
+        if result is not None:
+            step["members"] = result.get("members")
+        if status == "succeeded" and ctx.params.get("ensure", True):
+            request = EnsureDataRequest.model_validate(ensure_body(ctx))
+            e_job = service.submit_ensure(universe.id, request)
+            e_status, e_error, e_result, _ = ex.run_job(e_job, UNIVERSE_ENSURE_JOB, EnsureReport)
+            step |= ensure_step(e_status, e_error, e_result)
+        results[universe.id] = step
+    return universes_outcome(results)
