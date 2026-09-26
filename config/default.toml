@@ -19,6 +19,38 @@ slippage_bps = 0.0
 fee_per_trade = 0.0
 # Ignore closes older than this many calendar days before the tick's as_of.
 max_price_staleness_days = 7
+# Evaluate shadow strategies each tick against their own virtual portfolios
+# (written to shadow_decisions / shadow_portfolio_snapshots; never traded).
+shadow_enabled = true
+
+[production.risk]
+# Risk layer between strategy.decide and the broker. Sells are never blocked.
+# Weights are fractions of portfolio value before the tick's orders.
+enabled = true
+# max_open_positions = 10          # omit for unlimited
+max_weight_per_ticker = 1.0
+cash_buffer_fraction = 0.0
+min_order_notional = 0.0
+
+[production.risk.max_weight_per_asset_class]
+# crypto = 0.2                     # classes not listed are uncapped
+
+[production.health]
+# `stonks health` thresholds.
+max_bar_age_days = 4
+stuck_tick_minutes = 60
+stuck_ingest_minutes = 180
+ingest_failure_lookback_hours = 24
+
+[notify]
+# Backends: "log" (structlog) and/or "webhook" (JSON POST). [] disables alerts.
+backends = ["log"]
+# Drop notifications below this level: info | warning | error.
+min_level = "warning"
+
+[notify.webhook]
+# Set the URL via STONKS_NOTIFY_WEBHOOK_URL in .env; it usually embeds a token.
+timeout_seconds = 5.0
 
 [sources.eodhd]
 base_url = "https://eodhd.com/api"

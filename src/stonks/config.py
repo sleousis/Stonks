@@ -10,9 +10,12 @@ from __future__ import annotations
 import os
 import tomllib
 from pathlib import Path
+from typing import Annotated, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from stonks.core.types import AssetClass
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
 
@@ -45,6 +48,45 @@ class LoggingConfig(BaseModel):
     level: str = "INFO"
 
 
+class RiskPolicy(BaseModel):
+    """Portfolio construction limits applied between ``strategy.decide`` and
+    the broker (``[production.risk]``). Defaults are permissive, so an
+    unconfigured install trades exactly what the strategy asks for.
+
+    Weights are fractions of total portfolio value (cash + marked positions)
+    before the tick's orders. Sells are never blocked, only clipped to the
+    held quantity so they cannot open a short.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    # None = unlimited. Counts distinct tickers held after the tick's orders.
+    max_open_positions: int | None = Field(default=None, ge=0)
+    max_weight_per_ticker: float = Field(default=1.0, ge=0.0, le=1.0)
+    # e.g. {"crypto": 0.2}. Classes not listed are uncapped; when any cap is
+    # set, buys of tickers whose class is unknown are blocked.
+    max_weight_per_asset_class: dict[AssetClass, Annotated[float, Field(ge=0.0, le=1.0)]] = {}
+    # Fraction of portfolio value that must stay in cash after buys.
+    cash_buffer_fraction: float = Field(default=0.0, ge=0.0, le=1.0)
+    # Buys whose (possibly clipped) notional falls below this are dropped.
+    min_order_notional: float = Field(default=0.0, ge=0.0)
+
+
+class HealthConfig(BaseModel):
+    """Thresholds for ``stonks health`` (``[production.health]``)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Latest daily bar older than this many calendar days is stale. 4 covers
+    # a Monday check against Friday's close plus one day of vendor lag.
+    max_bar_age_days: int = Field(default=4, ge=0)
+    stuck_tick_minutes: int = Field(default=60, ge=1)
+    stuck_ingest_minutes: int = Field(default=180, ge=1)
+    # Ingest runs with status 'error' started within this window are unhealthy.
+    ingest_failure_lookback_hours: int = Field(default=24, ge=1)
+
+
 class ProductionConfig(BaseModel):
     universe: list[str] = []
     threshold: float = 0.0
@@ -52,6 +94,29 @@ class ProductionConfig(BaseModel):
     slippage_bps: float = 0.0
     fee_per_trade: float = 0.0
     max_price_staleness_days: int = 7
+    # Evaluate shadow strategies each tick against virtual portfolios.
+    shadow_enabled: bool = True
+    risk: RiskPolicy = RiskPolicy()
+    health: HealthConfig = HealthConfig()
+
+
+class WebhookConfig(BaseModel):
+    # Secret-bearing (Slack/Discord URLs embed a token): prefer the
+    # STONKS_NOTIFY_WEBHOOK_URL env var over committing it to TOML.
+    url: str | None = None
+    timeout_seconds: float = Field(default=5.0, gt=0)
+
+
+class NotifyConfig(BaseModel):
+    """Alert routing (``[notify]``)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Any of "log", "webhook". Empty list disables notifications.
+    backends: list[Literal["log", "webhook"]] = ["log"]
+    # Notifications below this level are dropped.
+    min_level: Literal["info", "warning", "error"] = "warning"
+    webhook: WebhookConfig = WebhookConfig()
 
 
 class Settings(BaseSettings):
@@ -63,6 +128,7 @@ class Settings(BaseSettings):
     logging: LoggingConfig = LoggingConfig()
     sources: SourcesConfig = SourcesConfig()
     production: ProductionConfig = ProductionConfig()
+    notify: NotifyConfig = NotifyConfig()
 
 
 def load_settings(config_path: Path | None = None) -> Settings:
@@ -89,6 +155,10 @@ def _overlay_env(data: dict) -> None:
     api_key = os.environ.get("EODHD_API_KEY")
     if api_key:
         data.setdefault("sources", {}).setdefault("eodhd", {})["api_key"] = api_key
+
+    webhook_url = os.environ.get("STONKS_NOTIFY_WEBHOOK_URL")
+    if webhook_url:
+        data.setdefault("notify", {}).setdefault("webhook", {})["url"] = webhook_url
 
     log_level = os.environ.get("STONKS_LOG_LEVEL")
     if log_level:

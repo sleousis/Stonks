@@ -65,3 +65,98 @@ max_price_staleness_days = 3
 
     settings = load_settings(config_path=cfg)
     assert settings.production.max_price_staleness_days == 3
+
+
+def test_production_risk_and_health_read_from_toml(tmp_path):
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text(
+        """
+[production]
+shadow_enabled = false
+
+[production.risk]
+max_open_positions = 5
+max_weight_per_ticker = 0.2
+cash_buffer_fraction = 0.05
+min_order_notional = 25.0
+
+[production.risk.max_weight_per_asset_class]
+crypto = 0.1
+
+[production.health]
+max_bar_age_days = 3
+stuck_tick_minutes = 30
+""".strip()
+    )
+    s = load_settings(config_path=cfg)
+    assert s.production.shadow_enabled is False
+    assert s.production.risk.max_open_positions == 5
+    assert s.production.risk.max_weight_per_ticker == 0.2
+    assert s.production.risk.max_weight_per_asset_class == {"crypto": 0.1}
+    assert s.production.risk.cash_buffer_fraction == 0.05
+    assert s.production.risk.min_order_notional == 25.0
+    assert s.production.health.max_bar_age_days == 3
+    assert s.production.health.stuck_tick_minutes == 30
+
+
+def test_production_risk_defaults_are_permissive(tmp_path):
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text("")
+    risk = load_settings(config_path=cfg).production.risk
+    assert risk.enabled is True
+    assert risk.max_open_positions is None
+    assert risk.max_weight_per_ticker == 1.0
+    assert risk.max_weight_per_asset_class == {}
+    assert risk.cash_buffer_fraction == 0.0
+    assert risk.min_order_notional == 0.0
+
+
+def test_notify_section_reads_from_toml(tmp_path, monkeypatch):
+    monkeypatch.delenv("STONKS_NOTIFY_WEBHOOK_URL", raising=False)
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text(
+        """
+[notify]
+backends = ["log", "webhook"]
+min_level = "error"
+
+[notify.webhook]
+url = "https://hooks.example.test/abc"
+timeout_seconds = 2.5
+""".strip()
+    )
+    s = load_settings(config_path=cfg)
+    assert s.notify.backends == ["log", "webhook"]
+    assert s.notify.min_level == "error"
+    assert s.notify.webhook.url == "https://hooks.example.test/abc"
+    assert s.notify.webhook.timeout_seconds == 2.5
+
+
+def test_notify_webhook_url_env_overrides_toml(tmp_path, monkeypatch):
+    monkeypatch.setenv("STONKS_NOTIFY_WEBHOOK_URL", "https://hooks.example.test/secret")
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text('[notify.webhook]\nurl = "https://toml.example.test/x"\n')
+    s = load_settings(config_path=cfg)
+    assert s.notify.webhook.url == "https://hooks.example.test/secret"
+
+
+def test_notify_defaults_to_log_backend(tmp_path, monkeypatch):
+    monkeypatch.delenv("STONKS_NOTIFY_WEBHOOK_URL", raising=False)
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text("")
+    s = load_settings(config_path=cfg)
+    assert s.notify.backends == ["log"]
+    assert s.notify.min_level == "warning"
+    assert s.notify.webhook.url is None
+
+
+def test_default_toml_parses(monkeypatch):
+    from pathlib import Path
+
+    monkeypatch.delenv("STONKS_NOTIFY_WEBHOOK_URL", raising=False)
+    repo_cfg = Path(__file__).parents[2] / "config" / "default.toml"
+    s = load_settings(config_path=repo_cfg)
+    assert s.production.risk.enabled is True
+    assert s.production.health.max_bar_age_days == 4
+    assert s.notify.backends == ["log"]
+    assert s.notify.min_level == "warning"
