@@ -35,7 +35,7 @@ from stonks.core.protocols import Broker
 from stonks.core.types import Fill
 from stonks.execution.brokers.base import OrderStateSource, delta_fill
 from stonks.logging import get_logger
-from stonks.production.ledger import ledger_filter
+from stonks.production.ledger import ledger_columns, ledger_filter
 from stonks.store.state import SqliteState
 
 _log = get_logger("stonks.execution.reconcile")
@@ -260,18 +260,30 @@ def _fill_exists(state: SqliteState, fill: Fill) -> bool:
 
 def _insert_fill(state: SqliteState, fill: Fill) -> None:
     # Same timestamp format as production.tick._record_fill so rows written
-    # by either path compare equal.
+    # by either path compare equal. The arrival price (TCA, BL-32) of a
+    # broker fill is the next session's open: copied from the order when
+    # production.tca.refresh_benchmarks already recorded it, else filled in
+    # by that refresh later.
+    values = [
+        fill.order_client_id,
+        fill.ticker,
+        fill.quantity,
+        fill.price,
+        fill.fee,
+        _iso(fill.filled_at),
+    ]
+    if "arrival_price" in ledger_columns(state, "fills"):
+        state.execute(
+            "INSERT INTO fills (order_client_id, ticker, quantity, price, fee, filled_at,"
+            " arrival_price) VALUES (?, ?, ?, ?, ?, ?,"
+            " (SELECT benchmark_price FROM orders WHERE client_id = ?))",
+            [*values, fill.order_client_id],
+        )
+        return
     state.execute(
         "INSERT INTO fills (order_client_id, ticker, quantity, price, fee, filled_at)"
         " VALUES (?, ?, ?, ?, ?, ?)",
-        [
-            fill.order_client_id,
-            fill.ticker,
-            fill.quantity,
-            fill.price,
-            fill.fee,
-            _iso(fill.filled_at),
-        ],
+        values,
     )
 
 

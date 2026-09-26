@@ -186,7 +186,7 @@ Enforced: today status changes carry no reason and no audit row (`registry/store
 
 **P42. The machine keeps the trade journal.**
 Why: a generated review beats looking at the equity curve and reacting to the latest move (Elder; Steenbarger).
-Enforced: BL-32 (decision context on every order, `stonks journal`).
+Enforced: BL-32 (decision context on every order, `stonks tca journal` with notes).
 
 ## 9. Engineering and scalability
 

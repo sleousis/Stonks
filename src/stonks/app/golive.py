@@ -62,6 +62,17 @@ class PromotionChecklistView(BaseModel):
     hypothesis: str | None = None
 
 
+class CostComparisonView(BaseModel):
+    """Live shortfall of the strategy's real orders against the cost
+    model's estimate (BL-32, P22), in bps."""
+
+    orders: int = 0
+    live_is_bps: FiniteFloat = None
+    modelled_bps: FiniteFloat = None
+    #: Live minus modelled, over the orders that recorded an estimate.
+    model_gap_bps: FiniteFloat = None
+
+
 class GoLiveReport(BaseModel):
     strategy_id: str
     status: str
@@ -72,6 +83,8 @@ class GoLiveReport(BaseModel):
     checks: list[GoLiveCheckView]
     #: Promotion context (trial count, DSR, PBO, benchmark excess, ...).
     checklist: PromotionChecklistView = PromotionChecklistView()
+    #: Live costs against the model; null without a real paper period.
+    costs: CostComparisonView | None = None
     policy: GoLivePolicy
 
 
@@ -105,6 +118,7 @@ class GoLiveService:
                 for c in report.checks
             ],
             checklist=PromotionChecklistView.model_validate(report.checklist),
+            costs=CostComparisonView.model_validate(report.costs) if report.costs else None,
             policy=policy.model_copy(deep=True),
         )
 

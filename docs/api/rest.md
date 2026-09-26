@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [connections](#connections-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints)
+Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [connections](#connections-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [tca](#tca-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints)
 
 ## alerts endpoints
 
@@ -248,6 +248,16 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | POST | `/api/studio/spec/validate` | Validate Spec | `lab.run` | [SpecValidateRequest](#specvalidaterequest) | [DraftValidation](#draftvalidation) |
 | GET | `/api/studio/templates` | Templates | sign-in |  | list[[RuleTemplateView](#ruletemplateview)] |
 
+## tca endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/tca/journal` | List Journal | sign-in |  | [Page_JournalEntryView_](#page_journalentryview_) |
+| PUT | `/api/tca/notes/{note_id}` | Update Journal Note | `portfolio.manage` | [NoteRequest](#noterequest) | [JournalNoteView](#journalnoteview) |
+| GET | `/api/tca/orders/{client_id}` | Get Order Tca | sign-in |  | [JournalEntryView](#journalentryview) |
+| POST | `/api/tca/orders/{client_id}/notes` | Add Journal Note | `portfolio.manage` | [NoteRequest](#noterequest) | [JournalNoteView](#journalnoteview) |
+| GET | `/api/tca/summary` | Tca Summary | sign-in |  | [TcaSummaryView](#tcasummaryview) |
+
 ## ticks endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
@@ -468,6 +478,17 @@ API-key connect. ``fields`` are the provider's ``credential_fields`` (plus ``pap
 | `provider` | string | yes |  |
 | `status` | "pending" \| "active" \| "error" | yes |  |
 | `updated_at` | date-time | yes |  |
+
+### CostComparisonView
+
+Live shortfall of the strategy's real orders against the cost model's estimate (BL-32, P22), in bps.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `live_is_bps` | number \| null | no |  |
+| `model_gap_bps` | number \| null | no |  |
+| `modelled_bps` | number \| null | no |  |
+| `orders` | integer | no |  |
 
 ### CostModelPreset
 
@@ -736,6 +757,7 @@ Limits a paper-trading period must meet before ``stonks golive check`` passes (`
 |-------|------|----------|-------------|
 | `checklist` | [PromotionChecklistView](#promotionchecklistview) | no |  |
 | `checks` | list[[GoLiveCheckView](#golivecheckview)] | yes |  |
+| `costs` | [CostComparisonView](#costcomparisonview) \| null | no |  |
 | `passed` | boolean | yes |  |
 | `policy` | [GoLivePolicy](#golivepolicy) | yes |  |
 | `source` | "shadow" \| "portfolio" \| "none" | yes |  |
@@ -933,6 +955,40 @@ One ``data:`` payload of the job event stream.
 | `reason` | "timeout" \| "untracked" \| null | no |  |
 | `status` | "queued" \| "running" \| "succeeded" \| "failed" \| "cancelled" | yes |  |
 
+### JournalEntryView
+
+One order: why it was placed, the signal context, the outcome and the notes people added.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `client_id` | string | yes |  |
+| `context` | object \| null | yes |  |
+| `created_at` | string | yes |  |
+| `decided_at` | string \| null | yes |  |
+| `decision_price` | number \| null | yes |  |
+| `next_session_move_bps` | number \| null | yes |  |
+| `notes` | list[[JournalNoteView](#journalnoteview)] | yes |  |
+| `portfolio_id` | string \| null | yes |  |
+| `quantity` | number | yes |  |
+| `shortfall` | [ShortfallView](#shortfallview) \| null | yes |  |
+| `side` | string | yes |  |
+| `status` | string | yes |  |
+| `status_reason` | string \| null | yes |  |
+| `strategy_id` | string \| null | yes |  |
+| `ticker` | string | yes |  |
+| `trigger` | string \| null | yes |  |
+
+### JournalNoteView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `author` | string | yes |  |
+| `created_at` | string | yes |  |
+| `id` | integer | yes |  |
+| `note` | string | yes |  |
+| `order_client_id` | string | yes |  |
+| `updated_at` | string | yes |  |
+
 ### KillSwitchRequest
 
 | Field | Type | Required | Description |
@@ -1099,6 +1155,12 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `recovery_codes` | list[string] \| null | no |  |
 | `recovery_codes_left` | integer | yes |  |
 
+### NoteRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `note` | string | yes |  |
+
 ### OperationalHaltSettings
 
 | Field | Type | Required | Description |
@@ -1182,6 +1244,15 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[Job](#job)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_JournalEntryView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[JournalEntryView](#journalentryview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
@@ -1667,6 +1738,31 @@ How one shadow strategy was evaluated during the tick.
 | `strategy_id` | string | yes |  |
 | `total_value` | number \| null | yes |  |
 
+### ShortfallView
+
+Implementation shortfall of one order. Costs are positive, in bps of the filled quantity's value at the decision price; ``null`` while an input is not known yet.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `arrival_price` | number \| null | yes |  |
+| `benchmark_price` | number \| null | yes |  |
+| `convention_bps` | number \| null | yes |  |
+| `decision_price` | number | yes |  |
+| `delay_bps` | number \| null | yes |  |
+| `expected_bps` | number \| null | yes |  |
+| `fee_bps` | number \| null | yes |  |
+| `fill_price` | number \| null | yes |  |
+| `filled_quantity` | number | yes |  |
+| `impact_bps` | number \| null | yes |  |
+| `is_bps` | number \| null | yes |  |
+| `is_cost` | number \| null | yes |  |
+| `opportunity_bps` | number \| null | yes |  |
+| `opportunity_cost` | number \| null | yes |  |
+| `ordered_quantity` | number | yes |  |
+| `post_close_price` | number \| null | yes |  |
+| `side` | string | yes |  |
+| `total_bps` | number \| null | yes |  |
+
 ### SignalICRequest
 
 | Field | Type | Required | Description |
@@ -1884,6 +1980,37 @@ What this server lets the Studio do.
 | `next_sync_at` | date-time \| null | yes |  |
 | `portfolios` | list[[PortfolioSyncView](#portfoliosyncview)] | yes |  |
 | `status` | "ok" \| "partial" \| "error" | yes |  |
+
+### TcaGroupView
+
+Costs of a group of orders, weighted by notional, in bps.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `convention_bps` | number \| null | yes |  |
+| `delay_bps` | number \| null | yes |  |
+| `expected_bps` | number \| null | yes |  |
+| `fee_bps` | number \| null | yes |  |
+| `filled_notional` | number | yes |  |
+| `filled_orders` | integer | yes |  |
+| `impact_bps` | number \| null | yes |  |
+| `is_bps` | number \| null | yes |  |
+| `is_cost` | number | yes |  |
+| `key` | string | yes |  |
+| `model_gap_bps` | number \| null | yes |  |
+| `opportunity_bps` | number \| null | yes |  |
+| `opportunity_cost` | number | yes |  |
+| `orders` | integer | yes |  |
+
+### TcaSummaryView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `by` | "all" \| "strategy" \| "ticker" \| "portfolio" \| "day" \| "week" \| "month" | yes |  |
+| `groups` | list[[TcaGroupView](#tcagroupview)] | yes |  |
+| `portfolio_id` | string | yes |  |
+| `since` | date \| null | yes |  |
+| `until` | date \| null | yes |  |
 
 ### TickRequest
 

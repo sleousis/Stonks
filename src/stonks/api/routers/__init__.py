@@ -31,6 +31,7 @@ from stonks.api.routers import (
     statements,
     strategies,
     studio,
+    tca,
     ticks,
     universes,
 )
@@ -64,6 +65,7 @@ API_ROUTERS: list[APIRouter] = [
     universes.router,
     statements.router,
     backups.router,
+    tca.router,
 ]
 
 #: Routers that always need a principal, even for reads on loopback.
