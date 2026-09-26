@@ -166,6 +166,33 @@ def test_register_artifact_meta_is_consistent_between_bundle_and_strategy(regist
     assert {r.test_id for r in bundle.reports} == {"oos", "drift"}
 
 
+def test_register_duplicate_id_raises_without_touching_existing_artifact(registry):
+    reg, _, artifacts_dir = registry
+    sid = reg.register(
+        BuyAndHold({"ticker": "AAPL.US"}), reports=_sample_reports(), strategy_id="fixed"
+    )
+    params_before = (artifacts_dir / sid / "params.json").read_text()
+    meta_before = (artifacts_dir / sid / "meta.json").read_text()
+
+    with pytest.raises(ValueError, match="already registered"):
+        reg.register(
+            BuyAndHold({"ticker": "MSFT.US"}),
+            reports=[SurvivalReport(test_id="extra", passed=False, metrics={})],
+            strategy_id="fixed",
+        )
+
+    assert (artifacts_dir / sid / "params.json").read_text() == params_before
+    assert (artifacts_dir / sid / "meta.json").read_text() == meta_before
+    assert not (artifacts_dir / sid / "reports" / "extra.json").exists()
+    assert reg.load(sid).params["ticker"] == "AAPL.US"
+
+
+def test_set_status_unknown_id_raises_key_error(registry):
+    reg, _, _ = registry
+    with pytest.raises(KeyError):
+        reg.set_status("does_not_exist", "active")
+
+
 def test_load_falls_back_to_constructor_when_class_has_no_load(registry):
     reg, _, _ = registry
     sid = reg.register(NoLoadStrategy({"x": 1}), reports=_sample_reports())
