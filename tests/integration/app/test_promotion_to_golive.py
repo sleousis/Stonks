@@ -24,6 +24,13 @@ MOMENTUM = f"{Momentum.__module__}:{Momentum.__name__}"
 SERIAL = {"max_workers": 1}
 
 
+class ShortMomentum(Momentum):
+    """Momentum on a 5-bar lookback labels about 5 bars ahead, not the
+    default month, so the walk-forward embargo stays short."""
+
+    label_horizon_bars = 5
+
+
 def _seed_waves(path) -> None:
     """Two oscillating tickers so a short-lookback momentum trades often."""
     dates = pd.bdate_range(start="2025-10-01", end="2026-04-01")
@@ -79,11 +86,11 @@ def promoted(settings, seeded):
     try:
         execution = execute_lab_run(
             settings,
-            Momentum,
+            ShortMomentum,
             request,
             lake=lake,
             state=state,
-            fixed_params={"lookback_days": 5, "threshold": 0.0},
+            fixed_params={"lookback_days": 5, "skip_days": 0, "threshold": 0.0},
         )
     finally:
         lake.close()

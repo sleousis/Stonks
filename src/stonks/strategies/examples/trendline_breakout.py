@@ -12,6 +12,12 @@ Shape-wise this is very close to :class:`DonchianBreakout` but the
 envelope is slope-aware: a trending market where highs drift up still
 registers a breakout the moment price lifts through the fitted upper
 line — not just a flat rolling max.
+
+Asset classes (BL-43): as for :class:`DonchianBreakout`, Grimes finds
+breakouts on single stocks no better than random, so the default universe
+is ``commodity``, ``crypto`` and ``bond`` with ``BTC-USD.CC`` as the
+default ticker. Equities are an opt-in through the ``asset_classes``
+param. Param sets saved before BL-43 still load.
 """
 
 from __future__ import annotations
@@ -33,6 +39,16 @@ _FIT_CACHE_MAX = 20_000
 
 class TrendlineBreakoutStrategy(BaseStrategy):
     id = "trendline_breakout"
+    applicable_asset_classes = ("commodity", "crypto", "bond")
+    hypothesis = (
+        "A close through a resistance line fitted to the last N bars starts "
+        "a trend in futures and crypto often enough that riding it pays for "
+        "the false breakouts. Fails in ranges and, per Grimes, on single "
+        "stocks."
+    )
+    alpha_family = "trend"
+    premise = "trend"
+    label_horizon_bars = 20
 
     @classmethod
     def parameter_spec(cls):
@@ -55,7 +71,7 @@ class TrendlineBreakoutStrategy(BaseStrategy):
             ParameterSpec(
                 name="ticker",
                 kind="categorical",
-                default="AAPL.US",
+                default="BTC-USD.CC",
                 bounds=None,
                 tunable=False,
                 description="Ticker the strategy trades.",

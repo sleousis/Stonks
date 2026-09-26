@@ -110,7 +110,7 @@ def test_real_score_is_the_walk_forward_oos_mean(ds):
 
 def test_only_bars_after_the_first_training_window_are_permuted(ds):
     tuner = _RecordingTuner()
-    folds = WF.folds_for(ds)
+    folds = WF.folds_for(ds, Momentum({}))
     first_train_end = folds[0].train_end
     cfg = WalkForwardPermutationConfig(walk_forward=WF, n_permutations=3, max_p_value=1.0, seed=4)
     WalkForwardPermutationTest(cfg, TuningSetup(tuner, SharpeObjective(), budget=1)).run(

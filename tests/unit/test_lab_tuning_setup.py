@@ -104,8 +104,12 @@ def test_fixed_params_of_keeps_only_the_non_tunable_params():
         "ticker": "Y.US",
         "allocation": 0.3,
     }
-    # Momentum: lookback_days / threshold are tunable, allocation is not
-    assert fixed_params_of(Momentum({"lookback_days": 5, "allocation": 0.5})) == {"allocation": 0.5}
+    # Momentum: lookback_days / threshold are tunable, allocation and
+    # skip_days are not (an old-style param set pins skip_days to 0)
+    assert fixed_params_of(Momentum({"lookback_days": 5, "allocation": 0.5})) == {
+        "allocation": 0.5,
+        "skip_days": 0,
+    }
 
 
 def test_tune_and_fit_keeps_fixed_params_in_the_space_and_the_result():
