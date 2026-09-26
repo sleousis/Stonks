@@ -1967,6 +1967,12 @@ def halts_clear(
     console.print(f"[green]cleared[/green]: halt #{view.id} ({view.kind})")
 
 
+# ---- transaction cost analysis and the journal (BL-32) ----------------------
+
+from stonks.cli_tca import app as tca_app  # noqa: E402
+
+app.add_typer(tca_app, name="tca")
+
 golive_app = typer.Typer(help="Go-live gate for paper-traded strategies")
 app.add_typer(golive_app, name="golive")
 
