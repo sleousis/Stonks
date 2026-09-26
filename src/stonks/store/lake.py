@@ -986,11 +986,13 @@ class DuckDBLake:
         *,
         frequency: str | None = None,
         missing_filing_lag_days: int = 90,
+        exclude_flagged: bool = False,
     ) -> pd.DataFrame:
         """Rows of :meth:`get_statement_history` whose ``available_date`` is
         on or before ``as_of`` (a date, or a datetime's calendar day),
         newest period first. ``frequency`` (``'Q'`` / ``'A'``) narrows the
-        result to one reporting cadence."""
+        result to one reporting cadence. ``exclude_flagged`` drops periods
+        the statement audit (BL-36) flagged with severity ``error``."""
         df = self.get_statement_history(
             statement, ticker, missing_filing_lag_days=missing_filing_lag_days
         )
@@ -998,6 +1000,11 @@ class DuckDBLake:
         mask = df["available_date"].map(lambda d: d <= cutoff).astype(bool)
         if frequency is not None:
             mask &= df["frequency"] == frequency
+        if exclude_flagged and not df.empty:
+            flags = self.get_statement_flags(ticker, severity="error")
+            bad = set(zip(flags["period_end"], flags["frequency"], strict=True))
+            keys = zip(df["period_end"], df["frequency"], strict=True)
+            mask &= pd.Series([k not in bad for k in keys], index=df.index)
         out = df[mask].iloc[::-1]
         return out.reset_index(drop=True)
 
@@ -1065,6 +1072,56 @@ class DuckDBLake:
             [ticker],
         ).fetchdf()
         return _dates_to_python(df, ("date",))
+
+    # ---- statement audit (BL-36, migration 014) -----------------------------
+
+    def replace_statement_flags(
+        self, flags: pd.DataFrame, *, tickers: list[str] | None = None
+    ) -> int:
+        """Replace the ``statement_flags`` of ``tickers`` (every ticker when
+        ``None``) with ``flags`` in one transaction. Written by
+        :func:`stonks.store.audit.audit_statements`."""
+        cols = (
+            "ticker",
+            "period_end",
+            "frequency",
+            "check_id",
+            "severity",
+            "detail",
+            "flagged_at",
+        )
+        with self.transaction():
+            if tickers is None:
+                self.con.execute("DELETE FROM statement_flags")
+            elif tickers:
+                self.con.execute("DELETE FROM statement_flags WHERE ticker = ANY(?)", [tickers])
+            if not flags.empty:
+                self._upsert(
+                    flags,
+                    table="statement_flags",
+                    cols=cols,
+                    pk=("ticker", "period_end", "frequency", "check_id"),
+                )
+        return len(flags)
+
+    def get_statement_flags(
+        self, ticker: str | None = None, *, severity: str | None = None
+    ) -> pd.DataFrame:
+        """Audit flags, one row per failing period and check, ordered by
+        ticker, period and check. ``ticker`` and ``severity`` narrow it."""
+        where, params = [], []
+        if ticker is not None:
+            where.append("ticker = ?")
+            params.append(ticker)
+        if severity is not None:
+            where.append("severity = ?")
+            params.append(severity)
+        clause = f"WHERE {' AND '.join(where)}" if where else ""
+        df = self.con.execute(
+            f"SELECT * FROM statement_flags {clause} ORDER BY ticker, period_end, frequency, check_id",
+            params,
+        ).fetchdf()
+        return _dates_to_python(df, ("period_end",))
 
     # ---- ingest_runs --------------------------------------------------------
 
