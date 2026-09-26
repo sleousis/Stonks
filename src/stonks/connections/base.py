@@ -269,8 +269,8 @@ class BrokerConnection(ABC):
     def open(cls, credentials: Credentials, context: ProviderContext) -> Self:
         """An adapter bound to one connection's credentials."""
 
-    @classmethod
-    def check_configured(cls, config: ConnectionsConfig) -> None:  # noqa: B027 - optional hook
+    @classmethod  # noqa: B027 - optional hook, not abstract
+    def check_configured(cls, config: ConnectionsConfig) -> None:
         """Raise :class:`ProviderNotConfigured` when app-level settings are
         missing. API-key providers need none."""
 
