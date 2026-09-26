@@ -17,12 +17,49 @@ the MCP server never opens the lake or the state database: it is a thin client
 of the running REST API. Start the API first:
 
 ```bash
-export STONKS_API_TOKEN=...      # same value for serve and mcp
 uv run stonks serve              # http://127.0.0.1:8000
+export STONKS_MCP_TOKEN=stk_...  # your personal token, made in the web app
 ```
 
 If the API is not reachable, every tool returns an error that says so and
 tells you to run `stonks serve`.
+
+## Who the tools act as
+
+The server acts as one person: the owner of its token.
+
+```mermaid
+flowchart LR
+  C[MCP client] --> M[stonks mcp]
+  M -- Bearer stk_... --> A[REST API]
+  A --> P[Principal: user, role, token scopes]
+  P --> R[Same permission and ownership checks as the web app]
+```
+
+- Make the token in the web app (Settings, API tokens). Pick its scopes:
+  `read` for a read-only assistant, add `lab` for research jobs, `trade`
+  for subscriptions and the kill switch. A token never exceeds its user's
+  role.
+- `whoami` shows the user, role and scopes.
+- Every tool does only what that user may do in the web app. A refused
+  call says that the token's role or scopes do not allow it.
+- Portfolio tools take an optional `portfolio_id`. It must be one of your
+  portfolios, otherwise the answer is "not found". Without it you get your
+  own book. Admins get totals (`get_portfolio_totals`,
+  `get_insights_totals`), never another trader's holdings.
+- Actions that need a fresh second factor are refused: switching a
+  subscription to auto, connecting or deleting a broker, resuming the kill
+  switch, user admin. The message points to the web app. A token can never
+  pass a second factor.
+- `STONKS_MCP_TOKEN` wins over `STONKS_API_TOKEN`, so the server's shared
+  token in the same `.env` is not picked up by accident. With the shared
+  token the server acts as the bootstrap admin and logs a warning.
+
+A test (`tests/integration/app/multiuser/test_mcp_permissions.py`) calls
+every tool as a viewer, a trader, a read-only trader token and an admin
+with and without the `admin` scope. Each request must be refused exactly
+when the REST route's permission is. A second test hands Alice's server
+Bob's ids and checks none of Bob's rows come back.
 
 ## Configuration
 
@@ -31,11 +68,11 @@ tells you to run `stonks serve`.
 | `[mcp].api_url` | `config/default.toml` | `http://127.0.0.1:8000` | Base URL of the REST API |
 | `[mcp].timeout_seconds` | `config/default.toml` | `30` | Per-request HTTP timeout |
 | `[mcp].max_wait_seconds` | `config/default.toml` | `600` | Upper bound for `wait_for_job` |
-| `STONKS_API_TOKEN` | env / `.env` | unset | Bearer token sent to the API |
+| `STONKS_MCP_TOKEN` | env / `.env` | unset | Your personal API token (`stk_...`), sent as the bearer |
+| `STONKS_API_TOKEN` | env / `.env` | unset | Fallback: the old shared token, acts as the bootstrap admin |
 
-The token is env-only. Without it the read tools work (reads are open on
-loopback by default), and job and write tools fail with a message asking for
-it. The token is never sent over plain `http` to a non-loopback host:
+The token is env-only. Without one, job and write tools fail with a message
+asking for it, and reads work only on a dev machine (`STONKS_PROFILE=dev`). The token is never sent over plain `http` to a non-loopback host:
 `stonks mcp` exits with an error instead (use `https`). `[mcp]` is read from
 `config/default.toml` in the working directory, so start the server from the
 repo root (the `--directory` / `cwd` settings below do that).
@@ -45,7 +82,7 @@ repo root (the `--directory` / `cwd` settings below do that).
 From the repo root:
 
 ```bash
-claude mcp add stonks --env STONKS_API_TOKEN=your-token -- uv run --directory "$(pwd)" stonks mcp
+claude mcp add stonks --env STONKS_MCP_TOKEN=stk_your-token -- uv run --directory "$(pwd)" stonks mcp
 ```
 
 Or put the token in the repo's `.env` (`stonks mcp` loads it) and drop
@@ -61,7 +98,7 @@ Add to `claude_desktop_config.json` (Settings, Developer, Edit Config):
     "stonks": {
       "command": "uv",
       "args": ["run", "--directory", "C:\\path\\to\\Stonks", "stonks", "mcp"],
-      "env": { "STONKS_API_TOKEN": "your-token" }
+      "env": { "STONKS_MCP_TOKEN": "stk_your-token" }
     }
   }
 }
@@ -80,7 +117,11 @@ Every tool carries MCP annotations (`readOnlyHint`, `destructiveHint`,
 |------|-------|
 | `health` | `GET /api/health` |
 | `get_health_report` (freshness, stuck ticks/ingests, ingest failures) | `GET /api/health/report` |
+| `whoami` (the token's user, role and scopes) | `GET /api/auth/me` |
 | `get_portfolio`, `list_portfolio_snapshots` | `GET /api/portfolio[/snapshots]` |
+| `get_insights` (allocation, exposure and beta, P&L over periods, risk) | `GET /api/insights` |
+| `get_strategy_agreement` (per holding, which active strategies agree, and why) | `GET /api/insights/agreement` |
+| `get_portfolio_totals`, `get_insights_totals` (admins, no holdings) | `GET /api/portfolio/totals`, `GET /api/insights/totals` |
 | `get_pnl` | `GET /api/pnl` |
 | `get_risk_policy` | `GET /api/risk/policy` |
 | `get_broker` (kind, paper, allow_live, credentials configured; never keys) | `GET /api/brokers` |
@@ -142,7 +183,7 @@ given).
 | `sync_connection` (idempotent, `openWorld`: reads from the broker, read-only there) | `POST /api/connections/{id}/sync` |
 
 Connecting, linking and removing a broker are console-only: they carry
-credentials (and, once login lands, a fresh second factor).
+credentials and need a fresh second factor.
 
 Code drafts (`kind: "code"`) run Python inside the API server. The API answers
 403 unless `[api] allow_code_strategies = true`; the Studio tools pass that
@@ -168,13 +209,13 @@ Resource: `stonks://portfolio/summary` (cash, total value, positions).
 - No tool changes broker settings or configuration, or enables live trading.
 - The token is only sent as a bearer header. Tool output and errors are
   redacted, and logs go to stderr (stdout carries the MCP protocol).
-- The API enforces auth itself: every mutating route needs the token whatever
-  the client.
+- The API enforces auth itself: every route checks the token's principal,
+  whatever the client. MCP adds no permission of its own and removes none.
 
 ## Adding a tool
 
 Tools live in `src/stonks/mcp/tools/`, one module per area: `reads.py`,
-`jobs.py`, `guarded.py`, `studio.py`. Shared annotations, parameter types and
+`jobs.py`, `guarded.py`, `studio.py`, `insights.py` and others. Shared annotations, parameter types and
 helpers are in `common.py`.
 
 - A parameterless `GET` is one `RouteRead(name, path, description)` row in the
@@ -190,4 +231,6 @@ helpers are in `common.py`.
 - A new module goes into `MODULES` in `tools/__init__.py`.
 
 Add a test in `tests/integration/app/test_mcp_server.py` (or
-`test_mcp_studio.py`) and put the tool in the catalogue sets there.
+`test_mcp_studio.py`) and put the tool in the catalogue sets there. Add a
+row to `CASES` in `tests/integration/app/multiuser/test_mcp_permissions.py`
+with the route the tool reaches and arguments that reach it.

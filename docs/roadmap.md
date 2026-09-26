@@ -302,7 +302,9 @@ Decided: one small always-on cloud VM (for example Hetzner Cloud or DigitalOcean
 
 - Done: 15.1 design; 15.2 data model (migration 010, default owner `usr_owner` and portfolio `pf_default`, scoped services, golden single-owner tick); 15.3 read-only connection seam with Alpaca, SnapTrade and fake providers (`python -m stonks.connections`); the 15.6 notification backend (outbox, Web Push, email, webhook, quiet hours, preferences).
 - Partly: 15.5 (the tick loops over portfolio books and `load_tick_plan` builds them from paper and auto subscriptions, but the entrypoints still run the single default book; the notify hook, the auto checklist, trading through connections and the kill switch are open); 15.6 delivery works, but the tick does not enqueue signals yet.
-- Not started: per-user API and MCP tokens, 15.4 insights, 15.7 simple home screen.
+- Done: 15.4 insights. Any portfolio you own, a synced broker account too, shows allocation (asset class, sector, currency, ticker), exposure (gross, net, beta), P&L over periods, risk (volatility, drawdown, VaR, concentration) and which active strategies agree or disagree with each holding, and why. Routes under `/api/insights`, MCP tools `get_insights` and `get_strategy_agreement`. Admins see totals only.
+- Done: per-user API and MCP tokens. `stonks mcp` acts as the owner of `STONKS_MCP_TOKEN`, with that token's scopes. A test calls every MCP tool as several people and checks it is refused exactly when its REST route is.
+- Not started: 15.7 simple home screen.
 
 Every trader gets a simple experience: connect a broker for insights, pick strategies, and choose whether Stonks acts or only notifies.
 

@@ -76,7 +76,7 @@ Cancelling a job needs `operations.run` for operator jobs (ticks, ingests, backu
 
 ## Your data only
 
-Portfolio, orders, fills and P&L reads take an optional `portfolio_id`. It must be one of your portfolios, or the answer is `404`. Without it you get your own book. Admins get the same `404` for other people's portfolios. They see `GET /api/portfolio/totals` instead: cash and value summed over every book, with no tickers. Connections, notifications, alerts, subscriptions, halts and tokens follow the same rule.
+Portfolio, orders, fills, P&L and insights reads take an optional `portfolio_id`. It must be one of your portfolios, or the answer is `404`. Without it you get your own book. Admins get the same `404` for other people's portfolios. They see `GET /api/portfolio/totals` and `GET /api/insights/totals` instead: cash, value, asset classes and exposure summed over every book, with no tickers. Connections, notifications, alerts, subscriptions, halts and tokens follow the same rule.
 
 - `GET /api/alerts` shows your alerts. Admins also see the admin audience (alerts with no single recipient).
 - Jobs and Studio drafts record who made them (`owner_id`). Only the owner sees, cancels or changes one. Admins see all of them. Anyone else gets `404`.
@@ -89,7 +89,7 @@ Some actions need a second factor checked in the last 10 minutes: user admin, a 
 
 ## API tokens
 
-Create one in the browser with `POST /api/auth/tokens` (name, scopes, optional expiry in days). The token looks like `stk_<id>_<secret>` and is shown once. Only its SHA-256 is stored. List with `GET /api/auth/tokens`, revoke with `DELETE /api/auth/tokens/{id}`. Use it as `Authorization: Bearer stk_...`, for example in the MCP server's `STONKS_API_TOKEN`.
+Create one in the browser with `POST /api/auth/tokens` (name, scopes, optional expiry in days). The token looks like `stk_<id>_<secret>` and is shown once. Only its SHA-256 is stored. List with `GET /api/auth/tokens`, revoke with `DELETE /api/auth/tokens/{id}`. Use it as `Authorization: Bearer stk_...`, for example in the MCP server's `STONKS_MCP_TOKEN`.
 
 ## Job event streams
 
@@ -180,4 +180,4 @@ The `[auth]` section of `config/default.toml`. Each value can be overridden by `
 | `failure_window_minutes` | 15 |
 | `totp_issuer` | Stonks |
 
-Secrets stay in the environment only: `STONKS_SECRET_KEYS`, `STONKS_API_TOKEN`. See `.env.example`.
+Secrets stay in the environment only: `STONKS_SECRET_KEYS`, `STONKS_API_TOKEN`, `STONKS_MCP_TOKEN`. See `.env.example`.

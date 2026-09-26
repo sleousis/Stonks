@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [connections](#connections-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tca](#tca-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints)
+Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [connections](#connections-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tca](#tca-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints)
 
 ## alerts endpoints
 
@@ -115,6 +115,14 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | GET | `/api/ingest/jobs/{job_id}/result` | Get Ingest Result | sign-in |  | [IngestResultView](#ingestresultview) |
 | GET | `/api/ingest/runs` | List Runs | sign-in |  | [Page_IngestRunView_](#page_ingestrunview_) |
 | POST | `/api/ingest/runs` | Start Ingest | `operations.run` | [IngestRequest](#ingestrequest) | [Job](#job) |
+
+## insights endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/insights` | Get Insights | sign-in |  | [InsightsView](#insightsview) |
+| GET | `/api/insights/agreement` | Get Agreement | sign-in |  | [AgreementView](#agreementview) |
+| GET | `/api/insights/totals` | Get Totals | `portfolio.totals` |  | [InsightsTotalsView](#insightstotalsview) |
 
 ## jobs endpoints
 
@@ -304,6 +312,16 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 
 ## Schemas
 
+### AgreementView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date \| null | yes | The price day the strategies scored. |
+| `holdings` | list[[HoldingAgreement](#holdingagreement)] | yes |  |
+| `portfolio_id` | string | yes |  |
+| `skipped` | list[string] | yes | Active strategies that could not be loaded. |
+| `strategies` | list[string] | yes | Active strategies asked, in registry order. |
+
 ### AlertView
 
 | Field | Type | Required | Description |
@@ -314,6 +332,24 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | `level` | "info" \| "warning" \| "error" | yes |  |
 | `message` | string | yes |  |
 | `title` | string | yes |  |
+
+### AllocationSlice
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `holdings` | integer | yes | Holdings in the group (0 for cash). |
+| `key` | string | yes | The group: an asset class, sector, currency or ticker. |
+| `value` | number | yes | Market value of the group (shorts count negative). |
+| `weight` | number \| null | yes | value / the book's total value; null when the total is zero or less. |
+
+### AllocationView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `asset_class` | list[[AllocationSlice](#allocationslice)] | yes |  |
+| `currency` | list[[AllocationSlice](#allocationslice)] | yes |  |
+| `sector` | list[[AllocationSlice](#allocationslice)] | yes |  |
+| `ticker` | list[[AllocationSlice](#allocationslice)] | yes |  |
 
 ### AlpacaStatus
 
@@ -488,6 +524,17 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `reason` | string | yes |  |
+
+### Concentration
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `effective_holdings` | number \| null | yes | 1 / hhi. |
+| `hhi` | number \| null | yes | Herfindahl index of the holding weights (0 to 1). |
+| `holdings` | integer | yes | Priced holdings. |
+| `largest` | string \| null | yes |  |
+| `top5_weight` | number \| null | yes |  |
+| `top_weight` | number \| null | yes | Largest holding's share of gross holdings. |
 
 ### ConnectWithKeysRequest
 
@@ -725,6 +772,18 @@ What an ensure did. ``run_id`` is the ``ingest_runs`` row (``None`` when nothing
 | `timestamp` | date-time | yes |  |
 | `value` | number | yes |  |
 
+### Exposure
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `benchmark` | string \| null | yes |  |
+| `beta` | number \| null | yes | Sum of each holding's weight times its beta to the benchmark, over the holdings with a beta. Null when none has one. |
+| `beta_coverage` | number | yes | Share of the gross holdings (by value) that have a beta. |
+| `gross` | number \| null | yes | (long - short) / total value; null without value. |
+| `long_value` | number | yes |  |
+| `net` | number \| null | yes | (long + short) / total value; null without value. |
+| `short_value` | number | yes | Market value of short holdings (zero or negative). |
+
 ### FailingCheck
 
 One go-live check that failed (``GoLiveCheck`` without ``passed``).
@@ -873,6 +932,17 @@ Thresholds for ``stonks health`` (``[production.health]``).
 |-------|------|----------|-------------|
 | `tickers` | list[string] \| null | no |  |
 
+### HoldingAgreement
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `agree` | integer | yes |  |
+| `disagree` | integer | yes |  |
+| `opinions` | list[[Opinion](#opinion)] | yes |  |
+| `side` | "long" \| "short" | yes |  |
+| `symbol` | string | yes |  |
+| `ticker` | string \| null | yes |  |
+
 ### HorizonICView
 
 | Field | Type | Required | Description |
@@ -959,6 +1029,37 @@ An index constituent history as CSV (``date,ticker,action`` with ``add``, ``remo
 | `status` | string \| null | yes |  |
 | `tickers_failed` | integer \| null | yes |  |
 | `tickers_ok` | integer \| null | yes |  |
+
+### InsightsTotalsView
+
+Sums over every active portfolio's latest snapshot, for admins. No tickers, sectors or per-person numbers (decision 2026-09-26).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `asset_class` | list[[AllocationSlice](#allocationslice)] | yes |  |
+| `cash` | number | yes |  |
+| `exposure` | [Exposure](#exposure) | yes |  |
+| `owners` | integer | yes |  |
+| `portfolios` | integer | yes |  |
+| `total_value` | number | yes |  |
+
+### InsightsView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `allocation` | [AllocationView](#allocationview) | yes |  |
+| `cash` | number | yes |  |
+| `currency` | string | yes | Reporting currency. Amounts are not FX-converted. |
+| `exposure` | [Exposure](#exposure) | yes |  |
+| `notes` | list[string] | yes |  |
+| `pnl` | list[[PeriodPnl](#periodpnl)] | yes |  |
+| `portfolio_id` | string | yes |  |
+| `risk` | [RiskView](#riskview) | yes |  |
+| `source` | "tick" \| "sync" \| null | yes | tick (the Stonks ledger) or sync (a broker). |
+| `taken_at` | date-time \| null | yes | When the snapshot read was taken. |
+| `total_value` | number | yes |  |
+| `uncovered` | list[string] | yes | Broker symbols no ticker maps to. |
+| `unpriced` | list[string] | yes | Holdings without a price, left out of the numbers. |
 
 ### InstrumentView
 
@@ -1235,6 +1336,15 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 |-------|------|----------|-------------|
 | `max_bar_age_days` | integer \| null | no |  |
 
+### Opinion
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `expected_return` | number \| null | yes |  |
+| `reason` | string | yes |  |
+| `stance` | "agree" \| "disagree" \| "no_view" \| "not_applicable" \| "error" | yes |  |
+| `strategy_id` | string | yes |  |
+
 ### OrderView
 
 | Field | Type | Required | Description |
@@ -1411,6 +1521,18 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `new_password` | string | yes |  |
+
+### PeriodPnl
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `change` | number \| null | yes | Value change, deposits and withdrawals included. |
+| `change_pct` | number \| null | yes | change / start_value (0.05 = +5%). |
+| `end_day` | date | yes |  |
+| `end_value` | number | yes |  |
+| `period` | "1d" \| "1w" \| "1m" \| "3m" \| "ytd" \| "1y" \| "inception" | yes |  |
+| `start_day` | date \| null | yes | Day of the start value; null without history. |
+| `start_value` | number \| null | yes |  |
 
 ### PnlRowView
 
@@ -1716,6 +1838,26 @@ Portfolio construction limits applied between ``strategy.decide`` and the broker
 | `max_weight_per_ticker` | number | no |  |
 | `min_order_notional` | number | no |  |
 | `rules` | [RuleSettings](#rulesettings) | no |  |
+
+### RiskStats
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `current_drawdown` | number | yes | Latest value against its peak, <= 0. |
+| `expected_shortfall_95` | number | yes | Mean return at or below var_95. |
+| `max_drawdown` | number | yes | Worst fall from a peak, <= 0. |
+| `observations` | integer | yes | Daily returns the numbers use. |
+| `var_95` | number | yes | One-day historical value at risk, a return (loss < 0). |
+| `volatility` | number \| null | yes | Annualized (252 days) standard deviation. |
+
+### RiskView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `concentration` | [Concentration](#concentration) | yes |  |
+| `history` | [RiskStats](#riskstats) \| null | yes | From the portfolio's own daily values; null with under three days. |
+| `holdings` | [RiskStats](#riskstats) \| null | yes | Today's weights applied to the last year of price returns; null without enough prices. |
+| `returns_as_of` | date \| null | yes | Last price day behind holdings risk and beta. |
 
 ### Role
 
