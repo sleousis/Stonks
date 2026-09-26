@@ -1,9 +1,14 @@
-"""Shared dependencies: the services container, auth and pagination."""
+"""Shared dependencies: the services container, auth and pagination.
+
+Every request resolves to one :class:`~stonks.auth.Principal` (session
+cookie with CSRF, personal API token, or the legacy ``STONKS_API_TOKEN``
+mapped to the bootstrap admin). See ``docs/security.md``."""
 
 from __future__ import annotations
 
 import hmac
 import ipaddress
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -14,9 +19,21 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from stonks.accounts import Scope
 from stonks.app.services import Services
+from stonks.auth import (
+    AuthService,
+    NotAuthenticated,
+    Permission,
+    PermissionDenied,
+    Principal,
+    SessionInfo,
+    require,
+)
 from stonks.config import ApiConfig
 
-_bearer = HTTPBearer(auto_error=False, description="STONKS_API_TOKEN")
+_bearer = HTTPBearer(
+    auto_error=False,
+    description="A personal API token (stk_...) or, while it lasts, STONKS_API_TOKEN",
+)
 
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
@@ -41,21 +58,57 @@ def _is_loopback(host: str | None) -> bool:
         return False
 
 
-def _check_token(cfg: ApiConfig, creds: HTTPAuthorizationCredentials | None) -> None:
-    if cfg.token is None:
-        # Fail closed: without a configured token nothing mutating is allowed.
-        raise HTTPException(
-            status_code=503, detail="API token not configured; set STONKS_API_TOKEN"
+SESSION_COOKIE = "stonks_session"
+CSRF_COOKIE = "stonks_csrf"
+CSRF_HEADER = "X-CSRF-Token"
+
+
+def get_auth(request: Request) -> AuthService:
+    """The app's :class:`AuthService`, built on first use (tests may set
+    ``app.state.auth`` beforehand)."""
+    auth = getattr(request.app.state, "auth", None)
+    if auth is None:
+        services = get_services(request)
+
+        def legacy() -> str | None:
+            token = services.context.settings.api.token
+            return token.get_secret_value() if token is not None else None
+
+        auth = AuthService(services.context.state, legacy_token=legacy)
+        request.app.state.auth = auth
+    return auth
+
+
+AuthDep = Annotated[AuthService, Depends(get_auth)]
+
+
+def _client_ip(request: Request) -> str | None:
+    return request.client.host if request.client else None
+
+
+def _resolve(request: Request, creds: HTTPAuthorizationCredentials | None) -> Principal:
+    """One principal per request, cached on ``request.state``.
+
+    A bearer token wins (an API token ``stk_...`` or the legacy
+    ``STONKS_API_TOKEN``); otherwise the session cookie, which also needs
+    the ``X-CSRF-Token`` header on unsafe methods. A session still waiting
+    for its second factor is refused (401 ``mfa_required``)."""
+    cached = getattr(request.state, "principal", None)
+    if cached is not None:
+        return cached
+    auth = get_auth(request)
+    if creds is not None:
+        principal = auth.principal_for_bearer(creds.credentials)
+    elif request.cookies.get(SESSION_COOKIE):
+        principal = auth.principal_for_session(
+            request.cookies.get(SESSION_COOKIE),
+            csrf=request.headers.get(CSRF_HEADER),
+            unsafe=request.method not in _SAFE_METHODS,
         )
-    supplied = creds.credentials if creds is not None else ""
-    if not hmac.compare_digest(
-        supplied.encode("utf-8"), cfg.token.get_secret_value().encode("utf-8")
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="missing or invalid bearer token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    else:
+        raise NotAuthenticated()
+    request.state.principal = principal
+    return principal
 
 
 def authorize(
@@ -65,25 +118,27 @@ def authorize(
     """Applied to every ``/api`` router except health.
 
     Keyed on the HTTP method so a new mutating route can't forget auth:
-    anything other than GET/HEAD/OPTIONS always needs the bearer token;
-    reads skip it only when ``open_reads_on_loopback`` is on and the peer
-    is a loopback address.
+    anything other than GET/HEAD/OPTIONS always needs a principal whose
+    credential may write (scope ``trade``, ``lab`` or ``admin``); reads skip
+    auth only when ``open_reads_on_loopback`` is on and the peer is a
+    loopback address.
     """
     cfg = get_api_config(request)
-    if request.method in _SAFE_METHODS and cfg.open_reads_on_loopback:
-        client = request.client.host if request.client else None
-        if _is_loopback(client):
-            return
-    _check_token(cfg, creds)
+    safe = request.method in _SAFE_METHODS
+    if safe and cfg.open_reads_on_loopback and _is_loopback(_client_ip(request)):
+        return
+    principal = _resolve(request, creds)
+    if not safe and not principal.can_write:
+        raise PermissionDenied("this credential is read-only")
 
 
 def require_token(
     request: Request,
     creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
 ) -> None:
-    """Always demands the bearer token, whatever the method or peer: for
-    routes whose whole point is to verify it (``GET /api/auth/check``)."""
-    _check_token(get_api_config(request), creds)
+    """Always demands a principal, whatever the method or peer: for routes
+    about the caller (``/api/auth/*``)."""
+    _resolve(request, creds)
 
 
 def authorize_stream(
@@ -108,23 +163,48 @@ def authorize_stream(
     authorize(request, creds)
 
 
-def current_scope(
+def current_principal(
     request: Request,
     creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
-) -> Scope:
-    """The authenticated principal's data scope, for user-scoped routes
-    (connections, push, notifications, audited runs).
+) -> Principal:
+    """The authenticated principal. Always demands a credential: loopback
+    reads carry no principal, so personal data has no open-reads exemption."""
+    return _resolve(request, creds)
 
-    Always demands the bearer token: loopback reads carry no principal, so
-    personal data has no open-reads exemption. Until login and per-user
-    tokens land (step S2, which swaps this one function), the token belongs
-    to the bootstrap admin ``usr_owner``.
-    """
-    _check_token(get_api_config(request), creds)
-    return get_services(request).bootstrap_scope()
+
+PrincipalDep = Annotated[Principal, Depends(current_principal)]
+
+
+def current_scope(principal: PrincipalDep) -> Scope:
+    """The principal's data scope, for user-scoped routes (connections,
+    push, notifications, audited runs)."""
+    return principal.scope
 
 
 ScopeDep = Annotated[Scope, Depends(current_scope)]
+
+
+def require_permission(permission: Permission) -> Callable[[Principal], None]:
+    """Route dependency: ``Depends(require_permission(Permission.X))``."""
+
+    def dependency(principal: PrincipalDep) -> None:
+        require(principal, permission)
+
+    dependency.__name__ = f"require_{permission.name.lower()}"
+    return dependency
+
+
+def current_session(request: Request) -> SessionInfo:
+    """The browser session behind the cookie, pending or full (for the
+    second-factor routes). Unsafe methods need the CSRF header."""
+    return get_auth(request).session(
+        request.cookies.get(SESSION_COOKIE),
+        csrf=request.headers.get(CSRF_HEADER),
+        unsafe=request.method not in _SAFE_METHODS,
+    )
+
+
+SessionDep = Annotated[SessionInfo, Depends(current_session)]
 
 
 class MetricsAccessConfig(BaseSettings):

@@ -10,7 +10,9 @@ The rules behind the tests are in [principles.md](../principles.md). The list of
 
 ```
 src/stonks/lab/
-├── runner.py        # pre-register, tune, fit, survival suite, verdict
+├── runner.py        # preflight, pre-register, tune, fit, survival suite, verdict
+├── preflight.py     # data checks before a run (BL-37)
+├── universe.py      # point-in-time universes: id, list or rule (BL-37)
 ├── catalog.py       # every strategy `stonks lab run` can name
 ├── dataset.py       # LabDataset: train / validation windows, embargo
 ├── objectives.py    # sharpe, cagr, final_return
@@ -101,6 +103,7 @@ sequenceDiagram
     participant Suite as SurvivalSuite
     participant Reg as StrategyRegistry
     User->>Runner: stonks lab run <id>
+    Runner->>Runner: preflight (coverage, flags, membership)
     Runner->>Ledger: pre-register (hypothesis, premortem, manifest)
     Runner->>Tuner: tune on the train window
     loop each trial (parallel)
@@ -125,6 +128,12 @@ uv run stonks lab sweep --start 2023-01-01 --end 2025-01-01 --csv-out sweep.csv
 ```
 
 `lab sweep` runs every catalogued strategy (or `--strategies`) over one basket and summarises the verdicts.
+
+### Preflight and universes
+
+Before tuning, the runner checks the data (`lab/preflight.py`). An empty universe, or no bars at all in the window, stops the run with a clear message. Everything else is a warning: missing tickers, data that starts late, too little history for the strategy's `required_history_bars`, quarantined bars, audit flags, a static ticker list (survivorship bias, P14), members of the named universe missing from the dataset, a long window with no delisted name, zero costs, and a benchmark with no bars. Warnings go to the log and to the run manifest. `LabRunner(strict_preflight=True)` turns them into errors, and `preflight=False` turns the check off. A preflight that crashes never blocks a run.
+
+`lab/universe.py` resolves a universe on a date. It takes a universe id (rows in `universe_membership`), a static list, or a rule with `min_adv`, `asset_classes` and `exclude_sectors`. A rule includes a delisted name up to its delisting date. `resolve_window` gives every name that was in the universe at any point in a window.
 
 ## Backtester
 

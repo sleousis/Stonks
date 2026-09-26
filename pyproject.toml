@@ -25,6 +25,8 @@ dependencies = [
     "exchange-calendars>=4.13.2",
     "filelock>=4.0.3",
     "pywebpush>=2.5.0",
+    "argon2-cffi>=25.1.0",
+    "pyotp>=2.10.0",
 ]
 
 [project.scripts]

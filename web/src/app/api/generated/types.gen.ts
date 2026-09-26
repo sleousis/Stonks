@@ -57,6 +57,13 @@ export type AlpacaStatus = {
 };
 
 /**
+ * ApiScope
+ *
+ * What a credential may do. A token never exceeds its user's role.
+ */
+export type ApiScope = 'read' | 'trade' | 'lab' | 'admin';
+
+/**
  * AssetClassCosts
  *
  * Fee and spread for one asset class.
@@ -862,6 +869,20 @@ export type DraftValidation = {
      * Valid
      */
     valid: boolean;
+};
+
+/**
+ * EnrolStartView
+ */
+export type EnrolStartView = {
+    /**
+     * Otpauth Uri
+     */
+    otpauth_uri: string;
+    /**
+     * Secret
+     */
+    secret: string;
 };
 
 /**
@@ -1681,6 +1702,42 @@ export type LinkResultView = {
 };
 
 /**
+ * LoginRequest
+ */
+export type LoginRequest = {
+    /**
+     * Email
+     */
+    email: string;
+    /**
+     * Password
+     */
+    password: string;
+};
+
+/**
+ * LoginView
+ */
+export type LoginView = {
+    /**
+     * Csrf Token
+     */
+    csrf_token: string;
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Next Step
+     */
+    next_step: 'enrol' | 'verify';
+    /**
+     * User Id
+     */
+    user_id: string;
+};
+
+/**
  * MarkReadRequest
  */
 export type MarkReadRequest = {
@@ -1752,6 +1809,77 @@ export type McptOptions = {
      * Seed
      */
     seed?: number | null;
+};
+
+/**
+ * MeView
+ */
+export type MeView = {
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Email
+     */
+    email: string | null;
+    /**
+     * Mfa Enrolled
+     */
+    mfa_enrolled: boolean;
+    /**
+     * Mfa Fresh
+     */
+    mfa_fresh: boolean;
+    role: Role;
+    /**
+     * Scopes
+     */
+    scopes: Array<ApiScope>;
+    /**
+     * User Id
+     */
+    user_id: string;
+    /**
+     * Via
+     */
+    via: 'session' | 'token' | 'legacy' | 'cli' | 'scheduler';
+};
+
+/**
+ * MfaCodeRequest
+ */
+export type MfaCodeRequest = {
+    /**
+     * Code
+     */
+    code?: string | null;
+    /**
+     * Recovery Code
+     */
+    recovery_code?: string | null;
+};
+
+/**
+ * MfaView
+ */
+export type MfaView = {
+    /**
+     * Csrf Token
+     */
+    csrf_token?: string | null;
+    /**
+     * Method
+     */
+    method: 'totp' | 'recovery_code';
+    /**
+     * Recovery Codes
+     */
+    recovery_codes?: Array<string> | null;
+    /**
+     * Recovery Codes Left
+     */
+    recovery_codes_left: number;
 };
 
 /**
@@ -2126,6 +2254,30 @@ export type ParameterInfo = {
      * Tunable
      */
     tunable: boolean;
+};
+
+/**
+ * PasswordChangeRequest
+ */
+export type PasswordChangeRequest = {
+    /**
+     * Current Password
+     */
+    current_password: string;
+    /**
+     * New Password
+     */
+    new_password: string;
+};
+
+/**
+ * PasswordResetRequest
+ */
+export type PasswordResetRequest = {
+    /**
+     * New Password
+     */
+    new_password: string;
 };
 
 /**
@@ -2612,6 +2764,16 @@ export type QuietHoursUpdate = {
 };
 
 /**
+ * RecoveryCodesView
+ */
+export type RecoveryCodesView = {
+    /**
+     * Recovery Codes
+     */
+    recovery_codes: Array<string>;
+};
+
+/**
  * RiskAdjustmentView
  *
  * One order the risk policy clipped or dropped.
@@ -2682,6 +2844,11 @@ export type RiskPolicy = {
      */
     min_order_notional?: number;
 };
+
+/**
+ * Role
+ */
+export type Role = 'viewer' | 'trader' | 'admin';
 
 /**
  * RuleTemplateView
@@ -3674,6 +3841,69 @@ export type TickSummary = {
 };
 
 /**
+ * TokenCreateRequest
+ */
+export type TokenCreateRequest = {
+    /**
+     * Expires In Days
+     */
+    expires_in_days?: number | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Scopes
+     */
+    scopes: Array<ApiScope>;
+};
+
+/**
+ * TokenCreatedView
+ */
+export type TokenCreatedView = {
+    info: TokenView;
+    /**
+     * Token
+     */
+    token: string;
+};
+
+/**
+ * TokenView
+ */
+export type TokenView = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Expires At
+     */
+    expires_at: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Last Used At
+     */
+    last_used_at: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Revoked At
+     */
+    revoked_at: string | null;
+    /**
+     * Scopes
+     */
+    scopes: Array<ApiScope>;
+};
+
+/**
  * TradeStatsView
  *
  * Trade-level statistics of a backtest (``backtest.trades.TradeStats``).
@@ -3785,6 +4015,73 @@ export type TradeView = {
      * Ticker
      */
     ticker: string;
+};
+
+/**
+ * UserCreateRequest
+ */
+export type UserCreateRequest = {
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Email
+     */
+    email: string;
+    /**
+     * Password
+     */
+    password: string;
+    role: Role;
+};
+
+/**
+ * UserUpdateRequest
+ */
+export type UserUpdateRequest = {
+    role?: Role | null;
+    /**
+     * Status
+     */
+    status?: 'active' | 'disabled' | null;
+};
+
+/**
+ * UserView
+ *
+ * Identity and status only. Admins never see holdings here.
+ */
+export type UserView = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Email
+     */
+    email: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Last Login At
+     */
+    last_login_at: string | null;
+    /**
+     * Mfa Enrolled
+     */
+    mfa_enrolled: boolean;
+    role: Role;
+    /**
+     * Status
+     */
+    status: 'active' | 'disabled';
 };
 
 /**
@@ -4089,6 +4386,10 @@ export type CheckAuthErrors = {
      */
     401: ProblemDetails;
     /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
      * Not Found
      */
     404: ProblemDetails;
@@ -4100,6 +4401,10 @@ export type CheckAuthErrors = {
      * Unprocessable Content
      */
     422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
     /**
      * Service Unavailable
      */
@@ -4116,6 +4421,814 @@ export type CheckAuthResponses = {
 };
 
 export type CheckAuthResponse = CheckAuthResponses[keyof CheckAuthResponses];
+
+export type LoginData = {
+    body: LoginRequest;
+    path?: never;
+    query?: never;
+    url: '/api/auth/login';
+};
+
+export type LoginErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type LoginError = LoginErrors[keyof LoginErrors];
+
+export type LoginResponses = {
+    /**
+     * Successful Response
+     */
+    200: LoginView;
+};
+
+export type LoginResponse = LoginResponses[keyof LoginResponses];
+
+export type LogoutData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/auth/logout';
+};
+
+export type LogoutErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type LogoutError = LogoutErrors[keyof LogoutErrors];
+
+export type LogoutResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type LogoutResponse = LogoutResponses[keyof LogoutResponses];
+
+export type GetMeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/auth/me';
+};
+
+export type GetMeErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetMeError = GetMeErrors[keyof GetMeErrors];
+
+export type GetMeResponses = {
+    /**
+     * Successful Response
+     */
+    200: MeView;
+};
+
+export type GetMeResponse = GetMeResponses[keyof GetMeResponses];
+
+export type StartMfaEnrolmentData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/auth/mfa/enrol';
+};
+
+export type StartMfaEnrolmentErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type StartMfaEnrolmentError = StartMfaEnrolmentErrors[keyof StartMfaEnrolmentErrors];
+
+export type StartMfaEnrolmentResponses = {
+    /**
+     * Successful Response
+     */
+    200: EnrolStartView;
+};
+
+export type StartMfaEnrolmentResponse = StartMfaEnrolmentResponses[keyof StartMfaEnrolmentResponses];
+
+export type ConfirmMfaEnrolmentData = {
+    body: MfaCodeRequest;
+    path?: never;
+    query?: never;
+    url: '/api/auth/mfa/enrol/confirm';
+};
+
+export type ConfirmMfaEnrolmentErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ConfirmMfaEnrolmentError = ConfirmMfaEnrolmentErrors[keyof ConfirmMfaEnrolmentErrors];
+
+export type ConfirmMfaEnrolmentResponses = {
+    /**
+     * Successful Response
+     */
+    200: MfaView;
+};
+
+export type ConfirmMfaEnrolmentResponse = ConfirmMfaEnrolmentResponses[keyof ConfirmMfaEnrolmentResponses];
+
+export type VerifyMfaData = {
+    body: MfaCodeRequest;
+    path?: never;
+    query?: never;
+    url: '/api/auth/mfa/verify';
+};
+
+export type VerifyMfaErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type VerifyMfaError = VerifyMfaErrors[keyof VerifyMfaErrors];
+
+export type VerifyMfaResponses = {
+    /**
+     * Successful Response
+     */
+    200: MfaView;
+};
+
+export type VerifyMfaResponse = VerifyMfaResponses[keyof VerifyMfaResponses];
+
+export type ChangePasswordData = {
+    body: PasswordChangeRequest;
+    path?: never;
+    query?: never;
+    url: '/api/auth/password';
+};
+
+export type ChangePasswordErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ChangePasswordError = ChangePasswordErrors[keyof ChangePasswordErrors];
+
+export type ChangePasswordResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type ChangePasswordResponse = ChangePasswordResponses[keyof ChangePasswordResponses];
+
+export type RegenerateRecoveryCodesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/auth/recovery-codes';
+};
+
+export type RegenerateRecoveryCodesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RegenerateRecoveryCodesError = RegenerateRecoveryCodesErrors[keyof RegenerateRecoveryCodesErrors];
+
+export type RegenerateRecoveryCodesResponses = {
+    /**
+     * Successful Response
+     */
+    200: RecoveryCodesView;
+};
+
+export type RegenerateRecoveryCodesResponse = RegenerateRecoveryCodesResponses[keyof RegenerateRecoveryCodesResponses];
+
+export type ListApiTokensData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/auth/tokens';
+};
+
+export type ListApiTokensErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListApiTokensError = ListApiTokensErrors[keyof ListApiTokensErrors];
+
+export type ListApiTokensResponses = {
+    /**
+     * Response Listapitokens
+     *
+     * Successful Response
+     */
+    200: Array<TokenView>;
+};
+
+export type ListApiTokensResponse = ListApiTokensResponses[keyof ListApiTokensResponses];
+
+export type CreateApiTokenData = {
+    body: TokenCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/api/auth/tokens';
+};
+
+export type CreateApiTokenErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CreateApiTokenError = CreateApiTokenErrors[keyof CreateApiTokenErrors];
+
+export type CreateApiTokenResponses = {
+    /**
+     * Successful Response
+     */
+    201: TokenCreatedView;
+};
+
+export type CreateApiTokenResponse = CreateApiTokenResponses[keyof CreateApiTokenResponses];
+
+export type RevokeApiTokenData = {
+    body?: never;
+    path: {
+        /**
+         * Token Id
+         */
+        token_id: string;
+    };
+    query?: never;
+    url: '/api/auth/tokens/{token_id}';
+};
+
+export type RevokeApiTokenErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RevokeApiTokenError = RevokeApiTokenErrors[keyof RevokeApiTokenErrors];
+
+export type RevokeApiTokenResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type RevokeApiTokenResponse = RevokeApiTokenResponses[keyof RevokeApiTokenResponses];
+
+export type ListUsersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/auth/users';
+};
+
+export type ListUsersErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListUsersError = ListUsersErrors[keyof ListUsersErrors];
+
+export type ListUsersResponses = {
+    /**
+     * Response Listusers
+     *
+     * Successful Response
+     */
+    200: Array<UserView>;
+};
+
+export type ListUsersResponse = ListUsersResponses[keyof ListUsersResponses];
+
+export type CreateUserData = {
+    body: UserCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/api/auth/users';
+};
+
+export type CreateUserErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CreateUserError = CreateUserErrors[keyof CreateUserErrors];
+
+export type CreateUserResponses = {
+    /**
+     * Successful Response
+     */
+    201: UserView;
+};
+
+export type CreateUserResponse = CreateUserResponses[keyof CreateUserResponses];
+
+export type UpdateUserData = {
+    body: UserUpdateRequest;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/api/auth/users/{user_id}';
+};
+
+export type UpdateUserErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type UpdateUserError = UpdateUserErrors[keyof UpdateUserErrors];
+
+export type UpdateUserResponses = {
+    /**
+     * Successful Response
+     */
+    200: UserView;
+};
+
+export type UpdateUserResponse = UpdateUserResponses[keyof UpdateUserResponses];
+
+export type ResetUserMfaData = {
+    body?: never;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/api/auth/users/{user_id}/mfa';
+};
+
+export type ResetUserMfaErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ResetUserMfaError = ResetUserMfaErrors[keyof ResetUserMfaErrors];
+
+export type ResetUserMfaResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type ResetUserMfaResponse = ResetUserMfaResponses[keyof ResetUserMfaResponses];
+
+export type ResetUserPasswordData = {
+    body: PasswordResetRequest;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/api/auth/users/{user_id}/password';
+};
+
+export type ResetUserPasswordErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ResetUserPasswordError = ResetUserPasswordErrors[keyof ResetUserPasswordErrors];
+
+export type ResetUserPasswordResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type ResetUserPasswordResponse = ResetUserPasswordResponses[keyof ResetUserPasswordResponses];
 
 export type GetBrokerInfoData = {
     body?: never;
