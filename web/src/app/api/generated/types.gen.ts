@@ -2022,6 +2022,56 @@ export type SpecValidateRequest = {
 };
 
 /**
+ * StatusChangeView
+ *
+ * One audited status change or intervention (BL-24).
+ */
+export type StatusChangeView = {
+    /**
+     * Actor
+     */
+    actor: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * From Status
+     */
+    from_status: string | null;
+    /**
+     * Golive Passed
+     */
+    golive_passed: boolean | null;
+    /**
+     * Golive Report
+     */
+    golive_report: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Override
+     */
+    override: boolean;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * To Status
+     */
+    to_status: string | null;
+};
+
+/**
  * StrategyClassInfo
  */
 export type StrategyClassInfo = {
@@ -2071,6 +2121,7 @@ export type StrategyDetail = {
      * Id
      */
     id: string;
+    metadata: StrategyMetadataView;
     /**
      * Params
      */
@@ -2082,6 +2133,10 @@ export type StrategyDetail = {
      */
     status: 'active' | 'shadow' | 'retired';
     /**
+     * Status History
+     */
+    status_history: Array<StatusChangeView>;
+    /**
      * Survival Reports
      */
     survival_reports: Array<SurvivalReportView>;
@@ -2089,6 +2144,34 @@ export type StrategyDetail = {
      * Updated At
      */
     updated_at: string;
+};
+
+/**
+ * StrategyMetadataView
+ *
+ * The strategy's hypothesis card and capability hooks (BL-26).
+ */
+export type StrategyMetadataView = {
+    /**
+     * Alpha Family
+     */
+    alpha_family: 'trend' | 'reversion' | 'carry' | 'value' | 'quality' | 'growth' | 'sentiment' | 'data_driven' | 'benchmark' | 'other';
+    /**
+     * Hypothesis
+     */
+    hypothesis: string;
+    /**
+     * Label Horizon Bars
+     */
+    label_horizon_bars: number;
+    /**
+     * Premise
+     */
+    premise: 'trend' | 'mean_reversion' | 'none';
+    /**
+     * Required History Bars
+     */
+    required_history_bars: number;
 };
 
 /**
@@ -2161,6 +2244,7 @@ export type StrategySummary = {
      * Id
      */
     id: string;
+    metadata: StrategyMetadataView;
     /**
      * Params
      */
