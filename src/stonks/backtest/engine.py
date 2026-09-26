@@ -25,7 +25,9 @@ after the last bar are never filled. Per bar the engine:
 
 All bar prices for the universe / interval / window are loaded with one
 query up front, joined to ``instruments`` for each ticker's asset class
-(missing row or NULL -> ``equity``).
+(missing row or NULL -> ``equity``). The broker receives those asset
+classes and, when filling, each fill bar's volume, so its ``CostModel``
+can charge per-asset-class fees and volume-aware slippage.
 
 Annualization
 -------------
@@ -71,6 +73,8 @@ class BacktestConfig:
 class _Bar:
     open: float | None
     close: float
+    #: Units traded in the bar; ``None`` when the vendor gave no volume.
+    volume: float | None = None
 
 
 class Backtester:
@@ -88,6 +92,7 @@ class Backtester:
 
     def run(self) -> BacktestReport:
         bars_by_ts, asset_classes = self._load_bars()
+        self._broker.set_asset_classes(asset_classes)
         equity_dates: list[datetime] = []
         equity_curve: list[float] = []
         last_close: dict[str, float] = {}
@@ -143,7 +148,7 @@ class Backtester:
         start_ts, end_ts = _to_window_bounds(self._config.start, self._config.end)
         df = self._lake.sql(
             """
-            SELECT b.timestamp, b.ticker, b.open, b.close,
+            SELECT b.timestamp, b.ticker, b.open, b.close, b.volume,
                    COALESCE(i.asset_class, 'equity') AS asset_class
               FROM bars b
               LEFT JOIN instruments i ON i.id = b.ticker
@@ -163,8 +168,9 @@ class Backtester:
         for row in df.itertuples(index=False):
             asset_classes[row.ticker] = row.asset_class
             open_ = None if pd.isna(row.open) else float(row.open)
+            volume = None if pd.isna(row.volume) else float(row.volume)
             out.setdefault(as_datetime(row.timestamp), {})[row.ticker] = _Bar(
-                open=open_, close=float(row.close)
+                open=open_, close=float(row.close), volume=volume
             )
         return out, asset_classes
 
@@ -172,9 +178,14 @@ class Backtester:
         self, pending: list[Order], bars: dict[str, _Bar], as_of: datetime
     ) -> list[Order]:
         """Fill queued orders whose ticker has an open at this bar; return
-        the orders still waiting for their ticker's next bar."""
+        the orders still waiting for their ticker's next bar.
+
+        The broker's cost model sees this (fill) bar's volume. That is not
+        look-ahead: it only prices the execution of a fill that happens
+        inside this bar, and no strategy decision ever reads it."""
         opens = {t: b.open for t, b in bars.items() if b.open is not None and b.open > 0}
-        self._broker.set_prices(opens, as_of=as_of)
+        volumes = {t: bars[t].volume for t in opens if bars[t].volume is not None}
+        self._broker.set_prices(opens, as_of=as_of, volumes=volumes)
         waiting: list[Order] = []
         for order in pending:
             if order.ticker in opens:

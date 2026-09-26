@@ -1,5 +1,7 @@
-"""Backtester annualizes Sharpe on the universe's trading calendar, resolved
-from the lake's ``instruments.asset_class`` (unknown tickers are equity)."""
+"""Backtester market data: Sharpe is annualized on the universe's trading
+calendar, resolved from the lake's ``instruments.asset_class`` (unknown
+tickers are equity), and the broker's cost model sees each ticker's asset
+class and the fill bar's volume."""
 
 from __future__ import annotations
 
@@ -8,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 import pandas as pd
 import pytest
 
+from stonks.backtest.costs import Trade, TradeCost
 from stonks.backtest.engine import BacktestConfig, Backtester
 from stonks.backtest.report import compute_report, periods_per_year
 from stonks.backtest.simulated_broker import SimulatedBroker
@@ -102,6 +105,54 @@ def test_universe_ticker_without_bars_does_not_change_the_calendar(tmp_path):
     lake = _lake(tmp_path, ["AAPL.US"], {"BTC-USD.CC": "crypto"})
     report = _run(lake, "AAPL.US", ["AAPL.US", "BTC-USD.CC"])
     assert report.sharpe == pytest.approx(_expected_sharpe(report, ["equity"]))
+    lake.close()
+
+
+class _RecordingCosts:
+    def __init__(self) -> None:
+        self.trades: list[Trade] = []
+
+    def cost(self, trade: Trade) -> TradeCost:
+        self.trades.append(trade)
+        return TradeCost(fill_price=trade.price, fee=0.0)
+
+
+def test_engine_passes_fill_bar_volume_and_asset_class_to_the_cost_model(tmp_path):
+    lake = _lake(tmp_path, [], {"BTC-USD.CC": "crypto"})
+    rows = _rows("BTC-USD.CC")
+    for i, row in enumerate(rows):
+        row["volume"] = 1_000.0 * (i + 1)
+    lake.upsert_bars(pd.DataFrame(rows), interval=Interval.HOUR_1)
+    costs = _RecordingCosts()
+    broker = SimulatedBroker(Portfolio(cash=10_000.0, positions={}), cost_model=costs)
+    config = BacktestConfig(
+        start=_T0, end=_T0 + timedelta(days=1), universe=["BTC-USD.CC"], interval=Interval.HOUR_1
+    )
+    strategy = BuyAndHold({"ticker": "BTC-USD.CC", "allocation": 0.5})
+    Backtester([strategy], broker, lake, config).run()
+
+    # decided on bar 0, filled at bar 1's open against bar 1's volume
+    assert len(costs.trades) == 1
+    trade = costs.trades[0]
+    assert trade.asset_class == "crypto"
+    assert trade.bar_volume == pytest.approx(2_000.0)
+    lake.close()
+
+
+def test_null_bar_volume_reaches_the_cost_model_as_unknown(tmp_path):
+    lake = _lake(tmp_path, [], {})
+    rows = _rows("AAPL.US")
+    for row in rows:
+        row["volume"] = None
+    lake.upsert_bars(pd.DataFrame(rows), interval=Interval.HOUR_1)
+    costs = _RecordingCosts()
+    broker = SimulatedBroker(Portfolio(cash=10_000.0, positions={}), cost_model=costs)
+    config = BacktestConfig(
+        start=_T0, end=_T0 + timedelta(days=1), universe=["AAPL.US"], interval=Interval.HOUR_1
+    )
+    Backtester([BuyAndHold({"ticker": "AAPL.US"})], broker, lake, config).run()
+    assert costs.trades[0].bar_volume is None
+    assert costs.trades[0].asset_class == "equity"
     lake.close()
 
 
