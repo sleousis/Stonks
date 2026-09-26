@@ -23,3 +23,11 @@ uv run pytest                               # unit + integration (no network)
 STONKS_RUN_LIVE_TESTS=1 uv run pytest       # also runs live contract tests
 uv run ruff check .
 ```
+
+## Upgrading an older lake
+
+`stonks db init` refuses to run a migration that would drop populated data. Migration 005 drops six legacy columns from `tickers` (now `instruments`) without copying them, so a lake created before it and still holding those values needs `STONKS_ALLOW_DESTRUCTIVE_MIGRATIONS=1`. Back up the lake file first. Fresh lakes are unaffected.
+
+## Roadmap
+
+See `docs/roadmap.md`.
