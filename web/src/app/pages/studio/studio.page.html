@@ -1,0 +1,164 @@
+<app-page-header
+  title="Studio"
+  description="Define a strategy, test it, then register it in shadow and enable it when it earns it."
+>
+  @if (!creating()) {
+    <button actions type="button" class="btn btn-primary" (click)="openCreate()">New draft</button>
+  }
+</app-page-header>
+
+<!-- Create ------------------------------------------------------------------>
+@if (creating()) {
+  <section class="panel create" aria-labelledby="create-title">
+    <div class="panel-head">
+      <h2 id="create-title">New draft</h2>
+      <button type="button" class="btn btn-ghost" (click)="creating.set(false)">Cancel</button>
+    </div>
+    <form class="panel-body create-body" (submit)="$event.preventDefault(); create()">
+      <fieldset class="starts">
+        <legend>Start from</legend>
+        @if (templates.error()) {
+          <p class="hint">Templates could not be loaded; you can still start blank.</p>
+        }
+        <div class="start-grid">
+          @for (o of options(); track o.id) {
+            <label class="start" [class.selected]="start() === o.id">
+              <input
+                type="radio"
+                name="start"
+                [value]="o.id"
+                [checked]="start() === o.id"
+                (change)="pick(o)"
+              />
+              <span class="start-title">{{ o.title }}</span>
+              <span class="start-desc">{{ o.description }}</span>
+            </label>
+          }
+        </div>
+      </fieldset>
+      @if (start() === 'code' && codeDisabled()) {
+        <div class="callout" role="note">
+          <p class="callout-title">Code strategies are turned off</p>
+          <p>
+            The operator must set <code>allow_code_strategies = true</code> under
+            <code>[api]</code> in the server config and restart <code>stonks serve</code>. Code
+            drafts run inside the server with its full privileges, so this is only for a single
+            trusted user.
+          </p>
+        </div>
+      }
+      <div class="field name-field">
+        <label for="new-name">Draft name</label>
+        <input
+          id="new-name"
+          class="input"
+          maxlength="100"
+          autocomplete="off"
+          [attr.aria-invalid]="!!nameError()"
+          [attr.aria-describedby]="nameError() ? 'new-name-error' : null"
+          [value]="newName()"
+          (input)="newName.set($any($event.target).value)"
+          (blur)="nameTouched.set(true)"
+        />
+        @if (nameError(); as e) {
+          <p id="new-name-error" class="error">{{ e }}</p>
+        }
+      </div>
+      <div class="create-actions">
+        <button
+          type="submit"
+          class="btn btn-primary"
+          [disabled]="createBusy() || (start() === 'code' && codeDisabled())"
+          [attr.aria-busy]="createBusy()"
+        >
+          {{ createBusy() ? 'Creating…' : 'Create draft' }}
+        </button>
+      </div>
+    </form>
+  </section>
+}
+
+<!-- Drafts ------------------------------------------------------------------>
+<section class="panel" aria-labelledby="drafts-title">
+  <div class="panel-head">
+    <h2 id="drafts-title">Drafts</h2>
+    @if (drafts.hasValue()) {
+      <span class="muted num">{{ drafts.value().total }} total</span>
+    }
+  </div>
+  @if (drafts.error(); as err) {
+    <app-error-state title="Could not load drafts" [error]="err" (retry)="drafts.reload()" />
+  } @else if (!drafts.hasValue()) {
+    <app-loading-state label="Loading drafts" [rows]="4" />
+  } @else if (drafts.value().items.length === 0) {
+    <app-empty-state
+      title="No drafts yet"
+      message="A draft is a strategy you are building. Start from a template such as RSI mean reversion, test it, then register it."
+    >
+      @if (!creating()) {
+        <button type="button" class="btn btn-primary" (click)="openCreate()">New draft</button>
+      }
+    </app-empty-state>
+  } @else {
+    <ul class="drafts">
+      @for (d of drafts.value().items; track d.id) {
+        <li class="draft">
+          @if (renamingId() === d.id) {
+            <form class="rename" (submit)="$event.preventDefault(); rename(d)">
+              <label class="visually-hidden" [for]="'rename-' + d.id"
+                >New name for {{ d.name }}</label
+              >
+              <input
+                class="input"
+                maxlength="100"
+                [id]="'rename-' + d.id"
+                [value]="renameText()"
+                (input)="renameText.set($any($event.target).value)"
+                (keydown.escape)="renamingId.set(null)"
+              />
+              <button type="button" class="btn" (click)="renamingId.set(null)">Cancel</button>
+              <button type="submit" class="btn btn-primary" [disabled]="!renameText().trim()">
+                Rename
+              </button>
+            </form>
+          } @else {
+            <div class="draft-main">
+              <a class="draft-name" [routerLink]="['/studio', d.id]">{{ d.name }}</a>
+              <p class="draft-meta">
+                <span>{{ summary(d) }}</span>
+                <span aria-hidden="true">·</span>
+                <span>edited {{ d.updated_at | ago }}</span>
+              </p>
+            </div>
+            <div class="draft-status">
+              @if (d.status === 'registered') {
+                <app-status-pill [status]="d.strategy_status ?? 'shadow'" />
+              } @else {
+                <app-status-pill status="draft" />
+              }
+              @if (d.kind === 'code') {
+                <app-status-pill
+                  status="code"
+                  [tone]="d.source_code === null ? 'warn' : 'neutral'"
+                  [label]="d.source_code === null ? 'Code (disabled)' : 'Code'"
+                />
+              }
+            </div>
+            <div class="draft-actions">
+              <a class="btn" [routerLink]="['/studio', d.id]">Open</a>
+              <button type="button" class="btn btn-ghost" (click)="startRename(d)">Rename</button>
+              <button
+                type="button"
+                class="btn btn-ghost danger"
+                [disabled]="deletingId() === d.id"
+                (click)="remove(d)"
+              >
+                Delete
+              </button>
+            </div>
+          }
+        </li>
+      }
+    </ul>
+  }
+</section>
