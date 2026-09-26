@@ -59,7 +59,11 @@ def daily_pnl(
         peak = max(peak, value)
         elapsed = None if prev is None else (day - prev[0]).days
         # Only compare with a previous row inside the gap limit.
-        prev_value = prev[1] if prev is not None and elapsed <= max_gap_days else None
+        prev_value = (
+            prev[1]
+            if prev is not None and elapsed is not None and elapsed <= max_gap_days
+            else None
+        )
         change = None if prev_value is None else value - prev_value
         daily_return = None if not prev_value else value / prev_value - 1
         cumulative = None if base == 0 else value / base - 1
