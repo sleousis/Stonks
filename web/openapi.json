@@ -51,7 +51,7 @@
           "account": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/BrokerAccountView"
+                "$ref": "#/components/schemas/stonks__app__brokers__BrokerAccountView"
               },
               {
                 "type": "null"
@@ -790,54 +790,6 @@
         "title": "BenchmarkStatsView",
         "type": "object"
       },
-      "BrokerAccountView": {
-        "properties": {
-          "buying_power": {
-            "title": "Buying Power",
-            "type": "number"
-          },
-          "can_trade": {
-            "title": "Can Trade",
-            "type": "boolean"
-          },
-          "cash": {
-            "title": "Cash",
-            "type": "number"
-          },
-          "currency": {
-            "title": "Currency",
-            "type": "string"
-          },
-          "equity": {
-            "title": "Equity",
-            "type": "number"
-          },
-          "pattern_day_trader": {
-            "title": "Pattern Day Trader",
-            "type": "boolean"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "trading_blocked": {
-            "title": "Trading Blocked",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "cash",
-          "equity",
-          "buying_power",
-          "currency",
-          "status",
-          "trading_blocked",
-          "pattern_day_trader",
-          "can_trade"
-        ],
-        "title": "BrokerAccountView",
-        "type": "object"
-      },
       "BrokerInfo": {
         "properties": {
           "allow_live": {
@@ -868,6 +820,158 @@
           "credentials_configured"
         ],
         "title": "BrokerInfo",
+        "type": "object"
+      },
+      "ConnectWithKeysRequest": {
+        "additionalProperties": false,
+        "description": "API-key connect. ``fields`` are the provider's ``credential_fields``\n(plus ``paper`` for brokers with a paper endpoint). They are write-only:\nnever logged, stored only sealed, never returned.",
+        "properties": {
+          "fields": {
+            "additionalProperties": {
+              "format": "password",
+              "type": "string",
+              "writeOnly": true
+            },
+            "maxProperties": 16,
+            "title": "Fields",
+            "type": "object"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "provider": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "fields"
+        ],
+        "title": "ConnectWithKeysRequest",
+        "type": "object"
+      },
+      "ConnectionView": {
+        "properties": {
+          "consecutive_failures": {
+            "title": "Consecutive Failures",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_sync_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync At"
+          },
+          "last_sync_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ok",
+                  "partial",
+                  "error"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync Status"
+          },
+          "next_sync_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Sync At"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "active",
+              "error"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "label",
+          "status",
+          "last_sync_at",
+          "last_sync_status",
+          "last_error",
+          "consecutive_failures",
+          "next_sync_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ConnectionView",
         "type": "object"
       },
       "CostModelPreset": {
@@ -1072,6 +1176,51 @@
           "configured"
         ],
         "title": "DataSourceInfo",
+        "type": "object"
+      },
+      "DisconnectView": {
+        "properties": {
+          "archived_portfolios": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Archived Portfolios",
+            "type": "array"
+          },
+          "connection_id": {
+            "title": "Connection Id",
+            "type": "string"
+          },
+          "remote_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remote Error"
+          },
+          "remote_removed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remote Removed"
+          }
+        },
+        "required": [
+          "connection_id",
+          "archived_portfolios",
+          "remote_removed",
+          "remote_error"
+        ],
+        "title": "DisconnectView",
         "type": "object"
       },
       "Draft": {
@@ -1664,6 +1813,98 @@
         "title": "EquityPoint",
         "type": "object"
       },
+      "FeedItemView": {
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "deep_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deep Link"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "level": {
+            "title": "Level",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "level",
+          "title",
+          "message",
+          "deep_link",
+          "created_at",
+          "read_at"
+        ],
+        "title": "FeedItemView",
+        "type": "object"
+      },
+      "FeedView": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FeedItemView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "unread_count": {
+            "title": "Unread Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "unread_count"
+        ],
+        "title": "FeedView",
+        "type": "object"
+      },
       "FillView": {
         "properties": {
           "fee": {
@@ -2021,6 +2262,152 @@
           "thresholds"
         ],
         "title": "HealthReportView",
+        "type": "object"
+      },
+      "HorizonICView": {
+        "properties": {
+          "hac_lags": {
+            "title": "Hac Lags",
+            "type": "integer"
+          },
+          "hit_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hit Rate"
+          },
+          "horizon": {
+            "title": "Horizon",
+            "type": "integer"
+          },
+          "ic_std": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ic Std"
+          },
+          "icir": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icir"
+          },
+          "mean_ic": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Ic"
+          },
+          "n_dates": {
+            "title": "N Dates",
+            "type": "integer"
+          },
+          "quantile_means": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Quantile Means",
+            "type": "array"
+          },
+          "se_hac": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Se Hac"
+          },
+          "se_iid": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Se Iid"
+          },
+          "spread_mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spread Mean"
+          },
+          "spread_t_hac": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spread T Hac"
+          },
+          "t_stat_hac": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T Stat Hac"
+          }
+        },
+        "required": [
+          "horizon",
+          "n_dates",
+          "mean_ic",
+          "ic_std",
+          "icir",
+          "hit_rate",
+          "se_iid",
+          "se_hac",
+          "hac_lags",
+          "t_stat_hac",
+          "quantile_means",
+          "spread_mean",
+          "spread_t_hac"
+        ],
+        "title": "HorizonICView",
         "type": "object"
       },
       "IStarSettings": {
@@ -2924,6 +3311,108 @@
         "title": "LabRunView",
         "type": "object"
       },
+      "LinkAccountRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "external_account_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "External Account Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio Id"
+          }
+        },
+        "required": [
+          "external_account_id"
+        ],
+        "title": "LinkAccountRequest",
+        "type": "object"
+      },
+      "LinkResultView": {
+        "properties": {
+          "connection_id": {
+            "title": "Connection Id",
+            "type": "string"
+          },
+          "external_account_id": {
+            "title": "External Account Id",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "connection_id",
+          "external_account_id",
+          "portfolio_id"
+        ],
+        "title": "LinkResultView",
+        "type": "object"
+      },
+      "MarkReadRequest": {
+        "properties": {
+          "ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ids"
+          }
+        },
+        "title": "MarkReadRequest",
+        "type": "object"
+      },
+      "MarkReadView": {
+        "properties": {
+          "unread_count": {
+            "title": "Unread Count",
+            "type": "integer"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "updated",
+          "unread_count"
+        ],
+        "title": "MarkReadView",
+        "type": "object"
+      },
       "MarketClockView": {
         "properties": {
           "is_open": {
@@ -3666,6 +4155,95 @@
         "title": "PnlSeries",
         "type": "object"
       },
+      "PortalLinkView": {
+        "properties": {
+          "connection_id": {
+            "title": "Connection Id",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "connection_id",
+          "url",
+          "expires_at"
+        ],
+        "title": "PortalLinkView",
+        "type": "object"
+      },
+      "PortfolioSyncView": {
+        "properties": {
+          "activities_new": {
+            "title": "Activities New",
+            "type": "integer"
+          },
+          "activities_seen": {
+            "title": "Activities Seen",
+            "type": "integer"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "external_account_id": {
+            "title": "External Account Id",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "positions": {
+            "title": "Positions",
+            "type": "integer"
+          },
+          "snapshot_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Id"
+          },
+          "unmapped": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmapped",
+            "type": "array"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "external_account_id",
+          "snapshot_id",
+          "positions",
+          "unmapped",
+          "activities_new",
+          "activities_seen",
+          "error"
+        ],
+        "title": "PortfolioSyncView",
+        "type": "object"
+      },
       "PortfolioView": {
         "properties": {
           "cash": {
@@ -3879,6 +4457,151 @@
         "title": "PositionView",
         "type": "object"
       },
+      "PreferenceItem": {
+        "properties": {
+          "category": {
+            "enum": [
+              "signal",
+              "order",
+              "risk",
+              "system"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "channel": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Channel",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Id"
+          }
+        },
+        "required": [
+          "category",
+          "channel",
+          "enabled"
+        ],
+        "title": "PreferenceItem",
+        "type": "object"
+      },
+      "PreferencesUpdate": {
+        "properties": {
+          "preferences": {
+            "items": {
+              "$ref": "#/components/schemas/PreferenceItem"
+            },
+            "maxItems": 200,
+            "title": "Preferences",
+            "type": "array"
+          }
+        },
+        "required": [
+          "preferences"
+        ],
+        "title": "PreferencesUpdate",
+        "type": "object"
+      },
+      "PreferencesView": {
+        "properties": {
+          "channels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Channels",
+            "type": "array"
+          },
+          "preferences": {
+            "items": {
+              "$ref": "#/components/schemas/PreferenceItem"
+            },
+            "title": "Preferences",
+            "type": "array"
+          },
+          "quiet_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quiet End"
+          },
+          "quiet_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quiet Start"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "webhook": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Webhook"
+          }
+        },
+        "required": [
+          "preferences",
+          "quiet_start",
+          "quiet_end",
+          "timezone",
+          "webhook",
+          "channels"
+        ],
+        "title": "PreferencesView",
+        "type": "object"
+      },
+      "ProbeView": {
+        "properties": {
+          "checks": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Checks",
+            "type": "object"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ProbeView",
+        "type": "object"
+      },
       "ProblemDetails": {
         "properties": {
           "detail": {
@@ -4012,6 +4735,215 @@
         "title": "PromotionChecklistView",
         "type": "object"
       },
+      "ProviderView": {
+        "properties": {
+          "auth_flow": {
+            "title": "Auth Flow",
+            "type": "string"
+          },
+          "can_trade": {
+            "title": "Can Trade",
+            "type": "boolean"
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "credential_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Credential Fields",
+            "type": "array"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "display_name",
+          "auth_flow",
+          "capabilities",
+          "credential_fields",
+          "can_trade"
+        ],
+        "title": "ProviderView",
+        "type": "object"
+      },
+      "PushDeviceView": {
+        "description": "A registered browser or installed app: no endpoint, no keys.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "endpoint_host": {
+            "title": "Endpoint Host",
+            "type": "string"
+          },
+          "failure_count": {
+            "title": "Failure Count",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          }
+        },
+        "required": [
+          "id",
+          "endpoint_host",
+          "user_agent",
+          "created_at",
+          "last_success_at",
+          "failure_count"
+        ],
+        "title": "PushDeviceView",
+        "type": "object"
+      },
+      "PushKeys": {
+        "properties": {
+          "auth": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Auth",
+            "type": "string"
+          },
+          "p256dh": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "P256Dh",
+            "type": "string"
+          }
+        },
+        "required": [
+          "p256dh",
+          "auth"
+        ],
+        "title": "PushKeys",
+        "type": "object"
+      },
+      "PushSubscriptionRequest": {
+        "description": "The browser's ``PushSubscription.toJSON()`` plus its user agent.",
+        "properties": {
+          "endpoint": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "expirationTime": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expirationtime"
+          },
+          "keys": {
+            "$ref": "#/components/schemas/PushKeys"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          }
+        },
+        "required": [
+          "endpoint",
+          "keys"
+        ],
+        "title": "PushSubscriptionRequest",
+        "type": "object"
+      },
+      "PushUnsubscribeRequest": {
+        "properties": {
+          "endpoint": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Endpoint",
+            "type": "string"
+          }
+        },
+        "required": [
+          "endpoint"
+        ],
+        "title": "PushUnsubscribeRequest",
+        "type": "object"
+      },
+      "QuietHoursUpdate": {
+        "properties": {
+          "end": {
+            "anyOf": [
+              {
+                "maxLength": 5,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "maxLength": 5,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          }
+        },
+        "title": "QuietHoursUpdate",
+        "type": "object"
+      },
       "RiskAdjustmentView": {
         "description": "One order the risk policy clipped or dropped.",
         "properties": {
@@ -4141,6 +5073,236 @@
           "spec"
         ],
         "title": "RuleTemplateView",
+        "type": "object"
+      },
+      "RunNowRequest": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          }
+        },
+        "title": "RunNowRequest",
+        "type": "object"
+      },
+      "RunNowView": {
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "job": {
+            "title": "Job",
+            "type": "string"
+          },
+          "run_key": {
+            "title": "Run Key",
+            "type": "string"
+          },
+          "status": {
+            "default": "started",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job",
+          "run_key",
+          "as_of"
+        ],
+        "title": "RunNowView",
+        "type": "object"
+      },
+      "ScheduleView": {
+        "properties": {
+          "backend": {
+            "title": "Backend",
+            "type": "string"
+          },
+          "hosted": {
+            "title": "Hosted",
+            "type": "boolean"
+          },
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduledJobView"
+            },
+            "title": "Jobs",
+            "type": "array"
+          },
+          "recent": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduledRunView"
+            },
+            "title": "Recent",
+            "type": "array"
+          }
+        },
+        "required": [
+          "backend",
+          "hosted",
+          "jobs",
+          "recent"
+        ],
+        "title": "ScheduleView",
+        "type": "object"
+      },
+      "ScheduledJobView": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "next_as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next As Of"
+          },
+          "next_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run At"
+          },
+          "trigger": {
+            "title": "Trigger",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "action",
+          "trigger",
+          "next_run_at",
+          "next_as_of"
+        ],
+        "title": "ScheduledJobView",
+        "type": "object"
+      },
+      "ScheduledRunView": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "catch_up": {
+            "title": "Catch Up",
+            "type": "boolean"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_name": {
+            "title": "Job Name",
+            "type": "string"
+          },
+          "run_key": {
+            "title": "Run Key",
+            "type": "string"
+          },
+          "scheduled_for": {
+            "format": "date-time",
+            "title": "Scheduled For",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "job_name",
+          "action",
+          "run_key",
+          "scheduled_for",
+          "as_of",
+          "status",
+          "catch_up",
+          "started_at",
+          "finished_at",
+          "detail",
+          "error"
+        ],
+        "title": "ScheduledRunView",
         "type": "object"
       },
       "ShadowDecisionView": {
@@ -4353,6 +5515,190 @@
         "title": "ShadowPnlSummary",
         "type": "object"
       },
+      "SignalICRequest": {
+        "properties": {
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "every_bars": {
+            "default": 5,
+            "maximum": 504.0,
+            "minimum": 1.0,
+            "title": "Every Bars",
+            "type": "integer"
+          },
+          "horizons": {
+            "default": [
+              1,
+              5,
+              21
+            ],
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Horizons",
+            "type": "array"
+          },
+          "interval": {
+            "default": "1d",
+            "title": "Interval",
+            "type": "string"
+          },
+          "min_names": {
+            "default": 5,
+            "maximum": 1000.0,
+            "minimum": 2.0,
+            "title": "Min Names",
+            "type": "integer"
+          },
+          "n_quantiles": {
+            "default": 5,
+            "maximum": 20.0,
+            "minimum": 2.0,
+            "title": "N Quantiles",
+            "type": "integer"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/StrategyRef"
+          },
+          "universe": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5000,
+            "minItems": 1,
+            "title": "Universe",
+            "type": "array"
+          }
+        },
+        "required": [
+          "strategy",
+          "universe",
+          "start",
+          "end"
+        ],
+        "title": "SignalICRequest",
+        "type": "object"
+      },
+      "SignalICView": {
+        "description": ":class:`stonks.lab.signal_eval.SignalICResult`; NaN is null.",
+        "properties": {
+          "every_bars": {
+            "title": "Every Bars",
+            "type": "integer"
+          },
+          "horizons": {
+            "items": {
+              "$ref": "#/components/schemas/HorizonICView"
+            },
+            "title": "Horizons",
+            "type": "array"
+          },
+          "ic_estimate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ic Estimate"
+          },
+          "ic_horizon": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ic Horizon"
+          },
+          "n_dates": {
+            "title": "N Dates",
+            "type": "integer"
+          },
+          "n_quantiles": {
+            "title": "N Quantiles",
+            "type": "integer"
+          },
+          "n_tickers": {
+            "title": "N Tickers",
+            "type": "integer"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          },
+          "score_turnover": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Turnover"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          },
+          "top_quantile_turnover": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Quantile Turnover"
+          },
+          "window": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Window",
+            "type": "array"
+          }
+        },
+        "required": [
+          "strategy_id",
+          "window",
+          "n_tickers",
+          "n_dates",
+          "every_bars",
+          "n_quantiles",
+          "status"
+        ],
+        "title": "SignalICView",
+        "type": "object"
+      },
       "SmokeCheck": {
         "properties": {
           "data": {
@@ -4462,6 +5808,53 @@
           "spec"
         ],
         "title": "SpecValidateRequest",
+        "type": "object"
+      },
+      "StartPortalRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "connection_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Id"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "provider": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "redirect_uri": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Redirect Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "redirect_uri"
+        ],
+        "title": "StartPortalRequest",
         "type": "object"
       },
       "StatusChangeRequest": {
@@ -4950,6 +6343,67 @@
           "notes"
         ],
         "title": "SurvivalReportView",
+        "type": "object"
+      },
+      "SyncResultView": {
+        "properties": {
+          "accounts_seen": {
+            "title": "Accounts Seen",
+            "type": "integer"
+          },
+          "connection_id": {
+            "title": "Connection Id",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "next_sync_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Sync At"
+          },
+          "portfolios": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioSyncView"
+            },
+            "title": "Portfolios",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "partial",
+              "error"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "connection_id",
+          "status",
+          "portfolios",
+          "error",
+          "next_sync_at",
+          "accounts_seen"
+        ],
+        "title": "SyncResultView",
         "type": "object"
       },
       "TickRequest": {
@@ -5599,6 +7053,26 @@
         "title": "ValidationIssue",
         "type": "object"
       },
+      "VapidKeyView": {
+        "properties": {
+          "public_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Key"
+          }
+        },
+        "required": [
+          "public_key"
+        ],
+        "title": "VapidKeyView",
+        "type": "object"
+      },
       "WalkForwardConfig": {
         "additionalProperties": false,
         "description": "Walk-forward settings. ``test_days=None`` splits the dataset's\nvalidation window evenly over the folds;\n``train_days=None`` means \"everything before the first test window\".",
@@ -5737,6 +7211,139 @@
           }
         },
         "title": "WalkForwardConfig",
+        "type": "object"
+      },
+      "WebhookUpdate": {
+        "description": "Your own webhook (a public ``https`` URL). Write-only: responses show\nits scheme and host only. Null removes it.",
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "format": "password",
+                "maxLength": 2048,
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "title": "WebhookUpdate",
+        "type": "object"
+      },
+      "stonks__app__brokers__BrokerAccountView": {
+        "properties": {
+          "buying_power": {
+            "title": "Buying Power",
+            "type": "number"
+          },
+          "can_trade": {
+            "title": "Can Trade",
+            "type": "boolean"
+          },
+          "cash": {
+            "title": "Cash",
+            "type": "number"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "equity": {
+            "title": "Equity",
+            "type": "number"
+          },
+          "pattern_day_trader": {
+            "title": "Pattern Day Trader",
+            "type": "boolean"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "trading_blocked": {
+            "title": "Trading Blocked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "cash",
+          "equity",
+          "buying_power",
+          "currency",
+          "status",
+          "trading_blocked",
+          "pattern_day_trader",
+          "can_trade"
+        ],
+        "title": "BrokerAccountView",
+        "type": "object"
+      },
+      "stonks__app__connections__BrokerAccountView": {
+        "properties": {
+          "connection_id": {
+            "title": "Connection Id",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "external_account_id": {
+            "title": "External Account Id",
+            "type": "string"
+          },
+          "institution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Institution"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "number_mask": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Number Mask"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio Id"
+          }
+        },
+        "required": [
+          "connection_id",
+          "external_account_id",
+          "name",
+          "institution",
+          "number_mask",
+          "currency",
+          "portfolio_id"
+        ],
+        "title": "BrokerAccountView",
         "type": "object"
       }
     },
@@ -6356,6 +7963,913 @@
         ]
       }
     },
+    "/api/connections": {
+      "get": {
+        "description": "The caller's connections, oldest first.",
+        "operationId": "listConnections",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConnectionView"
+                  },
+                  "title": "Response Listconnections",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Connections",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/api/connections/callback": {
+      "get": {
+        "description": "Finish a hosted-login connection: checks the one-time ``state`` and\nlists the accounts the user linked at the provider.",
+        "operationId": "completeConnectionPortal",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Connection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": true,
+            "schema": {
+              "maxLength": 256,
+              "minLength": 1,
+              "title": "State",
+              "type": "string"
+            }
+          },
+          {
+            "description": "the provider's outcome, if it sends one",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "the provider's outcome, if it sends one",
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Complete Portal",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/api/connections/keys": {
+      "post": {
+        "description": "Connect with API keys. The keys are checked against the provider\nfirst (refused keys are never stored), then sealed at rest; they are\nnever returned or logged. New accounts get a broker portfolio each.",
+        "operationId": "connectWithKeys",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectWithKeysRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Connect With Keys",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/api/connections/portal": {
+      "post": {
+        "description": "Start a hosted-login connection: returns the one-time provider URL.\nThe provider redirects to ``redirect_uri`` with ``connection_id`` and\n``state``; pass both to ``GET /api/connections/callback``.",
+        "operationId": "startConnectionPortal",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartPortalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortalLinkView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Portal",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/api/connections/providers": {
+      "get": {
+        "description": "Providers an admin enabled (``[connections].enabled_providers``) and\nconfigured; nothing else can be connected.",
+        "operationId": "listProviders",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderView"
+                  },
+                  "title": "Response Listproviders",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Providers",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/api/connections/{connection_id}": {
+      "delete": {
+        "description": "Remove the connection, its credentials, accounts and activities.\nLinked portfolios are archived (their snapshots stay).",
+        "operationId": "deleteConnection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "title": "Connection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisconnectView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Connection",
+        "tags": [
+          "connections"
+        ]
+      },
+      "get": {
+        "operationId": "getConnection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "title": "Connection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Connection",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/api/connections/{connection_id}/accounts": {
+      "get": {
+        "description": "External accounts seen on the connection, with the linked portfolio.",
+        "operationId": "listConnectionAccounts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "title": "Connection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/stonks__app__connections__BrokerAccountView"
+                  },
+                  "title": "Response Listconnectionaccounts",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Accounts",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/api/connections/{connection_id}/link": {
+      "post": {
+        "description": "Link an external account to one of your broker portfolios (a new one\nwhen ``portfolio_id`` is omitted).",
+        "operationId": "linkConnectionAccount",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "title": "Connection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkAccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkResultView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Link Account",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/api/connections/{connection_id}/sync": {
+      "post": {
+        "description": "Sync now (read-only at the provider). A provider failure is a 200\nwith ``status = \"error\"``; the connection records it and backs off.",
+        "operationId": "syncConnection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "title": "Connection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncResultView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sync Connection",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
     "/api/health": {
       "get": {
         "operationId": "getHealth",
@@ -6372,6 +8886,68 @@
           }
         },
         "summary": "Liveness probe",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/health/live": {
+      "get": {
+        "operationId": "getLiveness",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProbeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Liveness probe (process and hosted scheduler)",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/health/ready": {
+      "get": {
+        "operationId": "getReadiness",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProbeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Readiness probe (state migrated, lake present)",
         "tags": [
           "health"
         ]
@@ -7756,6 +10332,181 @@
         ]
       }
     },
+    "/api/lab/signal-ic": {
+      "post": {
+        "description": "Queue a signal IC analysis of a strategy's ``estimate_return`` (mean\nIC, ICIR, HAC t-stat, decay, quantile spread, turnover); fetch it from\n``GET /api/lab/signal-ic/{job_id}/result`` once it succeeds. Universes\nunder 10 tickers come back ``n/a``.",
+        "operationId": "startSignalIc",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignalICRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Signal Ic",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
+    "/api/lab/signal-ic/{job_id}/result": {
+      "get": {
+        "description": "The result of a succeeded signal IC job (409 until it has succeeded).",
+        "operationId": "getSignalIcResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignalICView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Signal Ic Result",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
     "/api/market/bars": {
       "get": {
         "description": "Bars in ``[start, end]``; the most recent ``limit`` when truncated.",
@@ -8187,6 +10938,548 @@
         "summary": "List Instruments",
         "tags": [
           "market"
+        ]
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "description": "Your in-app feed, newest first, with the unread count.",
+        "operationId": "listNotifications",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "unread_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Unread Only",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "page: ids below this",
+            "in": "query",
+            "name": "before_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page: ids below this",
+              "title": "Before Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Notifications",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notifications/preferences": {
+      "get": {
+        "operationId": "getNotificationPreferences",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferencesView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Preferences",
+        "tags": [
+          "notifications"
+        ]
+      },
+      "put": {
+        "description": "Set per-category (and optionally per-strategy) channel switches.",
+        "operationId": "updateNotificationPreferences",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferencesUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferencesView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Preferences",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notifications/quiet-hours": {
+      "put": {
+        "description": "Hold low and normal urgency deliveries for a morning digest; high\nurgency (halts, failed auto orders) always goes.",
+        "operationId": "setQuietHours",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuietHoursUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferencesView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Quiet Hours",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notifications/read": {
+      "post": {
+        "description": "Mark notifications read (all of yours when ``ids`` is omitted).",
+        "operationId": "markNotificationsRead",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkReadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkReadView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Mark Read",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notifications/webhook": {
+      "put": {
+        "description": "Your fallback webhook. Write-only: never shown back in full.",
+        "operationId": "setNotificationWebhook",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferencesView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Webhook",
+        "tags": [
+          "notifications"
         ]
       }
     },
@@ -8799,6 +12092,327 @@
         ]
       }
     },
+    "/api/push/subscriptions": {
+      "delete": {
+        "description": "Unregister a browser by its endpoint (404 when it isn't yours).",
+        "operationId": "deletePushSubscription",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushUnsubscribeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Push Subscription",
+        "tags": [
+          "push"
+        ]
+      },
+      "get": {
+        "description": "Your registered browsers and installed apps (no endpoints or keys).",
+        "operationId": "listPushSubscriptions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PushDeviceView"
+                  },
+                  "title": "Response Listpushsubscriptions",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Push Subscriptions",
+        "tags": [
+          "push"
+        ]
+      },
+      "post": {
+        "description": "Register this browser (``PushSubscription.toJSON()``). The endpoint\nmust be a known push service; re-registering refreshes it in place.",
+        "operationId": "createPushSubscription",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushSubscriptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushDeviceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Push Subscription",
+        "tags": [
+          "push"
+        ]
+      }
+    },
+    "/api/push/vapid-key": {
+      "get": {
+        "description": "The VAPID public key browsers subscribe with; null when this server\ncan't send Web Push (the console then doesn't subscribe).",
+        "operationId": "getVapidKey",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VapidKeyView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Vapid Key",
+        "tags": [
+          "push"
+        ]
+      }
+    },
     "/api/risk/policy": {
       "get": {
         "description": "The ``[production.risk]`` limits applied between a strategy's orders\nand the broker.",
@@ -8873,6 +12487,197 @@
         "summary": "Get Risk Policy",
         "tags": [
           "risk"
+        ]
+      }
+    },
+    "/api/schedule": {
+      "get": {
+        "description": "Scheduled jobs with their next fire, and the most recent runs.",
+        "operationId": "getSchedule",
+        "parameters": [
+          {
+            "description": "recent runs",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "recent runs",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Schedule",
+        "tags": [
+          "schedule"
+        ]
+      }
+    },
+    "/api/schedule/{job}/run-now": {
+      "post": {
+        "description": "Run a scheduled job now (a ``manual:`` run, audited). It runs in the\nbackground; its row shows up in ``GET /api/schedule``.",
+        "operationId": "runScheduledJobNow",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job",
+            "required": true,
+            "schema": {
+              "title": "Job",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunNowRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunNowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run Now",
+        "tags": [
+          "schedule"
         ]
       }
     },
