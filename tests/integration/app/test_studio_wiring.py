@@ -170,3 +170,96 @@ def test_lab_runs_honour_configured_costs(svc, settings, monkeypatch):
         )
     )
     assert seen and seen[0] == CostModelSettings.realistic()
+
+
+# ---- roadmap 8.2: studio lab runs share LabService's code path -----------------
+
+
+def _spy_dataset_costs(monkeypatch) -> list[object]:
+    from stonks.lab import dataset as dataset_module
+
+    seen: list[object] = []
+    original = dataset_module.LabDataset.__init__
+
+    def spy(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        seen.append(self.costs)
+
+    monkeypatch.setattr(dataset_module.LabDataset, "__init__", spy)
+    return seen
+
+
+def _draft_lab(**kw):
+    from stonks.app.studio import DraftLabRunRequest
+
+    base = {
+        "universe": ["UP.US", "DOWN.US"],
+        "start": date(2025, 10, 1),
+        "end": date(2026, 4, 1),
+        "budget": 1,
+        "survival_tests": ["oos"],
+    }
+    return DraftLabRunRequest(**base | kw)
+
+
+def test_studio_lab_runs_honour_configured_costs(svc, settings, monkeypatch):
+    from stonks.backtest.costs import CostModelSettings
+
+    seen = _spy_dataset_costs(monkeypatch)
+    settings.backtest.costs = CostModelSettings.realistic()
+    draft = svc.studio.create_draft(DraftCreate(name="costly trend", spec=TREND))
+    job = svc.studio.submit_lab_run(draft.id, _draft_lab())
+    done = svc.jobs.wait(job.id, timeout=120)
+    assert done.status == "succeeded", done.error
+    assert seen and seen[0] == CostModelSettings.realistic()
+
+
+def test_studio_lab_run_job_is_cancellable(svc):
+    assert svc.runner._handlers[STUDIO_LAB_RUN_JOB].cancellable
+
+
+def test_studio_lab_run_stops_once_cancelled(svc):
+    from stonks.app.jobs import JobCancelled, JobContext
+
+    draft = svc.studio.create_draft(DraftCreate(name="cancel me", spec=TREND))
+    params = {
+        "draft_id": draft.id,
+        "kind": "rule",
+        "spec": TREND,
+        "request": _draft_lab(budget=500).model_dump(mode="json"),
+    }
+    ctx = JobContext(job_id="job_none", _store=svc.runner.store)
+    ctx.request_cancel()
+    with pytest.raises(JobCancelled):
+        svc.studio._handle_lab_run(params, ctx)
+
+
+def test_studio_walk_forward_defaults_from_lab_settings(svc, settings):
+    from stonks.lab.survival.walk_forward import WalkForwardConfig
+
+    settings.lab.walk_forward = WalkForwardConfig(n_splits=2, anchored=True)
+    draft = svc.studio.create_draft(DraftCreate(name="wf trend", spec=TREND))
+    job = svc.studio.submit_lab_run(draft.id, _draft_lab(survival_tests=["walk_forward"]))
+    done = svc.jobs.wait(job.id, timeout=120)
+    assert done.status == "succeeded", done.error
+    [report] = done.result["survival_reports"]
+    assert report["metrics"]["n_folds"] == 2.0
+
+
+def test_api_walk_forward_defaults_from_lab_settings(svc, settings):
+    from stonks.app.lab import LabRunRequest
+    from stonks.lab.survival.walk_forward import WalkForwardConfig
+
+    settings.lab.walk_forward = WalkForwardConfig(n_splits=2, anchored=True)
+    view = svc.lab.run_lab(
+        LabRunRequest(
+            strategy=StrategyRef(class_path="stonks.strategies.examples.momentum:Momentum"),
+            universe=["UP.US"],
+            start=date(2025, 10, 1),
+            end=date(2026, 4, 1),
+            budget=1,
+            survival_tests=["walk_forward"],
+        )
+    )
+    [report] = view.survival_reports
+    assert report.metrics["n_folds"] == 2.0
