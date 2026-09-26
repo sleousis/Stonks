@@ -136,3 +136,17 @@ def test_gap_in_reference_drops_the_bar_from_both(tmp_path):
         assert f.values["joined_bars"] == 4 * 24 - 2
     finally:
         lake.close()
+
+
+def test_reference_listed_later_waits_for_enough_overlap(tmp_path):
+    traded, ref = _pair()
+    late = ref.iloc[70:].reset_index(drop=True)
+    lake = seed_lake(tmp_path / "lake.duckdb", {T: traded, REF: late})
+    try:
+        s = IntramarketDifferenceStrategy(PARAMS)
+        # 20 shared bars < atr_lookback + 2 -> no signal yet
+        assert s.extract_features(T, as_of(traded, 89), lake).values == {}
+        f = s.extract_features(T, as_of(traded, 110), lake).values
+        assert f["joined_bars"] == 41.0
+    finally:
+        lake.close()

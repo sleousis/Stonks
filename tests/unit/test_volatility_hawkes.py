@@ -89,3 +89,13 @@ def test_volatility_burst_after_calm(tmp_path, direction, long):
             assert all(h is None for h in hits)
     finally:
         lake.close()
+
+
+def test_zero_range_history_gives_no_signal_not_an_error(tmp_path):
+    frame = bars(np.full(300, 100.0), spread=0.0)
+    lake = seed_lake(tmp_path / "lake.duckdb", {T: frame})
+    try:
+        s = VolatilityHawkesStrategy(PARAMS)
+        assert s.estimate_return(T, as_of(frame, -1), lake) is None
+    finally:
+        lake.close()

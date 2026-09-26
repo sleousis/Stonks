@@ -74,3 +74,15 @@ def test_none_until_two_norm_lookbacks_of_history(tmp_path):
         assert s.extract_features(T, as_of(frame, 96), lake).values != {}
     finally:
         lake.close()
+
+
+def test_missing_volume_gives_no_signal_not_an_error(tmp_path):
+    frame = _frame("absorption")
+    frame["volume"] = None
+    lake = seed_lake(tmp_path / "lake.duckdb", {T: frame})
+    try:
+        s = VSAStrategy({"ticker": T, "norm_lookback": 48})
+        assert s.estimate_return(T, as_of(frame, -1), lake) is None
+        assert s.extract_features(T, as_of(frame, -1), lake).values == {}
+    finally:
+        lake.close()
