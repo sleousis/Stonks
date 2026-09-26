@@ -1,5 +1,11 @@
 import type { BrokerInfo } from '../../api/models';
-import { brokerLabel, isLiveBroker, tickConfirmOptions, tickRequest } from './tick-confirm';
+import {
+  brokerLabel,
+  isLiveBroker,
+  tickConfirmOptions,
+  tickRequest,
+  tickTicket,
+} from './tick-confirm';
 
 const SIMULATED: BrokerInfo = {
   kind: 'simulated',
@@ -23,7 +29,7 @@ describe('tick confirmation', () => {
     const opts = tickConfirmOptions(true, null);
     expect(opts.typedConfirmation).toBeUndefined();
     expect(opts.tone).toBeUndefined();
-    expect(opts.confirmLabel).toBe('Run dry run');
+    expect(opts.confirmLabel).toBe('Start dry run');
   });
 
   it('makes a real tick name the broker and require typing it', () => {
@@ -31,7 +37,7 @@ describe('tick confirmation', () => {
     expect(opts.title).toContain('alpaca paper');
     expect(opts.typedConfirmation).toBe('alpaca paper');
     expect(opts.tone).toBe('danger');
-    expect(opts.confirmLabel).toBe('Run tick');
+    expect(opts.confirmLabel).toBe('Start trading run');
   });
 
   it('warns about real money on a live broker', () => {
@@ -41,6 +47,30 @@ describe('tick confirmation', () => {
 
   it('refuses a real tick without broker information', () => {
     expect(() => tickConfirmOptions(false, null)).toThrow();
+  });
+
+  it('shows a real run as a ticket stamped PAPER or LIVE', () => {
+    const paper = tickTicket(ALPACA_PAPER, { asOf: '', tickers: '' });
+    expect(paper.live).toBe(false);
+    expect(paper.typedConfirmation).toBe('alpaca paper');
+    expect(paper.confirmLabel).toBe('Start trading run');
+    expect(paper.lines.map((l) => [l.label, l.value])).toEqual([
+      ['Broker', 'alpaca paper'],
+      ['As of', 'Today'],
+      ['Tickers', 'All in the universe'],
+      ['Strategies', 'Every active strategy'],
+    ]);
+
+    const live = tickTicket(ALPACA_LIVE, { asOf: '2026-09-25', tickers: 'aapl.us msft.us' });
+    expect(live.live).toBe(true);
+    expect(live.message).toContain('real money');
+    expect(live.lines.find((l) => l.label === 'Tickers')?.value).toBe('AAPL.US, MSFT.US');
+    expect(live.lines.find((l) => l.label === 'As of')).toEqual({
+      label: 'As of',
+      value: '2026-09-25',
+      mono: true,
+    });
+    expect(tickTicket(SIMULATED, { asOf: '', tickers: '' }).live).toBe(false);
   });
 
   it('builds the request body from the form', () => {
