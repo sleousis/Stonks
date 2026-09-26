@@ -3,9 +3,28 @@ import { Injectable, inject } from '@angular/core';
 import { AuthTokenService } from '../core/auth/auth-token.service';
 import { SILENT_HEADERS } from '../core/http/interceptors';
 import { unwrap } from './api-call';
-import { checkAuth } from './generated/sdk.gen';
+import {
+  changePassword,
+  checkAuth,
+  confirmMfaEnrolment,
+  createApiToken,
+  getMe,
+  listApiTokens,
+  listStrategies,
+  login,
+  logout,
+  regenerateRecoveryCodes,
+  revokeApiToken,
+  startMfaEnrolment,
+  verifyMfa,
+} from './generated/sdk.gen';
+import type { MfaCodeRequest, PasswordChangeRequest, TokenCreateRequest } from './models';
 
-/** The API's bearer-token check. */
+/**
+ * Sign-in, second factor, the caller's identity and their API tokens
+ * (`/api/auth/*`). Sign-in calls are silent: the login screens explain
+ * failures themselves.
+ */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly auth = inject(AuthTokenService);
@@ -16,13 +35,70 @@ export class AuthService {
    * configured". Silent: Settings explains the outcome itself.
    */
   check() {
+    return unwrap(checkAuth({ headers: this.withToken() }));
+  }
+
+  /** Who the credential (API token, else the session cookie) belongs to. Silent. */
+  me() {
+    return unwrap(getMe({ headers: this.withToken() }));
+  }
+
+  login(email: string, password: string) {
+    return unwrap(login({ body: { email, password }, headers: SILENT_HEADERS }));
+  }
+
+  startEnrolment() {
+    return unwrap(startMfaEnrolment({ headers: SILENT_HEADERS }));
+  }
+
+  confirmEnrolment(code: string) {
+    return unwrap(confirmMfaEnrolment({ body: { code }, headers: SILENT_HEADERS }));
+  }
+
+  /** A TOTP code or a recovery code: finishes sign-in, or refreshes the step-up window. */
+  verify(body: MfaCodeRequest) {
+    return unwrap(verifyMfa({ body, headers: SILENT_HEADERS }));
+  }
+
+  logout() {
+    return unwrap(logout({ headers: SILENT_HEADERS }));
+  }
+
+  /**
+   * True when this API answers reads without a credential (the dev
+   * profile's open reads on localhost). Asks for one strategy, silently.
+   */
+  async readsAreOpen(): Promise<boolean> {
+    try {
+      await unwrap(listStrategies({ query: { limit: 1 }, headers: SILENT_HEADERS }));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  changePassword(body: PasswordChangeRequest) {
+    return unwrap(changePassword({ body }));
+  }
+
+  regenerateRecoveryCodes() {
+    return unwrap(regenerateRecoveryCodes());
+  }
+
+  tokens() {
+    return unwrap(listApiTokens());
+  }
+
+  createToken(body: TokenCreateRequest) {
+    return unwrap(createApiToken({ body }));
+  }
+
+  revokeToken(tokenId: string) {
+    return unwrap(revokeApiToken({ path: { token_id: tokenId } }));
+  }
+
+  private withToken(): Record<string, string> {
     const token = this.auth.token();
-    return unwrap(
-      checkAuth({
-        headers: token
-          ? { ...SILENT_HEADERS, Authorization: `Bearer ${token}` }
-          : { ...SILENT_HEADERS },
-      }),
-    );
+    return token ? { ...SILENT_HEADERS, Authorization: `Bearer ${token}` } : { ...SILENT_HEADERS };
   }
 }
