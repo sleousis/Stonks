@@ -200,6 +200,23 @@ class SurfaceObjective:
         return 1.0 - ((a - 10.0) / 40.0) ** 2 - ((b - 0.5) / 2.0) ** 2
 
 
+class PeakTrader(LongAll):
+    """Buys and holds every pick only when ``a`` is exactly 10: a pure
+    peak in parameter space, in and out of sample."""
+
+    id = "peak_trader_fake"
+
+    @classmethod
+    def parameter_spec(cls):
+        return [
+            ParameterSpec(name="a", kind="int", default=10, bounds=(0, 20)),
+            *super().parameter_spec(),
+        ]
+
+    def estimate_return(self, ticker, as_of, lake):
+        return 1.0 if int(self.params["a"]) == 10 else None
+
+
 class FixedTuner:
     """A tuner stand-in: plateau/cross-instrument tests only read its seed."""
 
