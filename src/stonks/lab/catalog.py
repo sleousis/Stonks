@@ -3,7 +3,8 @@
 Every concrete strategy defined in a public ``stonks.strategies.examples``
 module (modules starting with ``_`` hold shared helpers and are skipped),
 plus the wrapper strategies (:class:`MacroRegimeFilter`,
-:class:`FeatureRegimeFilter`, :class:`LastTradeFilter`), keyed by ``id``. ``resolve_strategy``
+:class:`FeatureRegimeFilter`, :class:`LastTradeFilter`,
+:class:`RegimeFilter`), keyed by ``id``. ``resolve_strategy``
 also accepts a class name or a ``module:Class`` path.
 """
 
@@ -18,11 +19,13 @@ from stonks.strategies.base import BaseStrategy
 from stonks.strategies.feature_regime import FeatureRegimeFilter
 from stonks.strategies.last_trade_filter import LastTradeFilter
 from stonks.strategies.macro_regime import MacroRegimeFilter
+from stonks.strategies.regime import RegimeFilter
 
 _WRAPPERS: tuple[type[BaseStrategy], ...] = (
     MacroRegimeFilter,
     FeatureRegimeFilter,
     LastTradeFilter,
+    RegimeFilter,
 )
 
 
