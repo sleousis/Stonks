@@ -1,0 +1,86 @@
+<section class="panel" aria-labelledby="ship-title">
+  <div class="panel-head">
+    <h2 id="ship-title">Ship</h2>
+    @if (stage() === 'draft') {
+      <app-status-pill status="draft" label="Not registered" />
+    } @else {
+      <app-status-pill [status]="stage()" />
+    }
+  </div>
+
+  <ol class="steps" aria-label="Lifecycle">
+    @for (step of steps; track step.id) {
+      <li
+        [attr.data-state]="stepState(step.id)"
+        [attr.aria-current]="stepState(step.id) === 'current' ? 'step' : null"
+      >
+        <span class="dot" aria-hidden="true"></span>
+        <span class="step-text">
+          <span class="step-label">{{ step.label }}</span>
+          <span class="step-detail">{{ step.detail }}</span>
+        </span>
+      </li>
+    }
+  </ol>
+
+  <div class="panel-body body">
+    @switch (stage()) {
+      @case ('draft') {
+        <p>
+          Register the saved rules as a strategy. It starts in <strong>shadow</strong>, so you can
+          watch its decisions on real data before it trades.
+        </p>
+        <div>
+          <button
+            type="button"
+            class="btn btn-primary"
+            [disabled]="busy()"
+            [attr.aria-busy]="busy()"
+            (click)="register()"
+          >
+            {{ busy() ? 'Registering…' : 'Register in shadow' }}
+          </button>
+        </div>
+      }
+      @case ('retired') {
+        <p>
+          <strong class="mono">{{ strategyId() }}</strong> was retired in Strategies and can no
+          longer be enabled from here.
+        </p>
+      }
+      @default {
+        <p>
+          Registered as
+          <a class="mono" routerLink="/strategies">{{ strategyId() }}</a
+          >.
+          @if (enabled()) {
+            It is <strong>active</strong> and places orders on each tick.
+          } @else {
+            It is in <strong>shadow</strong>: evaluated on each tick, no orders. Follow it on the
+            <a routerLink="/shadow">Shadow</a> page.
+          }
+        </p>
+        <button
+          type="button"
+          role="switch"
+          class="toggle"
+          [attr.aria-checked]="enabled()"
+          [disabled]="busy()"
+          [attr.aria-busy]="busy()"
+          aria-describedby="ship-toggle-hint"
+          (click)="toggle()"
+        >
+          <span class="track" aria-hidden="true"><span class="thumb"></span></span>
+          <span class="toggle-label">{{ enabled() ? 'Enabled' : 'Disabled' }}</span>
+        </button>
+        <p id="ship-toggle-hint" class="hint">
+          {{
+            enabled()
+              ? 'Turn off to move it back to shadow. You will be asked to confirm.'
+              : 'Turn on to make it active. You will be asked to type its id.'
+          }}
+        </p>
+      }
+    }
+  </div>
+</section>

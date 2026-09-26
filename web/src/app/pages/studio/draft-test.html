@@ -1,0 +1,341 @@
+<!-- Setup --------------------------------------------------------------------->
+<section class="panel" aria-labelledby="test-setup-title">
+  <div class="panel-head">
+    <h2 id="test-setup-title">Test setup</h2>
+    <span class="muted">Shared by the backtest and the lab run</span>
+  </div>
+  <div class="panel-body">
+    <div class="form-grid form-grid-2 wide">
+      <div class="field span-all">
+        <label for="t-tickers">Tickers</label>
+        <input
+          id="t-tickers"
+          class="input"
+          list="t-ticker-options"
+          placeholder="AAPL.US, MSFT.US, NVDA.US"
+          autocapitalize="characters"
+          spellcheck="false"
+          aria-describedby="t-tickers-hint"
+          [attr.aria-invalid]="submitted() && !!tickersError()"
+          [value]="tickersText()"
+          (input)="tickersText.set($any($event.target).value)"
+        />
+        <datalist id="t-ticker-options">
+          @if (instruments.hasValue()) {
+            @for (i of instruments.value().items; track i.id) {
+              <option [value]="i.id">{{ i.name }}</option>
+            }
+          }
+        </datalist>
+        <p id="t-tickers-hint" class="hint">
+          Separate with commas or spaces. They need bars in the lake for the window below.
+        </p>
+        @if (submitted() && tickersError(); as e) {
+          <p class="error">{{ e }}</p>
+        }
+        @if (tickers().length) {
+          <ul class="ticker-chips" aria-label="Tickers to test">
+            @for (t of tickers(); track t) {
+              <li>{{ t }}</li>
+            }
+          </ul>
+        }
+      </div>
+      <div class="field">
+        <label for="t-start">From</label>
+        <input
+          id="t-start"
+          class="input"
+          type="date"
+          [attr.aria-invalid]="submitted() && !!windowError()"
+          [value]="start()"
+          (change)="start.set($any($event.target).value)"
+        />
+      </div>
+      <div class="field">
+        <label for="t-end">To</label>
+        <input
+          id="t-end"
+          class="input"
+          type="date"
+          [attr.aria-invalid]="submitted() && !!windowError()"
+          [value]="end()"
+          (change)="end.set($any($event.target).value)"
+        />
+        @if (submitted() && windowError(); as e) {
+          <p class="error">{{ e }}</p>
+        }
+      </div>
+      <div class="field">
+        <label for="t-interval">Interval</label>
+        <select
+          id="t-interval"
+          class="input"
+          [value]="interval()"
+          (change)="interval.set($any($event.target).value)"
+        >
+          @for (iv of intervals; track iv) {
+            <option [value]="iv">{{ iv }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="t-cost">Costs</label>
+        <select
+          id="t-cost"
+          class="input"
+          aria-describedby="t-cost-hint"
+          [value]="cost()"
+          (change)="cost.set($any($event.target).value)"
+        >
+          <option value="zero">Zero (frictionless)</option>
+          <option value="realistic">Realistic</option>
+          <option value="custom">Custom</option>
+        </select>
+        <p id="t-cost-hint" class="hint">
+          {{ costSummary() }}
+          @if (presetDescription(); as d) {
+            . {{ d }}
+          }
+        </p>
+      </div>
+      @if (cost() === 'custom') {
+        <div class="field">
+          <label for="t-slip">Slippage (bps)</label>
+          <input
+            id="t-slip"
+            class="input"
+            type="number"
+            min="0"
+            step="any"
+            inputmode="decimal"
+            [value]="customSlippage()"
+            (change)="customSlippage.set(numberValue($any($event.target).value, 0))"
+          />
+        </div>
+        <div class="field">
+          <label for="t-fee">Fee per trade ($)</label>
+          <input
+            id="t-fee"
+            class="input"
+            type="number"
+            min="0"
+            step="any"
+            inputmode="decimal"
+            [value]="customFee()"
+            (change)="customFee.set(numberValue($any($event.target).value, 0))"
+          />
+        </div>
+      }
+      <div class="field">
+        <label for="t-cash">Starting cash ($)</label>
+        <input
+          id="t-cash"
+          class="input"
+          type="number"
+          min="1"
+          step="any"
+          inputmode="decimal"
+          [value]="initialCash()"
+          (change)="initialCash.set(numberValue($any($event.target).value, 10000))"
+        />
+      </div>
+      <div class="field">
+        <label for="t-rebalance">Decide every (bars)</label>
+        <input
+          id="t-rebalance"
+          class="input"
+          type="number"
+          min="1"
+          step="1"
+          inputmode="numeric"
+          [value]="rebalanceEvery()"
+          (change)="rebalanceEvery.set(numberValue($any($event.target).value, 1))"
+        />
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Backtest ------------------------------------------------------------------>
+<section class="panel" aria-labelledby="bt-title">
+  <div class="panel-head">
+    <h2 id="bt-title">Backtest</h2>
+    <button
+      type="button"
+      class="btn btn-primary"
+      [disabled]="btBusy()"
+      [attr.aria-busy]="btBusy()"
+      (click)="runBacktest()"
+    >
+      {{ btBusy() ? 'Running…' : 'Run backtest' }}
+    </button>
+  </div>
+  @let bt = btRun();
+  @if (bt) {
+    <div class="job" aria-live="polite">
+      <div class="job-line">
+        <app-status-pill [status]="bt.status() ?? 'queued'" />
+        <span class="job-message">{{ bt.message() || 'Waiting for a worker…' }}</span>
+        @if (isRunning(bt)) {
+          <button type="button" class="btn btn-ghost" (click)="cancel(bt)">Cancel</button>
+        }
+      </div>
+      @if (isRunning(bt)) {
+        <label class="visually-hidden" for="bt-progress">Backtest progress</label>
+        <progress id="bt-progress" max="1" [value]="bt.progress()">
+          {{ percent(bt.progress(), { digits: 0 }) }}
+        </progress>
+      }
+      @if (bt.error(); as e) {
+        <p class="error" role="alert">{{ e }}</p>
+      }
+    </div>
+  }
+  @if (btResult(); as r) {
+    <div class="panel-body results">
+      <div class="tiles" role="group" aria-label="Backtest metrics">
+        <app-stat-tile
+          class="tile-main"
+          label="Return"
+          featured
+          [value]="percent(r.final_return, { signed: true })"
+          [detail]="r.start + ' to ' + r.end"
+          [detailTone]="''"
+        />
+        <app-stat-tile label="CAGR" [value]="percent(r.cagr, { signed: true })" />
+        <app-stat-tile label="Sharpe" [value]="number(r.sharpe, { digits: 2 })" />
+        <app-stat-tile label="Max drawdown" [value]="percent(r.max_drawdown)" />
+        <app-stat-tile label="Profit factor" [value]="number(r.profit_factor, { digits: 2 })" />
+      </div>
+      @if (r.equity.length) {
+        <app-time-series-chart
+          ariaLabel="Backtest equity, with drawdown below"
+          [summary]="chartSummary()"
+          [series]="equitySeries()"
+          [height]="300"
+        />
+      } @else {
+        <p class="muted">No equity points: the window had no bars for these tickers.</p>
+      }
+      <p class="hint">
+        The backtest API returns the equity curve and metrics; a per-trade list is not available
+        yet.
+      </p>
+    </div>
+  } @else if (!bt) {
+    <p class="panel-body muted">
+      Replays the saved rules over the tickers and window above, one decision per bar, with orders
+      filling at the next bar's open.
+    </p>
+  }
+</section>
+
+<!-- Lab run ------------------------------------------------------------------->
+<section class="panel" aria-labelledby="lab-title">
+  <div class="panel-head">
+    <h2 id="lab-title">Lab run</h2>
+    <button
+      type="button"
+      class="btn btn-primary"
+      [disabled]="labBusy() || !tests().length"
+      [attr.aria-busy]="labBusy()"
+      (click)="runLab()"
+    >
+      {{ labBusy() ? 'Running…' : 'Run lab' }}
+    </button>
+  </div>
+  <div class="panel-body lab-options">
+    <fieldset class="plain">
+      <legend>Survival tests</legend>
+      <div class="test-options">
+        @for (t of survivalTests; track t.id) {
+          <label class="check test-option">
+            <input
+              type="checkbox"
+              [checked]="tests().includes(t.id)"
+              (change)="toggleTest(t.id, $any($event.target).checked)"
+            />
+            <span>
+              <span class="test-name">{{ t.label }}</span>
+              <span class="hint">{{ t.hint }}</span>
+            </span>
+          </label>
+        }
+      </div>
+      @if (!tests().length) {
+        <p class="error">Pick at least one survival test.</p>
+      }
+    </fieldset>
+    <div class="field objective">
+      <label for="t-objective">Score by</label>
+      <select
+        id="t-objective"
+        class="input"
+        [value]="objective()"
+        (change)="objective.set($any($event.target).value)"
+      >
+        <option value="sharpe">Sharpe ratio</option>
+        <option value="cagr">CAGR</option>
+        <option value="final_return">Final return</option>
+      </select>
+    </div>
+  </div>
+  @let lr = labRun();
+  @if (lr) {
+    <div class="job" aria-live="polite">
+      <div class="job-line">
+        <app-status-pill [status]="lr.status() ?? 'queued'" />
+        <span class="job-message">{{ lr.message() || 'Waiting for a worker…' }}</span>
+        @if (isRunning(lr)) {
+          <button type="button" class="btn btn-ghost" (click)="cancel(lr)">Cancel</button>
+        }
+      </div>
+      @if (isRunning(lr)) {
+        <label class="visually-hidden" for="lab-progress">Lab run progress</label>
+        <progress id="lab-progress" max="1" [value]="lr.progress()">
+          {{ percent(lr.progress(), { digits: 0 }) }}
+        </progress>
+      }
+      @if (lr.error(); as e) {
+        <p class="error" role="alert">{{ e }}</p>
+      }
+    </div>
+  }
+  @if (labResult(); as v) {
+    <div class="panel-body verdict">
+      <div class="verdict-line">
+        <app-status-pill
+          [status]="v.verdict"
+          [label]="v.verdict === 'pass' ? 'Survived' : 'Did not survive'"
+        />
+        <span class="muted num">Best score {{ number(v.best_score, { digits: 3 }) }}</span>
+      </div>
+      <ul class="reports">
+        @for (rep of v.survival_reports; track rep.test_id) {
+          <li>
+            <div class="report-head">
+              <app-status-pill [status]="rep.passed ? 'pass' : 'fail'" />
+              <span class="test-name">{{ testLabel(rep.test_id) }}</span>
+            </div>
+            @if (rep.notes) {
+              <p class="report-notes">{{ rep.notes }}</p>
+            }
+            @if (metricEntries(rep.metrics).length) {
+              <dl class="metrics">
+                @for (m of metricEntries(rep.metrics); track m[0]) {
+                  <div>
+                    <dt>{{ m[0] }}</dt>
+                    <dd class="num">{{ m[1] }}</dd>
+                  </div>
+                }
+              </dl>
+            }
+          </li>
+        } @empty {
+          <li class="muted">No survival reports came back.</li>
+        }
+      </ul>
+    </div>
+  }
+</section>
