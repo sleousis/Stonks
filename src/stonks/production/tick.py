@@ -521,10 +521,29 @@ def _tick_status(results: Sequence[BookResult]) -> TickStatus:
     return "ok"
 
 
-def _book_strategies(run: _TickRun, book: TickBook) -> list[str]:
+def trades_live(book: TickBook, settings: TickSettings) -> bool:
+    """The book trades at an external broker (today only the default
+    portfolio, through ``[brokers].kind``)."""
+    return book.portfolio_id == DEFAULT_PORTFOLIO_ID and settings.broker_kind != "simulated"
+
+
+def book_strategies(book: TickBook, scored: Sequence[str], settings: TickSettings) -> list[str]:
+    """The strategies whose signals a book trades. The legacy book trades
+    every scored (active) strategy. A subscription book trades its paper and
+    auto subscriptions, except at a live broker, where only auto ones place
+    orders: paper money must never reach a real account."""
     if book.legacy or book.spec.strategy_weights is None:
-        return list(run.signals.scores)
-    return [s for s, w in book.spec.strategy_weights.items() if w > 0]
+        return list(scored)
+    live = trades_live(book, settings)
+    return [
+        s
+        for s, w in book.spec.strategy_weights.items()
+        if w > 0 and (not live or book.spec.strategy_modes.get(s) is Mode.AUTO)
+    ]
+
+
+def _book_strategies(run: _TickRun, book: TickBook) -> list[str]:
+    return book_strategies(book, list(run.signals.scores), run.settings)
 
 
 def _needs_shadow_signals(run: _TickRun) -> bool:
@@ -564,7 +583,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     #    An external broker (opt-in, e.g. Alpaca) is the source of truth: sync
     #    its order statuses and fills into the ledger first, then read the
     #    portfolio from the account.
-    external = is_default and settings.broker_kind != "simulated"
+    external = trades_live(book, settings)
     if book.spec.broker == "connection" and not external:
         log.warning("tick.portfolio_skipped", reason="no_connection_broker")
         return BookResult(
@@ -945,8 +964,11 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
 def load_tick_plan(state: SqliteState, settings: TickSettings) -> TickPlan:
     """One book per active portfolio (of an active owner) with at least one
     enabled paper or auto subscription, plus every enabled notify-mode
-    subscription. Auto subscriptions count only on broker portfolios (the
-    auto gate refuses others; this is the tick's own guard)."""
+    subscription. Auto subscriptions count only on portfolios that trade at
+    a broker (the auto gate refuses others; this is the tick's own guard):
+    ``kind = broker``, or the default portfolio of an install whose
+    ``[brokers].kind`` is external (its connection row arrives with S3)."""
+    live_default = settings.broker_kind != "simulated"
     rows = state.sql(
         "SELECT p.* FROM portfolios p JOIN users u ON u.id = p.owner_id"
         " WHERE p.status = 'active' AND u.status = 'active' ORDER BY p.created_at, p.id"
@@ -966,7 +988,11 @@ def load_tick_plan(state: SqliteState, settings: TickSettings) -> TickPlan:
             s
             for s in subs
             if s.portfolio_id == portfolio.id
-            and (s.mode is not Mode.AUTO or portfolio.kind == "broker")
+            and (
+                s.mode is not Mode.AUTO
+                or portfolio.kind == "broker"
+                or (live_default and portfolio.id == DEFAULT_PORTFOLIO_ID)
+            )
         ]
         spec = BookSpec.for_portfolio(
             portfolio,

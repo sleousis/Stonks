@@ -380,3 +380,21 @@ def test_a_gate_halting_everything_places_nothing(env, monkeypatch):
     result = run_tick(state, lake, registry, SETTINGS, as_of=AS_OF)
     assert result.orders_placed == 0 and state.count_rows("orders") == 0
     assert state.count_rows("portfolio_snapshots") == 1  # still marked
+
+
+def test_paper_subscriptions_never_reach_a_live_broker(env):
+    """On an install whose default portfolio trades at a real broker, only
+    auto subscriptions place orders there; paper ones stay out of it."""
+    _, state, _ = env
+    owner = Scope.for_user(UserRepository(state).get("usr_owner"))
+    subs = SubscriptionRepository(state)
+    subs.subscribe(owner, strategy_id="bh_up", mode=Mode.PAPER, portfolio_id=DEFAULT_PORTFOLIO_ID)
+    subs.subscribe(owner, strategy_id="mom", mode=Mode.PAPER, portfolio_id=DEFAULT_PORTFOLIO_ID)
+    state.execute("UPDATE subscriptions SET mode = 'auto' WHERE strategy_id = 'mom'")
+    live = TickSettings(universe=UNIVERSE, broker_kind="alpaca")
+
+    [book] = load_tick_plan(state, live).books
+    assert tick_mod.book_strategies(book, ["bh_up", "mom"], live) == ["mom"]
+    [book] = load_tick_plan(state, SETTINGS).books
+    # simulated: paper trades, and auto has no broker to reach (left out)
+    assert tick_mod.book_strategies(book, ["bh_up", "mom"], SETTINGS) == ["bh_up"]
