@@ -26,12 +26,17 @@ Two kinds:
 
 Order of application (``order``; lower first):
 
+0. ``margin_call`` (0): forced closes on a margin breach, opens clipped to
+   the margin room (roadmap 16.2); ``squeeze_guard`` (1): forced covers of
+   shorts at squeeze risk;
 1. ``max_holding`` (1): forced sells of positions held too long;
 2. ``drawdown_scaling`` (2): every opening buy times the drawdown size;
 3. ``portfolio_vol`` (3): opening buys scaled to the volatility caps,
    measured on the buys drawdown scaling left;
 4. ``circuit_breaker`` (4) and ``operational_halt`` (5): every opening buy
    dropped after a loss halt or when the data feed is stale (BL-28);
+4b. ``gross_exposure`` (6), ``net_exposure`` (7), ``short_caps`` (8) and
+   ``borrow_check`` (9): the short-book limits (roadmap 16.2);
 5. one order-rule pass: ``sell_within_position`` (10), ``require_price``
    (20), ``max_open_positions`` (30), ``max_weight_per_ticker`` (40),
    ``max_weight_per_asset_class`` (50), ``risk_per_position`` (52),

@@ -14,25 +14,36 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from stonks.production.rules.borrow_check import BorrowCheckSettings
 from stonks.production.rules.circuit_breaker import CircuitBreakerSettings, Cooldown
 from stonks.production.rules.drawdown_scaling import DrawdownScalingSettings, Schedule
+from stonks.production.rules.exposure import GrossExposureSettings, NetExposureSettings
 from stonks.production.rules.liquidity import LiquiditySettings
+from stonks.production.rules.margin_call import MarginCallSettings
 from stonks.production.rules.max_holding import MaxHoldingSettings
 from stonks.production.rules.operational_halt import OperationalHaltSettings
 from stonks.production.rules.portfolio_vol import PortfolioVolSettings
 from stonks.production.rules.risk_per_position import RiskPerPositionSettings
 from stonks.production.rules.sector_cap import SectorCapSettings
+from stonks.production.rules.short_caps import ShortCapsSettings
+from stonks.production.rules.squeeze_guard import SqueezeGuardSettings
 
 __all__ = [
+    "BorrowCheckSettings",
     "CircuitBreakerSettings",
     "DrawdownScalingSettings",
+    "GrossExposureSettings",
     "LiquiditySettings",
+    "MarginCallSettings",
     "MaxHoldingSettings",
+    "NetExposureSettings",
     "OperationalHaltSettings",
     "PortfolioVolSettings",
     "RiskPerPositionSettings",
     "RuleSettings",
     "SectorCapSettings",
+    "ShortCapsSettings",
+    "SqueezeGuardSettings",
     "merge_schedules",
     "tighter_rule_settings",
 ]
@@ -49,6 +60,13 @@ class RuleSettings(BaseModel):
     liquidity: LiquiditySettings = LiquiditySettings()
     circuit_breaker: CircuitBreakerSettings = CircuitBreakerSettings()
     operational_halt: OperationalHaltSettings = OperationalHaltSettings()
+    # Short selling (roadmap 16.2), every one off by default.
+    margin_call: MarginCallSettings = MarginCallSettings()
+    squeeze_guard: SqueezeGuardSettings = SqueezeGuardSettings()
+    gross_exposure: GrossExposureSettings = GrossExposureSettings()
+    net_exposure: NetExposureSettings = NetExposureSettings()
+    short_caps: ShortCapsSettings = ShortCapsSettings()
+    borrow_check: BorrowCheckSettings = BorrowCheckSettings()
 
 
 def _min_optional(a: float | None, b: float | None) -> float | None:
@@ -67,6 +85,16 @@ def _max_optional(a: float | None, b: float | None) -> float | None:
     if b is None:
         return a
     return max(a, b)
+
+
+def _either(a: bool, b: bool) -> bool:
+    """Switching a guard on is tighter."""
+    return a or b
+
+
+def _keep_base(a: Any, b: Any) -> Any:
+    """Set globally only: an override can't change it."""
+    return a
 
 
 def _size_at(schedule: Schedule, drawdown: float) -> float:
@@ -112,6 +140,19 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
         "cooldown": _stricter_cooldown,
     },
     "operational_halt": {"max_bar_age_days": _min_optional},
+    "margin_call": {"enabled": _either, "margin": _keep_base, "buffer": max},
+    "squeeze_guard": {
+        "max_borrow_fee": _min_optional,
+        "max_adverse_pct": _min_optional,
+        "atr_multiple": _min_optional,
+        "spike_pct": _min_optional,
+        "spike_bars": max,
+        "borrow": _keep_base,
+    },
+    "gross_exposure": {"max_gross": _min_optional},
+    "net_exposure": {"min_net": _max_optional, "max_net": _min_optional},
+    "short_caps": {"max_short_weight": _min_optional, "max_short_total": _min_optional},
+    "borrow_check": {"enabled": _either, "max_borrow_fee": _min_optional, "borrow": _keep_base},
 }
 
 
