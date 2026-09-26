@@ -234,3 +234,15 @@ def test_erc_score_budget_gives_more_risk_to_better_scores() -> None:
 def test_unknown_estimator_fails_at_build() -> None:
     with pytest.raises(ValueError, match="estimator"):
         get_constructor("hrp", estimator="nope")
+
+
+@pytest.mark.parametrize("method", ["hrp", "erc", "mean_variance_costs"])
+def test_construction_settings_build_the_new_methods(method: str) -> None:
+    from stonks.portfolio.settings import ConstructionSettings
+
+    settings = ConstructionSettings.from_mapping(
+        {"method": method, "estimator": "ewma", "max_weight": 0.25, "top_n": 8}
+    )
+    constructor = settings.build()
+    assert constructor.name == method
+    assert constructor.settings.max_weight == 0.25
