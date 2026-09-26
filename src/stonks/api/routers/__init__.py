@@ -24,6 +24,7 @@ from stonks.api.routers import (
     risk,
     schedule,
     shadow,
+    signals,
     sources,
     strategies,
     studio,
@@ -54,6 +55,7 @@ API_ROUTERS: list[APIRouter] = [
     notifications.push_router,
     notifications.router,
     schedule.router,
+    signals.router,
 ]
 
 #: Routers that always need the bearer token, even for reads on loopback.

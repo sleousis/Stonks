@@ -26,6 +26,7 @@ from stonks.app.orders import OrdersService
 from stonks.app.pagination import Page
 from stonks.app.portfolio import PortfolioService
 from stonks.app.schedule import ScheduleService
+from stonks.app.signals import SignalService
 from stonks.app.strategies import StrategyService
 from stonks.app.stream_tokens import IssuedStreamToken, StreamTokenSigner
 from stonks.app.studio import RuleStrategySource, StudioService, user_strategies_dir
@@ -131,6 +132,7 @@ class Services:
     connections: ConnectionsAppService
     notifications: NotificationsAppService
     schedule: ScheduleService
+    signals: SignalService
     _user_finder: UserStrategyFinder | None = field(default=None, repr=False)
 
     @classmethod
@@ -180,6 +182,7 @@ class Services:
             connections=ConnectionsAppService(context),
             notifications=NotificationsAppService(context),
             schedule=ScheduleService(context),
+            signals=SignalService(context, strategies, runner),
         )
         services.schedule.bind(services)
         return services
