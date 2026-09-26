@@ -46,3 +46,82 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+
+  # ---- Security (Phase 12.8) ------------------------------------------------
+  audit-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Export the locked runtime dependencies
+        run: uv export --locked --no-dev --no-emit-project --format requirements-txt -o requirements-audit.txt
+      - name: pip-audit (accepted findings in .github/audit/pip-audit-ignore.txt)
+        run: |
+          ignores=()
+          while read -r id _; do
+            case "$id" in ''|'#'*) continue ;; esac
+            ignores+=(--ignore-vuln "$id")
+          done < .github/audit/pip-audit-ignore.txt
+          uvx pip-audit --disable-pip --require-hashes -r requirements-audit.txt "${ignores[@]}"
+
+  audit-npm:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: npm audit --omit=dev (allowlist in .github/audit/npm-audit-allowlist.json)
+        run: node ../.github/audit/npm-audit.mjs --level=moderate
+
+  # ---- Packaging and deploy files (Phases 12.7, 14) ---------------------------
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: stonks:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test the image
+        run: |
+          docker run -d --name stonks-ci -e STONKS_API_TOKEN=ci stonks:ci
+          for _ in $(seq 1 30); do
+            status="$(docker inspect -f '{{.State.Health.Status}}' stonks-ci)"
+            [ "$status" = healthy ] && break
+            sleep 3
+          done
+          docker logs stonks-ci | tail -n 20
+          [ "$status" = healthy ]
+          docker exec stonks-ci stonks db init
+          docker exec stonks-ci test -f /app/web/dist/index.html
+          docker exec stonks-ci sh -c 'test "$(id -u)" = 10001'
+
+  deploy-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compose file is valid
+        working-directory: deploy
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+          docker compose --profile backup config --quiet
+      - name: Shell scripts pass shellcheck
+        run: shellcheck -x deploy/scripts/*.sh deploy/backup/*.sh deploy/monitor/*.sh
+      - uses: hashicorp/setup-terraform@v3
+      - name: Terraform fmt and validate
+        working-directory: infra/terraform/hetzner
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false -input=false
+          terraform validate

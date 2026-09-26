@@ -1,0 +1,20 @@
+# Maintenance jobs for the deploy user (Phases 14.5, 14.6, 14.8).
+# deploy.sh installs this with @DEPLOY_DIR@ replaced; edit here, not with
+# `crontab -e`, or the next deploy overwrites your change. Times are UTC.
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+CRON_TZ=UTC
+
+# m   h  dom mon dow  command
+# Host health every 5 minutes.
+*/5   *  *   *   *    @DEPLOY_DIR@/monitor/check-host.sh >> $HOME/stonks-cron.log 2>&1
+# Nightly off-server backup, after the 22:30-23:00 daily loop.
+30    2  *   *   *    @DEPLOY_DIR@/backup/backup.sh >> $HOME/stonks-cron.log 2>&1
+# Restore test on the 1st of each month.
+0     4  1   *   *    @DEPLOY_DIR@/backup/restore-test.sh >> $HOME/stonks-cron.log 2>&1
+# Monthly patch window (the 8th): refresh the Caddy and restic images, drop
+# images unused for 90 days. OS patches are automatic (unattended-upgrades);
+# app updates go through releases.
+0     5  8   *   *    cd @DEPLOY_DIR@ && docker compose pull caddy && docker compose up -d caddy && docker compose --profile backup pull restic && docker image prune -af --filter until=2160h >> $HOME/stonks-cron.log 2>&1
+# Keep the cron log small.
+0     6  *   *   0    tail -n 5000 $HOME/stonks-cron.log > $HOME/stonks-cron.log.tmp && mv $HOME/stonks-cron.log.tmp $HOME/stonks-cron.log

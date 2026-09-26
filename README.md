@@ -41,6 +41,10 @@ uv run ruff check .
 
 See `docs/roadmap.md`.
 
+## Deploy and contribute
+
+Run Stonks on a server with Docker Compose: see `docs/deploy.md`. How to contribute: `CONTRIBUTING.md`. Changes per release: `CHANGELOG.md`.
+
 ## License and disclaimer
 
 All rights reserved; see `LICENSE`. This is not financial advice; read `DISCLAIMER.md` before trading with it.

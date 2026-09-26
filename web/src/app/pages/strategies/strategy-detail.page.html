@@ -113,7 +113,7 @@
           @for (r of reports(); track r.test_id + $index) {
             <li class="report" [class.failed]="!r.passed">
               <div class="report-head">
-                <h3>{{ r.test_id }}</h3>
+                <h3>{{ r.test_id }} <app-help-tip [term]="r.test_id" /></h3>
                 <app-status-pill [status]="r.passed ? 'pass' : 'fail'" />
               </div>
               @if (r.notes) {
@@ -123,7 +123,7 @@
                 <dl class="metrics">
                   @for (m of r.metricList; track m.key) {
                     <div>
-                      <dt>{{ m.key }}</dt>
+                      <dt>{{ m.key }} <app-help-tip [term]="m.key" /></dt>
                       <dd class="num">{{ m.value }}</dd>
                     </div>
                   }

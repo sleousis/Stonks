@@ -1,0 +1,123 @@
+name: Deploy
+
+# Deploy a released image to the server over SSH (Phase 14.4).
+#
+#   Release succeeded (stable tag) ─┐
+#   or "Run workflow" with a tag ───┴─> join tailnet (optional) ─> rsync deploy/
+#       ─> docker login (job token) ─> deploy/scripts/deploy.sh <tag> ─> health check
+#
+# deploy.sh takes a snapshot, runs migrations, starts the new tag and rolls
+# back to the previous tag by itself if the health check fails.
+# Setup and secrets: docs/deploy.md.
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to deploy (e.g. v1.2.3); an older tag rolls back"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Automatic deploys only for successful stable releases (no "-rc" tags).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       !contains(github.event.workflow_run.head_branch, '-'))
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.STONKS_URL }}
+    env:
+      TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER || 'deploy' }}
+      DEPLOY_DIR: /opt/stonks/deploy
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+    steps:
+      - name: Check the tag
+        run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'$TAG' is not a release tag like v1.2.3"
+            exit 1
+          fi
+          if [ -z "$DEPLOY_HOST" ]; then
+            echo "::error::Repository secret DEPLOY_HOST is not set (see docs/deploy.md)"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Join the tailnet
+        if: env.TS_OAUTH_CLIENT_ID != ''
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Set up SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host stonks
+            HostName ${DEPLOY_HOST}
+            User ${DEPLOY_USER}
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            ServerAliveInterval 30
+          EOF
+
+      - name: Copy deploy files (keeps the server's .env and snapshots)
+        run: |
+          rsync -az --delete \
+            --exclude .env --exclude .deployed-tag --exclude .previous-tag --exclude snapshots/ \
+            deploy/ "stonks:${DEPLOY_DIR}/"
+
+      - name: Log the server in to GHCR with this job's token
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          # shellcheck disable=SC2029 # the user name expands on the runner on purpose
+          printf '%s' "$GHCR_TOKEN" | ssh stonks "docker login ghcr.io -u '${GHCR_USER}' --password-stdin"
+
+      - name: Deploy (snapshot, migrate, start, health check, auto rollback)
+        run: |
+          # shellcheck disable=SC2029 # expand on the runner on purpose; TAG is validated above
+          ssh stonks "${DEPLOY_DIR}/scripts/deploy.sh '${TAG}'"
+
+      - name: Log the server out of GHCR
+        if: always()
+        run: ssh stonks "docker logout ghcr.io" || true
+
+      - name: Check the public health endpoint
+        if: vars.STONKS_URL != ''
+        env:
+          STONKS_URL: ${{ vars.STONKS_URL }}
+        run: |
+          want="${TAG#v}"
+          got="$(curl -fsS --retry 5 --retry-delay 5 "${STONKS_URL%/}/api/health" | jq -r .version)"
+          echo "server reports version ${got}"
+          [ "$got" = "$want" ] || { echo "::error::expected ${want}, got ${got}"; exit 1; }

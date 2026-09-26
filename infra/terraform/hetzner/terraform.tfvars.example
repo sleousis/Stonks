@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars (gitignored) and fill in. Keep secrets out of files:
+#   export TF_VAR_hcloud_token=...            (Hetzner Cloud API token)
+#   export TF_VAR_tailscale_auth_key=tskey-auth-...   (private mode)
+name                  = "stonks"
+location              = "nbg1"
+server_type           = "cx22"
+volume_size_gb        = 20
+admin_ssh_public_key  = "ssh-ed25519 AAAA... you@laptop"
+deploy_ssh_public_key = "ssh-ed25519 AAAA... github-actions-deploy"
+
+# Public mode instead of Tailscale: SSH from your own IP, HTTPS for everyone.
+# ssh_allowed_cidrs = ["203.0.113.7/32"]
+# public_https      = true

@@ -310,10 +310,18 @@ Settings for ``AssetClassCostModel``. Zero costs by default; ``CostModelSettings
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `adv_window` | integer | no |  |
 | `asset_classes` | dict[str, [AssetClassCosts](#assetclasscosts)] | no |  |
 | `default` | [AssetClassCosts](#assetclasscosts) | no |  |
+| `half_spread_model` | "class" \| "corwin_schultz" \| "abdi_ranaldo" | no |  |
 | `impact_bps` | number | no |  |
+| `impact_gamma` | number | no |  |
+| `impact_model` | "sqrt" \| "sqrt_vol" \| "istar" | no |  |
+| `istar` | [IStarSettings](#istarsettings) | no |  |
+| `max_half_spread_bps` | number | no |  |
 | `max_impact_bps` | number | no |  |
+| `spread_window` | integer | no |  |
+| `vol_window` | integer | no |  |
 
 ### CoverageRow
 
@@ -504,6 +512,20 @@ Thresholds for ``stonks health`` (``[production.health]``).
 | `checks` | list[[HealthCheckView](#healthcheckview)] | yes |  |
 | `healthy` | boolean | yes |  |
 | `thresholds` | [HealthConfig](#healthconfig) | yes |  |
+
+### IStarSettings
+
+Kissell's I-Star parameters: ``I = a1 (Q/ADV)^a2 sigma^a3`` bps, with a temporary part ``b1 I pov^a4`` and a permanent part ``(1 - b1) I``. The defaults are Kissell's published US-equity estimates, **not calibrated** for this system; treat them as a starting point.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `a1` | number | no |  |
+| `a2` | number | no |  |
+| `a3` | number | no |  |
+| `a4` | number | no |  |
+| `b1` | number | no |  |
+| `periods_per_year` | number | no |  |
+| `pov` | number | no |  |
 
 ### IngestRequest
 

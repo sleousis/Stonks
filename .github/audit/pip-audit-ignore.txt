@@ -1,0 +1,4 @@
+# Accepted pip-audit findings (Phase 12.8). One vulnerability id per line,
+# then "#" and why it is accepted and until when. CI passes each id as
+# --ignore-vuln. Remove a line as soon as the fix is in uv.lock.
+#

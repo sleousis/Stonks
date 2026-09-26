@@ -52,6 +52,7 @@ When the backend changes a route: `uv run python -m stonks.api.openapi` (writes
 - `@hey-api/openapi-ts` generates `src/app/api/generated/` (Angular HttpClient
   client, so interceptors apply). Never edit it; ESLint and Prettier skip it.
 - TradingView Lightweight Charts, behind the `ChartEngine` seam.
+- `@angular/service-worker` for the app-shell cache and Web Push.
 - Public Sans (self-hosted via `@fontsource-variable/public-sans`).
 - Vitest (Angular's default runner) with jsdom; ESLint; Prettier.
 
@@ -73,19 +74,25 @@ web/src/
                               orders, shadow, ingest, studio, system, jobs-api
     core/                     cross-cutting services
       auth/                   AuthTokenService (sessionStorage only)
+      commands/               CommandRegistry (palette commands), ShortcutsService (keys)
+      help/                   glossary.ts: one-line help for every metric
       http/                   ApiError + problem-details mapping, interceptors
       jobs/                   JobsService (SSE via fetch + polling), SseParser
       notify/                 ToastService
       confirm/                ConfirmService
       theme/                  ThemeService
-      format/                 money / percent / date formatting
+      format/                 money / percent / date formatting; FormatService (locale, time zone)
+      pwa/                    ConnectivityService (offline, updates), NotificationPermissionService,
+                              PushSubscriptionApi (Web Push seam)
     shared/
       ui/                     page header, stat tile, status pill, data table,
-                              loading/empty/error states, confirm dialog, toasts
+                              loading/empty/error states, confirm dialog, toasts,
+                              help tip, command palette, shortcut cheat sheet,
+                              display and notification settings panels, offline page
       chart/                  ChartEngine seam, lightweight-charts engine,
                               <app-time-series-chart>
       format.pipes.ts         money, pct, num, day, dateTime, ago pipes
-    shell/                    app frame, navigation, keyboard shortcuts
+    shell/                    app frame, navigation, palette commands (shell-commands.ts)
     pages/<name>/             one folder per page: <name>.routes.ts + <name>.page.*
 ```
 
@@ -246,10 +253,74 @@ sentence `summary` (the canvas is invisible to screen readers). Tests use
 
 - Numbers through `formatMoney/formatPercent/...` or the `money`, `pct`, `num`,
   `day`, `dateTime`, `ago` pipes; percentages are fractions from the API.
-  Numeric cells get `.num` (tabular figures).
+  Numeric cells get `.num` (tabular figures). Never call `Intl` or
+  `toLocaleString` yourself: the formatters follow the trader's locale, time
+  zone and date style from Settings (`FormatService`, kept in `localStorage`)
+  and re-render when they change. Defaults: the browser's locale and zone,
+  ISO dates (`2026-09-26`). Date-only values are never shifted by zone.
 - Sentence case, plain verbs, buttons name the action ("Run tick", not "OK").
   Errors say what failed and what to do; empty states say what will fill the
   space and how.
+
+### Metric help
+
+Every metric shows a "?" tip with one plain sentence and a link to the wiki
+[Glossary](https://github.com/sleousis/Stonks/wiki/Glossary). The text lives
+in one file, `core/help/glossary.ts`.
+
+- `app-stat-tile` and `app-data-table` headers add the tip on their own when
+  the label is in the glossary ("Sharpe", "Max drawdown", "CAGR"...). Pass
+  `help="deflated_sharpe"` (tile) or `help: 'deflated_sharpe'` (column) when
+  the label differs, or `false` to hide it.
+- Anywhere else: `<dt>{{ m.label }} <app-help-tip [term]="m.key" /></dt>`;
+  unknown terms render nothing.
+- New metric: add a key to `METRIC_KEYS`, an entry (the compiler insists) and
+  its labels or API keys as `aliases`, and add the label to `LABELS_SHOWN` in
+  `glossary.spec.ts`. Keep `short` to one sentence a trader understands.
+
+### Command palette and shortcuts
+
+Ctrl+K / Cmd+K (or `/`, or the search button in the top bar and sidebar)
+opens the palette: pages, actions, strategies, tickers and recent jobs.
+The shell registers pages and global actions in `shell/shell-commands.ts`.
+A page can add its own while it is open:
+
+```ts
+inject(CommandRegistry).register(
+  [{ id: 'lab.compare', label: 'Compare backtests', group: 'Actions', run: () => this.compare() }],
+  inject(DestroyRef), // removed when the page goes
+);
+```
+
+Actions that change something confirm first, exactly like buttons do.
+Searches go through `api/search.service.ts` (silent: no error toasts).
+Tickers open `/data?instrument=<id>`.
+
+## Install and notifications (PWA)
+
+- `public/manifest.webmanifest` and `public/icons/` make the console
+  installable (desktop and phone home screen).
+- Angular's service worker (`ngsw-config.json`, production builds only)
+  caches the **app shell only**: HTML, JS, CSS, fonts and icons. It has no
+  data groups, so API responses are never cached, and `/api/**` is excluded
+  from navigation handling.
+- Offline, the shell swaps the page for `app-offline-page` (nothing stale is
+  shown) and brings the page back, freshly loaded, when the connection
+  returns. A newly deployed version shows a "reload" toast once.
+- Notifications are opt-in from **Settings, Notifications**; the browser
+  prompt appears only after the button is pressed. On iPhone and iPad the
+  panel explains Add to Home Screen first (iOS delivers Web Push only to
+  installed apps). `NotificationPermissionService` subscribes with `SwPush`
+  and the server's VAPID key through `PUSH_SUBSCRIPTION_API`; until the
+  backend has `GET /api/push/vapid-key` and `POST`/`DELETE
+  /api/push/subscriptions`, the pending implementation stops after
+  permission ("waiting for the server").
+- Push payloads must use Angular's format so a tap opens the deep link:
+  `{"notification": {"title": "...", "body": "...", "icon": "icons/icon-192.png",
+  "data": {"onActionClick": {"default": {"operation": "navigateLastFocusedOrOpen",
+  "url": "/strategies/momentum-v3"}}}}}`.
+- `stonks serve` should send `ngsw-worker.js` and `ngsw.json` with
+  `Cache-Control: no-cache` so updates are picked up.
 
 ### Tests
 
@@ -348,17 +419,50 @@ automate it.
 
 - Semantic landmarks: skip link, `nav aria-label="Main"`, `main`, sections
   labelled by their `h2`. One `h1` per page (from the page header).
-- Keyboard: everything reachable by Tab with the brass focus ring;
-  `g` then a key jumps between pages (`g d` dashboard, `g s` strategies, `g w`
-  shadow, `g o` orders, `g u` studio, `g l` lab, `g a` data, `g g` go-live,
-  `g h` health, `g ,` settings); Escape closes dialogs and the drawer.
+- Keyboard: everything reachable by Tab with the brass focus ring.
+  Ctrl+K / Cmd+K opens the command palette (ARIA combobox: the input keeps
+  focus, arrows move `aria-activedescendant`, Enter runs, Escape closes and
+  returns focus); `?` lists every shortcut; `g` then a key jumps between
+  pages (`g d` dashboard, `g s` strategies, `g w` shadow, `g o` orders, `g u`
+  studio, `g l` lab, `g a` data, `g g` go-live, `g h` health, `g ,`
+  settings); `n b` new backtest, `n t` dry-run tick. Single-key shortcuts can
+  be switched off in the cheat sheet (WCAG 2.1.4); Ctrl+K always works.
+  Escape closes dialogs and the drawer.
 - Status is text plus shape (`app-status-pill`), never colour alone; signed
   numbers carry `+`/`-`.
 - Loading regions use `role="status"`, errors `role="alert"`, toasts an
   `aria-live` region; the table announces sort changes.
 - Colour pairs meet WCAG AA (4.5:1 text, 3:1 focus and UI) in both themes.
+  Checked for every text token on `bg`, `surface`, `surface-2`, `surface-3`
+  and each `-soft` background: all at least 4.5:1. Brass is never text in
+  the light theme (4.4:1); it marks focus and active state only (at least
+  3:1). Text fields use `--color-control-border` (at least 3:1); buttons are
+  identified by their label, so they keep `--color-border-strong`.
+- Targets: 44px on phones and coarse pointers, at least 24px elsewhere (WCAG
+  2.2, 2.5.8), including the help tip. On phones the sticky top bar never
+  hides the focused element (`scroll-padding-top`, 2.4.11), and fields use
+  16px text so iOS does not zoom.
 - Motion is limited to the drawer slide, toast rise and skeleton shimmer, all
-  off under `prefers-reduced-motion`.
+  off under `prefers-reduced-motion` (a global rule also stops any stray
+  animation or transition). Forced-colours mode keeps the focus ring.
+- Help tips open on click or tap, never on hover alone.
+
+### Lighthouse budget
+
+Measured on the production build (`npm run build`, served by `stonks serve`)
+with mobile emulation, on the dashboard and one detail page. Dropping below
+a line is a bug.
+
+| Metric | Budget | Last check (Sep 2026, no API running) |
+|---|---|---|
+| Accessibility | 100 (never below 95) | 100 |
+| Best practices | at least 95 | 96 (console logs the missing API) |
+| SEO | at least 90 | 100 |
+| Performance | at least 90 | not measured yet |
+| Largest contentful paint | at most 2.5 s | not measured yet |
+| Cumulative layout shift | at most 0.1 | 0.44: error panels are taller than their skeletons; size skeletons like the content |
+| Total blocking time | at most 200 ms | not measured yet |
+| Initial JS + CSS | at most 600 kB raw (build warns), 1 MB (build fails) | 390 kB raw, 108 kB transferred |
 
 ## Security
 
