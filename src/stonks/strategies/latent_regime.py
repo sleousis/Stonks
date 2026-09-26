@@ -31,7 +31,7 @@ import json
 import weakref
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -216,7 +216,7 @@ class LatentRegimeFilter(InnerStrategyWrapper):
 
     def estimate_return(self, ticker: str, as_of: Any, lake: Any) -> float | None:
         if lake is None:
-            return self._inner.estimate_return(ticker, as_of, lake)
+            return self._inner.estimate_return(ticker, as_of, cast(Any, lake))
         self._remember_lake(lake)
         if self.params["mode"] == "exit_all" and self.is_risk_off(as_of, lake):
             return None

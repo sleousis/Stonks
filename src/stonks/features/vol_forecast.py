@@ -118,7 +118,7 @@ class GarchVol(VolForecaster):
     def __init__(self, dist: Literal["t", "normal"] = "t") -> None:
         if dist not in ("t", "normal"):
             raise ValueError(f"dist must be 't' or 'normal', got {dist!r}")
-        self.dist = dist
+        self.dist: Literal["t", "normal"] = dist
         self.mu = self.omega = self.alpha = self.beta = math.nan
         self.nu: float | None = None
         self._returns: np.ndarray | None = None

@@ -43,6 +43,9 @@ __all__ = [
 #: Float slack when comparing a log price with a barrier level.
 _EPS = 1e-12
 
+#: Integer bar positions, as a sequence or an array.
+IntSeq = Sequence[int] | np.ndarray
+
 _COLUMNS = ["t0_pos", "t1", "t1_pos", "ret", "label", "barrier", "complete", "vol"]
 
 
@@ -51,7 +54,7 @@ def ewma_vol(close: pd.Series, span: int = 100) -> pd.Series:
     first bar, which has no return)."""
     if span < 2:
         raise ValueError(f"span must be >= 2, got {span}")
-    log_returns = np.log(close.astype(float)).diff()
+    log_returns = pd.Series(np.log(close.to_numpy(dtype=float)), index=close.index).diff()
     return log_returns.ewm(span=span, min_periods=1).std()
 
 
@@ -132,7 +135,7 @@ def triple_barrier(
     return pd.DataFrame(rows, index=pd.Index(index), columns=_COLUMNS)
 
 
-def _spans(t0: Sequence[int], t1: Sequence[int]) -> tuple[np.ndarray, np.ndarray]:
+def _spans(t0: IntSeq, t1: IntSeq) -> tuple[np.ndarray, np.ndarray]:
     start = np.asarray(t0, dtype=int)
     end = np.asarray(t1, dtype=int)
     if start.shape != end.shape:
@@ -142,7 +145,7 @@ def _spans(t0: Sequence[int], t1: Sequence[int]) -> tuple[np.ndarray, np.ndarray
     return start, end
 
 
-def concurrency(t0: Sequence[int], t1: Sequence[int], n: int | None = None) -> np.ndarray:
+def concurrency(t0: IntSeq, t1: IntSeq, n: int | None = None) -> np.ndarray:
     """Number of labels open on each of ``n`` bars (spans are inclusive
     bar positions)."""
     start, end = _spans(t0, t1)
@@ -153,7 +156,7 @@ def concurrency(t0: Sequence[int], t1: Sequence[int], n: int | None = None) -> n
     return np.cumsum(delta)[:size]
 
 
-def avg_uniqueness(t0: Sequence[int], t1: Sequence[int]) -> np.ndarray:
+def avg_uniqueness(t0: IntSeq, t1: IntSeq) -> np.ndarray:
     """Each label's mean ``1 / concurrency`` over its span, in ``(0, 1]``."""
     start, end = _spans(t0, t1)
     if len(start) == 0:
@@ -164,7 +167,7 @@ def avg_uniqueness(t0: Sequence[int], t1: Sequence[int]) -> np.ndarray:
 
 
 def sequential_bootstrap(
-    t0: Sequence[int], t1: Sequence[int], n_draws: int | None = None, seed: int | None = 0
+    t0: IntSeq, t1: IntSeq, n_draws: int | None = None, seed: int | None = 0
 ) -> np.ndarray:
     """Indices of ``n_draws`` events (default: as many as there are) drawn
     one by one, each with probability proportional to its average

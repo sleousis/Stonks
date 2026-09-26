@@ -151,7 +151,7 @@ class MarkovSwitchingRegime(RegimeModel):
         )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")  # convergence chatter from the optimiser
-            result = model.fit(disp=False)
+            result: Any = model.fit(disp=False)
         values = dict(zip(model.param_names, np.asarray(result.params, dtype=float), strict=True))
         means = np.array([values[f"const[{i}]"] for i in range(self.k)])
         if self.switching_variance:

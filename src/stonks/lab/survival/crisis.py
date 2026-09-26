@@ -70,9 +70,9 @@ class CrisisTest:
     class Options(BaseModel):
         model_config = ConfigDict(extra="forbid")
 
-        max_dd_ratio: float = Field(1.5, gt=0.0)
-        abs_floor: float = Field(0.05, ge=0.0, lt=1.0)
-        min_bars: int = Field(10, ge=2)
+        max_dd_ratio: float = Field(default=1.5, gt=0.0)
+        abs_floor: float = Field(default=0.05, ge=0.0, lt=1.0)
+        min_bars: int = Field(default=10, ge=2)
         require_coverage: bool = False
         benchmark: str | None = None
         #: Custom windows replacing :data:`CRISIS_WINDOWS`.

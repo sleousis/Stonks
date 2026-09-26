@@ -49,6 +49,7 @@ from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.lab.backtesting import run_backtest
 from stonks.lab.cv import (
     CombinatorialPurgedKFold,
+    purge_horizon,
     refit,
     segments_from_indices,
     trading_dates,
@@ -138,14 +139,14 @@ class CPCVTest:
     class Options(BaseModel):
         model_config = ConfigDict(extra="forbid")
 
-        n_groups: int = Field(6, ge=3, le=12)
-        n_test_groups: int = Field(2, ge=1, le=6)
-        embargo_pct: float = Field(0.01, ge=0.0, lt=0.5)
-        min_positive_share: float = Field(0.6, ge=0.0, le=1.0)
-        min_psr: float = Field(0.9, gt=0.0, lt=1.0)
+        n_groups: int = Field(default=6, ge=3, le=12)
+        n_test_groups: int = Field(default=2, ge=1, le=6)
+        embargo_pct: float = Field(default=0.01, ge=0.0, lt=0.5)
+        min_positive_share: float = Field(default=0.6, ge=0.0, le=1.0)
+        min_psr: float = Field(default=0.9, gt=0.0, lt=1.0)
         retune: Literal["auto", "never"] = "auto"
         #: Worker processes for the splits; ``None`` means the default.
-        max_workers: int | None = Field(None, ge=1)
+        max_workers: int | None = Field(default=None, ge=1)
         seed: int | None = 0
 
     def __init__(self, options: CPCVTest.Options | None = None) -> None:
@@ -172,8 +173,7 @@ class CPCVTest:
                 metrics={"n_days": float(len(dates))},
                 notes=f"insufficient data: {len(dates)} trading days for {o.n_groups} groups",
             )
-        effective = getattr(context, "effective_embargo_bars", None)
-        horizon = int(effective(strategy)) if callable(effective) else 0
+        horizon = purge_horizon(context, strategy)
         positions = np.arange(len(dates))
         bounds = cv.group_bounds(len(dates))
         splits = [

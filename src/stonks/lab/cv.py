@@ -31,11 +31,12 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from itertools import combinations
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import numpy as np
+import pandas as pd
 
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy, TrialOutcome
@@ -47,6 +48,7 @@ __all__ = [
     "CombinatorialPurgedKFold",
     "PurgedKFold",
     "contiguous_runs",
+    "purge_horizon",
     "purged_train_mask",
     "trading_dates",
 ]
@@ -230,7 +232,11 @@ def trading_dates(dataset: Any, window: tuple[date, date]) -> list[date]:
 
 
 def _to_date(value: Any) -> date:
-    return value.date() if hasattr(value, "date") and callable(value.date) else value
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return cast(date, pd.Timestamp(value).date())
 
 
 def segments_from_indices(dates: list[date], indices: np.ndarray) -> list[tuple[date, date]]:
@@ -273,7 +279,7 @@ class CVObjective:
         from stonks.lab.objectives import per_bar_returns
 
         dates = trading_dates(dataset, dataset.train_window)
-        horizon = _horizon(dataset, strategy)
+        horizon = purge_horizon(dataset, strategy)
         positions = np.arange(len(dates))
         splits = PurgedKFold(self.folds, self.embargo_pct).split(positions, positions + horizon)
         scores: list[float] = []
@@ -301,8 +307,12 @@ class CVObjective:
         return self.evaluate(strategy, dataset).score
 
 
-def _horizon(dataset: Any, strategy: Any) -> int:
+def purge_horizon(dataset: Any, strategy: Any) -> int:
+    """Bars to purge around a test block: the dataset's effective embargo
+    for ``strategy`` (``max(embargo_bars, label_horizon_bars)``), else the
+    strategy's label horizon."""
     effective = getattr(dataset, "effective_embargo_bars", None)
-    if callable(effective):
-        return int(effective(strategy))
-    return int(getattr(strategy, "label_horizon_bars", 0) or 0)
+    value: Any = (
+        effective(strategy) if effective is not None else getattr(strategy, "label_horizon_bars", 0)
+    )
+    return int(value or 0)

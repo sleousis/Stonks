@@ -187,13 +187,13 @@ class StressTest:
     class Options(BaseModel):
         model_config = ConfigDict(extra="forbid")
 
-        n_paths: int = Field(200, ge=2)
+        n_paths: int = Field(default=200, ge=2)
         method: Literal["block_bootstrap", "garch_fhs"] = "block_bootstrap"
-        block: float = Field(20.0, ge=1.0)
+        block: float = Field(default=20.0, ge=1.0)
         source: Literal["full", "val"] = "full"
         min_p5_sharpe: float = -0.5
-        max_drawdown_limit: float = Field(-0.3, le=0.0)
-        max_workers: int | None = Field(None, ge=1)
+        max_drawdown_limit: float = Field(default=-0.3, le=0.0)
+        max_workers: int | None = Field(default=None, ge=1)
         seed: int = 0
 
     def __init__(self, options: StressTest.Options | None = None) -> None:
