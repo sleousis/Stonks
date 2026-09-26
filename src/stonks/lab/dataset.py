@@ -28,6 +28,17 @@ worker snapshot and every permuted or perturbed lake copies, so a run gives
 the same answer on any worker count and a modified lake never silently
 drops a reference.
 
+Training segments (BL-45)
+-------------------------
+Cross-validation folds train on data either side of a test block.
+``train_segments`` holds those non-contiguous, purged training windows and
+``train_windows`` returns them (the single ``train_window`` when unset).
+A strategy that can fit on several windows reads ``train_windows``. One
+that only reads ``train_window`` then sees the longest segment, so it
+never trains on a test block. A dataset with segments is a CV fold: its
+tests score explicit windows, so it has no validation window of its own
+to check.
+
 Bars are converted to calendar days through the exchange-session calendar
 (``backtest.calendar.EXCHANGE_SESSIONS``: 252 sessions a year): the bars
 become sessions, the sessions become calendar days at the yearly average
@@ -116,6 +127,9 @@ class LabDataset:
     #: Tickers the strategy reads but never trades (see the module doc).
     #: ``for_strategy`` fills it from the strategy's ``data_tickers()``.
     reference_tickers: tuple[str, ...] = ()
+    #: Non-contiguous training windows of a CV fold (see the module doc).
+    #: Empty for an ordinary dataset.
+    train_segments: tuple[tuple[date, date], ...] = ()
     #: Stitched walk-forward OOS backtest, set by the walk-forward test for
     #: the tests after it (``mc_trades``). Never copied by ``replace``.
     stitched_oos_report: BacktestReport | None = field(
@@ -135,6 +149,9 @@ class LabDataset:
                 f"train_end {self.train_end} must fall in [{self.start}, {self.end}) "
                 "so both the train and the validation window are non-empty"
             )
+        if self.train_segments:
+            self._check_segments()
+            return
         if self.embargo_bars > 0 and self.val_window[0] > self.end:
             raise ValueError(
                 f"an embargo of {self.embargo_bars} bars after {self.train_window[1]} "
@@ -146,8 +163,31 @@ class LabDataset:
                 f"{self.train_ratio}: it leaves no validation window"
             )
 
+    def _check_segments(self) -> None:
+        previous_end: date | None = None
+        for lo, hi in self.train_segments:
+            if not self.start <= lo <= hi <= self.end:
+                raise ValueError(f"train segment {lo}..{hi} must lie in [{self.start}, {self.end}]")
+            if previous_end is not None and lo <= previous_end:
+                raise ValueError("train segments must be sorted and must not overlap")
+            previous_end = hi
+
+    @property
+    def train_windows(self) -> tuple[tuple[date, date], ...]:
+        """Every training window: ``train_segments`` when set, else the
+        one ``train_window``."""
+        return self.train_segments or (self.train_window,)
+
+    def with_train_segments(self, segments: Iterable[tuple[date, date]]) -> LabDataset:
+        """This dataset as a CV fold that trains on ``segments``."""
+        return dataclasses.replace(self, train_segments=tuple(segments))
+
     @property
     def train_window(self) -> tuple[date, date]:
+        if self.train_segments:
+            # the longest segment (the latest on a tie): a strategy that
+            # reads one window never sees a test block
+            return max(self.train_segments, key=lambda seg: ((seg[1] - seg[0]).days, seg[0]))
         if self.train_end is not None:
             return self.start, self.train_end
         span_days = (self.end - self.start).days
