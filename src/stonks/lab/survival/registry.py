@@ -44,12 +44,20 @@ _log = get_logger("stonks.lab.survival.registry")
 
 _SKIPPED_MODULES = frozenset({"base", "registry"})
 
-#: Named suites. ``quick`` is the everyday check; ``promotion`` is what a
-#: strategy should survive before it is registered. Later waves add ids
-#: (deflated Sharpe, PBO, ...) here as they land.
+#: Named suites. ``quick`` is the everyday check; ``standard`` adds
+#: robustness, the deflated Sharpe and cost stress; ``promotion`` is what a
+#: strategy should survive before it is registered (the default suite of
+#: registering lab runs).
 SUITE_PRESETS: dict[str, tuple[str, ...]] = {
     "quick": ("oos", "period_stability"),
-    "standard": ("oos", "period_stability", "perturbation", "walk_forward"),
+    "standard": (
+        "oos",
+        "period_stability",
+        "perturbation",
+        "walk_forward",
+        "deflated_sharpe",
+        "cost_stress",
+    ),
     "promotion": (
         "oos",
         "walk_forward",
@@ -58,6 +66,7 @@ SUITE_PRESETS: dict[str, tuple[str, ...]] = {
         "mc_trades",
         "cost_stress",
         "plateau",
+        "cross_instrument",
         "benchmark_relative",
         "mcpt",
     ),
