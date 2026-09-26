@@ -11,13 +11,17 @@ import {
 import type { Job, ScheduledJobView, ScheduledRunView } from '../../api/models';
 import { OperationsService } from '../../api/operations.service';
 import { ScheduleService } from '../../api/schedule.service';
+import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
+import { formatDateTime } from '../../core/format/format';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { JobProgress } from '../../shared/ui/job-progress';
 import { PageHeader } from '../../shared/ui/page-header';
 import { humanize } from '../../shared/ui/param-form/param-spec';
+import { PermissionNote } from '../../shared/ui/permission-note';
+import { countdown } from '../../shared/ui/session-strip';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 
@@ -77,6 +81,7 @@ export function backupRow(job: Job): BackupRow {
     LoadingState,
     EmptyState,
     ErrorState,
+    PermissionNote,
   ],
   templateUrl: './schedule.page.html',
   styleUrl: './schedule.page.scss',
@@ -88,6 +93,15 @@ export class SchedulePage {
   private readonly toasts = inject(ToastService);
   private readonly jobs = inject(JobsService);
   private readonly destroyRef = inject(DestroyRef);
+  protected readonly session = inject(SessionService);
+
+  /** Running jobs by hand is the admins'. */
+  protected readonly canRun = computed(() => this.session.can('operations.run'));
+  /** Backups cover every portfolio: admins only. */
+  protected readonly canBackUp = computed(() => this.session.can('risk.global'));
+
+  /** Ticks every second so "Next run" counts down. */
+  protected readonly now = signal(Date.now());
 
   protected readonly schedule = resource({
     loader: () => this.scheduleApi.overview({ limit: RECENT_RUNS }),
@@ -111,17 +125,35 @@ export class SchedulePage {
   protected readonly runKey = (r: ScheduledRunView) => r.id;
   protected readonly backupKey = (b: BackupRow) => b.id;
 
-  protected readonly jobColumns: TableColumn<JobRow>[] = [
-    { key: 'name', label: 'Job', mobile: 'title' },
-    { key: 'action', label: 'Action', value: (j) => humanize(j.action) },
+  private readonly baseJobColumns: TableColumn<JobRow>[] = [
+    { key: 'name', label: 'Job', value: (j) => humanize(j.name), mobile: 'title' },
+    { key: 'action', label: 'Does', value: (j) => humanize(j.action), mobile: 'hide' },
     { key: 'trigger', label: 'When', sortable: false },
-    { key: 'next_run_at', label: 'Next run', format: 'datetime' },
+    { key: 'next_run_at', label: 'Next run' },
     { key: 'last_status', label: 'Last run' },
-    { key: 'run', label: 'Run now', sortable: false, value: () => '' },
   ];
+  /** Run now only for those who may use it. */
+  protected readonly jobColumns = computed<TableColumn<JobRow>[]>(() =>
+    this.canRun()
+      ? [...this.baseJobColumns, { key: 'run', label: 'Run now', sortable: false, value: () => '' }]
+      : this.baseJobColumns,
+  );
+
+  protected readonly jobName = (name: string) => humanize(name);
+  protected readonly when = (iso: string | null | undefined) => formatDateTime(iso);
+  protected untilNext(iso: string | null | undefined): string | null {
+    if (!iso) return null;
+    const left = countdown(Date.parse(iso) - this.now());
+    return left === 'now' ? 'due now' : `in ${left}`;
+  }
+
+  constructor() {
+    const timer = setInterval(() => this.now.set(Date.now()), 1000);
+    this.destroyRef.onDestroy(() => clearInterval(timer));
+  }
 
   protected readonly runColumns: TableColumn<ScheduledRunView>[] = [
-    { key: 'job_name', label: 'Job', mobile: 'title' },
+    { key: 'job_name', label: 'Job', value: (r) => humanize(r.job_name), mobile: 'title' },
     { key: 'status', label: 'Status' },
     { key: 'as_of', label: 'For', format: 'date' },
     { key: 'started_at', label: 'Started', format: 'datetime' },
@@ -136,18 +168,24 @@ export class SchedulePage {
   ];
 
   protected readonly backupColumns: TableColumn<BackupRow>[] = [
-    { key: 'backup_id', label: 'Backup', value: (b) => b.backup_id ?? 'None', mobile: 'title' },
+    {
+      key: 'created_at',
+      label: 'Backup',
+      value: (b) => formatDateTime(b.created_at),
+      mobile: 'title',
+    },
     { key: 'status', label: 'Status' },
-    { key: 'created_at', label: 'Started', format: 'datetime' },
     { key: 'finished_at', label: 'Finished', format: 'datetime', mobile: 'hide' },
-    { key: 'pruned', label: 'Pruned', format: 'number' },
+    { key: 'pruned', label: 'Old ones removed', format: 'number', mobile: 'hide' },
     { key: 'error', label: 'Error', sortable: false, value: (b) => b.error ?? '' },
   ];
 
   async runNow(job: JobRow): Promise<void> {
+    if (!this.canRun()) return;
     const isTick = job.action === 'tick';
+    const name = humanize(job.name);
     const ok = await this.confirm.confirm({
-      title: `Run ${job.name} now?`,
+      title: `Run ${name} now?`,
       message: isTick
         ? 'Active strategies decide and place orders through the broker, outside the schedule.'
         : `Starts ${humanize(job.action).toLowerCase()} in the background, outside the schedule.`,
@@ -159,7 +197,7 @@ export class SchedulePage {
     this.running.set(job.name);
     try {
       const started = await this.scheduleApi.runNow(job.name);
-      this.toasts.success(`Started ${job.name} for ${started.as_of}.`);
+      this.toasts.success(`Started ${name} for ${started.as_of}.`);
       this.schedule.reload();
     } catch {
       // The error interceptor already showed the API's message.
@@ -169,11 +207,11 @@ export class SchedulePage {
   }
 
   async backUpNow(): Promise<void> {
-    if (this.backingUp()) return;
+    if (this.backingUp() || !this.canBackUp()) return;
     const ok = await this.confirm.confirm({
       title: 'Back up now?',
       message:
-        'Copies the state database, the lake and artifacts to the backup folder, then verifies and prunes old backups. Ingest waits while it runs.',
+        'Copies the trading records, our price data and saved strategies to the backup folder, then checks the copy and removes old backups. Data updates wait while it runs.',
       confirmLabel: 'Back up now',
     });
     if (!ok) return;
@@ -186,8 +224,8 @@ export class SchedulePage {
       this.backups.reload();
       const last = await handle.finished;
       if (last?.status === 'succeeded') {
-        const result = await this.ops.backupResult(job.id);
-        this.toasts.success(`Backed up as ${result.backup_id}.`);
+        await this.ops.backupResult(job.id);
+        this.toasts.success('Backed up the system.');
       }
       this.backups.reload();
     } catch {
