@@ -24,7 +24,7 @@
         </ul>
       } @else {
         <p class="muted summary">
-          {{ cls.name }} has no parameters; the run fits and tests it as is.
+          {{ cls.name }} has no parameters. The run fits and tests it as is.
         </p>
       }
     </fieldset>
@@ -41,7 +41,7 @@
     />
     <div class="grid-2">
       <div class="field">
-        <label for="lr-train">Train share</label>
+        <label for="lr-train">Share used for tuning</label>
         <input
           id="lr-train"
           class="input num"
@@ -59,12 +59,13 @@
           <span class="error" id="lr-train-hint">{{ e }}</span>
         } @else {
           <span class="hint" id="lr-train-hint">
-            Fraction of the window used for tuning; the rest is held out.
+            The part of the window the search learns from, e.g. 0.7. The rest is kept aside to test
+            the winner.
           </span>
         }
       </div>
       <div class="field">
-        <label for="lr-embargo">Embargo bars <app-help-tip term="embargo" /></label>
+        <label for="lr-embargo">Gap before testing (bars) <app-help-tip term="embargo" /></label>
         <input
           id="lr-embargo"
           class="input num"
@@ -82,7 +83,8 @@
           <span class="error" id="lr-embargo-hint">{{ e }}</span>
         } @else {
           <span class="hint" id="lr-embargo-hint">
-            Gap between tuning and testing. Blank uses the setting, at least the strategy's horizon.
+            Bars skipped between the tuning and test data so one cannot leak into the other. Blank
+            uses the default, never shorter than the strategy looks ahead.
           </span>
         }
       </div>
@@ -96,21 +98,25 @@
   </fieldset>
 
   <fieldset class="group">
-    <legend>Tuner</legend>
+    <legend>Parameter search</legend>
     <div class="grid-2">
       <div class="field">
-        <label for="lr-tuner">Search</label>
+        <label for="lr-tuner">Search method</label>
         <select
           id="lr-tuner"
           class="input"
           (change)="setChoice('tuner', $any($event.target).value)"
         >
-          <option value="random" [selected]="form().tuner === 'random'">Random</option>
-          <option value="grid" [selected]="form().tuner === 'grid'">Grid</option>
+          <option value="random" [selected]="form().tuner === 'random'">
+            Random: samples the space
+          </option>
+          <option value="grid" [selected]="form().tuner === 'grid'">
+            Grid: tries every combination
+          </option>
         </select>
       </div>
       <div class="field">
-        <label for="lr-objective">Objective</label>
+        <label for="lr-objective">Pick the best by</label>
         <select
           id="lr-objective"
           class="input"
@@ -124,7 +130,7 @@
         </select>
       </div>
       <div class="field">
-        <label for="lr-budget">Budget</label>
+        <label for="lr-budget">Trials</label>
         <input
           id="lr-budget"
           class="input num"
@@ -141,23 +147,28 @@
         @if (errors()['budget']; as e) {
           <span class="error" id="lr-budget-hint">{{ e }}</span>
         } @else {
-          <span class="hint" id="lr-budget-hint">Trials (backtests) to try. All are counted.</span>
+          <span class="hint" id="lr-budget-hint">
+            How many parameter sets to try. Every one counts against the strategy.
+          </span>
         }
       </div>
       <div class="field">
-        <label for="lr-seed">Seed</label>
+        <label for="lr-seed">Random seed</label>
         <input
           id="lr-seed"
           class="input num"
           type="number"
           inputmode="numeric"
           step="1"
+          aria-describedby="lr-seed-hint"
           [value]="form().seed ?? ''"
           [attr.aria-invalid]="!!errors()['seed']"
           (input)="setNumber('seed', $any($event.target).value)"
         />
         @if (errors()['seed']; as e) {
-          <span class="error">{{ e }}</span>
+          <span class="error" id="lr-seed-hint">{{ e }}</span>
+        } @else {
+          <span class="hint" id="lr-seed-hint">The same seed picks the same trials again.</span>
         }
       </div>
     </div>
@@ -275,7 +286,7 @@
             <span class="error" id="lr-wf-wfe-hint">{{ e }}</span>
           } @else {
             <span class="hint" id="lr-wf-wfe-hint"
-              >Out-of-sample result over in-sample; under 0.5 fails.</span
+              >Out-of-sample result over in-sample. Under 0.5 fails.</span
             >
           }
         </div>
@@ -382,13 +393,13 @@
             <option value="no" [selected]="form().mcptRetune === 'no'">Never</option>
           </select>
           <span class="hint" id="lr-mcpt-retune-hint">
-            Stricter, but costs (shuffles + 1) × budget backtests.
+            Stricter, but costs (shuffles + 1) × trials backtests.
           </span>
         </div>
       </div>
     }
 
-    @if (optionTests().length) {
+    @if (showOptions()) {
       <details
         class="advanced"
         [open]="optionsOpen()"
@@ -403,48 +414,42 @@
             <span class="error summary-error">{{ n }} to fix</span>
           }
         </summary>
-        <p class="hint advanced-lead">
-          Change a pass rule only with a reason: loosening one after a failure is how overfitting
-          sneaks in. Blank uses the test's default, shown greyed out.
-        </p>
-        @for (t of optionTests(); track t.id) {
-          <fieldset class="opt-test" [attr.aria-label]="t.label + ' options'">
-            <legend>
-              {{ t.label }}
-              @if (t.filled) {
-                <button type="button" class="btn btn-ghost reset" (click)="clearOptions(t.id)">
-                  Reset
-                </button>
-              }
-            </legend>
-            <div class="grid-2">
-              @for (f of t.fields; track f.key) {
-                @let id = 'lr-opt-' + t.id + '-' + f.key;
-                @let err = errors()['opt.' + t.id + '.' + f.key];
-                <div class="field">
-                  <label [for]="id">{{ f.label }}</label>
-                  @switch (f.kind) {
-                    @case ('bool') {
+        @if (testCatalog.error(); as err) {
+          <app-error-state
+            title="Could not load the test options"
+            [error]="err"
+            (retry)="testCatalog.reload()"
+          />
+        } @else if (!testCatalog.hasValue()) {
+          <app-loading-state label="Loading the test options" [rows]="2" />
+        } @else {
+          <p class="hint advanced-lead">
+            Change a pass rule only with a reason: loosening one after a failure is how overfitting
+            sneaks in. Blank uses the test's default, shown greyed out.
+          </p>
+          @for (t of optionTests(); track t.id) {
+            <fieldset class="opt-test" [attr.aria-label]="t.label + ' options'">
+              <legend>
+                {{ t.label }}
+                @if (t.filled) {
+                  <button type="button" class="btn btn-ghost reset" (click)="clearOptions(t.id)">
+                    Reset
+                  </button>
+                }
+              </legend>
+              <div class="grid-2">
+                @for (f of t.fields; track f.key) {
+                  @let id = 'lr-opt-' + t.id + '-' + f.key;
+                  @let err = errors()['opt.' + t.id + '.' + f.key];
+                  @let numeric = f.kind !== 'text' && f.kind !== 'list-text' && f.kind !== 'choice';
+                  <div class="field">
+                    <label [for]="id">{{ f.label }}</label>
+                    @if (f.kind === 'choice') {
                       <select
                         class="input"
                         [id]="id"
-                        (change)="setOption(t.id, f.key, $any($event.target).value)"
-                      >
-                        <option value="" [selected]="optionValue(t.id, f.key) === ''">
-                          Default ({{ f.defaultText }})
-                        </option>
-                        <option value="true" [selected]="optionValue(t.id, f.key) === 'true'">
-                          Yes
-                        </option>
-                        <option value="false" [selected]="optionValue(t.id, f.key) === 'false'">
-                          No
-                        </option>
-                      </select>
-                    }
-                    @case ('choice') {
-                      <select
-                        class="input"
-                        [id]="id"
+                        [attr.aria-invalid]="!!err"
+                        [attr.aria-describedby]="err || f.hint ? id + '-hint' : null"
                         (change)="setOption(t.id, f.key, $any($event.target).value)"
                       >
                         <option value="" [selected]="optionValue(t.id, f.key) === ''">
@@ -459,32 +464,31 @@
                           </option>
                         }
                       </select>
-                    }
-                    @default {
+                    } @else {
                       <input
                         class="input"
-                        [class.num]="f.kind !== 'tickers'"
+                        [class.num]="numeric"
                         [id]="id"
-                        [attr.inputmode]="f.kind === 'tickers' ? null : 'decimal'"
-                        [attr.autocapitalize]="f.kind === 'tickers' ? 'characters' : null"
+                        [attr.inputmode]="numeric ? 'decimal' : null"
                         spellcheck="false"
+                        autocomplete="off"
                         [placeholder]="f.defaultText"
                         [value]="optionValue(t.id, f.key)"
                         [attr.aria-invalid]="!!err"
-                        [attr.aria-describedby]="id + '-hint'"
+                        [attr.aria-describedby]="err || f.hint ? id + '-hint' : null"
                         (input)="setOption(t.id, f.key, $any($event.target).value)"
                       />
                     }
-                  }
-                  @if (err) {
-                    <span class="error" [id]="id + '-hint'">{{ err }}</span>
-                  } @else if (f.hint) {
-                    <span class="hint" [id]="id + '-hint'">{{ f.hint }}</span>
-                  }
-                </div>
-              }
-            </div>
-          </fieldset>
+                    @if (err) {
+                      <span class="error" [id]="id + '-hint'">{{ err }}</span>
+                    } @else if (f.hint) {
+                      <span class="hint" [id]="id + '-hint'">{{ f.hint }}</span>
+                    }
+                  </div>
+                }
+              </div>
+            </fieldset>
+          }
         }
       </details>
     }
@@ -515,7 +519,7 @@
         <span class="error" id="lr-hypothesis-hint">{{ e }}</span>
       } @else {
         <span class="hint" id="lr-hypothesis-hint">
-          Saved with the run before tuning starts; the go-live gate checks it.
+          Saved with the run before tuning starts. The go-live check reads it.
         </span>
       }
     </div>
@@ -548,8 +552,8 @@
       Register the fitted strategy in shadow
     </label>
     <span class="check-hint" id="lr-register-hint">
-      It then decides on every tick without placing orders. Turning this on picks the promotion
-      suite; you can change it.
+      It then paper trades: it decides on every trading run without placing orders. Turning this on
+      picks the promotion suite. You can change it.
     </span>
     @if (form().register) {
       <div class="sub register-when" role="radiogroup" aria-label="When to register">
@@ -581,8 +585,14 @@
         Fix {{ n === 1 ? 'the highlighted field' : 'the ' + n + ' highlighted fields' }} to run it.
       </p>
     }
-    <button type="submit" class="btn btn-primary" [disabled]="busy()" [attr.aria-busy]="busy()">
+    <button
+      type="submit"
+      class="btn btn-primary"
+      [disabled]="busy() || !canRun()"
+      [attr.aria-busy]="busy()"
+    >
       {{ busy() ? 'Starting…' : 'Start lab run' }}
     </button>
+    <app-permission-note permission="lab.run" />
   </div>
 </form>

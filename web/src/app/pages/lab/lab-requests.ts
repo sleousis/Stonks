@@ -7,7 +7,12 @@ import type {
 } from '../../api/models';
 import { type ParamValues, paramErrors, paramPayload } from '../../shared/ui/param-form/param-spec';
 import { SURVIVAL_TESTS, type SurvivalTestName } from '../../shared/lab-results/survival-tests';
-import { type TestOptionValues, buildTestOptions, testOptionErrors } from './test-options';
+import {
+  type OptionCatalog,
+  type TestOptionValues,
+  buildTestOptions,
+  testOptionErrors,
+} from './test-options';
 
 /**
  * Form state for the lab page and the pure functions that turn it into API
@@ -19,7 +24,7 @@ export { SURVIVAL_TESTS } from '../../shared/lab-results/survival-tests';
 export type SuitePreset = NonNullable<LabRunRequest['preset']>;
 export type SuiteChoice = SuitePreset | 'custom';
 export type CostChoice = 'configured' | 'zero' | 'realistic' | 'flat';
-/** `default` sends nothing (the server's `[lab] benchmark`). */
+/** `default` sends nothing: the server's default benchmark. */
 export type BenchmarkChoice = 'default' | 'auto' | 'EW' | 'ticker' | 'none';
 export type RetuneChoice = 'default' | 'auto' | 'yes' | 'no';
 
@@ -52,7 +57,7 @@ export interface LabRunForm extends WindowForm, BenchmarkForm {
   seed: number | null;
   objective: NonNullable<LabRunRequest['objective']>;
   trainRatio: number | null;
-  /** Blank = the server's `[lab] embargo_bars` (raised to the strategy's horizon). */
+  /** Blank = the server's default gap (raised to the strategy's horizon). */
   embargoBars: number | null;
   suite: SuiteChoice;
   /** The tests ticked for a custom suite. */
@@ -233,7 +238,7 @@ function benchmarkErrors(f: BenchmarkForm): FormErrors {
   return {};
 }
 
-function windowErrors(f: WindowForm): FormErrors {
+export function windowErrors(f: WindowForm): FormErrors {
   const e: FormErrors = {};
   if (!f.classPath) e['strategy'] = 'Pick a strategy class.';
   if (parseTickers(f.tickers).length === 0) e['tickers'] = 'Enter at least one ticker.';
@@ -262,8 +267,11 @@ export function backtestErrors(f: BacktestForm, cls: StrategyClassInfo | null): 
   return e;
 }
 
-/** Field → message; `opt.<test>.<field>` keys are advanced test options. */
-export function labRunErrors(f: LabRunForm): FormErrors {
+/**
+ * Field → message; `opt.<test>.<field>` keys are advanced test options,
+ * checked against `catalog` (from `GET /api/lab/survival-tests`).
+ */
+export function labRunErrors(f: LabRunForm, catalog: OptionCatalog = {}): FormErrors {
   const e = { ...windowErrors(f), ...benchmarkErrors(f) };
   const tests = suiteTests(f);
   if (!isInt(f.budget) || f.budget < 1 || f.budget > 1000) e['budget'] = 'Between 1 and 1000.';
@@ -297,7 +305,7 @@ export function labRunErrors(f: LabRunForm): FormErrors {
     e['hypothesis'] = 'Say why it should make money before registering it.';
   if (f.hypothesis.length > 4000) e['hypothesis'] = 'At most 4000 characters.';
   if (f.premortem.length > 4000) e['premortem'] = 'At most 4000 characters.';
-  for (const [key, msg] of Object.entries(testOptionErrors(tests, f.testOptions))) {
+  for (const [key, msg] of Object.entries(testOptionErrors(tests, f.testOptions, catalog))) {
     e[`opt.${key}`] = msg;
   }
   return e;
@@ -330,7 +338,7 @@ export function buildBacktestRequest(
   return body;
 }
 
-export function buildLabRunRequest(f: LabRunForm): LabRunRequest {
+export function buildLabRunRequest(f: LabRunForm, catalog: OptionCatalog = {}): LabRunRequest {
   const tests = suiteTests(f);
   const body: LabRunRequest = {
     // The tuner searches the class's parameter space; params are ignored.
@@ -380,7 +388,7 @@ export function buildLabRunRequest(f: LabRunForm): LabRunRequest {
       mcpt.retune = f.mcptRetune === 'auto' ? 'auto' : f.mcptRetune === 'yes';
     if (Object.keys(mcpt).length) body.mcpt = mcpt;
   }
-  const options = buildTestOptions(tests, f.testOptions);
+  const options = buildTestOptions(tests, f.testOptions, catalog);
   if (options) body.test_options = options;
   return body;
 }

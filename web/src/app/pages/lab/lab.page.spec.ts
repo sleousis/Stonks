@@ -7,13 +7,16 @@ import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
 import { FakeChartEngine, provideFakeChart } from '../../../testing/fake-chart';
-import { tick } from '../../../testing/http';
+import { TRADER } from '../../../testing/auth-fixtures';
+import { nextRequest, tick } from '../../../testing/http';
 import { BACKTEST_RESULT, CATALOG, LAB_RUN_VIEW, MOMENTUM } from '../../../testing/lab-fixtures';
-import type { Job, Page } from '../../api/models';
+import type { Job, MeView, Page } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
+import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { JOB_FETCH, JOB_POLL_MS } from '../../core/jobs/jobs.service';
-import { LabPage, canCancel, jobStrategy, sweepCommand } from './lab.page';
+import { LabPage, canCancel, jobStrategy, kindLabel } from './lab.page';
+import { SURVIVAL_TEST_CATALOG, SWEEP_RESULT } from './lab-test-fixtures';
 
 function job(patch: Partial<Job>): Job {
   return {
@@ -38,6 +41,14 @@ const HISTORY: Record<string, Job[]> = {
       created_at: '2026-09-26T11:00:00Z',
     }),
   ],
+  lab_sweep: [
+    job({
+      id: 'sw-1',
+      kind: 'lab_sweep',
+      created_at: '2026-09-26T08:00:00Z',
+      params: { start: '2025-09-26', end: '2026-09-26', universe: ['SPY.US'] },
+    }),
+  ],
 };
 
 describe('LabPage', () => {
@@ -49,7 +60,21 @@ describe('LabPage', () => {
   let jobStatus: Record<string, Job>;
   let confirmed: string[];
 
-  beforeEach(() => {
+  let created = false;
+
+  async function create(me: MeView = TRADER): Promise<void> {
+    created = true;
+    const session = TestBed.inject(SessionService);
+    const loading = session.load();
+    (await nextRequest(controller, '/api/auth/me')).flush(me);
+    await loading;
+    fixture = TestBed.createComponent(LabPage);
+    el = fixture.nativeElement;
+    fixture.detectChanges();
+  }
+
+  beforeEach(async () => {
+    created = false;
     posted = [];
     confirmed = [];
     jobStatus = {};
@@ -71,9 +96,6 @@ describe('LabPage', () => {
       return true;
     });
     controller = TestBed.inject(HttpTestingController);
-    fixture = TestBed.createComponent(LabPage);
-    el = fixture.nativeElement;
-    fixture.detectChanges();
   });
 
   afterEach(() => controller.verify());
@@ -113,6 +135,10 @@ describe('LabPage', () => {
         return req.flush(BACKTEST_RESULT);
       case '/api/lab/runs/new-lr/result':
         return req.flush(LAB_RUN_VIEW);
+      case '/api/lab/survival-tests':
+        return req.flush(SURVIVAL_TEST_CATALOG);
+      case '/api/lab/sweeps/sw-1/result':
+        return req.flush(SWEEP_RESULT);
     }
     const m = /^\/api\/jobs\/([^/]+)$/.exec(path);
     if (m) return req.flush(jobStatus[m[1]] ?? job({ id: m[1] }));
@@ -120,6 +146,7 @@ describe('LabPage', () => {
   }
 
   async function settle(rounds = 8): Promise<void> {
+    if (!created) await create();
     for (let i = 0; i < rounds; i++) {
       controller.match(() => true).forEach(respond);
       await tick(5);
@@ -146,6 +173,7 @@ describe('LabPage', () => {
     expect(rows.map((r) => r.textContent)).toEqual([
       expect.stringContaining('Lab run'),
       expect.stringContaining('Backtest'),
+      expect.stringContaining('Sweep'),
     ]);
     expect(rows[0].textContent).toContain('Momentum');
     expect(rows[0].textContent).toContain('Cancel');
@@ -303,13 +331,31 @@ describe('LabPage', () => {
     expect(posted.at(-1)?.url).toBe('/api/jobs/lr-1/cancel');
   });
 
-  it('explains the sweep command, since no API route serves sweep results', async () => {
+  it('opens a sweep from history and shows its rows best first', async () => {
     await settle();
-    const sweep = el.querySelector('section[aria-labelledby="lab-sweep-title"]')!;
-    expect(sweep.querySelector('app-cli-command code')?.textContent).toContain('stonks lab sweep');
-    expect(sweepCommand(new Date(2026, 8, 26))).toBe(
-      'stonks lab sweep --tickers SPY.US,QQQ.US,IWM.US --start 2025-09-26 --end 2026-09-26',
+    const row = [...el.querySelectorAll('app-data-table tbody tr')].find((r) =>
+      r.textContent!.includes('Sweep'),
+    )!;
+    expect(row.textContent).toContain('All strategies');
+    row.querySelector<HTMLButtonElement>('button')!.click();
+    await settle();
+    const names = [...el.querySelectorAll('app-sweep-result tbody tr .name')].map((n) =>
+      n.textContent!.trim(),
     );
+    expect(names).toEqual(['momentum', 'buy_and_hold', 'macro_regime']);
+    expect(el.querySelector('app-sweep-result')!.textContent).toContain('n/a');
+  });
+
+  it('shows a note instead of Run to someone without lab access', async () => {
+    await create({ ...TRADER, role: 'viewer', scopes: ['read'] });
+    await settle();
+    const run = el.querySelector<HTMLButtonElement>('#lab-panel-backtest button[type="submit"]')!;
+    expect(run.disabled).toBe(true);
+    expect(el.querySelector('#lab-panel-backtest .permission-note')?.textContent).toContain(
+      'Traders and admins only.',
+    );
+    const rows = [...el.querySelectorAll('app-data-table tbody tr')];
+    expect(rows.some((r) => r.textContent!.includes('Cancel'))).toBe(false);
   });
 
   it('knows which jobs can be cancelled and names their strategy', async () => {
@@ -320,5 +366,9 @@ describe('LabPage', () => {
     expect(canCancel('lab_run', 'succeeded')).toBe(false);
     expect(jobStrategy({ params: { strategy: { strategy_id: 'mom-3' } } })).toBe('mom-3');
     expect(jobStrategy({ params: {} })).toBe('–');
+    expect(jobStrategy({ params: { start: 'x', strategies: ['a:B', 'c:D'] } })).toBe(
+      '2 strategies',
+    );
+    expect(kindLabel('signal_ic')).toBe('Signal IC');
   });
 });

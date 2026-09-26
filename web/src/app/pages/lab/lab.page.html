@@ -1,7 +1,8 @@
 <app-page-header
   title="Lab"
-  description="Backtest a strategy class, or tune it and run the survival suite before it goes to shadow."
+  description="Backtest a strategy, or tune it and run the survival tests before it goes to paper trading."
 />
+<app-lab-nav />
 
 <div class="lab-layout">
   <!-- Forms ---------------------------------------------------------------->
@@ -47,7 +48,7 @@
     } @else if (classes.value().length === 0) {
       <app-empty-state
         title="No strategy classes"
-        message="The catalog lists classes from the configured strategy sources. Add a strategy module and restart the API."
+        message="No strategies are available to test yet. Ask your admin to add some."
       />
     } @else {
       @if (strategy(); as id) {
@@ -57,8 +58,8 @@
           } @else if (preset(); as p) {
             @if (presetUncatalogued()) {
               <p class="preset-warn">
-                {{ p.strategyId }} runs {{ p.classPath }}, which is not in the strategy catalog, so
-                the forms start empty.
+                {{ p.strategyId }} uses a strategy that is not available to test here, so the forms
+                start empty.
               </p>
             } @else {
               <p>
@@ -127,7 +128,6 @@
             <div class="job" aria-live="polite">
               <div class="job-head">
                 <app-status-pill [status]="status ?? 'queued'" />
-                <span class="job-id num muted">Job {{ f.jobId }}</span>
               </div>
               @if (!f.handle.done()) {
                 <div class="progress">
@@ -181,12 +181,18 @@
               @case ('lab_run') {
                 <app-lab-run-result [result]="s.result" />
               }
+              @case ('lab_sweep') {
+                <app-sweep-result [result]="s.result" />
+              }
+              @case ('signal_ic') {
+                <app-signal-ic-result [result]="s.result" />
+              }
             }
           }
         } @else {
           <app-empty-state
             title="No run open"
-            message="Start a backtest or lab run, or open a finished job from the history below. Progress streams here while it runs."
+            message="Start a backtest or lab run, or open a finished job from the history below. Progress shows here while it runs."
           />
         }
       </div>
@@ -213,11 +219,11 @@
       } @else if (history.value().length === 0) {
         <app-empty-state
           title="No lab jobs yet"
-          message="Backtests and lab runs you start here (or over MCP) are listed with their status."
+          message="Backtests, lab runs, sweeps and signal checks you start are listed here with their status."
         />
       } @else {
         <app-data-table
-          caption="Recent backtests and lab runs, newest first"
+          caption="Recent lab jobs, newest first"
           [rows]="history.value()"
           [columns]="historyColumns"
           [rowKey]="jobKey"
@@ -238,7 +244,7 @@
               >
                 {{ isTerminal(job.status) ? 'Open' : 'Follow' }}
               </button>
-              @if (canCancel(job.kind, job.status)) {
+              @if (canRun() && canCancel(job.kind, job.status)) {
                 <button
                   type="button"
                   class="btn btn-ghost cancel"
@@ -253,25 +259,6 @@
           </ng-template>
         </app-data-table>
       }
-    </section>
-
-    <!-- Sweeps (CLI only until the API has a route) ------------------------->
-    <section class="panel" aria-labelledby="lab-sweep-title">
-      <div class="panel-head">
-        <h2 id="lab-sweep-title">Sweep every strategy</h2>
-      </div>
-      <div class="panel-body sweep">
-        <p>
-          A sweep runs every catalogued strategy through the lab on one basket of tickers and
-          summarises the verdicts side by side. Each run is counted in the trial ledger; nothing is
-          registered. The console cannot show sweep results yet, so run it from a terminal:
-        </p>
-        <app-cli-command [command]="sweepCommand" />
-        <p class="muted">
-          Add <code>--preset standard</code> for a stricter suite, <code>--strategies</code> to pick
-          a few, and <code>--csv-out sweep.csv</code> to keep the summary.
-        </p>
-      </div>
     </section>
   </div>
 </div>

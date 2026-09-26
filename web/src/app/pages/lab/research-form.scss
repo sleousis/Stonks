@@ -1,0 +1,43 @@
+@use 'breakpoints' as bp;
+
+// Extra layout for the sweep and signal IC forms (on top of lab-form.scss).
+.basket {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+}
+
+.grid-3 {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  > :last-child {
+    grid-column: 1 / -1;
+  }
+
+  > .field {
+    min-width: 0;
+    align-content: start;
+  }
+
+  @include bp.from-tablet {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+
+    > :last-child {
+      grid-column: auto;
+    }
+  }
+}
+
+input[type='date'] {
+  min-width: 0;
+}
+
+textarea.input {
+  text-transform: uppercase;
+
+  &::placeholder {
+    text-transform: none;
+  }
+}

@@ -1,0 +1,235 @@
+<form class="lab-form" novalidate (submit)="$event.preventDefault(); submit()">
+  <fieldset class="group">
+    <legend>Basket</legend>
+    <div class="basket" role="radiogroup" aria-label="What to run on">
+      <label class="check">
+        <input
+          type="radio"
+          name="sw-basket"
+          [checked]="form().basket === 'tickers'"
+          (change)="patch({ basket: 'tickers' })"
+        />
+        Tickers I type
+      </label>
+      <label class="check">
+        <input
+          type="radio"
+          name="sw-basket"
+          [checked]="form().basket === 'universe'"
+          (change)="patch({ basket: 'universe' })"
+        />
+        A saved universe
+      </label>
+    </div>
+
+    @if (form().basket === 'tickers') {
+      <div class="field">
+        <label for="sw-tickers">Tickers</label>
+        <textarea
+          id="sw-tickers"
+          class="input textarea"
+          rows="2"
+          autocapitalize="characters"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="SPY.US, QQQ.US, IWM.US"
+          aria-describedby="sw-tickers-hint"
+          [value]="form().tickers"
+          [attr.aria-invalid]="!!errors()['tickers']"
+          (input)="patch({ tickers: $any($event.target).value })"
+        ></textarea>
+        @if (errors()['tickers']; as e) {
+          <span class="error" id="sw-tickers-hint">{{ e }}</span>
+        } @else {
+          <span class="hint" id="sw-tickers-hint">
+            Separate with commas or spaces. Each needs price history in our data.
+          </span>
+        }
+      </div>
+    } @else {
+      <div class="field">
+        <label for="sw-universe">Universe</label>
+        @if (universes().length) {
+          <select
+            id="sw-universe"
+            class="input"
+            aria-describedby="sw-universe-hint"
+            [attr.aria-invalid]="!!errors()['universe']"
+            (change)="patch({ universeId: $any($event.target).value })"
+          >
+            <option value="" [selected]="form().universeId === ''">Pick a universe</option>
+            @for (u of universes(); track u.id) {
+              <option [value]="u.id" [selected]="form().universeId === u.id">
+                {{ u.name || u.id }}
+              </option>
+            }
+          </select>
+        } @else {
+          <p class="muted" id="sw-universe-none">
+            No universes yet. Create one on the Universes page, or type tickers instead.
+          </p>
+        }
+        @if (errors()['universe']; as e) {
+          <span class="error" id="sw-universe-hint">{{ e }}</span>
+        } @else {
+          <span class="hint" id="sw-universe-hint">
+            Every ticker that was a member during the window, delisted ones included.
+          </span>
+        }
+      </div>
+    }
+
+    <div class="grid-3">
+      <div class="field">
+        <label for="sw-start">Start</label>
+        <input
+          id="sw-start"
+          class="input num"
+          type="date"
+          [value]="form().start"
+          [attr.aria-invalid]="!!errors()['start']"
+          (input)="patch({ start: $any($event.target).value })"
+        />
+        @if (errors()['start']; as e) {
+          <span class="error">{{ e }}</span>
+        }
+      </div>
+      <div class="field">
+        <label for="sw-end">End</label>
+        <input
+          id="sw-end"
+          class="input num"
+          type="date"
+          [value]="form().end"
+          [attr.aria-invalid]="!!errors()['end']"
+          (input)="patch({ end: $any($event.target).value })"
+        />
+        @if (errors()['end']; as e) {
+          <span class="error">{{ e }}</span>
+        }
+      </div>
+      <div class="field">
+        <label for="sw-interval">Interval</label>
+        <select
+          id="sw-interval"
+          class="input"
+          (change)="patch({ interval: $any($event.target).value })"
+        >
+          @for (i of intervalOptions(); track i.code) {
+            <option [value]="i.code" [selected]="i.code === form().interval">
+              {{ i.code }}{{ i.is_intraday ? ' (intraday)' : '' }}
+            </option>
+          }
+        </select>
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset class="group">
+    <legend>
+      Strategies
+      <span class="legend-note">{{ strategiesNote() }}</span>
+    </legend>
+    <details class="advanced">
+      <summary>Choose strategies</summary>
+      <p class="hint advanced-lead">Leave all unticked to run every strategy.</p>
+      <ul class="tests">
+        @for (c of classes(); track c.class_path) {
+          <li>
+            <label class="check">
+              <input
+                type="checkbox"
+                [checked]="form().strategies.includes(c.class_path)"
+                (change)="toggleStrategy(c.class_path, $any($event.target).checked)"
+              />
+              {{ c.name }}
+            </label>
+          </li>
+        }
+      </ul>
+    </details>
+  </fieldset>
+
+  <fieldset class="group">
+    <legend>Tests and search</legend>
+    <div class="grid-2">
+      <div class="field span-2">
+        <label for="sw-suite">Survival tests</label>
+        <select
+          id="sw-suite"
+          class="input"
+          aria-describedby="sw-suite-hint"
+          (change)="patch({ suite: $any($event.target).value })"
+        >
+          @for (s of suites; track s.id) {
+            <option [value]="s.id" [selected]="form().suite === s.id">{{ s.label }}</option>
+          }
+        </select>
+        <span class="hint" id="sw-suite-hint">{{ suiteHint() }}</span>
+      </div>
+      <div class="field">
+        <label for="sw-tuner">Search method</label>
+        <select id="sw-tuner" class="input" (change)="patch({ tuner: $any($event.target).value })">
+          <option value="random" [selected]="form().tuner === 'random'">
+            Random: samples the space
+          </option>
+          <option value="grid" [selected]="form().tuner === 'grid'">
+            Grid: tries every combination
+          </option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="sw-objective">Pick the best by</label>
+        <select
+          id="sw-objective"
+          class="input"
+          (change)="patch({ objective: $any($event.target).value })"
+        >
+          <option value="sharpe" [selected]="form().objective === 'sharpe'">Sharpe</option>
+          <option value="cagr" [selected]="form().objective === 'cagr'">CAGR</option>
+          <option value="final_return" [selected]="form().objective === 'final_return'">
+            Total return
+          </option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="sw-budget">Trials per strategy</label>
+        <input
+          id="sw-budget"
+          class="input num"
+          type="number"
+          inputmode="numeric"
+          min="1"
+          max="1000"
+          step="1"
+          aria-describedby="sw-budget-hint"
+          [value]="form().budget ?? ''"
+          [attr.aria-invalid]="!!errors()['budget']"
+          (input)="setBudget($any($event.target).value)"
+        />
+        @if (errors()['budget']; as e) {
+          <span class="error" id="sw-budget-hint">{{ e }}</span>
+        } @else {
+          <span class="hint" id="sw-budget-hint">Parameter sets tried for each strategy.</span>
+        }
+      </div>
+    </div>
+  </fieldset>
+
+  <div class="form-actions">
+    @if (errorCount(); as n) {
+      <p class="error summary" role="alert">
+        Fix {{ n === 1 ? 'the highlighted field' : 'the ' + n + ' highlighted fields' }} to run it.
+      </p>
+    }
+    <button
+      type="submit"
+      class="btn btn-primary"
+      [disabled]="busy() || !canRun()"
+      [attr.aria-busy]="busy()"
+    >
+      {{ busy() ? 'Starting…' : 'Start sweep' }}
+    </button>
+    <app-permission-note permission="lab.run" />
+  </div>
+</form>

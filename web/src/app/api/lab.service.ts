@@ -4,13 +4,16 @@ import { unwrap } from './api-call';
 import {
   getBacktestResult,
   getLabRunResult,
+  getSweepResult,
   listCostModels,
+  listSurvivalTests,
   startBacktest,
   startLabRun,
+  startSweep,
 } from './generated/sdk.gen';
-import type { BacktestRequest, LabRunRequest } from './models';
+import type { BacktestRequest, LabRunRequest, SweepRequest } from './models';
 
-/** Backtests and lab runs (background jobs) and their results. */
+/** Backtests, lab runs and sweeps (background jobs), their results and the test catalog. */
 @Injectable({ providedIn: 'root' })
 export class LabService {
   startBacktest(body: BacktestRequest) {
@@ -27,6 +30,19 @@ export class LabService {
 
   labRunResult(jobId: string) {
     return unwrap(getLabRunResult({ path: { job_id: jobId } }));
+  }
+
+  startSweep(body: SweepRequest) {
+    return unwrap(startSweep({ body }));
+  }
+
+  sweepResult(jobId: string) {
+    return unwrap(getSweepResult({ path: { job_id: jobId } }));
+  }
+
+  /** Every survival test with the JSON Schema of its options. */
+  survivalTests() {
+    return unwrap(listSurvivalTests());
   }
 
   costModels() {
