@@ -326,6 +326,30 @@ Every trader gets a simple experience: connect a broker for insights, pick strat
 | 17.4 Risk for options | Greek limits (delta, gamma, vega), max loss per spread, and margin. |
 | 17.5 Options strategies | Covered calls, cash-secured puts, protective puts, vertical spreads, and volatility strategies from the book research (Sinclair, Natenberg). |
 
+## Phase 18: Review, polish and prove it
+
+The last phase. The whole project is reviewed file by file, fixed, tested through every edge case, and the console gets its own visual identity. It is done only when every gate below passes.
+
+**Gates**
+
+- Every finding from the review sweep is fixed with a test, or closed with a written reason.
+- Python line and branch coverage of at least 90 percent overall and 95 percent in `core/`, `production/`, `execution/`, `auth/` and `portfolio/`, enforced in CI. Mutation testing on the money paths (orders, fills, risk, ledger, P&L) keeps a surviving-mutant rate under 10 percent.
+- Pyright strict on `core/`, `production/`, `execution/`, `auth/` and `portfolio/`, and basic everywhere else. No ruff ignores without a comment.
+- Every user journey passes end to end in a real browser against a real server on seeded data, on desktop and on a 375px phone.
+- Zero axe accessibility violations. Lighthouse mobile scores of at least 95 for performance, accessibility and best practices.
+- Every backend capability is reachable from the console, the CLI and MCP, or is listed as deliberately CLI-only. A parity test checks this.
+
+| WP | Scope |
+|----|-------|
+| 18.1 Review sweep | Independent reviewers read every module in six areas (data and storage, research, trading and operations, API and security, console, tests and tooling) for bugs, edge cases, dead code, naming, duplication and missing tests. Findings are ranked and tracked. |
+| 18.2 Fix waves | Fix every finding test-first, in waves with disjoint file ownership, then re-review what changed. |
+| 18.3 Edge cases and test strength | Property tests (Hypothesis) for the money paths, fault injection (vendor errors, broker rejections, crashes mid-tick, disk full, clock skew, DST and holidays), coverage and mutation gates in CI. |
+| 18.4 End to end | Playwright journeys over a seeded stack: first sign-in with 2FA, connect a broker (fake provider), build a universe, run a lab, promote through the gate and the override, paper tick, notifications, kill switch and resume, backup and restore. A CLI golden run and a Compose smoke test. |
+| 18.5 Console identity | A visual identity specific to Stonks (type, colour, motion, data display, empty states, copy voice), applied to every page. Plain words for traders, no template look. |
+| 18.6 Usability and polish | Walk every flow as a new trader, cut steps and jargon, fix copy, loading and error states, mobile, accessibility and performance until the gates pass. |
+| 18.7 Feature completeness | A capability matrix of API, console, CLI and MCP. Fill every gap and add the parity test. |
+| 18.8 Release | Changelog, docs and wiki final pass, version 1.0 tag and a deploy dry run. |
+
 ## Execution order
 
 1. Wave 1 in parallel: backtest (1.2, 1.3, 3.5), lab (1.4, 1.5, 3.3), production (2.3, 2.4, 2.5), broker (2.1, 2.2), data (3.4), strategies (3.1, 3.2, 4.2), and the service layer plus REST API for existing features (5.1).
@@ -337,3 +361,4 @@ Every trader gets a simple experience: connect a broker for insights, pick strat
 7. Phase 9 (7.7), once 8.2, 8.5, 8.6, 6.6 and 6.7 are merged. Waves 9.1 to 9.5 run in order, up to six agents per wave, each wave followed by its integration step (merge, wire the shared files, review, fix, full test run).
 8. Final review, fix, re-review.
 9. Phases 15 to 17 follow the design docs in `docs/design/` (`accounts-and-modes.md`, `shorting.md`, `options.md`). The first step of 15.2 (accounts data model, no behaviour change) lands **before W2.1 (9.2.1) is wired into the tick**, so W2.1 writes the tick once as a loop over portfolios with a `BookSpec` instead of rewriting it twice. The backend of 13.1 (login, roles, 2FA, tokens) runs as part of Phase 15; see the step plan in `accounts-and-modes.md` section 12.
+10. Phase 18 runs last: the review sweep starts as soon as the code is frozen for review, the fix waves follow each merge wave, and the release waits for every gate.
