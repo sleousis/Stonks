@@ -1,0 +1,5 @@
+src/app/api/generated/
+dist/
+.angular/
+node_modules/
+
