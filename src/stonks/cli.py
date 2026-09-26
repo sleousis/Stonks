@@ -1668,6 +1668,53 @@ _REPORT_STRATEGIES = typer.Option(
 )
 
 
+def _write_tear_sheet(
+    out: Path,
+    target: str,
+    start: str | None,
+    end: str | None,
+    tickers: str | None,
+    params: str,
+    benchmark: str | None,
+) -> None:
+    import json
+
+    from stonks.app.catalog import CatalogService
+    from stonks.app.context import AppContext
+    from stonks.app.errors import AppError
+    from stonks.app.services import default_strategy_sources
+    from stonks.app.tearsheets import (
+        TearSheetWindow,
+        render_backtest_tear_sheet,
+        tear_sheet_request,
+    )
+
+    try:
+        pinned = json.loads(params)
+    except json.JSONDecodeError as exc:
+        raise typer.BadParameter(f"not valid JSON ({exc})", param_hint="--params") from None
+    if not isinstance(pinned, dict):
+        raise typer.BadParameter("must be a JSON object", param_hint="--params")
+    context = AppContext(_settings())
+    window = TearSheetWindow(
+        start=date.fromisoformat(start) if start else None,
+        end=date.fromisoformat(end) if end else None,
+        universe=tuple(_parse_tickers(tickers)),
+        params=pinned,
+        benchmark=benchmark,
+    )
+    try:
+        request = tear_sheet_request(context, target, window)
+        html = render_backtest_tear_sheet(
+            context, request, CatalogService(default_strategy_sources())
+        )
+    except AppError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--backtest") from None
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(html, encoding="utf-8")
+    console.print(f"[green]wrote[/green] {out}")
+
+
 @app.command("report")
 def report(
     out: Path = _REPORT_OUT,
@@ -1678,11 +1725,36 @@ def report(
         help="first day to show (YYYY-MM-DD); returns are still measured from inception",
         callback=_validate_iso_date,
     ),
+    backtest: str | None = typer.Option(
+        None,
+        "--backtest",
+        help="write a backtest tear sheet instead: a backtest job id, or a strategy id / "
+        "catalog name (with --start/--end)",
+    ),
+    start: str | None = typer.Option(
+        None, "--start", callback=_validate_iso_date, help="tear sheet start (YYYY-MM-DD)"
+    ),
+    end: str | None = typer.Option(
+        None, "--end", callback=_validate_iso_date, help="tear sheet end (YYYY-MM-DD)"
+    ),
+    tickers: str | None = typer.Option(
+        None, "--tickers", help="tear sheet universe; default [production].universe"
+    ),
+    params: str = typer.Option(
+        "{}", "--params", help="JSON params for a catalog strategy's tear sheet"
+    ),
+    benchmark: str | None = _BENCHMARK,
 ) -> None:
     """Write a self-contained static HTML report: equity curve, drawdown,
-    positions, orders/fills, and per-strategy verdicts, shadow P&L and drift."""
+    positions, orders/fills, and per-strategy verdicts, shadow P&L and drift.
+
+    With --backtest, write a backtest tear sheet (strategy vs benchmark,
+    drawdowns, rolling Sharpe, monthly returns, trade and benchmark stats)."""
     from stonks.reporting import build_report, render_html
 
+    if backtest is not None:
+        _write_tear_sheet(out, backtest, start, end, tickers, params, benchmark)
+        return
     settings = _settings()
     since_d = date.fromisoformat(since) if since else None
     state, registry = _open_registry(settings)
