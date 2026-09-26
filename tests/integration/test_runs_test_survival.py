@@ -9,9 +9,9 @@ import pytest
 
 from stonks.core.interval import Interval
 from stonks.core.protocols import SurvivalReport
-from stonks.lab.dataset import LabDataset
 from stonks.features.library import count_runs, runs_test_z_score
 from stonks.lab.backtesting import run_backtest, run_backtest_with_fills
+from stonks.lab.dataset import LabDataset
 from stonks.lab.survival.runs_test import RunsTestSurvivalTest, round_trip_trades
 from stonks.store.lake import DuckDBLake
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
