@@ -1,0 +1,112 @@
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { type ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+
+import type { PreferencesView } from '../../api/models';
+import { provideApi } from '../../api/provide-api';
+import { nextRequest, tick } from '../../../testing/http';
+import { NotificationPrefs } from './notification-prefs';
+
+const VIEW: PreferencesView = {
+  channels: ['inapp', 'webpush', 'webhook'],
+  preferences: [{ category: 'order', channel: 'webpush', enabled: false, strategy_id: null }],
+  quiet_start: null,
+  quiet_end: null,
+  timezone: 'Europe/London',
+  webhook: null,
+};
+
+describe('NotificationPrefs', () => {
+  let fixture: ComponentFixture<NotificationPrefs>;
+  let controller: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting()],
+    });
+    controller = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => controller.verify());
+
+  async function render(view = VIEW) {
+    fixture = TestBed.createComponent(NotificationPrefs);
+    fixture.detectChanges();
+    (await nextRequest(controller, '/api/notifications/preferences')).flush(view);
+    await tick();
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  function box(el: HTMLElement, label: string) {
+    return [...el.querySelectorAll('label.cell')]
+      .find((l) => l.textContent?.includes(label))!
+      .querySelector('input')!;
+  }
+
+  it('shows a switch per alert type and channel, without the in-app feed', async () => {
+    const el = await render();
+    const heads = [...el.querySelectorAll('thead th')].map((th) => th.textContent?.trim());
+    expect(heads).toEqual(['Alert', 'Push', 'Webhook']);
+    expect(box(el, 'Signals by Push').checked).toBe(true);
+    expect(box(el, 'Orders and fills by Push').checked).toBe(false);
+    expect(el.textContent).toContain('Europe/London');
+  });
+
+  it('saves one switch at a time', async () => {
+    const el = await render();
+    box(el, 'Signals by Push').click();
+    const req = await nextRequest(controller, '/api/notifications/preferences', 'PUT');
+    expect(req.request.body).toEqual({
+      preferences: [{ category: 'signal', channel: 'webpush', enabled: false }],
+    });
+    req.flush({
+      ...VIEW,
+      preferences: [
+        ...VIEW.preferences,
+        { category: 'signal', channel: 'webpush', enabled: false, strategy_id: null },
+      ],
+    });
+    await tick();
+    fixture.detectChanges();
+    expect(box(el, 'Signals by Push').checked).toBe(false);
+  });
+
+  it('sets and clears quiet hours', async () => {
+    const el = await render();
+    const set = (id: string, v: string) => {
+      const input = el.querySelector<HTMLInputElement>(id)!;
+      input.value = v;
+      input.dispatchEvent(new Event('input'));
+    };
+    set('#quiet-start', '22:00');
+    set('#quiet-end', '07:00');
+    [...el.querySelectorAll('button')].find((b) => b.textContent?.includes('Save quiet'))!.click();
+    const req = await nextRequest(controller, '/api/notifications/quiet-hours', 'PUT');
+    expect(req.request.body).toEqual({ start: '22:00', end: '07:00' });
+    req.flush({ ...VIEW, quiet_start: '22:00', quiet_end: '07:00' });
+    await tick();
+    fixture.detectChanges();
+
+    [...el.querySelectorAll('button')].find((b) => b.textContent?.includes('Turn off'))!.click();
+    const clear = await nextRequest(controller, '/api/notifications/quiet-hours', 'PUT');
+    expect(clear.request.body).toEqual({ start: null, end: null });
+    clear.flush(VIEW);
+    await tick();
+  });
+
+  it('asks for both times', async () => {
+    const el = await render();
+    const start = el.querySelector<HTMLInputElement>('#quiet-start')!;
+    start.value = '22:00';
+    start.dispatchEvent(new Event('input'));
+    [...el.querySelectorAll('button')].find((b) => b.textContent?.includes('Save quiet'))!.click();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Pick both times');
+  });
+
+  it('says when the server has no delivery channels', async () => {
+    const el = await render({ ...VIEW, channels: ['inapp'] });
+    expect(el.textContent).toContain('no push, email or webhook delivery');
+  });
+});
