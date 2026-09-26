@@ -184,10 +184,13 @@ class BookSpec:
         global_risk: RiskPolicy,
         global_construction: Mapping[str, Any] | None = None,
         default_initial_cash: float,
+        owner_risk: PolicyOverride = None,
     ) -> BookSpec:
         """The book of one portfolio. Only enabled paper and auto
         subscriptions of this portfolio take part; an auto-paused one places
-        nothing, so it is left out."""
+        nothing, so it is left out. ``owner_risk``: the owner's own risk
+        limits (``users.risk_policy_json``), which tighten every portfolio
+        they own."""
         live = [
             s
             for s in subscriptions
@@ -196,7 +199,7 @@ class BookSpec:
             and s.mode.places_orders
             and not s.auto_paused
         ]
-        risk = tighter_of(global_risk, portfolio.risk_policy)
+        risk = tighter_of(global_risk, owner_risk, portfolio.risk_policy)
         return cls(
             portfolio_id=portfolio.id,
             risk=risk,

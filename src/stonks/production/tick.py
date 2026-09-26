@@ -66,6 +66,7 @@ from typing import Any, Literal, get_args
 from stonks.accounts.book import BookSpec
 from stonks.accounts.models import DEFAULT_PORTFOLIO_ID, Mode, Subscription
 from stonks.accounts.models import Portfolio as AccountPortfolio
+from stonks.accounts.paper import ensure_paper_account
 from stonks.backtest.costs import CostModel, CostModelSettings, FixedCostModel
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.interval import Interval
@@ -91,6 +92,7 @@ from stonks.portfolio.pipeline import (
     build_orders,
     vols_from_history,
 )
+from stonks.production.auto_pause import broker_error_reason, pause_auto
 from stonks.production.corporate_actions import (
     CorporateActionPlan,
     adjust_orders_for_splits,
@@ -105,6 +107,7 @@ from stonks.production.corporate_actions import (
     record_plan,
     working_orders,
 )
+from stonks.production.halts import active_halts
 from stonks.production.hooks import (
     GateContext,
     NotifySignal,
@@ -116,6 +119,7 @@ from stonks.production.hooks import (
 )
 from stonks.production.hooks.attribution import load_attribution
 from stonks.production.ledger import ledger_filter
+from stonks.production.portfolio_runs import PortfolioRun, record_run, runs_recorded
 from stonks.production.prices import PriceBook, held_tickers, load_history, load_prices
 from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.ranker import Ranker, SignalSet, StrategyPool
@@ -135,6 +139,17 @@ _log = get_logger("stonks.production.tick")
 #: Builds the tick's broker around the portfolio it trades (a simulated
 #: broker trades that object in memory; an external one ignores it).
 BrokerFactory = Callable[[Portfolio], Broker]
+
+#: Opens the trading adapter of a broker portfolio's connection (auto mode).
+TraderFactory = Callable[[AccountPortfolio], Broker]
+
+#: What a book trades: ``legacy`` (the single default book), ``paper`` (a
+#: simulated account) or ``auto`` (a broker account).
+BookMode = Literal["legacy", "paper", "auto"]
+
+#: Halt kinds that count as breaking a book's risk limits (the auto gate's
+#: paper days restart after one).
+_BREACH_KINDS = frozenset({"month_loss", "week_loss", "drawdown"})
 
 #: Quantities closer than this are equal (a fill of the whole order).
 _QTY_EPSILON = 1e-9
@@ -235,10 +250,30 @@ class TickBook:
     #: Subscription id per strategy (for attribution).
     subscription_ids: Mapping[str, str] = field(default_factory=dict)
     legacy: bool = False
+    #: ``paper`` or ``auto`` for a subscription book (``None``: legacy).
+    mode: Literal["paper", "auto"] | None = None
+    #: The broker portfolio an auto book trades through its connection.
+    account: AccountPortfolio | None = None
+    #: For a broker portfolio's paper account: that broker portfolio.
+    parent_id: str | None = None
 
     @property
     def portfolio_id(self) -> str:
         return self.spec.portfolio_id
+
+    @property
+    def run_mode(self) -> BookMode:
+        if self.legacy or self.mode is None:
+            return "legacy"
+        return self.mode
+
+    def subscriptions_in(self, mode: Mode) -> list[str]:
+        """Ids of this book's subscriptions in ``mode``."""
+        return sorted(
+            sid
+            for strategy, sid in self.subscription_ids.items()
+            if self.spec.strategy_modes.get(strategy) is mode
+        )
 
 
 @dataclass(frozen=True)
@@ -248,6 +283,9 @@ class TickPlan:
 
     books: tuple[TickBook, ...]
     notify: tuple[Subscription, ...] = ()
+    #: Opens a connection's trading adapter for auto books (``None``: auto
+    #: books other than the legacy live default are skipped).
+    traders: TraderFactory | None = field(default=None, compare=False)
 
     @classmethod
     def default(cls, settings: TickSettings) -> TickPlan:
@@ -498,10 +536,11 @@ def _run_tick_body(
     results: list[BookResult] = []
     single = len(plan.books) == 1
     for book in plan.books:
+        started_at = _iso_now()
         try:
-            results.append(_run_book(run, book))
+            outcome = _run_book(run, book)
         except Exception as exc:
-            if single:
+            if single and book.legacy:
                 raise
             log.error(
                 "tick.portfolio_failed",
@@ -509,16 +548,22 @@ def _run_tick_body(
                 error=str(exc),
                 error_type=type(exc).__name__,
             )
-            results.append(
-                BookResult(
-                    portfolio_id=book.portfolio_id,
-                    status="error",
-                    winner_strategy_id=None,
-                    orders_placed=0,
-                    fills=0,
-                    summary={"error": str(exc), "error_type": type(exc).__name__},
-                )
+            outcome = BookResult(
+                portfolio_id=book.portfolio_id,
+                status="error",
+                winner_strategy_id=None,
+                orders_placed=0,
+                fills=0,
+                summary={"error": str(exc), "error_type": type(exc).__name__},
             )
+            outcome = _pause_on_broker_error(run, book, outcome, exc)
+        else:
+            if outcome.status == "partial":
+                outcome = _pause_on_broker_error(
+                    run, book, outcome, "an order raised at the broker"
+                )
+        results.append(outcome)
+        _record_portfolio_run(run, book, outcome, started_at)
 
     # 3. model books, strictly after the real ledgers committed, then hooks.
     shadow_summary = _shadow_phase(run)
@@ -641,7 +686,10 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     #    its order statuses and fills into the ledger first, then read the
     #    portfolio from the account.
     external = trades_live(book, settings)
-    if book.spec.broker == "connection" and not external:
+    connection = book.spec.broker == "connection" and not external
+    if connection and book.mode == "auto" and run.plan.traders and book.account:
+        external = True
+    elif connection:
         log.warning("tick.portfolio_skipped", reason="no_connection_broker")
         return BookResult(
             portfolio_id=portfolio_id,
@@ -654,12 +702,16 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     factory = run.broker_factory if is_default else None
     broker: Broker | None = None
     if external:
-        if factory is None:
+        if connection:
+            assert run.plan.traders is not None and book.account is not None
+            broker = run.plan.traders(book.account)
+        elif factory is None:
             raise ValueError(
                 f"broker_kind={settings.broker_kind!r} needs a broker_factory "
                 "(build it with production.settings_builder.build_tick_runtime)"
             )
-        broker = factory(Portfolio(cash=0.0))
+        else:
+            broker = factory(Portfolio(cash=0.0))
         if not isinstance(broker, OrderStateSource):
             raise TypeError(
                 f"broker_kind={settings.broker_kind!r}: the broker must look orders up by "
@@ -771,6 +823,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                 owner_id=book.owner_id,
                 dry_run=dry_run,
                 policy=book.spec.risk,
+                parent_portfolio_id=book.parent_id,
             ),
             log,
         )
@@ -1148,17 +1201,29 @@ def recover_interrupted_ticks(state: SqliteState, *, now: datetime | None = None
 # ---- plans from portfolios and subscriptions -----------------------------------------
 
 
-def load_tick_plan(state: SqliteState, settings: TickSettings) -> TickPlan:
-    """One book per active portfolio (of an active owner) with at least one
-    enabled paper or auto subscription, plus every enabled notify-mode
-    subscription. Auto subscriptions count only on portfolios that trade at
-    a broker (the auto gate refuses others; this is the tick's own guard):
-    ``kind = broker``, or the default portfolio of an install whose
-    ``[brokers].kind`` is external (its connection row arrives with S3)."""
+def load_tick_plan(
+    state: SqliteState, settings: TickSettings, traders: TraderFactory | None = None
+) -> TickPlan:
+    """The books of every active portfolio (of an active owner), plus every
+    enabled notify-mode subscription (design section 5, S6):
+
+    - a simulated portfolio: one ``paper`` book over its paper subscriptions
+      (auto ones are left out: the auto gate refuses them, this is the
+      tick's own guard);
+    - a portfolio that trades at a broker (``kind = broker``, or the default
+      portfolio of an install whose ``[brokers].kind`` is external): an
+      ``auto`` book over its running auto subscriptions, traded through its
+      connection (``traders``), and a ``paper`` book over its paper
+      subscriptions on its simulated paper account
+      (:func:`~stonks.accounts.paper.ensure_paper_account`), so paper money
+      never reaches the real account.
+
+    Every book is tightened by its owner's risk limits."""
     live_default = settings.broker_kind != "simulated"
     rows = state.sql(
-        "SELECT p.* FROM portfolios p JOIN users u ON u.id = p.owner_id"
-        " WHERE p.status = 'active' AND u.status = 'active' ORDER BY p.created_at, p.id"
+        "SELECT p.*, u.risk_policy_json AS owner_risk_json FROM portfolios p"
+        " JOIN users u ON u.id = p.owner_id WHERE p.status = 'active' AND u.status = 'active'"
+        " AND p.paper_of IS NULL ORDER BY p.created_at, p.id"
     )
     subs = [
         Subscription.from_row(r)
@@ -1169,27 +1234,29 @@ def load_tick_plan(state: SqliteState, settings: TickSettings) -> TickPlan:
     ]
     global_construction = _construction_mapping(settings.construction)
     books: list[TickBook] = []
-    for row in rows:
-        portfolio = AccountPortfolio.from_row(row)
-        own = [
-            s
-            for s in subs
-            if s.portfolio_id == portfolio.id
-            and (
-                s.mode is not Mode.AUTO
-                or portfolio.kind == "broker"
-                or (live_default and portfolio.id == DEFAULT_PORTFOLIO_ID)
-            )
-        ]
+
+    def add(
+        portfolio: AccountPortfolio,
+        own: list[Subscription],
+        owner_risk: Mapping[str, Any],
+        mode: Literal["paper", "auto"],
+    ) -> None:
         spec = BookSpec.for_portfolio(
             portfolio,
             own,
             global_risk=settings.risk,
             global_construction=global_construction,
             default_initial_cash=settings.initial_cash,
+            owner_risk=owner_risk or None,
         )
         if not spec.strategy_weights:
-            continue
+            return
+        account: AccountPortfolio | None = portfolio
+        parent: str | None = None
+        if mode == "paper" and trades_at_broker(portfolio):
+            paper = ensure_paper_account(state, portfolio)
+            spec = replace(spec, portfolio_id=paper.id, broker="simulated")
+            account, parent = paper, portfolio.id
         books.append(
             TickBook(
                 spec=spec,
@@ -1197,10 +1264,94 @@ def load_tick_plan(state: SqliteState, settings: TickSettings) -> TickPlan:
                 subscription_ids={
                     s.strategy_id: s.id for s in own if s.strategy_id in spec.strategy_weights
                 },
+                mode=mode,
+                account=account,
+                parent_id=parent,
             )
         )
+
+    def trades_at_broker(portfolio: AccountPortfolio) -> bool:
+        return portfolio.kind == "broker" or (live_default and portfolio.id == DEFAULT_PORTFOLIO_ID)
+
+    for row in rows:
+        portfolio = AccountPortfolio.from_row(row)
+        owner_risk = json.loads(row["owner_risk_json"] or "{}")
+        own = [s for s in subs if s.portfolio_id == portfolio.id]
+        if trades_at_broker(portfolio):
+            add(portfolio, [s for s in own if s.mode is Mode.AUTO], owner_risk, "auto")
+        add(portfolio, [s for s in own if s.mode is Mode.PAPER], owner_risk, "paper")
     notify = tuple(s for s in subs if s.mode is Mode.NOTIFY)
-    return TickPlan(books=tuple(books), notify=notify)
+    return TickPlan(books=tuple(books), notify=notify, traders=traders)
+
+
+def _pause_on_broker_error(
+    run: _TickRun, book: TickBook, outcome: BookResult, error: BaseException | str
+) -> BookResult:
+    """An auto book whose broker failed pauses its auto subscriptions."""
+    if book.mode != "auto" or run.dry_run or not run.scoped:
+        return outcome
+    reason = broker_error_reason(error)
+    try:
+        paused = pause_auto(
+            run.state,
+            book.portfolio_id,
+            book.subscriptions_in(Mode.AUTO),
+            reason,
+            tick_id=run.tick_id,
+            as_of=run.as_of,
+        )
+    except Exception as exc:  # pragma: no cover - best effort, the tick goes on
+        run.log.error("tick.auto_pause_failed", portfolio_id=book.portfolio_id, error=str(exc))
+        return outcome
+    if not paused:
+        return outcome
+    return replace(outcome, summary={**outcome.summary, "auto_paused": paused})
+
+
+def _record_portfolio_run(
+    run: _TickRun, book: TickBook, outcome: BookResult, started_at: str
+) -> None:
+    """One ``portfolio_runs`` row per book. Never raises."""
+    state = run.state
+    if run.dry_run or not run.scoped:
+        return
+    try:
+        if not runs_recorded(state):
+            return
+        halted = outcome.summary.get("halted") or {}
+        breached = any(
+            h.kind in _BREACH_KINDS and h.scope == "portfolio"
+            for h in active_halts(state, run.as_of, portfolio_id=book.portfolio_id)
+        )
+        rejected = state.sql(
+            "SELECT COUNT(*) FROM orders WHERE tick_id = ? AND portfolio_id = ?"
+            " AND status = 'rejected'",
+            [run.tick_id, book.portfolio_id],
+        )[0][0]
+        status = "paused" if outcome.summary.get("auto_paused") else outcome.status
+        error = outcome.summary.get("error")
+        record_run(
+            state,
+            PortfolioRun(
+                tick_id=run.tick_id,
+                portfolio_id=book.portfolio_id,
+                as_of=run.as_of,
+                mode=book.run_mode,
+                status=status,
+                started_at=started_at,
+                finished_at=_iso_now(),
+                orders_placed=outcome.orders_placed,
+                fills=outcome.fills,
+                orders_rejected=int(rejected),
+                risk_breached=breached,
+                halted=halted.get("halt"),
+                error=f"{outcome.summary.get('error_type', 'Error')}: {error}" if error else None,
+                paper_subscriptions=book.subscriptions_in(Mode.PAPER),
+                auto_subscriptions=book.subscriptions_in(Mode.AUTO),
+            ),
+        )
+    except Exception as exc:
+        run.log.error("tick.portfolio_run_failed", portfolio_id=book.portfolio_id, error=str(exc))
 
 
 def _construction_mapping(construction: ConstructionSettings) -> dict[str, Any]:

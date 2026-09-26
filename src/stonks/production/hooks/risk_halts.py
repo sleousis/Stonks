@@ -92,6 +92,13 @@ class RiskHaltGate(TradeGate):
         pending = self._breaker(ctx)
         owner = ctx.owner_id or portfolio_owner(state, ctx.portfolio_id)
         halts = active_halts(state, ctx.as_of, portfolio_id=ctx.portfolio_id, user_id=owner)
+        if ctx.parent_portfolio_id is not None:
+            seen = {h.id for h in halts}
+            halts += [
+                h
+                for h in active_halts(state, ctx.as_of, portfolio_id=ctx.parent_portfolio_id)
+                if h.id not in seen
+            ]
         reasons = [f"{h.kind} ({h.target}): {h.reason}" for h in halts]
         reasons += [f"{t.kind} (portfolio {ctx.portfolio_id}): {t.reason}" for t in pending]
         if not reasons:

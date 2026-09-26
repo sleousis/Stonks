@@ -121,8 +121,9 @@ def test_the_plan_comes_from_subscriptions_only_when_switched_on(tmp_path, monke
         assert build_tick_runtime(Settings(), ["A.US"]).plan_for(state) is None
         seen = {}
 
-        def fake_load(st, tick_settings):
+        def fake_load(st, tick_settings, traders=None):
             seen["args"] = (st, tick_settings)
+            seen["traders"] = traders
             return "plan"
 
         monkeypatch.setattr(settings_builder, "load_tick_plan", fake_load)
@@ -131,6 +132,7 @@ def test_the_plan_comes_from_subscriptions_only_when_switched_on(tmp_path, monke
         )
         assert runtime.plan_for(state) == "plan"
         assert seen["args"] == (state, runtime.settings)
+        assert callable(seen["traders"])  # auto books trade through their connection
     finally:
         state.close()
 

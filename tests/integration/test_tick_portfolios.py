@@ -459,7 +459,8 @@ def test_a_gate_halting_everything_places_nothing(env, monkeypatch):
 
 def test_paper_subscriptions_never_reach_a_live_broker(env):
     """On an install whose default portfolio trades at a real broker, only
-    auto subscriptions place orders there; paper ones stay out of it."""
+    auto subscriptions place orders there; paper ones trade its simulated
+    paper account."""
     _, state, _ = env
     owner = Scope.for_user(UserRepository(state).get("usr_owner"))
     subs = SubscriptionRepository(state)
@@ -468,8 +469,12 @@ def test_paper_subscriptions_never_reach_a_live_broker(env):
     state.execute("UPDATE subscriptions SET mode = 'auto' WHERE strategy_id = 'mom'")
     live = TickSettings(universe=UNIVERSE, broker_kind="alpaca")
 
-    [book] = load_tick_plan(state, live).books
-    assert tick_mod.book_strategies(book, ["bh_up", "mom"], live) == ["mom"]
+    auto, paper = load_tick_plan(state, live).books
+    assert (auto.portfolio_id, auto.mode) == (DEFAULT_PORTFOLIO_ID, "auto")
+    assert tick_mod.book_strategies(auto, ["bh_up", "mom"], live) == ["mom"]
+    assert (paper.portfolio_id, paper.mode) == ("pf_default_paper", "paper")
+    assert paper.parent_id == DEFAULT_PORTFOLIO_ID and paper.spec.broker == "simulated"
+    assert tick_mod.book_strategies(paper, ["bh_up", "mom"], live) == ["bh_up"]
     [book] = load_tick_plan(state, SETTINGS).books
     # simulated: paper trades, and auto has no broker to reach (left out)
     assert tick_mod.book_strategies(book, ["bh_up", "mom"], SETTINGS) == ["bh_up"]
