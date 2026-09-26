@@ -73,6 +73,7 @@ from stonks.core.protocols import Broker
 from stonks.core.types import Fill, Order, OrderStatus, Portfolio
 from stonks.execution.brokers.base import BrokerKind, OrderRejectedError, OrderStateSource
 from stonks.execution.brokers.simulated import SimulatedCosts
+from stonks.execution.margin import RegTMargin
 from stonks.execution.orders import SideToken, make_client_id
 from stonks.execution.reconcile import (
     NON_TERMINAL_STATUSES,
@@ -115,7 +116,7 @@ from stonks.production.hooks import (
     run_tick_hooks,
 )
 from stonks.production.hooks.attribution import load_attribution
-from stonks.production.ledger import ledger_filter
+from stonks.production.ledger import ledger_columns, ledger_filter
 from stonks.production.prices import PriceBook, held_tickers, load_history, load_prices
 from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.ranker import Ranker, SignalSet, StrategyPool
@@ -893,6 +894,10 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         broker = _build_broker(
             portfolio, settings, prices, as_of, factory, book_prices.volumes, asset_classes
         )
+        if book.spec.allow_short and isinstance(broker, SimulatedBroker):
+            # Roadmap 16.1: a short book's paper broker trades on margin.
+            model = book.spec.risk.rules.margin_call.margin.build()
+            broker.enable_shorts(model if model.allows_short else RegTMargin())
     # Every order records its decision: price, time, context and the
     # modelled cost (BL-32, P22).
     orders_with_tick = annotate_orders(
@@ -1580,6 +1585,8 @@ def _record_order(
         extra["portfolio_id"] = portfolio_id
     if tca_recorded(state):
         extra.update(decision_values(order))
+    if order.position_effect is not None and "position_effect" in ledger_columns(state, "orders"):
+        extra["position_effect"] = order.position_effect  # migration 021
     extra_col = "".join(f", {c}" for c in extra)
     extra_val = ", ?" * len(extra)
     state.execute(
