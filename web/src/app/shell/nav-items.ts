@@ -12,6 +12,8 @@ export interface NavItem {
 export const NAV_ITEMS: readonly NavItem[] = [
   // The trader's own pages (S9): always on top, never folded away.
   { path: '/', label: 'Home', key: 'm', group: 'You' },
+  { path: '/notifications', label: 'Notifications', key: 'n', group: 'You' },
+  { path: '/connections', label: 'Broker connections', key: 'c', group: 'You' },
   { path: '/profile', label: 'Profile', key: 'p', group: 'You' },
   { path: '/admin/users', label: 'Users', key: 'r', group: 'You', adminOnly: true },
   // Advanced pages.
@@ -19,6 +21,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { path: '/strategies', label: 'Strategies', key: 's', group: 'Monitor' },
   { path: '/shadow', label: 'Shadow', key: 'w', group: 'Monitor' },
   { path: '/orders', label: 'Orders', key: 'o', group: 'Monitor' },
+  { path: '/trades', label: 'Trade costs', key: 't', group: 'Monitor' },
   { path: '/studio', label: 'Studio', key: 'u', group: 'Build' },
   { path: '/lab', label: 'Lab', key: 'l', group: 'Build' },
   { path: '/data', label: 'Data', key: 'a', group: 'Operate' },

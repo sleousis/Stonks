@@ -30,12 +30,23 @@ describe('Nav', () => {
   }
 
   it('puts Home and Profile first, and Users for admins only', () => {
-    expect(mine(render(TRADER))).toEqual(['Home', 'Profile']);
+    expect(mine(render(TRADER))).toEqual([
+      'Home',
+      'Notifications',
+      'Broker connections',
+      'Profile',
+    ]);
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
       providers: [provideRouter([]), { provide: SessionService, useValue: session }],
     });
-    expect(mine(render(ADMIN))).toEqual(['Home', 'Profile', 'Users']);
+    expect(mine(render(ADMIN))).toEqual([
+      'Home',
+      'Notifications',
+      'Broker connections',
+      'Profile',
+      'Users',
+    ]);
   });
 
   it('folds advanced pages away for traders signed in with a session', () => {

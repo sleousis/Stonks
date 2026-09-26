@@ -39,6 +39,13 @@ export const routes: Routes = [
   { path: 'ops', loadChildren: () => import('./pages/ops/ops.routes') },
   { path: 'universes', loadChildren: () => import('./pages/universes/universes.routes') },
   { path: 'help', loadChildren: () => import('./pages/help/help.routes') },
+  // 18.2: broker connections, the notification feed, trade costs and journal
+  { path: 'connections', loadChildren: () => import('./pages/connections/connections.routes') },
+  {
+    path: 'notifications',
+    loadChildren: () => import('./pages/notifications/notifications.routes'),
+  },
+  { path: 'trades', loadChildren: () => import('./pages/trades/trades.routes') },
   {
     path: '**',
     title: 'Not found',
