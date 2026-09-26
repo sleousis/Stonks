@@ -6,6 +6,7 @@ one backtest each, p-value against a configurable threshold.
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import date, datetime
 
 import numpy as np
@@ -221,6 +222,50 @@ def test_permutes_only_the_window_and_keeps_real_history_for_lookbacks(lake_gbm)
     assert len(inside_variants) == 4
 
 
+def test_multi_ticker_permutations_keep_cross_asset_co_movement(lake_gbm):
+    """One shared permutation for the whole universe (Masters): a ticker
+    that moves in lockstep with another still does in every permuted lake."""
+    lake, dates = lake_gbm
+    real = lake.get_bars("RND.US", Interval.DAY_1, FAR_PAST, FAR_FUTURE)
+    twin = real.assign(ticker="TWIN.US")
+    for col in ("open", "high", "low", "close", "adj_close"):
+        twin[col] = twin[col] * 2.0
+    lake.upsert_bars(twin, interval=Interval.DAY_1)
+
+    seen: list[tuple[pd.DataFrame, pd.DataFrame]] = []
+
+    class _PairSpy(BaseStrategy):
+        id = "pair_spy"
+
+        def __init__(self, params):
+            super().__init__(params)
+            self._lakes: list = []
+
+        def estimate_return(self, ticker, as_of, lake):
+            if not any(lake is x for x in self._lakes):
+                self._lakes.append(lake)
+                seen.append(
+                    tuple(
+                        lake.get_bars(t, Interval.DAY_1, FAR_PAST, FAR_FUTURE)
+                        for t in ("RND.US", "TWIN.US")
+                    )
+                )
+            return
+
+        def decide(self, my_picks, portfolio, prices, as_of):
+            return []
+
+    ds = dataclasses.replace(_gbm_dataset(lake, dates), universe=["RND.US", "TWIN.US"])
+    MonteCarloPermutationTest(n_permutations=3, max_p_value=1.0, seed=5).run(_PairSpy({}), ds)
+
+    assert len(seen) == 4
+    variants = set()
+    for rnd, tw in seen:
+        np.testing.assert_allclose(tw["close"].to_numpy(), 2.0 * rnd["close"].to_numpy())
+        variants.add(tuple(np.round(rnd["close"].to_numpy(), 8)))
+    assert len(variants) == 4  # the permutations did shuffle
+
+
 def test_permuted_lakes_carry_non_bar_tables(lake_gbm):
     lake, dates = lake_gbm
     lake.con.execute(
@@ -360,6 +405,42 @@ def test_retune_re_tunes_on_each_permuted_train_window(lake_gbm):
     assert len(variants) == 4
     assert report.metrics["real_score"] == pytest.approx(float(real_train.mean()))
     assert "retune" in report.notes
+
+
+def test_retune_keeps_the_wrapped_inner_strategy(lake_gbm):
+    from stonks.lab.tuning.grid import GridTuner
+    from stonks.strategies.macro_regime import MacroRegimeFilter
+
+    class _InnerRecorder:
+        name = "inner_recorder"
+        direction = "maximize"
+
+        def __init__(self) -> None:
+            self.seen: list = []
+
+        def score(self, strategy, dataset):
+            self.seen.append((type(strategy.inner), dict(strategy.params["inner_params"])))
+            return 0.0
+
+    lake, dates = lake_gbm
+    objective = _InnerRecorder()
+    strategy = MacroRegimeFilter(
+        {
+            "inner_class_path": "stonks.strategies.examples.buy_and_hold:BuyAndHold",
+            "inner_params": {"ticker": "RND.US"},
+        }
+    )
+    test = MonteCarloPermutationTest(
+        n_permutations=2,
+        max_p_value=1.0,
+        retune=True,
+        tuning=TuningSetup(tuner=GridTuner(grid_size=2), objective=objective, budget=2),
+    )
+    test.run(strategy, _gbm_dataset(lake, dates))
+    assert objective.seen
+    for inner_cls, inner_params in objective.seen:
+        assert inner_cls is BuyAndHold
+        assert inner_params == {"ticker": "RND.US", "allocation": 1.0}
 
 
 def test_explicit_tuning_wins_over_the_runner_binding(lake_gbm):

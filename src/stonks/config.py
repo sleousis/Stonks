@@ -15,7 +15,9 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from stonks.backtest.costs import CostModelSettings
 from stonks.core.types import AssetClass
+from stonks.lab.survival.walk_forward import WalkForwardConfig
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
 
@@ -139,6 +141,27 @@ class ProductionConfig(BaseModel):
     health: HealthConfig = HealthConfig()
 
 
+class GoLivePolicy(BaseModel):
+    """Limits a paper-trading period must meet before ``stonks golive check``
+    passes (``[golive]``). The gate only reports; promotion stays a human
+    action. Every limit is strict about missing data: a period with no
+    snapshots, no fills or no backtest expectation fails."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Distinct days with a paper snapshot.
+    min_days: int = Field(default=20, ge=1)
+    # Deepest peak-to-trough fall allowed, as a positive fraction (0.15 = -15%).
+    max_drawdown: float = Field(default=0.15, gt=0.0, le=1.0)
+    # Largest allowed |paper return - backtest-expected return| over the
+    # period; the expectation compounds the ``oos`` survival report's CAGR.
+    max_drift: float = Field(default=0.10, ge=0.0)
+    # Filled trades during the paper period.
+    min_trades: int = Field(default=5, ge=1)
+    # Every stored survival report must have passed (and there must be one).
+    require_all_survival_passed: bool = True
+
+
 class WebhookConfig(BaseModel):
     # Secret-bearing (Slack/Discord URLs embed a token): prefer the
     # STONKS_NOTIFY_WEBHOOK_URL env var over committing it to TOML.
@@ -187,6 +210,9 @@ class ApiConfig(BaseModel):
     max_page_size: int = Field(default=500, ge=1)
     ui_dist: Path = Path("web/dist")
     token: SecretStr | None = Field(default_factory=_api_token_from_env)
+    # Strategy Studio: allow saving and running user Python strategies
+    # (arbitrary code with the server's privileges). Off by default.
+    allow_code_strategies: bool = False
 
     @model_validator(mode="before")
     @classmethod
@@ -194,6 +220,36 @@ class ApiConfig(BaseModel):
         if isinstance(data, dict) and "token" in data:
             raise ValueError("api.token must not be set in config; use STONKS_API_TOKEN")
         return data
+
+
+class McpConfig(BaseModel):
+    """MCP server (``stonks mcp``): a client of the running REST API, never
+    of the lake. The bearer token comes from ``STONKS_API_TOKEN`` only."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    api_url: str = "http://127.0.0.1:8000"
+    timeout_seconds: float = Field(default=30.0, gt=0)
+    # Upper bound for the wait_for_job tool's timeout argument.
+    max_wait_seconds: float = Field(default=600.0, gt=0)
+
+
+class BacktestSettings(BaseModel):
+    """``[backtest]``. ``costs`` (``[backtest.costs]``) is the transaction
+    cost model for lab backtests; zero costs unless configured. Production
+    can build the same model with ``settings.backtest.costs.build()``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    costs: CostModelSettings = CostModelSettings()
+
+
+class LabSettings(BaseModel):
+    """``[lab]``: defaults for ``stonks lab run``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    walk_forward: WalkForwardConfig = WalkForwardConfig()
 
 
 class Settings(BaseSettings):
@@ -208,6 +264,10 @@ class Settings(BaseSettings):
     production: ProductionConfig = ProductionConfig()
     notify: NotifyConfig = NotifyConfig()
     api: ApiConfig = Field(default_factory=ApiConfig)
+    backtest: BacktestSettings = BacktestSettings()
+    lab: LabSettings = LabSettings()
+    golive: GoLivePolicy = GoLivePolicy()
+    mcp: McpConfig = McpConfig()
 
 
 def load_settings(config_path: Path | None = None) -> Settings:

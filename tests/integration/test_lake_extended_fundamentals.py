@@ -555,3 +555,47 @@ def test_upsert_empty_dataframes_are_noop(lake):
         lake.upsert_instrument_profile,
     ):
         assert fn(empty) == 0
+
+
+def test_second_source_profile_does_not_erase_first_source_fields(lake):
+    """A sparser second vendor (Yahoo has no ISIN/CIK/IPO date) must not
+    NULL out identifiers the first vendor (EODHD) already landed."""
+    eodhd = pd.DataFrame(
+        [
+            {
+                "id": "AAPL.US",
+                "asset_class": "equity",
+                "exchange": "US",
+                "currency": "USD",
+                "name": "Apple Inc",
+                "sector": "Technology",
+                "ipo_date": date(1980, 12, 12),
+                "cik": "0000320193",
+                "isin": "US0378331005",
+                "updated_at": datetime(2025, 1, 1, tzinfo=UTC),
+            }
+        ]
+    )
+    lake.upsert_instrument_profile(eodhd)
+    yahoo = pd.DataFrame(
+        [
+            {
+                "id": "AAPL.US",
+                "asset_class": "equity",
+                "exchange": "US",
+                "currency": "USD",
+                "name": "Apple Inc.",
+                "sector": "Technology",
+                "ipo_date": None,
+                "cik": None,
+                "isin": None,
+                "updated_at": datetime(2025, 2, 1, tzinfo=UTC),
+            }
+        ]
+    )
+    lake.upsert_instrument_profile(yahoo)
+    row = lake.sql("SELECT name, ipo_date, cik, isin FROM instruments WHERE id='AAPL.US'").iloc[0]
+    assert row["name"] == "Apple Inc."  # real values still overwrite
+    assert row["isin"] == "US0378331005"
+    assert row["cik"] == "0000320193"
+    assert pd.Timestamp(row["ipo_date"]).date() == date(1980, 12, 12)

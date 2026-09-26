@@ -47,7 +47,11 @@ def run_backtest(
     ``lake`` overrides ``dataset.lake`` — survival tests that build a
     modified copy of the bars (permuted, perturbed) pass it here.
     """
-    broker = SimulatedBroker(portfolio=Portfolio(cash=LAB_INITIAL_CASH, positions={}))
+    costs = getattr(dataset, "costs", None)
+    broker = SimulatedBroker(
+        portfolio=Portfolio(cash=LAB_INITIAL_CASH, positions={}),
+        cost_model=costs.build() if costs is not None else None,
+    )
     return Backtester(
         strategies=[strategy],
         broker=broker,

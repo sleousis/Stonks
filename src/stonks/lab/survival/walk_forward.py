@@ -155,6 +155,7 @@ class WalkForwardTest:
             anchored=cfg.anchored,
         )
         strategy_cls = type(strategy)
+        fixed = setup.retune_fixed_params(strategy)  # e.g. a wrapper's inner strategy
         metrics: dict[str, float] = {}
         oos_scores: list[float] = []
         is_scores: list[float] = []
@@ -162,7 +163,7 @@ class WalkForwardTest:
             fold_ds = dataclasses.replace(
                 context, start=fold.train_start, end=fold.test_end, train_end=fold.train_end
             )
-            fitted, tuned = tune_and_fit(strategy_cls, fold_ds, setup)
+            fitted, tuned = tune_and_fit(strategy_cls, fold_ds, setup, fixed)
             report = run_backtest(fitted, fold_ds, (fold.test_start, fold.test_end))
             oos = float(getattr(report, cfg.metric))
             oos_scores.append(oos)

@@ -170,7 +170,33 @@ def test_unknown_regime_follows_when_unknown(lake):
 def test_stale_observations_count_as_unknown(lake):
     f = _filter(max_staleness_days=400, when_unknown="risk_off", threshold=5.0)
     assert f.is_risk_off(date(2024, 6, 1), lake) is False  # obs 2023-12-31 is fresh
-    assert f.is_risk_off(date(2025, 3, 1), lake) is True  # 426 days old -> unknown
+    assert f.is_risk_off(date(2025, 6, 1), lake) is True  # public 428 days ago -> unknown
+
+
+def test_staleness_counts_from_the_publication_date(lake):
+    # obs 2023-12-31 public 2024-03-30 (lag 90): 400 days later is 2025-05-04
+    f = _filter(max_staleness_days=400, when_unknown="risk_off", threshold=5.0)
+    assert f.is_risk_off(date(2025, 5, 4), lake) is False
+    assert f.is_risk_off(date(2025, 5, 5), lake) is True
+
+
+def test_default_params_judge_an_annual_period_start_series_all_year(tmp_path):
+    """With every default (period_start stamps, 180-day lag, 730-day
+    staleness) an annual series must drive the regime on every day of the
+    year: staleness counts from when a value became public, not from the
+    period start it is stamped with."""
+    db = DuckDBLake(tmp_path / "annual.duckdb")
+    db.migrate()
+    try:
+        # +1.0 every year: always risk off (default threshold 0.5, 'above')
+        _macro(db, [(date(y, 1, 1), 3.0 + (y - 2015)) for y in range(2015, 2025)])
+        f = MacroRegimeFilter(
+            {"inner_class_path": BUY_AND_HOLD, "inner_params": {"ticker": "AAPL.US"}}
+        )
+        for d in pd.date_range("2023-01-01", "2023-12-31", freq="D"):
+            assert f.is_risk_off(d.date(), db) is True, d
+    finally:
+        db.close()
 
 
 def test_null_values_are_skipped(lake):

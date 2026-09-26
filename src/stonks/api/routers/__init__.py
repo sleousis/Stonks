@@ -20,6 +20,7 @@ from stonks.api.routers import (
     shadow,
     sources,
     strategies,
+    studio,
     ticks,
 )
 
@@ -34,6 +35,7 @@ API_ROUTERS: list[APIRouter] = [
     lab.router,
     catalog.router,
     jobs.router,
+    studio.router,
     sources.router,
     risk.router,
     shadow.router,

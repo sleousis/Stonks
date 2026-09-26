@@ -3,11 +3,12 @@ structural Protocol; this module just holds the composition helper."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from typing import Any
 
 from stonks.core.protocols import Objective, Strategy, SurvivalReport, SurvivalTest, Tuner
+from stonks.lab.tuning.base import fixed_params_of
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,15 @@ class TuningSetup:
     tuner: Tuner
     objective: Objective
     budget: int
+    #: Params the caller pinned for the runner's own tuning. Re-tuning tests
+    #: keep them pinned too (on top of the strategy's non-tunable params,
+    #: see ``retune_fixed_params``) so they validate the same search.
+    fixed_params: Mapping[str, Any] = field(default_factory=dict)
+
+    def retune_fixed_params(self, strategy: Strategy) -> dict[str, Any]:
+        """What a re-tune of ``strategy`` must hold fixed: its non-tunable
+        params (e.g. a wrapper's inner strategy) plus the pinned ones."""
+        return {**fixed_params_of(strategy), **self.fixed_params}
 
 
 class SurvivalSuite:

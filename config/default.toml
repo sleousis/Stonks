@@ -42,6 +42,33 @@ stuck_tick_minutes = 60
 stuck_ingest_minutes = 180
 ingest_failure_lookback_hours = 24
 
+[backtest.costs]
+# Transaction costs for lab backtests (`stonks lab run`). All zero = no costs.
+# Production can build the same model via settings.backtest.costs.build().
+# Square-root-law impact in bps of an order the size of the whole bar, capped.
+impact_bps = 0.0
+max_impact_bps = 500.0
+
+[backtest.costs.default]
+# Fallback for asset classes not listed under [backtest.costs.asset_classes.*].
+fee_flat = 0.0
+half_spread_bps = 0.0
+fee_bps = 0.0
+
+# [backtest.costs.asset_classes.crypto]
+# half_spread_bps = 5.0
+# fee_bps = 10.0
+
+[lab.walk_forward]
+# Defaults for `stonks lab run --walk-forward` (CLI flags override).
+n_splits = 4
+# test_days = 30                   # omit: split the validation window evenly
+# train_days = 120                 # omit: everything before the first test window
+anchored = false
+metric = "sharpe"
+min_positive_share = 0.5
+min_mean_score = 0.0
+
 [notify]
 # Backends: "log" (structlog) and/or "webhook" (JSON POST). [] disables alerts.
 backends = ["log"]
@@ -89,3 +116,20 @@ max_concurrent_jobs = 2
 default_page_size = 50
 max_page_size = 500
 ui_dist = "web/dist"
+
+[golive]
+# `stonks golive check <id>` limits for a paper-trading period (shadow P&L for
+# shadow strategies, the real simulated portfolio for active ones). Missing
+# data fails a check. The gate never promotes; `stonks registry promote` does.
+min_days = 20
+max_drawdown = 0.15               # deepest allowed drawdown, positive fraction
+max_drift = 0.10                  # max |paper return - backtest-expected return|
+min_trades = 5
+require_all_survival_passed = true
+
+[mcp]
+# `stonks mcp` talks to the running REST API (`stonks serve`); it never opens
+# the lake. Write and job tools send STONKS_API_TOKEN (env only).
+api_url = "http://127.0.0.1:8000"
+timeout_seconds = 30.0
+max_wait_seconds = 600.0
