@@ -110,13 +110,17 @@ class FrozenRow(BaseModel):
 
 
 class RawPriceBar(FrozenRow):
+    """One daily bar as a vendor sent it. Prices may be missing (``None``):
+    the ingest quality checker quarantines such a row as ``missing_price``,
+    so one bad vendor row never fails the ticker's whole fetch."""
+
     ticker: str
     date: date
-    open: float
-    high: float
-    low: float
-    close: float
-    adj_close: float
+    open: float | None
+    high: float | None
+    low: float | None
+    close: float | None
+    adj_close: float | None
     volume: int | None = None
 
 
@@ -127,11 +131,11 @@ class IntradayBar(FrozenRow):
 
     ticker: str
     timestamp: datetime
-    open: float
-    high: float
-    low: float
-    close: float
-    adj_close: float
+    open: float | None
+    high: float | None
+    low: float | None
+    close: float | None
+    adj_close: float | None
     volume: int | None = None
 
 

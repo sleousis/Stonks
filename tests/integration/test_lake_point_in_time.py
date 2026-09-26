@@ -88,6 +88,58 @@ def test_statements_as_of_hides_unfiled_rows(lake):
     assert list(df["period_end"]) == [date(2024, 3, 31), date(2023, 12, 31)]
 
 
+def test_a_statement_is_known_from_its_filing_day(lake):
+    # A daily as_of is read after the close, and orders fill at the next
+    # open, so a report filed after the close of 2 May can be traded on
+    # 3 May: using it on 2 May is not look-ahead (review DS-06).
+    before = lake.get_statements_as_of("income_statement", "A.US", date(2024, 5, 1))
+    assert date(2024, 3, 31) not in set(before["period_end"])
+    on = lake.get_statements_as_of("income_statement", "A.US", date(2024, 5, 2))
+    assert date(2024, 3, 31) in set(on["period_end"])
+
+
+def test_a_restated_statement_moves_to_its_new_filing_date(lake):
+    lake.upsert_income_statement(
+        pd.DataFrame(
+            [
+                {
+                    "ticker": "A.US",
+                    "period_end": date(2024, 3, 31),
+                    "frequency": "Q",
+                    "filing_date": date(2024, 8, 1),
+                    "revenue": 90.0,
+                }
+            ]
+        )
+    )
+    # the original numbers are overwritten, so the period is hidden until
+    # the restatement: never visible early
+    between = lake.get_statements_as_of("income_statement", "A.US", date(2024, 7, 1))
+    assert date(2024, 3, 31) not in set(between["period_end"])
+    after = lake.get_statements_as_of("income_statement", "A.US", date(2024, 8, 1))
+    row = after[after["period_end"] == date(2024, 3, 31)].iloc[0]
+    assert row["revenue"] == 90.0 and row["net_income"] == 10.0
+
+
+def test_members_between_treats_end_date_as_the_first_day_out(lake):
+    lake.upsert_universe_membership(
+        pd.DataFrame(
+            [
+                {
+                    "universe_id": "u",
+                    "ticker": "A.US",
+                    "start_date": date(2024, 1, 1),
+                    "end_date": date(2024, 6, 1),
+                }
+            ]
+        )
+    )
+    assert lake.members_between("u", date(2024, 6, 1), date(2024, 6, 30)) == []
+    assert lake.members_between("u", date(2024, 5, 31), date(2024, 6, 30)) == ["A.US"]
+    assert lake.members_between("u", date(2023, 6, 1), date(2024, 1, 1)) == ["A.US"]
+    assert lake.members_as_of("u", date(2024, 6, 1)) == []
+
+
 def test_statements_as_of_applies_missing_filing_lag(lake):
     q2 = date(2024, 6, 30)
     before = lake.get_statements_as_of(

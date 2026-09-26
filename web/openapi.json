@@ -2103,6 +2103,13 @@
             "title": "Interval",
             "type": "string"
           },
+          "readjusted": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Readjusted",
+            "type": "array"
+          },
           "run_id": {
             "anyOf": [
               {

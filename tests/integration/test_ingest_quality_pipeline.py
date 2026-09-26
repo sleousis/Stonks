@@ -308,3 +308,102 @@ def test_primary_success_never_calls_fallback(lake):
     fallback = _Source("yahoo")
     IngestPipeline(primary, lake, fallback=fallback).run_prices(["AAA.US"])
     assert fallback.calls == []
+
+
+# ---- stored spikes (DS-03) --------------------------------------------------------------
+
+
+@pytest.mark.parametrize("backend", ["duckdb", "parquet"])
+def test_a_stored_spike_is_removed_when_the_next_day_reverts_it(tmp_path, backend):
+    lake = DuckDBLake(tmp_path / "lake.duckdb", bar_backend=backend)
+    lake.migrate()
+    try:
+        closes = _walk(62)
+        closes[60] = closes[59] * 3.0
+        day = START + timedelta(days=60)
+        # 60 bars, then a one-bar batch with the bad tick: stored, as it
+        # cannot be judged yet
+        IngestPipeline(_Source("fake", {"AAA.US": _bars("AAA.US", closes[:60])}), lake).run_prices(
+            ["AAA.US"]
+        )
+        spike = _Source("fake", {"AAA.US": _bars("AAA.US", [closes[60]], start=day)})
+        assert IngestPipeline(spike, lake).run_prices(["AAA.US"]).quality["bars_quarantined"] == 0
+        assert day in set(_stored(lake, "AAA.US")["date"])
+        # the next day's one-bar batch takes it back
+        revert = _Source(
+            "fake", {"AAA.US": _bars("AAA.US", [closes[61]], start=day + timedelta(days=1))}
+        )
+        result = IngestPipeline(revert, lake).run_prices(["AAA.US"])
+        stored = _stored(lake, "AAA.US")
+        assert day not in set(stored["date"])
+        assert len(stored) == 61
+        q = quarantined_bars(lake, run_id=result.run_id)
+        assert list(q["reasons"]) == ["price_spike"]
+        assert q.loc[0, "timestamp"].date() == day
+        assert result.quality["bars_quarantined"] == 1
+    finally:
+        lake.close()
+
+
+# ---- a bad vendor row costs only that row (DS-10) -----------------------------------------
+
+
+class _EodhdPayloadSource(_Source):
+    def __init__(self, payload):
+        super().__init__("eodhd")
+        self._payload = payload
+
+    def fetch_prices(self, ticker, since=None, until=None):
+        from stonks.ingest.sources.eodhd import parse_prices_response
+
+        return list(parse_prices_response(ticker, self._payload))
+
+
+def test_a_null_or_missing_price_quarantines_only_that_row(lake):
+    def row(day, **kw):
+        base = {
+            "date": day,
+            "open": 10.0,
+            "high": 11.0,
+            "low": 9.0,
+            "close": 10.5,
+            "adjusted_close": 10.5,
+            "volume": 100,
+        }
+        base.update(kw)
+        return base
+
+    payload = [
+        row("2025-01-02"),
+        row("2025-01-03", open=None),
+        {k: v for k, v in row("2025-01-06").items() if k != "open"},
+        row("2025-01-07", adjusted_close=None),
+    ]
+    result = IngestPipeline(_EodhdPayloadSource(payload), lake).run_prices(["AAA.US"])
+    assert (result.status, result.tickers_ok) == ("ok", 1)
+    stored = lake.get_prices("AAA.US", date(2025, 1, 1), date(2025, 1, 31))
+    assert list(stored["date"]) == [date(2025, 1, 2), date(2025, 1, 7)]
+    # a missing adjusted close falls back to the close
+    assert stored["adj_close"].iloc[-1] == 10.5
+    q = quarantined_bars(lake, ticker="AAA.US")
+    assert list(q["reasons"]) == ["missing_price", "missing_price"]
+
+
+# ---- edge cases -------------------------------------------------------------------------
+
+
+def test_a_fallback_row_with_another_ticker_code_is_stored_under_the_requested_one(lake):
+    # a fallback adapter that returns its own symbol must not create a
+    # second series: rows are stored under the ticker that was asked for
+    primary = _Source("eodhd", fail_on={"AAA.US"})
+    fallback = _Source("yahoo", prices={"AAA.US": _bars("AAA", [1.0] * 3)})
+    IngestPipeline(primary, lake, fallback=fallback).run_prices(["AAA.US"])
+    assert lake.sql("SELECT DISTINCT ticker FROM bars").ticker.tolist() == ["AAA.US"]
+
+
+def test_a_ticker_with_zero_rows_is_ok_but_warned_in_quality(lake):
+    src = _Source("fake", prices={"AAA.US": []})
+    result = IngestPipeline(src, lake).run_prices(["AAA.US"], until=START)
+    assert result.tickers_ok == 1
+    assert "AAA.US" in result.quality["warned_tickers"]
+    assert result.quality["warnings"] == {"no_data": 1}

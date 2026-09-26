@@ -37,12 +37,13 @@ def day_start(value: Any) -> datetime:
 
 
 def day_end(value: Any) -> datetime:
-    """End-of-day (23:59:59) for a plain ``date``; pass-through for
+    """End of day (23:59:59.999999, so sub-second bars count) for a plain
+    ``date``; pass-through for
     datetimes."""
     if isinstance(value, datetime):
         return value
     if isinstance(value, date):
-        return datetime(value.year, value.month, value.day, 23, 59, 59)
+        return datetime(value.year, value.month, value.day, 23, 59, 59, 999999)
     return value
 
 
