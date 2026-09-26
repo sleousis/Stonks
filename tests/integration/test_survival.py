@@ -69,6 +69,43 @@ def test_period_stability_test_produces_metrics(lake_trending):
     assert report.metrics["n_windows"] == 3
 
 
+def test_period_stability_fails_consistently_losing_strategy(lake_trending):
+    # Sharpes are all negative but tightly clustered: std alone would pass.
+    report = PeriodStabilityTest(n_windows=3, max_sharpe_std=1e9).run(
+        strategy=BuyAndHold({"ticker": "DOWN.US", "allocation": 1.0}),
+        context=_dataset(lake_trending, universe=("DOWN.US",)),
+    )
+    assert report.metrics["sharpe_max"] < 0.0
+    assert report.passed is False
+
+
+def test_period_stability_fails_strategy_that_never_trades(lake_trending):
+    # Target ticker is outside the universe -> flat equity, every Sharpe == 0.
+    report = PeriodStabilityTest(n_windows=3, max_sharpe_std=1e9).run(
+        strategy=BuyAndHold({"ticker": "NOPE.US", "allocation": 1.0}),
+        context=_dataset(lake_trending, universe=("UP.US",)),
+    )
+    assert report.metrics["sharpe_std"] == 0.0
+    assert report.passed is False
+
+
+def test_period_stability_min_sharpe_threshold_is_configurable(lake_trending):
+    ctx = _dataset(lake_trending, universe=("DOWN.US",))
+    strategy = BuyAndHold({"ticker": "DOWN.US", "allocation": 1.0})
+    report = PeriodStabilityTest(n_windows=3, max_sharpe_std=1e9, min_period_sharpe=-1e9).run(
+        strategy=strategy, context=ctx
+    )
+    assert report.passed is True
+
+
+def test_period_stability_passes_consistent_winner(lake_trending):
+    report = PeriodStabilityTest(n_windows=3, max_sharpe_std=1e9).run(
+        strategy=BuyAndHold({"ticker": "UP.US", "allocation": 1.0}),
+        context=_dataset(lake_trending, universe=("UP.US",)),
+    )
+    assert report.passed is True
+
+
 # ---- perturbation -----------------------------------------------------------
 
 
