@@ -1,6 +1,51 @@
 {
   "components": {
     "schemas": {
+      "AlertView": {
+        "properties": {
+          "context": {
+            "additionalProperties": true,
+            "title": "Context",
+            "type": "object"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "level": {
+            "enum": [
+              "info",
+              "warning",
+              "error"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "level",
+          "title",
+          "message",
+          "context",
+          "created_at"
+        ],
+        "title": "AlertView",
+        "type": "object"
+      },
       "AlpacaStatus": {
         "properties": {
           "account": {
@@ -73,6 +118,18 @@
           }
         },
         "title": "AssetClassCosts",
+        "type": "object"
+      },
+      "AuthCheck": {
+        "properties": {
+          "authenticated": {
+            "const": true,
+            "default": true,
+            "title": "Authenticated",
+            "type": "boolean"
+          }
+        },
+        "title": "AuthCheck",
         "type": "object"
       },
       "BacktestRequest": {
@@ -1952,6 +2009,37 @@
         "title": "OrderView",
         "type": "object"
       },
+      "Page_AlertView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AlertView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[AlertView]",
+        "type": "object"
+      },
       "Page_CoverageRow_": {
         "properties": {
           "items": {
@@ -2473,6 +2561,18 @@
             "title": "Cash",
             "type": "number"
           },
+          "cost_basis": {
+            "default": 0.0,
+            "description": "Sum of the positions' cost_basis (positions with a known cost).",
+            "title": "Cost Basis",
+            "type": "number"
+          },
+          "currency": {
+            "default": "USD",
+            "description": "Reporting currency: the currency every held instrument shares, else 'USD' (also for an empty book or unknown currencies). Amounts are not FX-converted.",
+            "title": "Currency",
+            "type": "string"
+          },
           "positions": {
             "items": {
               "$ref": "#/components/schemas/PositionView"
@@ -2521,6 +2621,12 @@
           "total_value": {
             "title": "Total Value",
             "type": "number"
+          },
+          "unrealized_pnl": {
+            "default": 0.0,
+            "description": "Sum of the positions' unrealized_pnl (priced, known cost).",
+            "title": "Unrealized Pnl",
+            "type": "number"
           }
         },
         "required": [
@@ -2537,6 +2643,42 @@
       },
       "PositionView": {
         "properties": {
+          "avg_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average cost per share from the fill history (weighted average, fees included); null when the ledger has no fills for the position.",
+            "title": "Avg Cost"
+          },
+          "cost_basis": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "avg_cost * quantity.",
+            "title": "Cost Basis"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The instrument's trading currency; null when unknown.",
+            "title": "Currency"
+          },
           "market_value": {
             "anyOf": [
               {
@@ -2578,6 +2720,30 @@
           "ticker": {
             "title": "Ticker",
             "type": "string"
+          },
+          "unrealized_pnl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "(price - avg_cost) * quantity at the latest stored close.",
+            "title": "Unrealized Pnl"
+          },
+          "unrealized_pnl_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "unrealized_pnl / |cost_basis| (0.05 = +5%).",
+            "title": "Unrealized Pnl Pct"
           },
           "weight": {
             "anyOf": [
@@ -3252,6 +3418,35 @@
         "title": "StrategyRef",
         "type": "object"
       },
+      "StrategyStatusCounts": {
+        "description": "How many registered strategies are in each lifecycle status.",
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "integer"
+          },
+          "retired": {
+            "title": "Retired",
+            "type": "integer"
+          },
+          "shadow": {
+            "title": "Shadow",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "active",
+          "shadow",
+          "retired",
+          "total"
+        ],
+        "title": "StrategyStatusCounts",
+        "type": "object"
+      },
       "StrategySummary": {
         "properties": {
           "applicable_asset_classes": {
@@ -3467,9 +3662,23 @@
       },
       "TickRun": {
         "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trading date the tick ran for (null for rows that predate it).",
+            "title": "As Of"
+          },
           "finished_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -3483,10 +3692,17 @@
             "type": "string"
           },
           "started_at": {
+            "format": "date-time",
             "title": "Started At",
             "type": "string"
           },
           "status": {
+            "enum": [
+              "running",
+              "ok",
+              "partial",
+              "error"
+            ],
             "title": "Status",
             "type": "string"
           },
@@ -3513,9 +3729,23 @@
       },
       "TickRunWithOrders": {
         "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trading date the tick ran for (null for rows that predate it).",
+            "title": "As Of"
+          },
           "finished_at": {
             "anyOf": [
               {
+                "format": "date-time",
                 "type": "string"
               },
               {
@@ -3536,10 +3766,17 @@
             "type": "array"
           },
           "started_at": {
+            "format": "date-time",
             "title": "Started At",
             "type": "string"
           },
           "status": {
+            "enum": [
+              "running",
+              "ok",
+              "partial",
+              "error"
+            ],
             "title": "Status",
             "type": "string"
           },
@@ -3809,6 +4046,213 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/alerts": {
+      "get": {
+        "description": "Every notification the ``store`` backend recorded, newest first.",
+        "operationId": "listAlerts",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "level",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "info",
+                    "warning",
+                    "error"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Level"
+            }
+          },
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_AlertView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Alerts",
+        "tags": [
+          "alerts"
+        ]
+      }
+    },
+    "/api/auth/check": {
+      "get": {
+        "description": "200 when the bearer token is valid, 401 otherwise (503 when the\nserver has no token configured, as for every mutating route).",
+        "operationId": "checkAuth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check Auth",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/brokers": {
       "get": {
         "description": "The broker the production tick trades through (keys never shown).",
@@ -7322,6 +7766,83 @@
         ]
       }
     },
+    "/api/strategies/summary": {
+      "get": {
+        "description": "Registered strategies counted by lifecycle status, in one call.",
+        "operationId": "getStrategySummary",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StrategyStatusCounts"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Strategy Summary",
+        "tags": [
+          "strategies"
+        ]
+      }
+    },
     "/api/strategies/{strategy_id}": {
       "get": {
         "operationId": "getStrategy",
@@ -9093,6 +9614,12 @@
             "schema": {
               "anyOf": [
                 {
+                  "enum": [
+                    "running",
+                    "ok",
+                    "partial",
+                    "error"
+                  ],
                   "type": "string"
                 },
                 {

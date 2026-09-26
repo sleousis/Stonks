@@ -16,7 +16,19 @@ Auth: reads (`GET`) are open to loopback clients by default
 (`[api].open_reads_on_loopback`). Every other method needs
 `Authorization: Bearer $STONKS_API_TOKEN`.
 
-Tags: [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [risk](#risk-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [ticks](#ticks-endpoints)
+Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [risk](#risk-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [ticks](#ticks-endpoints)
+
+## alerts endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/alerts` | List Alerts | token, or open on loopback |  | [Page_AlertView_](#page_alertview_) |
+
+## auth endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/auth/check` | Check Auth | token, or open on loopback |  | [AuthCheck](#authcheck) |
 
 ## brokers endpoints
 
@@ -121,6 +133,7 @@ Tags: [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [health]
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
 | GET | `/api/strategies` | List Strategies | token, or open on loopback |  | [Page_StrategySummary_](#page_strategysummary_) |
+| GET | `/api/strategies/summary` | Strategy Summary | token, or open on loopback |  | [StrategyStatusCounts](#strategystatuscounts) |
 | GET | `/api/strategies/{strategy_id}` | Get Strategy | token, or open on loopback |  | [StrategyDetail](#strategydetail) |
 | POST | `/api/strategies/{strategy_id}/promote` | Promote | bearer token |  | [StrategyDetail](#strategydetail) |
 | POST | `/api/strategies/{strategy_id}/retire` | Retire | bearer token |  | [StrategyDetail](#strategydetail) |
@@ -156,6 +169,17 @@ Tags: [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [health]
 
 ## Schemas
 
+### AlertView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `context` | object | yes |  |
+| `created_at` | date-time | yes |  |
+| `id` | integer | yes |  |
+| `level` | "info" \| "warning" \| "error" | yes |  |
+| `message` | string | yes |  |
+| `title` | string | yes |  |
+
 ### AlpacaStatus
 
 | Field | Type | Required | Description |
@@ -175,6 +199,12 @@ Fee and spread for one asset class.
 | `fee_bps` | number | no |  |
 | `fee_flat` | number | no |  |
 | `half_spread_bps` | number | no |  |
+
+### AuthCheck
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `authenticated` | true | no |  |
 
 ### BacktestRequest
 
@@ -561,6 +591,15 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `ticker` | string | yes |  |
 | `updated_at` | string | yes |  |
 
+### Page_AlertView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[AlertView](#alertview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
 ### Page_CoverageRow_
 
 | Field | Type | Required | Description |
@@ -706,22 +745,30 @@ One row per day. ``strategy_id`` is ``None`` for the real portfolio and a shadow
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `cash` | number | yes |  |
+| `cost_basis` | number | no | Sum of the positions' cost_basis (positions with a known cost). |
+| `currency` | string | no | Reporting currency: the currency every held instrument shares, else 'USD' (also for an empty book or unknown currencies). Amounts are not FX-converted. |
 | `positions` | list[[PositionView](#positionview)] | yes |  |
 | `positions_value` | number | yes |  |
 | `snapshot_total_value` | number \| null | yes |  |
 | `taken_at` | date-time \| null | yes |  |
 | `tick_id` | string \| null | yes |  |
 | `total_value` | number | yes |  |
+| `unrealized_pnl` | number | no | Sum of the positions' unrealized_pnl (priced, known cost). |
 
 ### PositionView
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `avg_cost` | number \| null | no | Average cost per share from the fill history (weighted average, fees included); null when the ledger has no fills for the position. |
+| `cost_basis` | number \| null | no | avg_cost * quantity. |
+| `currency` | string \| null | no | The instrument's trading currency; null when unknown. |
 | `market_value` | number \| null | yes |  |
 | `price` | number \| null | yes |  |
 | `price_date` | date \| null | yes |  |
 | `quantity` | number | yes |  |
 | `ticker` | string | yes |  |
+| `unrealized_pnl` | number \| null | no | (price - avg_cost) * quantity at the latest stored close. |
+| `unrealized_pnl_pct` | number \| null | no | unrealized_pnl / \|cost_basis\| (0.05 = +5%). |
 | `weight` | number \| null | yes |  |
 
 ### ProblemDetails
@@ -873,6 +920,17 @@ Which strategy to run: a registered id, or a catalog class + params.
 | `params` | object | no |  |
 | `strategy_id` | string \| null | no |  |
 
+### StrategyStatusCounts
+
+How many registered strategies are in each lifecycle status.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `active` | integer | yes |  |
+| `retired` | integer | yes |  |
+| `shadow` | integer | yes |  |
+| `total` | integer | yes |  |
+
 ### StrategySummary
 
 | Field | Type | Required | Description |
@@ -926,21 +984,23 @@ Which strategy to run: a registered id, or a catalog class + params.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `finished_at` | string \| null | yes |  |
+| `as_of` | date \| null | no | The trading date the tick ran for (null for rows that predate it). |
+| `finished_at` | date-time \| null | yes |  |
 | `id` | string | yes |  |
-| `started_at` | string | yes |  |
-| `status` | string | yes |  |
+| `started_at` | date-time | yes |  |
+| `status` | "running" \| "ok" \| "partial" \| "error" | yes |  |
 | `summary` | [TickSummary](#ticksummary) \| null | yes |  |
 
 ### TickRunWithOrders
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `finished_at` | string \| null | yes |  |
+| `as_of` | date \| null | no | The trading date the tick ran for (null for rows that predate it). |
+| `finished_at` | date-time \| null | yes |  |
 | `id` | string | yes |  |
 | `orders` | list[[OrderView](#orderview)] | yes |  |
-| `started_at` | string | yes |  |
-| `status` | string | yes |  |
+| `started_at` | date-time | yes |  |
+| `status` | "running" \| "ok" \| "partial" \| "error" | yes |  |
 | `summary` | [TickSummary](#ticksummary) \| null | yes |  |
 
 ### TickSummary

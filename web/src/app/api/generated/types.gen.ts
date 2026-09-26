@@ -5,6 +5,38 @@ export type ClientOptions = {
 };
 
 /**
+ * AlertView
+ */
+export type AlertView = {
+    /**
+     * Context
+     */
+    context: {
+        [key: string]: unknown;
+    };
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Level
+     */
+    level: 'info' | 'warning' | 'error';
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
  * AlpacaStatus
  */
 export type AlpacaStatus = {
@@ -42,6 +74,16 @@ export type AssetClassCosts = {
      * Half Spread Bps
      */
     half_spread_bps?: number;
+};
+
+/**
+ * AuthCheck
+ */
+export type AuthCheck = {
+    /**
+     * Authenticated
+     */
+    authenticated?: true;
 };
 
 /**
@@ -337,7 +379,7 @@ export type DataSourceInfo = {
     /**
      * Id
      */
-    id: 'eodhd' | 'yahoo';
+    id: 'eodhd' | 'yahoo' | 'defillama';
 };
 
 /**
@@ -671,7 +713,7 @@ export type IngestRequest = {
     /**
      * Source
      */
-    source?: 'eodhd' | 'yahoo';
+    source?: 'eodhd' | 'yahoo' | 'defillama';
     /**
      * Tickers
      */
@@ -1083,6 +1125,28 @@ export type OrderView = {
 };
 
 /**
+ * Page[AlertView]
+ */
+export type PageAlertView = {
+    /**
+     * Items
+     */
+    items: Array<AlertView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[CoverageRow]
  */
 export type PageCoverageRow = {
@@ -1436,6 +1500,18 @@ export type PortfolioView = {
      */
     cash: number;
     /**
+     * Cost Basis
+     *
+     * Sum of the positions' cost_basis (positions with a known cost).
+     */
+    cost_basis?: number;
+    /**
+     * Currency
+     *
+     * Reporting currency: the currency every held instrument shares, else 'USD' (also for an empty book or unknown currencies). Amounts are not FX-converted.
+     */
+    currency?: string;
+    /**
      * Positions
      */
     positions: Array<PositionView>;
@@ -1459,12 +1535,36 @@ export type PortfolioView = {
      * Total Value
      */
     total_value: number;
+    /**
+     * Unrealized Pnl
+     *
+     * Sum of the positions' unrealized_pnl (priced, known cost).
+     */
+    unrealized_pnl?: number;
 };
 
 /**
  * PositionView
  */
 export type PositionView = {
+    /**
+     * Avg Cost
+     *
+     * Average cost per share from the fill history (weighted average, fees included); null when the ledger has no fills for the position.
+     */
+    avg_cost?: number | null;
+    /**
+     * Cost Basis
+     *
+     * avg_cost * quantity.
+     */
+    cost_basis?: number | null;
+    /**
+     * Currency
+     *
+     * The instrument's trading currency; null when unknown.
+     */
+    currency?: string | null;
     /**
      * Market Value
      */
@@ -1485,6 +1585,18 @@ export type PositionView = {
      * Ticker
      */
     ticker: string;
+    /**
+     * Unrealized Pnl
+     *
+     * (price - avg_cost) * quantity at the latest stored close.
+     */
+    unrealized_pnl?: number | null;
+    /**
+     * Unrealized Pnl Pct
+     *
+     * unrealized_pnl / |cost_basis| (0.05 = +5%).
+     */
+    unrealized_pnl_pct?: number | null;
     /**
      * Weight
      */
@@ -1906,6 +2018,30 @@ export type StrategyRef = {
 };
 
 /**
+ * StrategyStatusCounts
+ *
+ * How many registered strategies are in each lifecycle status.
+ */
+export type StrategyStatusCounts = {
+    /**
+     * Active
+     */
+    active: number;
+    /**
+     * Retired
+     */
+    retired: number;
+    /**
+     * Shadow
+     */
+    shadow: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * StrategySummary
  */
 export type StrategySummary = {
@@ -2040,6 +2176,12 @@ export type TickResultView = {
  */
 export type TickRun = {
     /**
+     * As Of
+     *
+     * The trading date the tick ran for (null for rows that predate it).
+     */
+    as_of?: string | null;
+    /**
      * Finished At
      */
     finished_at: string | null;
@@ -2054,7 +2196,7 @@ export type TickRun = {
     /**
      * Status
      */
-    status: string;
+    status: 'running' | 'ok' | 'partial' | 'error';
     summary: TickSummary | null;
 };
 
@@ -2062,6 +2204,12 @@ export type TickRun = {
  * TickRunWithOrders
  */
 export type TickRunWithOrders = {
+    /**
+     * As Of
+     *
+     * The trading date the tick ran for (null for rows that predate it).
+     */
+    as_of?: string | null;
     /**
      * Finished At
      */
@@ -2081,7 +2229,7 @@ export type TickRunWithOrders = {
     /**
      * Status
      */
-    status: string;
+    status: 'running' | 'ok' | 'partial' | 'error';
     summary: TickSummary | null;
 };
 
@@ -2204,6 +2352,103 @@ export type WalkForwardConfig = {
      */
     train_days?: number | null;
 };
+
+export type ListAlertsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Level
+         */
+        level?: 'info' | 'warning' | 'error' | null;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/alerts';
+};
+
+export type ListAlertsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListAlertsError = ListAlertsErrors[keyof ListAlertsErrors];
+
+export type ListAlertsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageAlertView;
+};
+
+export type ListAlertsResponse = ListAlertsResponses[keyof ListAlertsResponses];
+
+export type CheckAuthData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/auth/check';
+};
+
+export type CheckAuthErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CheckAuthError = CheckAuthErrors[keyof CheckAuthErrors];
+
+export type CheckAuthResponses = {
+    /**
+     * Successful Response
+     */
+    200: AuthCheck;
+};
+
+export type CheckAuthResponse = CheckAuthResponses[keyof CheckAuthResponses];
 
 export type GetBrokerInfoData = {
     body?: never;
@@ -3859,6 +4104,47 @@ export type ListStrategiesResponses = {
 
 export type ListStrategiesResponse = ListStrategiesResponses[keyof ListStrategiesResponses];
 
+export type GetStrategySummaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/strategies/summary';
+};
+
+export type GetStrategySummaryErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetStrategySummaryError = GetStrategySummaryErrors[keyof GetStrategySummaryErrors];
+
+export type GetStrategySummaryResponses = {
+    /**
+     * Successful Response
+     */
+    200: StrategyStatusCounts;
+};
+
+export type GetStrategySummaryResponse = GetStrategySummaryResponses[keyof GetStrategySummaryResponses];
+
 export type GetStrategyData = {
     body?: never;
     path: {
@@ -4745,7 +5031,7 @@ export type ListTicksData = {
         /**
          * Status
          */
-        status?: string | null;
+        status?: 'running' | 'ok' | 'partial' | 'error' | null;
         /**
          * Limit
          *
