@@ -26,14 +26,13 @@
         class="input"
         data-path="interval"
         [attr.aria-invalid]="invalid('interval')"
-        [value]="s.interval"
         (change)="setText('interval', $any($event.target).value)"
       >
         @for (iv of intervals; track iv) {
-          <option [value]="iv">{{ iv }}</option>
+          <option [selected]="iv === s.interval" [value]="iv">{{ iv }}</option>
         }
         @if (!intervals.includes($any(s.interval))) {
-          <option [value]="s.interval">{{ s.interval }}</option>
+          <option selected [value]="s.interval">{{ s.interval }}</option>
         }
       </select>
       <p class="hint">Periods below count bars of this size.</p>
@@ -132,14 +131,13 @@
             [id]="'rb-ind-kind-' + i"
             [attr.data-path]="at + '.kind'"
             [attr.aria-invalid]="invalid(at + '.kind')"
-            [value]="ind.kind"
             (change)="setKind(i, $any($event.target).value)"
           >
             @for (opt of kinds(); track opt.kind) {
-              <option [value]="opt.kind">{{ opt.label }}</option>
+              <option [selected]="opt.kind === ind.kind" [value]="opt.kind">{{ opt.label }}</option>
             }
             @if (!k) {
-              <option [value]="ind.kind">{{ ind.kind }} (unknown)</option>
+              <option selected [value]="ind.kind">{{ ind.kind }} (unknown)</option>
             }
           </select>
         </div>
@@ -168,11 +166,12 @@
               class="input"
               [id]="'rb-ind-source-' + i"
               [attr.data-path]="at + '.source'"
-              [value]="ind.source ?? 'close'"
               (change)="setSource(i, $any($event.target).value)"
             >
               @for (src of sources; track src) {
-                <option [value]="src">{{ src }}</option>
+                <option [selected]="src === (ind.source ?? 'close')" [value]="src">
+                  {{ src }}
+                </option>
               }
             </select>
           </div>
@@ -200,14 +199,9 @@
   </ul>
   <div class="add-row">
     <label class="visually-hidden" for="rb-new-kind">Indicator kind to add</label>
-    <select
-      id="rb-new-kind"
-      class="input"
-      [value]="newKind()"
-      (change)="newKind.set($any($event.target).value)"
-    >
+    <select id="rb-new-kind" class="input" (change)="newKind.set($any($event.target).value)">
       @for (opt of kinds(); track opt.kind) {
-        <option [value]="opt.kind">{{ opt.label }}</option>
+        <option [selected]="opt.kind === newKind()" [value]="opt.kind">{{ opt.label }}</option>
       }
     </select>
     <button type="button" class="btn" [disabled]="!canAddIndicator()" (click)="addIndicator()">
@@ -275,14 +269,13 @@
         data-path="rank.by"
         aria-describedby="rb-rank-by-err"
         [attr.aria-invalid]="invalid('rank.by')"
-        [value]="s.rank.by"
         (change)="setRank('by', $any($event.target).value)"
       >
         @for (id of indicatorIds(); track $index) {
-          <option [value]="id">{{ id }}</option>
+          <option [selected]="id === s.rank.by" [value]="id">{{ id }}</option>
         }
         @if (!indicatorIds().includes(s.rank.by)) {
-          <option [value]="s.rank.by">{{ s.rank.by || 'Choose an indicator' }}</option>
+          <option selected [value]="s.rank.by">{{ s.rank.by || 'Choose an indicator' }}</option>
         }
       </select>
       <div id="rb-rank-by-err">

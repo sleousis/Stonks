@@ -48,6 +48,18 @@ describe('RuleBuilder', () => {
     expect(el.querySelectorAll('.indicator')).toHaveLength(3);
     expect((el.querySelector('#rb-ind-period-0') as HTMLInputElement).value).toBe('14');
 
+    // Selects whose options come from @for still show the spec's values.
+    const selected = (sel: string) => (el.querySelector(sel) as HTMLSelectElement).value;
+    expect(selected('#rb-interval')).toBe('1d');
+    expect(selected('#rb-ind-kind-0')).toBe('rsi');
+    expect(selected('#rb-ind-source-1')).toBe('close');
+    expect(selected('#rb-rank-by')).toBe('rsi14');
+    const second = el.querySelector('[data-node="entry.conditions[1]"]') as HTMLElement;
+    expect(selected('[data-node="entry.conditions[1]"] select[aria-label="Comparison"]')).toBe('>');
+    expect(
+      (second.querySelector('select[aria-label="Right side"]') as HTMLSelectElement).value,
+    ).toBe('i:sma50');
+
     change(el.querySelector('#rb-ind-period-0'), '14');
     expect(JSON.parse(JSON.stringify(spec()))).toEqual({ ...RSI_TEMPLATE_SPEC, description: '' });
   });

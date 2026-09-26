@@ -12,9 +12,22 @@
   gap: var(--space-2);
   align-items: start;
 
-  // Side by side once the node is wide enough (nested groups get narrower).
-  @container (min-width: 540px) {
-    grid-template-columns: minmax(0, 1.3fr) minmax(7.5rem, 0.9fr) minmax(0, 1.3fr) auto;
+  // Side by side once the node is wide enough (nested groups get narrower);
+  // the node's actions wrap under the operands until there is room for them.
+  @container (min-width: 460px) {
+    grid-template-columns: minmax(0, 1.3fr) minmax(6.5rem, 0.8fr) minmax(0, 1.3fr);
+
+    .node-actions {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @container (min-width: 760px) {
+    grid-template-columns: minmax(0, 1.3fr) minmax(7.5rem, 0.8fr) minmax(0, 1.3fr) auto;
+
+    .node-actions {
+      grid-column: auto;
+    }
   }
 }
 

@@ -68,14 +68,9 @@
       </div>
       <div class="field">
         <label for="t-interval">Interval</label>
-        <select
-          id="t-interval"
-          class="input"
-          [value]="interval()"
-          (change)="interval.set($any($event.target).value)"
-        >
+        <select id="t-interval" class="input" (change)="interval.set($any($event.target).value)">
           @for (iv of intervals; track iv) {
-            <option [value]="iv">{{ iv }}</option>
+            <option [selected]="iv === interval()" [value]="iv">{{ iv }}</option>
           }
         </select>
       </div>

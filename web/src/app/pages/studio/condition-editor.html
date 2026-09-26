@@ -7,13 +7,14 @@
           aria-label="Left side"
           [attr.data-path]="path() + '.left.id'"
           [attr.aria-invalid]="issuesAt('left.id').length > 0"
-          [value]="operandKey(c.left)"
           (change)="setOperand('left', $any($event.target).value)"
         >
           @for (id of operandOptions(c.left); track id) {
-            <option [value]="'i:' + id">{{ id || '(no id)' }}</option>
+            <option [selected]="operandKey(c.left) === 'i:' + id" [value]="'i:' + id">
+              {{ id || '(no id)' }}
+            </option>
           }
-          <option value="const">Number…</option>
+          <option [selected]="c.left.type === 'constant'" value="const">Number…</option>
         </select>
         @if (c.left.type === 'constant') {
           <input
@@ -34,11 +35,10 @@
         aria-label="Comparison"
         [attr.data-path]="path() + '.op'"
         [attr.aria-invalid]="issuesAt('op').length > 0"
-        [value]="c.op"
         (change)="setOp($any($event.target).value)"
       >
         @for (op of ops; track op.value) {
-          <option [value]="op.value">{{ op.label }}</option>
+          <option [selected]="op.value === c.op" [value]="op.value">{{ op.label }}</option>
         }
       </select>
 
@@ -48,13 +48,14 @@
           aria-label="Right side"
           [attr.data-path]="path() + '.right.id'"
           [attr.aria-invalid]="issuesAt('right.id').length > 0"
-          [value]="operandKey(c.right)"
           (change)="setOperand('right', $any($event.target).value)"
         >
           @for (id of operandOptions(c.right); track id) {
-            <option [value]="'i:' + id">{{ id || '(no id)' }}</option>
+            <option [selected]="operandKey(c.right) === 'i:' + id" [value]="'i:' + id">
+              {{ id || '(no id)' }}
+            </option>
           }
-          <option value="const">Number…</option>
+          <option [selected]="c.right.type === 'constant'" value="const">Number…</option>
         </select>
         @if (c.right.type === 'constant') {
           <input
