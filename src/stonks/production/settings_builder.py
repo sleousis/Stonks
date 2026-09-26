@@ -13,6 +13,7 @@ from stonks.config import Settings
 from stonks.core.protocols import Broker
 from stonks.core.types import Portfolio
 from stonks.execution.brokers import SimulatedCosts, make_broker
+from stonks.lab.parallel import default_max_workers
 from stonks.notify import Notifier, notifier_from_settings
 from stonks.production.tick import (
     BrokerFactory,
@@ -91,6 +92,8 @@ def build_tick_settings(
         quit_rule=p.quit_rule,
         scoped=scoped,
         bars_due=dict(bars_due) if bars_due else None,
+        scoring_workers=p.scoring_workers or default_max_workers(),
+        parallel_min_estimates=p.parallel_min_estimates,
     )
 
 

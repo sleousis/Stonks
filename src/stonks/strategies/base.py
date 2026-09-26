@@ -145,6 +145,10 @@ class BaseStrategy:
     # strategy equity-only without an opt-in change. Cross-class
     # strategies override (e.g. ``("equity", "crypto")``).
     applicable_asset_classes: ClassVar[tuple[AssetClass, ...]] = ("equity",)
+    #: ``estimate_return`` keeps no per-day state that ``decide`` reads, so
+    #: the tick may score this strategy in worker processes (see
+    #: ``stonks.production.scoring``). Off unless a strategy opts in.
+    parallel_scoring: ClassVar[bool] = False
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         # Catch the ``applicable_asset_classes = ()`` footgun at class

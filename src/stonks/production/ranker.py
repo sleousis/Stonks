@@ -88,7 +88,15 @@ class Ranker:
         universe: Sequence[str],
         threshold: float = 0.0,
         status: Literal["active", "shadow"] = "active",
+        workers: int = 1,
+        min_parallel_estimates: int = 2000,
     ) -> None:
+        """``workers`` > 1 scores the strategies that opt in with
+        ``parallel_scoring`` in worker processes (``production.scoring``),
+        once they need at least ``min_parallel_estimates`` estimates in all
+        (below that a pool costs more than it saves)."""
+        self._workers = workers
+        self._min_parallel = min_parallel_estimates
         self._registry = registry
         self._status = status
         self._lake = lake
@@ -137,9 +145,42 @@ class Ranker:
                 )
                 continue
             instances[handle.id] = strategy
-            scores[handle.id] = self._score_one(handle.id, strategy, as_of, asset_classes)
+        parallel = self._score_parallel(instances, as_of, asset_classes)
+        for sid, strategy in instances.items():
+            if sid in parallel:
+                scores[sid] = parallel[sid]
+            else:
+                scores[sid] = self._score_one(sid, strategy, as_of, asset_classes)
         self.signals = SignalSet(as_of=as_of, scores=scores, instances=instances)
         return self.signals.ranked()
+
+    def _tickers_for(self, strategy: Strategy, asset_classes: Mapping[str, str]) -> list[str]:
+        allowed = set(getattr(strategy, "applicable_asset_classes", ("equity",)))
+        return [t for t in self._universe if asset_classes.get(t) in allowed]
+
+    def _score_parallel(
+        self, instances: Mapping[str, Strategy], as_of: date, asset_classes: Mapping[str, str]
+    ) -> dict[str, dict[str, float]]:
+        """Scores of the opted-in strategies from worker processes, or
+        ``{}`` when the pool isn't worth it (or fails: then the serial path
+        scores them)."""
+        from stonks.production.scoring import parallel_safe, score_in_workers
+
+        if self._workers <= 1:
+            return {}
+        safe = {sid: s for sid, s in instances.items() if parallel_safe(s)}
+        tickers = {sid: self._tickers_for(s, asset_classes) for sid, s in safe.items()}
+        if not safe or sum(len(t) for t in tickers.values()) < self._min_parallel:
+            return {}
+        try:
+            return score_in_workers(
+                self._lake, safe, tickers, as_of=as_of, threshold=self._threshold,
+                workers=self._workers,
+            )  # fmt: skip
+        except Exception as exc:
+            _log.warning("ranker.parallel_scoring.failed", error=str(exc),
+                         error_type=type(exc).__name__)  # fmt: skip
+            return {}
 
     def _score_one(
         self,

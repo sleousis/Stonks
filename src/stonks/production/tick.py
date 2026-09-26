@@ -207,6 +207,11 @@ class TickSettings:
     #: latest bar is older (the price ingest failed) is marked and sellable
     #: but not buyable. None (manual ticks): the staleness window only.
     bars_due: Mapping[str, date] | None = None
+    #: Worker processes of the signal phase (``production.scoring``); 1
+    #: scores in this process.
+    scoring_workers: int = 1
+    #: Fewest estimates (opted-in strategies x tickers) worth a pool.
+    parallel_min_estimates: int = 2000
 
     def __post_init__(self) -> None:
         self.simulated_costs  # noqa: B018 - validates costs vs legacy (not both)
@@ -455,6 +460,8 @@ class _TickRun:
                     universe=self.settings.universe,
                     threshold=self.settings.threshold,
                     status="shadow",
+                    workers=self.settings.scoring_workers,
+                    min_parallel_estimates=self.settings.parallel_min_estimates,
                 ).score(as_of=self.as_of)
             except Exception as exc:
                 self._shadow_error = exc
@@ -510,6 +517,8 @@ def _run_tick_body(
         lake=lake,
         universe=settings.universe,
         threshold=settings.threshold,
+        workers=settings.scoring_workers,
+        min_parallel_estimates=settings.parallel_min_estimates,
     )
     signals = ranker.score(as_of=as_of)
     pool = StrategyPool(registry, lake)
