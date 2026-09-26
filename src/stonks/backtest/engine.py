@@ -77,7 +77,11 @@ through every registered risk rule when ``BacktestConfig.risk`` is set, with
 a ``RiskContext`` from the engine's own equity curve, daily history and
 the entry date of each held position (from the broker's fills, so
 ``max_holding`` works in a backtest). The history a decision sees ends at
-its bar (daily) or the day before (intraday), never later. A rule's order
+its bar (daily) or the day before (intraday), never later. That history is
+adjusted with the vendor's ``adj_close``, which already folds in splits and
+dividends after the decision, so each slice is rebased to the raw close of
+its last bar (RS-15): ATRs and volatilities come out in the units of the
+shares the decision trades, as if adjusted on the decision day. A rule's order
 carries a date-keyed client id, so the engine adds the bar time to it: two
 forced exits on one intraday day stay two orders. Strategies are keyed ``"0"``, ``"1"``, ... by
 position; each decision's target book is kept in ``target_books``.
@@ -222,6 +226,7 @@ class Backtester:
         self._fill_owner: dict[str, tuple[int, str]] = {}
         self._fill_seq = 0
         self._membership: dict[str, list[tuple[date, date | None]]] | None = None
+        self._raw_closes: dict[str, dict[date, float]] = {}
         #: The target book of every pipeline decision, by bar.
         self.target_books: dict[datetime, TargetBook] = {}
         #: The close each order was decided at, by client id (TCA, BL-32:
@@ -631,12 +636,28 @@ class Backtester:
 
         end = max(bars_by_ts).date()
         days = len({ts.date() for ts in bars_by_ts})
-        return load_history(
+        history = load_history(
             self._lake,
             list(self._config.universe),
             end,
             bars=self._config.history_bars + days,
         )
+        self._raw_closes = self._load_raw_closes(end)
+        return history
+
+    def _load_raw_closes(self, end: date) -> dict[str, dict[date, float]]:
+        """Unadjusted daily closes up to ``end``, per ticker, for rebasing
+        the pipeline history (see the module doc)."""
+        frame = self._lake.sql(
+            "SELECT ticker, timestamp, close FROM bars"
+            " WHERE ticker = ANY(?) AND interval = '1d' AND timestamp < ?",
+            [list(self._config.universe), day_start(end + timedelta(days=1))],
+        )
+        out: dict[str, dict[date, float]] = {}
+        for row in frame.itertuples(index=False):
+            if row.close is not None and not pd.isna(row.close) and row.close > 0:
+                out.setdefault(str(row.ticker), {})[_as_date(row.timestamp)] = float(row.close)
+        return out
 
     def _history_until(self, as_of: datetime) -> dict[str, pd.DataFrame]:
         """History a decision at ``as_of`` may see: daily bars dated on or
@@ -651,7 +672,25 @@ class Backtester:
         for ticker, frame in self._history.items():
             visible = frame.loc[:cutoff].tail(self._config.history_bars)
             if not visible.empty:
-                out[ticker] = visible
+                out[ticker] = self._rebased(ticker, visible)
+        return out
+
+    def _rebased(self, ticker: str, frame: pd.DataFrame) -> pd.DataFrame:
+        """``frame`` scaled so its last close is that day's raw close: any
+        split or dividend after the slice drops out (RS-15)."""
+        raw = self._raw_closes.get(ticker, {}).get(_as_date(frame.index[-1]))
+        last = frame["close"].iloc[-1] if "close" in frame else None
+        if raw is None or last is None or pd.isna(last) or last <= 0:
+            return frame
+        factor = raw / float(last)
+        if abs(factor - 1.0) <= 1e-12:
+            return frame
+        out = frame.copy()
+        for col in ("open", "high", "low", "close", "adj_close"):
+            if col in out:
+                out[col] = out[col] * factor
+        if "volume" in out:
+            out["volume"] = out["volume"] / factor
         return out
 
 

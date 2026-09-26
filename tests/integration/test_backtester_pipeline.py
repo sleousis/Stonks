@@ -225,3 +225,66 @@ def test_max_holding_exit_closes_the_lot(lake_trending):
     assert not any(t.is_open for t in report.trades)
     pnl = sum(t.pnl for t in report.trades)
     assert pnl == pytest.approx(report.equity_curve[-1] - report.equity_curve[0], rel=1e-9)
+
+
+# ---- RS-15: pipeline risk sizing ignores splits after the decision ---------------
+
+
+def _split_lake(path, *, future_split: bool):
+    """X.US with a noisy daily path. ``future_split`` stamps the vendor's
+    adj_close as if a 10:1 split happened after the window (every bar /10)."""
+    import numpy as np
+    import pandas as pd
+
+    from stonks.store.lake import DuckDBLake
+
+    rng = np.random.default_rng(3)
+    dates = pd.bdate_range("2025-09-01", "2026-03-31")
+    close = 100.0 * np.exp(np.cumsum(rng.normal(0.0005, 0.02, len(dates))))
+    lake = DuckDBLake(path)
+    lake.migrate()
+    lake.upsert_prices(
+        pd.DataFrame(
+            {
+                "ticker": "X.US",
+                "date": [d.date() for d in dates],
+                "open": close,
+                "high": close * 1.02,
+                "low": close * 0.98,
+                "close": close,
+                "adj_close": close / 10.0 if future_split else close,
+                "volume": 1e6,
+            }
+        )
+    )
+    lake.con.execute("INSERT INTO instruments (id, asset_class) VALUES ('X.US', 'equity')")
+    return lake
+
+
+def test_risk_sizing_is_the_same_with_and_without_a_future_split(tmp_path):
+    from stonks.production.rules.risk_per_position import RiskPerPositionSettings
+    from stonks.production.rules.settings import RuleSettings
+
+    risk = RiskPolicy(
+        rules=RuleSettings(risk_per_position=RiskPerPositionSettings(max_risk=0.0025))
+    )
+    quantities = []
+    for future in (False, True):
+        lake = _split_lake(tmp_path / f"lake{future}.duckdb", future_split=future)
+        broker = SimulatedBroker(Portfolio(cash=10_000.0))
+        Backtester(
+            strategies=[_Window("X.US", date(2026, 1, 5), date(2026, 3, 20))],
+            broker=broker,
+            lake=lake,
+            config=BacktestConfig(
+                start=date(2026, 1, 5),
+                end=date(2026, 3, 20),
+                universe=["X.US"],
+                construction="equal_weight_top_n",
+                risk=risk,
+            ),
+        ).run()
+        quantities.append([round(f.quantity, 6) for f in broker.fills])
+        lake.close()
+    assert quantities[0], "the risk rule must still let a buy through"
+    assert quantities[1] == quantities[0]
