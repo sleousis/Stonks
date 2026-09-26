@@ -79,6 +79,17 @@ class WalkForwardConfig(BaseModel):
         val_start, val_end = val_window
         return max(1, ((val_end - val_start).days + 1) // self.n_splits)
 
+    def folds_for(self, dataset: Any) -> list[WalkForwardFold]:
+        """The folds this config lays over ``dataset``'s full window."""
+        return walk_forward_folds(
+            dataset.start,
+            dataset.end,
+            n_splits=self.n_splits,
+            test_days=self.resolved_test_days(dataset.val_window),
+            train_days=self.train_days,
+            anchored=self.anchored,
+        )
+
 
 def walk_forward_folds(
     start: date,
@@ -146,14 +157,7 @@ class WalkForwardTest:
                 "WalkForwardTest needs a tuning setup: pass tuning=... or run it under LabRunner"
             )
         cfg = self._cfg
-        folds = walk_forward_folds(
-            context.start,
-            context.end,
-            n_splits=cfg.n_splits,
-            test_days=cfg.resolved_test_days(context.val_window),
-            train_days=cfg.train_days,
-            anchored=cfg.anchored,
-        )
+        folds = cfg.folds_for(context)
         strategy_cls = type(strategy)
         fixed = setup.retune_fixed_params(strategy)  # e.g. a wrapper's inner strategy
         metrics: dict[str, float] = {}
