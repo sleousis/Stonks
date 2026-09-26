@@ -8,6 +8,7 @@ import { provideRouter } from '@angular/router';
 
 import { FakeChartEngine, provideFakeChart } from '../../../testing/fake-chart';
 import { tick } from '../../../testing/http';
+import { STRATEGY_METADATA } from '../../../testing/strategy-fixtures';
 import { CATALOG, MOMENTUM } from '../../../testing/lab-fixtures';
 import type { StrategyDetail } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
@@ -23,6 +24,8 @@ function registered(id: string, classPath: string): StrategyDetail {
     applicable_asset_classes: ['equity'],
     created_at: '2026-09-01T10:00:00Z',
     updated_at: '2026-09-20T10:00:00Z',
+    metadata: STRATEGY_METADATA,
+    status_history: [],
     survival_reports: [],
   };
 }
