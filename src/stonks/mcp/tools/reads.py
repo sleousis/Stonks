@@ -19,6 +19,7 @@ from stonks.mcp.tools.common import (
     Limit,
     Offset,
     RouteRead,
+    Since,
     StrategyStatus,
     Ticker,
     ToolContext,
@@ -34,6 +35,29 @@ ROUTE_READS: tuple[RouteRead, ...] = (
         "/api/portfolio",
         "Current portfolio: cash, positions valued at the latest stored closes, "
         "weights and total value, from the latest snapshot.",
+    ),
+    RouteRead(
+        "get_risk_policy",
+        "/api/risk/policy",
+        "The [production.risk] limits applied between a strategy's orders and the broker "
+        "(max weights, order caps, ...).",
+    ),
+    RouteRead(
+        "get_broker",
+        "/api/brokers",
+        "The broker production ticks trade through: kind (simulated/alpaca), paper, "
+        "allow_live and whether credentials are configured (keys are never shown). Read-only.",
+    ),
+    RouteRead(
+        "list_sources",
+        "/api/sources",
+        "Market-data sources an ingest can name, which is the default, and whether each "
+        "is configured.",
+    ),
+    RouteRead(
+        "list_cost_models",
+        "/api/lab/cost-models",
+        "Transaction-cost presets run_backtest accepts as cost_model, with their settings.",
     ),
 )
 
@@ -200,3 +224,55 @@ def register(t: ToolContext) -> None:
     async def get_job(job_id: str) -> dict[str, Any]:
         """One background job: status, progress, and its result once finished."""
         return await t.get(f"/api/jobs/{seg(job_id)}")
+
+    @server.tool(annotations=READ)
+    async def get_pnl(since: Since = None) -> dict[str, Any]:
+        """Daily P&L of the real portfolio (last snapshot per UTC day). Returns
+        and drawdown are measured from inception even when since trims the rows."""
+        return await t.get("/api/pnl", {"since": iso(since)})
+
+    @server.tool(annotations=READ)
+    async def list_shadow_decisions(
+        strategy_id: str | None = None,
+        ticker: str | None = None,
+        as_of: IsoDate | None = None,
+        limit: Limit = 50,
+        offset: Offset = 0,
+    ) -> dict[str, Any]:
+        """Virtual orders shadow strategies placed (never sent to a broker), newest first."""
+        return await t.get(
+            "/api/shadow/decisions",
+            {
+                "strategy_id": strategy_id,
+                "ticker": ticker,
+                "as_of": iso(as_of),
+                "limit": limit,
+                "offset": offset,
+            },
+        )
+
+    @server.tool(annotations=READ)
+    async def list_shadow_pnl(
+        since: Since = None, limit: Limit = 50, offset: Offset = 0
+    ) -> dict[str, Any]:
+        """Latest value, return and worst drawdown of every shadow strategy's
+        virtual portfolio."""
+        return await t.get(
+            "/api/shadow/pnl", {"since": iso(since), "limit": limit, "offset": offset}
+        )
+
+    @server.tool(annotations=READ)
+    async def get_shadow_pnl(strategy_id: str, since: Since = None) -> dict[str, Any]:
+        """Daily P&L of one shadow strategy's virtual portfolio."""
+        return await t.get(f"/api/shadow/strategies/{seg(strategy_id)}/pnl", {"since": iso(since)})
+
+    @server.tool(annotations=READ)
+    async def get_health_report(
+        tickers: Annotated[
+            list[str] | None,
+            Field(description="bar-freshness tickers; default [production].universe"),
+        ] = None,
+    ) -> dict[str, Any]:
+        """Operational health (every `stonks health` check): bar freshness, stuck
+        ticks and ingest runs, recent ingest failures; see `healthy`."""
+        return await t.get("/api/health/report", {"tickers": tickers})

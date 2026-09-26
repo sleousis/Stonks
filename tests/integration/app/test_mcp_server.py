@@ -97,6 +97,15 @@ READ_TOOLS = {
     "list_jobs",
     "get_job",
     "wait_for_job",
+    "get_risk_policy",
+    "get_pnl",
+    "list_shadow_decisions",
+    "list_shadow_pnl",
+    "get_shadow_pnl",
+    "get_health_report",
+    "get_broker",
+    "list_sources",
+    "list_cost_models",
 }
 JOB_TOOLS = {"run_backtest", "run_lab", "run_ingest"}
 GUARDED_TOOLS = {"promote_strategy", "retire_strategy", "shadow_strategy", "run_tick"}
@@ -125,8 +134,11 @@ async def test_tool_list_and_annotations(mcp):
 
 @pytest.mark.anyio
 async def test_no_tool_touches_broker_settings(mcp):
-    names = {t.name for t in (await mcp.list_tools()).tools}
-    assert not any("broker" in n or "live" in n or "config" in n for n in names)
+    for tool in (await mcp.list_tools()).tools:
+        if any(word in tool.name for word in ("broker", "live", "config")):
+            # only reads may mention the broker (get_broker shows its mode)
+            assert tool.annotations.read_only_hint is True, tool.name
+            assert tool.name in READ_TOOLS, tool.name
 
 
 # ---- read tools -----------------------------------------------------------------
@@ -183,6 +195,56 @@ async def test_catalog_ingest_runs_and_jobs(mcp):
     assert catalog["intervals"] and catalog["asset_classes"]
     assert (await call(mcp, "list_ingest_runs"))["total"] == 0
     assert (await call(mcp, "list_jobs"))["total"] == 0
+
+
+@pytest.mark.anyio
+async def test_risk_policy_broker_sources_cost_models(mcp, settings):
+    policy = await call(mcp, "get_risk_policy")
+    assert policy["enabled"] is True
+    broker = await call(mcp, "get_broker")
+    assert broker["kind"] == "simulated"
+    assert set(broker) == {"kind", "paper", "allow_live", "credentials_configured"}
+    sources = (await call(mcp, "list_sources"))["items"]
+    assert any(s["default"] for s in sources)
+    presets = (await call(mcp, "list_cost_models"))["items"]
+    assert {p["name"] for p in presets} == {"zero", "realistic"}
+
+
+@pytest.mark.anyio
+async def test_pnl_and_health_report(mcp):
+    pnl = await call(mcp, "get_pnl")
+    assert pnl["strategy_id"] is None and pnl["rows"]
+    later = await call(mcp, "get_pnl", {"since": "2999-01-01"})
+    assert later["rows"] == []
+    report = await call(mcp, "get_health_report", {"tickers": ["UP.US", "DOWN.US"]})
+    assert isinstance(report["healthy"], bool)
+    assert report["checks"]
+
+
+@pytest.mark.anyio
+async def test_shadow_reads(mcp, seeded):
+    decisions = await call(mcp, "list_shadow_decisions", {"strategy_id": seeded["shadow_id"]})
+    assert decisions["items"] == [] and decisions["total"] == 0
+    summaries = (await call(mcp, "list_shadow_pnl", {"limit": 5}))["items"]
+    assert all("cumulative_return" in row for row in summaries)
+    series = await call(mcp, "get_shadow_pnl", {"strategy_id": seeded["shadow_id"]})
+    assert series["strategy_id"] == seeded["shadow_id"]
+    assert "nope" in await call_error(mcp, "get_shadow_pnl", {"strategy_id": "nope"})
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("tool", "arg"),
+    [
+        ("get_strategy", "strategy_id"),
+        ("get_shadow_pnl", "strategy_id"),
+        ("get_tick", "tick_id"),
+        ("get_job", "job_id"),
+        ("wait_for_job", "job_id"),
+    ],
+)
+async def test_read_ids_are_validated(mcp, tool, arg):
+    assert "invalid id" in await call_error(mcp, tool, {arg: "../ticks#"})
 
 
 # ---- job tools ------------------------------------------------------------------
