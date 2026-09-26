@@ -21,11 +21,19 @@ NOW = datetime(2026, 9, 25, 20, 0, tzinfo=UTC)
 
 
 class FakeTicker:
-    def __init__(self, symbol, frames, info, calls):
+    def __init__(self, symbol, frames, info, calls, splits=None, split_calls=None):
         self.symbol = symbol
         self._frames = frames
         self._info = info
         self._calls = calls
+        self._splits = splits
+        self._split_calls = split_calls if split_calls is not None else []
+
+    def get_splits(self, period="max"):
+        self._split_calls.append(self.symbol)
+        if self._splits is None:
+            return pd.Series(dtype=float)
+        return self._splits
 
     def history(self, **kwargs):
         self._calls.append((self.symbol, kwargs))
@@ -43,13 +51,15 @@ class FakeTicker:
 
 
 class FakeYF:
-    def __init__(self, frames=None, info=None):
+    def __init__(self, frames=None, info=None, splits=None):
         self.frames = list(frames or [])
         self.info = info if info is not None else {}
+        self.splits = splits
         self.calls: list = []
+        self.split_calls: list = []
 
     def __call__(self, symbol):
-        return FakeTicker(symbol, self.frames, self.info, self.calls)
+        return FakeTicker(symbol, self.frames, self.info, self.calls, self.splits, self.split_calls)
 
 
 def make_source(fake, **kwargs):
@@ -150,6 +160,84 @@ def test_fetch_prices_crypto_symbol():
     assert bars[0].ticker == "BTC-USD.CC"
 
 
+def _splits(when, ratio, tz="America/New_York"):
+    idx = pd.DatetimeIndex([when], name="Date").tz_localize(tz)
+    return pd.Series([ratio], index=idx, name="Stock Splits")
+
+
+def test_fetch_prices_undoes_yahoo_split_adjustment_on_ohlcv():
+    # Yahoo's OHLCV is split-adjusted even with auto_adjust=False; the lake's
+    # close is the as-traded price (EODHD semantics), adj_close the adjusted.
+    fake = FakeYF(frames=[daily_frame()], splits=_splits(datetime(2026, 4, 2), 4.0))
+    bars = list(make_source(fake).fetch_prices("AAPL.US", since=date(2026, 4, 1)))
+
+    before, on = bars
+    assert (before.open, before.high, before.low, before.close) == (400.0, 420.0, 396.0, 416.0)
+    assert before.volume == 250_000
+    assert before.adj_close == 103.0  # adjusted series unchanged
+    assert (on.close, on.volume, on.adj_close) == (102.0, 900_000, 101.5)
+
+
+def test_splits_after_the_window_still_unadjust():
+    fake = FakeYF(frames=[daily_frame()], splits=_splits(datetime(2027, 1, 5), 2.0))
+    bars = list(
+        make_source(fake).fetch_prices("AAPL.US", since=date(2026, 4, 1), until=date(2026, 4, 3))
+    )
+    assert bars[0].close == 208.0
+
+
+def test_intraday_bars_undo_split_adjustment():
+    fake = FakeYF(frames=[intraday_frame()], splits=_splits(datetime(2026, 9, 25), 2.0))
+    bars = list(
+        make_source(fake).fetch_intraday_bars("AAPL.US", Interval.MIN_5, since=date(2026, 9, 24))
+    )
+    assert bars[0].close == 22.0
+    assert bars[0].adj_close == 11.0
+    assert bars[0].volume == 50
+
+
+def test_crypto_skips_split_lookup():
+    fake = FakeYF(frames=[daily_frame(tz="UTC")])
+    make_source(fake).fetch_prices("BTC-USD.CC")
+    assert fake.split_calls == []
+
+
+def test_empty_history_skips_split_lookup():
+    fake = FakeYF(frames=[pd.DataFrame()])
+    make_source(fake).fetch_prices("AAPL.US")
+    assert fake.split_calls == []
+
+
+def test_http_4xx_is_not_retried():
+    from curl_cffi.requests.exceptions import HTTPError
+
+    class _Resp:
+        status_code = 404
+
+    fake = FakeYF(frames=[HTTPError("HTTP Error 404", response=_Resp())] * 3)
+    with pytest.raises(YahooDataSourceError, match="404"):
+        make_source(fake).fetch_prices("ZZZZ.US")
+    assert len(fake.calls) == 1
+
+
+def test_http_5xx_and_connection_errors_are_retried():
+    from curl_cffi.requests.exceptions import ConnectionError as CurlConnectionError
+    from curl_cffi.requests.exceptions import HTTPError
+
+    class _Resp:
+        status_code = 503
+
+    fake = FakeYF(
+        frames=[
+            HTTPError("HTTP Error 503", response=_Resp()),
+            CurlConnectionError("reset"),
+            daily_frame(),
+        ]
+    )
+    assert len(list(make_source(fake).fetch_prices("AAPL.US"))) == 2
+    assert len(fake.calls) == 3
+
+
 def test_unmapped_ticker_soft_fails_without_calling_yahoo():
     fake = FakeYF()
     with pytest.raises(YahooUnsupportedTickerError):
@@ -207,8 +295,8 @@ def test_min_request_interval_throttles_consecutive_calls():
         monotonic=lambda: next(clock),
         min_request_interval_seconds=0.5,
     )
-    source.fetch_prices("AAPL.US")
-    source.fetch_prices("MSFT.US")
+    source.fetch_prices("BTC-USD.CC")
+    source.fetch_prices("ETH-USD.CC")
     assert sleeps == [pytest.approx(0.4)]
 
 

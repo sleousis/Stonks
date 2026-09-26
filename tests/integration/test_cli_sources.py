@@ -34,6 +34,9 @@ class _FakeTicker:
             index=idx,
         )
 
+    def get_splits(self, period="max"):
+        return pd.Series(dtype=float)
+
     @property
     def info(self):
         return {

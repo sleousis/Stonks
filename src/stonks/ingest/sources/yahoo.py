@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from stonks.core.interval import Interval
@@ -222,7 +223,7 @@ def _volume(value: Any) -> int | None:
     if value is None:
         return None
     f = float(value)
-    return None if math.isnan(f) else int(f)
+    return None if math.isnan(f) else round(f)
 
 
 def _to_naive_utc(index: pd.DatetimeIndex) -> pd.DatetimeIndex:
@@ -235,9 +236,42 @@ def _to_local_dates(index: pd.DatetimeIndex) -> list[date]:
     # Daily bars are stamped at exchange-local midnight; the local calendar
     # date is the trading date (converting to UTC first would shift Asian
     # sessions onto the previous day).
+    return [ts.date() for ts in _local_dates(index)]
+
+
+def _local_dates(index: pd.DatetimeIndex) -> pd.DatetimeIndex:
+    """Exchange-local calendar dates (tz dropped, time floored to midnight)."""
     if index.tz is not None:
         index = index.tz_localize(None)
-    return [ts.date() for ts in index]
+    return index.normalize()
+
+
+def _unsplit(frame: pd.DataFrame, splits: pd.Series | None) -> pd.DataFrame:
+    """Undo Yahoo's split adjustment of OHLCV.
+
+    Even with ``auto_adjust=False`` Yahoo back-adjusts OHLC (and volume) for
+    splits; only ``Adj Close`` additionally reflects dividends. The lake's
+    ``close`` is the as-traded price (``adj_close`` carries the adjusted
+    series), so multiply prices, and divide volume, by the product of every
+    split ratio whose ex-date falls after the bar's local date.
+    """
+    if splits is None or len(splits) == 0 or frame.empty:
+        return frame
+    split_days = _local_dates(pd.DatetimeIndex(splits.index))
+    ratios = pd.to_numeric(pd.Series(splits.to_numpy()), errors="coerce").to_numpy(dtype=float)
+    bar_days = _local_dates(pd.DatetimeIndex(frame.index))
+    factor = np.ones(len(frame))
+    for day, ratio in zip(split_days, ratios, strict=True):
+        if not math.isfinite(ratio) or ratio <= 0:
+            continue
+        factor = np.where(bar_days < day, factor * ratio, factor)
+    if np.all(factor == 1.0):
+        return frame
+    out = frame.copy()
+    for col in _OHLC:
+        out[col] = out[col] * factor
+    out["Volume"] = pd.to_numeric(out["Volume"], errors="coerce") / factor
+    return out
 
 
 def _iter_rows(frame: pd.DataFrame) -> Iterator[tuple[Any, dict[str, Any]]]:
@@ -317,6 +351,7 @@ class YahooDataSource(DataSource):
         frame = _clean_ohlcv(self._history(symbol, **kwargs))
         if frame.empty:
             return []
+        frame = _unsplit(frame, self._splits(ticker, symbol))
         days = _to_local_dates(pd.DatetimeIndex(frame.index))
         return [
             RawPriceBar(
@@ -359,6 +394,7 @@ class YahooDataSource(DataSource):
         end = (until or today) + timedelta(days=1)  # end is exclusive
 
         bars: dict[datetime, IntradayBar] = {}
+        splits: pd.Series | None = None
         for start, stop in _windows(since, end, spec.max_window_days):
             frame = _clean_ohlcv(
                 self._history(
@@ -370,6 +406,9 @@ class YahooDataSource(DataSource):
             )
             if frame.empty:
                 continue
+            if splits is None:
+                splits = self._splits(ticker, symbol)
+            frame = _unsplit(frame, splits)
             stamps = _to_naive_utc(pd.DatetimeIndex(frame.index))
             for ts, (_, row) in zip(stamps, _iter_rows(frame), strict=True):
                 when = ts.to_pydatetime()
@@ -415,6 +454,14 @@ class YahooDataSource(DataSource):
 
     # ---- transport ----
 
+    def _splits(self, ticker: str, symbol: str) -> pd.Series:
+        """Full split history (one extra request per ticker). Crypto has no
+        splits, so it is skipped."""
+        if classify_asset_class(ticker) != "equity":
+            return pd.Series(dtype=float)
+        splits = self._call(symbol, lambda t: t.get_splits(period="max"))
+        return splits if isinstance(splits, pd.Series) else pd.Series(dtype=float)
+
     def _history(self, symbol: str, **kwargs: Any) -> pd.DataFrame:
         # auto_adjust=False keeps raw OHLC plus a separate "Adj Close", which
         # is exactly our (close, adj_close) pair.
@@ -433,7 +480,11 @@ class YahooDataSource(DataSource):
             try:
                 return fn(self._ticker_factory(symbol))
             except (YFRateLimitError, CurlRequestException) as exc:
-                rate_limited = isinstance(exc, YFRateLimitError)
+                rate_limited = isinstance(exc, YFRateLimitError) or _http_status(exc) == 429
+                status = _http_status(exc)
+                if not rate_limited and status is not None and status < 500:
+                    # 4xx (unknown symbol, bad request): retrying won't help.
+                    raise YahooDataSourceError(f"{symbol}: HTTP {status}: {exc}") from exc
                 if attempt >= self._max_retries:
                     error_cls = YahooRateLimitError if rate_limited else YahooDataSourceError
                     kind = "rate limited" if rate_limited else "transport error"
@@ -457,6 +508,11 @@ class YahooDataSource(DataSource):
             if elapsed < self._min_interval:
                 self._sleep(self._min_interval - elapsed)
         self._last_request = self._monotonic()
+
+
+def _http_status(exc: BaseException) -> int | None:
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    return status if isinstance(status, int) else None
 
 
 def _windows(start: date, end: date, max_days: int | None) -> Iterator[tuple[date, date]]:
