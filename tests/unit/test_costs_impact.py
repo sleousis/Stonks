@@ -224,3 +224,16 @@ def test_fill_price_and_fee_are_monotone_in_quantity(model, side):
                 assert adverse >= prev_px - 1e-12
                 assert c.fee >= prev_fee - 1e-12 or side == "sell"
             prev_px, prev_fee = adverse, c.fee
+
+
+# ---- RS-19: I-Star annualises with the trade's own calendar ---------------------------
+
+
+def test_istar_uses_the_trade_periods_per_year():
+    settings = CostModelSettings(impact_model="istar")
+    daily = settings.build().impact_components(_trade())
+    crypto = settings.build().impact_components(_trade(periods_per_year=365.0))
+    hourly = settings.build().impact_components(_trade(periods_per_year=252.0 * 7))
+    a3 = IStarSettings().a3
+    assert sum(crypto) / sum(daily) == pytest.approx((365.0 / 252.0) ** (a3 / 2))
+    assert sum(hourly) / sum(daily) == pytest.approx(7.0 ** (a3 / 2))

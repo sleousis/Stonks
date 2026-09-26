@@ -303,3 +303,26 @@ def test_gap_guard_allows_two_bars_of_the_bar_interval():
     assert _model().decide(_order(), _quote(gap_days=90.0, bar_days=30.0)).reason == "gap"
     # daily bars keep the calendar limit
     assert _model().decide(_order(), _quote(gap_days=8.0, bar_days=1.0)).reason == "gap"
+
+
+def test_adv_is_split_adjusted_across_a_split():
+    """RS-20: after a 4:1 split the pre-split volume is 4x lower in raw
+    shares; ADV must read it in post-split shares like the prices."""
+    n = 12
+    split_at = 6
+    close = [400.0] * split_at + [100.0] * (n - split_at)
+    bars = pd.DataFrame(
+        {
+            "ticker": "A.US",
+            "timestamp": pd.date_range("2026-01-01", periods=n, freq="D"),
+            "high": close,
+            "low": close,
+            "close": close,
+            # adjusted as of the last bar: pre-split bars / 4
+            "adj_close": [100.0] * n,
+            "volume": [1_000.0] * split_at + [4_000.0] * (n - split_at),
+        }
+    )
+    stats = lagged_market_stats(bars, MarketStatsSpec(adv_window=5, vol_window=3))
+    assert stats["adv"].iloc[5:].tolist() == pytest.approx([4_000.0] * (n - 5))
+    assert stats["sigma_daily"].iloc[4:].tolist() == pytest.approx([0.0] * (n - 4))

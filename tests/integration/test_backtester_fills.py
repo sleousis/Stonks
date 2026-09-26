@@ -417,3 +417,18 @@ def test_a_missing_monthly_bar_beyond_two_bars_still_expires(tmp_path):
     Backtester([_Once([_buy(1.0)])], broker, lake, config).run()
     assert broker.fills == ()
     lake.close()
+
+
+def test_a_limit_order_carried_by_the_participation_cap_keeps_its_limit(tmp_path):
+    """Edge case: the carried child of a capped limit order is still a limit
+    order. It fills while the bar reaches the limit, then expires (a DAY
+    order) on the first bar whose range stays above it."""
+    lake = _lake(tmp_path, [_row("X.US", i, 10.0 + i) for i in range(5)])
+    broker = _bar_broker()
+    order = _buy(250.0, kind="limit", limit=11.5)
+    Backtester([_Once([order])], broker, lake, _config(0, 4)).run()
+    fills = broker.fills
+    assert [f.quantity for f in fills] == pytest.approx([100.0, 100.0])
+    # bar 1 opens below the limit; bar 2's range touches it; bar 3's low is above
+    assert [f.price for f in fills] == pytest.approx([11.0, 11.5])
+    lake.close()
