@@ -1184,8 +1184,14 @@ class DuckDBLake:
         )
 
     def upsert_instrument_profile(self, df: pd.DataFrame) -> int:
-        return self._upsert(
-            df,
+        """Profiles arrive from several sources of differing richness (EODHD
+        carries ISIN/CIK/IPO date, Yahoo doesn't), so a NULL or absent field
+        from a later source keeps the earlier source's value instead of
+        clearing it. Real values still overwrite."""
+        if df.empty:
+            return 0
+        return self._upsert_preserve_nulls(
+            df.reindex(columns=list(self._INSTRUMENT_PROFILE_COLS)),
             table="instruments",
             cols=self._INSTRUMENT_PROFILE_COLS,
             pk=("id",),
