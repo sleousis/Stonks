@@ -70,6 +70,8 @@ def test_max_workers_must_be_positive():
 
 
 def test_default_max_workers_uses_env_override_else_cpu_count(monkeypatch):
+    # ``default_max_workers`` is the function imported above; conftest only
+    # replaces the module attribute (tests default to in-process runs)
     monkeypatch.setenv("STONKS_LAB_MAX_WORKERS", "3")
     assert default_max_workers() == 3
     monkeypatch.delenv("STONKS_LAB_MAX_WORKERS")

@@ -533,7 +533,13 @@ def test_parallel_scores_a_fitted_strategy_like_serial(lake_gbm):
     lake, dates = lake_gbm
     ds = _gbm_dataset(lake, dates)
     strategy = RSIPCAStrategy(
-        {"ticker": "RND.US", "n_components": 2, "long_quantile": 0.8, "lookahead": 3}
+        {
+            "ticker": "RND.US",
+            "n_components": 2,
+            "long_quantile": 0.8,
+            "lookahead": 3,
+            "rsi_period_max": 8,
+        }
     )
     strategy.fit(ds)
     reports = [

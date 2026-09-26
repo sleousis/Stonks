@@ -44,4 +44,6 @@ def _isolate_environment(request: pytest.FixtureRequest, monkeypatch: pytest.Mon
     # Lab survival tests run their backtests in-process unless a test asks
     # for a pool (``max_workers=...``): the suite already runs in parallel,
     # and in-process runs keep spy strategies' class-level records visible.
-    monkeypatch.setenv("STONKS_LAB_MAX_WORKERS", "1")
+    # (Patched on the module, not through STONKS_LAB_MAX_WORKERS, which the
+    # isolation above must strip like every STONKS_ variable.)
+    monkeypatch.setattr("stonks.lab.parallel.default_max_workers", lambda: 1)
