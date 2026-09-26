@@ -36,7 +36,12 @@ worker), so workers never contend with the API or ingest for the lake's
 write lock, and the data behind the run cannot change under it. A
 snapshot lives only as long as the run that built it (never reused, so
 never stale) and is deleted after the pool has shut down, when no worker
-holds the file any more (Windows cannot delete open files).
+holds the file any more (Windows cannot delete open files). When the
+source keeps its bars in Parquet (roadmap 10.4) the snapshot file holds
+everything but the bars, and the universe's bar partitions are hard-linked
+(copied across volumes) into ``<snapshot dir>/bars``: workers read the
+files directly, and since writers replace files rather than modify them,
+the run's bars still cannot change under it.
 :func:`dataset_snapshot` wraps a ``LabDataset`` into a picklable
 :class:`DatasetSpec` over such a snapshot.
 
@@ -87,6 +92,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from stonks.core.protocols import Strategy
 from stonks.lab.lake_copy import copy_universe_lake
 from stonks.logging import get_logger
+from stonks.store.bars import ParquetBarStore
 from stonks.store.lake import DuckDBLake
 
 _log = get_logger("stonks.lab.parallel")
@@ -291,8 +297,10 @@ class LakeSnapshot:
 
     Holds every table a strategy may read, filtered to the universe (see
     ``lab.lake_copy``), plus the universe's bars at every interval up to
-    ``end`` (all of them when ``end`` is None). Use as a context manager,
-    or call :meth:`close`, which deletes the file."""
+    ``end`` (all of them when ``end`` is None): in the file for a
+    table-backed source, as Parquet partitions beside it for a Parquet
+    one. Use as a context manager, or call :meth:`close`, which deletes
+    the snapshot directory."""
 
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -310,8 +318,17 @@ class LakeSnapshot:
         snapshot = cls(directory / "snapshot.duckdb")
         try:
             with copy_universe_lake(source, tickers) as scoped:
-                _copy_bars(source, scoped, tickers, end)
-                scoped.export_database(snapshot.path)
+                if isinstance(source.bar_store, ParquetBarStore):
+                    # Workers read the universe's bar partitions directly:
+                    # hard-linked (or copied) next to the snapshot file, so
+                    # later writes to the source never reach the run.
+                    scoped.export_database(snapshot.path, bar_backend="parquet")
+                    source.bar_store.export_partitions(
+                        snapshot.path.parent / "bars", tickers=tickers, end=end
+                    )
+                else:
+                    _copy_bars(source, scoped, tickers, end)
+                    scoped.export_database(snapshot.path)
         except BaseException:
             snapshot.close()
             raise
@@ -514,4 +531,4 @@ def _base_tables(lake: DuckDBLake) -> list[str]:
         "SELECT table_name FROM information_schema.tables"
         " WHERE table_schema = 'main' AND table_type = 'BASE TABLE' ORDER BY table_name"
     ).fetchall()
-    return [r[0] for r in rows if r[0] not in {"schema_migrations", "bars"}]
+    return [r[0] for r in rows if r[0] not in {"schema_migrations", "lake_settings", "bars"}]
