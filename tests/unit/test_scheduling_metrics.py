@@ -86,9 +86,9 @@ def test_build_metrics_from_snapshot():
     assert ages == {"0-1d": 1, "2-3d": 0, "4-7d": 0, "8d+": 1, "missing": 1}
     assert fams["stonks_data_oldest_bar_age_days"].samples[0].value == 15
     assert fams["stonks_job_queue_depth"].samples[0].value == 3
-    assert [s.labels for s in fams["stonks_scheduled_job_last_success_timestamp_seconds"].samples] == [
-        {"job": "tick"}
-    ]
+    assert [
+        s.labels for s in fams["stonks_scheduled_job_last_success_timestamp_seconds"].samples
+    ] == [{"job": "tick"}]
     assert len(fams["stonks_scheduled_job_next_run_timestamp_seconds"].samples) == 1
     text = render_prometheus(build_metrics(snap))
     assert 'stonks_tick_runs_total{status="ok"} 5' in text

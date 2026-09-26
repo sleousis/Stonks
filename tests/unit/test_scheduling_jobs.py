@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from stonks.scheduling.api_backend import API_ACTIONS
 from stonks.scheduling.calendar import UnknownCalendarError
 from stonks.scheduling.config import (
     DailyTriggerConfig,
@@ -16,15 +17,12 @@ from stonks.scheduling.config import (
     SessionTriggerConfig,
     scheduler_config_from,
 )
-from stonks.scheduling.jobs import (
-    JobOutcome,
-    UnknownActionError,
-    action_names,
-    build_job_specs,
-    get_action,
-    register_action,
-)
+from stonks.scheduling.in_process import IN_PROCESS_ACTIONS
+from stonks.scheduling.jobs import JobOutcome, UnknownActionError, build_job_specs
+from stonks.scheduling.local import LOCAL_ACTIONS, LocalExecutor, register_action
 from stonks.scheduling.triggers import DailyTrigger, IntervalTrigger, SessionTrigger
+
+BUILTIN = {"ingest_prices", "tick", "health", "report"}
 
 
 def test_default_jobs_build():
@@ -41,8 +39,14 @@ def test_default_jobs_build():
     assert ingest_at < tick.trigger.offset
 
 
-def test_builtin_actions_registered():
-    assert {"ingest_prices", "tick", "health", "report"} <= set(action_names())
+@pytest.mark.parametrize("registry", [LOCAL_ACTIONS, API_ACTIONS, IN_PROCESS_ACTIONS])
+def test_every_backend_runs_the_builtin_actions(registry):
+    assert set(registry.names()) >= BUILTIN
+
+
+def test_default_jobs_validate_against_every_backend():
+    for registry in (LOCAL_ACTIONS, API_ACTIONS, IN_PROCESS_ACTIONS):
+        build_job_specs(SchedulerConfig(), env={}, actions=registry.names())
 
 
 def test_duplicate_job_names_rejected():
@@ -54,7 +58,9 @@ def test_duplicate_job_names_rejected():
 def test_unknown_action_and_calendar_fail_fast():
     bad_action = JobConfig(name="a", action="nope", trigger=SessionTriggerConfig())
     with pytest.raises(UnknownActionError):
-        build_job_specs(SchedulerConfig(jobs=[bad_action]), env={})
+        build_job_specs(
+            SchedulerConfig(jobs=[bad_action]), env={}, actions=LocalExecutor().actions()
+        )
     bad_cal = JobConfig(name="a", action="tick", trigger=SessionTriggerConfig(calendar="ZZZZ"))
     with pytest.raises(UnknownCalendarError):
         build_job_specs(SchedulerConfig(jobs=[bad_cal]), env={})
@@ -70,8 +76,12 @@ def test_trigger_discriminator_and_overrides():
                 "trigger": {"type": "daily", "at": "00:05", "timezone": "UTC"},
                 "catch_up": "none",
             },
-            {"name": "off", "action": "tick", "trigger": {"type": "interval", "every_minutes": 5},
-             "enabled": False},
+            {
+                "name": "off",
+                "action": "tick",
+                "trigger": {"type": "interval", "every_minutes": 5},
+                "enabled": False,
+            },
             {"name": "h", "action": "health", "trigger": {"type": "interval", "every_minutes": 5}},
         ],
     )
@@ -85,12 +95,8 @@ def test_trigger_discriminator_and_overrides():
 
 def test_ping_url_from_env_or_config():
     jobs = [
-        JobConfig(
-            name="a", action="tick", trigger=SessionTriggerConfig(), ping_url_env="PING_A"
-        ),
-        JobConfig(
-            name="b", action="tick", trigger=SessionTriggerConfig(), ping_url="https://hc/b"
-        ),
+        JobConfig(name="a", action="tick", trigger=SessionTriggerConfig(), ping_url_env="PING_A"),
+        JobConfig(name="b", action="tick", trigger=SessionTriggerConfig(), ping_url="https://hc/b"),
         JobConfig(name="c", action="tick", trigger=SessionTriggerConfig(), ping_url_env="MISSING"),
     ]
     specs = build_job_specs(SchedulerConfig(jobs=jobs), env={"PING_A": "https://hc/a"})
@@ -98,7 +104,9 @@ def test_ping_url_from_env_or_config():
 
 
 def test_ping_url_is_secret_in_repr():
-    job = JobConfig(name="a", action="tick", trigger=SessionTriggerConfig(), ping_url="https://x/tok")
+    job = JobConfig(
+        name="a", action="tick", trigger=SessionTriggerConfig(), ping_url="https://x/tok"
+    )
     assert "tok" not in repr(job)
 
 
@@ -107,7 +115,7 @@ def test_register_custom_action():
     def _noop(ctx):
         return JobOutcome("succeeded")
 
-    assert get_action("noop_test") is _noop
+    assert LOCAL_ACTIONS.get("noop_test") is _noop
 
 
 def test_config_from_toml(tmp_path: Path):

@@ -11,7 +11,8 @@ import pytest
 from stonks.notify import Notification, Notifier
 from stonks.scheduling.config import SchedulerConfig
 from stonks.scheduling.deadman import Pinger
-from stonks.scheduling.jobs import JobOutcome, JobSpec, register_action
+from stonks.scheduling.jobs import JobOutcome, JobSpec
+from stonks.scheduling.local import register_action
 from stonks.scheduling.runs import RunStore
 from stonks.scheduling.scheduler import InstanceLock, Scheduler, SchedulerAlreadyRunningError
 from stonks.scheduling.triggers import IntervalTrigger, SessionTrigger
@@ -48,27 +49,27 @@ class FakePinger(Pinger):
         self.pings.append((url, event, run_id))
 
 
-CALLS: list[tuple[str, date]] = []
-BEHAVIOUR: dict[str, object] = {}
+calls: list[tuple[str, date]] = []
+behaviour: dict[str, object] = {}
 
 
 @register_action("test_record")
 def _record(ctx):
-    CALLS.append((ctx.spec.name, ctx.fire.as_of))
-    b = BEHAVIOUR.get(ctx.spec.name)
+    calls.append((ctx.spec.name, ctx.fire.as_of))
+    b = behaviour.get(ctx.spec.name)
     if isinstance(b, Exception):
         raise b
     if callable(b):
         return b(ctx)
     if isinstance(b, JobOutcome):
         return b
-    return JobOutcome("succeeded", {"n": len(CALLS)})
+    return JobOutcome("succeeded", {"n": len(calls)})
 
 
 @pytest.fixture(autouse=True)
 def _reset():
-    CALLS.clear()
-    BEHAVIOUR.clear()
+    calls.clear()
+    behaviour.clear()
 
 
 @pytest.fixture
@@ -119,7 +120,7 @@ def test_fires_after_close_once(store):
     )
     clock.advance(minutes=5)
     assert s.run_pending() == []
-    assert CALLS == [("ingest", date(2026, 9, 25))]
+    assert calls == [("ingest", date(2026, 9, 25))]
     run = store.get("ingest", "2026-09-25")
     assert run.status == "succeeded" and run.detail == {"n": 1}
 
@@ -217,7 +218,7 @@ def test_restart_does_not_rerun_a_finished_fire(store):
     second = _sched(store, [spec], clock)
     second.start()
     assert second.run_pending() == []
-    assert len(CALLS) == 1
+    assert len(calls) == 1
 
 
 # ---- coalescing / double runs ------------------------------------------------------
@@ -242,14 +243,13 @@ def test_two_schedulers_never_run_the_same_fire(store):
     clock.advance(hours=1)
     ra, rb = a.run_pending(), b.run_pending()
     assert [r.status for r in ra + rb] == ["succeeded", "already_claimed"]
-    assert len(CALLS) == 1
+    assert len(calls) == 1
 
 
 def test_instance_lock_is_exclusive(tmp_path):
     path = tmp_path / "scheduler.lock"
-    with InstanceLock(path):
-        with pytest.raises(SchedulerAlreadyRunningError):
-            InstanceLock(path).acquire()
+    with InstanceLock(path), pytest.raises(SchedulerAlreadyRunningError):
+        InstanceLock(path).acquire()
     # released: a new scheduler can take it
     lock = InstanceLock(path)
     lock.acquire()
@@ -274,7 +274,7 @@ def test_start_marks_interrupted_runs_failed(store):
 def test_exception_fails_the_run_and_alerts(store):
     notifier, pinger = Recorder(), FakePinger()
     spec = _close_job(ping_url="https://hc.example/abc")
-    BEHAVIOUR["ingest"] = RuntimeError("vendor down")
+    behaviour["ingest"] = RuntimeError("vendor down")
     clock = FakeClock(_utc(2026, 9, 25, 20))
     s = _sched(store, [spec], clock, notifier=notifier, pinger=pinger)
     s.start()
@@ -290,7 +290,7 @@ def test_exception_fails_the_run_and_alerts(store):
 
 def test_action_that_alerted_itself_is_not_alerted_twice(store):
     notifier = Recorder()
-    BEHAVIOUR["ingest"] = JobOutcome("failed", {"error": "tick error"}, alerted=True)
+    behaviour["ingest"] = JobOutcome("failed", {"error": "tick error"}, alerted=True)
     clock = FakeClock(_utc(2026, 9, 25, 20))
     s = _sched(store, [_close_job()], clock, notifier=notifier)
     s.start()
@@ -301,7 +301,7 @@ def test_action_that_alerted_itself_is_not_alerted_twice(store):
 
 def test_success_and_skip_ping_success(store):
     pinger = FakePinger()
-    BEHAVIOUR["ingest"] = JobOutcome("skipped", {"reason": "market_closed"})
+    behaviour["ingest"] = JobOutcome("skipped", {"reason": "market_closed"})
     clock = FakeClock(_utc(2026, 9, 25, 20))
     s = _sched(store, [_close_job(ping_url="https://hc.example/abc")], clock, pinger=pinger)
     s.start()
@@ -322,7 +322,7 @@ def test_stop_request_finishes_current_job_then_stops(store):
         s.request_stop()
         return JobOutcome("succeeded")
 
-    BEHAVIOUR["ingest"] = stop_during
+    behaviour["ingest"] = stop_during
     s.start()
     clock.advance(hours=1)
     assert [r.job_name for r in s.run_pending()] == ["ingest"]
@@ -343,7 +343,7 @@ def test_run_forever_with_injected_wait(store):
     s.run_forever(wait=fake_wait)
     # first wake lands exactly on the 20:30 fire, then polls
     assert waits[:2] == [1800, 3600]
-    assert CALLS == [("ingest", date(2026, 9, 25))]
+    assert calls == [("ingest", date(2026, 9, 25))]
     inst = store.latest_instance()
     assert inst["id"] == s.instance_id and inst["stopped_at"] is not None
 
@@ -381,6 +381,82 @@ def test_heartbeat_and_watchdog_run_while_a_long_job_blocks_the_loop(store):
         s.request_stop()
         return JobOutcome("succeeded")
 
-    BEHAVIOUR["ingest"] = long_job
+    behaviour["ingest"] = long_job
     s.run_forever(wait=lambda seconds: clock.advance(hours=1), watchdog=Dog())
     assert store.get("ingest", "2026-09-25").status == "succeeded"
+
+
+# ---- self-review regressions -------------------------------------------------------
+
+
+def test_manual_run_does_not_hide_a_missed_fire_from_catch_up(store):
+    from stonks.scheduling.triggers import Fire
+
+    spec = _close_job()
+    _seed_run(store, spec, date(2026, 9, 22), _utc(2026, 9, 22, 21))
+    # Thursday 09:00: a manual run for another day; Wednesday's fire was missed.
+    manual = Fire(_utc(2026, 9, 24, 9), date(2026, 9, 21), "manual:2026-09-24T09:00:00+00:00")
+    run_id = store.claim(spec, manual, instance_id="cli", now=manual.scheduled_for, catch_up=False)
+    store.finish(run_id, "succeeded", now=manual.scheduled_for)
+    s = _sched(store, [spec], FakeClock(_utc(2026, 9, 24, 12)))
+    s.start()
+    assert [r.fire.as_of for r in s.run_pending()] == [date(2026, 9, 23)]
+
+
+def test_recovery_leaves_a_fresh_manual_run_alone(store):
+    from stonks.scheduling.triggers import Fire
+
+    spec = _close_job()
+    now = _utc(2026, 9, 25, 12)
+    manual = Fire(now, date(2026, 9, 25), f"manual:{now.isoformat()}")
+    store.claim(spec, manual, instance_id="cli", now=now, catch_up=False)
+    _sched(store, [spec], FakeClock(now + timedelta(minutes=5))).start()
+    assert store.get("ingest", manual.key).status == "running"
+    _sched(store, [spec], FakeClock(now + timedelta(days=2))).start()
+    assert store.get("ingest", manual.key).status == "failed"
+
+
+def test_a_store_error_mid_batch_is_retried_not_lost(store, monkeypatch):
+    clock = FakeClock(_utc(2026, 9, 25, 20))
+    s = _sched(store, [_close_job("ingest", 30), _close_job("tick", 45)], clock)
+    s.start()
+    clock.advance(hours=1)
+    real_claim = store.claim
+    failures = iter([True])
+
+    def flaky(spec, fire, **kw):
+        if spec.name == "tick" and next(failures, False):
+            raise RuntimeError("database is locked")
+        return real_claim(spec, fire, **kw)
+
+    monkeypatch.setattr(store, "claim", flaky)
+    with pytest.raises(RuntimeError):
+        s.run_pending()
+    assert store.get("ingest", "2026-09-25").status == "succeeded"
+    clock.advance(minutes=1)
+    assert [r.job_name for r in s.run_pending()] == ["tick"]
+
+
+def test_loop_survives_a_failing_iteration(store, monkeypatch):
+    clock = FakeClock(_utc(2026, 9, 25, 20))
+    s = _sched(store, [_close_job()], clock, poll_seconds=3600)
+    boom = iter([True])
+
+    real = s.run_pending
+
+    def flaky():
+        if next(boom, False):
+            raise RuntimeError("database is locked")
+        return real()
+
+    monkeypatch.setattr(s, "run_pending", flaky)
+    waits = []
+
+    def fake_wait(seconds):
+        waits.append(seconds)
+        clock.advance(seconds=seconds)
+        if len(waits) >= 2:
+            s.request_stop()
+
+    s.run_forever(wait=fake_wait)
+    assert calls == [("ingest", date(2026, 9, 25))]

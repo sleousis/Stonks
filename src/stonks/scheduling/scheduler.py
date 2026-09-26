@@ -45,7 +45,7 @@ from stonks.logging import get_logger
 from stonks.notify import Notification, Notifier
 from stonks.scheduling.config import SchedulerConfig
 from stonks.scheduling.deadman import DeadlineWatchdog, NullPinger, Pinger
-from stonks.scheduling.jobs import JobOutcome, JobSpec, RunContext, get_action
+from stonks.scheduling.jobs import JobExecutor, JobOutcome, JobSpec, RunContext
 from stonks.scheduling.runs import RunStore
 from stonks.scheduling.triggers import Fire
 
@@ -134,6 +134,7 @@ class Scheduler:
         pinger: Pinger | None = None,
         clock: Clock | None = None,
         instance_id: str | None = None,
+        executor: JobExecutor | None = None,
     ) -> None:
         self.specs = list(specs)
         self.store = store
@@ -148,6 +149,12 @@ class Scheduler:
         self._started = False
         self._stop = threading.Event()
         self.pending = 0  # due runs not yet started (queue depth)
+        if executor is None:
+            from stonks.scheduling.local import LocalExecutor
+
+            executor = LocalExecutor()
+        self.executor = executor
+        executor.bind_stop(self._stop)
 
     # ---- lifecycle ---------------------------------------------------------
 
@@ -180,6 +187,7 @@ class Scheduler:
 
     def stop(self) -> None:
         self.store.mark_stopped(self.instance_id, now=self.clock.now())
+        self.executor.close()
         _log.info("scheduler.stopped", instance_id=self.instance_id)
 
     # ---- planning ----------------------------------------------------------
@@ -219,9 +227,7 @@ class Scheduler:
             fires = spec.trigger.fires_between(self._cursors[spec.name], now)
             if fires and (spec.name, fires[-1].key) not in planned:
                 if len(fires) > 1:
-                    _log.warning(
-                        "scheduler.coalesced", job=spec.name, skipped=len(fires) - 1
-                    )
+                    _log.warning("scheduler.coalesced", job=spec.name, skipped=len(fires) - 1)
                 out.append(DueRun(spec, fires[-1], catch_up=False))
         return sorted(out, key=lambda d: (d.fire.scheduled_for, d.spec.name))
 
@@ -243,21 +249,34 @@ class Scheduler:
     # ---- running -----------------------------------------------------------
 
     def run_pending(self) -> list[RunResult]:
-        """Run everything due now, in fire order; stops early on shutdown."""
+        """Run everything due now, in fire order; stops early on shutdown.
+
+        A job's cursor only moves past ``now`` once its due run has been
+        attempted, so a store error part-way through a batch leaves the
+        remaining fires due for the next wake-up instead of dropping them
+        (the claim keeps the ones that did run from running twice).
+        """
         now = self.clock.now()
         batch = self.due(now)
-        self._startup = []
-        for name in self._cursors:
-            self._cursors[name] = now
+        waiting = {d.spec.name for d in batch}
         results = []
         self.pending = len(batch)
-        for due in batch:
-            if self.stopping:
-                _log.info("scheduler.stop_before_run", job=due.spec.name, run_key=due.fire.key)
-                break
-            results.append(self.run_one(due.spec, due.fire, catch_up=due.catch_up))
-            self.pending -= 1
-        self.pending = 0
+        try:
+            for due in batch:
+                if self.stopping:
+                    _log.info("scheduler.stop_before_run", job=due.spec.name, run_key=due.fire.key)
+                    break
+                results.append(self.run_one(due.spec, due.fire, catch_up=due.catch_up))
+                self.pending -= 1
+                if due.catch_up:
+                    self._startup.remove(due)
+                if not any(d.spec.name == due.spec.name for d in batch[batch.index(due) + 1 :]):
+                    waiting.discard(due.spec.name)
+        finally:
+            self.pending = 0
+            for name in self._cursors:
+                if name not in waiting:
+                    self._cursors[name] = now
         return results
 
     def run_one(self, spec: JobSpec, fire: Fire, *, catch_up: bool = False) -> RunResult:
@@ -307,9 +326,10 @@ class Scheduler:
             now=now,
             settings=self.settings,
             notifier=self.notifier,
+            executor=self.executor,
         )
         try:
-            return get_action(spec.action)(ctx)
+            return self.executor.execute(ctx)
         except Exception as exc:
             log.error("scheduler.run_raised", error=str(exc), error_type=type(exc).__name__)
             return JobOutcome("failed", {"error": f"{type(exc).__name__}: {exc}"})
@@ -330,9 +350,14 @@ class Scheduler:
         dog_thread = self._start_background(watchdog)
         try:
             while not self.stopping:
-                self.run_pending()
+                try:
+                    self.run_pending()
+                    self.store.heartbeat(self.instance_id, now=self.clock.now())
+                except Exception as exc:  # e.g. a locked DB: retry next wake-up
+                    _log.error(
+                        "scheduler.iteration_failed", error=str(exc), error_type=type(exc).__name__
+                    )
                 now = self.clock.now()
-                self.store.heartbeat(self.instance_id, now=now)
                 if self.stopping:
                     break
                 wait(self.seconds_until_next_wake(now))
@@ -361,4 +386,6 @@ class Scheduler:
 
 
 def default_lock_path(config: SchedulerConfig, state_path: str | Path) -> Path:
-    return Path(config.lock_path) if config.lock_path else Path(state_path).parent / "scheduler.lock"
+    return (
+        Path(config.lock_path) if config.lock_path else Path(state_path).parent / "scheduler.lock"
+    )

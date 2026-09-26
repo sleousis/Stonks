@@ -392,7 +392,5 @@ def scheduler_liveness(
         return Probe(False, {"scheduler": f"stopped at {inst['stopped_at'].isoformat()}"})
     silence = now - inst["heartbeat_at"]
     if silence > max_silence:
-        return Probe(
-            False, {"scheduler": f"no heartbeat for {int(silence.total_seconds())}s"}
-        )
+        return Probe(False, {"scheduler": f"no heartbeat for {int(silence.total_seconds())}s"})
     return Probe(True, {"scheduler": f"heartbeat {int(silence.total_seconds())}s ago"})

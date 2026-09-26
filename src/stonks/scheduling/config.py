@@ -24,6 +24,7 @@ Listing ``[[scheduler.jobs]]`` replaces the default job list entirely.
 from __future__ import annotations
 
 import tomllib
+from collections.abc import Mapping
 from datetime import time
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -31,6 +32,8 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 CatchUpPolicy = Literal["none", "latest", "all"]
+SchedulerBackend = Literal["auto", "api", "in_process", "local"]
+ResolvedBackend = Literal["api", "in_process", "local"]
 
 
 class SessionTriggerConfig(BaseModel):
@@ -120,6 +123,21 @@ class SchedulerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = True
+    #: Where jobs run. ``auto``: ``api`` when an API URL is configured
+    #: (``api_url`` or ``STONKS_API_URL``), else ``local``. ``in_process``
+    #: is what ``stonks serve`` uses when it hosts the scheduler itself.
+    backend: SchedulerBackend = "auto"
+    #: The running API (``api`` backend); ``STONKS_API_URL`` overrides it.
+    #: The token is ``STONKS_API_TOKEN``, the one ``stonks serve`` uses.
+    api_url: str | None = None
+    #: Plain-http hosts the token may be sent to (e.g. ``["api"]`` on a
+    #: private Compose network). https and loopback are always allowed.
+    api_trusted_hosts: list[str] = Field(default_factory=list)
+    api_timeout_seconds: float = Field(default=30.0, gt=0)
+    #: How often a job started through the API or the JobRunner is polled.
+    job_poll_seconds: float = Field(default=2.0, gt=0)
+    #: Give up waiting (and fail the run) after this long.
+    job_timeout_minutes: float = Field(default=180.0, gt=0)
     #: What to do with fires missed while the scheduler was down:
     #: ``none`` skips them, ``latest`` runs only the most recent one per
     #: job, ``all`` runs up to ``max_catch_up_runs`` of the most recent.
@@ -143,6 +161,20 @@ class SchedulerConfig(BaseModel):
         if dupes:
             raise ValueError(f"duplicate scheduler job names: {dupes}")
         return self
+
+
+API_URL_ENV = "STONKS_API_URL"
+API_TOKEN_ENV = "STONKS_API_TOKEN"
+
+
+def resolved_api_url(config: SchedulerConfig, env: Mapping[str, str]) -> str | None:
+    return env.get(API_URL_ENV) or config.api_url
+
+
+def resolve_backend(config: SchedulerConfig, env: Mapping[str, str]) -> ResolvedBackend:
+    if config.backend != "auto":
+        return config.backend
+    return "api" if resolved_api_url(config, env) else "local"
 
 
 def scheduler_config_from(settings: object, config_path: Path | None = None) -> SchedulerConfig:

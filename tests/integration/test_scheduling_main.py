@@ -7,7 +7,8 @@ from pathlib import Path
 import pytest
 
 from stonks.scheduling.__main__ import EXIT_ALREADY_RUNNING, EXIT_USAGE, main
-from stonks.scheduling.jobs import JobOutcome, register_action
+from stonks.scheduling.jobs import JobOutcome
+from stonks.scheduling.local import register_action
 from stonks.scheduling.scheduler import InstanceLock
 
 
@@ -21,7 +22,7 @@ def config(tmp_path, monkeypatch) -> Path:
     monkeypatch.setenv("STONKS_DATA_DIR", str(tmp_path / "data"))
     path = tmp_path / "c.toml"
     path.write_text(
-        "[scheduler]\n\n[[scheduler.jobs]]\nname = \"hourly\"\naction = \"cli_test\"\n"
+        '[scheduler]\n\n[[scheduler.jobs]]\nname = "hourly"\naction = "cli_test"\n'
         'trigger = { type = "interval", every_minutes = 60 }\n',
         encoding="utf-8",
     )

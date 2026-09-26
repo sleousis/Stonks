@@ -14,7 +14,7 @@ import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
@@ -24,6 +24,10 @@ from stonks.store.state import SqliteState
 
 RunStatus = Literal["running", "succeeded", "skipped", "failed"]
 DONE_STATUSES: frozenset[str] = frozenset({"succeeded", "skipped"})
+
+#: Run keys of runs started by hand (``run-now``) rather than by a trigger.
+MANUAL_PREFIX = "manual:"
+MANUAL_RUN_STALE_AFTER = timedelta(days=1)
 
 
 @dataclass(frozen=True)
@@ -138,13 +142,16 @@ class RunStore:
             )
 
     def recover_interrupted(self, *, now: datetime) -> int:
-        """Mark every ``running`` row ``failed``. Only safe while holding
-        the single-instance lock: then no other scheduler is running."""
+        """Mark ``running`` rows ``failed``. Only safe while holding the
+        single-instance lock: then no other scheduler is running. Manual
+        runs belong to the CLI process that started them (which may still
+        be running), so they are only recovered once a day old."""
         with self._state() as s:
             cur = s.execute(
                 "UPDATE scheduled_runs SET status = 'failed', finished_at = ?, "
-                "error = 'interrupted: scheduler stopped mid-run' WHERE status = 'running'",
-                [_iso(now)],
+                "error = 'interrupted: scheduler stopped mid-run' WHERE status = 'running' "
+                f"AND (run_key NOT LIKE '{MANUAL_PREFIX}%' OR started_at < ?)",
+                [_iso(now), _iso(now - MANUAL_RUN_STALE_AFTER)],
             )
             return cur.rowcount
 
@@ -170,7 +177,8 @@ class RunStore:
     def last_scheduled_for(self, job_name: str) -> datetime | None:
         with self._state() as s:
             rows = s.sql(
-                "SELECT MAX(scheduled_for) AS m FROM scheduled_runs WHERE job_name = ?",
+                "SELECT MAX(scheduled_for) AS m FROM scheduled_runs WHERE job_name = ? "
+                f"AND run_key NOT LIKE '{MANUAL_PREFIX}%'",
                 [job_name],
             )
         return _parse(rows[0]["m"]) if rows else None

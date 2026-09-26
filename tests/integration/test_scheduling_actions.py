@@ -12,11 +12,14 @@ from stonks.config import Settings
 from stonks.ingest.schemas import FinancialStatementsBundle, RawPriceBar
 from stonks.ingest.sources.base import DataSource
 from stonks.notify import Notification, Notifier
-from stonks.scheduling import jobs as jobs_mod
-from stonks.scheduling.jobs import JobSpec, RunContext, get_action
+from stonks.scheduling import local as jobs_mod
+from stonks.scheduling.jobs import JobSpec, RunContext
+from stonks.scheduling.local import LOCAL_ACTIONS
 from stonks.scheduling.triggers import Fire, SessionTrigger
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
+
+get_action = LOCAL_ACTIONS.get
 
 
 class Recorder(Notifier):
