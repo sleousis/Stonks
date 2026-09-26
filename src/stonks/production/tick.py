@@ -1194,9 +1194,10 @@ def _asset_classes(lake: DuckDBLake, tickers: Sequence[str]) -> dict[str, str]:
     return lake.get_asset_classes(unique) if unique else {}
 
 
-def utc_today() -> date:
-    """Today's date in UTC — the calendar all stored timestamps use."""
-    return datetime.now(UTC).date()
+def utc_today(clock: Callable[[], datetime] | None = None) -> date:
+    """Today's date in UTC, the calendar all stored timestamps use.
+    ``clock`` returns an aware datetime (default: the system clock)."""
+    return (clock() if clock is not None else datetime.now(UTC)).astimezone(UTC).date()
 
 
 def _new_tick_id(as_of: date) -> str:

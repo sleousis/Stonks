@@ -20,7 +20,7 @@ import importlib
 import json
 import math
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -78,10 +78,19 @@ class StrategyHandle:
 
 
 class StrategyRegistry:
-    def __init__(self, state: SqliteState, artifacts_dir: Path) -> None:
+    def __init__(
+        self,
+        state: SqliteState,
+        artifacts_dir: Path,
+        *,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        """``clock`` returns an aware datetime for every timestamp the
+        registry writes (default: the system clock). Tests pin it (TT-06)."""
         self._state = state
         self._artifacts_dir = Path(artifacts_dir)
         self._artifacts_dir.mkdir(parents=True, exist_ok=True)
+        self._clock = clock
 
     # ---- writes ------------------------------------------------------------
 
@@ -98,7 +107,7 @@ class StrategyRegistry:
             raise ValueError(f"strategy id {sid!r} is already registered")
         class_path = f"{type(strategy).__module__}:{type(strategy).__name__}"
         params = dict(getattr(strategy, "params", {}))
-        now = _iso_now()
+        now = self._iso_now()
         artifact_path = self._artifacts_dir / sid
 
         # The strategy persists itself first (params + any fitted state such
@@ -175,7 +184,7 @@ class StrategyRegistry:
             reason_, golive_passed = _check_transition(
                 strategy_id, current, status, reason, golive_report, override
             )
-            now = _iso_now()
+            now = self._iso_now()
             # Log first: the ``strategies_status_audited`` trigger only lets
             # the UPDATE through when the latest log row matches it.
             change = self._log(
@@ -222,7 +231,7 @@ class StrategyRegistry:
                 override=False,
                 golive_passed=None,
                 golive_report=None,
-                created_at=_iso_now(),
+                created_at=self._iso_now(),
             )
 
     # ---- reads -------------------------------------------------------------
@@ -336,6 +345,10 @@ class StrategyRegistry:
             return self._artifacts_dir / path
         moved = self._artifacts_dir / path.name
         return moved if moved.is_dir() else path
+
+    def _iso_now(self) -> str:
+        now = self._clock() if self._clock is not None else datetime.now(UTC)
+        return now.astimezone(UTC).isoformat(timespec="seconds")
 
     def _generate_id(self, strategy: Strategy) -> str:
         suffix = uuid.uuid4().hex[:8]
@@ -452,7 +465,3 @@ def _change_from_row(row: Any) -> StatusChange:
         golive_report=json.loads(report) if report else None,
         created_at=row["created_at"],
     )
-
-
-def _iso_now() -> str:
-    return datetime.now(UTC).isoformat(timespec="seconds")

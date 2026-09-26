@@ -154,12 +154,14 @@ def test_crash_before_snapshot_rolls_back_orders_and_fills_and_marks_tick_error(
     assert "disk full" in json.loads(runs[0]["summary_json"])["error"]
 
 
-def test_utc_today_matches_utc_clock():
-    from datetime import UTC, datetime
+def test_utc_today_is_the_utc_date_of_the_clock():
+    """A pinned clock (TT-06): 23:30 in New York is already the next day in UTC."""
+    from datetime import datetime, timedelta, timezone
 
     from stonks.production.tick import utc_today
 
-    assert utc_today() == datetime.now(UTC).date()
+    new_york = timezone(timedelta(hours=-5))
+    assert utc_today(lambda: datetime(2026, 3, 20, 23, 30, tzinfo=new_york)) == date(2026, 3, 21)
 
 
 def test_default_as_of_is_the_utc_date(tick_env, monkeypatch):
