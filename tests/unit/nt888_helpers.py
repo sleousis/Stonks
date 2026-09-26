@@ -120,8 +120,9 @@ class FittedStub(_LongOnlySingle):
 
 
 class ScriptedSignal(_LongOnlySingle):
-    """Long whenever the close is above ``level`` (a deterministic signal
-    the tests can script through the bars themselves)."""
+    """Long whenever the bar's volume is at least ``volume_level``: tests
+    script the on / off signal through volumes and the trade outcomes
+    through closes independently."""
 
     id = "scripted"
 
@@ -133,7 +134,7 @@ class ScriptedSignal(_LongOnlySingle):
             ParameterSpec(
                 name="ticker", kind="categorical", default="X.US", bounds=None, tunable=False
             ),
-            ParameterSpec(name="level", kind="float", default=100.0, bounds=(0.0, 1e9)),
+            ParameterSpec(name="volume_level", kind="float", default=2e6, bounds=(0.0, 1e12)),
         ]
 
     def __init__(self, params):
@@ -147,5 +148,5 @@ class ScriptedSignal(_LongOnlySingle):
         bars = lake.get_bars(ticker, Interval.DAY_1, start=pd.Timestamp("1900-01-01"), end=as_of)
         if bars.empty:
             return None
-        close = float(bars["close"].iloc[-1])
-        return 0.01 if close > float(self.params["level"]) else None
+        volume = float(bars["volume"].iloc[-1])
+        return 0.01 if volume >= float(self.params["volume_level"]) else None
