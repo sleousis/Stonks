@@ -162,6 +162,13 @@ def test_unknown_chain_404_raises_without_retry():
     assert issubclass(DefiLlamaUnknownChainError, DataSourceError)
 
 
+def test_blank_chain_is_a_soft_fail_without_a_request():
+    session = _StubSession()
+    with pytest.raises(DefiLlamaUnknownChainError):
+        list(_source(session).fetch_chain_tvl("   "))
+    assert session.calls == []
+
+
 def test_transient_errors_are_retried_then_succeed():
     session = _StubSession(
         requests.ConnectionError("reset"),

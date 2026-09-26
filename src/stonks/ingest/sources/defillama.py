@@ -152,7 +152,12 @@ class DefiLlamaDataSource(DataSource):
     # ---- the one capability --------------------------------------------------
 
     def fetch_chain_tvl(self, chain: str, since: date | None = None) -> Iterable[DefiTvlRow]:
-        canonical = normalize_chain(chain)
+        try:
+            canonical = normalize_chain(chain)
+        except ValueError as exc:
+            # A blank chain is bad input for one unit, not a programmer bug:
+            # surface it as a soft-fail so the rest of the run continues.
+            raise DefiLlamaUnknownChainError(f"invalid chain {chain!r}") from exc
         url = f"{self._base_url}/v2/historicalChainTvl/{quote(canonical, safe='')}"
         payload = self._get(url, chain=canonical)
         rows = parse_chain_tvl_response(canonical, payload, source=self.source_id)
