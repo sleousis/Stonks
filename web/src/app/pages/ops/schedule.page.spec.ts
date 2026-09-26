@@ -20,6 +20,7 @@ const SCHEDULE: ScheduleView = {
       name: 'tick',
       action: 'tick',
       trigger: 'XNYS close +45m',
+      trigger_text: '45 minutes after the New York market closes, on trading days',
       next_run_at: '2026-09-28T20:45:00Z',
       next_as_of: '2026-09-28',
     },
@@ -166,7 +167,8 @@ describe('SchedulePage', () => {
     it('shows jobs, recent runs and backups', () => {
       const jobs = el.querySelector('[aria-labelledby="jobs-title"]')!;
       expect(jobs.textContent).toContain('Runs inside the server');
-      expect(jobs.textContent).toContain('XNYS close +45m');
+      expect(jobs.textContent).toContain('45 minutes after the New York market closes');
+      expect(jobs.textContent).not.toContain('XNYS close +45m');
       expect(jobs.textContent).toContain('Never');
       // Names read as words; the next run shows its time and a countdown.
       expect(jobs.textContent).toContain('Health');

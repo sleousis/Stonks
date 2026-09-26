@@ -4104,6 +4104,10 @@ export type ScheduledJobView = {
      * Trigger
      */
     trigger: string;
+    /**
+     * Trigger Text
+     */
+    trigger_text?: string;
 };
 
 /**

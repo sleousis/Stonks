@@ -128,7 +128,12 @@ export class SchedulePage {
   private readonly baseJobColumns: TableColumn<JobRow>[] = [
     { key: 'name', label: 'Job', value: (j) => humanize(j.name), mobile: 'title' },
     { key: 'action', label: 'Does', value: (j) => humanize(j.action), mobile: 'hide' },
-    { key: 'trigger', label: 'When', sortable: false },
+    {
+      key: 'trigger',
+      label: 'When',
+      sortable: false,
+      value: (j) => j.trigger_text || j.trigger,
+    },
     { key: 'next_run_at', label: 'Next run' },
     { key: 'last_status', label: 'Last run' },
   ];

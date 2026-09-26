@@ -67,7 +67,10 @@ class RunNowView(BaseModel):
 class ScheduledJobView(BaseModel):
     name: str
     action: str
+    #: Short form, as the CLI prints it (``XNYS close + 45 min on trading days``).
     trigger: str
+    #: When it runs in plain English, for people.
+    trigger_text: str = ""
     next_run_at: datetime | None
     next_as_of: date | None
 
@@ -220,6 +223,7 @@ class ScheduleService:
                     name=spec.name,
                     action=spec.action,
                     trigger=spec.trigger.describe(),
+                    trigger_text=spec.trigger.plain(),
                     next_run_at=fire.scheduled_for if fire else None,
                     next_as_of=fire.as_of if fire else None,
                 )

@@ -7503,6 +7503,11 @@
           "trigger": {
             "title": "Trigger",
             "type": "string"
+          },
+          "trigger_text": {
+            "default": "",
+            "title": "Trigger Text",
+            "type": "string"
           }
         },
         "required": [

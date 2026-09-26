@@ -214,3 +214,9 @@ def test_lifespan_hosts_the_in_process_scheduler(settings, seeded, fake_source, 
         assert live.status_code == 200, live.text
         assert live.json()["checks"] == {"process": "ok", "scheduler": "ok"}
     assert services.schedule.handle is None  # stopped with the app
+
+
+def test_schedule_says_when_each_job_runs_in_plain_words(client):
+    [job] = client.get("/api/schedule", headers=AUTH).json()["jobs"]
+    assert job["trigger"] == "every 10000 min"
+    assert job["trigger_text"] == "Every 10000 minutes"

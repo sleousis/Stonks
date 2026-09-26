@@ -1890,6 +1890,7 @@ Type: "viewer" \| "trader" \| "admin"
 | `next_as_of` | date \| null | yes |  |
 | `next_run_at` | date-time \| null | yes |  |
 | `trigger` | string | yes |  |
+| `trigger_text` | string | no |  |
 
 ### ScheduledRunView
 
