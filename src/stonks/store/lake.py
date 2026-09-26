@@ -33,6 +33,20 @@ _DROP_TABLE_RE = re.compile(
     r"\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*;",
     re.IGNORECASE,
 )
+# (migration file stem, table) pairs whose ``DROP TABLE`` is known to be
+# data-preserving because the same migration copies every row elsewhere
+# first. Shipped migrations can't be edited, so the destructive-drop guard
+# can't infer this from the SQL; it trusts this list instead. Keyed by the
+# full file stem (not just the version) so a different file that happens to
+# reuse a number isn't waved through.
+_DATA_PRESERVING_DROPS: frozenset[tuple[str, str]] = frozenset(
+    {
+        # Rebuilds insider_transactions with a NULL-safe natural key; rows
+        # are staged in a temp table and copied back (only exact natural-key
+        # duplicates collapse, last-inserted wins).
+        ("010_insider_natural_key", "insider_transactions"),
+    }
+)
 
 _PRICE_COLS = ("ticker", "date", "open", "high", "low", "close", "adj_close", "volume")
 _BAR_COLS = (
@@ -193,6 +207,20 @@ _CASH_FLOW_STATEMENT_COLS: tuple[str, ...] = (
 )
 _STATEMENT_PK: tuple[str, ...] = ("ticker", "period_end", "frequency")
 
+# NULL-safe natural key for insider_transactions. Each part renders as
+# 'v' || value (or 'n' for NULL) so NULL and '' differ, and DATE / DOUBLE
+# normalization makes 100 and 100.0 hash alike. MUST stay identical to the
+# expression in migrations_duckdb/010_insider_natural_key.sql, which
+# back-filled the key for rows that predate it.
+_INSIDER_NATURAL_KEY_SQL = """md5(concat_ws(chr(31),
+    COALESCE('v' || ticker, 'n'),
+    COALESCE('v' || CAST(CAST(transaction_date AS DATE) AS VARCHAR), 'n'),
+    COALESCE('v' || owner_name, 'n'),
+    COALESCE('v' || transaction_code, 'n'),
+    COALESCE('v' || CAST(CAST(shares AS DOUBLE) AS VARCHAR), 'n'),
+    COALESCE('v' || sec_link, 'n')
+))"""
+
 
 def _last_per_key(df: pd.DataFrame, keys: tuple[str, ...]) -> pd.DataFrame:
     """Drop rows whose ``keys`` repeat within the batch, keeping the last.
@@ -251,7 +279,7 @@ class DuckDBLake:
             if version in applied:
                 continue
             sql = path.read_text()
-            self._guard_destructive_drops(sql, version=version, log=log)
+            self._guard_destructive_drops(sql, version=version, name=path.stem, log=log)
             self.con.execute("BEGIN")
             try:
                 self.con.execute(sql)
@@ -264,7 +292,7 @@ class DuckDBLake:
                 self.con.execute("ROLLBACK")
                 raise
 
-    def _guard_destructive_drops(self, sql: str, *, version: int, log: Any) -> None:
+    def _guard_destructive_drops(self, sql: str, *, version: int, name: str, log: Any) -> None:
         """Refuse to apply a migration whose ``DROP TABLE`` step would
         delete a table that currently holds rows, unless the operator
         explicitly opts in via ``STONKS_ALLOW_DESTRUCTIVE_MIGRATIONS=1``.
@@ -278,7 +306,7 @@ class DuckDBLake:
         opt_in = os.environ.get(_DESTRUCTIVE_OPT_IN_ENV, "").lower() in {"1", "true", "yes"}
         for match in _DROP_TABLE_RE.finditer(sql):
             target = match.group(1)
-            if target not in existing:
+            if target not in existing or (name, target) in _DATA_PRESERVING_DROPS:
                 continue
             row_count = int(self.con.execute(f"SELECT COUNT(*) FROM {target}").fetchone()[0])
             if row_count == 0:
@@ -846,13 +874,15 @@ class DuckDBLake:
         ).fetchdf()
 
     def upsert_insider_transactions(self, df: pd.DataFrame) -> int:
-        # Deduplicates on the natural key via the unique index; the
-        # synthetic id column is excluded from insert.
+        # Deduplicates on the NULL-safe ``natural_key`` column (migration
+        # 010) derived from _INSIDER_NATURAL_KEY; the synthetic id column
+        # is excluded from insert.
         return self._upsert(
             df,
             table="insider_transactions",
             cols=self._INSIDER_COLS,
             pk=self._INSIDER_NATURAL_KEY,
+            natural_key_sql=_INSIDER_NATURAL_KEY_SQL,
         )
 
     def upsert_news(self, df: pd.DataFrame) -> int:
@@ -1066,7 +1096,16 @@ class DuckDBLake:
         table: str,
         cols: tuple[str, ...],
         pk: tuple[str, ...],
+        natural_key_sql: str | None = None,
     ) -> int:
+        """Last-write-wins upsert of ``cols`` keyed on ``pk``.
+
+        With ``natural_key_sql``, the table's conflict target is a
+        ``natural_key`` column computed from ``pk`` by that SQL expression
+        (used where ``pk`` columns are nullable and a plain unique index
+        would treat NULLs as distinct); ``pk`` still drives in-batch
+        dedup and which columns are left alone on UPDATE.
+        """
         if df.empty:
             return 0
         non_pk = [c for c in cols if c not in pk]
@@ -1074,11 +1113,18 @@ class DuckDBLake:
             action = "DO UPDATE SET " + ", ".join(f"{c} = EXCLUDED.{c}" for c in non_pk)
         else:
             action = "DO NOTHING"
+        insert_cols = ", ".join(cols)
+        select_cols = insert_cols
+        conflict = ", ".join(pk)
+        if natural_key_sql is not None:
+            insert_cols += ", natural_key"
+            select_cols += f", {natural_key_sql}"
+            conflict = "natural_key"
         with self._registered(_last_per_key(df[list(cols)], pk)):
             self.con.execute(
-                f"INSERT INTO {table} ({', '.join(cols)}) "
-                f"SELECT {', '.join(cols)} FROM _in "
-                f"ON CONFLICT ({', '.join(pk)}) {action}"
+                f"INSERT INTO {table} ({insert_cols}) "
+                f"SELECT {select_cols} FROM _in "
+                f"ON CONFLICT ({conflict}) {action}"
             )
         return len(df)
 
