@@ -28,7 +28,14 @@ BUILTIN = {"ingest_prices", "tick", "health", "report"}
 def test_default_jobs_build():
     specs = build_job_specs(SchedulerConfig(), env={})
     by_name = {s.name: s for s in specs}
-    assert set(by_name) == {"ingest_prices", "tick", "report", "health"}
+    assert set(by_name) == {
+        "ingest_prices",
+        "tick",
+        "report",
+        "health",
+        "backup",
+        "connections_sync",
+    }
     tick = by_name["tick"]
     assert tick.trigger == SessionTrigger("XNYS", "close", timedelta(minutes=45))
     assert tick.deadline == timedelta(minutes=60)

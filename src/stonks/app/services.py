@@ -10,6 +10,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from stonks.app.alerts import AlertService
+from stonks.app.backups import BackupService
 from stonks.app.brokers import BrokerConnector, BrokerService
 from stonks.app.catalog import CatalogService, LabCatalogSource, StrategySource
 from stonks.app.context import AppContext
@@ -124,6 +125,7 @@ class Services:
     brokers: BrokerService
     studio: StudioService
     alerts: AlertService
+    backups: BackupService
     _user_finder: UserStrategyFinder | None = field(default=None, repr=False)
 
     @classmethod
@@ -170,6 +172,7 @@ class Services:
             # before recover_interrupted() and the first request.
             studio=StudioService(context, lab, runner),
             alerts=AlertService(context),
+            backups=BackupService(context, runner),
         )
 
     def start(self) -> None:

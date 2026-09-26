@@ -1,7 +1,7 @@
 """Operator commands for backups: ``python -m stonks.ops <command>``.
 
-``app`` is a Typer app, so the main CLI can mount it
-(``app.add_typer(ops_app, name="backup")``) without duplicating anything.
+``app`` is a Typer app; the main CLI mounts it as ``stonks backup``
+(``stonks backup backup|verify|restore|list|prune``).
 Store paths come from the usual settings (``config/default.toml``,
 ``STONKS_DATA_DIR``); backups go to ``[backup].dir`` or, by default, a
 ``backups`` folder next to the lake.
@@ -17,11 +17,11 @@ from stonks.ops.backup import (
     BackupError,
     DataPaths,
     LocalFilesystemTarget,
+    configured_target,
     expired_backups,
-    run_backup,
+    run_configured_backup,
     verify_backup,
 )
-from stonks.ops.config import BackupConfig
 from stonks.ops.restore import RestoreError, restore_backup
 
 app = typer.Typer(help="Backups of the lake, state DB and artifacts.", no_args_is_help=True)
@@ -50,14 +50,8 @@ def _settings(config: Path | None):
     return settings
 
 
-def _backup_config(settings) -> BackupConfig:
-    cfg = getattr(settings, "backup", None)
-    return cfg if isinstance(cfg, BackupConfig) else BackupConfig()
-
-
 def _target(settings, dest: Path | None) -> LocalFilesystemTarget:
-    root = dest or _backup_config(settings).dir or Path(settings.lake.path).parent / "backups"
-    return LocalFilesystemTarget(root)
+    return configured_target(settings, dest)
 
 
 def _resolve(target: LocalFilesystemTarget, backup: str) -> Path:
@@ -81,9 +75,8 @@ def backup(
     """Take a consistent backup, verify it, then apply the retention policy."""
     settings = _settings(config)
     target = _target(settings, dest)
-    retention = None if no_prune else _backup_config(settings).retention
     try:
-        result = run_backup(DataPaths.from_settings(settings), target, retention)
+        result = run_configured_backup(settings, dest=dest, prune=not no_prune)
     except BackupError as exc:
         _fail(f"backup failed: {exc}")
     typer.echo(f"backup {result.ref.id} written to {target.root / result.ref.id}")
@@ -154,6 +147,6 @@ def prune(dest: Path | None = _DEST, config: Path | None = _CONFIG) -> None:
     """Delete backups the retention policy no longer keeps."""
     settings = _settings(config)
     target = _target(settings, dest)
-    for old in expired_backups(target.list(), _backup_config(settings).retention):
+    for old in expired_backups(target.list(), settings.backup.retention):
         target.delete(old.id)
         typer.echo(f"pruned {old.id}")

@@ -19,10 +19,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from stonks.backtest.costs import CostModelSettings
 from stonks.backtest.fills import ExecutionSettings
 from stonks.core.types import AssetClass
+from stonks.ingest.quality_config import DataQualityConfig, FallbackConfig
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
+from stonks.ops.config import BackupConfig
 from stonks.portfolio.settings import ConstructionSettings
 from stonks.production.rules.settings import RuleSettings
+from stonks.scheduling.config import SchedulerConfig
 from stonks.store.bars import BarBackend
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
@@ -375,6 +378,16 @@ class LabSettings(BaseModel):
     parallel: ParallelSettings = ParallelSettings()
 
 
+class IngestConfig(BaseModel):
+    """``[ingest]``: bar validation (``[ingest.quality]``) and the fallback
+    source per primary (``[ingest.fallback]``, off by default)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    quality: DataQualityConfig = DataQualityConfig()
+    fallback: FallbackConfig = FallbackConfig()
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -391,6 +404,9 @@ class Settings(BaseSettings):
     lab: LabSettings = LabSettings()
     golive: GoLivePolicy = GoLivePolicy()
     mcp: McpConfig = McpConfig()
+    ingest: IngestConfig = IngestConfig()
+    backup: BackupConfig = BackupConfig()
+    scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
 
 
 def configured_secrets(settings: Settings) -> list[str]:

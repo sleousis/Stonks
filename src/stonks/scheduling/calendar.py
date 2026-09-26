@@ -341,3 +341,18 @@ def universe_trades_on(
         except CalendarRangeError:
             return True
     return False
+
+
+class TickerSessionCalendar:
+    """The ingest quality checker's calendar (``sessions(ticker, start,
+    end)``, see ``stonks.ingest.quality``) over these market calendars:
+    each ticker's session dates on its exchange's calendar, or ``None``
+    (the checker then skips the gap rule) when the ticker has no known
+    calendar or the range is outside it."""
+
+    def sessions(self, ticker: str, start: date, end: date) -> list[date] | None:
+        try:
+            cal = calendar_for_ticker(ticker)
+            return [s.date for s in cal.sessions(start, end)]
+        except (UnknownCalendarError, CalendarRangeError):
+            return None
