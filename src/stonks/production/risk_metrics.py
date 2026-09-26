@@ -78,13 +78,13 @@ class RiskMonitorSettings(BaseModel):
 
     enabled: bool = True
     #: EWMA decay (RiskMetrics daily 0.94).
-    lam: float = Field(0.94, gt=0.0, lt=1.0)
+    lam: float = Field(default=0.94, gt=0.0, lt=1.0)
     #: Daily returns behind a forecast, and days in the violation window.
-    window: int = Field(250, ge=20, le=2000)
+    window: int = Field(default=250, ge=20, le=2000)
     #: Scored days before the violation ratio is judged (health, alerts).
-    min_window: int = Field(60, ge=1)
-    ratio_low: float = Field(0.5, ge=0.0)
-    ratio_high: float = Field(1.5, gt=0.0)
+    min_window: int = Field(default=60, ge=1)
+    ratio_low: float = Field(default=0.5, ge=0.0)
+    ratio_high: float = Field(default=1.5, gt=0.0)
 
 
 # ---- the math ----------------------------------------------------------------------
@@ -116,13 +116,13 @@ def ewma_sigma(returns: pd.DataFrame, weights: Mapping[str, float], lam: float =
     """Standard deviation of ``sum_i w_i r_i`` under the EWMA covariance of
     ``returns`` (columns are tickers). Names without a column or weight are
     left out; no weight at all is zero risk."""
-    from stonks.portfolio.covariance import EwmaCovariance
+    from stonks.portfolio.covariance import get_estimator
 
     names = [t for t, w in weights.items() if w != 0 and t in returns.columns]
     if not names or returns.empty:
         return 0.0
     w = np.array([float(weights[t]) for t in names])
-    cov = EwmaCovariance(lam=lam).estimate(returns[names].to_numpy(dtype=float))
+    cov = get_estimator("ewma", lam=lam).estimate(returns[names].to_numpy(dtype=float))
     return float(math.sqrt(max(float(w @ cov @ w), 0.0)))
 
 
@@ -255,7 +255,7 @@ def _day_return(closes: Mapping[str, pd.Series], ticker: str, prev: date, day: d
     s = closes.get(ticker)
     if s is None or s.empty:
         return 0.0
-    idx = s.index.date if isinstance(s.index, pd.DatetimeIndex) else s.index
+    idx = np.array([pd.Timestamp(x).date() for x in s.index])
     before = s[idx <= prev]
     after = s[idx <= day]
     if before.empty or after.empty or not before.iloc[-1] > 0:
@@ -665,7 +665,7 @@ def record_risk_snapshots(
         tickers |= _previous_tickers(state, pid, as_of)
         marks = _marks(lake, sorted(tickers), as_of)
         history = load_history(lake, sorted(tickers), as_of, bars=settings.window + 10)
-        closes = {t: f["close"] for t, f in history.items() if "close" in f}
+        closes = {t: pd.Series(f["close"]) for t, f in history.items() if "close" in f}
 
         exposures = {t: q * marks[t] for t, q in positions.items() if q and t in marks}
         value = float(row["cash"]) + sum(exposures.values())

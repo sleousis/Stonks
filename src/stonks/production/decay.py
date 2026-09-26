@@ -41,12 +41,12 @@ PERIODS_PER_YEAR = 252
 class DecaySettings(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    short_window: int = Field(60, ge=5)
-    long_window: int = Field(120, ge=5)
+    short_window: int = Field(default=60, ge=5)
+    long_window: int = Field(default=120, ge=5)
     #: Trailing days of a negative short IR that fire the monitor.
-    negative_days: int = Field(20, ge=1)
+    negative_days: int = Field(default=20, ge=1)
     #: The long IR below this share of the expected IR fires it too.
-    min_fraction: float = Field(0.5, ge=0.0, le=1.0)
+    min_fraction: float = Field(default=0.5, ge=0.0, le=1.0)
 
 
 @dataclass(frozen=True)

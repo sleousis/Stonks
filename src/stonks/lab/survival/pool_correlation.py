@@ -41,10 +41,11 @@ def _returns(report: Any) -> pd.Series:
 
 
 def _ir(returns: pd.Series) -> float:
-    sd = float(returns.std(ddof=1)) if len(returns) > 1 else 0.0
+    values = returns.to_numpy(dtype=float)
+    sd = float(np.std(values, ddof=1)) if len(values) > 1 else 0.0
     if not sd > 0 or not math.isfinite(sd):
         return 0.0
-    return float(returns.mean()) / sd * math.sqrt(252)
+    return float(np.mean(values)) / sd * math.sqrt(252)
 
 
 def _same(a: Any, b: Any) -> bool:
