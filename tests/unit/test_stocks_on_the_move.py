@@ -175,6 +175,27 @@ def test_future_bars_never_change_a_score(tmp_path, lake):
         other.close()
 
 
+def test_new_listings_and_delisted_names_are_not_ranked(tmp_path):
+    series = _series()
+    ipo = _smooth(0.01)
+    ipo[: T_WED - 60] = np.nan  # listed 60 sessions before WED
+    dead = _smooth(0.01)
+    dead[T_WED - 20 :] = np.nan  # last traded a month before WED
+    frames = [_frame(t, c) for t, c in series.items()]
+    for ticker, closes in (("IPO.US", ipo), ("DEAD.US", dead)):
+        frames.append(_frame(ticker, closes).dropna(subset=["close"]))
+    lake = DuckDBLake(tmp_path / "surv.duckdb")
+    lake.migrate()
+    lake.upsert_prices(pd.concat(frames, ignore_index=True))
+    try:
+        s = StocksOnTheMove({"top_fraction": 1.0})
+        scores = s.score_universe([*STOCKS, "IPO.US", "DEAD.US"], WED, lake)
+        assert "S5.US" in scores
+        assert "IPO.US" not in scores and "DEAD.US" not in scores
+    finally:
+        lake.close()
+
+
 # --- decide: timing, index filter, sizing ------------------------------------------
 
 
