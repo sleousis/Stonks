@@ -8,6 +8,7 @@ import {
   disableDraft,
   enableDraft,
   getDraft,
+  getStudioCapabilities,
   getRuleSpecSchema,
   listDrafts,
   listStudioTemplates,
@@ -31,6 +32,11 @@ import type {
 /** Strategy Studio: rule-spec drafts, validation, draft backtests/lab runs, register. */
 @Injectable({ providedIn: 'root' })
 export class StudioService {
+  /** What this server allows (e.g. code strategies). */
+  capabilities() {
+    return unwrap(getStudioCapabilities());
+  }
+
   drafts(query?: ListDraftsData['query']) {
     return unwrap(listDrafts({ query }));
   }

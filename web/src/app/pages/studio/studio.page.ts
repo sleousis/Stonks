@@ -89,6 +89,7 @@ export class StudioPage {
     loader: () => this.studio.drafts({ limit: PAGE_SIZE }),
   });
   protected readonly templates = resource({ loader: () => this.studio.templates() });
+  protected readonly capabilities = resource({ loader: () => this.studio.capabilities() });
 
   // ---- create ----------------------------------------------------------------
   protected readonly creating = signal(false);
@@ -96,11 +97,12 @@ export class StudioPage {
   protected readonly newName = signal('');
   protected readonly start = signal<string>(BLANK);
   protected readonly nameTouched = signal(false);
-  /** Set when the API refused a code draft (403), or lists code drafts without source. */
+  /** Set when the API refused a code draft (403), e.g. a server without the capabilities route. */
   protected readonly codeRefused = signal<string | null>(null);
 
   protected readonly codeDisabled = computed(() => {
     if (this.codeRefused()) return true;
+    if (this.capabilities.hasValue()) return !this.capabilities.value().code_strategies;
     if (!this.drafts.hasValue()) return false;
     return this.drafts.value().items.some((d) => d.kind === 'code' && d.source_code === null);
   });
@@ -117,7 +119,9 @@ export class StudioPage {
       {
         id: CODE,
         title: 'Python code',
-        description: 'A BaseStrategy subclass. Needs the operator to allow code strategies.',
+        description: this.codeDisabled()
+          ? 'A BaseStrategy subclass. Turned off on this server.'
+          : 'A BaseStrategy subclass, run inside the server.',
       },
     ];
   });
