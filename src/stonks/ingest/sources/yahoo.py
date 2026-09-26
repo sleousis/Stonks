@@ -342,9 +342,10 @@ class YahooDataSource(DataSource):
     ) -> Iterable[RawPriceBar]:
         symbol = to_yahoo_symbol(ticker)
         kwargs: dict[str, Any] = {"interval": "1d"}
-        if since is None and until is None:
+        if since is None:
+            # Without period="max" yfinance narrows an end-only request to 1mo.
             kwargs["period"] = "max"
-        if since is not None:
+        else:
             kwargs["start"] = since.isoformat()
         if until is not None:
             kwargs["end"] = (until + timedelta(days=1)).isoformat()  # end is exclusive

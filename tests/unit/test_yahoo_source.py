@@ -121,6 +121,17 @@ def test_fetch_prices_without_since_asks_for_full_history():
     assert "start" not in kwargs
 
 
+def test_fetch_prices_until_only_still_fetches_full_history():
+    # yfinance silently narrows an end-only request to one month unless
+    # period="max" is passed alongside it.
+    fake = FakeYF(frames=[daily_frame()])
+    make_source(fake).fetch_prices("AAPL.US", until=date(2026, 4, 3))
+    _, kwargs = fake.calls[0]
+    assert kwargs["period"] == "max"
+    assert kwargs["end"] == "2026-04-04"
+    assert "start" not in kwargs
+
+
 def test_fetch_prices_uses_exchange_local_date_not_utc_date():
     # Tokyo-style exchange: local midnight is the previous day in UTC. The
     # trading date must stay the exchange-local date.
