@@ -121,7 +121,7 @@ export class SignalIcResult {
   protected readonly rowKey = (h: HorizonIcView) => String(h.horizon);
   protected readonly columns: TableColumn<HorizonIcView>[] = [
     { key: 'horizon', label: 'Next', mobile: 'title', help: false },
-    { key: 'mean_ic', label: 'Mean IC', align: 'end', help: false },
+    { key: 'mean_ic', label: 'Mean IC', align: 'end' },
     { key: 't_stat_hac', label: 't-stat', align: 'end', help: false },
     { key: 'hit_rate', label: 'Dates with IC above 0', align: 'end', help: false },
     { key: 'spread_mean', label: 'Top minus bottom', align: 'end', help: false },

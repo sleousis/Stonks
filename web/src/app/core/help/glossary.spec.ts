@@ -6,6 +6,8 @@ import { GLOSSARY, METRIC_KEYS, findGlossary, glossaryUrl } from './glossary';
  * until the glossary explains it.
  */
 const LABELS_SHOWN = [
+  // Signal research
+  'Mean IC',
   // Backtest and lab result tiles
   'Total return',
   'CAGR',

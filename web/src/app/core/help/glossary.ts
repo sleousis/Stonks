@@ -82,6 +82,8 @@ export const METRIC_KEYS = [
   'hypothesis',
   'premortem',
   'label_horizon',
+  // Signal research
+  'information_coefficient',
 ] as const;
 
 export type MetricKey = (typeof METRIC_KEYS)[number];
@@ -415,6 +417,12 @@ export const GLOSSARY: Record<MetricKey, GlossaryEntry> = {
     term: 'Horizon',
     short: "How many bars ahead the strategy's signal looks; the embargo is at least this long.",
     aliases: ['label_horizon_bars', 'Label horizon'],
+  },
+  information_coefficient: {
+    term: 'Information coefficient (IC)',
+    short:
+      'How well a signal ranked the moves that followed, from -1 to 1. 0 means no skill, and a steady 0.05 is already useful.',
+    aliases: ['IC', 'Mean IC', 'mean_ic', 'IC estimate'],
   },
 };
 
