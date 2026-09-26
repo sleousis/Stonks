@@ -22,16 +22,17 @@ adjusted one (EODHD semantics). Yahoo split-adjusts OHLCV even with
 ``auto_adjust=False``, so :func:`_unsplit` reverses that using the split
 history. Daily bars carry the exchange-local trading date; intraday
 timestamps are stored as naive UTC. A daily request made during a session
-can include today's in-progress bar; the next ingest overwrites it.
+can include today's in-progress bar; the ingest pipeline drops it until
+the session has closed (``stonks.ingest.sessions``).
 
 Caveats
 -------
 - Constructing the source sets ``yf.config.debug.hide_exceptions = False``
   process-wide, so yfinance raises instead of returning empty frames.
 - Profiles carry only what Yahoo reports reliably (name, currency, sector,
-  industry, fund-type security types). The instruments upsert replaces
-  every column, so a Yahoo metadata run after an EODHD one clears
-  EODHD-only fields (ISIN, CIK, ...).
+  industry, fund-type security types). The instruments upsert keeps a
+  stored value when the new one is NULL, so a Yahoo metadata run after an
+  EODHD one keeps the EODHD-only fields (ISIN, CIK, ...).
 """
 
 from __future__ import annotations

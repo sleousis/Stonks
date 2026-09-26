@@ -49,9 +49,22 @@ date,ticker,action
 
 1. It clips the window to today and to the plan's limit. The EODHD free tier keeps one year of daily prices and has no intraday or bulk data, so the start moves and the report warns.
 2. It subtracts what the lake already has and the ranges it already asked for (`bar_fetch_ranges`). A dead name with no data is not asked for again.
-3. It fetches the gaps on a thread pool, with one rate limiter per source.
-4. On a paid plan, an exchange that misses the same few days is fetched with one bulk call a day. If that fails it falls back to one call per ticker.
-5. One thread writes everything through the ingest pipeline, with quality checks and one `ingest_runs` row. A failing ticker is logged and skipped.
+3. It drops gaps that hold no closed session: weekends, market holidays, and today before the close. The market calendar decides. A ticker with no known calendar counts every weekday.
+4. It fetches the gaps on a thread pool, with one rate limiter per source.
+5. On a paid plan, an exchange that misses the same few days is fetched with one bulk call a day. If that fails it falls back to one call per ticker.
+6. One thread writes everything through the ingest pipeline, with quality checks and one `ingest_runs` row. A failing ticker is logged and skipped. When the pipeline has a fallback source, it asks the fallback only for that ticker's own gaps.
+
+### Adjusted prices stay on one basis
+
+Vendors send `adj_close` adjusted as of the day you fetch. Bars fetched on different days can sit on different bases, and a split then looks like a crash (P13). So:
+
+- Each daily fetch starts 5 stored bars before the gap (`overlap_bars`). In bulk mode the last stored day is fetched too.
+- If the vendor's `adj_close / close` on an overlapping bar differs from the stored one by more than `adjustment_tolerance` (0.05%), a split or dividend happened since the last fetch. The ticker's whole history is fetched again in the same run. The report lists it under `readjusted`.
+- Bars older than the vendor's history limit (one year on the EODHD free tier) cannot be fetched again. Their `adj_close` is multiplied by the same factor.
+
+### Unfinished daily bars are never stored
+
+A vendor's bar for today holds the latest trade until the session closes. The ingest pipeline drops any daily bar whose session has not closed yet, for every ingest, not only the ensurer. The ensurer does not record that day as fetched, so it asks again after the close. A partial bar stored before this rule existed is overwritten by the overlap of the next fetch.
 
 ## Where it is used
 
