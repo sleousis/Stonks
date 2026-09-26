@@ -1,0 +1,108 @@
+{
+ "ingest": {
+  "bars": {
+   "AAA.US": 420,
+   "BBB.US": 420,
+   "BTC-USD.CC": 588,
+   "CCC.US": 420,
+   "SPY.US": 420
+  },
+  "dividends": [
+   [
+    "CCC.US",
+    "2025-12-17",
+    1.0
+   ]
+  ],
+  "splits": [
+   [
+    "BBB.US",
+    "2025-09-10",
+    2.0
+   ]
+  ]
+ },
+ "lab": {
+  "benchmark": {
+   "alpha_annual": 0.1689853915004887,
+   "alpha_tstat": 0.918819022473842,
+   "benchmark_cagr": 0.16909272068693415,
+   "benchmark_max_dd": -0.06732487841272995,
+   "benchmark_sharpe": 1.2646831960902718,
+   "beta": 0.06536414135224922,
+   "correlation": 0.0858451807467646,
+   "down_capture": 0.10049904334199407,
+   "excess_cagr": 0.031671830070644225,
+   "excluded": [],
+   "information_ratio": 0.1498019699957112,
+   "members": [
+    "SPY.US"
+   ],
+   "n_obs": 78,
+   "name": "SPY.US",
+   "r2": 0.0073693950574446054,
+   "residual_sharpe": 1.7958461244866462,
+   "spec": "SPY.US",
+   "tracking_error": 0.14931427202937517,
+   "up_capture": 0.2863331975504023
+  },
+  "best_params": {
+   "allocation": 1.0,
+   "ticker": "AAA.US"
+  },
+  "n_trials_run": 1,
+  "registered": true,
+  "survival": {
+   "oos": [
+    true,
+    {
+     "cagr_oos": 0.20076455075757837,
+     "final_return_oos": 0.05558868425548491,
+     "kurtosis": 3.622042650037109,
+     "max_drawdown_oos": -0.06157599551882024,
+     "min_trl_bars": 183.96158528816656,
+     "n_bars": 78.0,
+     "n_trades": 0.0,
+     "psr0": 0.8579272137909058,
+     "rho": -0.014314755917460767,
+     "sharpe_ci_high": 0.3976123046165655,
+     "sharpe_ci_low": -0.117797471704633,
+     "sharpe_oos": 1.8977836960393566,
+     "sharpe_se": 0.1115413351262494,
+     "skew": 0.09086969976138931,
+     "sr_per_bar": 0.11954913575983647,
+     "trade_expectancy": 0.0
+    }
+   ]
+  },
+  "verdict": "pass"
+ },
+ "promote": {
+  "override": true,
+  "printed": true,
+  "status": "active",
+  "to_status": "active"
+ },
+ "report": {
+  "mentions_strategy": true
+ },
+ "tick": {
+  "cash": 0.0,
+  "fill_rows": [
+   [
+    "AAA.US",
+    103.0525186550822,
+    97.0379,
+    0.0
+   ]
+  ],
+  "fills": 1,
+  "orders": 1,
+  "positions": {
+   "AAA.US": 103.0525186550822
+  },
+  "status": "ok",
+  "total_value": 10000.0,
+  "winner": true
+ }
+}

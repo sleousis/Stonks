@@ -95,7 +95,7 @@ def build_market(end: date, business_days: int = 420, seed: int = 18_4) -> Canne
     split_date, dividend_date = days[split_i], days[div_i]
 
     bars: dict[str, list[RawPriceBar]] = {}
-    aaa = _path(rng, n, 50.0, 0.0012, 0.012)
+    aaa = _path(rng, n, 50.0, 0.0015, 0.006)
     bars["AAA.US"] = [_bar("AAA.US", d, c, c, 2_000_000) for d, c in zip(days, aaa, strict=True)]
 
     # BBB: the economic price path, then raw closes halve from the split day.

@@ -114,9 +114,10 @@ def test_new_trader_home_loads_without_errors(browse, stack, viewport):
     person.totp_secret = pyotp.random_base32()
     enrol(stack, person)
     v = browse(person)
-    expect(v.page.locator("app-portfolio-card")).not_to_contain_text(
-        "Could not load", timeout=5_000
-    )
+    card = v.page.locator("app-portfolio-card")
+    expect(card.locator("app-loading-state")).to_have_count(0)
+    v.page.wait_for_load_state("networkidle")
+    expect(card).not_to_contain_text("Could not load", timeout=1_000)
     v.guard.assert_clean()
 
 

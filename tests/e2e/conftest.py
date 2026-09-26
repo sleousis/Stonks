@@ -57,6 +57,20 @@ KNOWN_NOISE: tuple[Refusal, ...] = (
 )
 
 
+#: axe violations the console has today, by (page path, rule). Each is an app
+#: fix listed in docs/testing.md; a strict xfail keeps it visible until fixed.
+KNOWN_AXE: dict[tuple[str, str], str] = {
+    ("/settings", "landmark-unique"): (
+        "A11Y-1: the Notifications panel on Settings is a second landmark with the same name"
+    ),
+}
+
+
+def new_axe_violations(page: Page, violations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    path = "/" + page.url.split("://", 1)[-1].split("/", 1)[-1].split("?", 1)[0]
+    return [v for v in violations if (path, v["id"]) not in KNOWN_AXE]
+
+
 @dataclass
 class Guard:
     """Collects console errors and failed requests for one browser context."""
@@ -185,11 +199,11 @@ class Visit:
     def open_nav(self) -> None:
         """On phones the navigation sits behind the menu button."""
         if self.phone:
-            self.page.get_by_role("button", name=re.compile("menu", re.I)).first.click()
+            self.page.get_by_role("button", name="Open navigation").click()
 
     def check_page(self, name: str) -> None:
-        """What every page must pass: no sideways scroll on phones, and
-        axe-core findings recorded for the report."""
+        """What every page must pass: no sideways scroll on phones and no
+        axe-core violation (findings also go to the report)."""
         page = self.page
         page.wait_for_load_state("networkidle")
         if self.phone:
@@ -197,7 +211,8 @@ class Visit:
                 "() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]"
             )
             assert widths[0] <= widths[1], f"{name}: page scrolls sideways on phone {widths}"
-        record_axe(page, name, self.viewport)
+        violations = new_axe_violations(page, record_axe(page, name, self.viewport))
+        assert not violations, f"{name}: axe violations {[v['id'] for v in violations]}"
 
 
 _AXE = Axe()
