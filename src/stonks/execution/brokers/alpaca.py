@@ -37,6 +37,7 @@ from alpaca.trading.requests import GetOrdersRequest, LimitOrderRequest, MarketO
 
 from stonks.core.types import Fill, Order, OrderStatus, Portfolio
 from stonks.execution.brokers.base import (
+    QTY_EPSILON,
     BrokerAccount,
     BrokerError,
     BrokerOrderState,
@@ -62,6 +63,7 @@ MAX_CLIENT_ORDER_ID_LEN = 128
 _EQUITY_QTY_INCREMENT = Decimal("0.000000001")
 _DUPLICATE_CODE = 40010001
 _OPEN_ORDERS_LIMIT = 500
+MAX_BACKOFF_SECONDS = 30.0
 
 _STATUS_MAP: dict[str, OrderStatus] = {
     "filled": "filled",
@@ -158,20 +160,20 @@ class AlpacaBroker:
         return Portfolio(cash=float(account["cash"]), positions=positions)
 
     def place_order(self, order: Order) -> Fill | None:
-        request = self._build_request(order)
-        self._ensure_account_can_trade()
-        try:
-            raw = self._call("submit_order", self._client.submit_order, request)
-        except _DuplicateClientOrderId:
-            _log.info("alpaca.order.duplicate_resolved", client_id=order.client_id)
-            raw = self._fetch_order(order.client_id)
-            if raw is None:
-                raise BrokerError(
-                    f"Alpaca reported client_order_id {order.client_id!r} as duplicate "
-                    "but the order could not be fetched"
-                ) from None
-        except _Unprocessable as exc:
-            raise OrderRejectedError(f"Alpaca rejected order {order.client_id!r}: {exc}") from None
+        symbol = self._validate_static(order)
+        # Resubmission first: an order already at Alpaca under this client_id
+        # resolves to that order *before* any pre-trade check, so a rerun
+        # can't fail on state the first submission itself changed (shares
+        # now locked by the pending sell, cash reserved by the pending buy).
+        raw = self._fetch_order(order.client_id)
+        if raw is not None:
+            _log.info("alpaca.order.already_submitted", client_id=order.client_id)
+        else:
+            request = self._build_request(order, symbol)
+            self._ensure_account_can_trade()
+            if order.side == "sell":
+                self._ensure_sellable(order, symbol, request.qty)
+            raw = self._submit(order, request)
         state = self._to_state(raw)
         self._warn_on_mismatch(order, state)
         self._booked.setdefault(state.client_id, (0.0, 0.0))
@@ -280,9 +282,27 @@ class AlpacaBroker:
         self._assets[symbol] = asset
         return asset
 
+    def _ensure_sellable(self, order: Order, symbol: str, qty: float) -> None:
+        """Refuse sells beyond the unencumbered holding: at Alpaca such a sell
+        would silently open a short position, which no strategy asked for."""
+        try:
+            pos = self._call(
+                "get_open_position", self._client.get_open_position, symbol.replace("/", "")
+            )
+            available = float(pos.get("qty_available", pos.get("qty")) or 0.0)
+        except _NotFound:
+            available = 0.0
+        if qty > available + QTY_EPSILON:
+            raise OrderRejectedError(
+                f"sell of {qty} {order.ticker} exceeds the available position of {available}; "
+                "refusing to open a short"
+            )
+
     # ---- internals ----------------------------------------------------------
 
-    def _build_request(self, order: Order) -> MarketOrderRequest | LimitOrderRequest:
+    @staticmethod
+    def _validate_static(order: Order) -> str:
+        """Checks that need no API call; returns the Alpaca symbol."""
         symbol = to_alpaca_symbol(order.ticker)
         if len(order.client_id) > MAX_CLIENT_ORDER_ID_LEN:
             raise BrokerError(
@@ -294,6 +314,25 @@ class AlpacaBroker:
                 f"order_type {order.order_type!r} is not supported by the Alpaca broker "
                 "(market and limit only; stop orders need a stop price)"
             )
+        return symbol
+
+    def _submit(self, order: Order, request: MarketOrderRequest | LimitOrderRequest) -> dict:
+        try:
+            return self._call("submit_order", self._client.submit_order, request)
+        except _DuplicateClientOrderId:
+            # Lost a race, or a retry after a lost response: the order exists.
+            _log.info("alpaca.order.duplicate_resolved", client_id=order.client_id)
+            raw = self._fetch_order(order.client_id)
+            if raw is None:
+                raise BrokerError(
+                    f"Alpaca reported client_order_id {order.client_id!r} as duplicate "
+                    "but the order could not be fetched"
+                ) from None
+            return raw
+        except _Unprocessable as exc:
+            raise OrderRejectedError(f"Alpaca rejected order {order.client_id!r}: {exc}") from None
+
+    def _build_request(self, order: Order, symbol: str) -> MarketOrderRequest | LimitOrderRequest:
         crypto = is_crypto_ticker(order.ticker)
         asset = self._asset(symbol)
         if not asset.get("tradable", False) or str(asset.get("status", "")).lower() != "active":
@@ -385,7 +424,7 @@ class AlpacaBroker:
                 error = f"alpaca {op} failed: {type(exc).__name__}"
             if not retryable or attempt >= self._max_retries:
                 raise BrokerError(error) from None
-            delay = self._backoff * (2**attempt)
+            delay = min(self._backoff * (2**attempt), MAX_BACKOFF_SECONDS)
             _log.warning("alpaca.retry", op=op, attempt=attempt + 1, delay=delay, error=error)
             self._sleep(delay)
             attempt += 1

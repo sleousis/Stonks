@@ -136,6 +136,13 @@ class FakeClient:
     def get_all_positions(self):
         return self.positions
 
+    def get_open_position(self, symbol):
+        self.position_calls = getattr(self, "position_calls", []) + [symbol]
+        for p in self.positions:
+            if p["symbol"].replace("/", "") == symbol.replace("/", ""):
+                return p
+        raise api_error(404, 40410000, "position does not exist")
+
     def submit_order(self, order_data):
         self.submitted.append(order_data)
         if self.submit_errors:
@@ -270,7 +277,17 @@ def test_market_order_sends_client_order_id_and_fractional_qty(broker, client):
     assert req.type.value == "market"
 
 
+AAPL_LONG_10 = {
+    "symbol": "AAPL",
+    "qty": "10",
+    "qty_available": "10",
+    "side": "long",
+    "asset_class": "us_equity",
+}
+
+
 def test_limit_order_carries_limit_price(broker, client):
+    client.positions = [AAPL_LONG_10]
     broker.place_order(
         order(cid="c-sell", side="sell", order_type="limit", limit_price=101.5, quantity=2)
     )
@@ -503,6 +520,7 @@ def test_equity_limit_price_rounded_to_tick(broker, client, price, expected):
 
 
 def test_sell_limit_price_rounds_up_never_below_requested(broker, client):
+    client.positions = [AAPL_LONG_10]
     broker.place_order(order(cid="s", side="sell", order_type="limit", limit_price=101.23001))
     assert client.submitted[0].limit_price == pytest.approx(101.24)
 
@@ -584,3 +602,54 @@ def test_cancel_all_orders(broker, client):
     broker.place_order(order(cid="a"))
     broker.place_order(order(cid="b"))
     assert broker.cancel_all_orders() == 2
+
+
+# ---- self-review hardening ---------------------------------------------------------
+
+
+def test_sell_more_than_available_is_rejected_not_shorted(broker, client):
+    client.positions = [dict(AAPL_LONG_10, qty_available="3")]
+    with pytest.raises(OrderRejectedError, match="short"):
+        broker.place_order(order(cid="s", side="sell", quantity=5))
+    assert client.submitted == []
+
+
+def test_sell_without_position_is_rejected(broker, client):
+    with pytest.raises(OrderRejectedError):
+        broker.place_order(order(cid="s", side="sell", quantity=1))
+    assert client.submitted == []
+
+
+def test_crypto_sell_checks_position_by_slashless_symbol(broker, client):
+    client.positions = [
+        {
+            "symbol": "BTCUSD",
+            "qty": "1",
+            "qty_available": "1",
+            "side": "long",
+            "asset_class": "crypto",
+        }
+    ]
+    broker.place_order(order(cid="s", ticker="BTC-USD.CC", side="sell", quantity=0.5))
+    assert client.position_calls == ["BTCUSD"]
+    assert client.submitted[0].qty == pytest.approx(0.5)
+
+
+def test_resubmitting_existing_sell_resolves_before_pre_trade_checks(broker, client):
+    # The first submission locked the shares (qty_available 0) and the account
+    # has since been blocked; a crashed-tick rerun must still resolve to the
+    # existing order instead of failing the checks or submitting again.
+    cid = "2026-01-05:s1:AAPL.US:sell"
+    client.orders[cid] = raw_order(cid, side="sell", qty="10")
+    client.positions = [dict(AAPL_LONG_10, qty_available="0")]
+    client.account = {"cash": "1", "status": "ACTIVE", "trading_blocked": True}
+    assert broker.place_order(order(cid=cid, side="sell", quantity=10)) is None
+    assert client.submitted == []
+
+
+def test_retry_backoff_is_capped(client):
+    delays = []
+    b = AlpacaBroker(client, max_retries=10, retry_backoff_seconds=10.0, sleep=delays.append)
+    client.submit_errors = [api_error(503)] * 3
+    b.place_order(order())
+    assert max(delays) <= 30.0
