@@ -29,6 +29,7 @@ import { ShortcutsService } from '../core/commands/shortcuts.service';
 import { HaltStateService } from '../core/halts/halt-state.service';
 import { ConnectivityService } from '../core/pwa/connectivity.service';
 import { ThemeService } from '../core/theme/theme.service';
+import { NotificationBell } from '../shared/ui/notification-bell';
 import { CommandPalette } from '../shared/ui/command-palette/command-palette';
 import { ConfirmDialog } from '../shared/ui/confirm-dialog';
 import { OfflinePage } from '../shared/ui/offline-page';
@@ -61,6 +62,7 @@ import { registerShellCommands } from './shell-commands';
     StepUpDialog,
     // ops
     SessionStrip,
+    NotificationBell,
   ],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',

@@ -20,6 +20,9 @@
     </button>
     <a routerLink="/" class="brand">Stonks</a>
     <span class="topbar-actions">
+      @if (session.me()) {
+        <app-notification-bell />
+      }
       <button
         type="button"
         class="btn btn-ghost btn-icon"
@@ -45,7 +48,12 @@
 
   <div class="frame">
     <aside class="sidebar">
-      <a routerLink="/" class="brand">Stonks</a>
+      <span class="sidebar-head">
+        <a routerLink="/" class="brand">Stonks</a>
+        @if (session.me()) {
+          <app-notification-bell />
+        }
+      </span>
       <button
         type="button"
         class="search-button"
