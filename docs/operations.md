@@ -132,7 +132,7 @@ The risk layer sits between `strategy.decide` and the broker. It is configured u
 | `cash_buffer_fraction` | Buys are clipped so this fraction of portfolio value stays in cash, net of slippage and fees. |
 | `min_order_notional` | Buys whose final notional is below this are dropped. |
 
-Weights are measured against portfolio value (cash plus positions at current prices) before the tick's orders. Sells are never blocked. They are only clipped to the held quantity, so a sell cannot open a short. They are placed before buys, so the cash they free up is really there when the buys go in. Shadow strategies go through the same policy.
+Weights are measured against portfolio value (cash plus positions at current prices) before the tick's orders. Sells are never blocked. They are only clipped to the held quantity, so a sell cannot open a short. They are placed before buys, and buys are then checked again against the portfolio as it stands after the sells. A sell that is rejected or fails at the broker therefore never funds a buy. Shadow strategies go through the same policy.
 
 ## Shadow mode
 

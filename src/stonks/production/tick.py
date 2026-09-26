@@ -192,16 +192,17 @@ def _run_tick_body(
     # 3. decide, then let the risk layer clip/drop before anything reaches
     #    the broker.
     proposed = strategy.decide(my_picks, portfolio, prices, as_of)
+    asset_classes = _asset_classes(lake, [*settings.universe, *portfolio.positions])
     risk_result = apply_risk(
         proposed,
         portfolio,
         prices,
-        _asset_classes(lake, [*settings.universe, *portfolio.positions]),
+        asset_classes,
         settings.risk,
         slippage_bps=settings.slippage_bps,
         fee_per_trade=settings.fee_per_trade,
     )
-    orders = risk_result.orders
+    risk_adjustments = list(risk_result.adjustments)
 
     broker = _build_broker(portfolio, settings, prices, as_of)
     orders_with_tick = [
@@ -213,8 +214,10 @@ def _run_tick_body(
                 as_of=as_of, strategy_id=winner_id, ticker=o.ticker, side=o.side
             ),
         )
-        for o in orders
+        for o in risk_result.orders
     ]
+    sells = [o for o in orders_with_tick if o.side == "sell"]
+    buys = [o for o in orders_with_tick if o.side == "buy"]
 
     placed = 0
     fills_count = 0
@@ -223,24 +226,44 @@ def _run_tick_body(
     # snapshot in one transaction, so a crash can't leave fills recorded
     # without the snapshot that reflects them.
     outcomes: list[tuple[Order, OrderStatus, Fill | None]] = []
-    for order in orders_with_tick:
-        if dry_run:
-            placed += 1
-            continue
-        if _already_filled(state, order.client_id):
-            log.info("tick.order.skipped_already_filled", client_id=order.client_id)
-            continue
-        try:
-            fill = broker.place_order(order)
-        except Exception as exc:
-            any_failure = True
-            log.warning("tick.order.failed", ticker=order.ticker, error=str(exc))
-            continue
 
-        outcomes.append((order, "filled" if fill else "rejected", fill))
-        placed += 1
-        if fill is not None:
-            fills_count += 1
+    def place(batch: list[Order]) -> None:
+        nonlocal placed, fills_count, any_failure
+        for order in batch:
+            if dry_run:
+                placed += 1
+                continue
+            if _already_filled(state, order.client_id):
+                log.info("tick.order.skipped_already_filled", client_id=order.client_id)
+                continue
+            try:
+                fill = broker.place_order(order)
+            except Exception as exc:
+                any_failure = True
+                log.warning("tick.order.failed", ticker=order.ticker, error=str(exc))
+                continue
+            outcomes.append((order, "filled" if fill else "rejected", fill))
+            placed += 1
+            if fill is not None:
+                fills_count += 1
+
+    # Sells first. The first risk pass counted their expected proceeds, so
+    # buys are re-checked against the portfolio as it stands after the
+    # sells: a rejected or unfilled sell must not fund a buy.
+    place(sells)
+    if buys and not dry_run:
+        second = apply_risk(
+            buys,
+            portfolio,
+            prices,
+            asset_classes,
+            settings.risk,
+            slippage_bps=settings.slippage_bps,
+            fee_per_trade=settings.fee_per_trade,
+        )
+        risk_adjustments.extend(second.adjustments)
+        buys = second.orders
+    place(buys)
 
     if not dry_run:
         with state.transaction():
@@ -278,7 +301,7 @@ def _run_tick_body(
             "winner_expected_return": winner_return,
             "orders_placed": placed,
             "fills": fills_count,
-            "risk_adjustments": [a.as_dict() for a in risk_result.adjustments],
+            "risk_adjustments": [a.as_dict() for a in risk_adjustments],
             **shadow_summary,
         },
     )
