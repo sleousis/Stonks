@@ -115,8 +115,7 @@ export function autoRefresh(
       const list = resources();
       return { busy: list.some((r) => r.isLoading()), loaded: list.some((r) => r.hasValue()) };
     },
-    computation: ({ busy, loaded }, prev) =>
-      !busy && loaded ? Date.now() : (prev?.value ?? null),
+    computation: ({ busy, loaded }, prev) => (!busy && loaded ? Date.now() : (prev?.value ?? null)),
   });
 
   inject(RefreshStatus, { optional: true })?.attach(updatedAt, destroyRef);
