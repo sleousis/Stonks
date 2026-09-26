@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  inject,
   input,
   linkedSignal,
   output,
@@ -14,7 +15,9 @@ import type {
   IntervalInfo,
   StrategyClassInfo,
 } from '../../api/models';
+import { SessionService } from '../../core/auth/session.service';
 import { ParamForm } from '../../shared/ui/param-form/param-form';
+import { PermissionNote } from '../../shared/ui/permission-note';
 import { type ParamValues, defaultParamValues } from '../../shared/ui/param-form/param-spec';
 import {
   type BacktestForm,
@@ -34,7 +37,7 @@ import { WindowFields } from './window-fields';
 @Component({
   selector: 'app-backtest-form',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [StrategyPicker, ParamForm, WindowFields, BenchmarkField],
+  imports: [StrategyPicker, ParamForm, WindowFields, BenchmarkField, PermissionNote],
   templateUrl: './backtest-form.html',
   styleUrl: './lab-form.scss',
 })
@@ -46,6 +49,10 @@ export class BacktestFormView {
   readonly preset = input<StrategyPreset | null>(null);
   readonly busy = input(false);
   readonly submitted = output<BacktestRequest>();
+
+  private readonly session = inject(SessionService);
+  /** May this user start lab jobs? Otherwise the button is off with a note. */
+  protected readonly canRun = computed(() => this.session.can('lab.run'));
 
   protected readonly form = linkedSignal<StrategyPreset | null, BacktestForm>({
     source: this.preset,
@@ -68,7 +75,7 @@ export class BacktestFormView {
   protected readonly errorCount = computed(() => Object.keys(this.errors()).length);
   protected readonly costHint = computed(() => {
     const c = this.form().cost;
-    if (c === 'configured') return 'The costs in the server settings ([backtest.costs]).';
+    if (c === 'configured') return 'The fees and slippage your admin set up for backtests.';
     if (c === 'flat') return 'A flat slippage on every fill and a fixed fee per trade.';
     return this.costModels().find((m) => m.name === c)?.description ?? '';
   });
@@ -105,6 +112,7 @@ export class BacktestFormView {
   }
 
   protected submit(): void {
+    if (!this.canRun()) return;
     this.tried.set(true);
     if (Object.keys(this.allErrors()).length) return;
     this.submitted.emit(buildBacktestRequest(this.form(), this.selected()));

@@ -2,14 +2,20 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  inject,
   input,
   linkedSignal,
   output,
+  resource,
   signal,
 } from '@angular/core';
 
+import { LabService } from '../../api/lab.service';
 import type { IntervalInfo, LabRunRequest, StrategyClassInfo } from '../../api/models';
+import { SessionService } from '../../core/auth/session.service';
 import { HelpTip } from '../../shared/ui/help-tip';
+import { PermissionNote } from '../../shared/ui/permission-note';
+import { ErrorState, LoadingState } from '../../shared/ui/states';
 import { paramFields, rangeText } from '../../shared/ui/param-form/param-spec';
 import { BenchmarkField } from './benchmark-field';
 import {
@@ -28,8 +34,14 @@ import {
 } from './lab-requests';
 import { StrategyPicker } from './strategy-picker';
 import type { StrategyPreset } from './strategy-preset';
-import { TEST_OPTION_FIELDS, filledCount } from './test-options';
+import { filledCount, optionCatalog } from './test-options';
 import { WindowFields } from './window-fields';
+
+/**
+ * Tests whose options have their own section in this form (and their own
+ * request field), so the generic editor leaves them out.
+ */
+const OWN_SECTION: readonly SurvivalTestName[] = ['mcpt'];
 
 /**
  * Tune a strategy class, fit it and run a survival suite; emits the
@@ -38,7 +50,15 @@ import { WindowFields } from './window-fields';
 @Component({
   selector: 'app-lab-run-form',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [StrategyPicker, WindowFields, BenchmarkField, HelpTip],
+  imports: [
+    StrategyPicker,
+    WindowFields,
+    BenchmarkField,
+    HelpTip,
+    PermissionNote,
+    ErrorState,
+    LoadingState,
+  ],
   templateUrl: './lab-run-form.html',
   styleUrl: './lab-form.scss',
 })
@@ -49,6 +69,17 @@ export class LabRunFormView {
   readonly preset = input<StrategyPreset | null>(null);
   readonly busy = input(false);
   readonly submitted = output<LabRunRequest>();
+
+  private readonly lab = inject(LabService);
+  private readonly session = inject(SessionService);
+  /** May this user start lab jobs? Otherwise the button is off with a note. */
+  protected readonly canRun = computed(() => this.session.can('lab.run'));
+
+  /** Each survival test's options, as JSON Schema from the API. */
+  protected readonly testCatalog = resource({ loader: () => this.lab.survivalTests() });
+  private readonly catalog = computed(() =>
+    this.testCatalog.hasValue() ? optionCatalog(this.testCatalog.value(), OWN_SECTION) : {},
+  );
 
   protected readonly suites = SUITES;
   protected readonly pickable = PICKABLE_TESTS;
@@ -91,18 +122,22 @@ export class LabRunFormView {
   /** Tests in the suite that take advanced options. */
   protected readonly optionTests = computed(() =>
     this.suiteTests()
-      .filter((t) => TEST_OPTION_FIELDS[t.id]?.length)
+      .filter((t) => this.catalog()[t.id]?.length)
       .map((t) => ({
         ...t,
-        fields: TEST_OPTION_FIELDS[t.id],
+        fields: this.catalog()[t.id],
         filled: filledCount(this.form().testOptions, t.id),
       })),
+  );
+  /** Show the advanced panel while the catalog loads or failed, so the error has a place. */
+  protected readonly showOptions = computed(
+    () => this.optionTests().length > 0 || !this.testCatalog.hasValue(),
   );
   protected readonly optionsFilled = computed(() =>
     this.optionTests().reduce((n, t) => n + t.filled, 0),
   );
 
-  private readonly allErrors = computed(() => labRunErrors(this.form()));
+  private readonly allErrors = computed(() => labRunErrors(this.form(), this.catalog()));
   protected readonly errors = computed(() => (this.tried() ? this.allErrors() : {}));
   protected readonly errorCount = computed(() => Object.keys(this.errors()).length);
   protected readonly optionErrorCount = computed(
@@ -171,10 +206,11 @@ export class LabRunFormView {
   }
 
   protected submit(): void {
+    if (!this.canRun()) return;
     this.tried.set(true);
     const errors = Object.keys(this.allErrors());
     if (errors.some((k) => k.startsWith('opt.'))) this.optionsOpen.set(true);
     if (errors.length) return;
-    this.submitted.emit(buildLabRunRequest(this.form()));
+    this.submitted.emit(buildLabRunRequest(this.form(), this.catalog()));
   }
 }
