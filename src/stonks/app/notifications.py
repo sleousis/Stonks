@@ -235,6 +235,11 @@ class NotificationsAppService:
         with self._state() as state:
             notify.remove_push_subscription_by_endpoint(state, scope, endpoint)
 
+    def remove_device(self, scope: Scope, device_id: str) -> None:
+        """Unregister one of your devices by its id (404 when it isn't yours)."""
+        with self._state() as state:
+            notify.remove_push_subscription(state, scope, device_id)
+
     def devices(self, scope: Scope) -> list[PushDeviceView]:
         with self._state() as state:
             return [_device(d) for d in notify.list_push_subscriptions(state, scope)]

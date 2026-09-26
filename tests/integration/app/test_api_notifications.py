@@ -121,6 +121,25 @@ def test_register_list_and_remove_a_browser(client):
     assert again.status_code == 404
 
 
+def test_a_device_is_removed_by_its_id(client, settings):
+    device = _subscribe(client).json()
+    path = f"/api/push/subscriptions/{device['id']}"
+    assert client.delete(path, headers=AUTH).status_code == 204
+    assert client.get("/api/push/subscriptions", headers=AUTH).json() == []
+    assert client.delete(path, headers=AUTH).status_code == 404
+
+
+def test_another_users_device_reads_as_missing(client, settings):
+    device = _subscribe(client).json()
+    with SqliteState(settings.state.path) as state:
+        other = UserRepository(state).create(display_name="Bob", role=Role.TRADER, actor="t")
+        state.execute(
+            "UPDATE push_subscriptions SET user_id = ? WHERE id = ?", [other.id, device["id"]]
+        )
+    resp = client.delete(f"/api/push/subscriptions/{device['id']}", headers=AUTH)
+    assert resp.status_code == 404
+
+
 def test_unknown_push_service_is_refused(client):
     resp = _subscribe(client, endpoint="https://evil.example.com/push")
     assert resp.status_code == 422
