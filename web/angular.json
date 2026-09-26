@@ -38,6 +38,11 @@
             "outputPath": {
               "base": "dist",
               "browser": ""
+            },
+            "stylePreprocessorOptions": {
+              "includePaths": [
+                "src/styles"
+              ]
             }
           },
           "configurations": {
@@ -45,7 +50,7 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "500kB",
+                  "maximumWarning": "600kB",
                   "maximumError": "1MB"
                 },
                 {

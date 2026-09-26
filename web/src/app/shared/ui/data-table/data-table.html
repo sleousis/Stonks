@@ -1,0 +1,74 @@
+<div class="table-wrap" role="region" tabindex="0" [attr.aria-label]="caption()">
+  <table>
+    <caption class="visually-hidden">
+      {{
+        caption()
+      }}
+    </caption>
+    <thead>
+      <tr>
+        @for (col of columns(); track col.key) {
+          <th
+            scope="col"
+            [class.end]="alignEnd(col)"
+            [class.hide-phone]="col.mobile === 'hide'"
+            [attr.aria-sort]="ariaSort(col)"
+          >
+            @if (sortable(col)) {
+              <button type="button" class="sort" (click)="toggleSort(col)">
+                <span>{{ col.label }}</span>
+                <span class="arrow" aria-hidden="true" [attr.data-dir]="ariaSort(col)"></span>
+              </button>
+            } @else {
+              {{ col.label }}
+            }
+          </th>
+        }
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of visibleRows(); track trackRow($index, row)) {
+        <tr>
+          @for (col of columns(); track col.key) {
+            <td
+              [attr.data-label]="col.label"
+              [class.end]="alignEnd(col)"
+              [class.num]="isNumeric(col)"
+              [class.cell-title]="col.mobile === 'title'"
+              [class.hide-phone]="col.mobile === 'hide'"
+              [class]="tone(row, col)"
+            >
+              @if (cellTemplates().get(col.key); as tpl) {
+                <ng-container *ngTemplateOutlet="tpl; context: { $implicit: row }" />
+              } @else {
+                {{ display(row, col) }}
+              }
+            </td>
+          }
+        </tr>
+      } @empty {
+        <tr class="empty-row">
+          <td [attr.colspan]="columns().length">{{ emptyMessage() }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>
+
+@if (pageSize() > 0 && pageCount() > 1) {
+  <nav class="pager" [attr.aria-label]="caption() + ' pages'">
+    <span class="range num">{{ rangeLabel() }}</span>
+    <button type="button" class="btn" [disabled]="page() === 0" (click)="goTo(page() - 1)">
+      Previous
+    </button>
+    <button
+      type="button"
+      class="btn"
+      [disabled]="page() >= pageCount() - 1"
+      (click)="goTo(page() + 1)"
+    >
+      Next
+    </button>
+  </nav>
+}
+<span class="visually-hidden" aria-live="polite">{{ liveMessage() }}</span>

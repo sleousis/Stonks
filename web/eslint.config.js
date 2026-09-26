@@ -36,7 +36,7 @@ module.exports = defineConfig([
     // Components and pages go through the domain services in src/app/api/,
     // never through the generated client directly.
     files: ['src/app/**/*.ts'],
-    ignores: ['src/app/api/**', 'src/app/app.config.ts'],
+    ignores: ['src/app/api/**'],
     rules: {
       'no-restricted-imports': [
         'error',

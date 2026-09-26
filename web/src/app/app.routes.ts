@@ -1,3 +1,23 @@
-import { Routes } from '@angular/router';
+import type { Routes } from '@angular/router';
 
-export const routes: Routes = [];
+/**
+ * One lazy route file per page (`pages/<name>/<name>.routes.ts`). Page agents
+ * add child routes inside their own route file, not here.
+ */
+export const routes: Routes = [
+  { path: '', loadChildren: () => import('./pages/dashboard/dashboard.routes') },
+  { path: 'strategies', loadChildren: () => import('./pages/strategies/strategies.routes') },
+  { path: 'studio', loadChildren: () => import('./pages/studio/studio.routes') },
+  { path: 'lab', loadChildren: () => import('./pages/lab/lab.routes') },
+  { path: 'data', loadChildren: () => import('./pages/data/data.routes') },
+  { path: 'orders', loadChildren: () => import('./pages/orders/orders.routes') },
+  { path: 'shadow', loadChildren: () => import('./pages/shadow/shadow.routes') },
+  { path: 'go-live', loadChildren: () => import('./pages/go-live/go-live.routes') },
+  { path: 'health', loadChildren: () => import('./pages/health/health.routes') },
+  { path: 'settings', loadChildren: () => import('./pages/settings/settings.routes') },
+  {
+    path: '**',
+    title: 'Not found',
+    loadComponent: () => import('./pages/not-found.page').then((m) => m.NotFoundPage),
+  },
+];

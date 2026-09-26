@@ -1,0 +1,213 @@
+@use 'breakpoints' as bp;
+
+:host {
+  display: block;
+  min-width: 0;
+}
+
+// Wide tables scroll inside this box on tablets; the page never scrolls sideways.
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+
+  &:focus-visible {
+    outline-offset: -2px;
+  }
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+th,
+td {
+  height: var(--row-h);
+  padding: 0 var(--space-3);
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--color-border);
+
+  &.end {
+    text-align: right;
+  }
+
+  &:first-child {
+    padding-left: var(--space-4);
+  }
+
+  &:last-child {
+    padding-right: var(--space-4);
+  }
+}
+
+th {
+  position: sticky;
+  top: 0;
+  background: var(--color-surface-2);
+  color: var(--color-ink-2);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
+td.gain {
+  color: var(--color-gain);
+}
+
+td.loss {
+  color: var(--color-loss);
+}
+
+tbody tr:hover td {
+  background: var(--color-surface-2);
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+
+  th.end & {
+    flex-direction: row-reverse;
+  }
+
+  &:hover {
+    color: var(--color-ink);
+  }
+}
+
+.arrow {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  opacity: 0.25;
+
+  &[data-dir] {
+    opacity: 1;
+  }
+
+  &[data-dir='ascending'] {
+    transform: rotate(180deg);
+  }
+}
+
+.empty-row td {
+  height: auto;
+  padding: var(--space-5) var(--space-4);
+  color: var(--color-ink-3);
+  text-align: left;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--color-border);
+
+  .range {
+    margin-right: auto;
+    color: var(--color-ink-3);
+    font-size: var(--text-xs);
+  }
+}
+
+// Phones: each row becomes a card with the title column on top and
+// label/value lines below. Columns marked mobile: 'hide' disappear.
+@include bp.phone {
+  table,
+  tbody,
+  tr,
+  td {
+    display: block;
+    width: 100%;
+  }
+
+  thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .hide-phone {
+    display: none;
+  }
+
+  tbody tr {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  tbody tr:hover td {
+    background: none;
+  }
+
+  td,
+  td:first-child,
+  td:last-child {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    height: auto;
+    min-height: 28px;
+    padding: 2px 0;
+    border: 0;
+    text-align: right;
+
+    &::before {
+      content: attr(data-label);
+      color: var(--color-ink-3);
+      font-size: var(--text-xs);
+      text-align: left;
+    }
+  }
+
+  td.cell-title {
+    order: -1;
+    justify-content: flex-start;
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+    text-align: left;
+
+    &::before {
+      content: none;
+    }
+  }
+
+  tr {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .empty-row td::before {
+    content: none;
+  }
+
+  .pager .btn {
+    flex: 1 1 0;
+  }
+}
