@@ -277,15 +277,33 @@ def test_officers_extract_current_roster_with_year_born():
 
 def test_shares_outstanding_history_from_fundamentals():
     rows = list(parse_shares_outstanding_history("AAPL.US", _load("aapl_fundamentals.json")))
-    # fixture has 2 annual + 3 quarterly entries (5 rows — duplicate dates
-    # across annual/quarterly are preserved; the lake's ON CONFLICT dedupes).
-    assert len(rows) == 5
+    # fixture has 2 annual + 3 quarterly entries; 2025-09-30 appears in both,
+    # so the parser emits 4 unique (ticker, date) rows. The lake upsert
+    # cannot absorb in-batch key duplicates, so dedup happens here.
+    assert len(rows) == 4
+    assert len({(r.ticker, r.date) for r in rows}) == len(rows)
     assert all(r.ticker == "AAPL.US" for r in rows)
     dates = {r.date for r in rows}
     assert date(2025, 12, 31) in dates
     assert date(2025, 9, 30) in dates
     # integer share counts are preserved as floats (lake schema is DOUBLE)
     assert all(r.shares > 0 for r in rows)
+
+
+def test_shares_outstanding_history_dedups_dates_with_quarterly_winning():
+    payload = {
+        "outstandingShares": {
+            "annual": {"0": {"dateFormatted": "2025-09-30", "shares": 100}},
+            "quarterly": {
+                "0": {"dateFormatted": "2025-09-30", "shares": 111},
+                "1": {"dateFormatted": "2025-06-30", "shares": 120},
+            },
+        }
+    }
+    rows = list(parse_shares_outstanding_history("X.US", payload))
+    by_date = {r.date: r.shares for r in rows}
+    assert len(rows) == 2
+    assert by_date == {date(2025, 9, 30): 111.0, date(2025, 6, 30): 120.0}
 
 
 def test_shares_outstanding_history_empty_when_section_missing():

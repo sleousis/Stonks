@@ -1088,9 +1088,11 @@ def parse_shares_outstanding_history(ticker: str, payload: Any) -> Iterator[Shar
     """Fundamentals has an ``outstandingShares`` section with both
     ``annual`` and ``quarterly`` dicts — each period dict carries
     ``dateFormatted`` (ISO date) and ``shares`` (integer count). We pull
-    the full history from both, merged. Duplicate ``(ticker, date)`` rows
-    (same period appearing in annual + quarterly) are idempotent in the
-    lake via ON CONFLICT, so we emit them all and let the DB dedupe.
+    the full history from both, merged, and emit at most one row per
+    ``(ticker, date)``. A fiscal-year-end date usually appears in both
+    series; when it does the quarterly value wins. Deduping here matters:
+    an upsert batch holding the same key twice fails as a whole in DuckDB
+    (ON CONFLICT cannot resolve a key twice in one statement).
     """
     if not isinstance(payload, dict):
         return iter(())
@@ -1101,6 +1103,9 @@ def parse_shares_outstanding_history(ticker: str, payload: Any) -> Iterator[Shar
 
 
 def _iter_shares_outstanding(ticker: str, shares_blob: dict) -> Iterator[SharesOutstandingRow]:
+    # Keyed by date: annual is read first so a quarterly entry for the same
+    # date overwrites it (quarterly is the finer-grained, fresher series).
+    by_date: dict[date, SharesOutstandingRow] = {}
     for frequency_key in ("annual", "quarterly"):
         periods = shares_blob.get(frequency_key) or {}
         if not isinstance(periods, dict):
@@ -1112,7 +1117,8 @@ def _iter_shares_outstanding(ticker: str, shares_blob: dict) -> Iterator[SharesO
             shares = _coerce_optional_float(period_entry.get("shares"))
             if d is None or shares is None or shares < 0:
                 continue
-            yield SharesOutstandingRow(ticker=ticker, date=d, shares=shares)
+            by_date[d] = SharesOutstandingRow(ticker=ticker, date=d, shares=shares)
+    return iter(by_date.values())
 
 
 def parse_employee_count_snapshot(
