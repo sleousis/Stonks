@@ -1,10 +1,25 @@
 # Roadmap
 
-Stonks is a solid research engine with a simulated trading loop. This roadmap takes it to paper trading against a real broker, then to better strategies and operational maturity. Each work package (WP) lists the files it owns so packages can be built in parallel without merge conflicts.
+This roadmap took Stonks from a research engine with a simulated loop to paper trading, better strategies and unattended operation, and lists what comes next. Each work package (WP) lists the files it owns so packages can be built in parallel without merge conflicts.
+
+## Status (September 2026)
+
+| Phase | Status |
+|-------|--------|
+| 1 to 8 | Done, except 5.4 end-to-end tests (now 13.14). 8.4 moved to 11.8. |
+| 9 | Waves 1, 2 and 4 mostly done; Wave 3 partly; Wave 5 not started. Details under Phase 9. |
+| 11 | Done except parts of 11.6. 11.8 is this docs refresh. |
+| 12 | Mostly done. Open: 12.6 kill switch, 12.10 soak test, parts of 12.3 and 12.5, three runbooks (tick failed, broker unreachable, disk full). |
+| 13 | Partly done: PWA and push, command palette, in-app help, accessibility and locale. The rest is planned. |
+| 14 | Done except 14.9 lab offload. |
+| 15 | Partly done: design, data model, connection seam, notifications backend. Per-portfolio books are built but not wired into the tick yet. |
+| 16, 17 | Planned. |
 
 Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor-agnostic schemas, third-party libraries wrapped behind a seam). Live-network tests go under `tests/integration/live/` behind `@pytest.mark.live`.
 
 ## Phase 1: Trust the numbers
+
+**Status:** done.
 
 | WP | Scope | Owns |
 |----|-------|------|
@@ -17,6 +32,8 @@ Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor
 
 ## Phase 2: Paper trading with a real broker
 
+**Status:** done. Alpaca is opt-in through `[brokers].kind`; the tick writes each order as pending before submitting it.
+
 | WP | Scope | Owns |
 |----|-------|------|
 | 2.1 Alpaca paper broker | `AlpacaBroker` implementing the `Broker` protocol, wrapping `alpaca-py`. Order submit with `client_order_id`, status polling, fill retrieval. Config under `[brokers.alpaca]`, keys from env. | `execution/brokers/`, `config.py` (broker section) |
@@ -28,6 +45,8 @@ Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor
 
 ## Phase 3: Better strategies and data
 
+**Status:** done (`quality_value`, `macro_regime_filter`, `walk_forward`, Yahoo source, `[backtest.costs]`).
+
 | WP | Scope | Owns |
 |----|-------|------|
 | 3.1 Fundamentals strategy | Point-in-time value/quality strategy on the statement tables, using `filing_date` so no statement is visible before it was filed. | `strategies/examples/`, `features/library.py`, additive read helpers in `store/lake.py` |
@@ -38,6 +57,8 @@ Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor
 
 ## Phase 4: Scale and operate
 
+**Status:** done (`stonks report`, the shared `BarCache`, `stonks golive check`).
+
 | WP | Scope | Owns |
 |----|-------|------|
 | 4.1 Reporting | `stonks report` writes a static HTML report: equity curve, drawdown, survival verdicts per strategy, live vs backtest drift. | `reporting/` |
@@ -45,6 +66,8 @@ Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor
 | 4.3 Go-live gate | `stonks golive check <id>` evaluates a paper-trading period against limits (min days, max drawdown, max live-vs-backtest drift). | `production/golive.py` |
 
 ## Phase 5: Trader interfaces
+
+**Status:** 5.1, 5.2, 5.3 and 5.5 done. 5.4 (Playwright end-to-end tests) is not done and continues as 13.14.
 
 The CLI, the web UI and the MCP server all call one application service layer. No business logic lives in a transport.
 
@@ -57,6 +80,8 @@ The CLI, the web UI and the MCP server all call one application service layer. N
 | 5.4 End-to-end tests and packaging | Playwright smoke tests of the main UI flows against a seeded API, and a CI job that builds and tests the UI. | `web/e2e/`, `.github/workflows/` |
 
 ## Phase 6: Strategy library from neurotrader888
+
+**Status:** done, including 6.6 and 6.7 (`stonks ingest tvl` from DefiLlama, `defi_tvl`, `tvl_deviation`).
 
 Ports of the public research in github.com/neurotrader888. The broker is long-only, so every short leg becomes flat. Each module docstring credits its source repo and license and lists deviations. IntramarketDifference has no license and is rebuilt from its algorithm description only.
 
@@ -72,6 +97,8 @@ Ports of the public research in github.com/neurotrader888. The broker is long-on
 
 ## Phase 7: Learn from the books
 
+**Status:** done. The synthesis is `docs/principles.md` and the backlog `docs/research/book-lessons.md`; 7.7 is Phase 9.
+
 About 60 trading books from three reading lists and the Axon "100 books" series, studied from legal sources only (open-access editions, author sites and papers, companion code). The goal is to change how Stonks thinks, not just add features.
 
 | WP | Scope |
@@ -86,6 +113,8 @@ About 60 trading books from three reading lists and the Axon "100 books" series,
 
 ## Phase 8: Integration and cleanup
 
+**Status:** done. 8.4 continues as 11.8.
+
 | WP | Scope | Owns |
 |----|-------|------|
 | 8.1 One strategy catalog | Connect the Strategy Studio to the catalog and services, and share one catalog between `stonks lab run` and the API. | `app/catalog.py`, `lab/catalog.py`, `app/services.py` |
@@ -97,9 +126,19 @@ About 60 trading books from three reading lists and the Axon "100 books" series,
 
 ## Phase 9: Book-driven improvements
 
+**Status:**
+
+- Wave 1: done.
+- Wave 2: done. The tick runs its books through the shared pipeline; backtests use it only when `BacktestConfig.construction` is set, which the lab and API don't do yet.
+- Wave 3: 9.3.1 rules added but not yet configurable (`[production.risk.rules]` is not read from the config); 9.3.3 and 9.3.5 done; 9.3.2, 9.3.4 and 9.3.6 not started.
+- Wave 4: 9.4.1 to 9.4.4 done (`quant_momentum`, `stocks_on_the_move` with `atr_parity`, `ewmac_trend`, `tsmom`, `ath_trend`, `TrailingStopWrapper`, `quant_value`); 9.4.5 and 9.4.6 not started.
+- Wave 5: not started.
+
+Migration numbers in the tables below were plans; the landed ones are `008_lab_trials`, `009_status_changes` and `014_position_attribution`. New migrations take the next free number.
+
 This phase is roadmap item 7.7. It builds the backlog in `docs/research/book-lessons.md` (items BL-01 to BL-49) against the rules in `docs/principles.md`.
 
-Items 8.2, 8.5, 8.6, 6.6, 6.7 and 5.2 are already in progress and are not repeated here. BL-01 is 8.6, and BL-07 extends 6.6's `lab/parallel.py`.
+Items 8.2, 8.5, 8.6, 6.6, 6.7 and 5.2 were built before this phase and are not repeated here. BL-01 is 8.6, and BL-07 extends 6.6's `lab/parallel.py`.
 
 Each wave has up to six packages with disjoint file ownership. Each package also owns the test files for its own modules. The shared files are `config.py`, `config/default.toml`, `cli.py`, the API routers, the MCP server, `lab/catalog.py`, `pyproject.toml`, `tests/conftest.py` and the docs. They are only changed in the integration step after each wave.
 
@@ -108,11 +147,11 @@ Each wave has up to six packages with disjoint file ownership. Each package also
 | WP | Scope | Owns |
 |----|-------|------|
 | 9.1.1 Trade ledger and metrics (BL-02, BL-03) | FIFO round trips and trade stats on `BacktestReport`; Sharpe with ddof=1, Sortino, Calmar, drawdown duration, skew, kurtosis, ES, turnover, costs paid. | `backtest/trades.py`, `backtest/metrics.py`, `backtest/report.py`, `backtest/simulated_broker.py`, `lab/backtesting.py` |
-| 9.1.2 Trial ledger and stats (BL-04, BL-05, BL-06) | Every trial recorded with hypothesis and premortem, plus a running count per strategy class; `stonks.stats` with PSR, MinTRL, DSR, bootstrap, HAC, CSCV and FDR; reproducibility manifest. | `lab/runner.py`, `lab/trials.py`, `lab/manifest.py`, `src/stonks/stats/*`, `registry/artifact.py`, `store/migrations_sqlite/006_lab_trials.sql` |
+| 9.1.2 Trial ledger and stats (BL-04, BL-05, BL-06) | Every trial recorded with hypothesis and premortem, plus a running count per strategy class; `stonks.stats` with PSR, MinTRL, DSR, bootstrap, HAC, CSCV and FDR; reproducibility manifest. | `lab/runner.py`, `lab/trials.py`, `lab/manifest.py`, `src/stonks/stats/*`, `registry/artifact.py`, `store/migrations_sqlite/008_lab_trials.sql` |
 | 9.1.3 Parallel lab (BL-07) | 6.6's pool extended to tuners: read-only snapshot lakes, one DuckDB connection per worker, spawned seeds per task, `TrialOutcome` with per-bar returns. | `lab/parallel.py`, `lab/tuning/*`, `lab/objectives.py`, `core/protocols.py`, `store/lake.py` |
 | 9.1.4 Portfolio construction seam (BL-08, BL-09) | `PortfolioConstructor` ABC and registry; signal normalisation; single-winner, equal-weight, inverse-vol and vol-target constructors; buffered `orders_from_targets`; volatility estimators; cross-sectional helpers. | `src/stonks/portfolio/*`, `features/volatility.py`, `features/cross_section.py` |
 | 9.1.5 Registries (BL-10, BL-11) | Survival-test registry with `quick` and `promotion` presets; `RiskRule` registry, `RiskContext`, and the existing caps as rules. | `lab/survival/registry.py`, `app/lab.py`, `production/risk.py`, `production/prices.py`, `production/rules/{__init__,caps}.py` |
-| 9.1.6 Governance and metadata (BL-24, BL-26) | Status-change audit; promotion needs a passing go-live or an override with a reason; strategy hypothesis, family, label horizon and required history. | `store/migrations_sqlite/007_status_changes.sql`, `registry/store.py`, `app/strategies.py`, `strategies/base.py` |
+| 9.1.6 Governance and metadata (BL-24, BL-26) | Status-change audit; promotion needs a passing go-live or an override with a reason; strategy hypothesis, family, label horizon and required history. | `store/migrations_sqlite/009_status_changes.sql`, `registry/store.py`, `app/strategies.py`, `strategies/base.py` |
 
 Integration 1: realistic costs by default (BL-13), `[lab.parallel]`, the CLI and API flags, `scipy` as an explicit dependency.
 
@@ -120,7 +159,7 @@ Integration 1: realistic costs by default (BL-13), `[lab.parallel]`, the CLI and
 
 | WP | Scope | Owns |
 |----|-------|------|
-| 9.2.1 Multi-strategy construction (BL-12) | One pipeline for the tick and the backtest replaces winner-take-all; per-strategy attribution; post-tick hook registry. | `production/tick.py`, `production/ranker.py`, `production/shadow.py`, `production/hooks.py`, `portfolio/pipeline.py`, `backtest/engine.py`, `store/migrations_sqlite/008_position_attribution.sql` |
+| 9.2.1 Multi-strategy construction (BL-12) | One pipeline for the tick and the backtest replaces winner-take-all; per-strategy attribution; post-tick hook registry. | `production/tick.py`, `production/ranker.py`, `production/shadow.py`, `production/hooks.py`, `portfolio/pipeline.py`, `backtest/engine.py`, `store/migrations_sqlite/014_position_attribution.sql` |
 | 9.2.2 Selection-bias gates (BL-14, BL-15, BL-16) | Deflated Sharpe, PBO via CSCV, a PSR-based OOS gate with a 20-trade minimum. | `lab/survival/deflated_sharpe.py`, `lab/survival/pbo.py`, `lab/survival/oos.py` |
 | 9.2.3 Trade and cost robustness (BL-17, BL-18, BL-19) | Monte Carlo over trades; costs at 2× plus Carver's speed limit; parameter plateau; cross-instrument consistency. | `lab/survival/{mc_trades,cost_stress,plateau,cross_instrument}.py` |
 | 9.2.4 Walk-forward and windows (BL-20, BL-21) | Embargo, walk-forward efficiency, stitched PSR and parallel folds; validation windows for perturbation, runs and period stability; MCPT n=200. | `lab/dataset.py`, `lab/survival/{walk_forward,perturbation,runs_test,period_stability,permutation}.py` |
@@ -162,6 +201,8 @@ Integration 1: realistic costs by default (BL-13), `[lab.parallel]`, the CLI and
 
 ## Phase 11: Console and platform follow-ups
 
+**Status:** 11.1 to 11.5 and 11.7 done; 11.6 mostly done; 11.8 is this refresh.
+
 Found while building the console and merging Waves 2 and 3.
 
 | WP | Scope | Owns |
@@ -176,6 +217,12 @@ Found while building the console and merging Waves 2 and 3.
 | 11.8 Docs refresh | Bring `CLAUDE.md`, `docs/architecture.md`, `docs/operations.md`, the block docs and the wiki in line with everything that landed (was 8.4). | docs, wiki |
 
 ## Phase 12: Production readiness
+
+**Status:**
+
+- Done: 12.1 calendars, 12.2 scheduler (`python -m stonks.scheduling`), 12.4 backups (`python -m stonks.ops`), 12.7 Docker and Compose, 12.8 security checks in CI, 12.9 releases, 12.12 repo hygiene.
+- Partly: 12.3 (deadlines, pings and Prometheus text on the CLI; no HTTP metrics or readiness route yet), 12.5 (validation and quarantine done; the fallback source and `[ingest.quality]` are not wired to config yet), 12.11 (runbooks for stale data, restore and failed deploys).
+- Not started: 12.6 kill switch (the `TradeGate` seam exists), 12.10 soak test.
 
 What it takes to run Stonks unattended every day and trust it.
 
@@ -195,6 +242,8 @@ What it takes to run Stonks unattended every day and trust it.
 | 12.12 Repo hygiene | LICENSE as all rights reserved (decided), SECURITY.md, CONTRIBUTING.md and a trading-risk disclaimer for the public repo. |
 
 ## Phase 13: Trader-ready UX
+
+**Status:** done: 13.3 (PWA and push opt-in; live job updates), 13.10, 13.11, 13.13. 13.1 has its data model (users, roles) but no login yet. The rest is planned.
 
 What a trader needs to use the console daily without the CLI.
 
@@ -217,6 +266,8 @@ What a trader needs to use the console daily without the CLI.
 
 ## Phase 14: Hosting and maintenance
 
+**Status:** done except 14.9 lab offload. See `docs/deploy.md`.
+
 Decided: one small always-on cloud VM (for example Hetzner Cloud or DigitalOcean). Heavy lab runs stay on the owner's 32-core PC or a temporary bigger VM.
 
 | WP | Scope |
@@ -234,6 +285,12 @@ Decided: one small always-on cloud VM (for example Hetzner Cloud or DigitalOcean
 
 ## Phase 15: Accounts, connected brokers and automation modes
 
+**Status:**
+
+- Done: 15.1 design; 15.2 data model (migration 010, default owner `usr_owner` and portfolio `pf_default`, scoped services, golden single-owner tick); 15.3 read-only connection seam with Alpaca, SnapTrade and fake providers (`python -m stonks.connections`); the 15.6 notification backend (outbox, Web Push, email, webhook, quiet hours, preferences).
+- Partly: 15.5 (the tick loops over portfolio books and `load_tick_plan` builds them from paper and auto subscriptions, but the entrypoints still run the single default book; the notify hook, the auto checklist, trading through connections and the kill switch are open); 15.6 delivery works, but the tick does not enqueue signals yet.
+- Not started: per-user API and MCP tokens, 15.4 insights, 15.7 simple home screen.
+
 Every trader gets a simple experience: connect a broker for insights, pick strategies, and choose whether Stonks acts or only notifies.
 
 | WP | Scope |
@@ -248,6 +305,8 @@ Every trader gets a simple experience: connect a broker for insights, pick strat
 
 ## Phase 16: Short selling
 
+**Status:** planned. Design: `docs/design/shorting.md`.
+
 | WP | Scope |
 |----|-------|
 | 16.1 Engine and broker | Negative positions in the portfolio, an order position effect (open or close, split at zero), short fills in the simulated broker, borrow costs, margin requirements, and short-sale availability checks. Opt-in per strategy and per portfolio; long-only behaviour stays identical by default. |
@@ -256,6 +315,8 @@ Every trader gets a simple experience: connect a broker for insights, pick strat
 | 16.4 Validation for shorts | Backtests, permutation tests and reports handle long/short books; borrow-cost stress tests. |
 
 ## Phase 17: Options
+
+**Status:** planned. Design: `docs/design/options.md`.
 
 | WP | Scope |
 |----|-------|
