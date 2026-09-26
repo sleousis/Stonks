@@ -33,7 +33,7 @@ from stonks.ingest.sources.registry import (
     build_source,
 )
 from stonks.logging import configure_logging, get_logger
-from stonks.notify import build_notifier
+from stonks.notify import notifier_from_settings
 from stonks.production.settings_builder import build_tick_runtime
 from stonks.production.tick import BackdatedTickError, run_tick
 from stonks.registry.store import StrategyRegistry
@@ -888,7 +888,7 @@ def health(
         return
     console.print(f"[red]UNHEALTHY[/red]: {len(report.failures)} check(s) failed")
     if notify:
-        notify_unhealthy(report, build_notifier(settings.notify))
+        notify_unhealthy(report, notifier_from_settings(settings))
     raise typer.Exit(code=1)
 
 

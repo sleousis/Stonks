@@ -203,9 +203,11 @@ class NotifyConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # Any of "log", "webhook". Empty list disables notifications.
-    backends: list[Literal["log", "webhook"]] = ["log"]
-    # Notifications below this level are dropped.
+    # Any of "log", "webhook", "store". Empty list disables notifications.
+    # "store" persists every notification (all levels, redacted) to the
+    # state DB's ``alerts`` table, which ``GET /api/alerts`` reads.
+    backends: list[Literal["log", "webhook", "store"]] = ["log", "store"]
+    # Notifications below this level are dropped (except by "store").
     min_level: Literal["info", "warning", "error"] = "warning"
     webhook: WebhookConfig = WebhookConfig()
 
@@ -297,6 +299,20 @@ class Settings(BaseSettings):
     lab: LabSettings = LabSettings()
     golive: GoLivePolicy = GoLivePolicy()
     mcp: McpConfig = McpConfig()
+
+
+def configured_secrets(settings: Settings) -> list[str]:
+    """Every credential value the settings hold, for scrubbing text before it
+    is logged, persisted or returned."""
+    alpaca = settings.brokers.alpaca
+    values = [
+        settings.sources.eodhd.api_key,
+        settings.api.token.get_secret_value() if settings.api.token else None,
+        alpaca.api_key.get_secret_value() if alpaca.api_key else None,
+        alpaca.secret_key.get_secret_value() if alpaca.secret_key else None,
+        settings.notify.webhook.url,
+    ]
+    return [v for v in values if v]
 
 
 def load_settings(config_path: Path | None = None) -> Settings:
