@@ -17,6 +17,7 @@ from stonks.lab.dataset import LabDataset
 from stonks.lab.objectives import FinalReturnObjective
 from stonks.lab.survival.oos import OutOfSampleTest
 from stonks.lab.survival.period_stability import PeriodStabilityTest
+from stonks.lab.survival.perturbation import PerturbationTest
 from stonks.store.lake import DuckDBLake
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
 
@@ -84,3 +85,11 @@ def test_period_stability_backtests_at_dataset_interval(lake_hourly):
         _strategy(), _dataset(lake_hourly)
     )
     assert report.metrics["sharpe_min"] > 0.0
+
+
+def test_perturbation_backtests_at_dataset_interval(lake_hourly):
+    report = PerturbationTest(noise_sigmas=[0.001], min_correlation=-1.0).run(
+        _strategy(), _dataset(lake_hourly)
+    )
+    # an empty equity curve would yield a correlation of 0.0
+    assert report.metrics["correlation_min"] > 0.9
