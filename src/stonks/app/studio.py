@@ -583,13 +583,25 @@ class StudioService:
     def _register(self, draft_id: str, name: str, strategy: Any, reports: list[Any]) -> str:
         sid = f"{_slug(name)}_{uuid.uuid4().hex[:8]}"
         with self._ctx.state() as state:
-            registry = self._ctx.registry_on(state)
-            registry.register(strategy, reports, strategy_id=sid)
-            state.execute(
+            # Claim the draft first (a guarded single UPDATE), so two
+            # concurrent registrations (a lab-run job and a direct register)
+            # can't both register it.
+            claimed = state.execute(
                 "UPDATE strategy_drafts SET status = 'registered', registered_strategy_id = ?, "
-                "updated_at = ? WHERE id = ?",
+                "updated_at = ? WHERE id = ? AND status = 'draft'",
                 [sid, _now(), draft_id],
             )
+            if claimed.rowcount != 1:
+                raise ConflictError(f"draft {draft_id} is already registered (or was deleted)")
+            try:
+                self._ctx.registry_on(state).register(strategy, reports, strategy_id=sid)
+            except BaseException:
+                state.execute(
+                    "UPDATE strategy_drafts SET status = 'draft', registered_strategy_id = NULL "
+                    "WHERE id = ? AND registered_strategy_id = ?",
+                    [draft_id, sid],
+                )
+                raise
         _log.info("studio.draft_registered", draft_id=draft_id, strategy_id=sid)
         return sid
 

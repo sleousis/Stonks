@@ -230,6 +230,26 @@ def test_backtest_invalid_draft_is_rejected_before_queueing(svc, studio):
     assert svc.jobs.list(limit=10, offset=0).total == 0
 
 
+def test_a_draft_is_registered_at_most_once(svc, studio):
+    draft = studio.create_draft(DraftCreate(name="twice", spec=TREND))
+    job = studio.submit_lab_run(draft.id, _lab(register_strategy=True))
+    try:
+        direct = studio.register_draft(draft.id).registered_strategy_id
+    except ConflictError:
+        direct = None
+    done = svc.jobs.wait(job.id, timeout=120)
+    if direct is None:  # the job registered first
+        assert done.status == "succeeded"
+        winner = done.result["registered_strategy_id"]
+    else:
+        assert done.status == "failed"
+        assert "already registered" in done.error
+        winner = direct
+    assert studio.get_draft(draft.id).registered_strategy_id == winner
+    assert [s.id for s in svc.strategies.list(limit=50, offset=0).items].count(winner) == 1
+    assert len([s for s in svc.strategies.list(limit=50, offset=0).items if "twice" in s.id]) == 1
+
+
 def test_lab_run_uses_the_draft_spec_and_can_register(svc, studio):
     draft = studio.create_draft(DraftCreate(name="Lab trend", spec=TREND))
     job = studio.submit_lab_run(draft.id, _lab(register_strategy=True))
