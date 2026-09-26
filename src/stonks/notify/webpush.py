@@ -56,6 +56,9 @@ _log = get_logger("stonks.notify.webpush")
 #: services refuse records over 4096 bytes.
 MAX_PAYLOAD_BYTES = 3072
 
+#: The console's PWA icon (web/public/icons), served from the app origin.
+ICON = "/icons/icon-192.png"
+
 _GONE = (404, 410)
 _RETRY_AFTER_MAX = 3600.0
 
@@ -107,6 +110,7 @@ def encode_payload(message: Message, limit: int = MAX_PAYLOAD_BYTES) -> bytes:
             "notification": {
                 "title": title,
                 "body": body,
+                "icon": ICON,
                 "tag": message.topic or f"n{message.notification_id or 0}",
                 "requireInteraction": message.urgency == "high",
                 "data": {
@@ -292,3 +296,10 @@ class WebPushChannel(Channel):
                     user_id,
                 ],
             )
+
+
+def vapid_public_key(settings: NotifySettings) -> str | None:
+    """The key the browser subscribes with (``GET /api/push/vapid-key``), or
+    None when Web Push can't send (so the console doesn't subscribe)."""
+    channel = WebPushChannel.from_settings(settings)
+    return channel.public_key if channel is not None else None

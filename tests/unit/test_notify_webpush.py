@@ -20,6 +20,7 @@ from stonks.notify.webpush import (
     WebPushChannel,
     encode_payload,
     generate_vapid_keys,
+    vapid_public_key,
 )
 
 ENDPOINT = "https://fcm.googleapis.com/fcm/send/DEVICE-SECRET-TOKEN"
@@ -202,3 +203,16 @@ def test_redact_scrubs_endpoint_keys_and_private_key(settings, keys):
     assert "DEVICE-SECRET-TOKEN" not in clean
     assert keys.private_key not in clean
     assert "fcm.googleapis.com" in clean  # host is fine, it's not secret
+
+
+def test_payload_carries_the_app_icon():
+    n = json.loads(encode_payload(_message()))["notification"]
+    assert n["icon"] == "/icons/icon-192.png"
+
+
+def test_vapid_public_key_only_when_push_works(settings, keys):
+    assert vapid_public_key(NotifySettings(webpush=settings)) == keys.public_key
+    assert vapid_public_key(NotifySettings()) is None
+    other = generate_vapid_keys()
+    mixed = settings.model_copy(update={"public_key": other.public_key})
+    assert vapid_public_key(NotifySettings(webpush=mixed)) is None
