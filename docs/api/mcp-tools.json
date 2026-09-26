@@ -1017,9 +1017,23 @@
         "open_world": false,
         "read_only": true
       },
-      "description": "One production tick run with the orders it placed.",
+      "description": "One production tick run with the orders it placed in your\nportfolios (or in ``portfolio_id`` only).",
       "input_schema": {
         "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
           "tick_id": {
             "title": "Tick Id",
             "type": "string"
@@ -2143,7 +2157,7 @@
         "open_world": false,
         "read_only": true
       },
-      "description": "Production tick runs, newest first, with their summaries.",
+      "description": "Production tick runs, newest first. Summaries show the global\noutcome and the parts about your own portfolios only.",
       "input_schema": {
         "properties": {
           "limit": {

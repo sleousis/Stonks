@@ -40,6 +40,7 @@ from stonks.auth.principal import Principal
 from stonks.auth.service import AuthService
 from stonks.config import configured_secrets
 from stonks.logging import get_logger
+from stonks.production.tick import recover_interrupted_ticks
 
 _log = get_logger("stonks.app.services")
 
@@ -251,6 +252,8 @@ class Services:
         recovered = self.runner.store.recover_interrupted()
         if recovered:
             _log.warning("jobs.recovered_interrupted", count=recovered)
+        with self.context.state() as state:  # ticks run here, as jobs (TO-06)
+            recover_interrupted_ticks(state)
         settings = self.context.settings
         if settings.api.allow_code_strategies and self._user_finder is None:
             self._user_finder = install(user_strategies_dir(settings))

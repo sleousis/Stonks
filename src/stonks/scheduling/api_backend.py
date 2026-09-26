@@ -7,8 +7,10 @@ it. This backend starts each job on the API's own job routes and waits on
 
 - ``ingest_prices``: ``POST /api/ingest/runs`` (kind ``prices``) for the
   universe over the last ``lookback_days`` up to the fire's date;
+- ``ingest_metadata``: ``POST /api/ingest/runs`` with ``kind = metadata``;
 - ``tick``: ``POST /api/ticks`` for the fire's date;
-- ``health``: ``GET /api/health/report``, alerting here when unhealthy;
+- ``health``: ``POST /api/health/run`` (checks plus the operational
+  halt), alerting here when unhealthy;
 - ``report``: reads only the state DB, so it runs in this process.
 
 The closed-day check uses ticker suffixes for calendars (``.CC`` is
@@ -36,6 +38,7 @@ from stonks.scheduling.jobs import (
     RunContext,
     closed_day_outcome,
     ensure_window,
+    job_is_scoped,
     job_universe,
     universes_outcome,
 )
@@ -231,6 +234,26 @@ def api_ingest_prices(ctx: RunContext) -> JobOutcome:
     return ingest_job_outcome(status, error, result, job_id)
 
 
+@API_ACTIONS.register("ingest_metadata")
+def api_ingest_metadata(ctx: RunContext) -> JobOutcome:
+    ex = _executor(ctx)
+    universe = job_universe(ctx, _members(ex))
+    if not universe:
+        return JobOutcome("skipped", {"reason": "empty_universe"})
+    closed = closed_day_outcome(ctx, universe, {})
+    if closed is not None:
+        return closed
+    body = {
+        "kind": "metadata",
+        "source": str(ctx.params.get("source", "eodhd")),
+        "tickers": universe,
+    }
+    job_id, status, error, result = _run_job(
+        ex, "/api/ingest/runs", body, "/api/ingest/jobs/{job_id}/result"
+    )
+    return ingest_job_outcome(status, error, result, job_id)
+
+
 @API_ACTIONS.register("tick")
 def api_tick(ctx: RunContext) -> JobOutcome:
     ex = _executor(ctx)
@@ -243,6 +266,8 @@ def api_tick(ctx: RunContext) -> JobOutcome:
     body = {
         "as_of": ctx.fire.as_of.isoformat(),
         "tickers": universe,
+        "scoped": job_is_scoped(ctx),
+        "bars_due_at": ctx.fire.scheduled_for.isoformat(),
         "dry_run": bool(ctx.params.get("dry_run", False)),
     }
     job_id, status, error, result = _run_job(
@@ -254,7 +279,7 @@ def api_tick(ctx: RunContext) -> JobOutcome:
 @API_ACTIONS.register("health")
 def api_health(ctx: RunContext) -> JobOutcome:
     ex = _executor(ctx)
-    view = ex.client.get("/api/health/report", {"tickers": job_universe(ctx, _members(ex))})
+    view = ex.client.post("/api/health/run", {"tickers": job_universe(ctx, _members(ex))})
     return health_view_outcome(ctx, view)
 
 

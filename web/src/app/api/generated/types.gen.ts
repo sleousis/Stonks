@@ -1507,6 +1507,16 @@ export type HealthReportView = {
 };
 
 /**
+ * HealthRunRequest
+ */
+export type HealthRunRequest = {
+    /**
+     * Tickers
+     */
+    tickers?: Array<string> | null;
+};
+
+/**
  * HorizonICView
  */
 export type HorizonIcView = {
@@ -5136,9 +5146,21 @@ export type TickRequest = {
      */
     asset_class?: 'equity' | 'crypto' | 'commodity' | 'bond' | null;
     /**
+     * Bars Due At
+     *
+     * Buy only tickers whose latest session that closed by this time has its daily bar in the lake (scheduled ticks send their fire time). Tickers whose bar is missing are marked and sellable, not buyable.
+     */
+    bars_due_at?: string | null;
+    /**
      * Dry Run
      */
     dry_run?: boolean;
+    /**
+     * Scoped
+     *
+     * Trade only the tick's tickers and leave other holdings alone, not even selling them. Default: true when tickers or asset_class narrow the universe.
+     */
+    scoped?: boolean | null;
     /**
      * Tickers
      */
@@ -5242,6 +5264,12 @@ export type TickRunWithOrders = {
  */
 export type TickSummary = {
     /**
+     * Deferred Corporate Actions
+     */
+    deferred_corporate_actions?: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
      * Error
      */
     error?: string | null;
@@ -5261,6 +5289,14 @@ export type TickSummary = {
      * Orders Placed
      */
     orders_placed?: number | null;
+    /**
+     * Outside Universe Skipped
+     */
+    outside_universe_skipped?: Array<string>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id?: string | null;
     /**
      * Reason
      */
@@ -8141,6 +8177,47 @@ export type GetHealthReportResponses = {
 };
 
 export type GetHealthReportResponse = GetHealthReportResponses[keyof GetHealthReportResponses];
+
+export type RunHealthChecksData = {
+    body: HealthRunRequest;
+    path?: never;
+    query?: never;
+    url: '/api/health/run';
+};
+
+export type RunHealthChecksErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RunHealthChecksError = RunHealthChecksErrors[keyof RunHealthChecksErrors];
+
+export type RunHealthChecksResponses = {
+    /**
+     * Successful Response
+     */
+    200: HealthReportView;
+};
+
+export type RunHealthChecksResponse = RunHealthChecksResponses[keyof RunHealthChecksResponses];
 
 export type GetIngestResultData = {
     body?: never;
@@ -12220,7 +12297,14 @@ export type GetTickData = {
          */
         tick_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise).
+         */
+        portfolio_id?: string | null;
+    };
     url: '/api/ticks/{tick_id}';
 };
 

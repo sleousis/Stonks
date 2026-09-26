@@ -33,6 +33,8 @@ class PriceBook:
     #: Volume of the bar each price comes from (the cost model's impact
     #: input); tickers whose bar has no volume are absent.
     volumes: dict[str, float] = field(default_factory=dict)
+    #: Date of the bar each price comes from.
+    bar_dates: dict[str, date] = field(default_factory=dict)
 
 
 def load_prices(
@@ -62,15 +64,19 @@ def load_prices(
     prices: dict[str, float] = {}
     volumes: dict[str, float] = {}
     fresh: set[str] = set()
-    for row in df.itertuples(index=False):
-        is_fresh = pd.Timestamp(row.date).date() >= oldest
+    bar_dates: dict[str, date] = {}
+    for record in df.to_dict("records"):
+        ticker = str(record["ticker"])
+        bar_date: date = pd.Timestamp(record["date"]).date()  # type: ignore[assignment]
+        is_fresh = bar_date >= oldest
         if is_fresh:
-            fresh.add(row.ticker)
-        if is_fresh or row.ticker in held_set:
-            prices[row.ticker] = float(row.close)
-            if not pd.isna(row.volume):
-                volumes[row.ticker] = float(row.volume)
-    return PriceBook(prices=prices, fresh=frozenset(fresh), volumes=volumes)
+            fresh.add(ticker)
+        if is_fresh or ticker in held_set:
+            prices[ticker] = float(record["close"])
+            bar_dates[ticker] = bar_date
+            if not pd.isna(record["volume"]):
+                volumes[ticker] = float(record["volume"])
+    return PriceBook(prices=prices, fresh=frozenset(fresh), volumes=volumes, bar_dates=bar_dates)
 
 
 _HISTORY_COLUMNS = ["open", "high", "low", "close", "volume"]

@@ -7,6 +7,7 @@ from datetime import date
 
 import pytest
 
+from stonks.config import RiskPolicy
 from stonks.core.protocols import SurvivalReport
 from stonks.core.types import Order
 from stonks.production.tick import TickSettings, run_tick
@@ -223,3 +224,124 @@ def test_stale_close_blocks_new_buys(env):
     assert result.fills == 0
     snap = _latest_snapshot(state)
     assert snap["total_value"] == pytest.approx(5_000.0 + 200.0)  # UP's last close is 200
+
+
+# ---- TO-04: a scoped tick never trades holdings outside its tickers ---------------
+
+
+class RankAndRotate(BuyAndHold):
+    """Ranks its target (BuyAndHold's score), then sells every holding it
+    didn't pick and buys one share of the target: a momentum-like rotation."""
+
+    decide = ExitWhenUnpicked.decide
+
+
+def _summary(state, tick_id):
+    return json.loads(state.sql("SELECT summary_json FROM tick_runs WHERE id = ?", [tick_id])[0][0])
+
+
+def test_a_scoped_tick_leaves_holdings_outside_its_tickers_alone(env):
+    """The documented crypto tick: an equity holding, a crypto-only universe.
+    Nothing ranks, the owner decides exits, and none of them may trade."""
+    lake, state, registry = env
+    sid = _register(registry, ExitWhenUnpicked({"ticker": "UP.US", "allocation": 1.0}))
+    _hold(state, sid, {"DOWN.US": 10.0})
+
+    settings = TickSettings(universe=["UP.US"], initial_cash=10_000.0, scoped=True)
+    run_tick(state, lake, registry, settings, as_of=AS_OF)
+
+    assert state.sql("SELECT ticker FROM orders WHERE side = 'sell'") == []
+    snap = state.sql("SELECT positions_json FROM portfolio_snapshots ORDER BY id DESC LIMIT 1")
+    assert not snap or json.loads(snap[0]["positions_json"]) == {"DOWN.US": 10.0}
+
+
+def test_a_scoped_winner_trades_inside_its_tickers_only(env):
+    lake, state, registry = env
+    sid = _register(registry, RankAndRotate({"ticker": "UP.US", "allocation": 1.0}))
+    _hold(state, sid, {"DOWN.US": 10.0}, cash=1_000.0)
+
+    settings = TickSettings(universe=["UP.US"], initial_cash=10_000.0, scoped=True)
+    result = run_tick(state, lake, registry, settings, as_of=AS_OF)
+
+    rows = state.sql("SELECT ticker, side FROM orders WHERE tick_id = ?", [result.tick_id])
+    assert [(r["ticker"], r["side"]) for r in rows] == [("UP.US", "buy")]
+    assert _summary(state, result.tick_id)["outside_universe_skipped"] == ["DOWN.US"]
+    assert json.loads(_latest_snapshot(state)["positions_json"])["DOWN.US"] == 10.0
+
+
+def test_the_full_universe_tick_still_sells_a_dropped_holding(env):
+    """Unscoped (the configured universe): a holding that left the universe
+    is still sold, as before."""
+    lake, state, registry = env
+    sid = _register(registry, RankAndRotate({"ticker": "UP.US", "allocation": 1.0}))
+    _hold(state, sid, {"DOWN.US": 10.0}, cash=1_000.0)
+
+    settings = TickSettings(universe=["UP.US"], initial_cash=10_000.0)
+    result = run_tick(state, lake, registry, settings, as_of=AS_OF)
+
+    rows = state.sql("SELECT ticker, side FROM orders WHERE tick_id = ?", [result.tick_id])
+    assert ("DOWN.US", "sell") in [(r["ticker"], r["side"]) for r in rows]
+
+
+# ---- TO-10: a scheduled tick doesn't buy without the session's bar ---------------
+
+
+def test_a_tick_without_the_due_bar_places_no_buys_but_still_sells(env):
+    """The price ingest failed: the latest bar is 04-01, the 04-02 session's
+    bar is due. Buys would fill at a close that was never available on 04-02."""
+    lake, state, registry = env
+    sid = _register(registry, RankAndRotate({"ticker": "UP.US", "allocation": 1.0}))
+    _hold(state, sid, {"DOWN.US": 10.0}, cash=1_000.0, as_of="2026-04-01")
+    due = {"UP.US": date(2026, 4, 2), "DOWN.US": date(2026, 4, 2)}
+    settings = TickSettings(universe=["UP.US", "DOWN.US"], initial_cash=10_000.0, bars_due=due)
+
+    result = run_tick(state, lake, registry, settings, as_of=date(2026, 4, 2))
+
+    rows = state.sql("SELECT ticker, side FROM orders WHERE tick_id = ?", [result.tick_id])
+    assert [(r["ticker"], r["side"]) for r in rows] == [("DOWN.US", "sell")]
+    assert _summary(state, result.tick_id)["stale_buys_dropped"] == ["UP.US"]
+
+
+def test_a_tick_with_the_due_bar_buys(env):
+    lake, state, registry = env
+    _register(registry, RankAndRotate({"ticker": "UP.US", "allocation": 1.0}))
+    settings = TickSettings(
+        universe=["UP.US"], initial_cash=10_000.0, bars_due={"UP.US": date(2026, 4, 1)}
+    )
+    result = run_tick(state, lake, registry, settings, as_of=date(2026, 4, 1))
+    rows = state.sql("SELECT ticker, side FROM orders WHERE tick_id = ?", [result.tick_id])
+    assert [(r["ticker"], r["side"]) for r in rows] == [("UP.US", "buy")]
+
+
+# ---- TO-11: an order row agrees with its fill ------------------------------------
+
+
+class BuyTooMuch(BuyAndHold):
+    """Ignores cash: always asks for 1,000 shares of its target."""
+
+    def estimate_return(self, ticker, as_of, lake):
+        return None
+
+    def decide(self, my_picks, portfolio, prices, as_of):
+        return [Order(client_id="b", ticker=self.params["ticker"], side="buy", quantity=1000.0)]
+
+
+def test_a_buy_scaled_to_cash_records_the_filled_quantity(env):
+    lake, state, registry = env
+    sid = _register(registry, BuyTooMuch({"ticker": "UP.US", "allocation": 1.0}))
+    _hold(state, sid, {"DOWN.US": 1.0}, cash=1_000.0)  # an owner, so the exit route decides
+
+    # with the risk layer off nothing clips the buy before the broker
+    settings = TickSettings(universe=["UP.US"], risk=RiskPolicy(enabled=False))
+    result = run_tick(state, lake, registry, settings, as_of=AS_OF)
+
+    [order] = state.sql(
+        "SELECT client_id, quantity, status, status_reason FROM orders"
+        " WHERE tick_id = ? AND side = 'buy'",
+        [result.tick_id],
+    )
+    [fill] = state.sql("SELECT quantity FROM fills WHERE order_client_id = ?", [order["client_id"]])
+    assert fill["quantity"] < 1000.0
+    assert order["status"] == "filled"
+    assert order["quantity"] == pytest.approx(fill["quantity"])
+    assert "1000" in order["status_reason"]

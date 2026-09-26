@@ -2888,6 +2888,26 @@
         "title": "HealthReportView",
         "type": "object"
       },
+      "HealthRunRequest": {
+        "properties": {
+          "tickers": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tickers"
+          }
+        },
+        "title": "HealthRunRequest",
+        "type": "object"
+      },
       "HorizonICView": {
         "properties": {
           "hac_lags": {
@@ -9564,10 +9584,35 @@
             ],
             "title": "Asset Class"
           },
+          "bars_due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Buy only tickers whose latest session that closed by this time has its daily bar in the lake (scheduled ticks send their fire time). Tickers whose bar is missing are marked and sellable, not buyable.",
+            "title": "Bars Due At"
+          },
           "dry_run": {
             "default": false,
             "title": "Dry Run",
             "type": "boolean"
+          },
+          "scoped": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Trade only the tick's tickers and leave other holdings alone, not even selling them. Default: true when tickers or asset_class narrow the universe.",
+            "title": "Scoped"
           },
           "tickers": {
             "anyOf": [
@@ -9777,6 +9822,15 @@
       "TickSummary": {
         "additionalProperties": true,
         "properties": {
+          "deferred_corporate_actions": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Deferred Corporate Actions",
+            "type": "array"
+          },
           "error": {
             "anyOf": [
               {
@@ -9831,6 +9885,25 @@
               }
             ],
             "title": "Orders Placed"
+          },
+          "outside_universe_skipped": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Outside Universe Skipped",
+            "type": "array"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio Id"
           },
           "reason": {
             "anyOf": [
@@ -15301,7 +15374,7 @@
     },
     "/api/health/report": {
       "get": {
-        "description": "Every ``stonks health`` check: bar freshness, stuck ticks and ingest\nruns, recent ingest failures. Always 200; see ``healthy``.",
+        "description": "Every ``stonks health`` check: bar freshness, stuck ticks and ingest\nruns, recent ingest failures, open halts. Always 200; see ``healthy``.\nRead-only: it never opens or clears the operational halt.",
         "operationId": "getHealthReport",
         "parameters": [
           {
@@ -15397,6 +15470,94 @@
         "tags": [
           "health"
         ]
+      }
+    },
+    "/api/health/run": {
+      "post": {
+        "description": "The scheduled health job: every check, then the global operational\nhalt is opened on stale data or a stuck run and cleared when the checks\npass again. The caller is recorded as the actor.",
+        "operationId": "runHealthChecks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HealthRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthReportView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run Health Checks",
+        "tags": [
+          "health"
+        ],
+        "x-permission": "operations.run"
       }
     },
     "/api/ingest/jobs/{job_id}/result": {
@@ -23725,6 +23886,7 @@
     },
     "/api/ticks": {
       "get": {
+        "description": "Every tick run, newest first. Summaries keep the global outcome\nand the parts about your own portfolios only.",
         "operationId": "listTicks",
         "parameters": [
           {
@@ -24029,6 +24191,7 @@
     },
     "/api/ticks/{tick_id}": {
       "get": {
+        "description": "One tick run with the orders it placed in your portfolios (or in\n``portfolio_id`` only). Another user's portfolio is a 404.",
         "operationId": "getTick",
         "parameters": [
           {
@@ -24038,6 +24201,25 @@
             "schema": {
               "title": "Tick Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise).",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise).",
+              "title": "Portfolio Id"
             }
           }
         ],

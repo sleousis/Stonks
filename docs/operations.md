@@ -20,7 +20,10 @@ flowchart LR
 
 Run `uv run stonks db init` after every upgrade, before the first tick. It applies new migrations to both stores.
 
-Every step is safe to rerun: ingest upserts, the tick reuses client ids for the same `as_of` and skips orders already placed (and model books already evaluated), health only reads. Times are UTC; `tick` defaults `--as-of` to today's UTC date and refuses a date older than its latest snapshot.
+Every step is safe to rerun: ingest upserts, the tick reuses client ids for the same `as_of` and skips orders already placed (and model books already evaluated), and health only opens or clears the operational halt. Times are UTC. `tick` defaults `--as-of` to today's UTC date and refuses a date older than its latest snapshot.
+
+- `stonks tick --tickers ...` (or `--asset-class`) runs a scoped tick. It trades only those tickers and leaves every other holding alone, not even selling it. A tick over `[production].universe` still sells a holding that left the universe.
+- When the broker fills less than an order asked for (a simulated buy scaled down to cash), the order row keeps the filled quantity. Its `status_reason` says what was asked for.
 
 ## Scheduler
 
@@ -39,14 +42,20 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 
 ### Default jobs
 
-| Job | When (NYSE, trading days) | Deadline |
+| Job | When | Deadline |
 |-----|------|----------|
+| `universes_refresh`: refresh stored universes and fill their recent bars | close + 20 min | none |
+| `ingest_metadata`: splits, dividends and other metadata for the universe, from Yahoo | close + 25 min | none |
 | `ingest_prices`: last 7 days of daily bars for `[production].universe` | close + 30 min | 60 min |
 | `tick` | close + 45 min | 60 min |
 | `report`: `reports/latest.html` next to the state DB | close + 90 min | none |
-| `health` | every 4 hours | none |
+| `health`: checks, and opens or clears the operational halt | every 4 hours | none |
+| `backup`: `[backup]` target and retention | 05:00 UTC daily | 120 min |
+| `connections_sync`: broker connections whose sync is due | every hour | none |
 
-These four are the only actions today. Backups, notification delivery and connection syncs are not scheduler jobs yet: run them from cron or a timer (see below).
+Session jobs run on NYSE trading days. `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
+
+The scheduler also runs the notification delivery worker (`[scheduler].deliver_notifications`, on by default). Don't add a cron `deliver` next to it.
 
 Listing any `[[scheduler.jobs]]` in the config replaces the whole default list:
 
@@ -69,6 +78,8 @@ action = "tick"
 params = { tickers = ["BTC-USD.CC", "ETH-USD.CC"] }
 trigger = { type = "daily", at = "00:30", timezone = "UTC" }
 ```
+
+A job with its own `tickers`, like `crypto_tick`, runs a scoped tick: holdings outside its tickers are marked but never traded. A scheduled tick also buys a ticker only when the lake holds the bar of its latest session that closed by the fire time. When the price ingest failed, the tick still marks and sells, but buys nothing. (`crypto_tick` at 00:30 UTC needs the previous day's bar.)
 
 Triggers:
 
@@ -98,6 +109,8 @@ Each fire is one `scheduled_runs` row keyed by job and run key (session date, lo
 
 A failed run is not retried. It alerts; rerun it with `run-now`. A run interrupted by a crash is marked `failed` ("interrupted") at the next start. If the scheduler stops while an API job runs, the job keeps going in the API; check `GET /api/jobs/{id}` before rerunning.
 
+A tick killed mid-run (container stop, out of memory, reboot) leaves its `tick_runs` row at `running`, and the `stuck_ticks` check then holds the operational buy halt. The next start of the process that runs ticks (`stonks serve`, or the `local` scheduler) closes such rows as `error` ("interrupted"). The next health run then clears the halt. Run `stonks health` to clear it at once. A same-day rerun of the tick is safe.
+
 ### Dead-man checks
 
 - **Deadlines.** A watchdog checks every `watchdog_seconds` that each job with `deadline_minutes` succeeded (or was skipped) in time. A miss sends one error alert, recorded in `scheduler_deadline_alerts` so restarts don't repeat it.
@@ -114,7 +127,9 @@ A failed run is not retried. It alerts; rerun it with `run-now`. A run interrupt
 | `stuck_ingest_runs` | An ingest has been `running` for more than N minutes. | `stuck_ingest_minutes` (180) |
 | `ingest_failures` | An ingest failed in the last N hours. | `ingest_failure_lookback_hours` (24) |
 
-The API serves `GET /api/health` (liveness, used by Docker and Caddy) and `GET /api/health/report` (the full report).
+The API serves `GET /api/health` (liveness, used by Docker and Caddy) and `GET /api/health/report` (the full report). The report only reads: it lists open halts but never opens or clears one, whatever tickers it is asked about. `POST /api/health/run` (admins, `operations.run`) runs the checks and syncs the operational halt, recorded under the caller. The `api` scheduler backend uses it.
+
+`GET /api/ticks` and `GET /api/ticks/{id}` show everyone each tick's status, counts, winner and shadow results. Orders, clipped orders, stale buys, halts and per-portfolio details show only for your own portfolios, admins included. `?portfolio_id=` picks one of yours. The MCP tools `list_ticks` and `get_tick` read the same.
 
 `python -m stonks.scheduling metrics` prints Prometheus text from the state DB: tick counts, duration and last success; orders by status and rejections; API jobs and queue depth; each scheduled job's last success, last status and next run; the scheduler heartbeat. `--data-age` adds universe data age buckets but opens the lake, so use it only when `stonks serve` is not running.
 
@@ -172,7 +187,8 @@ A notifier never raises. What alerts:
 | Source | Level | When |
 |--------|-------|------|
 | tick | error | The tick raised (recorded as `error`, exit non-zero). |
-| tick | warning | Status `partial`, or the broker rejected orders. |
+| tick | warning | Status `partial` (naming each failed portfolio and its error), or the broker rejected orders. |
+| tick | warning | A corporate action waits for its ex-date bar. |
 | `health --notify` | error | Any check failed. |
 | scheduler | error | A job failed or missed its deadline. |
 | ingest | warning | Quarantined bars, many warnings, or fallback used. |
@@ -191,7 +207,7 @@ uv run python -m stonks.notify deliver                  # one delivery pass
 
 Set `STONKS_VAPID_PUBLIC_KEY`, `STONKS_VAPID_PRIVATE_KEY` and `STONKS_VAPID_SUBJECT` (a `mailto:` or `https:` contact) as secrets. Email is optional (`STONKS_SMTP_HOST`, `_PORT`, `_USERNAME`, `_PASSWORD`, `_FROM`, `_SECURITY`). Rotating the VAPID pair makes every user re-enable push.
 
-The scheduler does not run `deliver` yet, so run it every minute from cron or a timer. The console's install and push opt-in are described in [ui.md](ui.md#install-and-notifications-pwa).
+The scheduler runs the delivery worker. Without the scheduler, run `deliver` every minute from cron or a timer. The console's install and push opt-in are described in [ui.md](ui.md#install-and-notifications-pwa).
 
 ## Broker connections
 
@@ -210,7 +226,7 @@ uv run python -m stonks.connections rotate-keys       # after adding a new maste
 - Credentials come from `STONKS_CONNECT_<FIELD>` or a hidden prompt, never from arguments, and are sealed with the master key from `STONKS_SECRET_KEYS`. Keep the old keys listed after a new one until `rotate-keys` has run.
 - SnapTrade needs `STONKS_SNAPTRADE_CLIENT_ID` and `STONKS_SNAPTRADE_CONSUMER_KEY` and connects through its portal (`connect snaptrade --redirect URL`, then `callback`).
 - A sync writes one `portfolio_snapshots` row per portfolio and day (`source` other than `tick`), and is safe to repeat.
-- The scheduler does not run `sync --due` yet: run it from cron or a timer, a few times a day.
+- The scheduler's `connections_sync` job runs `sync --due` every hour. Without the scheduler, run it from cron or a timer.
 
 ## Risk policy
 
@@ -246,12 +262,16 @@ flowchart LR
 | `month_loss` | Value is 6% below the month's first snapshot. | At the start of next month, or when cleared. |
 | `week_loss` | Value fell 4% over 5 snapshots. | At the start of next month, or when cleared. |
 | `drawdown` | Value is 20% below its peak. | Only when a person clears it. |
-| `operational` | `stonks health` finds stale data or a stuck run. | When health passes again. |
+| `operational` | The scheduled health job or `stonks health` finds stale data or a stuck run. | When one of them passes again. |
 | `kill` | A person turns on the kill switch. | Resume with the typed confirmation. |
 
 - The breaker limits live in `[production.risk.rules.circuit_breaker]` (`max_month_loss`, `max_week_loss`, `max_drawdown_halt`, `cooldown`). They are off until set. The same rule runs in backtests.
 - Breaker halts block buys. Sells and exits still go through.
+- The gate also runs on a tick that trades nothing, so a breaker trip is recorded and notified the day it happens.
 - The kill switch has three scopes: `global` (admins), `user` (all your portfolios) and `portfolio` (one of yours). It stops every order, or only buys with `flatten`.
+- A `user` kill switch covers every portfolio you own, `pf_default` included when you are its owner.
+- Engaging stop-all while a `flatten` kill switch is on escalates it to stop everything. The old row closes with "escalated to all" and a new one opens. Engaging `flatten` never weakens a stop-all.
+- Engaging also cancels the orders your portfolios still have working at an external broker (only buys with `flatten`), and books the result. A failed cancel is logged and audited but never undoes the halt. Engage again to retry.
 - Resume the kill switch with `POST /api/halts/{id}/resume` and the text `RESUME TRADING`. Clear other halts with `POST /api/halts/{id}/clear` and a reason.
 - Every action writes an `audit_log` row. Every clear also writes a `risk_reset` row in `status_changes`.
 - A trip sends a `risk` notification to the portfolio owner, or to the admins for a global halt.
@@ -260,6 +280,18 @@ flowchart LR
 ### Quit rule
 
 After each tick the quit rule checks every active strategy. It sums the strategy's share of each portfolio's P&L since promotion. When the drawdown of that P&L passes 1.5 times the backtest drawdown, or the Monte Carlo 95th percentile when it is lower, the admins get an `error` notification. With `auto_demote` on, the strategy also moves to `shadow` with a logged reason.
+
+## Splits and dividends
+
+Before a real book decides, the tick applies the splits and cash dividends of its holdings, once per portfolio. The `corporate_action_ledger` table records each one.
+
+- An event applies once its ex-date is on or before the tick's date, even when its row reached the lake after the ex-date tick.
+- It acts on the shares held at the close before the ex-date. Shares bought later were bought at post-split prices and are not scaled. A position closed in between is skipped.
+- It waits, and alerts, until the lake has a bar for the ticker on or after the ex-date. Before that the price is still the old one.
+- Working orders decided before a split's ex-date are resized. Fills already booked for them move to post-split shares too, as the broker reports them. An external broker's account already shows the event, so only the ledger row is written.
+- Events on or before a portfolio's last snapshot at the upgrade count as done.
+
+Model books still apply the events between their last snapshot and the tick.
 
 ## Model books (shadow mode)
 

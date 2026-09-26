@@ -57,7 +57,7 @@ class FakeApi:
             )
         if path.endswith("/jobs/job_1/result"):
             return httpx2.Response(200, json=self._result)
-        if path == "/api/health/report":
+        if request.method == "POST" and path == "/api/health/run":
             return httpx2.Response(200, json=self.health)
         return httpx2.Response(404, json={"title": "Not Found", "detail": path})
 
@@ -184,9 +184,28 @@ def test_tick_posts_the_fire_date_and_waits_for_the_job():
     assert out.status == "succeeded" and out.detail["tick_id"] == "tick_2026-09-25_x"
     method, path, body = api.requests[0]
     assert (method, path) == ("POST", "/api/ticks")
-    assert body == {"as_of": "2026-09-25", "tickers": ["AAPL.US"], "dry_run": False}
+    # the configured universe: a full tick, not a scoped one (TO-04)
+    assert body == {
+        "as_of": "2026-09-25",
+        "tickers": ["AAPL.US"],
+        "scoped": False,
+        # buys need the bar of the session that closed by the fire (TO-10)
+        "bars_due_at": "2026-09-25T21:00:00+00:00",
+        "dry_run": False,
+    }
     assert sleeps == [1.5, 1.5]  # queued, running, then succeeded
     assert api.requests[-1][1] == "/api/ticks/jobs/job_1/result"
+
+
+def test_a_tick_job_with_its_own_tickers_is_scoped():
+    """TO-04: a job's ``params.tickers`` (the crypto tick) must leave other
+    holdings alone."""
+    api = FakeApi(result={"tick_id": "t", "status": "ok", "orders_placed": 0, "fills": 0})
+    ex, _ = _executor(api)
+    ctx, _ = _ctx(ex, "tick", FRIDAY, tickers=["BTC-USD.CC"])
+    ex.execute(ctx)
+    body = api.requests[0][2]
+    assert body["tickers"] == ["BTC-USD.CC"] and body["scoped"] is True
 
 
 def test_ingest_posts_the_lookback_window():
@@ -205,6 +224,19 @@ def test_ingest_posts_the_lookback_window():
         "since": "2026-09-22",
         "until": "2026-09-25",
     }
+
+
+def test_ingest_metadata_posts_a_metadata_run():
+    api = FakeApi(
+        job_statuses=("succeeded",),
+        result={"run_id": 8, "status": "ok", "tickers_ok": 1, "tickers_failed": 0},
+    )
+    ex, _ = _executor(api)
+    ctx, _ = _ctx(ex, "ingest_metadata", FRIDAY, source="yahoo")
+    out = ex.execute(ctx)
+    assert out.status == "succeeded" and out.detail["ingest_run_id"] == 8
+    assert api.requests[0][:2] == ("POST", "/api/ingest/runs")
+    assert api.requests[0][2] == {"kind": "metadata", "source": "yahoo", "tickers": ["AAPL.US"]}
 
 
 def test_closed_day_makes_no_request():
@@ -242,7 +274,8 @@ def test_health_unhealthy_alerts_here():
     assert out.status == "failed" and out.alerted
     assert out.detail["failed_checks"] == ["freshness:AAPL.US"]
     assert len(notifier.sent) == 1
-    assert api.requests[0][1] == "/api/health/report"
+    # the scheduled job syncs the operational halt: the POST route, never the GET
+    assert api.requests[0][:2] == ("POST", "/api/health/run")
 
 
 def test_wait_times_out():

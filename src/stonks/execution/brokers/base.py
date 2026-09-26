@@ -125,3 +125,14 @@ class OrderStateSource(Protocol):
     """
 
     def get_order_state(self, client_id: str) -> BrokerOrderState | None: ...
+
+
+@runtime_checkable
+class OrderCanceller(Protocol):
+    """Optional broker capability: cancel a working order by our client_id.
+
+    Returns ``False`` when there is nothing to cancel (unknown or already
+    terminal). The kill switch uses it (``execution.cancel``) so orders a
+    tick queued at the broker don't fill after trading was stopped."""
+
+    def cancel_order(self, client_id: str) -> bool: ...

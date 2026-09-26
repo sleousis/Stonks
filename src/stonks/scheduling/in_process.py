@@ -37,6 +37,7 @@ from stonks.scheduling.jobs import (
     RunContext,
     build_job_specs,
     closed_day_outcome,
+    job_is_scoped,
     job_universe,
     universes_outcome,
 )
@@ -112,6 +113,29 @@ def in_process_ingest_prices(ctx: RunContext) -> JobOutcome:
     return ingest_job_outcome(*ex.run_job(job, INGEST_JOB, IngestResultView))
 
 
+@IN_PROCESS_ACTIONS.register("ingest_metadata")
+def in_process_ingest_metadata(ctx: RunContext) -> JobOutcome:
+    from stonks.app.ingest import INGEST_JOB, IngestRequest, IngestResultView
+
+    ex = _executor(ctx)
+    universe = job_universe(ctx, ex.members)
+    if not universe:
+        return JobOutcome("skipped", {"reason": "empty_universe"})
+    closed = closed_day_outcome(ctx, universe, ex.asset_classes(universe))
+    if closed is not None:
+        return closed
+    job = ex.services.ingest.submit(
+        IngestRequest.model_validate(
+            {
+                "kind": "metadata",
+                "source": str(ctx.params.get("source", "eodhd")),
+                "tickers": universe,
+            }
+        )
+    )
+    return ingest_job_outcome(*ex.run_job(job, INGEST_JOB, IngestResultView))
+
+
 @IN_PROCESS_ACTIONS.register("tick")
 def in_process_tick(ctx: RunContext) -> JobOutcome:
     from stonks.app.ticks import TICK_JOB, TickRequest, TickResultView
@@ -127,6 +151,8 @@ def in_process_tick(ctx: RunContext) -> JobOutcome:
         TickRequest(
             as_of=ctx.fire.as_of,
             tickers=universe,
+            scoped=job_is_scoped(ctx),
+            bars_due_at=ctx.fire.scheduled_for,
             dry_run=bool(ctx.params.get("dry_run", False)),
         )
     )
@@ -136,7 +162,9 @@ def in_process_tick(ctx: RunContext) -> JobOutcome:
 @IN_PROCESS_ACTIONS.register("health")
 def in_process_health(ctx: RunContext) -> JobOutcome:
     ex = _executor(ctx)
-    view = ex.services.operations.health_report(job_universe(ctx, ex.members))
+    view = ex.services.operations.run_health(
+        job_universe(ctx, ex.members), actor="service:scheduler"
+    )
     return health_view_outcome(ctx, view.model_dump(mode="json"))
 
 

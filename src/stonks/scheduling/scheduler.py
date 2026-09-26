@@ -165,6 +165,7 @@ class Scheduler:
         recovered = self.store.recover_interrupted(now=now)
         if recovered:
             _log.warning("scheduler.recovered_interrupted", runs=recovered)
+        self.executor.recover(self.settings)
         self.store.register_instance(
             self.instance_id, host=socket.gethostname(), pid=os.getpid(), now=now
         )

@@ -984,7 +984,9 @@ def tick(
                         "ingest profiles first or relax the filter"
                     )
 
-            runtime = build_tick_runtime(settings, universe)
+            # explicit tickers narrow the tick: other holdings are left alone
+            scoped = bool(_parse_tickers(tickers)) or asset_class is not None
+            runtime = build_tick_runtime(settings, universe, scoped=scoped)
             try:
                 result = run_tick(
                     state=state,

@@ -315,49 +315,49 @@
    "2026-03-21T12:00:00+00:00",
    "2026-03-21T12:00:00+00:00",
    "ok",
-   "{\"fills\": 0, \"orders_placed\": 1, \"risk_adjustments\": [{\"adjusted_quantity\": 26.20967741935484, \"original_quantity\": 31.451612903225804, \"reason\": \"quantity 31.451612903225804 exceeds max_weight_per_ticker room 26.20967741935484\", \"rule\": \"max_weight_per_ticker\", \"side\": \"buy\", \"ticker\": \"UP.US\"}], \"stale_buys_dropped\": [], \"winner_expected_return\": 0.020576131687242816, \"winner_strategy_id\": \"mom\"}"
+   "{\"fills\": 0, \"orders_placed\": 1, \"portfolio_id\": \"pf_default\", \"risk_adjustments\": [{\"adjusted_quantity\": 26.20967741935484, \"original_quantity\": 31.451612903225804, \"reason\": \"quantity 31.451612903225804 exceeds max_weight_per_ticker room 26.20967741935484\", \"rule\": \"max_weight_per_ticker\", \"side\": \"buy\", \"ticker\": \"UP.US\"}], \"stale_buys_dropped\": [], \"winner_expected_return\": 0.020576131687242816, \"winner_strategy_id\": \"mom\"}"
   ],
   [
    "tick_2026-03-16_2",
    "2026-03-21T12:00:00+00:00",
    "2026-03-21T12:00:00+00:00",
    "ok",
-   "{\"fills\": 1, \"orders_placed\": 1, \"risk_adjustments\": [{\"adjusted_quantity\": 26.20967741935484, \"original_quantity\": 31.451612903225804, \"reason\": \"quantity 31.451612903225804 exceeds max_weight_per_ticker room 26.20967741935484\", \"rule\": \"max_weight_per_ticker\", \"side\": \"buy\", \"ticker\": \"UP.US\"}], \"shadow\": [{\"decisions\": 1, \"error\": null, \"fills\": 1, \"status\": \"evaluated\", \"strategy_id\": \"bh_flat\", \"total_value\": 9996.5}, {\"decisions\": 1, \"error\": null, \"fills\": 1, \"status\": \"evaluated\", \"strategy_id\": \"bh_down\", \"total_value\": 9997.0}], \"stale_buys_dropped\": [], \"winner_expected_return\": 0.020576131687242816, \"winner_strategy_id\": \"mom\"}"
+   "{\"fills\": 1, \"orders_placed\": 1, \"portfolio_id\": \"pf_default\", \"risk_adjustments\": [{\"adjusted_quantity\": 26.20967741935484, \"original_quantity\": 31.451612903225804, \"reason\": \"quantity 31.451612903225804 exceeds max_weight_per_ticker room 26.20967741935484\", \"rule\": \"max_weight_per_ticker\", \"side\": \"buy\", \"ticker\": \"UP.US\"}], \"shadow\": [{\"decisions\": 1, \"error\": null, \"fills\": 1, \"status\": \"evaluated\", \"strategy_id\": \"bh_flat\", \"total_value\": 9996.5}, {\"decisions\": 1, \"error\": null, \"fills\": 1, \"status\": \"evaluated\", \"strategy_id\": \"bh_down\", \"total_value\": 9997.0}], \"stale_buys_dropped\": [], \"winner_expected_return\": 0.020576131687242816, \"winner_strategy_id\": \"mom\"}"
   ],
   [
    "tick_2026-03-17_3",
    "2026-03-21T12:00:00+00:00",
    "2026-03-21T12:00:00+00:00",
    "ok",
-   "{\"fills\": 1, \"orders_placed\": 1, \"risk_adjustments\": [], \"shadow\": [{\"decisions\": 0, \"error\": null, \"fills\": 0, \"status\": \"evaluated\", \"strategy_id\": \"bh_down\", \"total_value\": 9977.676328502415}], \"stale_buys_dropped\": [], \"winner_expected_return\": 1.0, \"winner_strategy_id\": \"bh_flat\"}"
+   "{\"fills\": 1, \"orders_placed\": 1, \"portfolio_id\": \"pf_default\", \"risk_adjustments\": [], \"shadow\": [{\"decisions\": 0, \"error\": null, \"fills\": 0, \"status\": \"evaluated\", \"strategy_id\": \"bh_down\", \"total_value\": 9977.676328502415}], \"stale_buys_dropped\": [], \"winner_expected_return\": 1.0, \"winner_strategy_id\": \"bh_flat\"}"
   ],
   [
    "tick_2026-03-18_4",
    "2026-03-21T12:00:00+00:00",
    "2026-03-21T12:00:00+00:00",
    "ok",
-   "{\"exit_strategy_id\": \"mom\", \"fills\": 2, \"orders_placed\": 2, \"reason\": \"no_candidates\", \"risk_adjustments\": [], \"shadow\": [{\"decisions\": 0, \"error\": null, \"fills\": 0, \"status\": \"evaluated\", \"strategy_id\": \"bh_down\", \"total_value\": 9958.35265700483}], \"stale_buys_dropped\": [], \"winner_expected_return\": null, \"winner_strategy_id\": null}"
+   "{\"exit_strategy_id\": \"mom\", \"fills\": 2, \"orders_placed\": 2, \"portfolio_id\": \"pf_default\", \"reason\": \"no_candidates\", \"risk_adjustments\": [], \"shadow\": [{\"decisions\": 0, \"error\": null, \"fills\": 0, \"status\": \"evaluated\", \"strategy_id\": \"bh_down\", \"total_value\": 9958.35265700483}], \"stale_buys_dropped\": [], \"winner_expected_return\": null, \"winner_strategy_id\": null}"
   ],
   [
    "tick_2026-03-20_5",
    "2026-03-21T12:00:00+00:00",
    "2026-03-21T12:00:00+00:00",
    "ok",
-   "{\"fills\": 1, \"orders_placed\": 1, \"risk_adjustments\": [{\"adjusted_quantity\": 25.86794726222478, \"original_quantity\": 31.041536714669736, \"reason\": \"quantity 31.041536714669736 exceeds max_weight_per_ticker room 25.86794726222478\", \"rule\": \"max_weight_per_ticker\", \"side\": \"buy\", \"ticker\": \"UP.US\"}], \"shadow\": [{\"decisions\": 0, \"error\": null, \"fills\": 0, \"status\": \"evaluated\", \"strategy_id\": \"bh_down\", \"total_value\": 9919.705314009661}], \"stale_buys_dropped\": [], \"winner_expected_return\": 0.020242914979756943, \"winner_strategy_id\": \"mom\"}"
+   "{\"fills\": 1, \"orders_placed\": 1, \"portfolio_id\": \"pf_default\", \"risk_adjustments\": [{\"adjusted_quantity\": 25.86794726222478, \"original_quantity\": 31.041536714669736, \"reason\": \"quantity 31.041536714669736 exceeds max_weight_per_ticker room 25.86794726222478\", \"rule\": \"max_weight_per_ticker\", \"side\": \"buy\", \"ticker\": \"UP.US\"}], \"shadow\": [{\"decisions\": 0, \"error\": null, \"fills\": 0, \"status\": \"evaluated\", \"strategy_id\": \"bh_down\", \"total_value\": 9919.705314009661}], \"stale_buys_dropped\": [], \"winner_expected_return\": 0.020242914979756943, \"winner_strategy_id\": \"mom\"}"
   ],
   [
    "tick_2026-03-20_6",
    "2026-03-21T12:00:00+00:00",
    "2026-03-21T12:00:00+00:00",
    "ok",
-   "{\"fills\": 0, \"orders_placed\": 0, \"risk_adjustments\": [], \"shadow\": [{\"decisions\": 0, \"error\": null, \"fills\": 0, \"status\": \"already_evaluated\", \"strategy_id\": \"bh_down\", \"total_value\": null}], \"stale_buys_dropped\": [], \"winner_expected_return\": 0.020242914979756943, \"winner_strategy_id\": \"mom\"}"
+   "{\"fills\": 0, \"orders_placed\": 0, \"portfolio_id\": \"pf_default\", \"risk_adjustments\": [], \"shadow\": [{\"decisions\": 0, \"error\": null, \"fills\": 0, \"status\": \"already_evaluated\", \"strategy_id\": \"bh_down\", \"total_value\": null}], \"stale_buys_dropped\": [], \"winner_expected_return\": 0.020242914979756943, \"winner_strategy_id\": \"mom\"}"
   ],
   [
    "tick_2026-03-24_7",
    "2026-03-21T12:00:00+00:00",
    "2026-03-21T12:00:00+00:00",
    "ok",
-   "{\"reason\": \"no_active_owner\", \"shadow\": [{\"decisions\": 0, \"error\": null, \"fills\": 0, \"status\": \"evaluated\", \"strategy_id\": \"bh_down\", \"total_value\": 9881.057971014492}]}"
+   "{\"portfolio_id\": \"pf_default\", \"reason\": \"no_active_owner\", \"shadow\": [{\"decisions\": 0, \"error\": null, \"fills\": 0, \"status\": \"evaluated\", \"strategy_id\": \"bh_down\", \"total_value\": 9881.057971014492}]}"
   ]
  ]
 }

@@ -10,12 +10,16 @@ from pathlib import Path
 import pytest
 
 import stonks.app
+from stonks.accounts import DEFAULT_OWNER_ID, Role, Scope
 from stonks.app.catalog import CatalogService, PackageStrategySource
 from stonks.app.errors import ConfigurationError, NotFoundError, ValidationError
 from stonks.app.ingest import IngestRequest
 from stonks.app.lab import BacktestRequest, LabRunRequest
 from stonks.app.strategies import StrategyRef
 from stonks.app.ticks import TickRequest
+
+#: The bootstrap admin, owner of pf_default.
+OWNER = Scope(user_id=DEFAULT_OWNER_ID, role=Role.ADMIN)
 
 # ---- layering ---------------------------------------------------------------
 
@@ -270,9 +274,9 @@ def test_orders_and_fills_filters(services, seeded):
 
 
 def test_tick_list_and_detail(services, seeded):
-    page = services.ticks.list(limit=10, offset=0)
+    page = services.ticks.list(OWNER, limit=10, offset=0)
     assert page.total == 1
-    detail = services.ticks.get(seeded["tick_id"])
+    detail = services.ticks.get(OWNER, seeded["tick_id"])
     assert detail.status == "ok"
     assert detail.summary["winner_strategy_id"] == seeded["active_id"]
     assert len(detail.orders) == 1
@@ -280,7 +284,7 @@ def test_tick_list_and_detail(services, seeded):
 
 def test_tick_unknown_is_not_found(services):
     with pytest.raises(NotFoundError):
-        services.ticks.get("tick_nope")
+        services.ticks.get(OWNER, "tick_nope")
 
 
 def test_tick_dry_run(services):
@@ -289,7 +293,7 @@ def test_tick_dry_run(services):
     )
     assert result.dry_run is True
     assert result.status in ("ok", "noop", "partial")
-    assert services.ticks.list(limit=10, offset=0).total == 2
+    assert services.ticks.list(OWNER, limit=10, offset=0).total == 2
 
 
 def test_tick_requires_universe(services):

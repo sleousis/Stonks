@@ -366,6 +366,37 @@ def universe_trades_on(
     return False
 
 
+def last_closed_session(ticker: str, asset_class: str | None, at: datetime) -> date | None:
+    """The date of ``ticker``'s latest session that closed at or before
+    ``at``: the daily bar a tick running at ``at`` should see (TO-10).
+    ``None`` when the ticker has no known calendar or ``at`` is outside it."""
+    at = ensure_utc(at)
+    try:
+        cal = calendar_for_ticker(ticker, asset_class)
+        day = at.date() + timedelta(days=1)
+        for _ in range(_MAX_SEARCH_DAYS):
+            session = cal.session(day)
+            if session is not None and session.close <= at:
+                return session.date
+            day -= timedelta(days=1)
+    except (UnknownCalendarError, CalendarRangeError):
+        return None
+    return None
+
+
+def bars_due(
+    tickers: Iterable[str], asset_classes: Mapping[str, str], at: datetime
+) -> dict[str, date]:
+    """:func:`last_closed_session` per ticker, leaving out tickers without
+    a known calendar (no requirement for them)."""
+    out: dict[str, date] = {}
+    for ticker in tickers:
+        due = last_closed_session(ticker, asset_classes.get(ticker), at)
+        if due is not None:
+            out[ticker] = due
+    return out
+
+
 class TickerSessionCalendar:
     """The ingest quality checker's calendar (``sessions(ticker, start,
     end)``, see ``stonks.ingest.quality``) over these market calendars:

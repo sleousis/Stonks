@@ -148,6 +148,10 @@ class JobExecutor(ABC):
     def bind_stop(self, stop: threading.Event) -> None:  # noqa: B027 - optional hook
         """The scheduler's stop event, for executors that wait on jobs."""
 
+    def recover(self, settings: Any) -> None:  # noqa: B027 - optional hook
+        """Called once when the scheduler starts, holding its instance lock:
+        clean up after an executor of this kind that died mid-run."""
+
 
 # ---- helpers shared by the backends ------------------------------------------------
 
@@ -155,6 +159,12 @@ class JobExecutor(ABC):
 #: ``(universe_id, day) -> members``: how a backend reads a stored
 #: universe's members (the API, the app services, or the lake).
 MembersResolver = Callable[[str, date], list[str]]
+
+
+def job_is_scoped(ctx: RunContext) -> bool:
+    """A job with its own ``params.tickers`` (e.g. a crypto-only tick)
+    covers only those tickers: its tick must leave other holdings alone."""
+    return bool(ctx.params.get("tickers"))
 
 
 def job_universe(ctx: RunContext, members: MembersResolver | None = None) -> list[str]:

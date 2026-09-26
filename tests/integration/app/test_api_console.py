@@ -104,13 +104,13 @@ def test_empty_book_defaults_to_usd(settings, fake_source):
 
 
 def test_tick_runs_have_as_of_typed_status_and_iso_datetimes(client, seeded):
-    [run] = client.get("/api/ticks").json()["items"]
+    [run] = client.get("/api/ticks", headers=AUTH).json()["items"]
     assert run["as_of"] == "2026-03-20"
     assert run["status"] == "ok"
     assert "T" in run["started_at"] and "T" in run["finished_at"]
-    detail = client.get(f"/api/ticks/{seeded['tick_id']}").json()
+    detail = client.get(f"/api/ticks/{seeded['tick_id']}", headers=AUTH).json()
     assert detail["as_of"] == "2026-03-20"
-    assert client.get("/api/ticks", params={"status": "bogus"}).status_code == 422
+    assert client.get("/api/ticks", params={"status": "bogus"}, headers=AUTH).status_code == 422
 
 
 def test_tick_schema_status_is_an_enum(client):

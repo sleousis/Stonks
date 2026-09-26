@@ -15,7 +15,7 @@ from stonks.app.errors import NotFoundError
 from stonks.app.pagination import Page
 from stonks.app.serialize import finite
 from stonks.config import HealthConfig, RiskPolicy
-from stonks.production.halts import run_health
+from stonks.production.halts import HEALTH_ACTOR, read_health, run_health
 from stonks.production.pnl import PnlRow, load_pnl
 
 
@@ -93,18 +93,26 @@ class OperationsService:
 
     def health_report(self, tickers: Sequence[str] | None = None) -> HealthReportView:
         """Every check behind ``stonks health``; freshness covers ``tickers``
-        or, by default, ``[production].universe``. Like the CLI it opens or
-        clears the global operational halt and reports open halts."""
+        or, by default, ``[production].universe``. Read-only: it lists open
+        halts but never opens or clears one (TO-03)."""
         p = self._ctx.settings.production
         universe = list(tickers) if tickers else list(p.universe)
         with self._ctx.state() as state, self._ctx.lake() as lake:
-            report = run_health(state, lake, universe, p.health)
-        return HealthReportView(
-            healthy=report.healthy,
-            checked_at=report.checked_at,
-            checks=[HealthCheckView(name=c.name, ok=c.ok, detail=c.detail) for c in report.checks],
-            thresholds=p.health.model_copy(),
-        )
+            report = read_health(state, lake, universe, p.health)
+        return _health_view(report, p.health)
+
+    def run_health(
+        self, tickers: Sequence[str] | None = None, *, actor: str = HEALTH_ACTOR
+    ) -> HealthReportView:
+        """The scheduled health job: the same checks, then the global
+        operational halt is opened or cleared from them, as ``actor``.
+        Callers are trusted (the scheduler, an admin through
+        ``operations.run``)."""
+        p = self._ctx.settings.production
+        universe = list(tickers) if tickers else list(p.universe)
+        with self._ctx.state() as state, self._ctx.lake() as lake:
+            report = run_health(state, lake, universe, p.health, actor=actor)
+        return _health_view(report, p.health)
 
     # ---- P&L ---------------------------------------------------------------
 
@@ -200,6 +208,15 @@ class OperationsService:
             for r in rows
         ]
         return Page[ShadowDecisionView](items=items, total=total, limit=limit, offset=offset)
+
+
+def _health_view(report: Any, thresholds: HealthConfig) -> HealthReportView:
+    return HealthReportView(
+        healthy=report.healthy,
+        checked_at=report.checked_at,
+        checks=[HealthCheckView(name=c.name, ok=c.ok, detail=c.detail) for c in report.checks],
+        thresholds=thresholds.model_copy(),
+    )
 
 
 def _pnl_view(row: PnlRow) -> PnlRowView:

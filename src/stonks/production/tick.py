@@ -68,6 +68,7 @@ from stonks.accounts.models import DEFAULT_PORTFOLIO_ID, Mode, Subscription
 from stonks.accounts.models import Portfolio as AccountPortfolio
 from stonks.backtest.costs import CostModel, CostModelSettings, FixedCostModel
 from stonks.backtest.simulated_broker import SimulatedBroker
+from stonks.core.interval import Interval
 from stonks.core.protocols import Broker
 from stonks.core.types import Fill, Order, OrderSide, OrderStatus, Portfolio
 from stonks.execution.brokers.base import BrokerKind, OrderRejectedError, OrderStateSource
@@ -91,10 +92,17 @@ from stonks.portfolio.pipeline import (
     vols_from_history,
 )
 from stonks.production.corporate_actions import (
+    CorporateActionPlan,
+    adjust_orders_for_splits,
     adjust_working_orders,
     apply_corporate_actions,
+    apply_plan,
+    event_as_dict,
+    ledger_enabled,
     load_corporate_actions,
+    plan_corporate_actions,
     record_as_dict,
+    record_plan,
     working_orders,
 )
 from stonks.production.hooks import (
@@ -108,7 +116,7 @@ from stonks.production.hooks import (
 )
 from stonks.production.hooks.attribution import load_attribution
 from stonks.production.ledger import ledger_filter
-from stonks.production.prices import held_tickers, load_history, load_prices
+from stonks.production.prices import PriceBook, held_tickers, load_history, load_prices
 from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.ranker import Ranker, SignalSet, StrategyPool
 from stonks.production.risk import RiskPolicy, build_risk_context, needs_risk_context
@@ -117,6 +125,7 @@ from stonks.production.tca import annotate_orders, decision_values, tca_recorded
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
+from stonks.strategies._common import decision_interval
 
 TickStatus = Literal["ok", "partial", "error", "noop"]
 _DBTickStatus = Literal["running", "ok", "partial", "error"]
@@ -126,6 +135,9 @@ _log = get_logger("stonks.production.tick")
 #: Builds the tick's broker around the portfolio it trades (a simulated
 #: broker trades that object in memory; an external one ignores it).
 BrokerFactory = Callable[[Portfolio], Broker]
+
+#: Quantities closer than this are equal (a fill of the whole order).
+_QTY_EPSILON = 1e-9
 
 #: Bars of daily history the volatility-aware constructors read.
 _VOL_HISTORY_BARS = 260
@@ -170,6 +182,16 @@ class TickSettings:
     model_books: Literal["shadow", "all"] = "shadow"
     #: ``[production.quit_rule]``: read by the ``quit_rule`` tick hook.
     quit_rule: QuitRuleSettings = field(default_factory=QuitRuleSettings)
+    #: A scoped tick (explicit tickers, e.g. a crypto-only job) trades only
+    #: tickers of ``universe``: holdings outside it are marked but never
+    #: traded, not even sold (TO-04). The full tick over the configured
+    #: universe is unscoped, so a holding that left the universe is sold.
+    scoped: bool = False
+    #: Per ticker, the daily bar a scheduled tick must see before it buys
+    #: (the session that closed by the fire time, TO-10). A ticker whose
+    #: latest bar is older (the price ingest failed) is marked and sellable
+    #: but not buyable. None (manual ticks): the staleness window only.
+    bars_due: Mapping[str, date] | None = None
 
     def __post_init__(self) -> None:
         self.simulated_costs  # noqa: B018 - validates costs vs legacy (not both)
@@ -288,19 +310,23 @@ def run_tick(
     # Any failure past this point closes the tick as 'error' so the ledger
     # never keeps a row stuck at 'running'; the exception still propagates.
     try:
-        result = _run_tick_body(
-            state,
-            lake,
-            registry,
-            settings,
-            as_of,
-            dry_run,
-            tick_id=tick_id,
-            log=log,
-            notifier=notifier,
-            broker_factory=broker_factory,
-            plan=plan,
-        )
+        # RS-03: the tick decides on daily bars, so a strategy sees a bar of
+        # any interval only once it has closed by the day's close (a 24/7
+        # market's midnight decision would otherwise read like an intraday one).
+        with decision_interval(Interval.DAY_1):
+            result = _run_tick_body(
+                state,
+                lake,
+                registry,
+                settings,
+                as_of,
+                dry_run,
+                tick_id=tick_id,
+                log=log,
+                notifier=notifier,
+                broker_factory=broker_factory,
+                plan=plan,
+            )
     except Exception as exc:
         log.error("tick.error", error=str(exc), error_type=type(exc).__name__)
         try:
@@ -324,21 +350,34 @@ def run_tick(
         )
         raise
     if result.status == "partial":
-        _safe_notify(
-            notifier,
-            Notification(
-                level="warning",
-                title="tick partially failed",
-                message="one or more orders raised at the broker; see logs",
-                fields={
-                    "tick_id": tick_id,
-                    "as_of": as_of.isoformat(),
-                    "status": result.status,
-                },
-            ),
-            log,
-        )
+        _safe_notify(notifier, _partial_notification(result, as_of), log)
     return result
+
+
+def _partial_notification(result: TickResult, as_of: date) -> Notification:
+    """The operator alert of a partial tick: the books that failed with
+    their errors (TO-12), and those whose orders raised at the broker."""
+    failed = {
+        b.portfolio_id: f"{b.summary.get('error_type', 'Error')}: {b.summary.get('error', '')}"
+        for b in result.portfolios
+        if b.status == "error"
+    }
+    raised = [b.portfolio_id for b in result.portfolios if b.status == "partial"]
+    parts = [f"book {pid} failed: {err}" for pid, err in failed.items()]
+    if raised or not failed:
+        parts.append("one or more orders raised at the broker; see logs")
+    fields: dict[str, Any] = {
+        "tick_id": result.tick_id,
+        "as_of": as_of.isoformat(),
+        "status": result.status,
+    }
+    if failed:
+        fields["failed_portfolios"] = failed
+    if raised:
+        fields["broker_errors_in"] = raised
+    return Notification(
+        level="warning", title="tick partially failed", message="; ".join(parts), fields=fields
+    )
 
 
 # ---- the tick ----------------------------------------------------------------
@@ -503,7 +542,9 @@ def _run_tick_body(
     status = _tick_status(results)
     if single:
         [only] = results
-        summary = dict(only.summary)
+        # the book's keys sit at the top level; name whose they are, so
+        # readers see them only for their own portfolio (AS-02)
+        summary = {"portfolio_id": only.portfolio_id, **only.summary}
         winner = only.winner_strategy_id
     else:
         summary = {
@@ -644,7 +685,36 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     working = _working_orders(state, scope)
     actions = load_corporate_actions(lake, [*held_tickers(portfolio.positions), *working.values()])
     applied = []
-    if not external:
+    plan: CorporateActionPlan | None = None
+    if scope is not None and ledger_enabled(state):
+        # the per-portfolio ledger: by ex-date, once, late rows included (TO-05)
+        plan = plan_corporate_actions(state, lake, actions, portfolio_id=scope, as_of=as_of)
+        if not external:
+            applied = apply_plan(
+                portfolio, plan, withholding_rate=settings.dividend_withholding_rate
+            )
+        for event in plan.deferred:
+            log.warning("tick.corporate_action_deferred", **event_as_dict(event))
+        if plan.deferred and not dry_run:
+            _safe_notify(
+                run.notifier,
+                Notification(
+                    level="warning",
+                    title="corporate actions deferred",
+                    message="no bar on or after the ex-date yet; applied once it is ingested",
+                    fields={
+                        "tick_id": tick_id,
+                        "as_of": as_of.isoformat(),
+                        "portfolio_id": portfolio_id,
+                        "events": [
+                            f"{e.ticker} {event_as_dict(e)['kind']} {e.ex_date.isoformat()}"
+                            for e in plan.deferred
+                        ],
+                    },
+                ),
+                log,
+            )
+    elif not external:
         applied = apply_corporate_actions(
             portfolio,
             actions,
@@ -652,18 +722,25 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             as_of=as_of,
             withholding_rate=settings.dividend_withholding_rate,
         )
-        for record in applied:
-            log.info("tick.corporate_action", **record_as_dict(record))
+    for record in applied:
+        log.info("tick.corporate_action", **record_as_dict(record))
     corporate_summary: dict[str, Any] = (
         {"corporate_actions": [record_as_dict(r) for r in applied]} if applied else {}
     )
+    if plan is not None and plan.deferred:
+        corporate_summary["deferred_corporate_actions"] = [event_as_dict(e) for e in plan.deferred]
 
     def persist_corporate_actions() -> int:
-        """Split-adjust the working orders; call inside the transaction
-        that writes this tick's snapshot."""
-        return adjust_working_orders(
-            state, list(working), actions, since=since, as_of=as_of, now=_iso_now()
-        )
+        """Record the handled events and split-adjust the working orders;
+        call inside the transaction that writes this tick's snapshot.
+        Returns how many rows changed (a noop tick then still snapshots)."""
+        now = _iso_now()
+        if plan is None:
+            return adjust_working_orders(
+                state, list(working), actions, since=since, as_of=as_of, now=now
+            )
+        record_plan(state, plan, applied, portfolio_id=portfolio_id, tick_id=tick_id, now=now)
+        return len(plan.due) + adjust_orders_for_splits(state, list(working), plan.splits, now=now)
 
     held = held_tickers(portfolio.positions)
     book_prices = load_prices(
@@ -685,16 +762,37 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             summary=summary,
         )
 
+    def gate() -> Any:
+        return run_gates(
+            GateContext(
+                state=state,
+                as_of=as_of,
+                portfolio_id=portfolio_id,
+                owner_id=book.owner_id,
+                dry_run=dry_run,
+                policy=book.spec.risk,
+            ),
+            log,
+        )
+
+    def halted(verdict: Any) -> dict[str, Any]:
+        if verdict is None:
+            return {}
+        return {"halted": {"halt": verdict.halt, "gate": verdict.gate, "reason": verdict.reason}}
+
     def noop(reason: str) -> BookResult:
+        halt_summary: dict[str, Any] = {}
         if not dry_run:
-            # nothing trades, but applied events must still be persisted
+            # nothing trades, but the gates still record a breaker trip the
+            # day it happens, and applied events must still be persisted
+            halt_summary = halted(gate())
             with state.transaction():
                 if persist_corporate_actions() or applied:
                     _snapshot_portfolio(
                         state, tick_id, portfolio, prices, as_of, portfolio_id=scope
                     )
         log.info("tick.portfolio_noop", reason=reason)
-        return result("noop", None, 0, 0, {"reason": reason, **corporate_summary})
+        return result("noop", None, 0, 0, {"reason": reason, **halt_summary, **corporate_summary})
 
     # 3. construct: the pipeline turns this book's signals into orders
     #    (decide or targets, stale buys dropped, then the risk layer).
@@ -714,7 +812,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     market = MarketView(
         as_of=as_of,
         prices=prices,
-        buyable=book_prices.fresh,
+        buyable=_buyable(book_prices, settings.bars_due),
         volumes=book_prices.volumes,
         asset_classes=asset_classes,
         vols_annual=({} if construction.is_single_winner else run.vols([*universe, *held])),
@@ -775,19 +873,16 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         )
     risk_adjustments = list(pipeline.adjustments)
     slice_policy = book_input.risk_overrides.get(winner_id) if winner_id else None
-
-    halt = run_gates(
-        GateContext(
-            state=state,
-            as_of=as_of,
-            portfolio_id=portfolio_id,
-            owner_id=book.owner_id,
-            dry_run=dry_run,
-            policy=book.spec.risk,
-        ),
-        log,
-    )
     proposed = pipeline.orders
+    outside: list[str] = []
+    if settings.scoped:
+        allowed = set(universe)
+        outside = sorted({o.ticker for o in proposed if o.ticker not in allowed})
+        if outside:
+            log.info("tick.outside_universe_skipped", tickers=outside)
+        proposed = [o for o in proposed if o.ticker in allowed]
+
+    halt = gate()
     if halt is not None:
         log.warning("tick.portfolio_halted", halt=halt.halt, gate=halt.gate, reason=halt.reason)
         proposed = [] if halt.halt == "all" else [o for o in proposed if o.side == "sell"]
@@ -826,6 +921,8 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     # recorded without the snapshot that reflects them. External: see
     # ``place_external``.
     outcomes: list[tuple[Order, OrderStatus, Fill | None]] = []
+    #: ``status_reason`` per client id (simulated partial fills).
+    reasons: dict[str, str] = {}
 
     def place_external(order: Order) -> None:
         """The order row is committed as 'pending' *before* the broker sees
@@ -888,6 +985,12 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                 log.warning("tick.order.failed", ticker=order.ticker, error=str(exc))
                 continue
             placed += 1
+            if fill is not None and fill.quantity < order.quantity - _QTY_EPSILON:
+                # scaled down to cash (or volume): the row records what traded (TO-11)
+                reasons[order.client_id] = (
+                    f"filled {fill.quantity:g} of {order.quantity:g} requested"
+                )
+                order = replace(order, quantity=fill.quantity)
             outcomes.append((order, "filled" if fill else "rejected", fill))
             if fill is not None:
                 fills_count += 1
@@ -946,7 +1049,13 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     elif not dry_run:
         with state.transaction():
             for order, order_status, fill in outcomes:
-                _record_order(state, order, status=order_status, portfolio_id=scope)
+                _record_order(
+                    state,
+                    order,
+                    status=order_status,
+                    reason=reasons.get(order.client_id or ""),
+                    portfolio_id=scope,
+                )
                 if fill is not None:
                     _record_fill(
                         state, fill, portfolio_id=scope, arrival_price=_arrival(broker, fill)
@@ -991,12 +1100,9 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                 else {}
             ),
             "stale_buys_dropped": pipeline.stale_buys,
+            **({"outside_universe_skipped": outside} if outside else {}),
             **({"open_order_conflicts": open_conflicts} if open_conflicts else {}),
-            **(
-                {"halted": {"halt": halt.halt, "gate": halt.gate, "reason": halt.reason}}
-                if halt is not None
-                else {}
-            ),
+            **halted(halt),
             **({"constructor": construction.method} if not book.legacy else {}),
             "orders_placed": placed,
             "fills": fills_count,
@@ -1005,6 +1111,38 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             **hook_summary,
         },
     )
+
+
+# ---- interrupted ticks ----------------------------------------------------------------
+
+#: ``summary_json.error`` of a tick row closed by :func:`recover_interrupted_ticks`.
+INTERRUPTED_ERROR = "interrupted: the process running the tick stopped before it finished"
+
+
+def recover_interrupted_ticks(state: SqliteState, *, now: datetime | None = None) -> list[str]:
+    """Close every ``tick_runs`` row still ``running`` as ``error`` (TO-06).
+
+    Call only where no tick can be running: at the start of the process
+    that runs ticks (the API, whose tick jobs never outlive it, or the
+    ``local`` scheduler). A killed tick committed nothing past its last
+    transaction, so a same-day rerun repeats it safely (idempotent client
+    ids). Without this the stuck-tick health check fails for ever and the
+    operational halt blocks every buy. Returns the closed ids."""
+    at = (now or datetime.now(UTC)).isoformat(timespec="seconds")
+    rows = state.sql("SELECT id FROM tick_runs WHERE status = 'running' ORDER BY started_at")
+    ids = [r["id"] for r in rows]
+    if not ids:
+        return []
+    summary = json.dumps({"error": INTERRUPTED_ERROR, "error_type": "Interrupted"})
+    with state.transaction():
+        for tick_id in ids:
+            state.execute(
+                "UPDATE tick_runs SET status = 'error', finished_at = ?, summary_json = ?"
+                " WHERE id = ? AND status = 'running'",
+                [at, summary, tick_id],
+            )
+    _log.warning("tick.recovered_interrupted", tick_ids=ids)
+    return ids
 
 
 # ---- plans from portfolios and subscriptions -----------------------------------------
@@ -1111,6 +1249,15 @@ def _client_id_fn(as_of: date, portfolio_id: str) -> Callable[[str | None, str, 
         )
 
     return make
+
+
+def _buyable(book: PriceBook, due: Mapping[str, date] | None) -> frozenset[str]:
+    """Fresh tickers, less those whose due session bar is missing."""
+    if not due:
+        return book.fresh
+    return frozenset(
+        t for t in book.fresh if t not in due or book.bar_dates.get(t, date.min) >= due[t]
+    )
 
 
 def _in_universe(scores: Mapping[str, float], universe: Sequence[str] | None) -> dict[str, float]:

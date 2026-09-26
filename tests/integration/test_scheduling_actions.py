@@ -109,9 +109,48 @@ def test_tick_with_crypto_in_the_universe_runs_on_weekends(settings):
     assert get_action("tick")(ctx).status == "succeeded"
 
 
+@pytest.mark.parametrize(("params", "scoped"), [({}, False), ({"tickers": ["BTC-USD.CC"]}, True)])
+def test_a_tick_job_with_its_own_tickers_runs_scoped(settings, monkeypatch, params, scoped):
+    """TO-04: ``params.tickers`` narrows the tick, so holdings outside it
+    are left alone; the configured universe runs the full tick."""
+    from stonks.production import settings_builder
+
+    seen: list[bool] = []
+    real = settings_builder.build_tick_runtime
+
+    def spy(settings_, universe, *, scoped=False, **kw):
+        seen.append(scoped)
+        return real(settings_, universe, scoped=scoped, **kw)
+
+    monkeypatch.setattr(settings_builder, "build_tick_runtime", spy)
+    ctx, _ = _ctx(settings, "tick", date(2026, 9, 25), **params)
+    assert get_action("tick")(ctx).status == "succeeded"
+    assert seen == [scoped]
+
+
 def test_tick_skip_can_be_disabled(settings):
     ctx, _ = _ctx(settings, "tick", date(2026, 11, 26), skip_closed_days=False)
     assert get_action("tick")(ctx).status == "succeeded"
+
+
+def test_ingest_metadata_pulls_corporate_actions_for_the_universe(settings, monkeypatch):
+    """TO-05: splits and dividends come from the metadata ingest, so it is
+    a scheduled job of its own."""
+    seen: list[str] = []
+
+    class MetaSource(FakeSource):
+        def fetch_metadata(self, ticker):
+            from stonks.ingest.metadata_bundle import MetadataBundle
+
+            seen.append(ticker)
+            return MetadataBundle()
+
+    monkeypatch.setattr(jobs_mod, "build_source", lambda sid, cfg: MetaSource())
+    ctx, _ = _ctx(settings, "ingest_metadata", date(2026, 9, 25))
+    out = get_action("ingest_metadata")(ctx)
+    assert out.status == "succeeded", out.detail
+    assert sorted(seen) == ["AAPL.US", "MSFT.US"]
+    assert out.detail["tickers_ok"] == 2
 
 
 def test_ingest_prices_for_the_lookback_window(settings, monkeypatch):

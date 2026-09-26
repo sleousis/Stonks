@@ -106,6 +106,7 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | GET | `/api/health/live` | Liveness probe (process and hosted scheduler) | none |  | [ProbeView](#probeview) |
 | GET | `/api/health/ready` | Readiness probe (state migrated, lake present) | none |  | [ProbeView](#probeview) |
 | GET | `/api/health/report` | Health Report | sign-in |  | [HealthReportView](#healthreportview) |
+| POST | `/api/health/run` | Run Health Checks | `operations.run` | [HealthRunRequest](#healthrunrequest) | [HealthReportView](#healthreportview) |
 
 ## ingest endpoints
 
@@ -865,6 +866,12 @@ Thresholds for ``stonks health`` (``[production.health]``).
 | `checks` | list[[HealthCheckView](#healthcheckview)] | yes |  |
 | `healthy` | boolean | yes |  |
 | `thresholds` | [HealthConfig](#healthconfig) | yes |  |
+
+### HealthRunRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `tickers` | list[string] \| null | no |  |
 
 ### HorizonICView
 
@@ -2239,7 +2246,9 @@ Costs of a group of orders, weighted by notional, in bps.
 |-------|------|----------|-------------|
 | `as_of` | date \| null | no |  |
 | `asset_class` | "equity" \| "crypto" \| "commodity" \| "bond" \| null | no |  |
+| `bars_due_at` | date-time \| null | no | Buy only tickers whose latest session that closed by this time has its daily bar in the lake (scheduled ticks send their fire time). Tickers whose bar is missing are marked and sellable, not buyable. |
 | `dry_run` | boolean | no |  |
+| `scoped` | boolean \| null | no | Trade only the tick's tickers and leave other holdings alone, not even selling them. Default: true when tickers or asset_class narrow the universe. |
 | `tickers` | list[string] \| null | no |  |
 
 ### TickResultView
@@ -2280,11 +2289,14 @@ Costs of a group of orders, weighted by notional, in bps.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `deferred_corporate_actions` | list[object] | no |  |
 | `error` | string \| null | no |  |
 | `error_type` | string \| null | no |  |
 | `exit_strategy_id` | string \| null | no |  |
 | `fills` | integer \| null | no |  |
 | `orders_placed` | integer \| null | no |  |
+| `outside_universe_skipped` | list[string] | no |  |
+| `portfolio_id` | string \| null | no |  |
 | `reason` | string \| null | no |  |
 | `risk_adjustments` | list[[RiskAdjustmentView](#riskadjustmentview)] | no |  |
 | `shadow` | list[[ShadowOutcomeView](#shadowoutcomeview)] | no |  |
