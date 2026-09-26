@@ -373,7 +373,7 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `register_strategy` | boolean | no |  |
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
-| `survival_tests` | list["drift" \| "mcpt" \| "oos" \| "period_stability" \| "permutation" \| "perturbation" \| "runs_test" \| "walk_forward" \| "walk_forward_mcpt"] | no |  |
+| `survival_tests` | list["cost_stress" \| "cross_instrument" \| "drift" \| "mc_trades" \| "mcpt" \| "oos" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "walk_forward" \| "walk_forward_mcpt"] | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" | no |  |
 | `universe` | list[string] | yes |  |
@@ -574,7 +574,7 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
 | `strategy` | [StrategyRef](#strategyref) | yes |  |
-| `survival_tests` | list["drift" \| "mcpt" \| "oos" \| "period_stability" \| "permutation" \| "perturbation" \| "runs_test" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
+| `survival_tests` | list["cost_stress" \| "cross_instrument" \| "drift" \| "mc_trades" \| "mcpt" \| "oos" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" | no |  |
 | `universe` | list[string] | yes |  |
