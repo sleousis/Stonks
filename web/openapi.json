@@ -3482,6 +3482,44 @@
         "title": "SpecValidateRequest",
         "type": "object"
       },
+      "StatusChangeRequest": {
+        "additionalProperties": false,
+        "description": "Body of a status-change route (promote / retire / shadow, Studio\nenable / disable). Demotions need ``reason``; a promotion without a\npassing go-live check needs ``override`` plus a ``reason`` of at least\n20 characters.",
+        "properties": {
+          "actor": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "override": {
+            "default": false,
+            "title": "Override",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "StatusChangeRequest",
+        "type": "object"
+      },
       "StatusChangeView": {
         "description": "One audited status change or intervention (BL-24).",
         "properties": {
@@ -8053,6 +8091,25 @@
             }
           },
           {
+            "description": "case-insensitive substring of the id or class path",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "case-insensitive substring of the id or class path",
+              "title": "Q"
+            }
+          },
+          {
             "description": "page size",
             "in": "query",
             "name": "limit",
@@ -8425,8 +8482,101 @@
         ]
       }
     },
+    "/api/strategies/{strategy_id}/history": {
+      "get": {
+        "description": "The strategy's audited status changes and interventions, oldest first.",
+        "operationId": "getStrategyHistory",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "strategy_id",
+            "required": true,
+            "schema": {
+              "title": "Strategy Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StatusChangeView"
+                  },
+                  "title": "Response Getstrategyhistory",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Strategy History",
+        "tags": [
+          "strategies"
+        ]
+      }
+    },
     "/api/strategies/{strategy_id}/promote": {
       "post": {
+        "description": "Move to ``active``. Needs a passing go-live check (409 with the\nfailing checks otherwise), or ``override`` with a ``reason`` of at\nleast 20 characters (422 when shorter).",
         "operationId": "promoteStrategy",
         "parameters": [
           {
@@ -8439,6 +8589,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/StatusChangeRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -8514,6 +8681,7 @@
     },
     "/api/strategies/{strategy_id}/retire": {
       "post": {
+        "description": "Move to ``retired``; needs a ``reason`` (422 without one).",
         "operationId": "retireStrategy",
         "parameters": [
           {
@@ -8526,6 +8694,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/StatusChangeRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -8601,6 +8786,7 @@
     },
     "/api/strategies/{strategy_id}/shadow": {
       "post": {
+        "description": "Move to ``shadow``; needs a ``reason`` (422 without one).",
         "operationId": "shadowStrategy",
         "parameters": [
           {
@@ -8613,6 +8799,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/StatusChangeRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -9393,7 +9596,7 @@
     },
     "/api/studio/drafts/{draft_id}/disable": {
       "post": {
-        "description": "Move the registered strategy back to ``shadow``.",
+        "description": "Move the registered strategy back to ``shadow``; needs a ``reason``\n(422 without one).",
         "operationId": "disableDraft",
         "parameters": [
           {
@@ -9406,6 +9609,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/StatusChangeRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -9491,7 +9711,7 @@
     },
     "/api/studio/drafts/{draft_id}/enable": {
       "post": {
-        "description": "Promote the registered strategy to ``active``.",
+        "description": "Promote the registered strategy to ``active``: the same go-live gate\nas ``POST /api/strategies/{id}/promote`` (409 when refused; ``override``\nneeds a ``reason`` of at least 20 characters).",
         "operationId": "enableDraft",
         "parameters": [
           {
@@ -9504,6 +9724,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/StatusChangeRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {

@@ -163,7 +163,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Move a registered draft's strategy back to shadow (stops trading it).\nWithout confirm=true returns a preview and changes nothing.",
+      "description": "Move a registered draft's strategy back to shadow (stops trading it).\nNeeds a reason. Without confirm=true returns a preview and changes nothing.",
       "input_schema": {
         "properties": {
           "confirm": {
@@ -175,6 +175,20 @@
           "draft_id": {
             "title": "Draft Id",
             "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "why (logged in the audit trail); required for demotions and overrides",
+            "title": "Reason"
           }
         },
         "required": [
@@ -193,7 +207,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Promote a registered draft's strategy to active so production ticks rank\nand trade it. Without confirm=true returns a preview (survival results,\nwarnings) and changes nothing.",
+      "description": "Promote a registered draft's strategy to active so production ticks rank\nand trade it. Same go-live gate as promote_strategy (override=true needs a\nreason of at least 20 characters). Without confirm=true returns a preview\n(survival results, warnings) and changes nothing.",
       "input_schema": {
         "properties": {
           "confirm": {
@@ -205,6 +219,26 @@
           "draft_id": {
             "title": "Draft Id",
             "type": "string"
+          },
+          "override": {
+            "default": false,
+            "description": "promote without a passing go-live check; needs a reason of at least 20 characters",
+            "title": "Override",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "why (logged in the audit trail); required for demotions and overrides",
+            "title": "Reason"
           }
         },
         "required": [
@@ -597,6 +631,30 @@
         "type": "object"
       },
       "name": "get_strategy",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "A strategy's audited status changes (actor, reason, override, go-live\nresult), oldest first.",
+      "input_schema": {
+        "properties": {
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_id"
+        ],
+        "title": "get_strategy_historyArguments",
+        "type": "object"
+      },
+      "name": "get_strategy_history",
       "needs_confirm": false
     },
     {
@@ -1255,7 +1313,7 @@
         "open_world": false,
         "read_only": true
       },
-      "description": "Registered strategies (id, class, params, status), optionally by status.",
+      "description": "Registered strategies (id, class, params, status), optionally by status\nor a search term.",
       "input_schema": {
         "properties": {
           "limit": {
@@ -1272,6 +1330,19 @@
             "minimum": 0,
             "title": "Offset",
             "type": "integer"
+          },
+          "q": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "case-insensitive substring of the id or class path",
+            "title": "Q"
           },
           "status": {
             "anyOf": [
@@ -1364,7 +1435,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Promote a strategy to active so production ticks rank and trade it.\nWithout confirm=true returns a preview (current status, survival\nresults, warnings) and changes nothing.",
+      "description": "Promote a strategy to active so production ticks rank and trade it.\nNeeds a passing go-live check, or override=true with a reason of at\nleast 20 characters; the change is audited. Without confirm=true\nreturns a preview (current status, survival results, warnings) and\nchanges nothing.",
       "input_schema": {
         "properties": {
           "confirm": {
@@ -1372,6 +1443,26 @@
             "description": "must be true to apply; false (default) returns a preview only",
             "title": "Confirm",
             "type": "boolean"
+          },
+          "override": {
+            "default": false,
+            "description": "promote without a passing go-live check; needs a reason of at least 20 characters",
+            "title": "Override",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "why (logged in the audit trail); required for demotions and overrides",
+            "title": "Reason"
           },
           "strategy_id": {
             "title": "Strategy Id",
@@ -1424,7 +1515,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Retire a strategy: it stops being ranked or evaluated.\nWithout confirm=true returns a preview and changes nothing.",
+      "description": "Retire a strategy: it stops being ranked or evaluated.\nNeeds a reason. Without confirm=true returns a preview and changes nothing.",
       "input_schema": {
         "properties": {
           "confirm": {
@@ -1432,6 +1523,20 @@
             "description": "must be true to apply; false (default) returns a preview only",
             "title": "Confirm",
             "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "why (logged in the audit trail); required for demotions and overrides",
+            "title": "Reason"
           },
           "strategy_id": {
             "title": "Strategy Id",
@@ -2165,7 +2270,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Move a strategy to shadow: evaluated on a virtual portfolio, never traded.\nWithout confirm=true returns a preview and changes nothing.",
+      "description": "Move a strategy to shadow: evaluated on a virtual portfolio, never traded.\nNeeds a reason. Without confirm=true returns a preview and changes nothing.",
       "input_schema": {
         "properties": {
           "confirm": {
@@ -2173,6 +2278,20 @@
             "description": "must be true to apply; false (default) returns a preview only",
             "title": "Confirm",
             "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "why (logged in the audit trail); required for demotions and overrides",
+            "title": "Reason"
           },
           "strategy_id": {
             "title": "Strategy Id",

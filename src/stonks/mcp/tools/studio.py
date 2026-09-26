@@ -20,11 +20,14 @@ from stonks.mcp.tools.common import (
     JOB,
     READ,
     STATUS_CHANGE,
+    STATUS_HINTS,
     Confirm,
     IsoDate,
     Limit,
     ObjectiveName,
     Offset,
+    Override,
+    Reason,
     RegisterConfirm,
     RegisterStrategy,
     RouteRead,
@@ -37,6 +40,7 @@ from stonks.mcp.tools.common import (
     queue_lab_run,
     register_route_reads,
     seg,
+    status_body,
 )
 
 ROUTE_READS: tuple[RouteRead, ...] = (
@@ -203,15 +207,21 @@ def register(t: ToolContext) -> None:
         )
         return await queue_lab_run(t, draft_path(draft_id, "lab-runs"), body, confirm, HINTS)
 
-    async def guarded(draft_id: str, action: str, confirm: bool) -> dict[str, Any]:
+    async def guarded(
+        draft_id: str,
+        action: str,
+        confirm: bool,
+        body: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         draft = await t.get(draft_path(draft_id), hints=HINTS)
         if not confirm:
             strategy = None
             sid = draft.get("registered_strategy_id")
             if action != "register" and sid:
                 strategy = await t.get(f"/api/strategies/{seg(sid)}")
-            return draft_preview(draft, action, strategy)
-        updated = await t.post(draft_path(draft_id, action), hints=HINTS)
+            preview = draft_preview(draft, action, strategy)
+            return preview | {k: v for k, v in (body or {}).items() if k != "actor"}
+        updated = await t.post(draft_path(draft_id, action), body, hints=HINTS | STATUS_HINTS)
         return {
             "preview": False,
             "applied": True,
@@ -227,14 +237,22 @@ def register(t: ToolContext) -> None:
         return await guarded(draft_id, "register", confirm)
 
     @server.tool(annotations=STATUS_CHANGE)
-    async def enable_draft(draft_id: str, confirm: Confirm = False) -> dict[str, Any]:
+    async def enable_draft(
+        draft_id: str,
+        confirm: Confirm = False,
+        reason: Reason = None,
+        override: Override = False,
+    ) -> dict[str, Any]:
         """Promote a registered draft's strategy to active so production ticks rank
-        and trade it. Without confirm=true returns a preview (survival results,
-        warnings) and changes nothing."""
-        return await guarded(draft_id, "enable", confirm)
+        and trade it. Same go-live gate as promote_strategy (override=true needs a
+        reason of at least 20 characters). Without confirm=true returns a preview
+        (survival results, warnings) and changes nothing."""
+        return await guarded(draft_id, "enable", confirm, status_body(reason, override))
 
     @server.tool(annotations=STATUS_CHANGE)
-    async def disable_draft(draft_id: str, confirm: Confirm = False) -> dict[str, Any]:
+    async def disable_draft(
+        draft_id: str, confirm: Confirm = False, reason: Reason = None
+    ) -> dict[str, Any]:
         """Move a registered draft's strategy back to shadow (stops trading it).
-        Without confirm=true returns a preview and changes nothing."""
-        return await guarded(draft_id, "disable", confirm)
+        Needs a reason. Without confirm=true returns a preview and changes nothing."""
+        return await guarded(draft_id, "disable", confirm, status_body(reason))

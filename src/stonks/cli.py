@@ -736,32 +736,122 @@ def registry_show(strategy_id: str) -> None:
         state.close()
 
 
-def _set_status_or_exit(registry: StrategyRegistry, strategy_id: str, status: str) -> None:
+def _cli_actor() -> str:
+    """``cli:<os user>``: who a CLI status change is logged under."""
+    import getpass
+
     try:
-        registry.set_status(strategy_id, status)
-    except KeyError:
+        return f"cli:{getpass.getuser()}"
+    except Exception:  # no login name (some containers / services)
+        return "cli"
+
+
+def _reason_option() -> typer.models.OptionInfo:
+    return typer.Option(None, "--reason", help="why (logged; required for demotions and overrides)")
+
+
+def _change_status_or_exit(
+    settings: Settings,
+    strategy_id: str,
+    status: str,
+    *,
+    reason: str | None,
+    override: bool = False,
+) -> None:
+    """Change a strategy's status through the governed service
+    (``app.strategies.change_status``: go-live gate for promotions, audit
+    row for every change). Refusals print a friendly message and exit 1."""
+    from stonks.app.context import AppContext
+    from stonks.app.errors import AppError, NotFoundError
+    from stonks.app.strategies import PromotionRefusedError, change_status
+
+    with SqliteState(settings.state.path) as state:
+        state.migrate()
+    try:
+        change = change_status(
+            AppContext(settings),
+            strategy_id,
+            status,
+            actor=_cli_actor(),
+            reason=reason,
+            override=override,
+        )
+    except NotFoundError:
         console.print(f"[red]no strategy with id {strategy_id!r}[/red]")
         raise typer.Exit(code=1) from None
+    except PromotionRefusedError as exc:
+        console.print(f"[red]promotion refused: {exc}[/red]")
+        if exc.failures:
+            console.print("failing go-live checks:")
+            for line in exc.failures:
+                console.print(f"  - {line}")
+        console.print(
+            "See `stonks golive check <id>`, or pass --override with a --reason "
+            "of at least 20 characters."
+        )
+        raise typer.Exit(code=1) from None
+    except AppError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from None
+    colour = {"active": "green", "shadow": "cyan", "retired": "yellow"}[status]
+    if change is None:
+        console.print(f"[{colour}]{strategy_id} is already {status}[/{colour}]")
+    else:
+        console.print(f"[{colour}]{strategy_id} → {status}[/{colour}]")
 
 
 @registry_app.command("promote")
-def registry_promote(strategy_id: str) -> None:
-    settings = _settings()
-    state, registry = _open_registry(settings)
-    try:
-        _set_status_or_exit(registry, strategy_id, "active")
-        console.print(f"[green]{strategy_id} → active[/green]")
-    finally:
-        state.close()
+def registry_promote(
+    strategy_id: str,
+    reason: str | None = _reason_option(),
+    override: bool = typer.Option(
+        False,
+        "--override",
+        help="promote without a passing go-live check (needs --reason, >= 20 chars)",
+    ),
+) -> None:
+    """Move a strategy to active. Needs a passing go-live check, or
+    --override with a reason; every change is audited."""
+    _change_status_or_exit(_settings(), strategy_id, "active", reason=reason, override=override)
+
+
+@registry_app.command("shadow")
+def registry_shadow(strategy_id: str, reason: str | None = _reason_option()) -> None:
+    """Move a strategy back to shadow (paper-traded on a virtual portfolio)."""
+    _change_status_or_exit(_settings(), strategy_id, "shadow", reason=reason)
 
 
 @registry_app.command("retire")
-def registry_retire(strategy_id: str) -> None:
+def registry_retire(strategy_id: str, reason: str | None = _reason_option()) -> None:
+    """Retire a strategy: it is no longer ranked or evaluated."""
+    _change_status_or_exit(_settings(), strategy_id, "retired", reason=reason)
+
+
+@registry_app.command("history")
+def registry_history(strategy_id: str) -> None:
+    """The strategy's audited status changes and interventions, oldest first."""
     settings = _settings()
     state, registry = _open_registry(settings)
     try:
-        _set_status_or_exit(registry, strategy_id, "retired")
-        console.print(f"[yellow]{strategy_id} → retired[/yellow]")
+        state.migrate()
+        if not any(h.id == strategy_id for h in registry.list_all()):
+            console.print(f"[red]no strategy with id {strategy_id!r}[/red]")
+            raise typer.Exit(code=1)
+        table = Table(title=f"status history: {strategy_id}")
+        for col in ("when", "kind", "change", "actor", "override", "go-live", "reason"):
+            table.add_column(col)
+        for c in registry.status_history(strategy_id):
+            golive = "-" if c.golive_passed is None else ("pass" if c.golive_passed else "fail")
+            table.add_row(
+                c.created_at,
+                c.kind,
+                f"{c.from_status} → {c.to_status}" if c.to_status else "-",
+                c.actor,
+                "override" if c.override else "",
+                golive,
+                c.reason,
+            )
+        console.print(table)
     finally:
         state.close()
 

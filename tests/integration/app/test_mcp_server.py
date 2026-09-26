@@ -85,6 +85,7 @@ READ_TOOLS = {
     "list_portfolio_snapshots",
     "list_strategies",
     "get_strategy",
+    "get_strategy_history",
     "search_instruments",
     "get_bars",
     "get_coverage",

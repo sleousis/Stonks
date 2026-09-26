@@ -8,15 +8,16 @@ off. Every non-GET route needs the bearer token (method-based auth).
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Body, HTTPException, Response
 
 from stonks.api.deps import PageDep, ServicesDep
 from stonks.api.errors import PROBLEM_RESPONSES, ProblemDetails
 from stonks.api.routers._jobs_common import JOB_CREATED, accepted
 from stonks.app.jobs import Job
 from stonks.app.pagination import Page
+from stonks.app.strategies import StatusChangeRequest
 from stonks.app.studio import (
     CodeStrategiesDisabledError,
     Draft,
@@ -138,12 +139,21 @@ def register_draft(draft_id: str, services: ServicesDep) -> Draft:
 
 
 @router.post("/drafts/{draft_id}/enable", response_model=Draft, operation_id="enableDraft")
-def enable_draft(draft_id: str, services: ServicesDep) -> Draft:
-    """Promote the registered strategy to ``active``."""
-    return _call(services, lambda s: s.enable(draft_id))
+def enable_draft(
+    draft_id: str, services: ServicesDep, body: Annotated[StatusChangeRequest | None, Body()] = None
+) -> Draft:
+    """Promote the registered strategy to ``active``: the same go-live gate
+    as ``POST /api/strategies/{id}/promote`` (409 when refused; ``override``
+    needs a ``reason`` of at least 20 characters)."""
+    body = body or StatusChangeRequest()
+    return _call(services, lambda s: s.enable(draft_id, reason=body.reason, override=body.override))
 
 
 @router.post("/drafts/{draft_id}/disable", response_model=Draft, operation_id="disableDraft")
-def disable_draft(draft_id: str, services: ServicesDep) -> Draft:
-    """Move the registered strategy back to ``shadow``."""
-    return _call(services, lambda s: s.disable(draft_id))
+def disable_draft(
+    draft_id: str, services: ServicesDep, body: Annotated[StatusChangeRequest | None, Body()] = None
+) -> Draft:
+    """Move the registered strategy back to ``shadow``; needs a ``reason``
+    (422 without one)."""
+    body = body or StatusChangeRequest()
+    return _call(services, lambda s: s.disable(draft_id, reason=body.reason))

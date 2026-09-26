@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from stonks.app.catalog import CatalogService, class_path_of
 from stonks.app.context import AppContext
@@ -34,6 +34,16 @@ StrategyStatus = Literal["active", "shadow", "retired"]
 _STATUSES = ("active", "shadow", "retired")
 
 _log = get_logger("stonks.app.strategies")
+
+
+class PromotionRefusedError(ConflictError):
+    """A promotion the go-live gate refused (HTTP 409). ``failures`` lists
+    the failing go-live checks as ``"name: detail"`` lines, so transports
+    can show them one per line."""
+
+    def __init__(self, message: str, failures: list[str] | None = None) -> None:
+        super().__init__(message)
+        self.failures = list(failures or [])
 
 
 class StrategyRef(BaseModel):
@@ -87,6 +97,20 @@ class StatusChangeView(BaseModel):
     created_at: str
 
 
+class StatusChangeRequest(BaseModel):
+    """Body of a status-change route (promote / retire / shadow, Studio
+    enable / disable). Demotions need ``reason``; a promotion without a
+    passing go-live check needs ``override`` plus a ``reason`` of at least
+    20 characters."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str | None = Field(default=None, max_length=2_000)
+    override: bool = False
+    #: Who asked (logged); defaults to the transport (``api``, ``studio``).
+    actor: str | None = Field(default=None, min_length=1, max_length=100)
+
+
 class StrategySummary(BaseModel):
     id: str
     class_path: str
@@ -117,11 +141,20 @@ class StrategyService:
         self._ctx = context
         self._catalog = catalog
 
-    def list(self, *, status: str | None = None, limit: int, offset: int) -> Page[StrategySummary]:
+    def list(
+        self, *, status: str | None = None, q: str | None = None, limit: int, offset: int
+    ) -> Page[StrategySummary]:
+        """``q`` keeps strategies whose id or class path contains it
+        (case-insensitive)."""
         if status is not None and status not in _STATUSES:
             raise ValidationError(f"status must be one of {list(_STATUSES)}, got {status!r}")
         with self._ctx.registry() as registry:
             handles = registry.list_all(status=status)
+        needle = (q or "").strip().lower()
+        if needle:
+            handles = [
+                h for h in handles if needle in h.id.lower() or needle in h.class_path.lower()
+            ]
         items = [self._summary(h) for h in handles[offset : offset + limit]]
         return Page[StrategySummary](items=items, total=len(handles), limit=limit, offset=offset)
 
@@ -292,7 +325,7 @@ def change_status(
         except KeyError:
             raise NotFoundError(f"no strategy with id {strategy_id!r}") from None
         except PromotionRefused as exc:
-            raise ConflictError(str(exc)) from None
+            raise PromotionRefusedError(str(exc), _failed_checks(report)) from None
         except GovernanceError as exc:
             raise ValidationError(str(exc)) from None
         if change is not None and status == "active":
@@ -310,6 +343,14 @@ def change_status(
             golive_passed=change.golive_passed,
         )
     return change
+
+
+def _failed_checks(report: Any) -> list[str]:
+    return [
+        f"{c.name}: {c.detail}" if c.detail else c.name
+        for c in getattr(report, "checks", None) or []
+        if not c.passed
+    ]
 
 
 def _promotion_warnings(meta: StrategyMetadata | StrategyMetadataView) -> list[str]:

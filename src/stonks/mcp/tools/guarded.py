@@ -14,13 +14,17 @@ from stonks.mcp.client import ApiClient, ApiError
 from stonks.mcp.guards import CONFIRM_HINT, live_trading_state, status_change_preview
 from stonks.mcp.tools.common import (
     STATUS_CHANGE,
+    STATUS_HINTS,
     TICK,
     AssetClass,
     Confirm,
+    Override,
+    Reason,
     ToolContext,
     drop_none,
     iso,
     seg,
+    status_body,
 )
 
 #: Broker the production tick trades through (``BrokerInfo``). A
@@ -31,12 +35,22 @@ BROKER_STATUS_PATH = "/api/brokers"
 def register(t: ToolContext) -> None:
     server = t.server
 
-    async def change_status(strategy_id: str, action: str, target: str, confirm: bool):
+    async def change_status(
+        strategy_id: str,
+        action: str,
+        target: str,
+        confirm: bool,
+        reason: str | None,
+        override: bool = False,
+    ):
         sid = seg(strategy_id)
         current = await t.get(f"/api/strategies/{sid}")
         if not confirm:
-            return status_change_preview(current, target)
-        updated = await t.post(f"/api/strategies/{sid}/{action}")
+            preview = status_change_preview(current, target)
+            return preview | {"reason": reason, "override": override}
+        updated = await t.post(
+            f"/api/strategies/{sid}/{action}", status_body(reason, override), hints=STATUS_HINTS
+        )
         return {
             "preview": False,
             "applied": True,
@@ -45,23 +59,34 @@ def register(t: ToolContext) -> None:
         }
 
     @server.tool(annotations=STATUS_CHANGE)
-    async def promote_strategy(strategy_id: str, confirm: Confirm = False) -> dict[str, Any]:
+    async def promote_strategy(
+        strategy_id: str,
+        confirm: Confirm = False,
+        reason: Reason = None,
+        override: Override = False,
+    ) -> dict[str, Any]:
         """Promote a strategy to active so production ticks rank and trade it.
-        Without confirm=true returns a preview (current status, survival
-        results, warnings) and changes nothing."""
-        return await change_status(strategy_id, "promote", "active", confirm)
+        Needs a passing go-live check, or override=true with a reason of at
+        least 20 characters; the change is audited. Without confirm=true
+        returns a preview (current status, survival results, warnings) and
+        changes nothing."""
+        return await change_status(strategy_id, "promote", "active", confirm, reason, override)
 
     @server.tool(annotations=STATUS_CHANGE)
-    async def shadow_strategy(strategy_id: str, confirm: Confirm = False) -> dict[str, Any]:
+    async def shadow_strategy(
+        strategy_id: str, confirm: Confirm = False, reason: Reason = None
+    ) -> dict[str, Any]:
         """Move a strategy to shadow: evaluated on a virtual portfolio, never traded.
-        Without confirm=true returns a preview and changes nothing."""
-        return await change_status(strategy_id, "shadow", "shadow", confirm)
+        Needs a reason. Without confirm=true returns a preview and changes nothing."""
+        return await change_status(strategy_id, "shadow", "shadow", confirm, reason)
 
     @server.tool(annotations=STATUS_CHANGE)
-    async def retire_strategy(strategy_id: str, confirm: Confirm = False) -> dict[str, Any]:
+    async def retire_strategy(
+        strategy_id: str, confirm: Confirm = False, reason: Reason = None
+    ) -> dict[str, Any]:
         """Retire a strategy: it stops being ranked or evaluated.
-        Without confirm=true returns a preview and changes nothing."""
-        return await change_status(strategy_id, "retire", "retired", confirm)
+        Needs a reason. Without confirm=true returns a preview and changes nothing."""
+        return await change_status(strategy_id, "retire", "retired", confirm, reason)
 
     @server.tool(annotations=TICK)
     async def run_tick(

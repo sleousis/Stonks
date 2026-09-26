@@ -24,6 +24,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_rule_schema`](#get_rule_schema) | read | no |
 | [`get_shadow_pnl`](#get_shadow_pnl) | read | no |
 | [`get_strategy`](#get_strategy) | read | no |
+| [`get_strategy_history`](#get_strategy_history) | read | no |
 | [`get_tick`](#get_tick) | read | no |
 | [`health`](#health) | read | no |
 | [`lab_run_draft`](#lab_run_draft) | guarded | yes |
@@ -189,6 +190,17 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `strategy_id` | string | yes |  |  |
 
+### `get_strategy_history`
+
+A strategy's audited status changes (actor, reason, override, go-live
+result), oldest first.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `strategy_id` | string | yes |  |  |
+
 ### `get_tick`
 
 One production tick run with the orders it placed.
@@ -329,13 +341,15 @@ No inputs.
 
 ### `list_strategies`
 
-Registered strategies (id, class, params, status), optionally by status.
+Registered strategies (id, class, params, status), optionally by status
+or a search term.
 
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `status` | "active" \| "shadow" \| "retired" \| null | no | `null` |  |
+| `q` | string \| null | no | `null` | case-insensitive substring of the id or class path |
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
 
@@ -511,7 +525,7 @@ Need `confirm=true` to act. Without it they return a preview and change nothing.
 ### `disable_draft`
 
 Move a registered draft's strategy back to shadow (stops trading it).
-Without confirm=true returns a preview and changes nothing.
+Needs a reason. Without confirm=true returns a preview and changes nothing.
 
 Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 
@@ -519,12 +533,14 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 |-------|------|----------|---------|-------------|
 | `draft_id` | string | yes |  |  |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+| `reason` | string \| null | no | `null` | why (logged in the audit trail); required for demotions and overrides |
 
 ### `enable_draft`
 
 Promote a registered draft's strategy to active so production ticks rank
-and trade it. Without confirm=true returns a preview (survival results,
-warnings) and changes nothing.
+and trade it. Same go-live gate as promote_strategy (override=true needs a
+reason of at least 20 characters). Without confirm=true returns a preview
+(survival results, warnings) and changes nothing.
 
 Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 
@@ -532,6 +548,8 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 |-------|------|----------|---------|-------------|
 | `draft_id` | string | yes |  |  |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+| `reason` | string \| null | no | `null` | why (logged in the audit trail); required for demotions and overrides |
+| `override` | boolean | no | `false` | promote without a passing go-live check; needs a reason of at least 20 characters |
 
 ### `lab_run_draft`
 
@@ -561,8 +579,10 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 ### `promote_strategy`
 
 Promote a strategy to active so production ticks rank and trade it.
-Without confirm=true returns a preview (current status, survival
-results, warnings) and changes nothing.
+Needs a passing go-live check, or override=true with a reason of at
+least 20 characters; the change is audited. Without confirm=true
+returns a preview (current status, survival results, warnings) and
+changes nothing.
 
 Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 
@@ -570,6 +590,8 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 |-------|------|----------|---------|-------------|
 | `strategy_id` | string | yes |  |  |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+| `reason` | string \| null | no | `null` | why (logged in the audit trail); required for demotions and overrides |
+| `override` | boolean | no | `false` | promote without a passing go-live check; needs a reason of at least 20 characters |
 
 ### `register_draft`
 
@@ -586,7 +608,7 @@ Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes*
 ### `retire_strategy`
 
 Retire a strategy: it stops being ranked or evaluated.
-Without confirm=true returns a preview and changes nothing.
+Needs a reason. Without confirm=true returns a preview and changes nothing.
 
 Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 
@@ -594,6 +616,7 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 |-------|------|----------|---------|-------------|
 | `strategy_id` | string | yes |  |  |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+| `reason` | string \| null | no | `null` | why (logged in the audit trail); required for demotions and overrides |
 
 ### `run_lab`
 
@@ -641,7 +664,7 @@ Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes*
 ### `shadow_strategy`
 
 Move a strategy to shadow: evaluated on a virtual portfolio, never traded.
-Without confirm=true returns a preview and changes nothing.
+Needs a reason. Without confirm=true returns a preview and changes nothing.
 
 Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 
@@ -649,6 +672,7 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 |-------|------|----------|---------|-------------|
 | `strategy_id` | string | yes |  |  |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+| `reason` | string \| null | no | `null` | why (logged in the audit trail); required for demotions and overrides |
 
 ## Resources
 

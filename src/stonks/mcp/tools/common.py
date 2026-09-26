@@ -69,6 +69,35 @@ SurvivalTestName = Literal[
 ]
 
 
+Reason = Annotated[
+    str | None,
+    Field(
+        max_length=2000,
+        description="why (logged in the audit trail); required for demotions and overrides",
+    ),
+]
+Override = Annotated[
+    bool,
+    Field(
+        description="promote without a passing go-live check; needs a reason of at least "
+        "20 characters"
+    ),
+]
+#: Actor logged for status changes made through MCP.
+MCP_ACTOR = "mcp"
+#: Explanations for the governed status routes' refusals.
+STATUS_HINTS: dict[int, str] = {
+    409: "Promotion refused by the go-live gate; wait for a passing paper period, or pass "
+    "override=true with a reason of at least 20 characters",
+    422: "The change needs a reason (and an override reason of at least 20 characters)",
+}
+
+
+def status_body(reason: str | None, override: bool = False) -> dict[str, Any]:
+    """Body of a governed status-change route (``StatusChangeRequest``)."""
+    return drop_none({"reason": reason, "override": override or None, "actor": MCP_ACTOR})
+
+
 RegisterStrategy = Annotated[
     bool,
     Field(description="register the result in shadow status (needs confirm=true)"),
