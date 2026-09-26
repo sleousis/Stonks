@@ -58,17 +58,19 @@ def split_lake(tmp_path):
         pd.DataFrame([{"ticker": "SPL.US", "date": dates[ex_idx].date(), "ratio": SPLIT_RATIO}])
     )
     lake.upsert_dividends(
-        pd.DataFrame([
-            {
-                "ticker": "SPL.US",
-                "ex_date": dates[160].date(),
-                "amount": 0.05,
-                "currency": "USD",
-                "pay_date": None,
-                "record_date": None,
-                "declaration_date": None,
-            }
-        ])
+        pd.DataFrame(
+            [
+                {
+                    "ticker": "SPL.US",
+                    "ex_date": dates[160].date(),
+                    "amount": 0.05,
+                    "currency": "USD",
+                    "pay_date": None,
+                    "record_date": None,
+                    "declaration_date": None,
+                }
+            ]
+        )
     )
     yield lake, dates
     lake.close()
