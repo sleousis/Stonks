@@ -239,10 +239,10 @@ Every trader gets a simple experience: connect a broker for insights, pick strat
 | WP | Scope |
 |----|-------|
 | 15.1 Design: tenancy and modes | A design doc (`docs/design/accounts-and-modes.md`) for per-user portfolios, subscriptions, broker connections and modes, and how every table, API route and job gets a user scope. Guides all later work. |
-| 15.2 Per-user data model | Users, portfolios, strategy subscriptions and notification settings; every order, fill, snapshot, alert and audit row belongs to a user. Migrations with a default owner for existing data. |
-| 15.3 Broker connection seam | A `BrokerConnection` interface: read-only sync of positions, cash, orders and history first, trading later. Providers: a direct Alpaca adapter and an aggregator (for example SnapTrade) for many brokers, wrapped behind the seam. OAuth or API keys stored encrypted per user. |
+| 15.2 Per-user data model | Users, portfolios, strategy subscriptions and notification settings; every order, fill, snapshot, alert and audit row belongs to a user or portfolio, while market data and the strategy catalog stay global. Migrations with a default owner and portfolio for existing data (a golden test keeps the single-owner tick identical). Then app services take a principal, per-user API and MCP tokens with scopes, and a tenant-isolation test over every route. |
+| 15.3 Broker connection seam | A `BrokerConnection` interface: read-only sync of positions, cash, orders and history first, trading later. Providers: a direct Alpaca adapter and an aggregator (for example SnapTrade) for many brokers, wrapped behind the seam. OAuth or API keys stored encrypted per user. No provider is enabled by default; an admin enables each one. |
 | 15.4 Portfolio insights | Imported holdings analyzed like Stonks portfolios: allocation, exposure, P&L, risk, and which Stonks strategies agree or disagree with each holding. |
-| 15.5 Automation modes | Per subscription: notify (signals only), paper (simulated account) or auto (connected account). Auto requires a second factor to enable and respects per-user risk limits and the kill switch. |
+| 15.5 Automation modes | Strategies compute signals once per tick through per-strategy model books (shadow books generalised); then per subscription: notify (signals only), paper (simulated account) or auto (connected account). Auto requires a checklist and a second factor to enable, pauses itself on broker errors, and respects per-user risk limits and the kill switch at global, user and portfolio scope. |
 | 15.6 Signals and notifications | A signal feed (opportunity, entry, exit, risk alerts) with reasons; Web Push through the browser's service worker so Chrome and installed phone apps get background notifications; quiet hours and per-strategy preferences. |
 | 15.7 Simple trader UX | A home screen with three things: my portfolio, today's signals, my strategies with an on/off and mode switch. Advanced pages stay available but out of the way. |
 
@@ -250,7 +250,7 @@ Every trader gets a simple experience: connect a broker for insights, pick strat
 
 | WP | Scope |
 |----|-------|
-| 16.1 Engine and broker | Negative positions in the portfolio, short fills in the simulated broker, borrow costs, margin requirements, and short-sale availability checks. |
+| 16.1 Engine and broker | Negative positions in the portfolio, an order position effect (open or close, split at zero), short fills in the simulated broker, borrow costs, margin requirements, and short-sale availability checks. Opt-in per strategy and per portfolio; long-only behaviour stays identical by default. |
 | 16.2 Risk rules for shorts | Gross and net exposure limits, per-position short caps, and squeeze protection (stop on adverse moves), as registered risk rules. |
 | 16.3 Strategies that short | Let strategies emit short signals behind an opt-in; re-enable the short legs of the neurotrader888 ports and the long/short books from the book research. |
 | 16.4 Validation for shorts | Backtests, permutation tests and reports handle long/short books; borrow-cost stress tests. |
@@ -259,7 +259,7 @@ Every trader gets a simple experience: connect a broker for insights, pick strat
 
 | WP | Scope |
 |----|-------|
-| 17.1 Instruments and data | An option contract model (underlying, expiry, strike, right, multiplier) and an options chain data source behind the `DataSource` seam, with daily chain snapshots in the lake. |
+| 17.1 Instruments and data | An option contract model (underlying, expiry, strike, right, multiplier) and an options chain data source behind the `DataSource` seam, with daily chain snapshots in the lake. Stage 1 with 17.2 is read-only analytics; nothing trades options until 17.3 to 17.5. |
 | 17.2 Pricing and Greeks | Black-Scholes and implied volatility through a maintained library (for example py_vollib or QuantLib), wrapped behind a seam; volatility surface basics. |
 | 17.3 Backtesting options | Fills on option prices, expiry and assignment handling, early exercise rules, and multi-leg positions. |
 | 17.4 Risk for options | Greek limits (delta, gamma, vega), max loss per spread, and margin. |
@@ -275,3 +275,4 @@ Every trader gets a simple experience: connect a broker for insights, pick strat
 6. Angular trader console (5.2) including the Strategy Studio UI (5.5), then end-to-end tests (5.4). This runs alongside Phase 9, which never touches `web/`.
 7. Phase 9 (7.7), once 8.2, 8.5, 8.6, 6.6 and 6.7 are merged. Waves 9.1 to 9.5 run in order, up to six agents per wave, each wave followed by its integration step (merge, wire the shared files, review, fix, full test run).
 8. Final review, fix, re-review.
+9. Phases 15 to 17 follow the design docs in `docs/design/` (`accounts-and-modes.md`, `shorting.md`, `options.md`). The first step of 15.2 (accounts data model, no behaviour change) lands **before W2.1 (9.2.1) is wired into the tick**, so W2.1 writes the tick once as a loop over portfolios with a `BookSpec` instead of rewriting it twice. The backend of 13.1 (login, roles, 2FA, tokens) runs as part of Phase 15; see the step plan in `accounts-and-modes.md` section 12.

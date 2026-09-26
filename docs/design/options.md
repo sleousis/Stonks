@@ -1,0 +1,153 @@
+# Options
+
+Design for roadmap Phase 17. Stonks has no derivatives today: positions are keyed by ticker, valued at `qty × price`, and every instrument lives in `instruments`.
+
+Staging is the main decision: **read-only analytics first** (chains, implied volatility, Greeks, "what would a covered call on my holdings pay"), then backtests, then paper, and live trading last behind its own go-live.
+
+Non-goals for now: naked short options, futures options, exotic payoffs, intraday options data, market making.
+
+## 1. Instrument model
+
+Options don't go in `instruments`: a single large underlying has thousands of contracts and they churn daily. They get their own table and a canonical id.
+
+**Contract id**: `<underlying>:<expiry>:<C|P>:<strike>`, e.g. `AAPL.US:2026-01-16:C:150`. Vendor symbols (OCC `AAPL  260116C00150000`, broker variants) are mapped at parse time, like tickers today.
+
+**`option_contracts`** (lake) `(contract_id PK, underlying, expiry, strike, right, style, multiplier, settlement, currency, exchange, first_seen, last_seen)`
+- `right ∈ {call, put}`, `style ∈ {american, european}`, `settlement ∈ {physical, cash}`: normalised literals.
+- `multiplier` is usually 100, but adjusted contracts after splits or mergers differ, so it is never assumed.
+
+**Core types** (`core/options.py`):
+
+```python
+@dataclass(frozen=True)
+class OptionContract:
+    contract_id: str
+    underlying: str
+    expiry: date
+    strike: float
+    right: Literal["call", "put"]
+    style: Literal["american", "european"]
+    multiplier: float
+    settlement: Literal["physical", "cash"]
+```
+
+**Valuation with multipliers.** `Portfolio.positions` stays `id -> signed quantity`; an option position is keyed by its contract id. `Portfolio.total_value(prices, multipliers=None)` and the fill cash delta use `qty × price × multiplier`, where the multiplier map defaults to empty (1.0). Long-only equity code never passes it, so nothing changes there. An `InstrumentBook` helper resolves multipliers and underlyings for any id.
+
+## 2. Data source and lake tables
+
+**Seam.** An optional capability on `DataSource`, duck-typed like the other hooks:
+
+```python
+def fetch_option_chain(self, underlying: str, as_of: date) -> OptionChainFrame: ...
+```
+
+`OptionChainFrame` has our columns only: `contract_id, bid, ask, last, volume, open_interest, vendor_iv, underlying_price, quoted_at`. Candidate vendors: EODHD's options add-on, Tradier, Polygon (Massive), or ORATS or CBOE for history. Yahoo has current chains only. Each is one adapter file.
+
+**`option_quotes`** (lake) `(contract_id, as_of, bid, ask, last, volume, open_interest, vendor_iv, underlying_price, source; PK (contract_id, as_of, source))`: one end-of-day snapshot per contract.
+
+**Size control.** 500 underlyings × ~2,000 contracts × 252 days is about 250 M rows a year. So:
+- snapshot only a configured list of underlyings (watchlists plus holdings), strikes within ±30 % of spot, expiries up to 1 year;
+- store the table as Parquet partitioned by underlying and year (the same layout Phase 14.2 uses for bars), queried through DuckDB;
+- start collecting forward now; buy history only when a strategy needs it for validation.
+
+**Derived tables** (recomputable, never the source of truth): `option_analytics (contract_id, as_of, iv, delta, gamma, vega, theta, rho, model)` and `vol_surface_points (underlying, as_of, expiry, moneyness, iv)`.
+
+## 3. Pricing and Greeks seam
+
+```python
+class OptionPricer(ABC):
+    name: ClassVar[str]
+    def price(self, c: OptionContract, m: MarketInputs) -> float: ...
+    def greeks(self, c: OptionContract, m: MarketInputs) -> Greeks: ...
+    def implied_vol(self, c: OptionContract, m: MarketInputs, price: float) -> float | None: ...
+    # vectorised versions over a whole chain are the main path
+```
+
+`MarketInputs(spot, rate, dividend_yield | discrete_dividends, vol, as_of)`.
+
+| Pricer | Wraps | Use |
+|---|---|---|
+| `black_scholes` | `py_vollib` / `py_vollib_vectorized` | European, index options, fast chain-wide IV and Greeks |
+| `american` | `QuantLib` (Barone-Adesi-Whaley or binomial) | Equity options with dividends, early exercise value |
+
+- Registry `@register_pricer(name)`; strategies and risk ask for a pricer by name, and vendor types never leave the adapter.
+- Rates: Treasury yields from `bond_yield_history` interpolated to expiry; dividends from `dividends` (known future ex-dates, else trailing yield).
+- `VolSurface`: per-expiry smile interpolation in moneyness, total-variance interpolation across expiries; an SVI fit can come later behind the same class.
+- IV that fails to solve (price below intrinsic, stale quote) is `NULL`, never a guess.
+- Cores: IV and Greeks are vectorised per chain; the per-underlying fan-out goes through `lab/parallel.run_tasks`.
+
+## 4. Backtest handling
+
+```mermaid
+flowchart TB
+  SIG[Strategy intent:<br/>structure + target delta/DTE] --> SEL[LegSelector picks contracts<br/>from the chain snapshot]
+  SEL --> CO[ComboOrder: legs, ratios,<br/>net limit price]
+  CO --> FILL{Quotes for<br/>every leg?}
+  FILL -- no --> REJ[No fill, logged]
+  FILL -- yes --> F[All-or-none fill<br/>at mid ± spread share]
+  F --> POS[Leg positions +<br/>position group]
+  POS --> DAY[Each day: mark, accrue,<br/>early-assignment check]
+  DAY --> EXP{Expiry?}
+  EXP -- ITM ≥ 0.01 --> EX[Exercise / assign:<br/>shares or cash]
+  EXP -- OTM --> ZERO[Expires worthless]
+```
+
+- **Fills.** From the day's quote only: buy at `mid + f × half-spread`, sell at `mid − f × half-spread`, `f` configurable (default 1.0, i.e. at the touch). No quote, no fill: a model price never fills in v1. Fee per contract (e.g. $0.65) through the cost model.
+- **Multi-leg.** `ComboOrder(legs=[(contract_id, ratio, side)], net_limit)` fills all legs or none. Legs are ordinary positions; a `position_groups (group_id, portfolio_id, structure, legs_json, opened_at)` row ties them together for risk, P&L and exits.
+- **Expiry.** At the expiry close: ITM by at least $0.01 is exercised (OCC auto-exercise); physical settlement turns into `± multiplier × qty` shares of the underlying at the strike, cash settlement credits intrinsic value. OTM expires at zero.
+- **Early assignment** of short American options, via an `AssignmentModel` seam: default assigns a short call the day before ex-dividend when its extrinsic value is below the dividend, and a deep ITM short put when extrinsic value falls below a threshold. Configurable, reported.
+- **Corporate actions.** Splits produce adjusted contracts (new multiplier or deliverable); v1 closes affected positions at the last quote and logs it.
+- **Calendar.** Weekly and monthly expiries follow the exchange calendar from Phase 12.1.
+- The engine iterates daily bars as today; option marks come from `option_quotes` of the same day.
+
+## 5. Risk
+
+Portfolio Greeks are summed in share-equivalents and dollars (`dollar_delta = Σ delta × multiplier × qty × spot`). New rules under `production/rules/`:
+
+| Rule | Limit (defaults to confirm) |
+|---|---|
+| `greek_limits` | `max_abs_dollar_delta` (e.g. 1.0 × equity), `max_vega` (% of equity per vol point), `max_gamma`, `max_theta_decay` |
+| `max_loss` | Every position group must have a defined max loss (long options, verticals, iron condors, covered calls, cash-secured puts); max loss per group ≤ `max_loss_per_group` (2 % of equity) and in total ≤ `max_loss_total` |
+| `option_liquidity` | Minimum open interest and volume; maximum spread as % of mid |
+| `expiry_rules` | Close or roll at `min_dte` (e.g. 5 days) to avoid pin and assignment risk; cap exposure per expiry date |
+| `option_margin` | Cash-secured puts reserve `strike × multiplier`; covered calls need the shares; spreads reserve max loss; naked shorts rejected in v1 |
+
+The generic property test still applies: rules never increase max loss or gross Greeks, and closing orders are never blocked.
+
+## 6. Strategy contract and examples
+
+Option strategies usually reuse an equity view, then choose a structure. So the contract splits in two:
+1. The strategy returns **intents**: `OptionIntent(underlying, structure, params)`, e.g. `("AAPL.US", "covered_call", {"delta": 0.30, "dte": 35})`.
+2. A **structure registry** (`options/structures/*.py`, `@register_structure`) turns an intent into legs with a `LegSelector` over the chain snapshot (nearest delta, nearest DTE, liquidity filters).
+
+This keeps selection logic in one place and lets any equity strategy drive an options overlay.
+
+| Strategy | Idea |
+|---|---|
+| Covered call overlay | Sell ~0.30 delta, 30-45 DTE calls on held shares; roll at 50 % profit or 21 DTE |
+| Cash-secured put (wheel) | Sell puts on names an equity strategy wants to own; assigned shares then get covered calls |
+| Protective put / collar | Buy puts on large holdings when a regime filter (BL-42) turns risk-off |
+| Vertical spreads | Defined-risk directional bets from existing momentum or trend signals |
+| Volatility risk premium | Iron condors when IV rank is high and implied exceeds forecast realised volatility (BL-48 `VolForecaster`), per Sinclair and Natenberg |
+
+Validation reuses the lab: survival tests run on the equity curve; options add a check that results survive wider fills (`f` from 1.0 to 1.5) and missing-quote days.
+
+## 7. Staging
+
+| Stage | WP | Delivers | Trades? |
+|---|---|---|---|
+| 1 Read-only analytics | 17.1, 17.2 | Contract model, chain adapter, daily snapshots, pricers, IV and Greeks, vol surface; UI pages for IV rank, term structure, skew, expected move; insight "covered-call yield on my holdings" | No |
+| 2 Backtests | 17.3 | Multipliers in valuation, combo fills, expiry, assignment, position groups | Simulated only |
+| 3 Risk and paper | 17.4 | Greek and max-loss rules, option margin; paper subscriptions | Paper |
+| 4 Strategies | 17.5 | The examples above through the lab and go-live | Paper, then auto |
+| 5 Live | after 17.5 | Auto only with `Capability.OPTIONS` on the connection; the broker's options approval level limits the allowed structures (level 1: covered and cash-secured; level 2: long options; level 3: spreads) | Auto with 2FA |
+
+Owns, by stage: `core/options.py`, `ingest/sources/<vendor>_options.py`, lake migrations for `option_contracts`, `option_quotes` and analytics; `options/{pricing,surface,structures,selector}/*`; `backtest/{options_fills,expiry}.py` and multiplier support in `core/types.py` and `backtest/engine.py`; `production/rules/{greek_limits,max_loss,option_liquidity,expiry_rules,option_margin}.py`; `strategies/examples/options/*`.
+
+Depends on: shorting's `position_effect` and margin seam (Phase 16) for short legs; accounts design step S3 for connection capabilities.
+
+## 8. Open questions
+
+1. Which options data vendor, and do we buy history or collect forward only?
+2. Which underlyings to snapshot (size and cost)?
+3. Is QuantLib acceptable as a dependency (large wheel), or py_vollib only and European approximations at first?
