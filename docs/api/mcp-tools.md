@@ -10,6 +10,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`backtest_draft`](#backtest_draft) | job | no |
 | [`create_draft`](#create_draft) | job | no |
 | [`create_universe`](#create_universe) | guarded | yes |
+| [`delete_universe`](#delete_universe) | guarded | yes |
 | [`disable_draft`](#disable_draft) | guarded | yes |
 | [`enable_draft`](#enable_draft) | guarded | yes |
 | [`engage_kill_switch`](#engage_kill_switch) | guarded | yes |
@@ -53,6 +54,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_studio_templates`](#list_studio_templates) | read | no |
 | [`list_ticks`](#list_ticks) | read | no |
 | [`list_universes`](#list_universes) | read | no |
+| [`order_tca`](#order_tca) | read | no |
 | [`promote_strategy`](#promote_strategy) | guarded | yes |
 | [`refresh_universe`](#refresh_universe) | guarded | yes |
 | [`register_draft`](#register_draft) | guarded | yes |
@@ -65,6 +67,8 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`search_instruments`](#search_instruments) | read | no |
 | [`shadow_strategy`](#shadow_strategy) | guarded | yes |
 | [`sync_connection`](#sync_connection) | guarded | yes |
+| [`tca_summary`](#tca_summary) | read | no |
+| [`trade_journal`](#trade_journal) | read | no |
 | [`update_draft`](#update_draft) | job | no |
 | [`validate_draft`](#validate_draft) | job | no |
 | [`validate_rule_spec`](#validate_rule_spec) | read | no |
@@ -481,6 +485,17 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
 
+### `order_tca`
+
+One of your orders in full: decision price and context, arrival
+and fill prices, the shortfall split and the notes.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `client_id` | string | yes |  |  |
+
 ### `search_instruments`
 
 Search instruments in the lake by id/name and asset class.
@@ -493,6 +508,40 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `asset_class` | "equity" \| "crypto" \| "commodity" \| "bond" \| null | no | `null` |  |
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
+
+### `tca_summary`
+
+Implementation shortfall of your orders in bps of notional:
+delay (decision to arrival), impact (arrival to fill), fees and the
+opportunity cost of what did not fill, next to the cost model's
+estimate (model_gap_bps = realised minus modelled).
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `by` | "all" \| "strategy" \| "ticker" \| "portfolio" \| "day" \| "week" \| "month" | no | `"all"` | how to group the orders |
+| `since` | string \| null | no | `null` | YYYY-MM-DD |
+| `until` | string \| null | no | `null` | YYYY-MM-DD |
+| `strategy_id` | string \| null | no | `null` |  |
+| `ticker` | string \| null | no | `null` |  |
+| `portfolio_id` | string \| null | no | `null` |  |
+
+### `trade_journal`
+
+Your orders, newest first: why each was placed (trigger, signal
+score and rank), the outcome (shortfall, next-day move) and notes.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `since` | string \| null | no | `null` | YYYY-MM-DD |
+| `strategy_id` | string \| null | no | `null` |  |
+| `ticker` | string \| null | no | `null` |  |
+| `portfolio_id` | string \| null | no | `null` |  |
+| `limit` | integer | no | `50` |  |
+| `offset` | integer | no | `0` |  |
 
 ### `validate_rule_spec`
 
@@ -671,6 +720,19 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 | `name` | string \| null | no | `null` |  |
 | `description` | string \| null | no | `null` |  |
 | `csv` | string \| null | no | `null` | list only: CSV with a ticker column (replaces spec) |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
+### `delete_universe`
+
+Delete a stored universe and its membership rows (admins only).
+Lab runs, ticks and scheduled jobs that name it stop resolving.
+Without confirm=true returns a preview.
+
+Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `universe_id` | string | yes |  | universe id, e.g. sp500 or us_common |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
 ### `disable_draft`

@@ -2,9 +2,9 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 
 import type { BacktestResult } from '../../api/models';
 import { formatMoney, formatNumber, formatPercent, toneClass } from '../../core/format/format';
-import type { ChartSeries } from '../../shared/chart/chart-engine';
-import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
-import { StatTile } from '../../shared/ui/stat-tile';
+import type { ChartSeries } from '../chart/chart-engine';
+import { TimeSeriesChart } from '../chart/time-series-chart';
+import { StatTile } from '../ui/stat-tile';
 import {
   FigureGrid,
   benchmarkFigures,

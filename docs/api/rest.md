@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [connections](#connections-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints)
+Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [connections](#connections-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [tca](#tca-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints)
 
 ## alerts endpoints
 
@@ -128,10 +128,15 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | POST | `/api/lab/backtests` | Start Backtest | `lab.run` | [BacktestRequest](#backtestrequest) | [Job](#job) |
 | GET | `/api/lab/backtests/{job_id}/result` | Get Backtest Result | sign-in |  | [BacktestResult](#backtestresult) |
 | GET | `/api/lab/cost-models` | List Cost Models | sign-in |  | list[[CostModelPreset](#costmodelpreset)] |
+| GET | `/api/lab/ensure/{job_id}/result` | Get Lab Ensure Result | sign-in |  | [EnsureReport](#ensurereport) |
 | POST | `/api/lab/runs` | Start Lab Run | `lab.run` | [LabRunRequest](#labrunrequest) | [Job](#job) |
 | GET | `/api/lab/runs/{job_id}/result` | Get Lab Run Result | sign-in |  | [LabRunView](#labrunview) |
 | POST | `/api/lab/signal-ic` | Start Signal Ic | `lab.run` | [SignalICRequest](#signalicrequest) | [Job](#job) |
 | GET | `/api/lab/signal-ic/{job_id}/result` | Get Signal Ic Result | sign-in |  | [SignalICView](#signalicview) |
+| GET | `/api/lab/survival-presets` | List Survival Presets | sign-in |  | list[[SurvivalPresetInfo](#survivalpresetinfo)] |
+| GET | `/api/lab/survival-tests` | List Survival Tests | sign-in |  | list[[SurvivalTestInfo](#survivaltestinfo)] |
+| POST | `/api/lab/sweeps` | Start Sweep | `lab.run` | [SweepRequest](#sweeprequest) | [Job](#job) |
+| GET | `/api/lab/sweeps/{job_id}/result` | Get Sweep Result | sign-in |  | [SweepResultView](#sweepresultview) |
 
 ## market endpoints
 
@@ -247,6 +252,16 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | GET | `/api/studio/schema` | Schema | sign-in |  | object |
 | POST | `/api/studio/spec/validate` | Validate Spec | `lab.run` | [SpecValidateRequest](#specvalidaterequest) | [DraftValidation](#draftvalidation) |
 | GET | `/api/studio/templates` | Templates | sign-in |  | list[[RuleTemplateView](#ruletemplateview)] |
+
+## tca endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/tca/journal` | List Journal | sign-in |  | [Page_JournalEntryView_](#page_journalentryview_) |
+| PUT | `/api/tca/notes/{note_id}` | Update Journal Note | `portfolio.manage` | [NoteRequest](#noterequest) | [JournalNoteView](#journalnoteview) |
+| GET | `/api/tca/orders/{client_id}` | Get Order Tca | sign-in |  | [JournalEntryView](#journalentryview) |
+| POST | `/api/tca/orders/{client_id}/notes` | Add Journal Note | `portfolio.manage` | [NoteRequest](#noterequest) | [JournalNoteView](#journalnoteview) |
+| GET | `/api/tca/summary` | Tca Summary | sign-in |  | [TcaSummaryView](#tcasummaryview) |
 
 ## ticks endpoints
 
@@ -469,6 +484,17 @@ API-key connect. ``fields`` are the provider's ``credential_fields`` (plus ``pap
 | `status` | "pending" \| "active" \| "error" | yes |  |
 | `updated_at` | date-time | yes |  |
 
+### CostComparisonView
+
+Live shortfall of the strategy's real orders against the cost model's estimate (BL-32, P22), in bps.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `live_is_bps` | number \| null | no |  |
+| `model_gap_bps` | number \| null | no |  |
+| `modelled_bps` | number \| null | no |  |
+| `orders` | integer | no |  |
+
 ### CostModelPreset
 
 | Field | Type | Required | Description |
@@ -666,6 +692,17 @@ What an ensure did. ``run_id`` is the ``ingest_runs`` row (``None`` when nothing
 | `timestamp` | date-time | yes |  |
 | `value` | number | yes |  |
 
+### FailingCheck
+
+One go-live check that failed (``GoLiveCheck`` without ``passed``).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `detail` | string | no |  |
+| `limit` | number \| null | no |  |
+| `name` | string | yes |  |
+| `value` | number \| null | no |  |
+
 ### FeedItemView
 
 | Field | Type | Required | Description |
@@ -736,6 +773,7 @@ Limits a paper-trading period must meet before ``stonks golive check`` passes (`
 |-------|------|----------|-------------|
 | `checklist` | [PromotionChecklistView](#promotionchecklistview) | no |  |
 | `checks` | list[[GoLiveCheckView](#golivecheckview)] | yes |  |
+| `costs` | [CostComparisonView](#costcomparisonview) \| null | no |  |
 | `passed` | boolean | yes |  |
 | `policy` | [GoLivePolicy](#golivepolicy) | yes |  |
 | `source` | "shadow" \| "portfolio" \| "none" | yes |  |
@@ -933,6 +971,40 @@ One ``data:`` payload of the job event stream.
 | `reason` | "timeout" \| "untracked" \| null | no |  |
 | `status` | "queued" \| "running" \| "succeeded" \| "failed" \| "cancelled" | yes |  |
 
+### JournalEntryView
+
+One order: why it was placed, the signal context, the outcome and the notes people added.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `client_id` | string | yes |  |
+| `context` | object \| null | yes |  |
+| `created_at` | string | yes |  |
+| `decided_at` | string \| null | yes |  |
+| `decision_price` | number \| null | yes |  |
+| `next_session_move_bps` | number \| null | yes |  |
+| `notes` | list[[JournalNoteView](#journalnoteview)] | yes |  |
+| `portfolio_id` | string \| null | yes |  |
+| `quantity` | number | yes |  |
+| `shortfall` | [ShortfallView](#shortfallview) \| null | yes |  |
+| `side` | string | yes |  |
+| `status` | string | yes |  |
+| `status_reason` | string \| null | yes |  |
+| `strategy_id` | string \| null | yes |  |
+| `ticker` | string | yes |  |
+| `trigger` | string \| null | yes |  |
+
+### JournalNoteView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `author` | string | yes |  |
+| `created_at` | string | yes |  |
+| `id` | integer | yes |  |
+| `note` | string | yes |  |
+| `order_client_id` | string | yes |  |
+| `updated_at` | string | yes |  |
+
 ### KillSwitchRequest
 
 | Field | Type | Required | Description |
@@ -953,6 +1025,7 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `embargo_bars` | integer \| null | no |  |
 | `end` | date | yes |  |
+| `ensure_data` | boolean | no |  |
 | `grid_size` | integer | no |  |
 | `hypothesis` | string \| null | no |  |
 | `interval` | string | no |  |
@@ -971,7 +1044,8 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" | no |  |
-| `universe` | list[string] | yes |  |
+| `universe` | list[string] | no |  |
+| `universe_id` | string \| null | no |  |
 | `walk_forward` | [WalkForwardConfig](#walkforwardconfig) \| null | no |  |
 
 ### LabRunView
@@ -982,6 +1056,7 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `best_params` | object | yes |  |
 | `best_score` | number \| null | yes |  |
 | `class_path` | string | yes |  |
+| `ensure_job_id` | string \| null | no |  |
 | `n_trials_class` | integer | no |  |
 | `n_trials_run` | integer | no |  |
 | `preflight` | [PreflightView](#preflightview) \| null | no |  |
@@ -1099,6 +1174,12 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `recovery_codes` | list[string] \| null | no |  |
 | `recovery_codes_left` | integer | yes |  |
 
+### NoteRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `note` | string | yes |  |
+
 ### OperationalHaltSettings
 
 | Field | Type | Required | Description |
@@ -1182,6 +1263,15 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[Job](#job)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_JournalEntryView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[JournalEntryView](#journalentryview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
@@ -1422,6 +1512,7 @@ The BL-37 data preflight of a lab run. A run only starts with no errors, so a re
 |-------|------|----------|-------------|
 | `detail` | string \| null | no |  |
 | `errors` | list[object] \| null | no |  |
+| `failing_checks` | list[[FailingCheck](#failingcheck)] \| null | no |  |
 | `instance` | string \| null | no |  |
 | `status` | integer | yes |  |
 | `title` | string | yes |  |
@@ -1667,6 +1758,31 @@ How one shadow strategy was evaluated during the tick.
 | `strategy_id` | string | yes |  |
 | `total_value` | number \| null | yes |  |
 
+### ShortfallView
+
+Implementation shortfall of one order. Costs are positive, in bps of the filled quantity's value at the decision price; ``null`` while an input is not known yet.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `arrival_price` | number \| null | yes |  |
+| `benchmark_price` | number \| null | yes |  |
+| `convention_bps` | number \| null | yes |  |
+| `decision_price` | number | yes |  |
+| `delay_bps` | number \| null | yes |  |
+| `expected_bps` | number \| null | yes |  |
+| `fee_bps` | number \| null | yes |  |
+| `fill_price` | number \| null | yes |  |
+| `filled_quantity` | number | yes |  |
+| `impact_bps` | number \| null | yes |  |
+| `is_bps` | number \| null | yes |  |
+| `is_cost` | number \| null | yes |  |
+| `opportunity_bps` | number \| null | yes |  |
+| `opportunity_cost` | number \| null | yes |  |
+| `ordered_quantity` | number | yes |  |
+| `post_close_price` | number \| null | yes |  |
+| `side` | string | yes |  |
+| `total_bps` | number \| null | yes |  |
+
 ### SignalICRequest
 
 | Field | Type | Required | Description |
@@ -1865,6 +1981,14 @@ What this server lets the Studio do.
 |-------|------|----------|-------------|
 | `code_strategies` | boolean | yes |  |
 
+### SurvivalPresetInfo
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes |  |
+| `options` | dict[str, object] | yes |  |
+| `tests` | list[string] | yes |  |
+
 ### SurvivalReportView
 
 | Field | Type | Required | Description |
@@ -1873,6 +1997,77 @@ What this server lets the Studio do.
 | `notes` | string | yes |  |
 | `passed` | boolean | yes |  |
 | `test_id` | string | yes |  |
+
+### SurvivalTestInfo
+
+A survival test and the options a request's ``test_options[id]`` may set, as JSON Schema from the backend's own options model.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `config_schema` | object \| null | no |  |
+| `description` | string | yes |  |
+| `id` | string | yes |  |
+| `options_schema` | object | yes |  |
+| `presets` | list[string] | yes |  |
+
+### SweepRequest
+
+A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member during the window). ``strategies`` default to every catalogued non-wrapper strategy. The lab options apply to every run; sweeps never register strategies.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `benchmark` | string \| null | no |  |
+| `budget` | integer | no |  |
+| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
+| `embargo_bars` | integer \| null | no |  |
+| `end` | date | yes |  |
+| `exclude` | list[string] | no |  |
+| `grid_size` | integer | no |  |
+| `hypothesis` | string \| null | no |  |
+| `interval` | string | no |  |
+| `mcpt` | [McptOptions](#mcptoptions) \| null | no |  |
+| `objective` | "sharpe" \| "cagr" \| "final_return" | no |  |
+| `preflight` | boolean \| null | no |  |
+| `premortem` | string \| null | no |  |
+| `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |
+| `register_if_passes` | boolean | no |  |
+| `register_strategy` | boolean | no |  |
+| `seed` | integer | no |  |
+| `start` | date | yes |  |
+| `strategies` | list[string] \| null | no |  |
+| `strict_preflight` | boolean \| null | no |  |
+| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "signal_ic" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
+| `test_options` | dict[str, object] \| null | no |  |
+| `train_ratio` | number | no |  |
+| `tuner` | "grid" \| "random" | no |  |
+| `universe` | list[string] | no |  |
+| `universe_id` | string \| null | no |  |
+| `walk_forward` | [WalkForwardConfig](#walkforwardconfig) \| null | no |  |
+
+### SweepResultView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `errors` | integer | yes |  |
+| `failed` | integer | yes |  |
+| `passed` | integer | yes |  |
+| `rows` | list[[SweepRowView](#sweeprowview)] | yes |  |
+| `universe` | list[string] | yes |  |
+| `universe_id` | string \| null | no |  |
+
+### SweepRowView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `best_params` | object | no |  |
+| `best_score` | number \| null | no |  |
+| `error` | string \| null | no |  |
+| `n_trials` | integer | no |  |
+| `run_id` | string | no |  |
+| `strategy` | string | yes |  |
+| `survival` | dict[str, object] | no |  |
+| `ticker` | string \| null | yes |  |
+| `verdict` | "pass" \| "fail" \| "error" | yes |  |
 
 ### SyncResultView
 
@@ -1884,6 +2079,37 @@ What this server lets the Studio do.
 | `next_sync_at` | date-time \| null | yes |  |
 | `portfolios` | list[[PortfolioSyncView](#portfoliosyncview)] | yes |  |
 | `status` | "ok" \| "partial" \| "error" | yes |  |
+
+### TcaGroupView
+
+Costs of a group of orders, weighted by notional, in bps.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `convention_bps` | number \| null | yes |  |
+| `delay_bps` | number \| null | yes |  |
+| `expected_bps` | number \| null | yes |  |
+| `fee_bps` | number \| null | yes |  |
+| `filled_notional` | number | yes |  |
+| `filled_orders` | integer | yes |  |
+| `impact_bps` | number \| null | yes |  |
+| `is_bps` | number \| null | yes |  |
+| `is_cost` | number | yes |  |
+| `key` | string | yes |  |
+| `model_gap_bps` | number \| null | yes |  |
+| `opportunity_bps` | number \| null | yes |  |
+| `opportunity_cost` | number | yes |  |
+| `orders` | integer | yes |  |
+
+### TcaSummaryView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `by` | "all" \| "strategy" \| "ticker" \| "portfolio" \| "day" \| "week" \| "month" | yes |  |
+| `groups` | list[[TcaGroupView](#tcagroupview)] | yes |  |
+| `portfolio_id` | string | yes |  |
+| `since` | date \| null | yes |  |
+| `until` | date \| null | yes |  |
 
 ### TickRequest
 

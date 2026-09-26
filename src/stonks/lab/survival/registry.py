@@ -19,12 +19,14 @@ from __future__ import annotations
 import importlib
 import inspect
 import pkgutil
+import types
+import typing
 from collections.abc import Mapping, Sequence
 from functools import cache
 from types import ModuleType
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, create_model
 from pydantic import ValidationError as PydanticValidationError
 
 from stonks.core.protocols import SurvivalTest
@@ -34,7 +36,10 @@ __all__ = [
     "PRESET_OPTIONS",
     "SUITE_PRESETS",
     "build_survival_test",
+    "config_model",
+    "describe",
     "discover_survival_tests",
+    "options_model",
     "preset_names",
     "preset_options",
     "resolve_preset",
@@ -157,6 +162,83 @@ def build_survival_test(
         return cls(**raw)
     except (TypeError, PydanticValidationError) as exc:
         raise ValueError(f"invalid options for survival test {name!r}: {exc}") from None
+
+
+#: Constructor parameters that are objects the lab builds, never options.
+LAB_BUILT_PARAMS = frozenset({"config", "tuning"})
+
+
+def _test_class(name: str) -> type:
+    cls = _default_tests().get(name)
+    if cls is None:
+        raise ValueError(f"unknown survival test {name!r}; choose from {survival_test_names()}")
+    return cls
+
+
+def _init_hints(cls: type) -> dict[str, Any]:
+    try:
+        return typing.get_type_hints(cls.__init__)
+    except Exception:  # an annotation only importable under TYPE_CHECKING
+        return {}
+
+
+def _model_in(annotation: Any) -> type[BaseModel] | None:
+    """The pydantic model in ``annotation`` (``Model`` or ``Model | None``)."""
+    candidates = (
+        typing.get_args(annotation)
+        if isinstance(annotation, types.UnionType) or typing.get_origin(annotation) is typing.Union
+        else (annotation,)
+    )
+    for candidate in candidates:
+        if isinstance(candidate, type) and issubclass(candidate, BaseModel):
+            return candidate
+    return None
+
+
+@cache
+def options_model(name: str) -> type[BaseModel]:
+    """The pydantic model of test ``name``'s options (what a request's
+    ``test_options[name]`` may set), whichever way the test declares them:
+    an ``Options`` class, an ``options=`` constructor parameter typed as a
+    model, or plain keyword arguments (``config`` and ``tuning`` are objects
+    the lab builds, so they are left out)."""
+    cls = _test_class(name)
+    declared = getattr(cls, "Options", None)
+    if isinstance(declared, type) and issubclass(declared, BaseModel):
+        return declared
+    hints = _init_hints(cls)
+    fields: dict[str, Any] = {}
+    for param in list(inspect.signature(cls.__init__).parameters.values())[1:]:
+        if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD):
+            continue
+        if param.name in LAB_BUILT_PARAMS:
+            continue
+        annotation = hints.get(param.name, Any)
+        if param.name == "options":
+            model = _model_in(annotation)
+            if model is not None:
+                return model
+        default = ... if param.default is param.empty else param.default
+        fields[param.name] = (annotation, default)
+    return create_model(  # type: ignore[call-overload]
+        f"{cls.__name__}Options", __config__=ConfigDict(extra="forbid"), **fields
+    )
+
+
+def config_model(name: str) -> type[BaseModel] | None:
+    """The model of test ``name``'s ``config`` parameter, set through its own
+    request field (``walk_forward``), or ``None``."""
+    annotation = _init_hints(_test_class(name)).get("config")
+    return _model_in(annotation) if annotation is not None else None
+
+
+def describe(name: str) -> str:
+    """The first paragraph of test ``name``'s docstring (else its module's),
+    on one line."""
+    cls = _test_class(name)
+    doc = cls.__dict__.get("__doc__") or inspect.getmodule(cls).__doc__ or ""
+    doc = inspect.cleandoc(doc)
+    return " ".join(doc.split("\n\n", 1)[0].split())
 
 
 def preset_names() -> list[str]:

@@ -175,6 +175,31 @@ describe('LabRunResultView', () => {
     expect(params).toEqual(['Lookback days 60', 'Mode slow', 'Long only true']);
   });
 
+  it('shows preflight warnings when the run has any, and nothing when it has none', () => {
+    expect(render().querySelector('app-preflight-issues')).toBeNull();
+    TestBed.resetTestingModule();
+    const el = render({
+      ...LAB_RUN_VIEW,
+      preflight: {
+        ok: true,
+        skipped: false,
+        issues: [
+          {
+            code: 'survivorship_bias',
+            severity: 'warning',
+            message: 'The list has no dated spans.',
+            details: { tickers: ['AAPL.US', 'MSFT.US'] },
+          },
+        ],
+      },
+    });
+    const issue = el.querySelector('app-preflight-issues .issue')!;
+    expect(issue.textContent).toContain('Survivorship bias');
+    expect(issue.textContent).toContain('The list has no dated spans.');
+    expect(issue.textContent).toContain('Tickers: AAPL.US, MSFT.US');
+    expect(issue.querySelector('app-status-pill')!.textContent!.trim()).toBe('Warning');
+  });
+
   it('renders one pass/fail row per survival test with metrics and notes', () => {
     const el = render();
     const rows = [...el.querySelectorAll('.test')];

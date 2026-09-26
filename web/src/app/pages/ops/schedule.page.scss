@@ -1,0 +1,7 @@
+@use 'breakpoints' as bp;
+
+@include bp.phone {
+  .panel-head .btn {
+    width: 100%;
+  }
+}

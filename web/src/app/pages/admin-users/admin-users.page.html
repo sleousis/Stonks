@@ -1,0 +1,165 @@
+<app-page-header
+  title="Users"
+  description="People with an account, their role and sign-in status. Never their holdings."
+>
+  <button
+    actions
+    type="button"
+    class="btn btn-primary"
+    [attr.aria-expanded]="showForm()"
+    aria-controls="add-user"
+    (click)="showForm.set(!showForm())"
+  >
+    {{ showForm() ? 'Close' : 'Add person' }}
+  </button>
+</app-page-header>
+
+@if (showForm()) {
+  <section id="add-user" class="panel add" aria-labelledby="add-title">
+    <div class="panel-head">
+      <h2 id="add-title">Add a person</h2>
+    </div>
+    <form
+      class="panel-body form-grid form-grid-2"
+      [formGroup]="form"
+      (ngSubmit)="create()"
+      novalidate
+    >
+      <div class="field">
+        <label for="user-name">Name</label>
+        <input id="user-name" class="input" formControlName="display_name" autocomplete="off" />
+        @if (form.controls.display_name.touched && form.controls.display_name.invalid) {
+          <span class="error">Enter a name.</span>
+        }
+      </div>
+      <div class="field">
+        <label for="user-email">Email</label>
+        <input
+          id="user-email"
+          class="input"
+          type="email"
+          formControlName="email"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+        />
+        @if (form.controls.email.touched && form.controls.email.invalid) {
+          <span class="error">Enter a valid email.</span>
+        }
+      </div>
+      <div class="field">
+        <label for="user-role">Role</label>
+        <select id="user-role" class="input" formControlName="role">
+          @for (r of roles; track r.value) {
+            <option [value]="r.value">{{ r.label }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label for="user-password">First password</label>
+        <input
+          id="user-password"
+          class="input"
+          type="password"
+          formControlName="password"
+          autocomplete="new-password"
+          aria-describedby="user-password-hint"
+        />
+        @if (form.controls.password.touched && form.controls.password.invalid) {
+          <span class="error">Use at least {{ passwordMin }} characters.</span>
+        } @else {
+          <span id="user-password-hint" class="hint"
+            >Share it privately. They set up their authenticator at first sign-in.</span
+          >
+        }
+      </div>
+      <div class="actions">
+        <button
+          type="submit"
+          class="btn btn-primary"
+          [disabled]="creating()"
+          [attr.aria-busy]="creating()"
+        >
+          {{ creating() ? 'Adding…' : 'Add person' }}
+        </button>
+      </div>
+    </form>
+  </section>
+}
+
+<section class="panel" aria-labelledby="people-title">
+  <div class="panel-head">
+    <h2 id="people-title">People</h2>
+    @if (users.hasValue()) {
+      <span class="muted">{{ users.value().length }}</span>
+    }
+  </div>
+  @if (users.error(); as err) {
+    <app-error-state title="Could not load people" [error]="err" (retry)="users.reload()" />
+  } @else if (!users.hasValue()) {
+    <app-loading-state label="Loading people" [rows]="4" />
+  } @else if (sorted().length === 0) {
+    <app-empty-state title="No people yet" message="Add a person to give them an account." />
+  } @else {
+    <ul class="people">
+      @for (u of sorted(); track u.id) {
+        <li>
+          <div class="who">
+            <span class="name">
+              {{ u.display_name }}
+              @if (u.id === myId()) {
+                <span class="muted">(you)</span>
+              }
+            </span>
+            <span class="email">{{ u.email ?? 'No email' }}</span>
+            <span class="seen muted">{{ lastSeen(u) }}</span>
+          </div>
+          <div class="pills">
+            <app-status-pill
+              [status]="u.status === 'active' ? 'ok' : 'disabled'"
+              [label]="u.status === 'active' ? 'Active' : 'Disabled'"
+            />
+            <app-status-pill
+              [status]="u.mfa_enrolled ? 'ok' : 'warn'"
+              [tone]="u.mfa_enrolled ? 'positive' : 'warn'"
+              [label]="u.mfa_enrolled ? 'App set up' : 'App not set up'"
+            />
+          </div>
+          <div class="controls">
+            <label class="visually-hidden" [for]="'role-' + u.id"
+              >Role for {{ u.display_name }}</label
+            >
+            <select
+              class="input role"
+              [id]="'role-' + u.id"
+              [value]="u.role"
+              [disabled]="busy() === u.id || u.id === myId()"
+              (change)="changeRole(u, $event)"
+            >
+              @for (r of roles; track r.value) {
+                <option [value]="r.value" [selected]="r.value === u.role">{{ r.label }}</option>
+              }
+            </select>
+            <button
+              type="button"
+              class="btn"
+              [disabled]="busy() === u.id || u.id === myId()"
+              (click)="toggleStatus(u)"
+            >
+              {{ u.status === 'active' ? 'Disable' : 'Enable' }}
+            </button>
+            <button
+              type="button"
+              class="btn"
+              [disabled]="busy() === u.id || !u.mfa_enrolled"
+              [attr.aria-label]="'Reset authenticator for ' + u.display_name"
+              (click)="resetMfa(u)"
+            >
+              Reset app
+            </button>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+</section>

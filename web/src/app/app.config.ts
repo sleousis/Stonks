@@ -18,6 +18,7 @@ import {
 
 import { provideApi } from './api/provide-api';
 import { routes } from './app.routes';
+import { protectRoutes } from './core/auth/auth.guards';
 import { FormatService } from './core/format/format.service';
 
 /** "Dashboard – Stonks" */
@@ -35,7 +36,7 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideRouter(
-      routes,
+      protectRoutes(routes),
       withComponentInputBinding(),
       withInMemoryScrolling({ scrollPositionRestoration: 'top' }),
     ),

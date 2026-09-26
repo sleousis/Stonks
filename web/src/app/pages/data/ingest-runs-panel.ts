@@ -93,6 +93,7 @@ const STATUSES = ['running', 'ok', 'partial', 'error'] as const;
           [columns]="columns"
           [rowKey]="key"
           [total]="list.value().total"
+          [offset]="list.value().offset"
           [pageSize]="pageSize"
           (pageChange)="offset.set($event.offset)"
         >

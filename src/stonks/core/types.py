@@ -32,6 +32,18 @@ class Order:
     limit_price: float | None = None
     strategy_id: str | None = None
     tick_id: str | None = None
+    #: The portfolio the order trades for (``None``: the caller's only book).
+    portfolio_id: str | None = None
+    # ---- decision context (BL-32, TCA) ----
+    #: The price the strategy decided at (the latest close it saw).
+    decision_price: float | None = None
+    #: When it decided.
+    decided_at: datetime | None = None
+    #: Why: trigger, signal score and rank, constructor, target weight.
+    #: JSON-safe values only. Not part of equality or hashing.
+    decision_context: Mapping[str, Any] | None = field(default=None, compare=False)
+    #: The cost model's estimate at ``decision_price``, in bps of notional.
+    expected_cost_bps: float | None = None
 
     def __post_init__(self) -> None:
         if self.quantity <= 0:

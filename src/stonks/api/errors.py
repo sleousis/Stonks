@@ -18,6 +18,7 @@ from stonks.app.errors import (
     NotFoundError,
     ValidationError,
 )
+from stonks.app.strategies import FailingCheck
 from stonks.ingest.redact import redact_secrets
 from stonks.logging import get_logger
 
@@ -34,6 +35,8 @@ class ProblemDetails(BaseModel):
     instance: str | None = None
     #: Field-level errors for 422 responses.
     errors: list[dict[str, Any]] | None = None
+    #: A refused promotion (409): the go-live checks that failed.
+    failing_checks: list[FailingCheck] | None = None
 
 
 _STATUS_BY_ERROR: tuple[tuple[type[AppError], int], ...] = (
@@ -58,6 +61,7 @@ def problem(
     detail: str | None = None,
     errors: list[dict[str, Any]] | None = None,
     headers: dict[str, str] | None = None,
+    extensions: dict[str, Any] | None = None,
 ) -> JSONResponse:
     body = ProblemDetails(
         title=title or HTTPStatus(status).phrase,
@@ -65,6 +69,7 @@ def problem(
         detail=detail,
         instance=request.url.path,
         errors=errors,
+        **(extensions or {}),
     )
     return JSONResponse(
         body.model_dump(exclude_none=True),
@@ -83,7 +88,15 @@ def install_error_handlers(app: FastAPI) -> None:
             getattr(exc, "http_status", 400),
         )
         headers = getattr(exc, "headers", None)
-        return problem(request, status, title=exc.title, detail=str(exc), headers=headers)
+        extend = getattr(exc, "problem_extensions", None)
+        return problem(
+            request,
+            status,
+            title=exc.title,
+            detail=str(exc),
+            headers=headers,
+            extensions=extend() if callable(extend) else None,
+        )
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:

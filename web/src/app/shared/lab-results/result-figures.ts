@@ -7,8 +7,8 @@ import type {
   TradeStatsView,
 } from '../../api/models';
 import { formatMoney, formatNumber, formatPercent, toneClass } from '../../core/format/format';
-import { NA } from '../../shared/metrics';
-import { HelpTip } from '../../shared/ui/help-tip';
+import { NA } from '../metrics';
+import { HelpTip } from '../ui/help-tip';
 
 /**
  * Figures for backtest and lab-run results, kept pure so the null handling

@@ -1,0 +1,246 @@
+<div class="wrap">
+  <p class="brand" aria-hidden="true">Stonks</p>
+  <section class="card" aria-labelledby="login-title">
+    <h1 id="login-title" #headingRef tabindex="-1">{{ heading() }}</h1>
+
+    @if (error(); as err) {
+      <p class="alert" role="alert">{{ err }}</p>
+    }
+
+    @switch (current()) {
+      @case ('password') {
+        <form class="form" [formGroup]="passwordForm" (ngSubmit)="signIn()" novalidate>
+          <div class="field">
+            <label for="login-email">Email</label>
+            <input
+              id="login-email"
+              class="input"
+              type="email"
+              formControlName="email"
+              autocomplete="username"
+              autocapitalize="off"
+              spellcheck="false"
+              [attr.aria-invalid]="
+                passwordForm.controls.email.touched && passwordForm.controls.email.invalid
+              "
+            />
+            @if (passwordForm.controls.email.touched && passwordForm.controls.email.invalid) {
+              <span class="error">Enter your email.</span>
+            }
+          </div>
+          <div class="field">
+            <label for="login-password">Password</label>
+            <input
+              id="login-password"
+              class="input"
+              type="password"
+              formControlName="password"
+              autocomplete="current-password"
+              [attr.aria-invalid]="
+                passwordForm.controls.password.touched && passwordForm.controls.password.invalid
+              "
+            />
+            @if (passwordForm.controls.password.touched && passwordForm.controls.password.invalid) {
+              <span class="error">Enter your password.</span>
+            }
+          </div>
+          <button
+            type="submit"
+            class="btn btn-primary wide"
+            [disabled]="busy()"
+            [attr.aria-busy]="busy()"
+          >
+            {{ busy() ? 'Signing in…' : 'Sign in' }}
+          </button>
+        </form>
+
+        <div class="alt">
+          <button
+            type="button"
+            class="btn btn-ghost"
+            [attr.aria-expanded]="showTokenForm()"
+            aria-controls="token-form"
+            (click)="showTokenForm.set(!showTokenForm())"
+          >
+            Use an API token instead
+          </button>
+          @if (showTokenForm()) {
+            <form
+              id="token-form"
+              class="form"
+              [formGroup]="tokenForm"
+              (ngSubmit)="useToken()"
+              novalidate
+            >
+              <div class="field">
+                <label for="login-token">API token</label>
+                <input
+                  id="login-token"
+                  class="input"
+                  type="password"
+                  formControlName="token"
+                  autocomplete="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                  aria-describedby="login-token-hint"
+                />
+                <span id="login-token-hint" class="hint">
+                  For local work and scripts. Kept in this tab only.
+                </span>
+              </div>
+              <button type="submit" class="btn wide" [disabled]="busy()">Use token</button>
+            </form>
+          }
+        </div>
+      }
+
+      @case ('enrol') {
+        <ol class="steps">
+          <li>
+            Open an authenticator app on your phone, such as Google Authenticator or 1Password.
+          </li>
+          <li>Scan this code, or type the key below.</li>
+          <li>Enter the six digit code the app shows.</li>
+        </ol>
+        @if (enrolment(); as e) {
+          <div class="qr">
+            <app-qr-code [value]="e.otpauth_uri" label="QR code for your authenticator app" />
+            <p class="secret">
+              <span class="muted">Key</span>
+              <code>{{ groupedSecret() }}</code>
+            </p>
+          </div>
+        }
+        <form class="form" [formGroup]="codeForm" (ngSubmit)="confirmEnrolment()" novalidate>
+          <div class="field">
+            <label for="enrol-code">Code from the app</label>
+            <input
+              id="enrol-code"
+              class="input code"
+              formControlName="code"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              maxlength="8"
+            />
+          </div>
+          <button
+            type="submit"
+            class="btn btn-primary wide"
+            [disabled]="busy()"
+            [attr.aria-busy]="busy()"
+          >
+            {{ busy() ? 'Checking…' : 'Confirm' }}
+          </button>
+        </form>
+        <button type="button" class="btn btn-ghost" (click)="startOver()">Start over</button>
+      }
+
+      @case ('verify') {
+        <p class="lead">
+          {{
+            useRecovery()
+              ? 'Enter one of your recovery codes. Each works once.'
+              : 'Open your authenticator app and enter the code for Stonks.'
+          }}
+        </p>
+        <form class="form" [formGroup]="codeForm" (ngSubmit)="verify()" novalidate>
+          <div class="field">
+            @if (useRecovery()) {
+              <label for="verify-recovery">Recovery code</label>
+              <input
+                id="verify-recovery"
+                class="input"
+                formControlName="code"
+                autocomplete="off"
+                autocapitalize="off"
+                spellcheck="false"
+              />
+            } @else {
+              <label for="verify-code">Code</label>
+              <input
+                id="verify-code"
+                class="input code"
+                formControlName="code"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                maxlength="8"
+              />
+            }
+          </div>
+          <button
+            type="submit"
+            class="btn btn-primary wide"
+            [disabled]="busy()"
+            [attr.aria-busy]="busy()"
+          >
+            {{ busy() ? 'Checking…' : 'Continue' }}
+          </button>
+        </form>
+        <div class="links">
+          <button type="button" class="btn btn-ghost" (click)="toggleRecovery()">
+            {{ useRecovery() ? 'Use the app code' : 'Lost your phone? Use a recovery code' }}
+          </button>
+          <button type="button" class="btn btn-ghost" (click)="startOver()">Start over</button>
+        </div>
+      }
+
+      @case ('codes') {
+        <p class="lead">
+          If you lose your phone, each code signs you in once. Keep them somewhere safe, like a
+          password manager.
+        </p>
+        <app-one-time-secret
+          [values]="recoveryCodes()"
+          label="Recovery codes"
+          warning="Shown once. You cannot see these again."
+        />
+        <label class="check">
+          <input
+            type="checkbox"
+            [checked]="savedCodes()"
+            (change)="savedCodes.set(!savedCodes())"
+          />
+          I saved my recovery codes
+        </label>
+        <button
+          type="button"
+          class="btn btn-primary wide"
+          [disabled]="!savedCodes()"
+          (click)="afterCodes()"
+        >
+          Continue
+        </button>
+      }
+
+      @case ('push') {
+        <p class="lead">
+          Get a message when a strategy has a signal, an order fills or a risk limit trips. Messages
+          carry no amounts. You can change this later in Settings.
+        </p>
+        @if (push.state() === 'install-first') {
+          <p class="note">
+            On iPhone and iPad, alerts only reach the installed app. In Safari, tap Share, then Add
+            to Home Screen, and turn alerts on from Settings there.
+          </p>
+        }
+        @if (push.error(); as err) {
+          <p class="alert" role="alert">{{ err }}</p>
+        }
+        <div class="choices">
+          @if (push.state() !== 'install-first') {
+            <button
+              type="button"
+              class="btn btn-primary wide"
+              [disabled]="push.busy()"
+              [attr.aria-busy]="push.busy()"
+              (click)="enablePush()"
+            >
+              {{ push.busy() ? 'Asking…' : 'Turn on alerts' }}
+            </button>
+          }
+          <button type="button" class="btn wide" (click)="skipPush()">Not now</button>
+        </div>
+      }
+    }
+  </section>
+</div>

@@ -114,6 +114,7 @@ const PAGE_SIZE = 50;
           <app-orders-table
             [rows]="orders.value().items"
             [total]="orders.value().total"
+            [offset]="orders.value().offset"
             [pageSize]="pageSize"
             (pageChange)="offset.set($event.offset)"
           />

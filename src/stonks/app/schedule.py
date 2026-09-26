@@ -280,10 +280,14 @@ class ScheduleService:
         except ValidationError:
             specs = []
         bars = None
-        universe = list(settings.production.universe)
-        if universe:
+        from stonks.production.universe import production_tickers
+
+        if settings.production.universe:
             try:
                 with self._ctx.lake() as lake:
+                    universe = production_tickers(
+                        lake, settings.production.universe, self._clock().date()
+                    )
                     bars = latest_daily_bars(lake, universe)
             except Exception as exc:  # data age is optional; the rest still renders
                 _log.warning("metrics.data_age_failed", error_type=type(exc).__name__)

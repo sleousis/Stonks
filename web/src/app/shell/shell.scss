@@ -160,6 +160,12 @@ main {
   }
 }
 
+// Sign-in and other frameless pages: the page owns its whole layout.
+main.bare {
+  max-width: none;
+  padding: 0;
+}
+
 .sidebar-foot {
   display: grid;
   gap: var(--space-1);

@@ -40,6 +40,7 @@
     [loading]="portfolio.isLoading() && !portfolio.hasValue()"
     [value]="portfolio.hasValue() ? money(portfolio.value().positions_value) : '–'"
     [detail]="positionsDetail()"
+    [detailTone]="positionsTone()"
   />
   <app-stat-tile
     label="Drawdown"
@@ -167,8 +168,10 @@
     } @else if (ticks.value().items.length === 0) {
       <app-empty-state
         title="No ticks yet"
-        message="Run the first tick from Go-live, or with `stonks tick` on the command line."
-      />
+        message="Nothing has run yet. Try a dry run first: it shows what the strategies would trade without sending orders."
+      >
+        <a class="btn" routerLink="/orders/ticks">Go to ticks</a>
+      </app-empty-state>
     } @else {
       <app-data-table
         caption="Most recent production ticks"

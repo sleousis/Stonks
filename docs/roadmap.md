@@ -7,7 +7,8 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | Phase | Status |
 |-------|--------|
 | 1 to 8 | Done, except 5.4 end-to-end tests (now 13.14). 8.4 moved to 11.8. |
-| 9 | Waves 1, 2 and 4 done. Wave 3 done except 9.3.4. Wave 5: 9.5.1 done. Details under Phase 9. |
+| 9 | Waves 1 to 4 done. Wave 5: 9.5.1 done. Details under Phase 9. |
+| 10 | Done: 10.1 to 10.5. |
 | 11 | Done except parts of 11.6. 11.8 is this docs refresh. |
 | 12 | Mostly done. Open: 12.10 soak test, three runbooks (tick failed, broker unreachable, disk full). |
 | 13 | Partly done: PWA and push, command palette, in-app help, accessibility and locale. The rest is planned. |
@@ -130,11 +131,11 @@ About 60 trading books from three reading lists and the Axon "100 books" series,
 
 - Wave 1: done.
 - Wave 2: done. The tick runs its books through the shared pipeline; backtests use it only when `BacktestConfig.construction` is set, which the lab and API don't do yet.
-- Wave 3: 9.3.1, 9.3.2, 9.3.3, 9.3.5 and 9.3.6 done. The rules are set under `[production.risk.rules.*]`, the circuit breaker and operational halt are off by default, and the quit rule alerts after every tick (`[production.quit_rule]`). Halts are listed and cleared with `stonks halts`. The lab runs the data preflight before tuning, and `stonks audit statements` checks the statements (also after `stonks ingest fundamentals`). 9.3.4 not started.
+- Wave 3: done. The rules are set under `[production.risk.rules.*]`, the circuit breaker and operational halt are off by default, and the quit rule alerts after every tick (`[production.quit_rule]`). Halts are listed and cleared with `stonks halts`. The lab runs the data preflight before tuning, and `stonks audit statements` checks the statements (also after `stonks ingest fundamentals`). 9.3.4 records the decision price and context on every order and reports implementation shortfall and the trade journal with `stonks tca`, `/api/tca` and MCP tools. Round trips with MAE and MFE in the journal are not built yet.
 - Wave 4: done. 9.4.1 to 9.4.4 (`quant_momentum`, `stocks_on_the_move` with `atr_parity`, `ewmac_trend`, `tsmom`, `ath_trend`, `TrailingStopWrapper`, `quant_value`), 9.4.5 (`RegimeFilter`) and 9.4.6 (legacy defaults and metadata backfill).
 - Wave 5: 9.5.1 done. The `hrp`, `erc` and `mean_variance_costs` constructors, four covariance estimators and the effective number of bets are in `portfolio/`. They read `returns_history`, which the tick and the backtest don't fill yet, so today they fall back to each name's own volatility.
 
-Migration numbers in the tables below were plans. The landed ones are SQLite `008_lab_trials`, `009_status_changes`, `014_position_attribution` and `016_risk_halts`, and DuckDB `014_statement_flags` and `015_universe_membership`. New migrations take the next free number.
+Migration numbers in the tables below were plans. The landed ones are SQLite `008_lab_trials`, `009_status_changes`, `014_position_attribution`, `016_risk_halts` and `017_tca`, and DuckDB `014_statement_flags` and `015_universe_membership`. New migrations take the next free number.
 
 This phase is roadmap item 7.7. It builds the backlog in `docs/research/book-lessons.md` (items BL-01 to BL-49) against the rules in `docs/principles.md`.
 
@@ -199,6 +200,18 @@ Integration 1: realistic costs by default (BL-13), `[lab.parallel]`, the CLI and
 | 9.5.5 Stress (BL-48) | Crisis windows, stress simulation, `VolForecaster` with GARCH (arch, wrapped). | `lab/survival/crisis.py`, `lab/survival/stress.py`, `features/vol_forecast.py` |
 | 9.5.6 Engineering guards (BL-49) | Point-in-time lake proxy, universe membership in engine and ranker, pyright, Hypothesis property tests, vectorised pre-screen. | `store/pit.py`, `lab/vectorized.py`, `pyrightconfig.json`, `backtest/engine.py`, `production/ranker.py`, `.github/workflows/ci.yml`, `tests/property/*` |
 
+## Phase 10: Repository, docs and data scale
+
+**Status:** 10.1 to 10.5 done.
+
+| WP | Scope | Status | Owns |
+|----|-------|--------|------|
+| 10.1 Public repo and branch protection | Protect `main`: changes land as squash PRs from `feat/roadmap` with CI green. Open the repo to the public. | Done. The repo is public after a full secret scan, and `main` needs a PR with passing `test` and `ui` checks, with no force push or deletion. | GitHub settings, `.github/workflows/` |
+| 10.2 GitHub wiki | Guides and the glossary on the wiki. `docs.yml` syncs the API and MCP references there. | Done. The wiki holds the guides and glossary, and `docs.yml` syncs the API and MCP references on every merge to `main`. | `.github/workflows/docs.yml`, wiki |
+| 10.3 API docs from code | `docs/api/rest.md` from the OpenAPI spec, `docs/api/mcp-tools.{json,md}` from the MCP tools, each route's permission as `x-permission`, Swagger UI on Pages. Tests fail when a checked-in copy is stale. | Done. | `api/openapi.py`, `api/docs.py`, `mcp/docs.py`, `docs/api/` |
+| 10.4 Parquet bar store | `BarStore` seam with the DuckDB table and hive-partitioned Parquet files that other processes can read while `stonks serve` holds the lake. `bars_migrate` moves the bars and switches. | Done. | `store/bars.py`, `store/bars_migrate.py`, `[lake.bars]` |
+| 10.5 Dynamic universes and on-demand tickers | Stored universes (list, exchange, rule, index) with point-in-time membership, index history import, and `DataEnsurer` that fetches only missing bars. Wired into settings (`[ensure]`, `[production].universe` as an id), the tick, `stonks universe` and `stonks lab run --universe-id --ensure-data`, API lab runs (`universe_id`, `ensure_data`), MCP and a daily scheduled refresh. | Done. The console universes page is still open. | `universes/`, `ingest/ensure.py`, `production/universe.py`, `app/universes.py`, `docs/universes.md` |
+
 ## Phase 11: Console and platform follow-ups
 
 **Status:** 11.1 to 11.5 and 11.7 done; 11.6 mostly done; 11.8 is this refresh.
@@ -243,7 +256,7 @@ What it takes to run Stonks unattended every day and trust it.
 
 ## Phase 13: Trader-ready UX
 
-**Status:** done: 13.3 (PWA and push opt-in; live job updates), 13.10, 13.11, 13.13. 13.1 has its data model (users, roles) but no login yet. The rest is planned.
+**Status:** done: 13.3 (PWA and push opt-in; live job updates), 13.10, 13.11, 13.13. 13.1 has its data model (users, roles) but no login yet. The rest is planned. 13.4 and 13.6 have their API (`/api/universes`, `/api/lab/sweeps`); their pages are open.
 
 What a trader needs to use the console daily without the CLI.
 

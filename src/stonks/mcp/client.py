@@ -112,6 +112,10 @@ class ApiClient:
         self._require_token()
         return await self._request("PATCH", path, json=body)
 
+    async def delete(self, path: str) -> Any:
+        self._require_token()
+        return await self._request("DELETE", path)
+
     def _require_token(self) -> None:
         if not self.has_token:
             raise ApiError(

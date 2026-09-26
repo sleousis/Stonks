@@ -1,69 +1,77 @@
 <a class="skip-link" href="#main">Skip to content</a>
 
-<header class="topbar">
-  <button
-    type="button"
-    class="btn btn-ghost btn-icon"
-    aria-label="Open navigation"
-    aria-controls="nav-drawer"
-    [attr.aria-expanded]="drawerOpen()"
-    (click)="openDrawer()"
-  >
-    <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
-      <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.8" />
-    </svg>
-  </button>
-  <a routerLink="/" class="brand">Stonks</a>
-  <span class="topbar-actions">
-    <button
-      type="button"
-      class="btn btn-ghost btn-icon"
-      aria-label="Search"
-      aria-haspopup="dialog"
-      aria-keyshortcuts="Control+K Meta+K /"
-      (click)="openPalette()"
-    >
-      <ng-container *ngTemplateOutlet="searchIcon" />
-    </button>
-    <button
-      type="button"
-      class="btn btn-ghost btn-icon"
-      [attr.aria-label]="
-        theme.resolved() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'
-      "
-      (click)="theme.toggle()"
-    >
-      <ng-container *ngTemplateOutlet="themeIcon" />
-    </button>
-  </span>
-</header>
-
-<div class="frame">
-  <aside class="sidebar">
-    <a routerLink="/" class="brand">Stonks</a>
-    <button
-      type="button"
-      class="search-button"
-      aria-haspopup="dialog"
-      aria-keyshortcuts="Control+K Meta+K /"
-      (click)="openPalette()"
-    >
-      <ng-container *ngTemplateOutlet="searchIcon" />
-      <span class="search-label">Search</span>
-      <kbd aria-hidden="true">{{ modKey }} K</kbd>
-    </button>
-    <app-nav />
-    <ng-container *ngTemplateOutlet="footer" />
-  </aside>
-
-  <main id="main" #main tabindex="-1">
-    @if (connectivity.online()) {
-      <router-outlet />
-    } @else {
-      <app-offline-page />
-    }
+@if (bare()) {
+  <main id="main" class="bare" tabindex="-1">
+    <router-outlet />
   </main>
-</div>
+} @else {
+  <header class="topbar">
+    <button
+      type="button"
+      class="btn btn-ghost btn-icon"
+      aria-label="Open navigation"
+      aria-controls="nav-drawer"
+      [attr.aria-expanded]="drawerOpen()"
+      (click)="openDrawer()"
+    >
+      <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
+        <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.8" />
+      </svg>
+    </button>
+    <a routerLink="/" class="brand">Stonks</a>
+    <span class="topbar-actions">
+      <button
+        type="button"
+        class="btn btn-ghost btn-icon"
+        aria-label="Search"
+        aria-haspopup="dialog"
+        aria-keyshortcuts="Control+K Meta+K /"
+        (click)="openPalette()"
+      >
+        <ng-container *ngTemplateOutlet="searchIcon" />
+      </button>
+      <button
+        type="button"
+        class="btn btn-ghost btn-icon"
+        [attr.aria-label]="
+          theme.resolved() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'
+        "
+        (click)="theme.toggle()"
+      >
+        <ng-container *ngTemplateOutlet="themeIcon" />
+      </button>
+    </span>
+  </header>
+
+  <div class="frame">
+    <aside class="sidebar">
+      <a routerLink="/" class="brand">Stonks</a>
+      <button
+        type="button"
+        class="search-button"
+        aria-haspopup="dialog"
+        aria-keyshortcuts="Control+K Meta+K /"
+        (click)="openPalette()"
+      >
+        <ng-container *ngTemplateOutlet="searchIcon" />
+        <span class="search-label">Search</span>
+        <kbd aria-hidden="true">{{ modKey }} K</kbd>
+      </button>
+      <app-nav />
+      <ng-container *ngTemplateOutlet="footer" />
+    </aside>
+
+    <main id="main" #main tabindex="-1">
+      <!-- ops: session strip with the halt state -->
+      <app-session-strip />
+      @if (connectivity.online()) {
+        <router-outlet />
+      } @else {
+        <app-offline-page />
+      }
+    </main>
+  </div>
+}
 
 <!-- Backdrop click closes the drawer; Escape (native dialog) and the close button cover keyboards. -->
 <!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events, @angular-eslint/template/interactive-supports-focus -->
@@ -96,10 +104,18 @@
 
 <ng-template #footer>
   <div class="sidebar-foot">
-    <a routerLink="/settings" class="token-status" [class.set]="auth.hasToken()">
-      <span class="dot" aria-hidden="true"></span>
-      {{ auth.hasToken() ? 'API token set' : 'Read-only: no API token' }}
-    </a>
+    @if (session.me(); as me) {
+      <a routerLink="/profile" class="token-status set">
+        <span class="dot" aria-hidden="true"></span>
+        {{ me.display_name }}{{ me.via === 'session' ? '' : ', API token' }}
+      </a>
+      <button type="button" class="btn btn-ghost theme-toggle" (click)="signOut()">Sign out</button>
+    } @else {
+      <a routerLink="/login" class="token-status">
+        <span class="dot" aria-hidden="true"></span>
+        Read-only. Sign in
+      </a>
+    }
     <button type="button" class="btn btn-ghost theme-toggle" (click)="theme.toggle()">
       <ng-container *ngTemplateOutlet="themeIcon" />
       {{ theme.resolved() === 'dark' ? 'Light theme' : 'Dark theme' }}
@@ -139,4 +155,5 @@
 <app-command-palette />
 <app-shortcut-help />
 <app-confirm-dialog />
+<app-step-up-dialog />
 <app-toast-outlet />

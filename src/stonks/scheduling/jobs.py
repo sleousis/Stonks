@@ -29,9 +29,10 @@ import threading
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Literal
 
+from stonks.logging import get_logger
 from stonks.scheduling.calendar import universe_trades_on
 from stonks.scheduling.config import (
     CatchUpPolicy,
@@ -54,6 +55,8 @@ if TYPE_CHECKING:
 
 #: The actor recorded on every scheduled run (see docs/design/accounts-and-modes.md).
 SCHEDULER_ACTOR = "service:scheduler"
+
+_log = get_logger("stonks.scheduling.jobs")
 
 JobRunStatus = Literal["succeeded", "skipped", "failed"]
 
@@ -149,12 +152,54 @@ class JobExecutor(ABC):
 # ---- helpers shared by the backends ------------------------------------------------
 
 
-def job_universe(ctx: RunContext) -> list[str]:
-    """``params.tickers``, else ``[production].universe``."""
+#: ``(universe_id, day) -> members``: how a backend reads a stored
+#: universe's members (the API, the app services, or the lake).
+MembersResolver = Callable[[str, date], list[str]]
+
+
+def job_universe(ctx: RunContext, members: MembersResolver | None = None) -> list[str]:
+    """``params.tickers``, else ``[production].universe``. A universe id
+    there is resolved on the fire's date through ``members``; without a
+    resolver, or when it fails (the universe was never refreshed), the
+    job has no tickers and skips."""
     tickers = ctx.params.get("tickers")
     if tickers:
         return [str(t) for t in tickers]
-    return list(ctx.settings.production.universe)
+    configured = ctx.settings.production.universe
+    if not isinstance(configured, str):
+        return list(configured)
+    if members is None:
+        return []
+    try:
+        return list(members(configured, ctx.fire.as_of))
+    except Exception as exc:  # a missing universe means nothing to trade today
+        _log.warning(
+            "scheduler.universe_unresolved",
+            universe_id=configured,
+            error=f"{type(exc).__name__}: {exc}",
+        )
+        return []
+
+
+def ensure_window(ctx: RunContext) -> tuple[date, date]:
+    """The trailing window the ``universes_refresh`` job fills
+    (``params.ensure_days``, default 10) up to the fire's date."""
+    days = int(ctx.params.get("ensure_days", 10))
+    return ctx.fire.as_of - timedelta(days=days), ctx.fire.as_of
+
+
+def universes_outcome(results: Mapping[str, Mapping[str, Any]]) -> JobOutcome:
+    """The ``universes_refresh`` outcome from each universe's step results
+    (``refresh`` / ``ensure`` statuses): failed when any step failed."""
+    if not results:
+        return JobOutcome("skipped", {"reason": "no_universes"})
+    failed = sorted(
+        uid
+        for uid, r in results.items()
+        if r.get("refresh") != "succeeded" or r.get("ensure", "succeeded") != "succeeded"
+    )
+    detail = {"universes": dict(results), "failed": failed}
+    return JobOutcome("failed" if failed else "succeeded", detail)
 
 
 def closed_day_outcome(

@@ -234,6 +234,9 @@ class ToolContext:
     async def patch(self, path: str, body: dict[str, Any], *, hints: Hints | None = None) -> Any:
         return await self.call(self.api.patch(path, body), hints)
 
+    async def delete(self, path: str, *, hints: Hints | None = None) -> Any:
+        return await self.call(self.api.delete(path), hints)
+
 
 async def queue_lab_run(
     t: ToolContext, path: str, body: dict[str, Any], confirm: bool, hints: Hints | None = None

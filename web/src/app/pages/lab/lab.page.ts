@@ -33,10 +33,10 @@ import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { BacktestFormView } from './backtest-form';
-import { BacktestResultView } from './backtest-result';
+import { BacktestResultView } from '../../shared/lab-results/backtest-result';
 import { defaultWindow, suiteTests } from './lab-requests';
 import { LabRunFormView } from './lab-run-form';
-import { LabRunResultView } from './lab-run-result';
+import { LabRunResultView } from '../../shared/lab-results/lab-run-result';
 import { type StrategyPreset, presetFromStrategy } from './strategy-preset';
 
 export type LabKind = 'backtest' | 'lab_run';

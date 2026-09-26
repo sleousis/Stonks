@@ -9,8 +9,8 @@
 
 import { signal } from '@angular/core';
 
-/** The API does not report a portfolio currency yet; the console shows USD. */
-export const DISPLAY_CURRENCY = 'USD';
+/** Used when the API sends no currency for a figure. */
+export const DEFAULT_CURRENCY = 'USD';
 export const MISSING = '–';
 
 /** `iso` shows 2026-09-26 (unambiguous everywhere); `locale` follows the locale. */
@@ -50,6 +50,8 @@ export interface NumberOptions {
   /** 1.2K / 3.4M (axes, tight tiles). */
   compact?: boolean;
   digits?: number;
+  /** ISO 4217 code from the API (`PortfolioView.currency`); defaults to USD. */
+  currency?: string | null;
 }
 
 // Intl formatters are costly to build; keep one per locale and option set.
@@ -86,13 +88,13 @@ export function formatMoney(value: Num, opts: NumberOptions = {}): string {
   const options: Intl.NumberFormatOptions = opts.compact
     ? {
         style: 'currency',
-        currency: DISPLAY_CURRENCY,
+        currency: opts.currency || DEFAULT_CURRENCY,
         notation: 'compact',
         maximumFractionDigits: 1,
       }
     : {
         style: 'currency',
-        currency: DISPLAY_CURRENCY,
+        currency: opts.currency || DEFAULT_CURRENCY,
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       };

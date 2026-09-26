@@ -1,7 +1,9 @@
 # Trader console (web UI)
 
-The Angular app in `web/` is the trader console: dashboard, strategies, studio,
-lab, data, orders, shadow, go-live, health and settings. It talks only to the
+The Angular app in `web/` is the trader console: sign-in, a simple home,
+profile, admin users, and the advanced pages (dashboard, strategies, studio,
+lab, data, universes, orders, shadow, go-live, halts, schedule and backups,
+data quality, health and settings). It talks only to the
 REST API (`src/stonks/api/`) through a client generated from the checked-in
 contract `web/openapi.json`.
 
@@ -27,10 +29,11 @@ serves it at `/` with single-page fallback (`[api].ui_dist`), so one process
 serves both. The dev server origin (`http://localhost:4200`) is the API's
 `[api].ui_origin` for CORS, although the proxy makes CORS unnecessary in dev.
 
-Every call needs a credential. Sign in, or enter a token in **Settings** (kept
-in `sessionStorage` for that tab only). For local UI work, start the API with
+Every call needs a credential. Sign in, or paste an API token (on the sign-in
+page under "Use an API token instead", or in **Settings**; kept in
+`sessionStorage` for that tab only). For local UI work, start the API with
 `STONKS_PROFILE=dev` so reads from 127.0.0.1 work without signing in. See
-`docs/security.md`.
+`docs/security.md` and [Sign-in and the trader home](#sign-in-and-the-trader-home).
 
 | Command | What it does |
 |---|---|
@@ -74,7 +77,8 @@ web/src/
       <domain>.service.ts     portfolio, ticks, health, strategies, lab, market,
                               orders, shadow, ingest, studio, system, jobs-api
     core/                     cross-cutting services
-      auth/                   AuthTokenService (sessionStorage only)
+      auth/                   AuthTokenService (sessionStorage only), SessionService,
+                              session interceptor, guards, StepUpService + dialog, qr.ts
       commands/               CommandRegistry (palette commands), ShortcutsService (keys)
       help/                   glossary.ts: one-line help for every metric
       http/                   ApiError + problem-details mapping, interceptors
@@ -283,10 +287,15 @@ sentence `summary` (the canvas is invisible to screen readers). Tests use
 `provideFakeChart()` from `src/testing/fake-chart.ts`.
 
 With a benchmark, the strategy and the benchmark share pane 0, both rebased
-to 100 (`rebase()` in `pages/lab/result-figures.ts`, `format: 'number'`);
+to 100 (`rebase()` in `shared/lab-results/result-figures.ts`, `format: 'number'`);
 the benchmark is a `muted` line and a small legend names it.
 
 ### Results and missing figures
+
+The result views live in `shared/lab-results/`: `<app-backtest-result>`,
+`<app-lab-run-result>` (with `<app-preflight-issues>`, the run's data
+checks) and `<app-figure-grid>`. The Lab page and Studio's backtest and lab
+panels both use them.
 
 The API sends non-finite figures (a Sharpe with no variance, a payoff ratio
 with no losing trades) as `null`. Show them as **n/a**, never 0 or a dash:
@@ -361,6 +370,34 @@ inject(CommandRegistry).register(
 Actions that change something confirm first, exactly like buttons do.
 Searches go through `api/search.service.ts` (silent: no error toasts).
 Tickers open `/data?instrument=<id>`.
+
+## Operations pages
+
+| Page | Route | What it does |
+|---|---|---|
+| Halts | `/ops/halts` | Active and past halts, the kill switch (global or one portfolio, reason, flatten), Resume and Clear |
+| Schedule and backups | `/ops/schedule` | Jobs with next and last run, recent runs and Run now. Backup jobs and Back up now |
+| Data quality | `/ops/data-quality` | Statement audit flags, filtered by ticker and severity |
+| Universes | `/universes`, `/universes/:id` | List, create (JSON spec or CSV), index history import, members on a date, Refresh and Ensure data |
+
+- `<app-session-strip>` sits above every page: the next scheduled run with
+  a live countdown (`GET /api/schedule`), and the halt state. It turns red
+  while a kill switch is on and amber for a breaker or operational halt.
+  `HaltStateService` (`core/halts/`) reads active halts every minute and
+  right after any halt action.
+- Server-paged tables pass the API page's offset: `[total]="p.total"
+  [offset]="p.offset"`. The table is re-created after each load, and the
+  offset keeps the pager on the right page.
+- Resume needs the typed words `RESUME TRADING` and a fresh second factor.
+  The page calls `StepUpService.ensure()` (`core/auth/step-up.service.ts`)
+  first, and again with `force` when the API answers 403
+  `step_up_required`. The default service never prompts. The sign-in work
+  provides the real one.
+- Refresh, Ensure data and Back up now return a job. Pages follow it with
+  `JobsService.track()` and show `<app-job-progress>`.
+- Run now on a tick job needs the job name typed, like a tick.
+- The backup list shows backup jobs the server ran (`GET /api/jobs?kind=backup`).
+  The API has no route for backups made from the command line.
 
 ## Install and notifications (PWA)
 
@@ -537,6 +574,56 @@ all reserve at least 9.5rem (an error with a one-line message and a 44px
 retry button), so a failed load no longer pushes the page down when it
 replaces its skeleton. Still pass `rows` sized like the content it stands
 for.
+
+## Sign-in and the trader home
+
+```mermaid
+flowchart LR
+  L[Email + password] -->|first login| E[Scan QR, enter code] --> R[Recovery codes, shown once] --> P[Alerts on this device?] --> H[Home]
+  L -->|later logins| V[App code or recovery code] --> H
+```
+
+- **Routes.** `app.config.ts` wraps `app.routes.ts` with `protectRoutes()`, so
+  every page gets `authGuard` unless it has `data: { public: true }`.
+  `data: { bare: true }` shows a page without the app frame (sign-in).
+  `/admin/users` also has `adminGuard`. Home is `/`; the dashboard is
+  `/dashboard`. The nav keeps Home, Profile (and Users for admins) on top and
+  folds the rest under **Advanced** (closed for traders and viewers, open for
+  admins, tokens and dev mode, remembered per browser).
+- **Session.** `SessionService` asks `GET /api/auth/me` once (with the tab's
+  API token when there is one, as the server prefers it). Statuses:
+  `signed-in`, `mfa-pending`, `open` (no one signed in but reads work: dev
+  profile, pages behave as before), `signed-out`, `unreachable`.
+- **Session interceptor** (`core/auth/session.interceptor.ts`, after the
+  error interceptor): adds `X-CSRF-Token` (from the sign-in response, else the
+  `stonks_csrf` cookie) to unsafe same-origin calls that ride on the cookie;
+  401 `mfa_required` goes to the code screen; a 401 after being signed in
+  goes to sign-in with `?next=`; 403 `step_up_required` opens the step-up
+  prompt and retries once. `ApiError.code` holds the auth code from the
+  detail and `message` says it plainly.
+- **Step-up.** Any action that needs a fresh code just calls the API: the
+  interceptor asks when needed. A page that knows beforehand (turning on auto)
+  calls `await inject(StepUpService).ensure('Turn on auto for X.')` first.
+  API tokens cannot step up; the prompt says to sign in instead.
+- **QR codes** are drawn in the browser by `uqr` (pinned), behind
+  `core/auth/qr.ts`. The secret never leaves the page.
+- **Home** (`pages/home/`): my portfolio (value, today's change, biggest
+  holdings; admins get totals across traders instead, never holdings),
+  today's signals (the feed's `signal` items from the last 24 hours), and my
+  strategies with an on/off switch and a notify, paper or auto switch. Auto
+  stays disabled with the reason until 20 paper days and the server's other
+  checks pass, then asks for the step-up and a typed confirm.
+  `api/subscriptions.service.ts` calls the planned `/api/subscriptions`
+  routes with `HttpClient`; until the server has them the card says "Coming
+  soon".
+- **Profile** (`pages/profile/`): password, new recovery codes and API
+  tokens (a new token is shown once). **Settings** adds alert settings per
+  type and channel and quiet hours next to the push opt-in.
+- **Users** (`pages/admin-users/`): add a person, change role, disable or
+  enable, reset their authenticator.
+
+Checked at 375px in Chromium: no sideways scroll and 44px targets on sign-in,
+set-up, home (trader and admin), profile, settings and users.
 
 ## Security
 

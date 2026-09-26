@@ -83,6 +83,7 @@ const TICK_STATUSES = [
               [columns]="columns"
               [rowKey]="key"
               [total]="ticks.value().total"
+              [offset]="ticks.value().offset"
               [pageSize]="pageSize"
               [initialSort]="{ key: 'started_at', dir: 'desc' }"
               (pageChange)="offset.set($event.offset)"
