@@ -29,11 +29,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date
 
+from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
 from stonks.backtest.costs import CostModel, CostModelSettings
 from stonks.config import RiskPolicy
 from stonks.core.types import Order, Portfolio
 from stonks.logging import get_logger
 from stonks.production import rules as _rules
+from stonks.production.ledger import ledger_filter
 from stonks.production.prices import load_history
 from stonks.production.rules import OrderRule, RiskAdjustment, RiskContext, RiskRule
 from stonks.store.lake import DuckDBLake
@@ -146,10 +148,12 @@ def build_risk_context(
     cost_model: CostModel | CostModelSettings | None = None,
     volumes: Mapping[str, float] | None = None,
     history_bars: int = HISTORY_BARS,
+    portfolio_id: str = DEFAULT_PORTFOLIO_ID,
 ) -> RiskContext:
     """A full ``RiskContext`` for held, priced and ``universe`` tickers: the
     last ``history_bars`` adjusted bars (one query), asset classes and
-    sectors, the real portfolio's equity curve and each holding's entry date."""
+    sectors, ``portfolio_id``'s equity curve and each holding's entry date
+    (from that portfolio's fills only)."""
     from stonks.production.pnl import load_pnl
 
     held = [t for t, q in portfolio.positions.items() if abs(q) > 1e-12]
@@ -162,8 +166,13 @@ def build_risk_context(
         policy=policy or RiskPolicy(),
         history=load_history(lake, tickers, as_of, bars=history_bars),
         sectors={t: s for t, (_, s) in profiles.items() if s},
-        equity_curve=[(r.day, r.total_value) for r in load_pnl(state) if r.day <= as_of],
-        entry_dates=_entry_dates(state, held, as_of),
+        equity_curve=[
+            (r.day, r.total_value)
+            for r in load_pnl(state, portfolio_id=portfolio_id)
+            if r.day <= as_of
+        ],
+        entry_dates=_entry_dates(state, held, as_of, portfolio_id),
+        portfolio_id=portfolio_id,
         cost_model=(
             cost_model.build() if isinstance(cost_model, CostModelSettings) else cost_model
         ),
@@ -188,20 +197,23 @@ def _str_or_none(value: object) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
-def _entry_dates(state: SqliteState, held: Sequence[str], as_of: date) -> dict[str, date]:
+def _entry_dates(
+    state: SqliteState, held: Sequence[str], as_of: date, portfolio_id: str
+) -> dict[str, date]:
     """The day each held position was last opened from flat, from the fill
-    history (fills of the real portfolio up to ``as_of``)."""
+    history (fills of ``portfolio_id`` up to ``as_of``)."""
     if not held:
         return {}
     marks = ",".join("?" for _ in held)
+    where, params = ledger_filter(state, "fills", portfolio_id, alias="f")
     rows = state.sql(
         f"""
         SELECT f.ticker, f.quantity, f.filled_at, o.side
           FROM fills f JOIN orders o ON o.client_id = f.order_client_id
-         WHERE f.ticker IN ({marks}) AND substr(f.filled_at, 1, 10) <= ?
+         WHERE f.ticker IN ({marks}) AND substr(f.filled_at, 1, 10) <= ? AND {where}
          ORDER BY f.filled_at, f.id
         """,
-        [*held, as_of.isoformat()],
+        [*held, as_of.isoformat(), *params],
     )
     net: dict[str, float] = {}
     entry: dict[str, date] = {}

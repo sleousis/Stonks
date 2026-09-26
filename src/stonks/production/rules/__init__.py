@@ -130,6 +130,9 @@ class RiskContext:
     fee_per_trade: float = 0.0
     #: The decision day. Rules read no bar or equity point after it.
     as_of: date | None = None
+    #: The book's portfolio (``None``: the default one); orders a rule
+    #: creates carry it in their client id.
+    portfolio_id: str | None = None
 
     def __post_init__(self) -> None:
         if self.cost_model is not None and (self.slippage_bps or self.fee_per_trade):

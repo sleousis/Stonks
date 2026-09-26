@@ -14,7 +14,7 @@ Evaluates a strategy's paper-trading period against ``GoLivePolicy``:
 
 The paper period is the strategy's virtual shadow P&L while it is
 ``shadow``, and the real (simulated or paper-broker) portfolio P&L once it
-is ``active``. The real portfolio is shared by all active strategies, so for
+is ``active`` (the default portfolio's ledger only). The real portfolio is shared by all active strategies, so for
 an active strategy the P&L checks describe the combined book; trades are
 still counted per strategy. P&L is read only through
 ``stonks.production.pnl`` so its day grouping stays in one place.
@@ -62,8 +62,10 @@ from typing import Any, Literal
 
 from pydantic import Field
 
+from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
 from stonks.config import GoLivePolicy
 from stonks.core.protocols import SurvivalReport
+from stonks.production.ledger import ledger_filter
 from stonks.production.pnl import PnlRow, daily_pnl, load_pnl
 from stonks.registry.store import StrategyRegistry
 from stonks.stats.sharpe import min_trl
@@ -239,7 +241,7 @@ def load_paper_period(
         trades = _shadow_trades(state, strategy_id, since)
     elif handle.status == "active":
         source = "portfolio"
-        raw = load_pnl(state, since=since)
+        raw = load_pnl(state, since=since, portfolio_id=DEFAULT_PORTFOLIO_ID)
         trades = _real_trades(state, strategy_id, since)
     else:
         source, raw, trades = "none", [], 0
@@ -688,9 +690,12 @@ def _shadow_trades(state: SqliteState, strategy_id: str, since: date | None) -> 
 
 
 def _real_trades(state: SqliteState, strategy_id: str, since: date | None) -> int:
+    """Fills of the strategy's orders in the default portfolio (the real
+    book go-live evidence reads; other people's portfolios never count)."""
+    where, params = ledger_filter(state, "fills", DEFAULT_PORTFOLIO_ID, alias="f")
     rows = state.sql(
         "SELECT COUNT(*) AS n FROM fills f JOIN orders o ON o.client_id = f.order_client_id "
-        "WHERE o.strategy_id = ? AND substr(f.filled_at, 1, 10) >= ?",
-        [strategy_id, since.isoformat() if since else ""],
+        f"WHERE o.strategy_id = ? AND substr(f.filled_at, 1, 10) >= ? AND {where}",
+        [strategy_id, since.isoformat() if since else "", *params],
     )
     return int(rows[0]["n"])

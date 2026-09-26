@@ -107,6 +107,7 @@ from stonks.production.hooks import (
     run_tick_hooks,
 )
 from stonks.production.hooks.attribution import load_attribution
+from stonks.production.ledger import ledger_filter
 from stonks.production.prices import held_tickers, load_history, load_prices
 from stonks.production.ranker import Ranker, SignalSet, StrategyPool
 from stonks.production.risk import RiskPolicy
@@ -263,8 +264,9 @@ def run_tick(
     tick_id = _new_tick_id(as_of)
     started = _iso_now()
     log = _log.bind(tick_id=tick_id, as_of=as_of.isoformat(), dry_run=dry_run)
+    plan = plan or TickPlan.default(settings)
     if not dry_run:
-        _refuse_backdated(state, as_of, log)
+        _refuse_backdated(state, as_of, log, [b.portfolio_id for b in plan.books])
 
     state.execute(
         "INSERT INTO tick_runs (id, started_at, status) VALUES (?, ?, 'running')",
@@ -285,7 +287,7 @@ def run_tick(
             log=log,
             notifier=notifier,
             broker_factory=broker_factory,
-            plan=plan or TickPlan.default(settings),
+            plan=plan,
         )
     except Exception as exc:
         log.error("tick.error", error=str(exc), error_type=type(exc).__name__)
@@ -609,7 +611,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                 "client id (OrderStateSource) so crashed submissions can be reconciled"
             )
         if not dry_run:
-            pre = reconcile_orders(broker, state)
+            pre = reconcile_orders(broker, state, portfolio_id=portfolio_id)
             log.info(
                 "tick.reconciled",
                 orders_checked=pre.orders_checked,
@@ -1049,15 +1051,17 @@ def _notify_signals(run: _TickRun) -> list[NotifySignal]:
 
 
 def _client_id_fn(as_of: date, portfolio_id: str) -> Callable[[str | None, str, OrderSide], str]:
-    """Deterministic client ids. The default portfolio keeps the
-    pre-accounts format, so a same-day re-run across the upgrade matches
-    its orders; any other portfolio's ids carry its id."""
+    """Deterministic client ids (:func:`make_client_id`: the default
+    portfolio keeps the pre-accounts format, others carry their id)."""
 
     def make(strategy_id: str | None, ticker: str, side: OrderSide) -> str:
-        sid = strategy_id or PORTFOLIO_STRATEGY
-        if portfolio_id == DEFAULT_PORTFOLIO_ID:
-            return make_client_id(as_of=as_of, strategy_id=sid, ticker=ticker, side=side)
-        return f"{as_of.isoformat()}:{portfolio_id}:{sid}:{ticker}:{side}"
+        return make_client_id(
+            as_of=as_of,
+            strategy_id=strategy_id or PORTFOLIO_STRATEGY,
+            ticker=ticker,
+            side=side,
+            portfolio_id=portfolio_id,
+        )
 
     return make
 
@@ -1179,20 +1183,31 @@ def _scoped(portfolio_id: str | None, sql: str, params: list[Any]) -> tuple[str,
     return f"{sql}{joiner}portfolio_id = ?", [*params, portfolio_id]
 
 
-def _refuse_backdated(state: SqliteState, as_of: date, log: Any) -> None:
-    latest = state.sql("SELECT MAX(as_of) AS as_of FROM portfolio_snapshots")[0]["as_of"]
-    if latest is not None and as_of.isoformat() < latest:
-        log.error("tick.backdated_refused", latest_snapshot_as_of=latest)
-        raise BackdatedTickError(
-            f"refusing to trade as_of {as_of.isoformat()}: the portfolio already has a "
-            f"snapshot for {latest}; run with --dry-run to inspect a past date"
-        )
+def _refuse_backdated(
+    state: SqliteState, as_of: date, log: Any, portfolio_ids: Sequence[str]
+) -> None:
+    """Refuse when any traded portfolio's own ledger (tick snapshots; a
+    broker sync's rows are not the tick's) is already past ``as_of``."""
+    for portfolio_id in portfolio_ids:
+        latest = _latest_snapshot_as_of(state, portfolio_id=portfolio_id)
+        if latest is not None and as_of < latest:
+            log.error(
+                "tick.backdated_refused",
+                latest_snapshot_as_of=latest.isoformat(),
+                portfolio_id=portfolio_id,
+            )
+            raise BackdatedTickError(
+                f"refusing to trade as_of {as_of.isoformat()}: the portfolio already has a "
+                f"snapshot for {latest.isoformat()}; run with --dry-run to inspect a past date"
+            )
 
 
 def _latest_snapshot_as_of(state: SqliteState, portfolio_id: str | None = None) -> date | None:
-    """``as_of`` of the portfolio's latest dated snapshot (``None``: none)."""
-    sql, params = _scoped(portfolio_id, "SELECT MAX(as_of) AS as_of FROM portfolio_snapshots", [])
-    latest = state.sql(sql, params)[0]["as_of"]
+    """``as_of`` of the portfolio's latest dated tick snapshot (``None``: none)."""
+    where, params = ledger_filter(state, "portfolio_snapshots", portfolio_id, tick_only=True)
+    latest = state.sql(
+        f"SELECT MAX(as_of) AS as_of FROM portfolio_snapshots WHERE {where}", params
+    )[0]["as_of"]
     return date.fromisoformat(latest) if latest else None
 
 
@@ -1200,8 +1215,12 @@ def _load_or_seed_portfolio(
     state: SqliteState, initial_cash: float, portfolio_id: str | None = None
 ) -> Portfolio:
     # NULL as_of (rows written without one) sorts last under DESC.
-    sql, params = _scoped(portfolio_id, "SELECT cash, positions_json FROM portfolio_snapshots", [])
-    rows = state.sql(f"{sql} ORDER BY as_of DESC, id DESC LIMIT 1", params)
+    where, params = ledger_filter(state, "portfolio_snapshots", portfolio_id, tick_only=True)
+    rows = state.sql(
+        f"SELECT cash, positions_json FROM portfolio_snapshots WHERE {where}"
+        " ORDER BY as_of DESC, id DESC LIMIT 1",
+        params,
+    )
     if not rows:
         return Portfolio(cash=initial_cash, positions={})
     row = rows[0]
