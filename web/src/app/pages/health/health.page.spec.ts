@@ -51,7 +51,7 @@ describe('HealthPage', () => {
     expect(ingest.request.urlWithParams).toContain('status=error');
     ingest.flush(FAILED_INGEST);
     const ticks = await nextRequest(http, '/api/ticks');
-    expect(ticks.request.urlWithParams).toContain('status=failed');
+    expect(ticks.request.urlWithParams).toContain('status=error');
     ticks.flush(NO_TICKS);
     await tick();
     fixture.detectChanges();

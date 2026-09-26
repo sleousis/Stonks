@@ -74,7 +74,7 @@ const TICKS: Page<TickRun> = {
       id: 't2',
       started_at: '2026-09-25T21:00:00Z',
       finished_at: '2026-09-25T21:00:04Z',
-      status: 'succeeded',
+      status: 'ok',
       summary: {
         orders_placed: 2,
         fills: 2,
@@ -85,7 +85,7 @@ const TICKS: Page<TickRun> = {
       id: 't1',
       started_at: '2026-09-24T21:00:00Z',
       finished_at: '2026-09-24T21:00:01Z',
-      status: 'failed',
+      status: 'error',
       summary: null,
     },
   ],
@@ -210,8 +210,8 @@ describe('DashboardPage', () => {
     expect(positionRows[0].textContent).toContain('$28,700.00');
 
     const tickSection = el.querySelector('section[aria-labelledby="ticks-title"]');
-    expect(tickSection?.textContent).toContain('succeeded');
-    expect(tickSection?.textContent).toContain('failed');
+    expect(tickSection?.textContent).toContain('ok');
+    expect(tickSection?.textContent).toContain('error');
     expect(tickSection?.textContent).toContain('momentum-v3');
 
     const health = el.querySelector('section[aria-labelledby="health-title"]');
