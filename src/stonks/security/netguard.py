@@ -139,7 +139,11 @@ class _PinnedAdapter(HTTPAdapter):
         super().__init__(max_retries=0)
 
     def get_connection_with_tls_context(self, request, verify, proxies=None, cert=None):
-        host_params, pool_kwargs = self.build_connection_pool_key_attributes(request, verify, cert)
+        # None means "not said": verify, the safe default.
+        host_params, key_kwargs = self.build_connection_pool_key_attributes(
+            request, True if verify is None else verify, cert
+        )
+        pool_kwargs: dict[str, Any] = dict(key_kwargs)
         name = host_params["host"]
         host_params["host"] = self._address
         if host_params["scheme"] == "https":

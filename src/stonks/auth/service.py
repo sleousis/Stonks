@@ -263,12 +263,12 @@ class AuthService:
         state.con.execute("BEGIN IMMEDIATE")
         try:
             self._check_limit(state, email, ip)
-            cur = state.execute(
+            [row] = state.execute(
                 "INSERT INTO login_attempts (email, ip, stage, success, created_at)"
-                " VALUES (?, ?, ?, 0, ?)",
+                " VALUES (?, ?, ?, 0, ?) RETURNING id",
                 [email, ip, stage, _iso(self._now())],
-            )
-            attempt_id = int(cur.lastrowid)
+            ).fetchall()
+            attempt_id = int(row[0])
         except BaseException:
             state.con.execute("ROLLBACK")
             raise

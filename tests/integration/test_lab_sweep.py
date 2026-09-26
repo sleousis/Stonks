@@ -233,3 +233,32 @@ def test_rs01_the_snapshot_holds_the_benchmark_ticker(
     )
     [tickers] = seen
     assert tickers[: len(BASKET)] == BASKET and expected in tickers
+
+
+def test_the_snapshot_holds_each_strategys_reference_tickers():
+    """A strategy's ``data_tickers()`` (read but never traded) must be in the
+    snapshot, or its workers see no bars for the reference market."""
+    from stonks.app.sweep import snapshot_tickers
+
+    tasks = plan_sweep(["ETH-USD.CC"], ["intramarket_difference"])
+    request = _request(benchmark="none").model_copy(update={"universe": ["ETH-USD.CC"]})
+    assert snapshot_tickers(request, tasks) == ["ETH-USD.CC", "BTC-USD.CC"]
+
+
+def test_load_strategy_class_returns_a_tradable_class():
+    from stonks.lab.catalog import load_strategy_class
+
+    cls = load_strategy_class("momentum")
+    assert cls.id == "momentum"
+    assert callable(cls.estimate_return) and callable(cls.decide)
+
+
+def test_load_strategy_class_refuses_a_class_that_cannot_trade(monkeypatch):
+    import stonks.lab.catalog as catalog
+
+    class Half(catalog.BaseStrategy):
+        id = "half"
+
+    monkeypatch.setattr(catalog, "strategy_catalog", lambda: {"half": Half})
+    with pytest.raises(ValueError, match="cannot trade"):
+        catalog.load_strategy_class("half")

@@ -114,3 +114,11 @@ def test_pinned_session_connects_to_the_ip_but_verifies_the_name():
     assert pool.assert_hostname == "hooks.example"
     assert session.max_redirects == 0
     ipaddress.ip_address(pool.host)
+
+
+def test_pinned_session_verifies_certificates_when_verify_is_not_given():
+    session = pinned_session("93.184.216.34")
+    request = requests.Request("GET", "https://hooks.example/x").prepare()
+    pool = session.get_adapter(request.url).get_connection_with_tls_context(request, verify=None)
+    assert pool.cert_reqs == "CERT_REQUIRED"
+    assert pool.assert_hostname == "hooks.example"

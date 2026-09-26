@@ -33,13 +33,14 @@ from pydantic import BaseModel, Field, model_validator
 
 from stonks.app.lab import LabRunOptions, LabRunRequest, execute_lab_run
 from stonks.app.strategies import StrategyRef
-from stonks.backtest.benchmark import AUTO_BENCHMARK_TICKER, normalize_spec
-from stonks.lab.catalog import is_wrapper, resolve_strategy, strategy_catalog
+from stonks.lab.catalog import is_wrapper, load_strategy_class, resolve_strategy, strategy_catalog
+from stonks.lab.dataset import data_tickers
 from stonks.lab.parallel import LakeSnapshot, ParallelSettings, planned_workers, run_tasks
 from stonks.logging import get_logger
 from stonks.production.universe import window_tickers
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
+from stonks.strategies.base import strategy_data_tickers
 from stonks.universes.base import UNIVERSE_ID_PATTERN
 
 _log = get_logger("stonks.app.sweep")
@@ -123,7 +124,7 @@ def _run_task(worker: _WorkerState, task: SweepTask) -> SweepRow:
         update={"strategy": StrategyRef(class_path=task.class_path), "universe": universe}
     )
     try:
-        cls = resolve_strategy(task.class_path)
+        cls = load_strategy_class(task.class_path)
         pinned = {"ticker": task.ticker} if task.ticker is not None else None
         result = execute_lab_run(
             payload.settings,
@@ -166,23 +167,20 @@ def _run_task(worker: _WorkerState, task: SweepTask) -> SweepRow:
 def snapshot_tickers(
     request: LabRunRequest, tasks: Sequence[SweepTask], *, default_benchmark: str = "auto"
 ) -> list[str]:
-    """Every ticker a sweep reads (RS-01): the basket, the benchmark ticker
-    (``auto`` is :data:`~stonks.backtest.benchmark.AUTO_BENCHMARK_TICKER`,
-    ``EW`` and ``none`` add none) and each strategy's ``data_tickers()``
-    (reference tickers it reads but never trades), from default params."""
-    tickers = list(request.universe)
+    """Every ticker a sweep reads (RS-01), through the lab's shared
+    :func:`~stonks.lab.dataset.data_tickers`: the basket, each strategy's
+    ``data_tickers()`` (reference tickers it reads but never trades, from
+    default params) and the benchmark ticker (``request.benchmark``, else
+    ``default_benchmark``)."""
+    extra: list[str] = []
     for task in tasks:
         try:
-            hook = getattr(resolve_strategy(task.class_path)(), "data_tickers", None)
-            tickers.extend(hook() if callable(hook) else ())
+            strategy = resolve_strategy(task.class_path)({})
         except Exception:  # an unbuildable strategy fails in its own task
             continue
-    spec = normalize_spec(request.benchmark or default_benchmark)
-    if spec == "auto":
-        tickers.append(AUTO_BENCHMARK_TICKER)
-    elif spec not in (None, "ew"):
-        tickers.append(spec)
-    return list(dict.fromkeys(str(t) for t in tickers if t))
+        extra.extend(strategy_data_tickers(strategy))
+    context = request.model_copy(update={"benchmark": request.benchmark or default_benchmark})
+    return data_tickers(context, extra)
 
 
 def run_sweep(
