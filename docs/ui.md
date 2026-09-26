@@ -266,7 +266,16 @@ protected readonly columns: TableColumn<OrderView>[] = [
 - Formats: `text`, `number`, `money`, `signedMoney`, `percent`, `signedPercent`
   (fractions), `date`, `datetime`; `tone: true` colours numbers by sign.
 - Client paging by default; pass `total` for server paging and refetch on
-  `pageChange` (put `offset` in the resource `params`).
+  `pageChange` (put `offset` in the resource `params`). Server mode has no
+  sort buttons and keeps the API's row order.
+- Keep the last page on screen while the next loads: build the page from
+  `keepLatest(res)` (`shared/ui/data-table/keep-latest.ts`) and pass
+  `[busy]="res.isLoading()"`, which dims the rows under a thin progress bar.
+- Pages that should stay fresh call `autoRefresh(() => [resources])` from
+  `shared/auto-refresh.ts`: a reload every minute while the tab is visible,
+  paused when hidden. Show `<app-updated-ago [at]="auto.updatedAt()" />` in
+  the page header. `TicksService.finished` changes when a trading run this
+  tab followed ends, and the dashboard reloads then.
 - Always give a `caption` (screen readers) and a `rowKey`.
 - Links in rows: put an `<a routerLink>` in a custom cell of the title column.
 
@@ -315,14 +324,22 @@ The lab-run form sends a named suite (`preset`: quick, standard,
 promotion) unless the trader picks custom tests (`survival_tests`).
 Registering defaults to `register_if_passes` (the promotion suite, a
 required hypothesis); "Always" sends `register_strategy`. Walk-forward,
-MCPT and the per-test "advanced options" (`pages/lab/test-options.ts`,
-mirroring each test's `Options` model) start blank, meaning "the test's
+MCPT and the per-test "advanced options" start blank, meaning "the test's
 default", and only filled fields are sent, so presets keep their own
-settings. Field errors show next to the field; the advanced panel opens
+settings. The options come from `GET /api/lab/survival-tests`: each test's
+options schema gives labels, defaults, bounds and choices
+(`pages/lab/test-options.ts`), so a new backend option needs no console
+change. Field errors show next to the field, and the advanced panel opens
 when one of its fields is wrong.
 
-`stonks lab sweep` has no API route yet, so the Lab page explains the
-command instead of showing results.
+The Lab has three screens, linked at the top of each: Backtest and lab run
+(`/lab`), Sweep (`/lab/sweeps`) and Signal IC (`/lab/signal-ic`). A sweep
+runs every strategy, or the ones picked, on typed tickers or a saved
+universe, and `<app-sweep-result>` ranks the rows best first. Signal IC
+shows how well a strategy's scores ranked the moves that followed, per
+look-ahead (`<app-signal-ic-result>`). Both follow the job with
+`<app-job-progress>` and show a failed result load inline with Retry
+(`pages/lab/job-follower.ts`). The Lab history lists and opens them too.
 
 ### Formatting and copy
 
@@ -398,7 +415,50 @@ Tickers open `/data?instrument=<id>`.
   `JobsService.track()` and show `<app-job-progress>`.
 - Run now on a tick job needs the job name typed, like a tick.
 - The backup list shows backup jobs the server ran (`GET /api/jobs?kind=backup`).
-  The API has no route for backups made from the command line.
+  A backup list, verify and restore route is planned on the API.
+
+## Trader screens added in 18.2
+
+| Page | Route | What it does |
+|---|---|---|
+| Notifications | `/notifications` | The in-app feed, unread first marks, Mark read and Mark all read, deep links, and "Your devices" (push devices, Remove) |
+| Broker connections | `/connections`, `/connections/:id`, `/connections/callback` | Provider cards, connect by keys or the provider's sign-in page, accounts, Link to a portfolio, Sync now, Disconnect |
+| Trade costs | `/trades`, `/trades/orders/:clientId` | Totals and shortfall by strategy, ticker or portfolio, the trade journal, and each order as a ticket with notes |
+| Sweep, Signal IC | `/lab/sweeps`, `/lab/signal-ic` | See Lab form above |
+| Glossary | `/help/glossary` | Every term the help tips explain |
+
+- **Notifications.** `NotificationFeedService` (`core/notify/`) keeps the
+  unread count, read quietly every minute while the tab is visible and after
+  any mark-read. `<app-notification-bell>` sits in the top bar and sidebar.
+  `<app-alerts-panel>` shows recent system alerts on Health. Alert settings
+  in Settings also take a webhook address (write-only, shown as scheme and
+  host after saving).
+- **Connections.** Key fields are password inputs, cleared when the form
+  closes and never shown again. Portal providers leave through the
+  `BROWSER_REDIRECT` seam and come back to `/connections/callback`, which
+  calls the callback route once. Link sends a new broker portfolio by
+  default. Connect and disconnect need `connection.manage`, link and sync
+  `portfolio.manage`.
+- **Trade costs.** Shortfall is the gap between the price when the order was
+  decided and the price paid, fees included. Positive figures are costs.
+  Orders and fills link to the order ticket. Notes need `portfolio.manage`.
+- **Order tickets.** `ConfirmService.confirm({ ticket: { lines, side, live } })`
+  shows a confirmation as an order ticket: `<app-side-tag>` (solid B, outlined
+  S), mono figures and `<app-mode-stamp>` (grey PAPER, brass LIVE). A real
+  trading run confirms this way. Brass means real money only.
+- **Strategy lifecycle.** One vocabulary in `shared/governance-labels.ts`:
+  Start paper trading, Go live, Back to paper trading, Stop, and the stages
+  Draft, Paper, Ready, Live. Studio and the strategy page both use it, and
+  the strategy page has a stage bar, a paper value chart and recent orders.
+  A promotion the gate allows needs a reason and a one-second hold
+  (`app-hold-button`); an override still needs the typed word.
+- **Dialogs** are built on `app-sheet` (`shared/ui/sheet.ts`) with
+  `app-typed-confirm`.
+- **Settings** has "Your account" for everyone and "System" (broker, risk
+  policy, data sources, cost models) for admins only.
+- **Toasts.** Success and info leave after a few seconds and pause while
+  hovered or focused. Errors stay until dismissed. The toast layer is a
+  manual popover in the top layer, so toasts over a modal stay usable.
 
 ## Permissions
 
@@ -570,8 +630,9 @@ automate it.
   Escape closes dialogs and the drawer.
 - Status is text plus shape (`app-status-pill`), never colour alone; signed
   numbers carry `+`/`-`.
-- Loading regions use `role="status"`, errors `role="alert"`, toasts an
-  `aria-live` region; the table announces sort changes.
+- Loading regions use `role="status"`, errors `role="alert"`. Each toast is
+  its own live region (alert for errors, status otherwise). The table
+  announces sort changes.
 - Colour pairs meet WCAG AA (4.5:1 text, 3:1 focus and UI) in both themes.
   Checked for every text token on `bg`, `surface`, `surface-2`, `surface-3`
   and each `-soft` background: all at least 4.5:1. Brass is never text in
