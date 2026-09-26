@@ -1020,6 +1020,38 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     )
 
 
+# ---- interrupted ticks ----------------------------------------------------------------
+
+#: ``summary_json.error`` of a tick row closed by :func:`recover_interrupted_ticks`.
+INTERRUPTED_ERROR = "interrupted: the process running the tick stopped before it finished"
+
+
+def recover_interrupted_ticks(state: SqliteState, *, now: datetime | None = None) -> list[str]:
+    """Close every ``tick_runs`` row still ``running`` as ``error`` (TO-06).
+
+    Call only where no tick can be running: at the start of the process
+    that runs ticks (the API, whose tick jobs never outlive it, or the
+    ``local`` scheduler). A killed tick committed nothing past its last
+    transaction, so a same-day rerun repeats it safely (idempotent client
+    ids). Without this the stuck-tick health check fails for ever and the
+    operational halt blocks every buy. Returns the closed ids."""
+    at = (now or datetime.now(UTC)).isoformat(timespec="seconds")
+    rows = state.sql("SELECT id FROM tick_runs WHERE status = 'running' ORDER BY started_at")
+    ids = [r["id"] for r in rows]
+    if not ids:
+        return []
+    summary = json.dumps({"error": INTERRUPTED_ERROR, "error_type": "Interrupted"})
+    with state.transaction():
+        for tick_id in ids:
+            state.execute(
+                "UPDATE tick_runs SET status = 'error', finished_at = ?, summary_json = ?"
+                " WHERE id = ? AND status = 'running'",
+                [at, summary, tick_id],
+            )
+    _log.warning("tick.recovered_interrupted", tick_ids=ids)
+    return ids
+
+
 # ---- plans from portfolios and subscriptions -----------------------------------------
 
 

@@ -148,6 +148,10 @@ class JobExecutor(ABC):
     def bind_stop(self, stop: threading.Event) -> None:  # noqa: B027 - optional hook
         """The scheduler's stop event, for executors that wait on jobs."""
 
+    def recover(self, settings: Any) -> None:  # noqa: B027 - optional hook
+        """Called once when the scheduler starts, holding its instance lock:
+        clean up after an executor of this kind that died mid-run."""
+
 
 # ---- helpers shared by the backends ------------------------------------------------
 

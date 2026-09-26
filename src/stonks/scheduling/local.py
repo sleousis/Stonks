@@ -53,6 +53,20 @@ class LocalExecutor(JobExecutor):
     def execute(self, ctx: RunContext) -> JobOutcome:
         return LOCAL_ACTIONS.get(ctx.spec.action)(ctx)
 
+    def recover(self, settings: Any) -> None:
+        """Ticks run in this process: a tick row left ``running`` belongs to
+        a scheduler that died, so it is closed as interrupted (TO-06)."""
+        from stonks.production.tick import recover_interrupted_ticks
+        from stonks.store.state import SqliteState
+
+        if settings is None:
+            return
+        state = SqliteState(settings.state.path)
+        try:
+            recover_interrupted_ticks(state)
+        finally:
+            state.close()
+
 
 def lake_members(ctx: RunContext) -> MembersResolver:
     """Reads a stored universe's members on a day from the lake."""
