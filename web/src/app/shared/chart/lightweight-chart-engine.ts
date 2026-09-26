@@ -6,6 +6,7 @@ import {
   type ISeriesApi,
   LineSeries,
   type LineData,
+  LineStyle,
   type MouseEventParams,
   type SeriesType,
   type Time,
@@ -190,7 +191,11 @@ class LightweightChart implements ChartHandle {
         lineWidth: 1 as const,
       };
     }
-    return { color, lineWidth: 2 as const };
+    return {
+      color,
+      lineWidth: 2 as const,
+      lineStyle: spec.dashed ? LineStyle.Dashed : LineStyle.Solid,
+    };
   }
 
   private emitCrosshair(p: MouseEventParams<Time>): void {
