@@ -89,3 +89,13 @@ max_concurrent_jobs = 2
 default_page_size = 50
 max_page_size = 500
 ui_dist = "web/dist"
+
+[golive]
+# `stonks golive check <id>` limits for a paper-trading period (shadow P&L for
+# shadow strategies, the real simulated portfolio for active ones). Missing
+# data fails a check. The gate never promotes; `stonks registry promote` does.
+min_days = 20
+max_drawdown = 0.15               # deepest allowed drawdown, positive fraction
+max_drift = 0.10                  # max |paper return - backtest-expected return|
+min_trades = 5
+require_all_survival_passed = true
