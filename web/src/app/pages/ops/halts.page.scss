@@ -48,3 +48,14 @@ fieldset.scope {
     }
   }
 }
+
+// The kill switch is the one red control on the page.
+.kill {
+  border-left: 3px solid var(--color-loss);
+}
+
+.cell-action {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-1);
+}
