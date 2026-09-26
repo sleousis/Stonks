@@ -25,6 +25,7 @@ from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.quality import (
     BarQualityChecker,
     RunQuality,
+    SeriesWarning,
     history_before,
     quarantine_bars,
     record_run_quality,
@@ -331,7 +332,15 @@ class IngestPipeline:
             rows, supplier = self._fetch_with_fallback(fetch, ticker, fallback_fetch)
             if supplier != self._source.source_id:
                 quality.supplied_by[ticker] = supplier
+            if not rows:
+                quality.warnings.append(
+                    SeriesWarning(ticker, "no_data", 0, "the source returned no bars")
+                )
             frame = to_df(rows)
+            if not frame.empty:
+                # a source may answer with its own symbol; the series is the
+                # ticker that was asked for
+                frame["ticker"] = ticker
             if interval == Interval.DAY_1:
                 cls = self._lake.get_asset_classes([ticker]).get(ticker)
                 frame = drop_open_sessions(frame, self._sessions, ticker, self._clock(), cls)
@@ -420,7 +429,64 @@ class IngestPipeline:
         if rejected.any():
             bad = timed[rejected].assign(reasons=batch.reasons[rejected])
             quarantine_bars(self._lake, bad, run_id=run_id, interval=interval, source=supplier)
+        spiked = rejected & batch.reasons.str.contains("price_spike").to_numpy(dtype=bool)
+        self._drop_stored_spikes(
+            ticker,
+            interval,
+            history,
+            [ts for t, ts in batch.stored_spikes if t == ticker],
+            timed[spiked],
+            run_id,
+            supplier,
+            quality,
+        )
         return frame[~rejected], int(rejected.sum())
+
+    def _drop_stored_spikes(
+        self,
+        ticker: str,
+        interval: Interval,
+        history: pd.DataFrame,
+        stored: list[pd.Timestamp],
+        batch_spikes: pd.DataFrame,
+        run_id: int,
+        supplier: str,
+        quality: RunQuality,
+    ) -> None:
+        """Remove spikes that already sit in the bar store: stored bars the
+        batch showed to be spikes (moved to quarantine here), and stored
+        copies of batch rows rejected as spikes (already quarantined) when
+        the stored close is the same bad value."""
+        if stored and not history.empty:
+            hist = history.assign(timestamp=pd.to_datetime(history["timestamp"]))
+            rows = hist[hist["timestamp"].isin(stored)].assign(reasons="price_spike")
+            if not rows.empty:
+                quarantine_bars(self._lake, rows, run_id=run_id, interval=interval, source=supplier)
+                self._lake.delete_bars(ticker, interval, list(rows["timestamp"]))
+                quality.bars_quarantined += len(rows)
+                quality.reasons.update(["price_spike"] * len(rows))
+                self._log.warning(
+                    "bars.stored_spike_removed",
+                    ticker=ticker,
+                    timestamps=[str(t) for t in rows["timestamp"]],
+                )
+        if batch_spikes.empty:
+            return
+        stamps = pd.to_datetime(batch_spikes["timestamp"])
+        on_disk = self._lake.get_bars(
+            ticker, interval, stamps.min().to_pydatetime(), stamps.max().to_pydatetime()
+        )
+        if on_disk.empty:
+            return
+        bad_close = dict(zip(stamps, batch_spikes["close"].astype(float), strict=True))
+        on_disk = on_disk.assign(timestamp=pd.to_datetime(on_disk["timestamp"]))
+        same = [
+            ts
+            for ts, close in zip(on_disk["timestamp"], on_disk["close"], strict=True)
+            if ts in bad_close and abs(float(close) - bad_close[ts]) <= 1e-9 * abs(bad_close[ts])
+        ]
+        if same:
+            self._lake.delete_bars(ticker, interval, same)
 
     def _alert(self, result: IngestRunResult, summary: dict[str, Any], breaches: list[str]) -> None:
         if not breaches or self._notifier is None:

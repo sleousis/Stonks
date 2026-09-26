@@ -308,3 +308,58 @@ def test_primary_success_never_calls_fallback(lake):
     fallback = _Source("yahoo")
     IngestPipeline(primary, lake, fallback=fallback).run_prices(["AAA.US"])
     assert fallback.calls == []
+
+
+# ---- stored spikes (DS-03) --------------------------------------------------------------
+
+
+@pytest.mark.parametrize("backend", ["duckdb", "parquet"])
+def test_a_stored_spike_is_removed_when_the_next_day_reverts_it(tmp_path, backend):
+    lake = DuckDBLake(tmp_path / "lake.duckdb", bar_backend=backend)
+    lake.migrate()
+    try:
+        closes = _walk(62)
+        closes[60] = closes[59] * 3.0
+        day = START + timedelta(days=60)
+        # 60 bars, then a one-bar batch with the bad tick: stored, as it
+        # cannot be judged yet
+        IngestPipeline(_Source("fake", {"AAA.US": _bars("AAA.US", closes[:60])}), lake).run_prices(
+            ["AAA.US"]
+        )
+        spike = _Source("fake", {"AAA.US": _bars("AAA.US", [closes[60]], start=day)})
+        assert IngestPipeline(spike, lake).run_prices(["AAA.US"]).quality["bars_quarantined"] == 0
+        assert day in set(_stored(lake, "AAA.US")["date"])
+        # the next day's one-bar batch takes it back
+        revert = _Source(
+            "fake", {"AAA.US": _bars("AAA.US", [closes[61]], start=day + timedelta(days=1))}
+        )
+        result = IngestPipeline(revert, lake).run_prices(["AAA.US"])
+        stored = _stored(lake, "AAA.US")
+        assert day not in set(stored["date"])
+        assert len(stored) == 61
+        q = quarantined_bars(lake, run_id=result.run_id)
+        assert list(q["reasons"]) == ["price_spike"]
+        assert q.loc[0, "timestamp"].date() == day
+        assert result.quality["bars_quarantined"] == 1
+    finally:
+        lake.close()
+
+
+# ---- edge cases -------------------------------------------------------------------------
+
+
+def test_a_fallback_row_with_another_ticker_code_is_stored_under_the_requested_one(lake):
+    # a fallback adapter that returns its own symbol must not create a
+    # second series: rows are stored under the ticker that was asked for
+    primary = _Source("eodhd", fail_on={"AAA.US"})
+    fallback = _Source("yahoo", prices={"AAA.US": _bars("AAA", [1.0] * 3)})
+    IngestPipeline(primary, lake, fallback=fallback).run_prices(["AAA.US"])
+    assert lake.sql("SELECT DISTINCT ticker FROM bars").ticker.tolist() == ["AAA.US"]
+
+
+def test_a_ticker_with_zero_rows_is_ok_but_warned_in_quality(lake):
+    src = _Source("fake", prices={"AAA.US": []})
+    result = IngestPipeline(src, lake).run_prices(["AAA.US"], until=START)
+    assert result.tickers_ok == 1
+    assert "AAA.US" in result.quality["warned_tickers"]
+    assert result.quality["warnings"] == {"no_data": 1}

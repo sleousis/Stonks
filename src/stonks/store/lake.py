@@ -781,6 +781,12 @@ class DuckDBLake:
         """Fetch bars at the given interval inside a ``[start, end]`` window."""
         return self._bars.get(ticker, interval, start, end)
 
+    def delete_bars(self, ticker: str, interval: Interval, timestamps: list[Any]) -> int:
+        """Remove the bars of one series at ``timestamps`` (naive UTC), for
+        example a stored bar the quality checker found to be a spike.
+        Returns how many were removed."""
+        return self._bars.delete(ticker, interval, timestamps)
+
     def aggregate_bars(
         self,
         ticker: str,

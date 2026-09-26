@@ -134,6 +134,11 @@ class BarStore(ABC):
         ``ticker, timestamp, open, high, low, close, adj_close, volume``."""
 
     @abstractmethod
+    def delete(self, ticker: str, interval: Interval, timestamps: Iterable[Any]) -> int:
+        """Remove the bars of one series at ``timestamps`` (naive UTC);
+        returns how many were removed."""
+
+    @abstractmethod
     def aggregate(self, ticker: str, source: Interval, target: Interval) -> int:
         """Rebuild ``target`` bars of ``ticker`` from its ``source`` bars;
         returns the net number of new ``target`` rows."""
@@ -212,6 +217,18 @@ class DuckDBTableBarStore(BarStore):
             """,
             [ticker, interval.code, start, end],
         ).fetchdf()
+
+    def delete(self, ticker: str, interval: Interval, timestamps: Iterable[Any]) -> int:
+        stamps = [pd.Timestamp(t).to_pydatetime() for t in timestamps]
+        if not stamps:
+            return 0
+        sql = "FROM bars WHERE ticker = ? AND interval = ? AND timestamp = ANY(?)"
+        params = [ticker, interval.code, stamps]
+        con = self._lake.con
+        with self._lake.transaction():
+            n = int(con.execute(f"SELECT COUNT(*) {sql}", params).fetchone()[0])
+            con.execute(f"DELETE {sql}", params)
+        return n
 
     def aggregate(self, ticker: str, source: Interval, target: Interval) -> int:
         con = self._lake.con
@@ -376,6 +393,39 @@ class ParquetBarStore(BarStore):
         finally:
             self._con.unregister(view)
         return len(frame)
+
+    def delete(self, ticker: str, interval: Interval, timestamps: Iterable[Any]) -> int:
+        self._check_writable()
+        stamps = [pd.Timestamp(t).to_pydatetime() for t in timestamps]
+        if not stamps:
+            return 0
+        removed = 0
+        by_year: dict[int, list[datetime]] = {}
+        for ts in stamps:
+            by_year.setdefault(ts.year, []).append(ts)
+        with self._series_lock(interval.code, ticker, required=True):
+            for year, wanted in sorted(by_year.items()):
+                part = self.partition_dir(interval.code, ticker, year)
+                existing = sorted(part.glob("*.parquet"))
+                if not existing:
+                    continue
+                rows = f"read_parquet({_list(existing)}, union_by_name = true)"
+                keys = ", ".join(f"{_lit(t.isoformat(sep=' '))}::TIMESTAMP" for t in wanted)
+                where = f"CAST(timestamp AS TIMESTAMP) IN ({keys})"
+                n = int(
+                    self._con.execute(f"SELECT COUNT(*) FROM {rows} WHERE {where}").fetchone()[0]
+                )
+                if not n:
+                    continue
+                query = (
+                    f"SELECT {_TYPED_FILE_COLS} FROM {rows} WHERE NOT ({where}) ORDER BY timestamp"
+                )
+                self._write_file(query, part / PART_FILE)
+                for path in existing:
+                    if path.name != PART_FILE:
+                        self._retry_io(path.unlink)
+                removed += n
+        return removed
 
     def aggregate(self, ticker: str, source: Interval, target: Interval) -> int:
         self._check_writable()
