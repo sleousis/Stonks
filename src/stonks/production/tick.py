@@ -15,7 +15,7 @@ import json
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from typing import Any, Literal
 
 from stonks.backtest.simulated_broker import SimulatedBroker
@@ -23,9 +23,10 @@ from stonks.core.types import Fill, Order, OrderStatus, Portfolio
 from stonks.execution.orders import make_client_id
 from stonks.logging import get_logger
 from stonks.notify import Notification, Notifier
+from stonks.production.prices import drop_stale_buys, held_tickers, load_prices
 from stonks.production.ranker import Ranker
 from stonks.production.risk import RiskPolicy, apply_risk
-from stonks.production.shadow import evaluate_shadow_strategies
+from stonks.production.shadow import evaluate_shadow_strategies, shadow_held_tickers
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
@@ -153,8 +154,7 @@ def _run_tick_body(
     log: Any,
     notifier: Notifier | None,
 ) -> TickResult:
-    # 1. rank active strategies; prices are needed by both the real and the
-    #    shadow path, so load them up front.
+    # 1. rank active strategies.
     ranker = Ranker(
         registry=registry,
         lake=lake,
@@ -162,20 +162,25 @@ def _run_tick_body(
         threshold=settings.threshold,
     )
     ranked = ranker.rank(as_of=as_of)
-    prices = _current_prices(
+
+    # 2. prepare the portfolio, then price the universe plus every holding:
+    #    a held ticker outside the universe must still be marked and sellable.
+    portfolio = _load_or_seed_portfolio(state, initial_cash=settings.initial_cash)
+    held = held_tickers(portfolio.positions)
+    book = load_prices(
         lake,
         settings.universe,
+        held,
         as_of,
         max_staleness_days=settings.max_price_staleness_days,
     )
+    prices = book.prices
 
-    if not ranked:
-        summary: dict[str, Any] = {"reason": "no_candidates"}
-        summary.update(
-            _shadow_phase(state, lake, registry, settings, as_of, dry_run, tick_id, prices, log)
-        )
+    def noop(reason: str) -> TickResult:
+        summary: dict[str, Any] = {"reason": reason}
+        summary.update(_shadow_phase(state, lake, registry, settings, as_of, dry_run, tick_id, log))
         _close_tick(state, tick_id, status="noop", summary=summary)
-        log.info("tick.noop", reason="no_candidates")
+        log.info("tick.noop", reason=reason)
         return TickResult(
             tick_id=tick_id,
             status="noop",
@@ -184,22 +189,35 @@ def _run_tick_body(
             fills=0,
         )
 
-    winner_return, winner_id, winner_ticker = ranked[0]
-    log.info(
-        "tick.winner",
-        strategy_id=winner_id,
-        ticker=winner_ticker,
-        expected_return=winner_return,
-    )
+    winner_return: float | None
+    exit_strategy_id: str | None = None
+    if ranked:
+        winner_return, winner_id, winner_ticker = ranked[0]
+        log.info(
+            "tick.winner",
+            strategy_id=winner_id,
+            ticker=winner_ticker,
+            expected_return=winner_return,
+        )
+        my_picks = [(r, t) for r, sid, t in ranked if sid == winner_id]
+    else:
+        # Nothing ranked. A flat book has nothing to do; otherwise the
+        # strategy that owns the positions still decides (with no picks),
+        # so exits (momentum drop-outs, regime risk-off, ...) happen.
+        if not held:
+            return noop("no_candidates")
+        owner = _position_owner(state, registry, held, log)
+        if owner is None:
+            return noop("no_active_owner")
+        log.info("tick.exit_decision", strategy_id=owner, held=held)
+        winner_return, winner_id, exit_strategy_id, my_picks = None, owner, owner, []
     strategy = registry.load(winner_id)
-    my_picks = [(r, t) for r, sid, t in ranked if sid == winner_id]
 
-    # 2. prepare portfolio
-    portfolio = _load_or_seed_portfolio(state, initial_cash=settings.initial_cash)
-
-    # 3. decide, then let the risk layer clip/drop before anything reaches
-    #    the broker.
-    proposed = strategy.decide(my_picks, portfolio, prices, as_of)
+    # 3. decide, drop buys priced off stale closes, then let the risk layer
+    #    clip/drop before anything reaches the broker.
+    proposed, stale_buys = drop_stale_buys(
+        strategy.decide(my_picks, portfolio, prices, as_of), book.fresh
+    )
     asset_classes = _asset_classes(lake, [*settings.universe, *portfolio.positions])
     risk_result = apply_risk(
         proposed,
@@ -295,9 +313,7 @@ def _run_tick_body(
         )
 
     # 4. shadow strategies, strictly after the real ledger has committed.
-    shadow_summary = _shadow_phase(
-        state, lake, registry, settings, as_of, dry_run, tick_id, prices, log
-    )
+    shadow_summary = _shadow_phase(state, lake, registry, settings, as_of, dry_run, tick_id, log)
 
     status: TickStatus = "ok" if not any_failure else "partial"
     _close_tick(
@@ -305,8 +321,14 @@ def _run_tick_body(
         tick_id,
         status=status,
         summary={
-            "winner_strategy_id": winner_id,
+            "winner_strategy_id": None if exit_strategy_id else winner_id,
             "winner_expected_return": winner_return,
+            **(
+                {"reason": "no_candidates", "exit_strategy_id": exit_strategy_id}
+                if exit_strategy_id
+                else {}
+            ),
+            "stale_buys_dropped": stale_buys,
             "orders_placed": placed,
             "fills": fills_count,
             "risk_adjustments": [a.as_dict() for a in risk_adjustments],
@@ -316,7 +338,7 @@ def _run_tick_body(
     return TickResult(
         tick_id=tick_id,
         status=status,
-        winner_strategy_id=winner_id,
+        winner_strategy_id=None if exit_strategy_id else winner_id,
         orders_placed=placed,
         fills=fills_count,
     )
@@ -350,7 +372,6 @@ def _shadow_phase(
     as_of: date,
     dry_run: bool,
     tick_id: str,
-    prices: dict[str, float],
     log: Any,
 ) -> dict[str, Any]:
     """Rank and evaluate shadow strategies; return the tick-summary fragment.
@@ -365,15 +386,25 @@ def _shadow_phase(
             threshold=settings.threshold,
             status="shadow",
         ).rank(as_of=as_of)
+        # Shadow portfolios may hold tickers outside the universe too.
+        shadow_held = shadow_held_tickers(state)
+        book = load_prices(
+            lake,
+            settings.universe,
+            shadow_held,
+            as_of,
+            max_staleness_days=settings.max_price_staleness_days,
+        )
         outcomes = evaluate_shadow_strategies(
             state,
             registry,
             shadow_ranked,
-            prices,
-            _asset_classes(lake, settings.universe),
+            book.prices,
+            _asset_classes(lake, [*settings.universe, *shadow_held]),
             as_of,
             tick_id,
             settings,
+            buyable=book.fresh,
         )
     except Exception as exc:
         log.error("tick.shadow_failed", error=str(exc), error_type=type(exc).__name__)
@@ -423,8 +454,7 @@ def _refuse_backdated(state: SqliteState, as_of: date, log: Any) -> None:
 def _load_or_seed_portfolio(state: SqliteState, initial_cash: float) -> Portfolio:
     # NULL as_of (rows written without one) sorts last under DESC.
     rows = state.sql(
-        "SELECT cash, positions_json FROM portfolio_snapshots "
-        "ORDER BY as_of DESC, id DESC LIMIT 1"
+        "SELECT cash, positions_json FROM portfolio_snapshots ORDER BY as_of DESC, id DESC LIMIT 1"
     )
     if not rows:
         return Portfolio(cash=initial_cash, positions={})
@@ -432,32 +462,29 @@ def _load_or_seed_portfolio(state: SqliteState, initial_cash: float) -> Portfoli
     return Portfolio(cash=float(row["cash"]), positions=json.loads(row["positions_json"]))
 
 
-def _current_prices(
-    lake: DuckDBLake,
-    universe: Sequence[str],
-    as_of: date,
-    *,
-    max_staleness_days: int = 7,
-) -> dict[str, float]:
-    if not universe:
-        return {}
-    # Single grouped query: per ticker, take the latest close at or before
-    # ``as_of`` but no older than ``max_staleness_days`` calendar days.
-    # Tickers with only older closes are dropped (no price → no trade).
-    # Avoids the N+1 pattern of one LIMIT-1 query per ticker.
-    oldest = as_of - timedelta(days=max_staleness_days)
-    df = lake.sql(
-        """
-        SELECT ticker, close
-          FROM prices
-         WHERE ticker = ANY(?) AND date <= ? AND date >= ?
-         QUALIFY ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY date DESC) = 1
-        """,
-        [list(universe), as_of, oldest],
+def _position_owner(
+    state: SqliteState, registry: StrategyRegistry, held: Sequence[str], log: Any
+) -> str | None:
+    """The active strategy behind the most recent fill on a held ticker, or
+    None when every strategy that bought the holdings is no longer active."""
+    placeholders = ",".join("?" for _ in held)
+    rows = state.sql(
+        "SELECT strategy_id FROM orders"
+        " WHERE status IN ('filled', 'partially_filled') AND strategy_id IS NOT NULL"
+        f" AND ticker IN ({placeholders})"
+        " ORDER BY updated_at DESC, created_at DESC, rowid DESC",
+        list(held),
     )
-    if df.empty:
-        return {}
-    return {row.ticker: float(row.close) for row in df.itertuples(index=False)}
+    active = {h.id for h in registry.list_all(status="active")}
+    for row in rows:
+        if row["strategy_id"] in active:
+            return row["strategy_id"]
+    log.warning(
+        "tick.exit.no_active_owner",
+        held=list(held),
+        owners=sorted({r["strategy_id"] for r in rows}),
+    )
+    return None
 
 
 def _already_filled(state: SqliteState, client_id: str | None) -> bool:

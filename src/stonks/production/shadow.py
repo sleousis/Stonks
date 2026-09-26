@@ -15,14 +15,17 @@ Isolation guarantees:
 - a strategy already evaluated for ``as_of`` (or for a later date) is skipped,
   so re-running a tick never double-applies virtual fills.
 
-Like the real tick, a strategy with no ranked picks today holds: its
-portfolio is only marked to market.
+Like the real tick, a strategy with no ranked picks but open virtual
+positions still decides (with no picks) so its exits happen; one with no
+picks and a flat portfolio holds, and is only marked to market. Buys need
+a fresh close (``buyable``); holdings are marked and sold at their last
+known close.
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any, Literal
@@ -31,6 +34,7 @@ from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.types import Fill, Order, Portfolio
 from stonks.execution.orders import make_client_id
 from stonks.logging import get_logger
+from stonks.production.prices import drop_stale_buys, held_tickers
 from stonks.production.risk import apply_risk
 from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
@@ -72,7 +76,11 @@ def evaluate_shadow_strategies(
     as_of: date,
     tick_id: str,
     settings: TickSettings,
+    buyable: Collection[str] | None = None,
 ) -> list[ShadowOutcome]:
+    """``buyable`` restricts buys to tickers with a fresh close (default:
+    any ticker in ``prices``)."""
+    fresh = set(prices) if buyable is None else set(buyable)
     picks_by_strategy: dict[str, list[tuple[float, str]]] = {}
     for r, sid, ticker in ranked:
         picks_by_strategy.setdefault(sid, []).append((r, ticker))
@@ -91,6 +99,7 @@ def evaluate_shadow_strategies(
                 as_of,
                 tick_id,
                 settings,
+                fresh,
             )
         except Exception as exc:
             log.warning("shadow.failed", error=str(exc), error_type=type(exc).__name__)
@@ -113,6 +122,7 @@ def _evaluate_one(
     as_of: date,
     tick_id: str,
     settings: TickSettings,
+    fresh: Collection[str],
 ) -> ShadowOutcome:
     latest = state.sql(
         "SELECT as_of FROM shadow_portfolio_snapshots WHERE strategy_id = ? AND as_of >= ? "
@@ -131,8 +141,8 @@ def _evaluate_one(
     strategy = registry.load(strategy_id)
 
     orders: list[Order] = []
-    if picks:
-        proposed = strategy.decide(picks, portfolio, prices, as_of)
+    if picks or held_tickers(portfolio.positions):
+        proposed, _ = drop_stale_buys(strategy.decide(picks, portfolio, prices, as_of), fresh)
         risk_result = apply_risk(
             proposed,
             portfolio,
@@ -222,6 +232,19 @@ def _load_virtual_portfolio(state: SqliteState, strategy_id: str, initial_cash: 
     if not rows:
         return Portfolio(cash=initial_cash, positions={})
     return Portfolio(cash=float(rows[0]["cash"]), positions=json.loads(rows[0]["positions_json"]))
+
+
+def shadow_held_tickers(state: SqliteState) -> list[str]:
+    """Every ticker held in any strategy's latest virtual portfolio."""
+    latest: dict[str, str] = {}
+    for row in state.sql(
+        "SELECT strategy_id, positions_json FROM shadow_portfolio_snapshots ORDER BY as_of, id"
+    ):
+        latest[row["strategy_id"]] = row["positions_json"]
+    held: set[str] = set()
+    for positions_json in latest.values():
+        held.update(held_tickers(json.loads(positions_json)))
+    return sorted(held)
 
 
 def _iso_now() -> str:
