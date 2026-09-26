@@ -20,6 +20,7 @@ from stonks.app.ingest import IngestService
 from stonks.app.jobs import Job, JobRunner, JobStore
 from stonks.app.lab import LabService
 from stonks.app.market import MarketDataService
+from stonks.app.notifications import NotificationsAppService
 from stonks.app.operations import OperationsService
 from stonks.app.orders import OrdersService
 from stonks.app.pagination import Page
@@ -127,6 +128,7 @@ class Services:
     studio: StudioService
     alerts: AlertService
     connections: ConnectionsAppService
+    notifications: NotificationsAppService
     _user_finder: UserStrategyFinder | None = field(default=None, repr=False)
 
     @classmethod
@@ -174,6 +176,7 @@ class Services:
             studio=StudioService(context, lab, runner),
             alerts=AlertService(context),
             connections=ConnectionsAppService(context),
+            notifications=NotificationsAppService(context),
         )
 
     def bootstrap_scope(self) -> Scope:

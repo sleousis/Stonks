@@ -17,6 +17,7 @@ from stonks.api.routers import (
     jobs,
     lab,
     market,
+    notifications,
     orders,
     pnl,
     portfolio,
@@ -49,6 +50,8 @@ API_ROUTERS: list[APIRouter] = [
     brokers.router,
     alerts.router,
     connections.router,
+    notifications.push_router,
+    notifications.router,
 ]
 
 #: Routers that always need the bearer token, even for reads on loopback.
