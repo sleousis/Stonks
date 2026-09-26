@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 import pickle
 import random
+import time
 from datetime import date
 from pathlib import Path
 
@@ -144,6 +145,49 @@ def test_blas_threads_setting_reaches_workers(monkeypatch):
     out = run_tasks(_env_task, [1, 2], settings=ParallelSettings(max_workers=2, blas_threads=2))
     assert out == [("2", "2")] * 2
     assert "OPENBLAS_NUM_THREADS" not in os.environ  # parent env restored
+
+
+def _blas_threads(state, task):
+    from threadpoolctl import threadpool_info
+
+    return sorted({i["num_threads"] for i in threadpool_info() if i["user_api"] == "blas"})
+
+
+def test_serial_run_pins_blas_threads_like_the_workers():
+    # Multi-threaded BLAS reductions can differ in the last bits from
+    # single-threaded ones; the serial path must compute exactly like a
+    # worker so 1 vs N workers stay bit-identical.
+    pytest.importorskip("threadpoolctl")
+    before = _blas_threads(None, None)
+    if not before:
+        pytest.skip("no BLAS library loaded")
+    assert run_tasks(_blas_threads, [1], max_workers=1) == [[1]]
+    assert run_tasks(
+        _blas_threads, [1], settings=ParallelSettings(max_workers=1, blas_threads=2)
+    ) == [[2]]
+    assert _blas_threads(None, None) == before  # restored afterwards
+
+
+def test_stale_snapshot_directories_are_swept_on_build(mem_lake, tmp_path, monkeypatch):
+    # a crashed run (hard-killed process) can leave its snapshot behind
+    import tempfile
+
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    stale = tmp_path / "stonks-snapshot-crashed"
+    stale.mkdir()
+    (stale / "snapshot.duckdb").write_bytes(b"x")
+    old = time.time() - 2 * 86_400
+    os.utime(stale, (old, old))
+    recent = tmp_path / "stonks-snapshot-running"  # another live run
+    recent.mkdir()
+    unrelated = tmp_path / "something-else"
+    unrelated.mkdir()
+    os.utime(unrelated, (old, old))
+
+    with LakeSnapshot.build(mem_lake, ["A.US"]):
+        pass
+    assert not stale.exists()
+    assert recent.exists() and unrelated.exists()
 
 
 def test_serial_checkpoint_runs_before_every_task_and_can_stop_the_run():

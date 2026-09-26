@@ -41,8 +41,6 @@ def test_evaluate_returns_score_and_per_bar_returns(lake_trending, objective):
     curve = np.asarray(report.equity_curve)
     assert outcome.n_bars == len(curve) - 1
     np.testing.assert_allclose(outcome.returns, curve[1:] / curve[:-1] - 1.0)
-    assert list(outcome.index) == list(
-        np.array(report.equity_dates[1:], dtype="datetime64[ns]")
-    )
+    assert list(outcome.index) == list(np.array(report.equity_dates[1:], dtype="datetime64[ns]"))
     # returns cover the train window only
     assert outcome.index[-1] <= np.datetime64(ds.train_window[1])

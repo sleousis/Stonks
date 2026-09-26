@@ -188,15 +188,16 @@ def run_tasks[T, R](
     seeds: list[int | None] = (
         list(task_seeds(root_seed, len(tasks))) if root_seed is not None else [None] * len(tasks)
     )
-    if workers <= 1:
-        state = setup(payload) if setup is not None else payload
-        results: list[R] = []
-        for task, seed in zip(tasks, seeds, strict=True):
-            if checkpoint is not None:
-                checkpoint()
-            results.append(_call_seeded(task_fn, state, task, seed))
-        return results
     blas = settings.blas_threads if settings is not None else 1
+    if workers <= 1:
+        with _blas_limit(blas):
+            state = setup(payload) if setup is not None else payload
+            results: list[R] = []
+            for task, seed in zip(tasks, seeds, strict=True):
+                if checkpoint is not None:
+                    checkpoint()
+                results.append(_call_seeded(task_fn, state, task, seed))
+        return results
     with (
         _pinned_thread_env(blas),
         ProcessPoolExecutor(
@@ -235,6 +236,22 @@ def _pinned_thread_env(threads: int) -> Iterator[None]:
     finally:
         for var in added:
             os.environ.pop(var, None)
+
+
+@contextmanager
+def _blas_limit(threads: int) -> Iterator[None]:
+    """Limit the already-loaded BLAS/OpenMP pools of this process to
+    ``threads`` for the block, so the in-process path computes exactly
+    like a worker (multi-threaded BLAS reductions can differ in the last
+    bits). A no-op when ``threadpoolctl`` (a scikit-learn dependency) is
+    missing."""
+    try:
+        from threadpoolctl import threadpool_limits
+    except ImportError:  # pragma: no cover - installed with scikit-learn
+        yield
+        return
+    with threadpool_limits(limits=threads):
+        yield
 
 
 def _init_worker(setup: Callable[[Any], Any] | None, payload: Any) -> None:
@@ -288,7 +305,8 @@ class LakeSnapshot:
         if not tickers:
             raise ValueError("a lake snapshot needs a non-empty universe")
         started = time.perf_counter()
-        directory = Path(tempfile.mkdtemp(prefix="stonks-snapshot-"))
+        _sweep_stale_snapshots()
+        directory = Path(tempfile.mkdtemp(prefix=_SNAPSHOT_PREFIX))
         snapshot = cls(directory / "snapshot.duckdb")
         try:
             with copy_universe_lake(source, tickers) as scoped:
@@ -330,6 +348,25 @@ class LakeSnapshot:
 
     def __exit__(self, *exc: object) -> None:
         self.close()
+
+
+_SNAPSHOT_PREFIX = "stonks-snapshot-"
+#: Snapshot directories older than this are leftovers of a killed run
+#: (a live run's snapshot is younger than any lab run is long).
+_STALE_SNAPSHOT_SECONDS = 86_400
+
+
+def _sweep_stale_snapshots() -> None:
+    """Delete snapshot directories a hard-killed run left in the temp dir.
+    Best effort: one still open elsewhere is skipped."""
+    cutoff = time.time() - _STALE_SNAPSHOT_SECONDS
+    for directory in Path(tempfile.gettempdir()).glob(f"{_SNAPSHOT_PREFIX}*"):
+        try:
+            if directory.is_dir() and directory.stat().st_mtime < cutoff:
+                shutil.rmtree(directory)
+                _log.info("lab.snapshot.stale_removed", path=str(directory))
+        except OSError:
+            continue
 
 
 def _copy_bars(
