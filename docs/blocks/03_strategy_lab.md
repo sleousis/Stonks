@@ -58,12 +58,13 @@ class Strategy(Protocol):
 
 - Tuners: `grid` and `random` (`--tuner`). A tuner reads only the `ParamSpace`.
 - Objectives: `sharpe` (default), `cagr`, `final_return` (`--objective`).
+- `lab.cv.CVObjective(inner, folds=5)` wraps any of them: it scores a strategy on purged folds of the train window, each fold fitted on the others, so a tuner stops picking on in-sample fit (BL-45). It is a code-level option today, not a CLI choice.
 - Trials run in parallel on `[lab.parallel] max_workers` processes (0 = every core). Results do not depend on the worker count.
 - Worker snapshots and the permuted, perturbed and noise lakes of the survival tests copy every ticker a run reads: the universe, `LabDataset.reference_tickers` (filled from the strategy's `data_tickers()`) and the benchmark ticker. See `lab.dataset.data_tickers`. References are permuted together with the universe.
 
 ## Survival tests
 
-A test is one module in `lab/survival/` with an `id` and a `run` method; `survival/registry.py` finds it. There are 18:
+A test is one module in `lab/survival/` with an `id` and a `run` method; `survival/registry.py` finds it. There are 21:
 
 | Id | Checks |
 |----|--------|
@@ -85,6 +86,9 @@ A test is one module in `lab/survival/` with an `id` and a `run` method; `surviv
 | `signal_ic` | Scores rank future returns (informational) |
 | `event_study` | Entries beat baseline drift |
 | `vs_random` | Beats random entries with the same exposure |
+| `cpcv` | Combinatorial purged CV: most backtest paths of models that never saw their data are positive (BL-45) |
+| `crisis` | Drawdown in each named crisis window stays within 1.5x the benchmark's (BL-48) |
+| `stress` | 5th-percentile Sharpe and 95th-percentile drawdown over 200 simulated validation windows (BL-48) |
 
 Presets (`--preset`):
 
@@ -92,7 +96,7 @@ Presets (`--preset`):
 |--------|-------|
 | `quick` (default; `--register` defaults to `promotion`) | `oos`, `period_stability` |
 | `standard` | `quick` plus `perturbation`, `walk_forward`, `deflated_sharpe`, `cost_stress` |
-| `promotion` | `oos`, `walk_forward`, `deflated_sharpe`, `pbo`, `mc_trades`, `cost_stress`, `plateau`, `cross_instrument`, `benchmark_relative`, `mcpt` (200 permutations) |
+| `promotion` | `oos`, `walk_forward`, `deflated_sharpe`, `pbo`, `mc_trades`, `cost_stress`, `plateau`, `cross_instrument`, `benchmark_relative`, `mcpt` (200 permutations), `event_study`, `vs_random`, `cpcv`, `crisis` |
 
 `--tests a,b,c` picks tests by id instead. `--test-option` passes options to one test.
 
@@ -112,6 +116,21 @@ Other rules:
 - IC standard errors keep gaps in the date calendar.
 - The suite runs `walk_forward` first, so `mc_trades` always scores the stitched trades. Reports keep the order you asked for.
 - The trial matrix is indexed by date.
+
+### Purged CV, CPCV and labels (BL-45)
+
+- `lab/cv.py` holds `PurgedKFold` and `CombinatorialPurgedKFold`. Both drop train samples whose labels overlap a test block (purge) and the samples right after it (embargo).
+- With 6 groups and 2 test groups, CPCV makes 15 splits that chain into 5 full backtest paths.
+- The `cpcv` test lays the groups over the whole dataset window. Each split is re-tuned (when the lab run bound a tuner) and fitted on its purged training segments, then backtested on its test groups. It passes when at least 60% of the path Sharpes are positive and the pooled PSR is at least 0.9.
+- A split's dataset carries its segments as `LabDataset.train_segments`. `train_windows` lists them. A strategy that reads only `train_window` gets the longest segment, so it never trains on a test block.
+- `features/labels.py`: triple-barrier labels (EWMA volatility widths, high and low touches), label concurrency, average uniqueness and the sequential bootstrap.
+- `features/ml.py`: `bet_size(p)` turns a probability into a size in 0.1 steps (0 at p = 0.5), `break_even_probability(tp, sl)` is `sl / (tp + sl)`, and `Classifier.fit` takes `sample_weight`.
+
+### Crisis and stress (BL-48)
+
+- `crisis` checks the GFC, the 2011 euro crisis, Q4 2018, COVID, 2022 H1 and the 2022 crypto collapse. Windows with no data are skipped and `crisis_coverage` reports the share covered. With no window covered the test passes with a note (P35 says "where data allows"). Set `require_coverage` to fail instead.
+- `stress` simulates the validation window 200 times, by a stationary block bootstrap of whole bars (mean block 20) or by GARCH-t filtered historical simulation (`method="garch_fhs"`). Every ticker draws the same days, so correlations survive. It is not in a preset: it is slow, so ask for it with `--tests stress`.
+- `features/vol_forecast.py` is the `VolForecaster` seam: `ewma`, `garch` (GARCH(1,1)-t, the `arch` library wrapped, only plain floats leave the fit) and `har_rv`.
 
 ## Run sequence
 

@@ -156,7 +156,7 @@ Enforced: today `MacroRegimeFilter` and `FeatureRegimeFilter` (`strategies/macro
 
 **P35. Every strategy must be seen through at least one crisis before promotion, where data allows.**
 Why: a backtest that skips a crash is lying, and risk models fail exactly when they're needed (Kindleberger; Danielsson).
-Enforced: BL-48 (crisis windows and stress simulation). The EODHD free tier's one-year limit makes this a data requirement (BL-37 preflight).
+Enforced: the `crisis` test (in the `promotion` preset) compares the drawdown in each named crisis window with the benchmark's and reports `crisis_coverage`. The `stress` test replays 200 simulated validation windows (BL-48). The EODHD free tier's one-year limit makes this a data requirement (BL-37 preflight).
 
 **P36. Diversification is not a crash hedge: correlations go to one in panics.**
 Why: contagion (Kindleberger; Harris on liquidity vanishing).

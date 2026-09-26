@@ -7,7 +7,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | Phase | Status |
 |-------|--------|
 | 1 to 8 | Done, except 5.4 end-to-end tests (now 13.14). 8.4 moved to 11.8. |
-| 9 | Waves 1 to 4 done. Wave 5: 9.5.1 done. Details under Phase 9. |
+| 9 | Waves 1 to 4 done. Wave 5: 9.5.1, 9.5.2, 9.5.3 and 9.5.5 done. Details under Phase 9. |
 | 10 | Done: 10.1 to 10.5. |
 | 11 | Done except parts of 11.6. 11.8 is this docs refresh. |
 | 12 | Mostly done. Open: 12.10 soak test, three runbooks (tick failed, broker unreachable, disk full). |
@@ -134,6 +134,9 @@ About 60 trading books from three reading lists and the Axon "100 books" series,
 - Wave 3: done. The rules are set under `[production.risk.rules.*]`, the circuit breaker and operational halt are off by default, and the quit rule alerts after every tick (`[production.quit_rule]`). Halts are listed and cleared with `stonks halts`. The lab runs the data preflight before tuning, and `stonks audit statements` checks the statements (also after `stonks ingest fundamentals`). 9.3.4 records the decision price and context on every order and reports implementation shortfall and the trade journal with `stonks tca`, `/api/tca` and MCP tools. Round trips with MAE and MFE in the journal are not built yet.
 - Wave 4: done. 9.4.1 to 9.4.4 (`quant_momentum`, `stocks_on_the_move` with `atr_parity`, `ewmac_trend`, `tsmom`, `ath_trend`, `TrailingStopWrapper`, `quant_value`), 9.4.5 (`RegimeFilter`) and 9.4.6 (legacy defaults and metadata backfill).
 - Wave 5: 9.5.1 done. The `hrp`, `erc` and `mean_variance_costs` constructors, four covariance estimators and the effective number of bets are in `portfolio/`. They read `returns_history`, which the tick and the backtest don't fill yet, so today they fall back to each name's own volatility.
+- Wave 5: 9.5.2 done. Purged and combinatorial purged k-fold and `CVObjective` (`lab/cv.py`), the `cpcv` test (in `promotion`), `LabDataset.train_segments`, the triple-barrier and uniqueness toolkit (`features/labels.py`), bet sizing and sample weights (`features/ml.py`). `trendline_meta_label` fits each CV segment separately, weights trades by uniqueness, reports a purged CV score and trades above the barriers' break-even probability. `CVObjective` is not a CLI or API objective choice yet.
+- Wave 5: 9.5.3 done. `MarkovSwitchingRegime` (statsmodels, wrapped, with our own Hamilton filter) in `features/regimes.py`, the `latent_regime_filter` wrapper, the `vix_term_structure` condition (`features/regime_vix.py`) and Yahoo's `vix_spot` and `vix_3m` macro series.
+- Wave 5: 9.5.5 done. The `crisis` test (in `promotion`), the `stress` test (block bootstrap or GARCH-t filtered historical simulation, in no preset) and the `VolForecaster` seam (`ewma`, `garch` wrapping `arch`, `har_rv`) in `features/vol_forecast.py`.
 
 Migration numbers in the tables below were plans. The landed ones are SQLite `008_lab_trials`, `009_status_changes`, `014_position_attribution`, `016_risk_halts` and `017_tca`, and DuckDB `014_statement_flags` and `015_universe_membership`. New migrations take the next free number.
 
@@ -195,7 +198,7 @@ Integration 1: realistic costs by default (BL-13), `[lab.parallel]`, the CLI and
 |----|-------|------|
 | 9.5.1 Optimising constructors (BL-44) | Covariance estimators, HRP, ERC, mean-variance with costs (cvxpy, wrapped), effective number of bets. | `portfolio/{covariance,hrp,erc,optimizers,diversification}.py` |
 | 9.5.2 ML hygiene (BL-45) | Purged and combinatorial CV, CPCV test, triple-barrier and uniqueness toolkit, bet sizing. | `lab/cv.py`, `lab/survival/cpcv.py`, `features/labels.py`, `features/ml.py`, `strategies/examples/trendline_meta_label.py`, `lab/dataset.py` |
-| 9.5.3 Latent regimes (BL-46) | Markov-switching regime filter; VIX term-structure condition. | `features/regimes.py`, `strategies/latent_regime.py`, `features/regime_conditions_vix.py`, `ingest/sources/yahoo.py` |
+| 9.5.3 Latent regimes (BL-46) | Markov-switching regime filter; VIX term-structure condition. | `features/regimes.py`, `strategies/latent_regime.py`, `features/regime_vix.py`, `ingest/sources/yahoo.py` |
 | 9.5.4 Live monitoring (BL-47) | VaR/ES with violation ratio, alpha-decay monitor, correlation-to-pool test. | `production/risk_metrics.py`, `production/decay.py`, `lab/survival/pool_correlation.py`, `store/migrations_sqlite/011_risk_snapshots.sql` |
 | 9.5.5 Stress (BL-48) | Crisis windows, stress simulation, `VolForecaster` with GARCH (arch, wrapped). | `lab/survival/crisis.py`, `lab/survival/stress.py`, `features/vol_forecast.py` |
 | 9.5.6 Engineering guards (BL-49) | Point-in-time lake proxy, universe membership in engine and ranker, pyright, Hypothesis property tests, vectorised pre-screen. | `store/pit.py`, `lab/vectorized.py`, `pyrightconfig.json`, `backtest/engine.py`, `production/ranker.py`, `.github/workflows/ci.yml`, `tests/property/*` |
