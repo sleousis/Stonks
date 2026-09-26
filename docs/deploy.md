@@ -143,7 +143,7 @@ sequenceDiagram
 1. Bump `version` in `pyproject.toml`, refresh the changelog (`git cliff --tag v0.1.0 -o CHANGELOG.md`), commit.
 2. `git tag v0.1.0 && git push origin v0.1.0`.
 3. Watch **Release**, then **Deploy**, in the Actions tab.
-4. Open `https://stonks.<tailnet>.ts.net`. Enter `STONKS_API_TOKEN` in **Settings** and turn on "send the token when reading data": behind Caddy, reads are not on loopback, so they need the token too.
+4. On the server, run `docker compose run --rm api stonks users bootstrap --email you@example.com` once. Then open `https://stonks.<tailnet>.ts.net`, sign in and set up the second factor. Every call needs a sign-in or a token. Behind Caddy the API trusts forwarded client IPs only from the Compose network (`STONKS_DOCKER_SUBNET`).
 
 The release fails on purpose if the tag does not match `pyproject.toml`.
 

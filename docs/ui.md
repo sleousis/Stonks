@@ -27,9 +27,10 @@ serves it at `/` with single-page fallback (`[api].ui_dist`), so one process
 serves both. The dev server origin (`http://localhost:4200`) is the API's
 `[api].ui_origin` for CORS, although the proxy makes CORS unnecessary in dev.
 
-Reads are open on loopback, so the console works read-only without a token.
-Enter `STONKS_API_TOKEN` in **Settings** to enable actions; it is kept in
-`sessionStorage` for that tab only.
+Every call needs a credential. Sign in, or enter a token in **Settings** (kept
+in `sessionStorage` for that tab only). For local UI work, start the API with
+`STONKS_PROFILE=dev` so reads from 127.0.0.1 work without signing in. See
+`docs/security.md`.
 
 | Command | What it does |
 |---|---|
