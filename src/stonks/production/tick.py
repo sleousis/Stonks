@@ -30,7 +30,7 @@ from stonks.core.protocols import Broker
 from stonks.core.types import Fill, Order, OrderStatus, Portfolio
 from stonks.execution.brokers.base import BrokerKind, OrderRejectedError
 from stonks.execution.orders import make_client_id
-from stonks.execution.reconcile import reconcile_orders
+from stonks.execution.reconcile import NON_TERMINAL_STATUSES, reconcile_orders
 from stonks.logging import get_logger
 from stonks.notify import Notification, Notifier
 from stonks.production.prices import drop_stale_buys, held_tickers, load_prices
@@ -285,6 +285,9 @@ def _run_tick_body(
         )
         for o in risk_result.orders
     ]
+    open_conflicts: list[dict[str, str]] = []
+    if external:
+        orders_with_tick, open_conflicts = _drop_open_order_conflicts(state, orders_with_tick, log)
     sells = [o for o in orders_with_tick if o.side == "sell"]
     buys = [o for o in orders_with_tick if o.side == "buy"]
 
@@ -358,9 +361,24 @@ def _run_tick_body(
     if not dry_run and external:
         post = reconcile_orders(broker, state)
         fills_count = post.fills_inserted
+        # Report what the broker made of each submission (e.g. rejected).
+        booked = _order_statuses(state, [o.client_id for o, _, _ in outcomes])
+        outcomes = [(o, booked.get(o.client_id, st), f) for o, st, f in outcomes]
         after = broker.fetch_portfolio()
+        marks = dict(prices)
+        unpriced = [t for t in held_tickers(after.positions) if t not in marks]
+        if unpriced:
+            marks.update(
+                load_prices(
+                    lake,
+                    [],
+                    unpriced,
+                    as_of,
+                    max_staleness_days=settings.max_price_staleness_days,
+                ).prices
+            )
         with state.transaction():
-            _snapshot_portfolio(state, tick_id, after, prices, as_of)
+            _snapshot_portfolio(state, tick_id, after, marks, as_of)
     elif not dry_run:
         with state.transaction():
             for order, order_status, fill in outcomes:
@@ -399,6 +417,7 @@ def _run_tick_body(
                 else {}
             ),
             "stale_buys_dropped": stale_buys,
+            **({"open_order_conflicts": open_conflicts} if open_conflicts else {}),
             "orders_placed": placed,
             "fills": fills_count,
             "risk_adjustments": [a.as_dict() for a in risk_adjustments],
@@ -559,6 +578,52 @@ def _position_owner(
         owners=sorted({r["strategy_id"] for r in rows}),
     )
     return None
+
+
+def _drop_open_order_conflicts(
+    state: SqliteState, orders: list[Order], log: Any
+) -> tuple[list[Order], list[dict[str, str]]]:
+    """Drop orders on a (ticker, side) that already has a working order at
+    the broker under another client_id (e.g. yesterday's GTC buy still
+    open): the portfolio doesn't show it yet, so deciding again would double
+    the position once both fill."""
+    placeholders = ",".join("?" for _ in NON_TERMINAL_STATUSES)
+    open_rows = state.sql(
+        f"SELECT client_id, ticker, side FROM orders WHERE status IN ({placeholders})",
+        list(NON_TERMINAL_STATUSES),
+    )
+    kept: list[Order] = []
+    conflicts: list[dict[str, str]] = []
+    for order in orders:
+        clash = [
+            r["client_id"]
+            for r in open_rows
+            if r["ticker"] == order.ticker
+            and r["side"] == order.side
+            and r["client_id"] != order.client_id
+        ]
+        if clash:
+            log.warning(
+                "tick.order.open_order_conflict",
+                ticker=order.ticker,
+                side=order.side,
+                open_client_ids=clash,
+            )
+            conflicts.append({"ticker": order.ticker, "side": order.side})
+            continue
+        kept.append(order)
+    return kept, conflicts
+
+
+def _order_statuses(state: SqliteState, client_ids: Sequence[str | None]) -> dict[str, str]:
+    ids = [c for c in client_ids if c]
+    if not ids:
+        return {}
+    placeholders = ",".join("?" for _ in ids)
+    rows = state.sql(
+        f"SELECT client_id, status FROM orders WHERE client_id IN ({placeholders})", ids
+    )
+    return {r["client_id"]: r["status"] for r in rows}
 
 
 def _live_order_status(state: SqliteState, client_id: str | None) -> str | None:

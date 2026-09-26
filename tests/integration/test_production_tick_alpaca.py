@@ -6,13 +6,16 @@ from the adapter's unit tests. No network, no keys.
 
 from __future__ import annotations
 
+import json
 from datetime import date
 
+import pandas as pd
 import pytest
 
 import stonks.production.tick as tick_mod
 from stonks.config import Settings
 from stonks.core.protocols import SurvivalReport
+from stonks.core.types import Portfolio
 from stonks.execution.brokers import AlpacaBroker
 from stonks.execution.brokers.base import BrokerError
 from stonks.production.settings_builder import build_tick_runtime
@@ -245,3 +248,52 @@ def test_builder_alpaca_factory_connects_lazily_with_env_keys(no_alpaca_env, mon
     )
     runtime = build_tick_runtime(Settings(brokers={"kind": "alpaca"}), ["UP.US"])
     assert isinstance(runtime.broker_factory(None), AlpacaBroker)
+
+
+# ---- self-review: broker-side rejections, open orders, late positions -------
+
+
+def test_broker_side_rejection_is_booked_and_notified(env):
+    from tests.integration.test_production_tick_notify import Recorder
+
+    _, state, _, _, client, _, _ = env
+    client.next_status = "rejected"
+    recorder = Recorder()
+    _tick(env, notifier=recorder)
+    assert [o["status"] for o in _orders(state)] == ["rejected"]
+    assert [n.title for n in recorder.sent] == ["orders rejected"]
+
+
+def test_open_order_from_an_earlier_day_blocks_a_second_order(env):
+    _, state, _, sid, client, _, _ = env
+    cid = f"2026-03-19:{sid}:UP.US:buy"
+    state.execute("INSERT INTO tick_runs (id, started_at, status) VALUES ('t0', 'x', 'ok')")
+    state.execute(
+        "INSERT INTO orders (client_id, tick_id, strategy_id, ticker, side, quantity, order_type,"
+        " status, created_at, updated_at) VALUES (?, 't0', ?, 'UP.US', 'buy', 10, 'market',"
+        " 'pending', '2026-03-19', '2026-03-19')",
+        [cid, sid],
+    )
+    client.orders[cid] = raw_order(cid, symbol="UP", qty="10", status="new", order_id="b-0")
+
+    result = _tick(env)
+
+    assert client.submitted == []  # a GTC buy is still working: don't buy twice
+    assert state.count_rows("orders") == 1
+    summary = json.loads(
+        state.sql("SELECT summary_json FROM tick_runs WHERE id = ?", [result.tick_id])[0][0]
+    )
+    assert summary["open_order_conflicts"] == [{"ticker": "UP.US", "side": "buy"}]
+
+
+def test_snapshot_prices_positions_that_appear_after_trading(env, monkeypatch):
+    _, state, _, _, _, _, _ = env
+    portfolios = iter(
+        [Portfolio(cash=10_000.0), Portfolio(cash=9_000.0, positions={"DOWN.US": 2.0})]
+    )
+    monkeypatch.setattr(AlpacaBroker, "fetch_portfolio", lambda self: next(portfolios))
+    _tick(env)
+    snap = state.sql("SELECT total_value FROM portfolio_snapshots")[0]
+    days = list(pd.bdate_range(start="2025-10-01", end="2026-04-01").date)
+    down = 100.0 - 40.0 * days.index(AS_OF) / (len(days) - 1)
+    assert snap["total_value"] == pytest.approx(9_000.0 + 2 * down)
