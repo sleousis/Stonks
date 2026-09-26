@@ -6,7 +6,7 @@ the production tick only has to call it and never imports a vendor SDK.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.types import Portfolio
@@ -14,6 +14,7 @@ from stonks.execution.brokers.alpaca import AlpacaBroker
 from stonks.execution.brokers.base import (
     BrokerAccount,
     BrokerError,
+    BrokerKind,
     BrokerOrderState,
     LiveTradingRefusedError,
     MarketClock,
@@ -24,8 +25,6 @@ from stonks.execution.brokers.base import (
 
 if TYPE_CHECKING:  # pragma: no cover
     from stonks.config import Settings
-
-BrokerKind = Literal["simulated", "alpaca"]
 
 __all__ = [
     "AlpacaBroker",

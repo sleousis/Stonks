@@ -13,13 +13,15 @@ from __future__ import annotations
 
 import json
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from typing import Any, Literal
 
 from stonks.backtest.simulated_broker import SimulatedBroker
+from stonks.core.protocols import Broker
 from stonks.core.types import Fill, Order, OrderStatus, Portfolio
+from stonks.execution.brokers.base import BrokerKind
 from stonks.execution.orders import make_client_id
 from stonks.logging import get_logger
 from stonks.notify import Notification, Notifier
@@ -35,6 +37,10 @@ TickStatus = Literal["ok", "partial", "error", "noop"]
 _DBTickStatus = Literal["running", "ok", "partial", "error"]
 
 _log = get_logger("stonks.production.tick")
+
+#: Builds the tick's broker around the portfolio it trades (a simulated
+#: broker trades that object in memory; an external one ignores it).
+BrokerFactory = Callable[[Portfolio], Broker]
 
 
 class BackdatedTickError(ValueError):
@@ -56,6 +62,10 @@ class TickSettings:
     risk: RiskPolicy = field(default_factory=RiskPolicy)
     # Evaluate shadow strategies against virtual portfolios (never traded).
     shadow_enabled: bool = True
+    # "simulated" (default) trades in memory against the snapshot portfolio.
+    # "alpaca" trades through ``run_tick``'s ``broker_factory``; the broker
+    # account is then the source of truth for the portfolio.
+    broker_kind: BrokerKind = "simulated"
 
 
 @dataclass(frozen=True)
@@ -75,6 +85,7 @@ def run_tick(
     as_of: date | None = None,
     dry_run: bool = False,
     notifier: Notifier | None = None,
+    broker_factory: BrokerFactory | None = None,
 ) -> TickResult:
     as_of = as_of or utc_today()
     tick_id = _new_tick_id(as_of)
@@ -101,6 +112,7 @@ def run_tick(
             tick_id=tick_id,
             log=log,
             notifier=notifier,
+            broker_factory=broker_factory,
         )
     except Exception as exc:
         log.error("tick.error", error=str(exc), error_type=type(exc).__name__)
@@ -153,6 +165,7 @@ def _run_tick_body(
     tick_id: str,
     log: Any,
     notifier: Notifier | None,
+    broker_factory: BrokerFactory | None,
 ) -> TickResult:
     # 1. rank active strategies.
     ranker = Ranker(
@@ -230,7 +243,7 @@ def _run_tick_body(
     )
     risk_adjustments = list(risk_result.adjustments)
 
-    broker = _build_broker(portfolio, settings, prices, as_of)
+    broker = _build_broker(portfolio, settings, prices, as_of, broker_factory)
     orders_with_tick = [
         replace(
             o,
@@ -352,15 +365,19 @@ def _build_broker(
     settings: TickSettings,
     prices: dict[str, float],
     as_of: date,
-) -> SimulatedBroker:
-    """The one place the tick constructs its broker; swap here for a real
-    broker (roadmap 2.6)."""
-    broker = SimulatedBroker(
-        portfolio=portfolio,
-        slippage_bps=settings.slippage_bps,
-        fee_per_trade=settings.fee_per_trade,
-    )
-    broker.set_prices(prices, as_of=as_of)
+    factory: BrokerFactory | None = None,
+) -> Broker:
+    """The one place the tick constructs its broker around ``portfolio``."""
+    if factory is not None:
+        broker = factory(portfolio)
+    else:
+        broker = SimulatedBroker(
+            portfolio=portfolio,
+            slippage_bps=settings.slippage_bps,
+            fee_per_trade=settings.fee_per_trade,
+        )
+    if isinstance(broker, SimulatedBroker):
+        broker.set_prices(prices, as_of=as_of)
     return broker
 
 

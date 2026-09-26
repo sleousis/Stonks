@@ -34,7 +34,8 @@ from stonks.ingest.sources.registry import (
 )
 from stonks.logging import configure_logging, get_logger
 from stonks.notify import build_notifier
-from stonks.production.tick import BackdatedTickError, TickSettings, run_tick
+from stonks.production.settings_builder import build_tick_runtime
+from stonks.production.tick import BackdatedTickError, run_tick
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
@@ -777,26 +778,17 @@ def tick(
                         "ingest profiles first or relax the filter"
                     )
 
-            tick_settings = TickSettings(
-                universe=universe,
-                threshold=settings.production.threshold,
-                initial_cash=settings.production.initial_cash,
-                slippage_bps=settings.production.slippage_bps,
-                fee_per_trade=settings.production.fee_per_trade,
-                max_price_staleness_days=settings.production.max_price_staleness_days,
-                risk=settings.production.risk,
-                shadow_enabled=settings.production.shadow_enabled,
-            )
-
+            runtime = build_tick_runtime(settings, universe)
             try:
                 result = run_tick(
                     state=state,
                     lake=lake,
                     registry=registry,
-                    settings=tick_settings,
+                    settings=runtime.settings,
                     as_of=as_of_date,
                     dry_run=dry_run,
-                    notifier=build_notifier(settings.notify),
+                    notifier=runtime.notifier,
+                    broker_factory=runtime.broker_factory,
                 )
             except BackdatedTickError as exc:
                 console.print(f"[red]{exc}[/red]")
