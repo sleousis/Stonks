@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-import ipaddress
 import json
 import uuid
 from collections.abc import Iterable, Mapping
@@ -30,6 +29,7 @@ from stonks.notify.base import redact_url
 from stonks.notify.channels import channel_names
 from stonks.notify.prefs import Preference, PreferenceStore
 from stonks.notify.settings import OutboxSettings
+from stonks.security.netguard import UnsafeAddress, check_public_host
 from stonks.store.state import SqliteState
 
 #: Hosts (and their subdomains) of the browser vendors' push services.
@@ -103,14 +103,14 @@ def _person(state: SqliteState, scope: Scope) -> str:
 
 
 def _host_is_public(host: str) -> bool:
-    host = host.lower().rstrip(".")
-    if host in ("localhost",) or host.endswith((".localhost", ".local", ".internal")):
-        return False
+    """Save-time host check: no local names, no non-public address in any
+    numeric form. Names are checked again, resolved and pinned, on every
+    webhook send (``WebhookChannel``); push hosts are also allow-listed."""
     try:
-        ip = ipaddress.ip_address(host.strip("[]"))
-    except ValueError:
-        return True  # a name; push hosts are allow-listed, webhooks resolve at send time
-    return ip.is_global
+        check_public_host(host)
+    except UnsafeAddress:
+        return False
+    return True
 
 
 def _check_endpoint(endpoint: str) -> str:

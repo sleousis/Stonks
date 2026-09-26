@@ -19,6 +19,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, ClassVar, Literal
+from urllib.parse import urlsplit
 
 import requests
 
@@ -26,7 +27,8 @@ from stonks.logging import get_logger
 from stonks.notify.base import Notification
 from stonks.notify.events import Message
 from stonks.notify.settings import NotifySettings
-from stonks.notify.webhook import WebhookNotifier, _Session
+from stonks.notify.webhook import RedirectRefused, WebhookNotifier, _Session
+from stonks.security.netguard import Resolver, UnsafeAddress, pinned_session, resolve_public
 from stonks.store.state import SqliteState
 
 Outcome = Literal["sent", "retry", "dead", "gone"]
@@ -162,13 +164,24 @@ class WebhookChannel(Channel):
     """POSTs to the user's own webhook (``notification_settings.webhook_url``).
     Off by default; a fallback for ``high`` urgency when the user has no
     working push device. The URL is a secret and never leaves this class
-    unredacted."""
+    unredacted.
+
+    The user picks the host, so each send resolves it, refuses unless every
+    address is public, and connects to that checked address (no DNS
+    rebinding). Redirects are never followed (review finding AS-05)."""
 
     fallback = True
 
-    def __init__(self, timeout_seconds: float = 5.0, session: _Session | None = None) -> None:
+    def __init__(
+        self,
+        timeout_seconds: float = 5.0,
+        session: _Session | None = None,
+        resolver: Resolver | None = None,
+    ) -> None:
         self._timeout = timeout_seconds
-        self._session = session if session is not None else requests.Session()
+        #: Tests inject a fake session; otherwise each send pins a new one.
+        self._session = session
+        self._resolver = resolver
 
     def resolve(self, state: SqliteState, user_id: str, target_id: str) -> str | None:
         rows = state.sql(
@@ -177,7 +190,17 @@ class WebhookChannel(Channel):
         return rows[0]["webhook_url"] if rows and rows[0]["webhook_url"] else None
 
     def send(self, message: Message, target: str) -> DeliveryResult:
-        notifier = WebhookNotifier(url=target, timeout_seconds=self._timeout, session=self._session)
+        parts = urlsplit(target)
+        redact = WebhookNotifier(url=target)._redact
+        try:
+            kwargs = {"resolver": self._resolver} if self._resolver is not None else {}
+            address = resolve_public(parts.hostname or "", parts.port or 443, **kwargs)
+        except UnsafeAddress as exc:
+            return DeliveryResult.dead(redact(f"refused: {exc}"))
+        session = self._session if self._session is not None else pinned_session(address)
+        notifier = WebhookNotifier(
+            url=target, timeout_seconds=self._timeout, session=session, follow_redirects=False
+        )
         fields = {"category": message.category, "deep_link": message.deep_link}
         try:
             notifier._send(
@@ -185,6 +208,8 @@ class WebhookChannel(Channel):
                     level=message.level, title=message.title, message=message.body, fields=fields
                 )
             )
+        except RedirectRefused as exc:
+            return DeliveryResult.dead(notifier._redact(str(exc)))
         except requests.HTTPError as exc:
             status = getattr(getattr(exc, "response", None), "status_code", None)
             error = notifier._redact(f"HTTP {status}: {exc}")

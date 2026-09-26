@@ -22,8 +22,14 @@ from stonks.notify.base import Notification, Notifier, redact_url
 _log = get_logger("stonks.notify.webhook")
 
 
+class RedirectRefused(Exception):
+    """The endpoint answered with a redirect and the notifier does not follow them."""
+
+
 class _Session(Protocol):
-    def post(self, url: str, json: Any = ..., timeout: float = ..., headers: Any = ...) -> Any: ...
+    def post(
+        self, url: str, json: Any = ..., timeout: float = ..., headers: Any = ..., **kwargs: Any
+    ) -> Any: ...
 
 
 class WebhookNotifier(Notifier):
@@ -32,10 +38,13 @@ class WebhookNotifier(Notifier):
         url: str,
         timeout_seconds: float = 5.0,
         session: _Session | None = None,
+        *,
+        follow_redirects: bool = True,
     ) -> None:
         self._url = url
         self._timeout = timeout_seconds
         self._session = session if session is not None else requests.Session()
+        self._follow_redirects = follow_redirects
 
     def __repr__(self) -> str:
         return f"WebhookNotifier(url={redact_url(self._url)!r}, timeout={self._timeout})"
@@ -61,12 +70,16 @@ class WebhookNotifier(Notifier):
             "fields": notification.json_fields(),
             "text": f"[{notification.level.upper()}] {notification.title}: {notification.message}",
         }
+        extra: dict[str, Any] = {} if self._follow_redirects else {"allow_redirects": False}
         resp = self._session.post(
             self._url,
             json=body,
             timeout=self._timeout,
             headers={"Content-Type": "application/json"},
+            **extra,
         )
+        if not self._follow_redirects and 300 <= int(resp.status_code) < 400:
+            raise RedirectRefused(f"HTTP {resp.status_code}: redirects are not followed")
         resp.raise_for_status()
 
     def _redact(self, text: str) -> str:
