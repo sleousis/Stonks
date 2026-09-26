@@ -120,6 +120,9 @@ READ_TOOLS = {
     "get_connection_accounts",
     "list_halts",
     "list_statement_flags",
+    "tca_summary",
+    "trade_journal",
+    "order_tca",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
