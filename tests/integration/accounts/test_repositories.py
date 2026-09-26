@@ -26,6 +26,7 @@ from stonks.accounts import (
 )
 from stonks.config import RiskPolicy
 from stonks.store.state import SqliteState
+from tests.fixtures.paper import link_connection, seed_paper_days
 
 NOW = "2026-01-02T15:00:00+00:00"
 SYSTEM = Scope.service("system")
@@ -109,9 +110,7 @@ def test_user_creation_is_audited(state, users):
 def test_disabling_a_user_pauses_their_auto_subscriptions(state, users, alice, portfolios, subs):
     pf = portfolios.create(alice, name="Live", kind="broker")
     sub = subs.subscribe(alice, strategy_id="s_active", portfolio_id=pf.id, mode=Mode.PAPER)
-    state.execute(
-        "UPDATE subscriptions SET mode='auto', paper_days_completed=25 WHERE id=?", [sub.id]
-    )
+    state.execute("UPDATE subscriptions SET mode='auto' WHERE id=?", [sub.id])
     users.set_status(alice.user_id, "disabled", actor="user:usr_owner")
     assert subs.get(SYSTEM, sub.id).paused_reason == "user_disabled"
     # A disabled user's scope sees nothing any more.
@@ -247,49 +246,36 @@ def test_list_for_portfolio_checks_ownership(alice, bob, portfolios, subs):
         subs.list_for_portfolio(bob, pf.id)
 
 
-def _paper_days(subs, sub_id, n, start=1):
-    for i in range(start, start + n):
-        subs.record_paper_day(SYSTEM, sub_id, date(2026, 1, i), breached=False)
+def _live(state, portfolios, scope, name="Live"):
+    pf = portfolios.create(scope, name=name, kind="broker")
+    link_connection(state, pf.id)
+    return pf
 
 
-def test_paper_days_count_once_per_trading_day(alice, portfolios, subs):
+def test_paper_days_come_from_portfolio_runs(state, alice, portfolios, subs):
     pf = portfolios.create(alice, name="Book")
     sub = subs.subscribe(alice, strategy_id="s_active", portfolio_id=pf.id, mode=Mode.PAPER)
-    _paper_days(subs, sub.id, 3)
-    subs.record_paper_day(SYSTEM, sub.id, date(2026, 1, 3), breached=False)  # re-run
-    subs.record_paper_day(SYSTEM, sub.id, date(2026, 1, 2), breached=False)  # late
+    seed_paper_days(state, sub.id, 3, portfolio_id=pf.id)
     assert subs.get(alice, sub.id).paper_days_completed == 3
+    assert subs.list_for_user(alice)[0].paper_days_completed == 3
 
 
-def test_a_risk_breach_restarts_the_paper_count(alice, portfolios, subs):
+def test_a_risk_breach_restarts_the_paper_count(state, alice, portfolios, subs):
     pf = portfolios.create(alice, name="Book")
     sub = subs.subscribe(alice, strategy_id="s_active", portfolio_id=pf.id, mode=Mode.PAPER)
-    _paper_days(subs, sub.id, 5)
-    subs.record_paper_day(SYSTEM, sub.id, date(2026, 1, 6), breached=True)
+    seed_paper_days(state, sub.id, 5, portfolio_id=pf.id)
+    seed_paper_days(state, sub.id, 1, start=date(2026, 1, 6), breached=True, portfolio_id=pf.id)
     assert subs.get(alice, sub.id).paper_days_completed == 0
 
 
-def test_only_services_record_paper_days(alice, portfolios, subs):
-    pf = portfolios.create(alice, name="Book")
+def test_auto_requires_twenty_paper_days(state, alice, portfolios, subs):
+    pf = _live(state, portfolios, alice)
     sub = subs.subscribe(alice, strategy_id="s_active", portfolio_id=pf.id, mode=Mode.PAPER)
-    with pytest.raises(AccountsError):
-        subs.record_paper_day(alice, sub.id, date(2026, 1, 1), breached=False)
-
-
-def test_notify_subscriptions_do_not_count_paper_days(alice, subs):
-    sub = subs.subscribe(alice, strategy_id="s_active")
-    subs.record_paper_day(SYSTEM, sub.id, date(2026, 1, 1), breached=False)
-    assert subs.get(alice, sub.id).paper_days_completed == 0
-
-
-def test_auto_requires_twenty_paper_days(alice, portfolios, subs):
-    pf = portfolios.create(alice, name="Live", kind="broker")
-    sub = subs.subscribe(alice, strategy_id="s_active", portfolio_id=pf.id, mode=Mode.PAPER)
-    _paper_days(subs, sub.id, MIN_PAPER_DAYS_FOR_AUTO - 1)
+    seed_paper_days(state, sub.id, MIN_PAPER_DAYS_FOR_AUTO - 1)
     with pytest.raises(AutoGateRefused) as err:
         subs.set_mode(alice, sub.id, Mode.AUTO)
     assert any("paper" in r for r in err.value.reasons)
-    subs.record_paper_day(SYSTEM, sub.id, date(2026, 2, 1), breached=False)
+    seed_paper_days(state, sub.id, 1, start=date(2026, 2, 1))
     on = subs.set_mode(alice, sub.id, Mode.AUTO)
     assert on.mode is Mode.AUTO
     assert on.auto_enabled_by == alice.actor
@@ -305,20 +291,22 @@ def test_auto_gate_lists_every_failed_check(alice, portfolios, subs):
         subs.set_mode(alice, sub.id, Mode.AUTO)
 
 
-def test_leaving_paper_for_notify_restarts_the_count(alice, portfolios, subs):
-    pf = portfolios.create(alice, name="Live", kind="broker")
+def test_leaving_paper_for_notify_restarts_the_count(state, alice, portfolios, subs):
+    pf = _live(state, portfolios, alice)
     sub = subs.subscribe(alice, strategy_id="s_active", portfolio_id=pf.id, mode=Mode.PAPER)
-    _paper_days(subs, sub.id, MIN_PAPER_DAYS_FOR_AUTO)
+    seed_paper_days(state, sub.id, MIN_PAPER_DAYS_FOR_AUTO)
     subs.set_mode(alice, sub.id, Mode.NOTIFY)
     assert subs.get(alice, sub.id).paper_days_completed == 0
+    back = subs.set_mode(alice, sub.id, Mode.PAPER)
+    assert back.paper_days_completed == 0
     with pytest.raises(AutoGateRefused):
         subs.set_mode(alice, sub.id, Mode.AUTO)
 
 
-def test_auto_back_to_paper_clears_auto_fields(alice, portfolios, subs):
-    pf = portfolios.create(alice, name="Live", kind="broker")
+def test_auto_back_to_paper_clears_auto_fields(state, alice, portfolios, subs):
+    pf = _live(state, portfolios, alice)
     sub = subs.subscribe(alice, strategy_id="s_active", portfolio_id=pf.id, mode=Mode.PAPER)
-    _paper_days(subs, sub.id, MIN_PAPER_DAYS_FOR_AUTO)
+    seed_paper_days(state, sub.id, MIN_PAPER_DAYS_FOR_AUTO)
     subs.set_mode(alice, sub.id, Mode.AUTO)
     back = subs.set_mode(alice, sub.id, Mode.PAPER)
     assert back.mode is Mode.PAPER
@@ -410,3 +398,64 @@ def test_book_for_portfolio_merges_risk_and_skips_non_trading_subscriptions(
     assert book.allow_short is True
     assert book.initial_cash == 2_000.0
     assert book.broker == "simulated"
+
+
+# ---- auto checklist: connection and halts (S6) ------------------------------------
+
+
+def test_auto_needs_a_healthy_connection_that_can_trade(state, alice, portfolios, subs):
+    pf = portfolios.create(alice, name="Live", kind="broker")
+    sub = subs.subscribe(alice, strategy_id="s_active", portfolio_id=pf.id, mode=Mode.PAPER)
+    seed_paper_days(state, sub.id, MIN_PAPER_DAYS_FOR_AUTO)
+    assert subs.auto_blockers(alice, sub.id) == [
+        "the portfolio is not linked to a broker connection"
+    ]
+    con = link_connection(state, pf.id, provider="fake", status="error")
+    assert subs.auto_blockers(alice, sub.id) == [
+        "the broker connection is error",
+        "the fake connection cannot place orders",
+    ]
+    state.execute("UPDATE broker_connections SET status = 'active' WHERE id = ?", [con])
+    state.execute("DELETE FROM broker_connections WHERE id = ?", [con])
+    assert subs.auto_blockers(alice, sub.id) == ["the portfolio's broker connection is gone"]
+
+
+def test_auto_is_refused_while_a_halt_is_in_force(state, alice, portfolios, subs):
+    from stonks.production.halts import trip_halt
+
+    pf = _live(state, portfolios, alice)
+    sub = subs.subscribe(alice, strategy_id="s_active", portfolio_id=pf.id, mode=Mode.PAPER)
+    seed_paper_days(state, sub.id, MIN_PAPER_DAYS_FOR_AUTO)
+    assert subs.auto_blockers(alice, sub.id) == []
+    trip_halt(state, "kill", reason="stop", actor=alice.actor, scope="user", user_id=alice.user_id)
+    [blocker] = subs.auto_blockers(alice, sub.id)
+    assert blocker.startswith("trading is halted: kill (user ")
+    with pytest.raises(AutoGateRefused):
+        subs.set_mode(alice, sub.id, Mode.AUTO)
+
+
+def test_user_risk_limits_are_validated_partial_and_audited(state, users, alice):
+    assert users.risk_policy(alice.user_id) == {}
+    stored = users.set_risk_policy(alice.user_id, {"max_weight_per_ticker": 0.2}, actor=alice.actor)
+    assert stored == {"max_weight_per_ticker": 0.2}
+    assert users.risk_policy(alice.user_id) == stored
+    with pytest.raises(ValueError):
+        users.set_risk_policy(alice.user_id, {"no_such_limit": 1}, actor=alice.actor)
+    with pytest.raises(NotFound):
+        users.risk_policy("usr_missing")
+    [row] = state.sql("SELECT * FROM audit_log WHERE action = 'user.risk_policy'")
+    assert row["target_id"] == alice.user_id
+
+
+def test_paper_accounts_are_created_once_and_hidden_from_lists(state, alice, portfolios):
+    from stonks.accounts.paper import ensure_paper_account, paper_account_id
+
+    live = portfolios.create(alice, name="Live", kind="broker", initial_cash=5_000.0)
+    portfolios.create(alice, name="Live (paper)")  # the natural name is taken
+    paper = ensure_paper_account(state, live)
+    assert paper.id == paper_account_id(live.id) and paper.kind == "simulated"
+    assert paper.owner_id == alice.user_id and paper.initial_cash == 5_000.0
+    assert paper.name == f"Live (paper {live.id})"
+    assert ensure_paper_account(state, live) == paper
+    assert paper.id not in {p.id for p in portfolios.list(alice)}
+    assert owned_portfolio(state, alice, paper.id) == paper

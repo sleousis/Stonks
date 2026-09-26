@@ -4,7 +4,10 @@ checks (who may create or disable users) live in S2's policy, not here."""
 
 from __future__ import annotations
 
+import json
 import uuid
+from collections.abc import Mapping
+from typing import Any
 
 from stonks.accounts.audit import AuditLog, iso_now
 from stonks.accounts.models import NotFound, Role, User, UserKind, UserStatus
@@ -89,3 +92,28 @@ class UserRepository:
                 details={"from": before.status, "to": status},
             )
         return self.get(user_id)
+
+    def risk_policy(self, user_id: str) -> dict[str, Any]:
+        """The user's own risk limits: a partial ``RiskPolicy`` that
+        tightens every portfolio they own (``{}``: none)."""
+        rows = self._state.sql("SELECT risk_policy_json FROM users WHERE id = ?", [user_id])
+        if not rows:
+            raise NotFound(f"user {user_id!r} not found")
+        return json.loads(rows[0]["risk_policy_json"] or "{}")
+
+    def set_risk_policy(
+        self, user_id: str, overrides: Mapping[str, Any] | None, *, actor: str
+    ) -> dict[str, Any]:
+        """Replace the user's risk limits (validated; tighten only, merged by
+        :func:`stonks.accounts.book.tighter_of` in the tick)."""
+        from stonks.accounts.book import partial_risk_policy
+
+        self.get(user_id)
+        policy = partial_risk_policy(overrides)
+        with self._state.transaction():
+            self._state.execute(
+                "UPDATE users SET risk_policy_json = ? WHERE id = ?",
+                [json.dumps(policy, sort_keys=True), user_id],
+            )
+            self._audit.record(actor, "user.risk_policy", "user", user_id, details=policy)
+        return policy
