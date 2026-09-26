@@ -43,7 +43,10 @@ Deliberate deviations from the original:
   returns; here they drive the exit, and the max hold is scaled by
   ``hold_mult`` (the original held at most one head width).
 - The pattern R-squared attribute (unused as a filter upstream) is dropped.
-- History is limited to the last ``100 * order + 200`` bars.
+- History is limited to the last ``100 * order + 200`` bars, and a pattern
+  is only taken when every bar it depends on stays inside that sliding
+  window for its whole max hold (so a trade never vanishes mid-life as the
+  window moves on).
 """
 
 from __future__ import annotations
@@ -79,8 +82,10 @@ def _check_inverse_hs(
     logc: np.ndarray,
     i: int,
     confirmed: list[Extreme],
+    order: int,
     early_find: bool,
     hold_mult: float,
+    window_bars: int | None,
 ) -> IHSTrade | None:
     if len(confirmed) < 4:
         return None
@@ -129,24 +134,41 @@ def _check_inverse_hs(
     else:
         return None
 
+    # Window stability: the replay window slides one bar per evaluation, so
+    # every bar this pattern depends on (its start, and the left shoulder's
+    # rolling-window neighbourhood) must stay inside a window of
+    # ``window_bars`` for the whole max hold; otherwise the trade would
+    # vanish mid-life on a later bar. The span is measured in bars, so the
+    # check gives the same answer wherever the window sits.
+    max_hold = max(1, round(head_width * hold_mult))
+    if window_bars is not None and i - min(x, ls - order) + max_hold > window_bars:
+        return None
+
     head_height = neck(hd) - hd_p
     return IHSTrade(
         entry_index=i,
         neckline=neck(i),
         stop=float(rs_p),
         target=neck(i) + head_height,
-        max_hold=max(1, round(head_width * hold_mult)),
+        max_hold=max_hold,
         head_width=head_width,
     )
 
 
 def replay_inverse_hs(
-    log_close: np.ndarray, order: int, early_find: bool, hold_mult: float
+    log_close: np.ndarray,
+    order: int,
+    early_find: bool,
+    hold_mult: float,
+    window_bars: int | None = None,
 ) -> IHSTrade | None:
     """Replay the inverse H&S rule bar by bar over ``log_close`` and return
     the trade live at the last bar, or ``None`` when flat.
 
-    Only extremes confirmed at or before each bar are consulted.
+    Only extremes confirmed at or before each bar are consulted. With
+    ``window_bars`` (the size of the caller's sliding replay window),
+    patterns whose bars would leave that window before their max hold ends
+    are skipped.
     """
     logc = np.asarray(log_close, dtype=float)
     extremes = rw_extremes(logc, order)
@@ -169,7 +191,7 @@ def replay_inverse_hs(
                 continue
         if locked:
             continue
-        found = _check_inverse_hs(logc, i, confirmed, early_find, hold_mult)
+        found = _check_inverse_hs(logc, i, confirmed, order, early_find, hold_mult, window_bars)
         if found is not None:
             locked = True
             trade = found
@@ -320,6 +342,10 @@ class HeadShouldersStrategy(BaseStrategy):
             return None
         logc = np.log(closes)
         trade = replay_inverse_hs(
-            logc, order, bool(self.params["early_find"]), float(self.params["hold_mult"])
+            logc,
+            order,
+            bool(self.params["early_find"]),
+            float(self.params["hold_mult"]),
+            window_bars=self.history_bars(),
         )
         return trade, logc
