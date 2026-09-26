@@ -291,13 +291,32 @@ def event_study(
 class EventStudyOptions(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    horizons: tuple[int, ...] = DEFAULT_EVENT_HORIZONS
-    min_events: int = Field(default=100, ge=30, le=500)
-    alpha: float = Field(default=0.05, gt=0.0, le=0.2)
-    n_boot: int = Field(default=1000, ge=100)
+    horizons: tuple[int, ...] = Field(
+        default=DEFAULT_EVENT_HORIZONS,
+        description="Bars after each entry at which to measure the return.",
+    )
+    min_events: int = Field(
+        default=100,
+        ge=30,
+        le=500,
+        description="Fewest entries to judge. Fewer fails for lack of data.",
+    )
+    alpha: float = Field(
+        default=0.05, gt=0.0, le=0.2, description="Chance of a false pass the test accepts."
+    )
+    n_boot: int = Field(
+        default=1000, ge=100, description="Resamples used to measure the uncertainty."
+    )
     #: Typical holding horizon in bars; ``None`` reads the trade ledger.
-    holding_bars: int | None = Field(default=None, ge=1)
-    window: Literal["val", "full"] = "val"
+    holding_bars: int | None = Field(
+        default=None,
+        ge=1,
+        description="Typical holding time in bars. Blank reads it from the trades.",
+    )
+    window: Literal["val", "full"] = Field(
+        default="val",
+        description="Which data to test on: val is the held-out window, full is all of it.",
+    )
     seed: int = 17
     #: Worker processes; ``None`` means ``lab.parallel.default_max_workers()``.
     max_workers: int | None = Field(default=None, ge=1)

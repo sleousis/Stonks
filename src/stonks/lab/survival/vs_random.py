@@ -165,12 +165,26 @@ class VsRandomOptions(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     #: Noise lakes, each a full tune.
-    k: int = Field(default=20, ge=5, le=1000)
+    k: int = Field(
+        default=20,
+        ge=5,
+        le=1000,
+        description="How many random look-alike price histories to tune on.",
+    )
     #: Mean bootstrap block length, in bars.
-    block: float = Field(default=20.0, ge=1.0)
+    block: float = Field(
+        default=20.0, ge=1.0, description="Average length in bars of the chunks used to build them."
+    )
     #: Quantile of the noise best scores the real best must beat.
-    quantile: float = Field(default=0.95, ge=0.5, lt=1.0)
-    oos_metric: Literal["sharpe", "final_return", "cagr"] = "sharpe"
+    quantile: float = Field(
+        default=0.95,
+        ge=0.5,
+        lt=1.0,
+        description="The real result must beat this share of the random ones.",
+    )
+    oos_metric: Literal["sharpe", "final_return", "cagr"] = Field(
+        default="sharpe", description="Which held-out number to compare."
+    )
     seed: int = 17
     #: Worker processes; ``None`` means ``lab.parallel.default_max_workers()``.
     max_workers: int | None = Field(default=None, ge=1)

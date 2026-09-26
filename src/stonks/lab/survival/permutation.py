@@ -31,7 +31,7 @@ import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
-from typing import Any, Literal, Protocol
+from typing import Any, ClassVar, Literal, Protocol
 
 import numpy as np
 import pandas as pd
@@ -257,6 +257,14 @@ class MonteCarloPermutationTest:
     """
 
     id = "mcpt"
+
+    #: Plain words for each option, shown by the console's options editor.
+    option_help: ClassVar[dict[str, str]] = {
+        "n_permutations": "How many shuffled price histories to test against.",
+        "max_p_value": "Highest share of shuffled histories that may do as well as the real one.",
+        "metric": "Which result to compare between real and shuffled histories.",
+        "retune": "Tune again on each shuffled history. auto does it when the strategy has settings to tune.",
+    }
 
     def __init__(
         self,

@@ -44,15 +44,36 @@ class OutOfSampleTest:
     class Options(BaseModel):
         model_config = ConfigDict(extra="forbid")
 
-        mode: OOSMode = "psr"
-        min_psr: float = Field(0.95, gt=0.0, lt=1.0)
-        min_sharpe: float = 0.5
+        mode: OOSMode = Field(
+            default="psr",
+            description="psr judges the chance the Sharpe is above zero, sharpe uses a fixed floor.",
+        )
+        min_psr: float = Field(
+            0.95,
+            gt=0.0,
+            lt=1.0,
+            description="Lowest chance that the true Sharpe is above zero (psr mode).",
+        )
+        min_sharpe: float = Field(
+            default=0.5, description="Lowest held-out Sharpe that passes (sharpe mode)."
+        )
         #: Inclusive lower bound on the validation max drawdown (e.g. -0.3).
-        max_drawdown_limit: float = Field(-0.3, le=0.0)
-        min_trades: int = Field(20, ge=0)
+        max_drawdown_limit: float = Field(
+            -0.3, le=0.0, description="Worst fall allowed on held-out data, as a negative fraction."
+        )
+        min_trades: int = Field(
+            20, ge=0, description="Fewest round trips to judge. Fewer fails for lack of data."
+        )
         #: Two-sided level of the bootstrap Sharpe interval.
-        ci_alpha: float = Field(0.05, gt=0.0, lt=1.0)
-        n_boot: int = Field(1000, ge=100)
+        ci_alpha: float = Field(
+            0.05,
+            gt=0.0,
+            lt=1.0,
+            description="Level of the Sharpe confidence range. 0.05 gives a 95 percent range.",
+        )
+        n_boot: int = Field(
+            1000, ge=100, description="Resamples used for the Sharpe confidence range."
+        )
         seed: int = 0
 
     def __init__(
