@@ -14,6 +14,24 @@ missing from it raise :class:`YahooUnsupportedTickerError`. Commodity and
 bond tickers are deliberately unmapped: Yahoo's futures (``GC=F``) and
 yield indices (``^TNX``) are different instruments from the canonical
 spot/benchmark series, so silently substituting them would corrupt bars.
+
+Price semantics
+---------------
+``close`` is the as-traded price and ``adj_close`` the split+dividend
+adjusted one (EODHD semantics). Yahoo split-adjusts OHLCV even with
+``auto_adjust=False``, so :func:`_unsplit` reverses that using the split
+history. Daily bars carry the exchange-local trading date; intraday
+timestamps are stored as naive UTC. A daily request made during a session
+can include today's in-progress bar; the next ingest overwrites it.
+
+Caveats
+-------
+- Constructing the source sets ``yf.config.debug.hide_exceptions = False``
+  process-wide, so yfinance raises instead of returning empty frames.
+- Profiles carry only what Yahoo reports reliably (name, currency, sector,
+  industry, fund-type security types). The instruments upsert replaces
+  every column, so a Yahoo metadata run after an EODHD one clears
+  EODHD-only fields (ISIN, CIK, ...).
 """
 
 from __future__ import annotations
