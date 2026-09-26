@@ -141,6 +141,27 @@ class ProductionConfig(BaseModel):
     health: HealthConfig = HealthConfig()
 
 
+class GoLivePolicy(BaseModel):
+    """Limits a paper-trading period must meet before ``stonks golive check``
+    passes (``[golive]``). The gate only reports; promotion stays a human
+    action. Every limit is strict about missing data: a period with no
+    snapshots, no fills or no backtest expectation fails."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Distinct days with a paper snapshot.
+    min_days: int = Field(default=20, ge=1)
+    # Deepest peak-to-trough fall allowed, as a positive fraction (0.15 = -15%).
+    max_drawdown: float = Field(default=0.15, gt=0.0, le=1.0)
+    # Largest allowed |paper return - backtest-expected return| over the
+    # period; the expectation compounds the ``oos`` survival report's CAGR.
+    max_drift: float = Field(default=0.10, ge=0.0)
+    # Filled trades during the paper period.
+    min_trades: int = Field(default=5, ge=1)
+    # Every stored survival report must have passed (and there must be one).
+    require_all_survival_passed: bool = True
+
+
 class WebhookConfig(BaseModel):
     # Secret-bearing (Slack/Discord URLs embed a token): prefer the
     # STONKS_NOTIFY_WEBHOOK_URL env var over committing it to TOML.
@@ -223,6 +244,7 @@ class Settings(BaseSettings):
     api: ApiConfig = Field(default_factory=ApiConfig)
     backtest: BacktestSettings = BacktestSettings()
     lab: LabSettings = LabSettings()
+    golive: GoLivePolicy = GoLivePolicy()
 
 
 def load_settings(config_path: Path | None = None) -> Settings:

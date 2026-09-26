@@ -1178,5 +1178,89 @@ def lab_run(
         Path(json_out).write_text(json.dumps(to_jsonable(doc), indent=2, sort_keys=True))
 
 
+# ---- go-live gate (4.3) -----------------------------------------------------
+
+golive_app = typer.Typer(help="Go-live gate for paper-traded strategies")
+app.add_typer(golive_app, name="golive")
+
+
+@golive_app.command("check")
+def golive_check(
+    strategy_id: str,
+    since: str | None = typer.Option(
+        None,
+        "--since",
+        help="start the paper period on this day (YYYY-MM-DD); default: all of it",
+        callback=_validate_iso_date,
+    ),
+) -> None:
+    """Evaluate a strategy's paper period against [golive]. Exit code 1 when
+    any check fails. Never changes the strategy's status."""
+    from stonks.production.golive import evaluate_golive
+
+    settings = _settings()
+    since_d = date.fromisoformat(since) if since else None
+    state, registry = _open_registry(settings)
+    try:
+        report = evaluate_golive(state, registry, strategy_id, settings.golive, since=since_d)
+    except KeyError:
+        console.print(f"[red]no strategy with id {strategy_id!r}[/red]")
+        raise typer.Exit(code=1) from None
+    finally:
+        state.close()
+
+    table = Table(title=f"go-live gate: {strategy_id} ({report.status}, {report.source} P&L)")
+    for col in ("check", "status", "detail"):
+        table.add_column(col)
+    for c in report.checks:
+        table.add_row(c.name, "[green]PASS[/green]" if c.passed else "[red]FAIL[/red]", c.detail)
+    console.print(table)
+    if report.passed:
+        console.print("[green]PASS[/green]: ready for a human to promote")
+        return
+    console.print(f"[red]FAIL[/red]: {len(report.failures)} check(s) failed")
+    raise typer.Exit(code=1)
+
+
+# ---- static HTML report (4.1) -----------------------------------------------
+
+
+_REPORT_OUT = typer.Option(
+    Path("data/reports/report.html"), "--out", help="where to write the HTML file"
+)
+_REPORT_STRATEGIES = typer.Option(
+    None, "--strategy", help="only these strategy ids (repeatable); default: all"
+)
+
+
+@app.command("report")
+def report(
+    out: Path = _REPORT_OUT,
+    strategies: list[str] | None = _REPORT_STRATEGIES,
+    since: str | None = typer.Option(
+        None,
+        "--since",
+        help="first day to show (YYYY-MM-DD); returns are still measured from inception",
+        callback=_validate_iso_date,
+    ),
+) -> None:
+    """Write a self-contained static HTML report: equity curve, drawdown,
+    positions, orders/fills, and per-strategy verdicts, shadow P&L and drift."""
+    from stonks.reporting import build_report, render_html
+
+    settings = _settings()
+    since_d = date.fromisoformat(since) if since else None
+    state, registry = _open_registry(settings)
+    try:
+        data = build_report(
+            state, registry, settings.golive, strategy_ids=strategies or None, since=since_d
+        )
+    finally:
+        state.close()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(render_html(data), encoding="utf-8")
+    console.print(f"[green]wrote[/green] {out}")
+
+
 if __name__ == "__main__":
     app()
