@@ -60,13 +60,13 @@ import json
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from typing import Any, Literal
 
 from stonks.accounts.book import BookSpec
 from stonks.accounts.models import DEFAULT_PORTFOLIO_ID, Mode, Subscription
 from stonks.accounts.models import Portfolio as AccountPortfolio
-from stonks.backtest.costs import CostModelSettings
+from stonks.backtest.costs import CostModel, CostModelSettings, FixedCostModel
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.protocols import Broker
 from stonks.core.types import Fill, Order, OrderSide, OrderStatus, Portfolio
@@ -113,6 +113,7 @@ from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.ranker import Ranker, SignalSet, StrategyPool
 from stonks.production.risk import RiskPolicy, build_risk_context, needs_risk_context
 from stonks.production.shadow import evaluate_shadow_strategies, shadow_held_tickers
+from stonks.production.tca import annotate_orders, decision_values, tca_recorded
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
@@ -182,6 +183,14 @@ class TickSettings:
         return SimulatedCosts(
             model=self.costs, slippage_bps=self.slippage_bps, fee_per_trade=self.fee_per_trade
         )
+
+    @property
+    def cost_model(self) -> CostModel:
+        """The model the simulated broker fills through; TCA records its
+        estimate on every order as the modelled cost (BL-32)."""
+        if self.costs is not None:
+            return self.costs.build()
+        return FixedCostModel(self.slippage_bps, self.fee_per_trade)
 
     @property
     def fill_costs(self) -> FillCosts:
@@ -787,7 +796,20 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         broker = _build_broker(
             portfolio, settings, prices, as_of, factory, book_prices.volumes, asset_classes
         )
-    orders_with_tick = [replace(o, tick_id=tick_id) for o in proposed]
+    # Every order records its decision: price, time, context and the
+    # modelled cost (BL-32, P22).
+    orders_with_tick = annotate_orders(
+        [replace(o, tick_id=tick_id, portfolio_id=portfolio_id) for o in proposed],
+        decided_at=datetime.combine(as_of, time(), UTC),
+        prices=prices,
+        signals=signals,
+        cost_model=settings.cost_model,
+        constructor=construction.method,
+        exit_only=pipeline.exit_only,
+        target_weights=pipeline.target_book.weights,
+        volumes=book_prices.volumes,
+        asset_classes=asset_classes,
+    )
     open_conflicts: list[dict[str, str]] = []
     if external:
         orders_with_tick, open_conflicts = _drop_open_order_conflicts(
@@ -926,7 +948,9 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             for order, order_status, fill in outcomes:
                 _record_order(state, order, status=order_status, portfolio_id=scope)
                 if fill is not None:
-                    _record_fill(state, fill, portfolio_id=scope)
+                    _record_fill(
+                        state, fill, portfolio_id=scope, arrival_price=_arrival(broker, fill)
+                    )
             persist_corporate_actions()
             _snapshot_portfolio(state, tick_id, portfolio, prices, as_of, portfolio_id=scope)
             hook_summary = hooks(portfolio, prices)
@@ -1386,8 +1410,16 @@ def _record_order(
     # rewriting ``updated_at`` when nothing changed (a retried tick
     # replaying an already-filled order). ``portfolio_id`` is written only
     # on insert (it is immutable).
+    # The decision columns (BL-32) are written on insert only: a retried
+    # order keeps the decision it was first placed with.
     now = _iso_now()
-    extra_col, extra_val = (", portfolio_id", ", ?") if portfolio_id is not None else ("", "")
+    extra: dict[str, Any] = {}
+    if portfolio_id is not None:
+        extra["portfolio_id"] = portfolio_id
+    if tca_recorded(state):
+        extra.update(decision_values(order))
+    extra_col = "".join(f", {c}" for c in extra)
+    extra_val = ", ?" * len(extra)
     state.execute(
         f"""
         INSERT INTO orders
@@ -1415,13 +1447,31 @@ def _record_order(
             reason,
             now,
             now,
-            *([portfolio_id] if portfolio_id is not None else []),
+            *extra.values(),
         ],
     )
 
 
-def _record_fill(state: SqliteState, fill: Fill, portfolio_id: str | None = None) -> None:
-    extra_col, extra_val = (", portfolio_id", ", ?") if portfolio_id is not None else ("", "")
+def _arrival(broker: Broker, fill: Fill) -> float | None:
+    """The pre-cost price a simulated fill was priced from (the close it
+    filled at): its arrival price for TCA. Unknown for other brokers."""
+    reference = getattr(broker, "reference_price", None)
+    return reference(fill.order_client_id) if callable(reference) else None
+
+
+def _record_fill(
+    state: SqliteState,
+    fill: Fill,
+    portfolio_id: str | None = None,
+    arrival_price: float | None = None,
+) -> None:
+    extra: dict[str, Any] = {}
+    if portfolio_id is not None:
+        extra["portfolio_id"] = portfolio_id
+    if arrival_price is not None and tca_recorded(state):
+        extra["arrival_price"] = arrival_price
+    extra_col = "".join(f", {c}" for c in extra)
+    extra_val = ", ?" * len(extra)
     state.execute(
         f"""
         INSERT INTO fills
@@ -1435,7 +1485,7 @@ def _record_fill(state: SqliteState, fill: Fill, portfolio_id: str | None = None
             fill.price,
             fill.fee,
             fill.filled_at.isoformat(timespec="seconds"),
-            *([portfolio_id] if portfolio_id is not None else []),
+            *extra.values(),
         ],
     )
 
