@@ -10,9 +10,11 @@ succeeded, ``"error"`` when all failed, and always ``"ok"`` for an empty batch
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
+from functools import partial
+from typing import Any
 
 import pandas as pd
 import pydantic
@@ -20,6 +22,7 @@ import requests
 
 from stonks.core.interval import Interval
 from stonks.ingest.metadata_bundle import MetadataBundle
+from stonks.ingest.redact import format_exception
 from stonks.ingest.schemas import (
     FinancialStatementsBundle,
     IntradayBar,
@@ -52,6 +55,15 @@ class IngestRunResult:
 
 
 class IngestPipeline:
+    """Every ``run_*`` method funnels through :meth:`_run_units`, which owns
+    the ``ingest_runs`` row lifecycle: open, per-unit soft-fail accounting,
+    and a guaranteed close — even when a non-soft-fail exception (a lake
+    error, a programmer bug, Ctrl-C) escapes the loop, in which case the row
+    is closed as ``error`` and the exception re-raised. Operators never have
+    to triage orphaned ``running`` rows by hand. The overall run is **not**
+    atomic: units that succeeded before the failure stay committed.
+    """
+
     def __init__(self, source: DataSource, lake: DuckDBLake):
         self._source = source
         self._lake = lake
@@ -63,12 +75,27 @@ class IngestPipeline:
         since: date | None = None,
         until: date | None = None,
     ) -> IngestRunResult:
-        return self._run(
+        return self._run_rows(
             kind="prices",
             tickers=tickers,
             fetch=lambda t: self._source.fetch_prices(t, since=since, until=until),
             to_df=_prices_to_df,
             upsert=self._lake.upsert_prices,
+        )
+
+    def run_intraday_bars(
+        self,
+        tickers: Sequence[str],
+        interval: Interval,
+        since: date | None = None,
+        until: date | None = None,
+    ) -> IngestRunResult:
+        return self._run_rows(
+            kind=f"intraday:{interval.code}",
+            tickers=tickers,
+            fetch=lambda t: self._source.fetch_intraday_bars(t, interval, since, until),
+            to_df=_intraday_to_df,
+            upsert=lambda df: self._lake.upsert_bars(df, interval=interval),
         )
 
     def run_fundamentals(self, tickers: Sequence[str]) -> IngestRunResult:
@@ -77,67 +104,21 @@ class IngestPipeline:
 
         One vendor call per ticker (the bundle), three lake writes
         wrapped in a per-ticker transaction so a partial failure on one
-        ticker never leaves that ticker half-populated. The overall run
-        is **not** atomic — successful tickers stay committed even if a
-        later ticker fails. The ``ingest_runs`` row is always closed,
-        even if an unhandled exception escapes the loop, so operators
-        never have to clean up orphaned ``running`` rows by hand.
+        ticker never leaves that ticker half-populated.
         """
-        run_id = self._lake.open_ingest_run(source=self._source.source_id, kind="fundamentals")
-        log = self._log.bind(run_id=run_id, kind="fundamentals")
 
-        ok = 0
-        failed = 0
-        last_error: str | None = None
-        try:
-            for ticker in tickers:
-                try:
-                    bundle = self._source.fetch_fundamentals(ticker)
-                    self._upsert_statements_bundle(bundle)
-                    ok += 1
-                    log.info(
-                        "ticker.ingested",
-                        ticker=ticker,
-                        income_rows=len(bundle.income),
-                        balance_rows=len(bundle.balance),
-                        cashflow_rows=len(bundle.cashflow),
-                    )
-                except _SOFT_FAIL_EXCEPTIONS as exc:
-                    failed += 1
-                    last_error = f"{type(exc).__name__}: {exc}"
-                    log.warning("ticker.failed", ticker=ticker, error=last_error)
+        def ingest(ticker: str) -> dict[str, Any]:
+            bundle = self._source.fetch_fundamentals(ticker)
+            self._upsert_statements_bundle(bundle)
+            return {
+                "income_rows": len(bundle.income),
+                "balance_rows": len(bundle.balance),
+                "cashflow_rows": len(bundle.cashflow),
+            }
 
-            status = _status(ok, failed)
-        except BaseException as exc:
-            # Catch SystemExit / KeyboardInterrupt too: the ingest_runs
-            # row must close so operators don't have to triage orphaned
-            # ``running`` rows. Re-raised after the row is closed.
-            status = "error"
-            last_error = f"{type(exc).__name__}: {exc}"
-            self._lake.close_ingest_run(
-                run_id,
-                tickers_ok=ok,
-                tickers_failed=failed,
-                status=status,
-                error=last_error,
-            )
-            log.error("run.aborted", status=status, error=last_error)
-            raise
-
-        self._lake.close_ingest_run(
-            run_id,
-            tickers_ok=ok,
-            tickers_failed=failed,
-            status=status,
-            error=last_error if status in ("error", "partial") else None,
-        )
-        log.info("run.finished", status=status, tickers_ok=ok, tickers_failed=failed)
-        return IngestRunResult(
-            run_id=run_id,
+        return self._run_units(
             kind="fundamentals",
-            status=status,
-            tickers_ok=ok,
-            tickers_failed=failed,
+            units=[({"ticker": t}, partial(ingest, t)) for t in tickers],
         )
 
     def _upsert_statements_bundle(self, bundle: FinancialStatementsBundle) -> None:
@@ -168,83 +149,20 @@ class IngestPipeline:
         we keep the existing ``IngestRunResult`` field names to avoid
         forking the result type for a single new flow.
         """
-        run_id = self._lake.open_ingest_run(source=self._source.source_id, kind="macro")
-        log = self._log.bind(run_id=run_id, kind="macro")
 
-        ok = 0
-        failed = 0
-        last_error: str | None = None
-        try:
-            for country in countries:
-                for indicator in indicators:
-                    try:
-                        rows = list(self._source.fetch_macro_indicator(country, indicator))
-                        df = _macro_to_df(rows)
-                        self._lake.upsert_macro_indicators(df)
-                        ok += 1
-                        log.info(
-                            "macro.ingested",
-                            country_iso=country,
-                            indicator=indicator,
-                            rows=len(rows),
-                        )
-                    except _SOFT_FAIL_EXCEPTIONS as exc:
-                        failed += 1
-                        last_error = f"{type(exc).__name__}: {exc}"
-                        log.warning(
-                            "macro.failed",
-                            country_iso=country,
-                            indicator=indicator,
-                            error=last_error,
-                        )
+        def ingest(country: str, indicator: str) -> dict[str, Any]:
+            rows = list(self._source.fetch_macro_indicator(country, indicator))
+            self._lake.upsert_macro_indicators(_macro_to_df(rows))
+            return {"rows": len(rows)}
 
-            status = _status(ok, failed)
-        except BaseException as exc:
-            # Same belt-and-braces guard ``run_fundamentals`` uses: a long
-            # N×M run that gets SIGTERMed mid-loop must still close the
-            # ``ingest_runs`` row to a terminal status, otherwise operators
-            # have to triage orphaned ``running`` rows by hand.
-            status = "error"
-            last_error = f"{type(exc).__name__}: {exc}"
-            self._lake.close_ingest_run(
-                run_id,
-                tickers_ok=ok,
-                tickers_failed=failed,
-                status=status,
-                error=last_error,
-            )
-            log.error("run.aborted", status=status, error=last_error)
-            raise
-
-        self._lake.close_ingest_run(
-            run_id,
-            tickers_ok=ok,
-            tickers_failed=failed,
-            status=status,
-            error=last_error if status in ("error", "partial") else None,
-        )
-        log.info("run.finished", status=status, tickers_ok=ok, tickers_failed=failed)
-        return IngestRunResult(
-            run_id=run_id,
+        return self._run_units(
             kind="macro",
-            status=status,
-            tickers_ok=ok,
-            tickers_failed=failed,
-        )
-
-    def run_intraday_bars(
-        self,
-        tickers: Sequence[str],
-        interval: Interval,
-        since: date | None = None,
-        until: date | None = None,
-    ) -> IngestRunResult:
-        return self._run(
-            kind=f"intraday:{interval.code}",
-            tickers=tickers,
-            fetch=lambda t: self._source.fetch_intraday_bars(t, interval, since, until),
-            to_df=_intraday_to_df,
-            upsert=lambda df: self._lake.upsert_bars(df, interval=interval),
+            event="macro",
+            units=[
+                ({"country_iso": c, "indicator": i}, partial(ingest, c, i))
+                for c in countries
+                for i in indicators
+            ],
         )
 
     def run_metadata(self, tickers: Sequence[str]) -> IngestRunResult:
@@ -252,43 +170,15 @@ class IngestPipeline:
         insiders, news + sentiment, analyst estimates + ratings, shares
         outstanding, employee count, segmentations) and upsert each non-empty
         part into its matching lake table."""
-        run_id = self._lake.open_ingest_run(source=self._source.source_id, kind="metadata")
-        log = self._log.bind(run_id=run_id, kind="metadata")
 
-        ok = 0
-        failed = 0
-        last_error: str | None = None
+        def ingest(ticker: str) -> dict[str, Any]:
+            bundle = self._source.fetch_metadata(ticker)
+            self._upsert_bundle(bundle)
+            return {"kinds_found": _non_empty_parts(bundle)}
 
-        for ticker in tickers:
-            try:
-                bundle = self._source.fetch_metadata(ticker)
-                self._upsert_bundle(bundle)
-                ok += 1
-                log.info(
-                    "ticker.ingested",
-                    ticker=ticker,
-                    kinds_found=_non_empty_parts(bundle),
-                )
-            except _SOFT_FAIL_EXCEPTIONS as exc:
-                failed += 1
-                last_error = f"{type(exc).__name__}: {exc}"
-                log.warning("ticker.failed", ticker=ticker, error=last_error)
-
-        status = _status(ok, failed)
-        self._lake.close_ingest_run(
-            run_id,
-            tickers_ok=ok,
-            tickers_failed=failed,
-            status=status,
-            error=last_error if status in ("error", "partial") else None,
-        )
-        log.info("run.finished", status=status, tickers_ok=ok, tickers_failed=failed)
-        return IngestRunResult(
-            run_id=run_id,
+        return self._run_units(
             kind="metadata",
-            status=status,
-            tickers_ok=ok,
-            tickers_failed=failed,
+            units=[({"ticker": t}, partial(ingest, t)) for t in tickers],
         )
 
     def _upsert_bundle(self, bundle: MetadataBundle) -> None:
@@ -331,27 +221,73 @@ class IngestPipeline:
                 self._lake.upsert_commodity_contract(_rows_to_df([bundle.commodity_contract]))
             self._lake.upsert_bond_yields(_rows_to_df(bundle.bond_yields))
 
-    def _run(self, *, kind, tickers, fetch, to_df, upsert) -> IngestRunResult:
+    def _run_rows(
+        self,
+        *,
+        kind: str,
+        tickers: Sequence[str],
+        fetch: Callable[[str], Iterable[Any]],
+        to_df: Callable[[Iterable[Any]], pd.DataFrame],
+        upsert: Callable[[pd.DataFrame], Any],
+    ) -> IngestRunResult:
+        """Row-stream flavour of :meth:`_run_units`: fetch → DataFrame → upsert."""
+
+        def ingest(ticker: str) -> dict[str, Any]:
+            rows = list(fetch(ticker))
+            upsert(to_df(rows))
+            return {"rows": len(rows)}
+
+        return self._run_units(
+            kind=kind,
+            units=[({"ticker": t}, partial(ingest, t)) for t in tickers],
+        )
+
+    def _run_units(
+        self,
+        *,
+        kind: str,
+        units: Iterable[tuple[dict[str, Any], Callable[[], dict[str, Any]]]],
+        event: str = "ticker",
+    ) -> IngestRunResult:
+        """Run each ``(log_context, work)`` unit under one ``ingest_runs`` row.
+
+        ``work()`` fetches + upserts one unit and returns extra fields for
+        the success log line. Soft-fail exceptions count the unit as failed
+        and move on; anything else closes the row as ``error`` and re-raises.
+        Error text is credential-scrubbed before it is logged or stored.
+        """
         run_id = self._lake.open_ingest_run(source=self._source.source_id, kind=kind)
         log = self._log.bind(run_id=run_id, kind=kind)
 
         ok = 0
         failed = 0
         last_error: str | None = None
-
-        for ticker in tickers:
-            try:
-                rows = list(fetch(ticker))
-                df = to_df(rows)
-                upsert(df)
+        try:
+            for context, work in units:
+                try:
+                    fields = work()
+                except _SOFT_FAIL_EXCEPTIONS as exc:
+                    failed += 1
+                    last_error = format_exception(exc)
+                    log.warning(f"{event}.failed", **context, error=last_error)
+                    continue
                 ok += 1
-                log.info("ticker.ingested", ticker=ticker, rows=len(rows))
-            except _SOFT_FAIL_EXCEPTIONS as exc:  # per-ticker soft-fail
-                failed += 1
-                last_error = f"{type(exc).__name__}: {exc}"
-                log.warning("ticker.failed", ticker=ticker, error=last_error)
+                log.info(f"{event}.ingested", **context, **fields)
+            status = _status(ok, failed)
+        except BaseException as exc:
+            # BaseException on purpose: SystemExit / KeyboardInterrupt must
+            # also close the row to a terminal status before propagating.
+            last_error = format_exception(exc)
+            self._lake.close_ingest_run(
+                run_id,
+                tickers_ok=ok,
+                tickers_failed=failed,
+                status="error",
+                error=last_error,
+            )
+            log.error("run.aborted", status="error", error=last_error)
+            raise
 
-        status = _status(ok, failed)
         self._lake.close_ingest_run(
             run_id,
             tickers_ok=ok,
