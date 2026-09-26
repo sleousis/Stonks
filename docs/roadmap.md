@@ -175,6 +175,46 @@ Found while building the console and merging Waves 2 and 3.
 | 11.7 Production polish | `[production] dividend_withholding_rate` in config; PIP miner and trendline meta-label reuse their bar cache when training; the risk cash buffer accounts for the cost model. | `config.py`, `production/`, `strategies/` |
 | 11.8 Docs refresh | Bring `CLAUDE.md`, `docs/architecture.md`, `docs/operations.md`, the block docs and the wiki in line with everything that landed (was 8.4). | docs, wiki |
 
+## Phase 12: Production readiness
+
+What it takes to run Stonks unattended every day and trust it.
+
+| WP | Scope |
+|----|-------|
+| 12.1 Market calendars | Exchange holidays and trading sessions (wrap a maintained library such as `exchange_calendars`); ticks and ingests skip closed days, crypto stays 24/7. |
+| 12.2 Built-in scheduler | A scheduler seam (e.g. APScheduler) that runs ingest, tick, health and reports on the calendar, catches up missed runs, and shows next run times. Replaces hand-written cron entries. |
+| 12.3 Dead-man's switch and observability | Alert when a scheduled tick or ingest did not run by its deadline; a Prometheus metrics endpoint (tick duration, orders, rejections, data age, job queue); readiness and liveness endpoints. |
+| 12.4 Backups and restore | Scheduled backups of the lake and state with retention, `stonks backup` and `stonks restore`, and a tested restore drill. |
+| 12.5 Data quality and fallback | Validate bars on ingest (spikes, gaps, stale, zero volume), quarantine bad rows, and fall back to a second source when the primary fails. |
+| 12.6 Global kill switch | One action that halts all new orders (CLI, API, UI, MCP), audited, with a typed confirmation to resume. Pairs with the circuit breaker (Phase 9 Wave 3). |
+| 12.7 Packaging and deployment | Docker image and compose file (API, UI, scheduler), a production `stonks serve` mode, Windows service instructions, environment profiles (dev, paper, live). |
+| 12.8 Security hardening | Dependabot, pip-audit and npm audit in CI, CodeQL, secret scanning with push protection, HTTPS behind a reverse proxy when not on loopback, API rate limits. |
+| 12.9 Releases | Semantic versions, tags, a changelog generated from commits, and a GitHub release per version. |
+| 12.10 Paper soak test | Run the full daily loop on the simulated broker for weeks of historical days in fast-forward, checking idempotency, crashes mid-tick, and reconciliation every day. |
+| 12.11 Runbooks | Short incident guides: tick failed, data stale, broker unreachable, disk full, restore from backup. |
+| 12.12 Repo hygiene | A LICENSE, SECURITY.md, CONTRIBUTING.md and a trading-risk disclaimer for the public repo. |
+
+## Phase 13: Trader-ready UX
+
+What a trader needs to use the console daily without the CLI.
+
+| WP | Scope |
+|----|-------|
+| 13.1 Login and roles | Real sign-in instead of pasting a token: local accounts, sessions, roles (viewer, trader, admin), and a second factor before any real-money action. |
+| 13.2 First-run wizard | Guided setup: data source key, universe, first ingest, pick a template strategy, backtest it, start paper trading. Helpful empty states everywhere. |
+| 13.3 Live updates and notifications | Portfolio, ticks, jobs and alerts update live (server-sent events); a notification center; installable PWA with push notifications on phones. |
+| 13.4 Universe and watchlist manager | Create and edit universes and watchlists in the UI instead of config files. |
+| 13.5 Trading charts | Candlesticks with indicator overlays, trade entry and exit markers from the ledger, zoom and compare, rolling Sharpe and drawdown charts. |
+| 13.6 Strategy tear sheets and leaderboard | One page per strategy (live, shadow, backtest, benchmark, trades, survival verdicts), a comparison view, and a viewer for `stonks lab sweep` results. |
+| 13.7 Portfolio analytics | Exposure by asset class and sector, risk contributions, P&L attribution per strategy, monthly returns heatmap. |
+| 13.8 Controls in the UI | Edit risk policy and non-secret settings with validation, the kill switch, circuit-breaker status, and the schedule. |
+| 13.9 Journal | Notes on trades and strategies next to the audit trail of promotions and overrides. |
+| 13.10 Command palette and shortcuts | Ctrl+K search across strategies, tickers, jobs and pages; keyboard shortcuts for common actions. |
+| 13.11 In-app help | Plain-English tooltips for every metric (Sharpe, deflated Sharpe, drawdown), linked to the wiki glossary. |
+| 13.12 Exports | CSV of trades, fills and P&L; PDF tear sheets; a tax-lot report from the trade ledger. |
+| 13.13 Accessibility, locale and polish | WCAG 2.2 AA audit, locale-aware numbers, currency and dates, timezone preference, a Lighthouse performance budget, and a usability pass with real tasks. |
+| 13.14 End-to-end tests | Playwright flows for the main trader journeys on desktop and phone sizes, in CI (was 5.4). |
+
 ## Execution order
 
 1. Wave 1 in parallel: backtest (1.2, 1.3, 3.5), lab (1.4, 1.5, 3.3), production (2.3, 2.4, 2.5), broker (2.1, 2.2), data (3.4), strategies (3.1, 3.2, 4.2), and the service layer plus REST API for existing features (5.1).
