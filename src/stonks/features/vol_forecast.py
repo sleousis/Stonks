@@ -187,6 +187,13 @@ class GarchVol(VolForecaster):
         r, var = self._require()
         return (r - self.mu) / np.sqrt(var)
 
+    def standardize(self, returns: np.ndarray) -> np.ndarray:
+        """``returns`` run through the fitted recursion and divided by its
+        conditional volatility (the shocks that drove them)."""
+        self._require()
+        r = np.asarray(returns, dtype=float)
+        return (r - self.mu) / np.sqrt(self._filter(r))
+
     def simulate(self, shocks: np.ndarray) -> np.ndarray:
         """Returns of the fitted recursion driven by standardised ``shocks``
         (one per bar), starting from the variance after the last fitted

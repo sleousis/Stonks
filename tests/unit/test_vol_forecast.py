@@ -59,6 +59,7 @@ def test_garch_recovers_a_simulated_process_and_leaks_no_library_types():
     assert all(isinstance(v, float | str | None) for v in data.values())
     assert f.conditional_vol().shape == r.shape
     assert f.standardized_residuals().std() == pytest.approx(1.0, abs=0.1)
+    np.testing.assert_allclose(f.standardize(r), f.standardized_residuals())
 
 
 def test_garch_long_forecast_tends_to_the_unconditional_variance():
