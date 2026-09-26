@@ -90,3 +90,36 @@ def test_live_metadata_carries_extended_surface(source):
     assert bundle.cross_listings or bundle.officers, (
         "expected cross_listings or officers populated for AAPL"
     )
+
+
+def test_live_fetch_macro_indicator_either_succeeds_or_reports_paywall(source):
+    """Macro indicators sit under the Fundamentals subscription per
+    EODHD's docs (https://eodhd.com/financial-apis/macroeconomics-data-api/),
+    so a non-fundamentals key gets blocked. Empirically EODHD signals
+    that paywall with **HTTP 404** on this endpoint (not the usual 403 +
+    text marker we see on /fundamentals), so we tolerate either: a real
+    time series on paid keys, or any of {EodhdFreeTierError, HTTP 404}
+    on plans that don't include macro."""
+    import requests
+
+    from stonks.ingest.schemas import MacroIndicatorRow
+
+    try:
+        rows = list(source.fetch_macro_indicator(country_iso="USA", indicator="real_gdp_total"))
+    except EodhdFreeTierError:
+        pytest.skip("macro endpoint blocked: vendor returned the canonical free-tier marker")
+    except requests.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 404:
+            pytest.skip(
+                "macro endpoint blocked: vendor returned 404 (paywall on non-fundamentals plans)"
+            )
+        raise
+    else:
+        assert rows, "paid tier should yield at least one observation for USA real_gdp_total"
+        assert all(isinstance(r, MacroIndicatorRow) for r in rows)
+        assert all(r.country_iso == "USA" for r in rows)
+        assert all(r.indicator == "real_gdp_total" for r in rows)
+        # Series stretches back to ~1960 per vendor docs; assert we got
+        # multiple decades' worth rather than a single point.
+        years = {r.observation_date.year for r in rows}
+        assert len(years) >= 10, f"expected a multi-decade series, got years={sorted(years)}"

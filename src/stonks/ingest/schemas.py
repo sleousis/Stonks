@@ -69,6 +69,8 @@ __all__ = [
     "InsiderTransactionRow",
     "InstitutionalHolderRow",
     "IntradayBar",
+    "MacroIndicatorRow",
+    "MacroPeriod",
     "MarketCapRow",
     "NewsArticleRow",
     "NewsSentimentRow",
@@ -860,6 +862,44 @@ class CommodityContractRow(FrozenRow):
     expiry_date: date | None = None
     contract_size: float | None = Field(default=None, ge=0.0)
     contract_unit: str | None = None  # 'troy_ounce', 'barrel', 'metric_ton', …
+
+
+# ---- macroeconomic indicators ----------------------------------------------
+
+# Reporting cadence vendors expose macro series at. Closed cross-vendor set;
+# adapters map their raw strings ("Annual", "Quarterly", …) into these
+# lower-case literals at parse time. Rows whose vendor returns anything
+# outside this set drop ``period`` to ``None`` rather than rejecting the
+# observation — the value itself is still useful even when the cadence
+# tag isn't classifiable.
+MacroPeriod = Literal["annual", "quarterly", "monthly"]
+
+
+class MacroIndicatorRow(FrozenRow):
+    """One observation of a macroeconomic indicator for a country.
+
+    Country-level time series: keyed by ``(country_iso, indicator,
+    observation_date)`` so one country can carry many indicators and a
+    single indicator can span many countries inside the same table.
+
+    ``country_iso`` is ISO 3166-1 alpha-3 ("USA", "DEU", "GBR"); adapters
+    that receive ISO-2 should expand before constructing the row so the
+    PK stays consistent across vendors.
+
+    ``indicator`` is a canonical lower_snake_case key (e.g.
+    ``"real_gdp_total"``, ``"inflation_consumer_prices_annual"``,
+    ``"unemployment_total_percent"``). The set is open — vendors keep
+    adding new series — so this stays free-text rather than a closed
+    Literal; adapters normalize their vendor strings into snake_case at
+    parse time so SQL filters stay portable.
+    """
+
+    country_iso: str = Field(min_length=3, max_length=3)
+    indicator: str = Field(min_length=1)
+    observation_date: date
+    period: MacroPeriod | None = None
+    country_name: str | None = None
+    value: float | None = None
 
 
 # ---- source discovery (not a lake-row type) --------------------------------
