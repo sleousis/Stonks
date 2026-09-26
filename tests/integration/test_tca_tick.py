@@ -167,3 +167,22 @@ def test_reconcile_uses_a_known_benchmark_as_the_arrival(env):
     reconcile_orders(broker, state)
     [fill] = state.sql("SELECT arrival_price FROM fills")
     assert fill[0] == pytest.approx(101.0)
+
+
+def test_golive_compares_live_shortfall_with_the_modelled_cost(env, lake_trending):
+    from stonks.config import GoLivePolicy
+    from stonks.production.golive import evaluate_golive
+
+    state, registry, sid = env
+    run_tick(
+        state,
+        lake_trending,
+        registry,
+        TickSettings(universe=["UP.US"], costs=MODEL, shadow_enabled=False),
+        as_of=AS_OF,
+    )
+    report = evaluate_golive(state, registry, sid, GoLivePolicy())
+    costs = report.costs
+    assert costs["orders"] == 1
+    assert costs["live_is_bps"] == pytest.approx(costs["modelled_bps"])
+    assert costs["model_gap_bps"] == pytest.approx(0.0, abs=1e-9)

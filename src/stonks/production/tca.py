@@ -476,6 +476,30 @@ def _aggregate(key: str, rows: Sequence[OrderTca]) -> TcaGroup:
     )
 
 
+def cost_comparison(
+    state: SqliteState,
+    strategy_id: str,
+    portfolio_id: str | None,
+    *,
+    since: date | None = None,
+) -> dict[str, Any]:
+    """Live shortfall of a strategy's orders next to the cost model's
+    estimate, for the go-live report (P22): ``orders``, ``live_is_bps``,
+    ``modelled_bps`` and ``model_gap_bps`` (``None`` without orders)."""
+    groups = summarize(
+        load_order_tca(state, portfolio_id, since=since, strategy_id=strategy_id), "all"
+    )
+    if not groups:
+        return {"orders": 0, "live_is_bps": None, "modelled_bps": None, "model_gap_bps": None}
+    [g] = groups
+    return {
+        "orders": g.orders,
+        "live_is_bps": g.is_bps,
+        "modelled_bps": g.expected_bps,
+        "model_gap_bps": g.model_gap_bps,
+    }
+
+
 # ---- backtests ----------------------------------------------------------------------
 
 

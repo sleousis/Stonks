@@ -2012,6 +2012,15 @@ def golive_check(
     for key, value in report.checklist.items():
         shown = "-" if value is None else f"{value:.4g}" if isinstance(value, float) else value
         console.print(f"  {key}: {shown}", markup=False)
+    if report.costs:
+        c = report.costs
+        console.print(
+            f"live costs (TCA): {c['orders']} order(s), shortfall "
+            + " vs model ".join(
+                "-" if v is None else f"{v:.1f} bps" for v in (c["live_is_bps"], c["modelled_bps"])
+            ),
+            markup=False,
+        )
     if report.passed:
         console.print("[green]PASS[/green]: ready for a human to promote")
         return
