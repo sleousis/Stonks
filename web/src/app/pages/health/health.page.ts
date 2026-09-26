@@ -13,6 +13,7 @@ import type { IngestRunView, TickRun } from '../../api/models';
 import { TicksService } from '../../api/ticks.service';
 import { formatAgo, formatDateTime } from '../../core/format/format';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
+import { AlertsPanel } from '../../shared/ui/alerts-panel';
 import { PageHeader } from '../../shared/ui/page-header';
 import { StatTile, type StatTone } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -55,6 +56,7 @@ function sourceName(id: string | null | undefined): string {
     LoadingState,
     EmptyState,
     ErrorState,
+    AlertsPanel,
   ],
   templateUrl: './health.page.html',
   styleUrl: './health.page.scss',

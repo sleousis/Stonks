@@ -59,6 +59,10 @@ describe('HealthPage', () => {
     const ticks = await nextRequest(http, '/api/ticks');
     expect(ticks.request.urlWithParams).toContain('status=error');
     ticks.flush(NO_TICKS);
+    // The system alerts panel loads on its own, once.
+    http
+      .match((r) => r.url.split('?')[0] === '/api/alerts')
+      .forEach((r) => r.flush({ items: [], total: 0, limit: 20, offset: 0 }));
     await tick();
     fixture.detectChanges();
   }
@@ -113,6 +117,11 @@ describe('HealthPage', () => {
     });
     expect(el.querySelector('.overall')!.getAttribute('data-level')).toBe('good');
     expect(el.textContent).toContain('The check passes');
+  });
+
+  it('shows the recent system alerts panel (UI-07)', async () => {
+    await flushAll();
+    expect(el.querySelector('app-alerts-panel')).not.toBeNull();
   });
 
   it('checks chosen tickers', async () => {
