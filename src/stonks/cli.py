@@ -779,6 +779,96 @@ def tick(
     )
 
 
+# ---- operations: health + pnl ----------------------------------------------
+
+
+@app.command("health")
+def health(
+    tickers: str | None = typer.Option(
+        None,
+        "--tickers",
+        help="comma-separated tickers to check for fresh bars; overrides config.production.universe",
+    ),
+    notify: bool = typer.Option(
+        False, "--notify/--no-notify", help="send an alert through [notify] when unhealthy"
+    ),
+) -> None:
+    """Check data freshness and stuck/failed runs. Exit code 1 when unhealthy,
+    so a scheduler can alert on it."""
+    from stonks.production.health import check_health, notify_unhealthy
+
+    settings = _settings()
+    universe = _parse_tickers(tickers) or list(settings.production.universe)
+    state = SqliteState(settings.state.path)
+    try:
+        with _open_lake(settings.lake.path) as lake:
+            report = check_health(state, lake, universe, settings.production.health)
+    finally:
+        state.close()
+
+    table = Table(title="health")
+    for col in ("check", "status", "detail"):
+        table.add_column(col)
+    for c in report.checks:
+        table.add_row(c.name, "[green]ok[/green]" if c.ok else "[red]FAIL[/red]", c.detail)
+    console.print(table)
+
+    if report.healthy:
+        console.print("[green]healthy[/green]")
+        return
+    console.print(f"[red]UNHEALTHY[/red]: {len(report.failures)} check(s) failed")
+    if notify:
+        notify_unhealthy(report, build_notifier(settings.notify))
+    raise typer.Exit(code=1)
+
+
+@app.command("pnl")
+def pnl(
+    since: str | None = typer.Option(
+        None,
+        "--since",
+        help="first day to show (YYYY-MM-DD); returns are still measured from inception",
+        callback=_validate_iso_date,
+    ),
+    strategy: str | None = typer.Option(
+        None, "--strategy", help="show a shadow strategy's virtual P&L instead of the real one"
+    ),
+) -> None:
+    """Daily P&L from portfolio snapshots: value, daily change, cumulative
+    return and drawdown from the running peak."""
+    from stonks.production.pnl import load_pnl
+
+    settings = _settings()
+    since_d = date.fromisoformat(since) if since else None
+    state = SqliteState(settings.state.path)
+    try:
+        rows = load_pnl(state, since=since_d, strategy_id=strategy)
+    finally:
+        state.close()
+
+    if not rows:
+        console.print("[yellow]no portfolio snapshots yet[/yellow]")
+        return
+
+    def pct(x: float | None) -> str:
+        return "-" if x is None else f"{x:+.2%}"
+
+    title = f"P&L ({'shadow ' + strategy if strategy else 'portfolio'})"
+    table = Table(title=title)
+    for col in ("date", "value", "change", "daily", "cumulative", "drawdown"):
+        table.add_column(col, justify="right")
+    for r in rows:
+        table.add_row(
+            r.day.isoformat(),
+            f"{r.total_value:,.2f}",
+            "-" if r.daily_change is None else f"{r.daily_change:+,.2f}",
+            pct(r.daily_return),
+            pct(r.cumulative_return),
+            pct(r.drawdown),
+        )
+    console.print(table)
+
+
 # Re-export bound logger so tests / users can discover it easily
 log = get_logger("stonks.cli")
 
