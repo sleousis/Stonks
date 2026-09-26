@@ -92,9 +92,7 @@ describe('sessionInterceptor', () => {
       await signIn();
       const nav = vi.spyOn(router, 'navigate').mockResolvedValue(true);
       const result = firstValueFrom(http.get('/api/portfolio'));
-      controller
-        .expectOne('/api/portfolio')
-        .flush(problem(401, 'not_authenticated'), UNAUTHORIZED);
+      controller.expectOne('/api/portfolio').flush(problem(401, 'not_authenticated'), UNAUTHORIZED);
       await expect(result).rejects.toBeTruthy();
       expect(session.status()).toBe('signed-out');
       expect(nav).toHaveBeenCalledWith(['/login'], { queryParams: { next: '/' } });

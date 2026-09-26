@@ -49,9 +49,7 @@ describe('auth guards', () => {
     });
 
     it('sends signed-out people to sign-in and back afterwards', async () => {
-      expect(serialize(await run(authGuard, fakeSession('signed-out')))).toBe(
-        '/login?next=%2Flab',
-      );
+      expect(serialize(await run(authGuard, fakeSession('signed-out')))).toBe('/login?next=%2Flab');
     });
 
     it('sends a pending second factor to the code screen', async () => {

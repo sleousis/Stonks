@@ -1,0 +1,134 @@
+@use 'breakpoints' as bp;
+
+:host {
+  display: block;
+}
+
+.wrap {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: var(--space-4);
+  min-height: 100dvh;
+  padding: calc(var(--space-6) + env(safe-area-inset-top)) var(--gutter)
+    calc(var(--space-6) + env(safe-area-inset-bottom));
+}
+
+.brand {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.02em;
+}
+
+.card {
+  display: grid;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 26rem;
+  min-width: 0;
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--color-brass);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-1);
+}
+
+h1 {
+  font-size: var(--text-xl);
+}
+
+.form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.wide {
+  width: 100%;
+}
+
+.lead {
+  color: var(--color-ink-2);
+}
+
+.alert,
+.note {
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-loss);
+  border-radius: var(--radius-sm);
+  background: var(--color-loss-soft);
+  font-size: var(--text-sm);
+}
+
+.note {
+  border-left-color: var(--color-info);
+  background: var(--color-info-soft);
+}
+
+.alt {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.alt > .btn,
+.links .btn,
+.card > .btn-ghost {
+  justify-self: start;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.steps {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--color-ink-2);
+}
+
+.qr {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+}
+
+.secret {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+
+  code {
+    overflow-wrap: anywhere;
+    text-align: center;
+    font-size: var(--text-md);
+    user-select: all;
+  }
+}
+
+.code {
+  font-size: var(--text-lg);
+  letter-spacing: 0.2em;
+  font-variant-numeric: tabular-nums;
+}
+
+.choices {
+  display: grid;
+  gap: var(--space-2);
+}
+
+@include bp.phone {
+  .wrap {
+    padding-top: calc(var(--space-5) + env(safe-area-inset-top));
+  }
+
+  .card {
+    padding: var(--space-4);
+  }
+}

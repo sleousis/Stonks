@@ -14,12 +14,7 @@ import { AuthTokenService } from './auth-token.service';
  * - `unreachable`: the API did not answer (pages show their own errors).
  */
 export type SessionStatus =
-  | 'unknown'
-  | 'signed-in'
-  | 'mfa-pending'
-  | 'open'
-  | 'signed-out'
-  | 'unreachable';
+  'unknown' | 'signed-in' | 'mfa-pending' | 'open' | 'signed-out' | 'unreachable';
 
 /** What the second-factor screen asks for: set up the app, or send a code. */
 export type SecondFactorStep = 'enrol' | 'verify';
