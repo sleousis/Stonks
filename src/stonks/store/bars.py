@@ -144,6 +144,25 @@ class BarStore(ABC):
         equal for two stores holding the same bars."""
 
 
+def open_bar_reader(root: str | Path) -> duckdb.DuckDBPyConnection:
+    """A new in-memory DuckDB connection with ``bars`` and ``prices`` views
+    over the Parquet bar store at ``root`` (``<lake dir>/bars``), for a
+    process that cannot open the lake file because another one holds its
+    write lock. The views re-read the files on every query."""
+    con = duckdb.connect()
+    try:
+        store = ParquetBarStore(root, con, read_only=True)
+        con.execute(f"CREATE VIEW bars AS {store.view_sql()}")
+        con.execute(
+            "CREATE VIEW prices AS SELECT ticker, CAST(timestamp AS DATE) AS date, "
+            "open, high, low, close, adj_close, volume FROM bars WHERE interval = '1d'"
+        )
+    except BaseException:
+        con.close()
+        raise
+    return con
+
+
 def checksums(
     con: duckdb.DuckDBPyConnection, relation: str
 ) -> dict[tuple[str, str], tuple[int, int]]:

@@ -15,6 +15,7 @@ import pytest
 
 from stonks.core.interval import Interval
 from stonks.store import bars_migrate
+from stonks.store.bars import open_bar_reader
 from stonks.store.lake import DuckDBLake
 
 BACKENDS = ["duckdb", "parquet"]
@@ -180,6 +181,15 @@ def test_parquet_readers_run_while_a_read_write_lake_is_open(tmp_path):
             f"SELECT COUNT(*) FROM read_parquet('{(tmp_path / 'bars').as_posix()}/interval=1d/*/*/*.parquet')"
         ).fetchone()[0]
         assert n == 185
+        # the reader helper: bars and prices views without the lake file
+        reader = open_bar_reader(tmp_path / "bars")
+        try:
+            assert reader.execute("SELECT COUNT(*) FROM bars").fetchone()[0] == 185 + 70
+            assert reader.execute("SELECT COUNT(*) FROM prices").fetchone()[0] == 185
+            writer.upsert_prices(_daily("D.US", date(2024, 1, 1), 2))
+            assert reader.execute("SELECT COUNT(*) FROM prices").fetchone()[0] == 187
+        finally:
+            reader.close()
     finally:
         writer.close()
 

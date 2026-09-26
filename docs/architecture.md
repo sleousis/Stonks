@@ -182,7 +182,7 @@ DuckDB lets one process at a time open a database file for writing, so while `st
 - `DuckDBTableBarStore`: the `bars` table in the lake file. It is the default and what every test lake uses.
 - `ParquetBarStore`: hive-partitioned files at `<lake dir>/bars/interval=<code>/ticker=<id>/year=<yyyy>/part-0.parquet`. Any number of processes can read them while one process writes. Path values are percent-encoded, so `ES=F` is stored as `ticker=ES%3DF`.
 
-The public `DuckDBLake` API is unchanged. `upsert_bars`, `upsert_prices`, `aggregate_bars` and `get_bars` go through the store. On a Parquet lake the connection gets a temporary `bars` view over `read_parquet(..., hive_partitioning = true)`, so existing SQL (the `prices` view, the engine, `lake.sql`) runs as before.
+The public `DuckDBLake` API is unchanged. `upsert_bars`, `upsert_prices`, `aggregate_bars` and `get_bars` go through the store. On a Parquet lake the connection gets a temporary `bars` view over `read_parquet(..., hive_partitioning = true)`, so existing SQL (the `prices` view, the engine, `lake.sql`) runs as before. The lake file itself still has DuckDB's single-writer lock. A process that cannot open it, because `stonks serve` holds it, can read the bars with `open_bar_reader(<lake dir>/bars)`, an in-memory connection with `bars` and `prices` views.
 
 How Parquet writes stay safe:
 
