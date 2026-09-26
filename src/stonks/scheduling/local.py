@@ -31,9 +31,12 @@ from stonks.scheduling.jobs import (
     ActionRegistry,
     JobExecutor,
     JobOutcome,
+    MembersResolver,
     RunContext,
     closed_day_outcome,
+    ensure_window,
     job_universe,
+    universes_outcome,
 )
 
 LOCAL_ACTIONS = ActionRegistry("local")
@@ -50,6 +53,19 @@ class LocalExecutor(JobExecutor):
         return LOCAL_ACTIONS.get(ctx.spec.action)(ctx)
 
 
+def lake_members(ctx: RunContext) -> MembersResolver:
+    """Reads a stored universe's members on a day from the lake."""
+
+    def members(universe_id: str, day: Any) -> list[str]:
+        from stonks.production.universe import production_tickers
+        from stonks.store.lake import DuckDBLake
+
+        with DuckDBLake(ctx.settings.lake.path) as lake:
+            return production_tickers(lake, universe_id, day)
+
+    return members
+
+
 def build_source(source_id: str, sources: Any) -> Any:
     """Indirection so tests can swap in a fake source."""
     from stonks.ingest.sources.registry import build_source as _build
@@ -63,7 +79,7 @@ def ingest_prices_action(ctx: RunContext) -> JobOutcome:
     from stonks.ingest.wiring import build_ingest_pipeline
     from stonks.store.lake import DuckDBLake
 
-    universe = job_universe(ctx)
+    universe = job_universe(ctx, lake_members(ctx))
     if not universe:
         return JobOutcome("skipped", {"reason": "empty_universe"})
     lookback = int(ctx.params.get("lookback_days", 7))
@@ -97,7 +113,7 @@ def tick_action(ctx: RunContext) -> JobOutcome:
     from stonks.store.lake import DuckDBLake
     from stonks.store.state import SqliteState
 
-    universe = job_universe(ctx)
+    universe = job_universe(ctx, lake_members(ctx))
     if not universe:
         return JobOutcome("skipped", {"reason": "empty_universe"})
     settings = ctx.settings
@@ -148,7 +164,11 @@ def health_action(ctx: RunContext) -> JobOutcome:
     try:
         with DuckDBLake(settings.lake.path) as lake:
             report = run_health(
-                state, lake, job_universe(ctx), settings.production.health, now=ctx.now
+                state,
+                lake,
+                job_universe(ctx, _open_lake_members(lake)),
+                settings.production.health,
+                now=ctx.now,
             )
     finally:
         state.close()
@@ -215,3 +235,63 @@ def connections_sync_action(ctx: RunContext) -> JobOutcome:
     failed = [r.connection_id for r in results if not r.ok]
     detail = {"connections": len(results), "failed": failed}
     return JobOutcome("failed" if failed else "succeeded", detail)
+
+
+def _open_lake_members(lake: Any) -> MembersResolver:
+    """Members from a lake this action already holds open."""
+
+    def members(universe_id: str, day: Any) -> list[str]:
+        from stonks.production.universe import production_tickers
+
+        return production_tickers(lake, universe_id, day)
+
+    return members
+
+
+@register_action("universes_refresh")
+def universes_refresh_action(ctx: RunContext) -> JobOutcome:
+    """Refresh every stored universe, then fetch its members' missing bars
+    over the trailing ``ensure_days`` (``[ensure]`` settings)."""
+    from stonks.app.lab import build_data_ensurer
+    from stonks.core.interval import Interval
+    from stonks.ingest.sources.registry import DEFAULT_SOURCE_ID
+    from stonks.store.lake import DuckDBLake
+    from stonks.universes import UniverseStore, refresh_universe
+
+    settings = ctx.settings
+    start, end = ensure_window(ctx)
+    interval = Interval.parse(str(ctx.params.get("interval", "1d")))
+    source_id = str(ctx.params.get("source") or DEFAULT_SOURCE_ID)
+    results: dict[str, dict[str, Any]] = {}
+    with DuckDBLake(settings.lake.path) as lake:
+        lake.migrate()
+        for definition in UniverseStore(lake).list():
+            uid = definition.id
+            try:
+                refreshed = refresh_universe(
+                    lake,
+                    uid,
+                    as_of=ctx.fire.as_of,
+                    source_factory=lambda sid: build_source(
+                        sid or DEFAULT_SOURCE_ID, settings.sources
+                    ),
+                )
+            except Exception as exc:  # one broken universe must not stop the rest
+                results[uid] = {"refresh": "failed", "refresh_error": f"{exc}"}
+                continue
+            step: dict[str, Any] = {"refresh": "succeeded", "members": refreshed.members}
+            if ctx.params.get("ensure", True):
+                try:
+                    report = build_data_ensurer(
+                        settings, lake, build_source(source_id, settings.sources)
+                    ).ensure(lake.members_between(uid, start, end), start, end, interval)
+                    step |= {
+                        "ensure": "succeeded",
+                        "tickers_fetched": report.tickers_fetched,
+                        "tickers_failed": report.tickers_failed,
+                        "warnings": report.warnings,
+                    }
+                except Exception as exc:
+                    step |= {"ensure": "failed", "ensure_error": f"{exc}"}
+            results[uid] = step
+    return universes_outcome(results)

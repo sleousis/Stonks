@@ -21,6 +21,7 @@ from stonks.app.jobs import JobStore
 from stonks.app.lab import BACKTEST_JOB, BacktestRequest, backtest_report
 from stonks.app.strategies import StrategyRef, StrategyService
 from stonks.lab.catalog import resolve_strategy
+from stonks.production.universe import EmptyUniverseError, window_tickers
 from stonks.reporting.tearsheet import TearSheet, render_tear_sheet_page
 
 __all__ = ["TearSheetWindow", "render_backtest_tear_sheet", "tear_sheet_request"]
@@ -50,9 +51,15 @@ def tear_sheet_request(
         return request
     if window.start is None or window.end is None:
         raise ValidationError(f"{target!r} is not a backtest job: pass --start and --end")
-    universe = list(window.universe) or list(context.settings.production.universe)
+    universe = list(window.universe)
     if not universe:
-        raise ValidationError("pass --tickers or set [production].universe")
+        with context.lake() as lake:
+            try:
+                universe = window_tickers(
+                    lake, context.settings.production.universe, window.start, window.end
+                )
+            except EmptyUniverseError as exc:
+                raise ValidationError(f"pass --tickers, or {exc}") from None
     with context.registry() as registry:
         registered = any(h.id == target for h in registry.list_all())
     if registered:

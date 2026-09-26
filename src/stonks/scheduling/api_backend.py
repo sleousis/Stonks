@@ -32,9 +32,12 @@ from stonks.scheduling.jobs import (
     ActionRegistry,
     JobExecutor,
     JobOutcome,
+    MembersResolver,
     RunContext,
     closed_day_outcome,
+    ensure_window,
     job_universe,
+    universes_outcome,
 )
 
 API_ACTIONS = ActionRegistry("api")
@@ -183,6 +186,16 @@ def _executor(ctx: RunContext) -> ApiExecutor:
     return executor
 
 
+def _members(ex: ApiExecutor) -> MembersResolver:
+    """Reads a stored universe's members on a day from the API."""
+
+    def members(universe_id: str, day: Any) -> list[str]:
+        view = ex.client.get(f"/api/universes/{universe_id}/members", {"as_of": day.isoformat()})
+        return [str(t) for t in view["tickers"]]
+
+    return members
+
+
 def _run_job(
     ex: ApiExecutor, start_path: str, body: dict[str, Any], result_path: str
 ) -> tuple[str, str, str | None, dict[str, Any] | None]:
@@ -198,7 +211,7 @@ def _run_job(
 @API_ACTIONS.register("ingest_prices")
 def api_ingest_prices(ctx: RunContext) -> JobOutcome:
     ex = _executor(ctx)
-    universe = job_universe(ctx)
+    universe = job_universe(ctx, _members(ex))
     if not universe:
         return JobOutcome("skipped", {"reason": "empty_universe"})
     closed = closed_day_outcome(ctx, universe, {})
@@ -221,7 +234,7 @@ def api_ingest_prices(ctx: RunContext) -> JobOutcome:
 @API_ACTIONS.register("tick")
 def api_tick(ctx: RunContext) -> JobOutcome:
     ex = _executor(ctx)
-    universe = job_universe(ctx)
+    universe = job_universe(ctx, _members(ex))
     if not universe:
         return JobOutcome("skipped", {"reason": "empty_universe"})
     closed = closed_day_outcome(ctx, universe, {})
@@ -240,7 +253,8 @@ def api_tick(ctx: RunContext) -> JobOutcome:
 
 @API_ACTIONS.register("health")
 def api_health(ctx: RunContext) -> JobOutcome:
-    view = _executor(ctx).client.get("/api/health/report", {"tickers": job_universe(ctx)})
+    ex = _executor(ctx)
+    view = ex.client.get("/api/health/report", {"tickers": job_universe(ctx, _members(ex))})
     return health_view_outcome(ctx, view)
 
 
@@ -265,3 +279,53 @@ def api_connections_sync(ctx: RunContext) -> JobOutcome:
     from stonks.scheduling.local import connections_sync_action
 
     return connections_sync_action(ctx)
+
+
+def ensure_body(ctx: RunContext) -> dict[str, Any]:
+    """The ensure request of the ``universes_refresh`` job."""
+    start, end = ensure_window(ctx)
+    body: dict[str, Any] = {
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "interval": str(ctx.params.get("interval", "1d")),
+    }
+    if ctx.params.get("source"):
+        body["source"] = str(ctx.params["source"])
+    return body
+
+
+def ensure_step(status: str, error: str | None, result: Mapping[str, Any] | None) -> dict[str, Any]:
+    step: dict[str, Any] = {"ensure": status}
+    if result is not None:
+        step |= {k: result.get(k) for k in ("tickers_fetched", "tickers_failed", "warnings")}
+    if error:
+        step["ensure_error"] = error
+    return step
+
+
+@API_ACTIONS.register("universes_refresh")
+def api_universes_refresh(ctx: RunContext) -> JobOutcome:
+    """Refresh every stored universe, then fetch its members' missing bars
+    over the trailing ``ensure_days`` (both as lake-writer jobs in the API)."""
+    ex = _executor(ctx)
+    results: dict[str, dict[str, Any]] = {}
+    for universe in ex.client.get("/api/universes"):
+        uid = universe["id"]
+        _, status, error, result = _run_job(
+            ex, f"/api/universes/{uid}/refresh", {}, "/api/universes/refresh/{job_id}/result"
+        )
+        step: dict[str, Any] = {"refresh": status}
+        if error:
+            step["refresh_error"] = error
+        if result is not None:
+            step["members"] = result.get("members")
+        if status == "succeeded" and ctx.params.get("ensure", True):
+            _, e_status, e_error, e_result = _run_job(
+                ex,
+                f"/api/universes/{uid}/ensure",
+                ensure_body(ctx),
+                "/api/universes/ensure/{job_id}/result",
+            )
+            step |= ensure_step(e_status, e_error, e_result)
+        results[uid] = step
+    return universes_outcome(results)

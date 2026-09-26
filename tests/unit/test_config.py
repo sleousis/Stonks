@@ -257,3 +257,49 @@ def test_lab_preflight_and_audit_defaults(tmp_path):
     s = load_settings(config_path=cfg)
     assert (s.lab.preflight, s.lab.strict_preflight) == (True, False)
     assert s.audit.tolerances() == AuditTolerances()
+
+
+def test_ensure_section_defaults_to_the_eodhd_free_plan(tmp_path):
+    from stonks.ingest.ensure import EnsureSettings
+
+    settings = load_settings(config_path=tmp_path / "missing.toml")
+    assert isinstance(settings.ensure, EnsureSettings)
+    assert settings.ensure.plans == {"eodhd": "free"}
+
+
+def test_ensure_section_reads_from_toml(tmp_path):
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text('[ensure]\nmax_workers = 3\nplans = { eodhd = "all_world" }\n')
+    settings = load_settings(config_path=cfg)
+    assert settings.ensure.max_workers == 3
+    assert settings.ensure.plans == {"eodhd": "all_world"}
+
+
+def test_default_toml_has_an_ensure_section():
+    import tomllib
+    from pathlib import Path
+
+    data = tomllib.loads(Path("config/default.toml").read_text(encoding="utf-8"))
+    assert data["ensure"]["plans"] == {"eodhd": "free"}
+    assert load_settings(Path("config/default.toml")).ensure.plans == {"eodhd": "free"}
+
+
+def test_production_universe_accepts_a_list_or_a_universe_id(tmp_path):
+    import pytest
+    from pydantic import ValidationError
+
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text('[production]\nuniverse = ["A.US", "B.US"]\n')
+    assert load_settings(config_path=cfg).production.universe == ["A.US", "B.US"]
+    cfg.write_text('[production]\nuniverse = "sp500"\n')
+    assert load_settings(config_path=cfg).production.universe == "sp500"
+    cfg.write_text('[production]\nuniverse = "Not An Id"\n')
+    with pytest.raises(ValidationError):
+        load_settings(config_path=cfg)
+
+
+def test_config_universe_id_pattern_matches_the_universes_block():
+    from stonks import config
+    from stonks.universes.base import UNIVERSE_ID_PATTERN
+
+    assert config.UNIVERSE_ID_PATTERN == UNIVERSE_ID_PATTERN

@@ -8,6 +8,7 @@ from stonks.api.routers._jobs_common import JOB_CREATED, accepted
 from stonks.app.jobs import Job
 from stonks.app.lab import (
     BACKTEST_JOB,
+    LAB_ENSURE_JOB,
     LAB_RUN_JOB,
     BacktestRequest,
     BacktestResult,
@@ -16,6 +17,7 @@ from stonks.app.lab import (
     LabRunView,
 )
 from stonks.auth import Permission, require
+from stonks.ingest.ensure import EnsureReport
 
 router = APIRouter(prefix="/api/lab", tags=["lab"], responses=PROBLEM_RESPONSES)
 
@@ -61,6 +63,15 @@ def get_backtest_result(job_id: str, services: ServicesDep) -> BacktestResult:
 def get_lab_run_result(job_id: str, services: ServicesDep) -> LabRunView:
     """The result of a succeeded lab-run job (409 until it has succeeded)."""
     return services.jobs.typed_result(job_id, LAB_RUN_JOB, LabRunView)
+
+
+@router.get(
+    "/ensure/{job_id}/result", response_model=EnsureReport, operation_id="getLabEnsureResult"
+)
+def get_lab_ensure_result(job_id: str, services: ServicesDep) -> EnsureReport:
+    """The report of a lab run's chained data job (``ensure_data``; the
+    run's ``ensure_job_id``), 409 until it has succeeded."""
+    return services.jobs.typed_result(job_id, LAB_ENSURE_JOB, EnsureReport)
 
 
 @router.get("/cost-models", response_model=list[CostModelPreset], operation_id="listCostModels")

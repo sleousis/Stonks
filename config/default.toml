@@ -17,7 +17,9 @@ artifacts_dir = "data/artifacts"
 level = "INFO"
 
 [production]
-# Universe the production tick iterates; empty means "explicitly pass --tickers".
+# Universe the production tick iterates: a ticker list, or the id of a stored
+# universe (e.g. universe = "sp500") whose members on the tick's date are
+# traded. Empty means "explicitly pass --tickers".
 universe = []
 threshold = 0.0
 initial_cash = 10000.0
@@ -200,6 +202,27 @@ net_income = 0.05                  # income statement vs cash flow
 cash = 0.05                        # cash flow end cash vs balance sheet
 gross_profit = 0.02                # vs revenue - cost of revenue
 quarterly_sum = 0.05               # four quarters vs the annual figure
+
+[ensure]
+# On-demand bar fetches for universes (docs/universes.md): `stonks universe
+# ensure`, `stonks lab run --ensure-data`, POST /api/universes/{id}/ensure and
+# the daily universes_refresh job. Only the missing ranges are fetched.
+max_workers = 8                    # concurrent fetches (network bound)
+default_requests_per_second = 5.0
+bulk = false                       # one bulk call per exchange and day (paid plans)
+bulk_max_days = 5
+bulk_min_tickers = 20
+prefetch_window = 64               # fetches kept ahead of the writer
+settle_days = 14                   # empty recent answers are asked again
+
+[ensure.requests_per_second]
+eodhd = 10.0
+yahoo = 2.0
+
+[ensure.plans]
+# Data plan per source. The EODHD free plan keeps one year of daily bars and
+# has no intraday or bulk data, so windows are clipped with a warning.
+eodhd = "free"
 
 [notify]
 # Backends: "log" (structlog), "webhook" (JSON POST), "store" (the state DB's

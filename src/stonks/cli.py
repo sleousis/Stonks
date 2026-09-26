@@ -7,7 +7,7 @@ To browse the lake interactively, run ``uv run duckdb -ui data/lake.duckdb``
 from __future__ import annotations
 
 import importlib
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, cast, get_args
 
@@ -41,6 +41,7 @@ from stonks.production.tick import BackdatedTickError, run_tick
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
+from stonks.universes.commands import app as universe_app
 
 _ASSET_CLASS_CHOICES: tuple[str, ...] = get_args(AssetClass)
 
@@ -91,6 +92,7 @@ app.add_typer(db_app, name="db")
 app.add_typer(ingest_app, name="ingest")
 app.add_typer(registry_app, name="registry")
 app.add_typer(ops_app, name="backup")
+app.add_typer(universe_app, name="universe")
 
 
 @app.command(
@@ -902,6 +904,30 @@ def registry_history(strategy_id: str) -> None:
 # ---- production tick --------------------------------------------------------
 
 
+def _production_universe(
+    lake: Any,
+    settings: Any,
+    as_of: date | None,
+    tickers: str | None,
+    *,
+    required: bool = True,
+) -> list[str]:
+    """``--tickers``, else ``[production].universe`` (a list, or a universe
+    id resolved on ``as_of``, default today in UTC). ``required=False``
+    gives ``[]`` instead of an error."""
+    from stonks.production.universe import EmptyUniverseError, production_tickers
+
+    day = as_of or datetime.now(UTC).date()
+    try:
+        return production_tickers(
+            lake, settings.production.universe, day, tickers=_parse_tickers(tickers)
+        )
+    except EmptyUniverseError as exc:
+        if not required:
+            return []
+        raise typer.BadParameter(str(exc), param_hint="--tickers") from None
+
+
 @app.command("tick")
 def tick(
     dry_run: bool = typer.Option(False, "--dry-run", help="rank + log, place no orders"),
@@ -930,8 +956,8 @@ def tick(
     record everything in state. Designed to be invoked by cron/systemd."""
     settings = _settings()
 
-    universe = _parse_tickers(tickers) or list(settings.production.universe)
-    if not universe:
+    configured = settings.production.universe
+    if not _parse_tickers(tickers) and not configured:
         raise typer.BadParameter(
             "production universe is empty — provide --tickers or set "
             "[production].universe in config/default.toml"
@@ -942,6 +968,7 @@ def tick(
     state, registry = _open_registry(settings)
     try:
         with _open_lake(settings.lake.path) as lake:
+            universe = _production_universe(lake, settings, as_of_date, tickers)
             # Apply --asset-class inside the same lake connection that
             # ``run_tick`` will use, so we don't open the lake twice.
             if asset_class is not None:
@@ -1004,10 +1031,10 @@ def health(
     from stonks.production.health import notify_unhealthy
 
     settings = _settings()
-    universe = _parse_tickers(tickers) or list(settings.production.universe)
     state = SqliteState(settings.state.path)
     try:
         with _open_lake(settings.lake.path) as lake:
+            universe = _production_universe(lake, settings, None, tickers, required=False)
             report = run_health(state, lake, universe, settings.production.health)
     finally:
         state.close()
@@ -1386,6 +1413,20 @@ def lab_run(
     tickers: str | None = typer.Option(
         None, "--tickers", help="comma-separated universe; default [production].universe"
     ),
+    universe_id: str | None = typer.Option(
+        None,
+        "--universe-id",
+        help="stored universe: every member during the window, delisted names included",
+    ),
+    ensure_data: bool = typer.Option(
+        False, "--ensure-data", help="fetch missing bars first ([ensure] settings, --source)"
+    ),
+    source_id: str = typer.Option(
+        DEFAULT_SOURCE_ID,
+        "--source",
+        help=f"source for --ensure-data ({'|'.join(SOURCE_IDS)})",
+        callback=_validate_source,
+    ),
     start: str = typer.Option(..., "--start", callback=_validate_iso_date, help="YYYY-MM-DD"),
     end: str = typer.Option(..., "--end", callback=_validate_iso_date, help="YYYY-MM-DD"),
     interval: str = typer.Option("1d", "--interval", help="bar interval (1d, 1h, 5m, ...)"),
@@ -1496,7 +1537,12 @@ def lab_run(
     import json
 
     from stonks.app.errors import ValidationError as AppValidationError
-    from stonks.app.lab import LabRunRequest, McptOptions, execute_lab_run
+    from stonks.app.lab import (
+        LabRunRequest,
+        McptOptions,
+        build_data_ensurer,
+        execute_lab_run,
+    )
     from stonks.app.serialize import to_jsonable
     from stonks.app.strategies import StrategyRef
     from stonks.core.interval import Interval
@@ -1533,9 +1579,15 @@ def lab_run(
     }
 
     settings = _settings()
-    universe = _parse_tickers(tickers) or list(settings.production.universe)
-    if not universe:
-        raise typer.BadParameter("pass --tickers or set [production].universe")
+    universe = _parse_tickers(tickers)
+    if not universe and not universe_id:
+        configured = settings.production.universe
+        if isinstance(configured, str):
+            universe_id = configured
+        else:
+            universe = list(configured)
+    if not universe and not universe_id:
+        raise typer.BadParameter("pass --tickers or --universe-id, or set [production].universe")
 
     wf_overrides = {
         k: v
@@ -1553,6 +1605,8 @@ def lab_run(
         request = LabRunRequest(
             strategy=StrategyRef(class_path=class_path),
             universe=universe,
+            universe_id=universe_id,
+            ensure_data=ensure_data,
             start=start_d,
             end=end_d,
             interval=bar_interval.code,
@@ -1584,10 +1638,21 @@ def lab_run(
     except ValueError as exc:  # pydantic ValidationError is a ValueError
         raise typer.BadParameter(str(exc)) from None
 
+    ensure_source = None
+    if ensure_data:
+        from stonks.universes import commands as universe_commands
+
+        ensure_source = universe_commands.ensure_source(settings, source_id)
     lake = _open_lake(settings.lake.path)
     state = SqliteState(settings.state.path)
     try:
         state.migrate()
+        if universe_id is not None and universe_id not in lake.universe_ids():
+            raise typer.BadParameter(
+                f"universe {universe_id!r} has no members: create and refresh it first "
+                f"(stonks universe refresh {universe_id})",
+                param_hint="--universe-id",
+            )
         execution = execute_lab_run(
             settings,
             strategy_cls,
@@ -1596,6 +1661,11 @@ def lab_run(
             state=state,
             fixed_params=pinned,
             parallel=_parallel_settings(settings, workers),
+            data_ensurer=(
+                build_data_ensurer(settings, lake, ensure_source)
+                if ensure_source is not None
+                else None
+            ),
         )
     except AppValidationError as exc:  # e.g. [lab] embargo_bars vs the window
         raise typer.BadParameter(str(exc)) from None
@@ -1639,6 +1709,7 @@ def lab_run(
         doc = {
             "strategy": class_path,
             "universe": universe,
+            "universe_id": universe_id,
             "window": [start, end],
             "interval": bar_interval.code,
             "run_id": result.run_id,
@@ -1736,9 +1807,15 @@ def lab_sweep(
     suite = _lab_suite(tests, preset, mcpt=False, walk_forward=False)
 
     settings = _settings()
-    basket = _parse_tickers(tickers) or list(settings.production.universe)
+    basket = _parse_tickers(tickers)
     if not basket:
-        raise typer.BadParameter("pass --tickers or set [production].universe")
+        from stonks.production.universe import EmptyUniverseError, window_tickers
+
+        with _open_lake(settings.lake.path) as lake:
+            try:
+                basket = window_tickers(lake, settings.production.universe, start_d, end_d)
+            except EmptyUniverseError as exc:
+                raise typer.BadParameter(str(exc), param_hint="--tickers") from None
     try:
         tasks = plan_sweep(basket, _parse_tickers(strategies), _parse_tickers(exclude))
     except ValueError as exc:

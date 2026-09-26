@@ -22,7 +22,7 @@ from stonks.scheduling.jobs import JobOutcome, UnknownActionError, build_job_spe
 from stonks.scheduling.local import LOCAL_ACTIONS, LocalExecutor, register_action
 from stonks.scheduling.triggers import DailyTrigger, IntervalTrigger, SessionTrigger
 
-BUILTIN = {"ingest_prices", "tick", "health", "report"}
+BUILTIN = {"ingest_prices", "tick", "health", "report", "universes_refresh"}
 
 
 def test_default_jobs_build():
@@ -35,6 +35,7 @@ def test_default_jobs_build():
         "health",
         "backup",
         "connections_sync",
+        "universes_refresh",
     }
     tick = by_name["tick"]
     assert tick.trigger == SessionTrigger("XNYS", "close", timedelta(minutes=45))
@@ -44,6 +45,8 @@ def test_default_jobs_build():
     # the tick runs after the ingest it depends on
     ingest_at = by_name["ingest_prices"].trigger.offset
     assert ingest_at < tick.trigger.offset
+    # stored universes are refreshed and filled before the tick trades them
+    assert by_name["universes_refresh"].trigger.offset < tick.trigger.offset
 
 
 @pytest.mark.parametrize("registry", [LOCAL_ACTIONS, API_ACTIONS, IN_PROCESS_ACTIONS])
@@ -147,3 +150,50 @@ def test_config_from_toml(tmp_path: Path):
 def test_extra_keys_forbidden():
     with pytest.raises(ValidationError):
         SchedulerConfig(catchup="none")
+
+
+
+def _run_ctx(settings, **params):
+    from datetime import UTC, date, datetime
+
+    from stonks.notify import Notifier
+    from stonks.scheduling.jobs import JobSpec, RunContext
+    from stonks.scheduling.triggers import Fire
+
+    class _Quiet(Notifier):
+        def _send(self, n):  # pragma: no cover - never called here
+            pass
+
+    at = datetime(2026, 3, 23, 21, tzinfo=UTC)
+    return RunContext(
+        spec=JobSpec("tick", "tick", SessionTrigger("XNYS"), params=params),
+        fire=Fire(at, date(2026, 3, 23), "2026-03-23"),
+        run_id="srun_u",
+        now=at,
+        settings=settings,
+        notifier=_Quiet(),
+    )
+
+
+def test_job_universe_resolves_a_universe_id_through_the_backend():
+    from stonks.config import Settings
+    from stonks.scheduling.jobs import job_universe
+
+    settings = Settings()
+    settings.production.universe = "sp500"
+    calls = []
+
+    def members(universe_id, day):
+        calls.append((universe_id, day.isoformat()))
+        return ["A.US", "B.US"]
+
+    ctx = _run_ctx(settings)
+    assert job_universe(ctx, members) == ["A.US", "B.US"]
+    assert calls == [("sp500", "2026-03-23")]
+    # without a resolver (or when it fails) there is nothing to trade
+    assert job_universe(ctx) == []
+    assert job_universe(ctx, lambda u, d: (_ for _ in ()).throw(KeyError(u))) == []
+    # explicit tickers and lists work as before
+    assert job_universe(_run_ctx(settings, tickers=["X.US"]), members) == ["X.US"]
+    settings.production.universe = ["L.US"]
+    assert job_universe(_run_ctx(settings), members) == ["L.US"]

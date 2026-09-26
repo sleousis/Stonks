@@ -19,7 +19,7 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, WithJsonSchema, model_validator
 
 from stonks.app.context import AppContext
-from stonks.app.errors import ValidationError
+from stonks.app.errors import ConflictError, NotFoundError, ValidationError
 from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.app.serialize import FiniteFloat, finite, to_jsonable
 from stonks.app.strategies import StrategyRef, StrategyService, SurvivalReportView
@@ -33,6 +33,8 @@ from stonks.backtest.trades import with_trades
 from stonks.core.interval import Interval
 from stonks.core.protocols import Objective, Strategy, SurvivalReport, SurvivalTest, Tuner
 from stonks.core.types import Portfolio
+from stonks.ingest.ensure import DataEnsurer, EnsureReport
+from stonks.ingest.wiring import build_ingest_pipeline
 from stonks.lab.backtesting import run_backtest
 from stonks.lab.dataset import LabDataset, scoring_window
 from stonks.lab.objectives import CAGRObjective, FinalReturnObjective, SharpeObjective
@@ -51,12 +53,17 @@ from stonks.lab.survival.walk_forward import WalkForwardConfig
 from stonks.lab.trials import TrialLedger
 from stonks.lab.tuning.grid import GridTuner
 from stonks.lab.tuning.random import RandomTuner
+from stonks.lab.universe_data import prepare_dataset
 from stonks.logging import get_logger
 from stonks.registry.artifact import update_meta
 from stonks.registry.store import StrategyRegistry
+from stonks.universes.base import UNIVERSE_ID_PATTERN
+from stonks.universes.store import UniverseStore
 
 BACKTEST_JOB = "backtest"
 LAB_RUN_JOB = "lab_run"
+#: The chained job that fetches a lab run's missing bars (``ensure_data``).
+LAB_ENSURE_JOB = "lab_ensure"
 
 TunerName = Literal["grid", "random"]
 ObjectiveName = Literal["sharpe", "cagr", "final_return"]
@@ -438,7 +445,24 @@ class LabRunOptions(BaseModel):
 
 class LabRunRequest(_WindowRequest, LabRunOptions):
     """Tunes the class the ``strategy`` ref points at (its ``params`` are
-    ignored: the tuner searches the class's parameter space)."""
+    ignored: the tuner searches the class's parameter space).
+
+    Give ``universe`` (tickers), ``universe_id`` (a stored universe: every
+    member on any day of the window, delisted names included), or both
+    (the preflight then reports members missing from the list)."""
+
+    universe: list[str] = Field(default_factory=list)
+    #: A stored universe (``/api/universes``) to take the tickers from.
+    universe_id: str | None = Field(default=None, pattern=UNIVERSE_ID_PATTERN)
+    #: Fetch the missing bars first (window plus the strategy's warm-up),
+    #: as a chained ``lab_ensure`` job on the lake writer lane.
+    ensure_data: bool = False
+
+    @model_validator(mode="after")
+    def _has_a_universe(self) -> Self:
+        if not self.universe and not self.universe_id:
+            raise ValueError("give universe (tickers) or universe_id")
+        return self
 
     @model_validator(mode="after")
     def _embargo_fits_the_window(self) -> Self:
@@ -517,6 +541,9 @@ class LabRunView(BaseModel):
     benchmark: BenchmarkStatsView | None = None
     #: The data preflight's warnings; ``None`` when it was turned off.
     preflight: PreflightView | None = None
+    #: The chained ``lab_ensure`` job that fetched missing bars first
+    #: (``ensure_data``); its report is at ``/api/lab/ensure/{id}/result``.
+    ensure_job_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -577,6 +604,7 @@ def execute_lab_run(
     register: RegisterFn | None = None,
     fixed_params: Mapping[str, Any] | None = None,
     parallel: ParallelSettings | None = None,
+    data_ensurer: Any = None,
 ) -> LabExecution:
     """Tune ``cls`` on ``lake`` and run the survival suite; the one lab-run
     code path (see the module doc).
@@ -587,7 +615,9 @@ def execute_lab_run(
     ``register_if_passes`` neither runs on a failed verdict. ``progress``
     adds job progress and cancellation checks between trials and tests.
     ``parallel`` defaults to ``[lab.parallel]``. ``fixed_params`` pin
-    parameters for the whole search (``--params`` on the CLI)."""
+    parameters for the whole search (``--params`` on the CLI).
+    ``data_ensurer`` (a :class:`~stonks.ingest.ensure.DataEnsurer`) fetches
+    missing bars before the preflight (``stonks lab run --ensure-data``)."""
     interval = _parse_interval(request.interval)
     tuner = build_tuner(request, parallel or settings.lab.parallel)
     objective: Objective = _OBJECTIVES[request.objective]()
@@ -612,26 +642,11 @@ def execute_lab_run(
             if request.strict_preflight is None
             else request.strict_preflight
         ),
+        data_ensurer=data_ensurer,
     )
     if progress is not None:
         progress.progress(0.05, "tuning")
-    embargo = request.embargo_bars
-    try:
-        dataset = LabDataset(
-            lake=lake,
-            universe=list(request.universe),
-            start=request.start,
-            end=request.end,
-            train_ratio=request.train_ratio,
-            interval=interval,
-            costs=lab_costs(settings, request.cost_model),
-            benchmark=lab_benchmark(settings, request.benchmark),
-            embargo_bars=settings.lab.embargo_bars if embargo is None else embargo,
-            execution=settings.backtest.execution,
-            construction=settings.backtest.construction,
-        )
-    except ValueError as exc:  # e.g. [lab] embargo_bars leaves no validation window
-        raise ValidationError(str(exc)) from None
+    dataset = lab_dataset(settings, request, lake, interval)
     try:
         result = runner.run(
             cls,
@@ -664,6 +679,42 @@ def execute_lab_run(
             "lab.registered", run_id=result.run_id, strategy_id=registered, verdict=result.verdict
         )
     return LabExecution(result=result, registered_id=registered, benchmark=benchmark)
+
+
+def lab_dataset(
+    settings: Any, request: LabRunRequest, lake: Any, interval: Interval | None = None
+) -> LabDataset:
+    """The request's :class:`LabDataset` on ``lake`` (``ValidationError``
+    when the window can't hold it)."""
+    embargo = request.embargo_bars
+    try:
+        return LabDataset(
+            lake=lake,
+            universe=list(request.universe),
+            start=request.start,
+            end=request.end,
+            train_ratio=request.train_ratio,
+            interval=interval or _parse_interval(request.interval),
+            costs=lab_costs(settings, request.cost_model),
+            benchmark=lab_benchmark(settings, request.benchmark),
+            embargo_bars=settings.lab.embargo_bars if embargo is None else embargo,
+            execution=settings.backtest.execution,
+            construction=settings.backtest.construction,
+            universe_id=request.universe_id,
+        )
+    except ValueError as exc:  # e.g. [lab] embargo_bars leaves no validation window
+        raise ValidationError(str(exc)) from None
+
+
+def build_data_ensurer(settings: Any, lake: Any, source: Any) -> DataEnsurer:
+    """A :class:`~stonks.ingest.ensure.DataEnsurer` over ``source`` with the
+    ``[ensure]`` settings and the configured ingest pipeline."""
+    return DataEnsurer(
+        lake,
+        source,
+        settings.ensure,
+        pipeline_factory=lambda src, lk: build_ingest_pipeline(settings, src, lk),
+    )
 
 
 def lab_benchmark(settings: Any, option: str | None) -> str:
@@ -817,6 +868,8 @@ class LabService:
         runner.register(BACKTEST_JOB, self._handle_backtest)
         # Cooperative: stops between tuning trials and survival tests.
         runner.register(LAB_RUN_JOB, self._handle_lab_run, cancellable=True)
+        # Fetching a lab run's missing bars writes the lake: one writer lane.
+        runner.register(LAB_ENSURE_JOB, self._handle_lab_ensure, lock="lake_write")
 
     # ---- backtests ---------------------------------------------------------
 
@@ -846,11 +899,56 @@ class LabService:
     def submit_lab_run(self, request: LabRunRequest) -> Job:
         _parse_interval(request.interval)
         self._strategies.strategy_class(request.strategy)
+        if request.universe_id is not None:
+            self._require_universe(request.universe_id)
+        if request.ensure_data:
+            self._ctx.build_source(None)  # fail fast when it isn't configured
         return self._runner.submit(LAB_RUN_JOB, request.model_dump(mode="json"))
 
     def run_lab(self, request: LabRunRequest, progress: JobContext | None = None) -> LabRunView:
         cls = self._strategies.strategy_class(request.strategy)
         return self.run_lab_class(cls, request, progress=progress)
+
+    def ensure_lab_data(self, request: LabRunRequest) -> EnsureReport:
+        """Fetch the bars a lab run will read that the lake lacks: the
+        members (or tickers) over the window plus the strategy's warm-up,
+        and a benchmark ticker. Runs as the ``lab_ensure`` job."""
+        cls = self._strategies.strategy_class(request.strategy)
+        source = self._ctx.build_source(None)
+        with self._ctx.lake() as lake:
+            dataset = lab_dataset(self._ctx.settings, request, lake)
+            ensurer = build_data_ensurer(self._ctx.settings, lake, source)
+            _, report = prepare_dataset(dataset, ensurer=ensurer, strategy=cls)
+        if report is not None:
+            return report
+        return EnsureReport(  # no tickers to fetch
+            interval=request.interval,
+            start=request.start,
+            end=request.end,
+            source=source.source_id,
+        )
+
+    def _require_universe(self, universe_id: str) -> None:
+        with self._ctx.lake() as lake:
+            known = UniverseStore(lake).exists(universe_id) or universe_id in lake.universe_ids()
+        if not known:
+            raise NotFoundError(f"no universe {universe_id!r}")
+
+    def _ensure_first(self, request: LabRunRequest, ctx: JobContext) -> str:
+        """Run the chained ``lab_ensure`` job and wait for it (checking for
+        cancellation); its id. A failed ensure fails the lab run."""
+        job = self._runner.submit(LAB_ENSURE_JOB, request.model_dump(mode="json"))
+        ctx.progress(0.01, f"fetching missing data (job {job.id})")
+        while True:
+            final = self._runner.wait(job.id, timeout=1.0)
+            if final.is_terminal:
+                break
+            if not self._runner.is_tracked(job.id):
+                raise ConflictError(f"data job {job.id} stopped without finishing")
+            ctx.check_cancelled()
+        if final.status != "succeeded":
+            raise ConflictError(f"data job {job.id} {final.status}: {final.error or 'no detail'}")
+        return job.id
 
     def run_lab_class(
         self,
@@ -880,7 +978,13 @@ class LabService:
         return self.run_backtest(BacktestRequest.model_validate(params))
 
     def _handle_lab_run(self, params: dict[str, Any], ctx: JobContext) -> LabRunView:
-        return self.run_lab(LabRunRequest.model_validate(params), progress=ctx)
+        request = LabRunRequest.model_validate(params)
+        ensure_job_id = self._ensure_first(request, ctx) if request.ensure_data else None
+        view = self.run_lab(request, progress=ctx)
+        return view.model_copy(update={"ensure_job_id": ensure_job_id})
+
+    def _handle_lab_ensure(self, params: dict[str, Any], ctx: JobContext) -> EnsureReport:
+        return self.ensure_lab_data(LabRunRequest.model_validate(params))
 
 
 class _CancellableObjective:
