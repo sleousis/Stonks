@@ -29,6 +29,22 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#broke
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
 | GET | `/api/auth/check` | Check Auth | token, or open on loopback |  | [AuthCheck](#authcheck) |
+| POST | `/api/auth/login` | Login | none | [LoginRequest](#loginrequest) | [LoginView](#loginview) |
+| POST | `/api/auth/logout` | Logout | none |  |  |
+| GET | `/api/auth/me` | Me | token, or open on loopback |  | [MeView](#meview) |
+| POST | `/api/auth/mfa/enrol` | Start Enrolment | none |  | [EnrolStartView](#enrolstartview) |
+| POST | `/api/auth/mfa/enrol/confirm` | Confirm Enrolment | none | [MfaCodeRequest](#mfacoderequest) | [MfaView](#mfaview) |
+| POST | `/api/auth/mfa/verify` | Verify Mfa | none | [MfaCodeRequest](#mfacoderequest) | [MfaView](#mfaview) |
+| POST | `/api/auth/password` | Change Password | bearer token | [PasswordChangeRequest](#passwordchangerequest) |  |
+| POST | `/api/auth/recovery-codes` | Regenerate Recovery Codes | bearer token |  | [RecoveryCodesView](#recoverycodesview) |
+| GET | `/api/auth/tokens` | List Tokens | token, or open on loopback |  | list[[TokenView](#tokenview)] |
+| POST | `/api/auth/tokens` | Create Token | bearer token | [TokenCreateRequest](#tokencreaterequest) | [TokenCreatedView](#tokencreatedview) |
+| DELETE | `/api/auth/tokens/{token_id}` | Revoke Token | bearer token |  |  |
+| GET | `/api/auth/users` | List Users | token, or open on loopback |  | list[[UserView](#userview)] |
+| POST | `/api/auth/users` | Create User | bearer token | [UserCreateRequest](#usercreaterequest) | [UserView](#userview) |
+| PATCH | `/api/auth/users/{user_id}` | Update User | bearer token | [UserUpdateRequest](#userupdaterequest) | [UserView](#userview) |
+| DELETE | `/api/auth/users/{user_id}/mfa` | Reset User Mfa | bearer token |  |  |
+| POST | `/api/auth/users/{user_id}/password` | Reset User Password | bearer token | [PasswordResetRequest](#passwordresetrequest) |  |
 
 ## brokers endpoints
 
@@ -238,6 +254,12 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#broke
 | `connected` | boolean | yes |  |
 | `error` | string \| null | no |  |
 | `paper` | boolean | yes |  |
+
+### ApiScope
+
+What a credential may do. A token never exceeds its user's role.
+
+Type: "read" \| "trade" \| "lab" \| "admin"
 
 ### AssetClassCosts
 
@@ -525,6 +547,13 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `issues` | list[[ValidationIssue](#validationissue)] | yes |  |
 | `smoke` | [SmokeCheck](#smokecheck) \| null | no |  |
 | `valid` | boolean | yes |  |
+
+### EnrolStartView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `otpauth_uri` | string | yes |  |
+| `secret` | string | yes |  |
 
 ### EquityPoint
 
@@ -823,6 +852,22 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `external_account_id` | string | yes |  |
 | `portfolio_id` | string | yes |  |
 
+### LoginRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `email` | string | yes |  |
+| `password` | string | yes |  |
+
+### LoginView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `csrf_token` | string | yes |  |
+| `display_name` | string | yes |  |
+| `next_step` | "enrol" \| "verify" | yes |  |
+| `user_id` | string | yes |  |
+
 ### MarkReadRequest
 
 | Field | Type | Required | Description |
@@ -856,6 +901,35 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `n_permutations` | integer | no |  |
 | `retune` | boolean \| "auto" | no |  |
 | `seed` | integer \| null | no |  |
+
+### MeView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `display_name` | string | yes |  |
+| `email` | string \| null | yes |  |
+| `mfa_enrolled` | boolean | yes |  |
+| `mfa_fresh` | boolean | yes |  |
+| `role` | [Role](#role) | yes |  |
+| `scopes` | list[[ApiScope](#apiscope)] | yes |  |
+| `user_id` | string | yes |  |
+| `via` | "session" \| "token" \| "legacy" \| "cli" \| "scheduler" | yes |  |
+
+### MfaCodeRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `code` | string \| null | no |  |
+| `recovery_code` | string \| null | no |  |
+
+### MfaView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `csrf_token` | string \| null | no |  |
+| `method` | "totp" \| "recovery_code" | yes |  |
+| `recovery_codes` | list[string] \| null | no |  |
+| `recovery_codes_left` | integer | yes |  |
 
 ### OrderView
 
@@ -1002,6 +1076,19 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `kind` | string | yes |  |
 | `name` | string | yes |  |
 | `tunable` | boolean | yes |  |
+
+### PasswordChangeRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `current_password` | string | yes |  |
+| `new_password` | string | yes |  |
+
+### PasswordResetRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `new_password` | string | yes |  |
 
 ### PnlRowView
 
@@ -1188,6 +1275,12 @@ The browser's ``PushSubscription.toJSON()`` plus its user agent.
 | `end` | string \| null | no |  |
 | `start` | string \| null | no |  |
 
+### RecoveryCodesView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `recovery_codes` | list[string] | yes |  |
+
 ### RiskAdjustmentView
 
 One order the risk policy clipped or dropped.
@@ -1213,6 +1306,10 @@ Portfolio construction limits applied between ``strategy.decide`` and the broker
 | `max_weight_per_asset_class` | dict[str, number] | no |  |
 | `max_weight_per_ticker` | number | no |  |
 | `min_order_notional` | number | no |  |
+
+### Role
+
+Type: "viewer" \| "trader" \| "admin"
 
 ### RuleTemplateView
 
@@ -1581,6 +1678,33 @@ What this server lets the Studio do.
 | `winner_expected_return` | number \| null | no |  |
 | `winner_strategy_id` | string \| null | no |  |
 
+### TokenCreateRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `expires_in_days` | integer \| null | no |  |
+| `name` | string | yes |  |
+| `scopes` | list[[ApiScope](#apiscope)] | yes |  |
+
+### TokenCreatedView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `info` | [TokenView](#tokenview) | yes |  |
+| `token` | string | yes |  |
+
+### TokenView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `created_at` | string | yes |  |
+| `expires_at` | string \| null | yes |  |
+| `id` | string | yes |  |
+| `last_used_at` | string \| null | yes |  |
+| `name` | string | yes |  |
+| `revoked_at` | string \| null | yes |  |
+| `scopes` | list[[ApiScope](#apiscope)] | yes |  |
+
 ### TradeStatsView
 
 Trade-level statistics of a backtest (``backtest.trades.TradeStats``). Win/loss figures are over closed round trips; ``None`` marks an unbounded ratio (no losing trades).
@@ -1618,6 +1742,37 @@ One round trip (a lot, or part of one, from buy to sell or to the end).
 | `qty` | number | yes |  |
 | `return_pct` | number \| null | yes |  |
 | `ticker` | string | yes |  |
+
+### UserCreateRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `display_name` | string | yes |  |
+| `email` | string | yes |  |
+| `password` | string | yes |  |
+| `role` | [Role](#role) | yes |  |
+
+### UserUpdateRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `role` | [Role](#role) \| null | no |  |
+| `status` | "active" \| "disabled" \| null | no |  |
+
+### UserView
+
+Identity and status only. Admins never see holdings here.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `created_at` | string | yes |  |
+| `display_name` | string | yes |  |
+| `email` | string \| null | yes |  |
+| `id` | string | yes |  |
+| `last_login_at` | string \| null | yes |  |
+| `mfa_enrolled` | boolean | yes |  |
+| `role` | [Role](#role) | yes |  |
+| `status` | "active" \| "disabled" | yes |  |
 
 ### ValidateRequest
 

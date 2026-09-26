@@ -58,7 +58,7 @@ API_ROUTERS: list[APIRouter] = [
     signals.router,
 ]
 
-#: Routers that always need the bearer token, even for reads on loopback.
+#: Routers that always need a principal, even for reads on loopback.
 TOKEN_ROUTERS: list[APIRouter] = [auth.router]
 
 #: Routers that run their own auth dependency instead of :func:`authorize`
@@ -67,8 +67,9 @@ STREAM_ROUTERS: list[APIRouter] = [
     jobs.events_router,
 ]
 
-#: Routers that stay open (liveness and readiness probes).
-PUBLIC_ROUTERS: list[APIRouter] = [health.router, schedule.probes_router]
+#: Routers that stay open (liveness and readiness probes, and sign-in, which
+#: checks its own credentials).
+PUBLIC_ROUTERS: list[APIRouter] = [health.router, schedule.probes_router, auth.public_router]
 
 #: ``GET /metrics``: the scrape token or a loopback peer (``authorize_metrics``).
 METRICS_ROUTERS: list[APIRouter] = [schedule.metrics_router]
