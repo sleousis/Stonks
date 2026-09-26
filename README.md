@@ -16,6 +16,15 @@ uv run stonks db info
 
 See [`docs/architecture.md`](docs/architecture.md) and the per-block documents under [`docs/blocks/`](docs/blocks/).
 
+## API docs
+
+Generated from the code, published on every push to `main`:
+
+- Site: <https://sleousis.github.io/Stonks/> ([REST, Swagger UI](https://sleousis.github.io/Stonks/rest.html), [MCP tools](https://sleousis.github.io/Stonks/mcp.html))
+- Markdown: [`docs/api/rest.md`](docs/api/rest.md) and [`docs/api/mcp-tools.md`](docs/api/mcp-tools.md)
+
+A running `stonks serve` also serves live Swagger UI at `/docs` (ReDoc at `/redoc`, spec at `/openapi.json`). Use "Authorize" with `STONKS_API_TOKEN` for non-GET calls.
+
 ## Testing
 
 ```bash

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stonks REST API</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.33.0/swagger-ui.css"
+        integrity="sha384-Ov4/wv3j2bmct8cDc5X4ngJZohVPzEmc6uDPH8WeljUxO5vtoykvMEfbu9Vh6RaW"
+        crossorigin="anonymous">
+  <style>
+    body { margin: 0; background: #fff; font-family: system-ui, sans-serif; }
+    nav { display: flex; gap: 16px; padding: 12px 16px; border-bottom: 1px solid #d1d9e0; }
+    nav a { color: #0969da; text-decoration: none; }
+  </style>
+</head>
+<body>
+<nav><a href="./">Docs home</a><a href="redoc.html">ReDoc</a><a href="mcp.html">MCP tools</a></nav>
+<div id="swagger-ui"></div>
+<script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.33.0/swagger-ui-bundle.js"
+        integrity="sha384-YDALVcy8kj8yltLBVi1vBiBAUqdxvus673gM8XKwiy6aDUJFXivF/KCufekjYbVf"
+        crossorigin="anonymous"></script>
+<script>
+  // Static docs: there is no API behind this page, so "Try it out" is off.
+  window.ui = SwaggerUIBundle({
+    url: "./openapi.json",
+    dom_id: "#swagger-ui",
+    deepLinking: true,
+    supportedSubmitMethods: [],
+  });
+</script>
+</body>
+</html>

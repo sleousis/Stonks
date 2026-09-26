@@ -30,6 +30,9 @@ uv run stonks registry show <id>
 uv run stonks registry promote <id>
 uv run stonks registry retire <id>
 uv run stonks tick [--dry-run] [--as-of YYYY-MM-DD] [--tickers AAPL.US,MSFT.US]
+uv run python -m stonks.api.openapi   # regenerate web/openapi.json after changing routes/models
+uv run python -m stonks.api.docs      # regenerate docs/api/rest.md from web/openapi.json
+uv run python -m stonks.mcp.docs      # regenerate docs/api/mcp-tools.{json,md} after changing MCP tools
 ```
 
 ## Working rules (enforced)
