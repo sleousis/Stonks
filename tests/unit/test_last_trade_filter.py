@@ -119,10 +119,10 @@ def test_inner_signals_are_memoized_per_bar(lake):
 
 def test_fit_forgets_memoized_inner_signals(lake):
     f = _filter()
-    f.estimate_return("X.US", day(9), lake)
+    f.estimate_return("X.US", day(8), lake)
     calls = f.inner.calls
     f.fit(None)
-    f.estimate_return("X.US", day(9), lake)
+    f.estimate_return("X.US", day(8), lake)
     assert f.inner.calls - calls > len(CLOSES) // 2
 
 
