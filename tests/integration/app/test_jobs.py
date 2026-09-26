@@ -229,3 +229,20 @@ def _wait_for_status(store: JobStore, job_id: str, status: str, timeout: float =
             return
         time.sleep(0.01)
     raise AssertionError(f"job {job_id} never reached {status}")
+
+
+def test_job_errors_are_scrubbed_of_credentials(store):
+    runner = JobRunner(store, max_workers=1, secrets=lambda: ["hunter2"])
+
+    def leaky(params: dict, ctx: JobContext) -> None:
+        raise RuntimeError("GET https://vendor.test/eod?api_token=abc123 failed; key hunter2")
+
+    runner.register("leaky", leaky)
+    try:
+        done = runner.wait(runner.submit("leaky", {}).id, timeout=10)
+    finally:
+        runner.shutdown()
+    assert done.status == "failed"
+    assert "abc123" not in done.error
+    assert "hunter2" not in done.error
+    assert "RuntimeError" in done.error

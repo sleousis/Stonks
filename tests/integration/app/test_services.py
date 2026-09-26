@@ -392,3 +392,15 @@ def test_lab_run_job(services):
     assert [r["test_id"] for r in done.result["survival_reports"]] == ["oos"]
     sid = done.result["registered_strategy_id"]
     assert services.strategies.get(sid).status == "shadow"
+
+
+def test_services_scrub_configured_secrets_from_job_errors(settings, seeded):
+    from stonks.app.context import AppContext
+    from stonks.app.services import Services
+
+    settings.sources.eodhd.api_key = "vendor-key-xyz"
+    svc = Services.create(AppContext(settings))
+    assert "vendor-key-xyz" in list(svc.runner.secrets())
+    from tests.integration.app.conftest import API_TOKEN
+
+    assert API_TOKEN in list(svc.runner.secrets())

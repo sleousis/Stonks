@@ -27,6 +27,12 @@ def default_strategy_sources() -> list[StrategySource]:
     return [PackageStrategySource("stonks.strategies.examples", name="examples")]
 
 
+def _configured_secrets(context: AppContext) -> list[str]:
+    s = context.settings
+    values = [s.sources.eodhd.api_key, s.api.token.get_secret_value() if s.api.token else None]
+    return [v for v in values if v]
+
+
 class JobService:
     """Transport-facing view of the job runner."""
 
@@ -81,7 +87,9 @@ class Services:
     ) -> Services:
         settings = context.settings
         runner = JobRunner(
-            JobStore(settings.state.path), max_workers=settings.api.max_concurrent_jobs
+            JobStore(settings.state.path),
+            max_workers=settings.api.max_concurrent_jobs,
+            secrets=lambda: _configured_secrets(context),
         )
         catalog = CatalogService(
             sources=list(strategy_sources)

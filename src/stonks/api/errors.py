@@ -18,6 +18,7 @@ from stonks.app.errors import (
     NotFoundError,
     ValidationError,
 )
+from stonks.ingest.redact import redact_secrets
 from stonks.logging import get_logger
 
 PROBLEM_MEDIA_TYPE = "application/problem+json"
@@ -100,6 +101,7 @@ def install_error_handlers(app: FastAPI) -> None:
         _log.error(
             "api.unhandled_error",
             path=request.url.path,
+            error=redact_secrets(str(exc)),
             error_type=type(exc).__name__,
         )
         return problem(request, 500, detail="internal server error")

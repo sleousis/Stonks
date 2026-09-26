@@ -39,7 +39,7 @@ import json
 import threading
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass
@@ -52,6 +52,7 @@ from pydantic import BaseModel
 from stonks.app.errors import AppError, ConflictError, NotFoundError, ValidationError
 from stonks.app.pagination import Page
 from stonks.app.serialize import to_jsonable
+from stonks.ingest.redact import format_exception, redact_secrets
 from stonks.logging import get_logger
 from stonks.store.state import SqliteState
 
@@ -217,8 +218,17 @@ class _Registration:
 
 
 class JobRunner:
-    def __init__(self, store: JobStore, max_workers: int = 2) -> None:
+    def __init__(
+        self,
+        store: JobStore,
+        max_workers: int = 2,
+        *,
+        secrets: Callable[[], Iterable[str]] = tuple,
+    ) -> None:
+        """``secrets`` returns credential values scrubbed from every stored
+        and logged job error (on top of generic ``token=...`` patterns)."""
         self._store = store
+        self.secrets = secrets
         self._executor = ThreadPoolExecutor(
             max_workers=max_workers, thread_name_prefix="stonks-job"
         )
@@ -303,12 +313,14 @@ class JobRunner:
             try:
                 result = reg.handler(params, JobContext(job_id=job_id, _store=self._store))
             except AppError as exc:
-                log.warning("job.failed", error=str(exc), error_type=type(exc).__name__)
-                self._store.finish(job_id, "failed", error=str(exc))
+                message = redact_secrets(str(exc), self.secrets())
+                log.warning("job.failed", error=message, error_type=type(exc).__name__)
+                self._store.finish(job_id, "failed", error=message)
                 return
             except Exception as exc:
-                log.error("job.crashed", error=str(exc), error_type=type(exc).__name__)
-                self._store.finish(job_id, "failed", error=f"{type(exc).__name__}: {exc}")
+                message = format_exception(exc, self.secrets())
+                log.error("job.crashed", error=message, error_type=type(exc).__name__)
+                self._store.finish(job_id, "failed", error=message)
                 return
             try:
                 self._store.finish(job_id, "succeeded", result=result)
