@@ -180,3 +180,30 @@ def test_benchmark_option_defaults_to_config():
     assert _req().benchmark is None
     assert _req(benchmark="QQQ.US").benchmark == "QQQ.US"
     assert _req(benchmark="none").benchmark == "none"
+
+
+# ---- preset options: the promotion preset's MCPT --------------------------------
+
+
+def test_mcpt_options_default_to_200_permutations_and_accept_auto_retune():
+    from stonks.app.lab import McptOptions
+
+    assert McptOptions().n_permutations == 200
+    assert McptOptions(retune="auto").retune == "auto"
+    with pytest.raises(ValidationError):
+        McptOptions(retune="sometimes")
+
+
+def test_promotion_preset_gives_mcpt_200_permutations_and_auto_retune():
+    expected = {"n_permutations": 200, "retune": "auto"}
+    assert _req(register_strategy=True).survival_options("mcpt") == expected
+    assert _req(preset="promotion").survival_options("mcpt") == expected
+    # explicit test lists carry no preset options
+    assert _req(survival_tests=["mcpt"]).survival_options("mcpt") is None
+
+
+def test_request_options_override_preset_options():
+    req = _req(preset="promotion", mcpt={"retune": False})
+    assert req.survival_options("mcpt") == {"n_permutations": 200, "retune": False}
+    req = _req(preset="promotion", test_options={"mcpt": {"n_permutations": 20}})
+    assert req.survival_options("mcpt") == {"n_permutations": 20, "retune": "auto"}

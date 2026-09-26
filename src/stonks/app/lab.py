@@ -181,11 +181,13 @@ class McptOptions(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    n_permutations: int = Field(default=50, ge=1, le=1_000)
+    n_permutations: int = Field(default=200, ge=1, le=1_000)
     max_p_value: float = Field(default=0.05, gt=0, le=1)
     metric: Literal["profit_factor", "sharpe", "final_return", "cagr"] = "profit_factor"
-    #: Re-tune on every permutation (Masters); costs ``(n + 1) * budget`` backtests.
-    retune: bool = False
+    #: Re-tune on every permutation (Masters); costs ``(n + 1) * budget``
+    #: backtests. ``"auto"`` re-tunes only a strategy with a non-trivial
+    #: ``fit`` (the promotion preset's choice).
+    retune: bool | Literal["auto"] = False
     seed: int | None = 17
 
 
@@ -366,15 +368,28 @@ class LabRunOptions(BaseModel):
         default = "promotion" if self.registers else "quick"
         return resolve_suite(tests, preset=self.preset, default=default)
 
+    def options_preset(self) -> str | None:
+        """The preset whose test options apply: ``preset`` when named, else
+        the default suite's (``promotion`` when registering, else
+        ``quick``) unless explicit ``survival_tests`` replaced it."""
+        if self.preset:
+            return self.preset
+        if self.survival_tests:
+            return None
+        return "promotion" if self.registers else "quick"
+
     def survival_options(self, name: str) -> dict[str, Any] | None:
-        """Registry options for survival test ``name``: the ``walk_forward``
-        / ``mcpt`` fields, then ``test_options`` (legacy names mapped) over
-        them. ``None`` when the request sets none."""
-        options: dict[str, Any] = {}
+        """Registry options for survival test ``name``: the preset's
+        options (``PRESET_OPTIONS``, see :meth:`options_preset`), then the
+        ``walk_forward`` / ``mcpt`` fields (the values they set), then
+        ``test_options`` (legacy names mapped). ``None`` when nothing sets
+        any."""
+        preset = self.options_preset()
+        options = survival_registry.preset_options(preset).get(name, {}) if preset else {}
         if name == "walk_forward" and self.walk_forward is not None:
             options["config"] = self.walk_forward
         if name == "mcpt" and self.mcpt is not None:
-            options.update(self.mcpt.model_dump())
+            options.update(self.mcpt.model_dump(exclude_unset=True))
         for key, value in (self.test_options or {}).items():
             if _LEGACY_TEST_NAMES.get(key, key) == name:
                 options.update(value)

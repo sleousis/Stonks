@@ -1239,9 +1239,13 @@ def lab_run(
     mcpt_retune: bool = typer.Option(
         False, "--mcpt-retune", help="permutation test re-tuning on each permuted train window"
     ),
-    mcpt_permutations: int = typer.Option(50, "--mcpt-permutations", min=1),
-    mcpt_max_p: float = typer.Option(0.05, "--mcpt-max-p", min=0.0001, max=1.0),
-    mcpt_seed: int = typer.Option(17, "--mcpt-seed"),
+    mcpt_permutations: int | None = typer.Option(
+        None, "--mcpt-permutations", min=1, help="default 200"
+    ),
+    mcpt_max_p: float | None = typer.Option(
+        None, "--mcpt-max-p", min=0.0001, max=1.0, help="default 0.05"
+    ),
+    mcpt_seed: int | None = typer.Option(None, "--mcpt-seed", help="default 17"),
     walk_forward: bool = typer.Option(False, "--walk-forward", help="add walk-forward test"),
     wf_splits: int | None = typer.Option(
         None, "--wf-splits", min=1, help="default [lab.walk_forward].n_splits"
@@ -1312,6 +1316,17 @@ def lab_run(
         registers=register_if_passes,
     )
     test_options = _parse_test_options(test_option)
+    # only what was passed: the rest comes from the preset or the test
+    mcpt_set: dict[str, Any] = {
+        k: v
+        for k, v in {
+            "n_permutations": mcpt_permutations,
+            "max_p_value": mcpt_max_p,
+            "seed": mcpt_seed,
+            "retune": True if mcpt_retune else False if mcpt else None,
+        }.items()
+        if v is not None
+    }
 
     settings = _settings()
     universe = _parse_tickers(tickers) or list(settings.production.universe)
@@ -1347,16 +1362,9 @@ def lab_run(
                 if "walk_forward" in suite
                 else None
             ),
-            mcpt=(
-                McptOptions(
-                    n_permutations=mcpt_permutations,
-                    max_p_value=mcpt_max_p,
-                    retune=mcpt_retune,
-                    seed=mcpt_seed,
-                )
-                if "mcpt" in suite
-                else None
-            ),
+            # the preset's test options apply unless --tests replaced its suite
+            preset=None if tests else preset or ("promotion" if register_if_passes else "quick"),
+            mcpt=McptOptions(**mcpt_set) if "mcpt" in suite and mcpt_set else None,
             register_if_passes=register_if_passes,
             cost_model=_cost_model_option(cost_model),  # type: ignore[arg-type]
             hypothesis=hypothesis,

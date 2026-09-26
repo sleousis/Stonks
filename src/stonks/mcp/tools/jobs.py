@@ -82,11 +82,13 @@ class WalkForwardOptions(_Options):
 class McptOptions(_Options):
     """Settings of the ``permutation`` (Monte-Carlo permutation) survival test."""
 
-    n_permutations: int | None = Field(default=None, description="1..1000 (default 50)")
+    n_permutations: int | None = Field(default=None, description="1..1000 (default 200)")
     max_p_value: float | None = Field(default=None, description="pass threshold (default 0.05)")
     metric: Literal["profit_factor", "sharpe", "final_return", "cagr"] | None = None
-    retune: bool | None = Field(
-        default=None, description="re-tune on every permutation: (n + 1) x budget backtests"
+    retune: bool | Literal["auto"] | None = Field(
+        default=None,
+        description="re-tune on every permutation: (n + 1) x budget backtests; 'auto' re-tunes "
+        "only strategies with a non-trivial fit (the promotion preset's default)",
     )
     seed: int | None = None
 

@@ -185,3 +185,17 @@ def test_resolve_suite_prefers_explicit_tests_over_preset():
     assert registry.resolve_suite(["drift"], preset="promotion") == ["drift"]
     assert registry.resolve_suite(None, preset="quick") == ["oos", "period_stability"]
     assert registry.resolve_suite(None, preset=None, default="quick") == ["oos", "period_stability"]
+
+
+def test_preset_options_are_valid_for_their_tests():
+    assert registry.preset_options("promotion") == {
+        "mcpt": {"n_permutations": 200, "retune": "auto"}
+    }
+    assert registry.preset_options("quick") == {}
+    for name in registry.preset_names():
+        for test_id, options in registry.preset_options(name).items():
+            assert test_id in registry.SUITE_PRESETS[name]
+            registry.build_survival_test(test_id, options)
+    # callers get a copy, never the table itself
+    registry.preset_options("promotion")["mcpt"]["retune"] = False
+    assert registry.preset_options("promotion")["mcpt"]["retune"] == "auto"
