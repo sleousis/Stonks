@@ -21,3 +21,7 @@ htmlcov/
 dist/
 build/
 .claude/worktrees/
+
+# End-to-end test output (traces, axe report, server log)
+test-results/
+.e2e-stack/

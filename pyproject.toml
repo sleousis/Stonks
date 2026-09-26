@@ -42,10 +42,12 @@ packages = ["src/stonks"]
 
 [dependency-groups]
 dev = [
+    "axe-playwright-python>=0.1.8",
     "httpx2>=2.13.1",
     "pyright>=1.1.414",
     "pytest>=8.3",
     "pytest-cov>=5.0",
+    "pytest-playwright>=0.9.0",
     "pytest-socket>=0.8.1",
     "pytest-xdist>=3.8.0",
     "ruff>=0.7",
@@ -58,6 +60,7 @@ testpaths = ["tests"]
 addopts = "-ra --strict-markers --allow-hosts=127.0.0.1,::1,localhost"
 markers = [
     "live: tests that hit real external APIs (gated by STONKS_RUN_LIVE_TESTS=1)",
+    "e2e: browser journeys over a seeded stack (opt in with -m e2e; see docs/testing.md)",
 ]
 # TT-14: a leaked SQLite connection fails the run. The warning surfaces when
 # the connection is garbage collected, as an unraisable exception.

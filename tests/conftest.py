@@ -51,10 +51,6 @@ def enable_network_for_live_tests(items) -> None:
             item.add_marker(pytest.mark.enable_socket)
 
 
-def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    enable_network_for_live_tests(items)
-
-
 @pytest.fixture
 def lake(tmp_path: Path) -> Iterator[DuckDBLake]:
     """An empty, migrated lake in the test's temp folder (TT-09). A test
@@ -65,7 +61,13 @@ def lake(tmp_path: Path) -> Iterator[DuckDBLake]:
     db.close()
 
 
+# Test-run switches, not app settings: they must survive the isolation.
+_TEST_SWITCHES = frozenset({"STONKS_UPDATE_GOLDEN", "STONKS_RUN_LIVE_TESTS"})
+
+
 def _is_isolated_var(name: str) -> bool:
+    if name in _TEST_SWITCHES:
+        return False
     return name.startswith(("STONKS_", "ALPACA_")) or name == "EODHD_API_KEY"
 
 
@@ -82,3 +84,18 @@ def _isolate_environment(request: pytest.FixtureRequest, monkeypatch: pytest.Mon
     # (Patched on the module, not through STONKS_LAB_MAX_WORKERS, which the
     # isolation above must strip like every STONKS_ variable.)
     monkeypatch.setattr("stonks.lab.parallel.default_max_workers", lambda: 1)
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Live tests get the network back (TT-05). Browser journeys (``e2e``)
+    run only when the marker expression names them (``-m e2e``), so the
+    default run stays fast and needs no browser."""
+    enable_network_for_live_tests(items)
+    if "e2e" in (config.option.markexpr or ""):
+        return
+    selected, deselected = [], []
+    for item in items:
+        (deselected if item.get_closest_marker("e2e") else selected).append(item)
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+        items[:] = selected
