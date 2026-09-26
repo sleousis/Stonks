@@ -99,13 +99,15 @@ Every tool carries MCP annotations (`readOnlyHint`, `destructiveHint`,
 | `list_studio_templates`, `get_rule_schema` | `GET /api/studio/templates`, `GET /api/studio/schema` |
 | `list_drafts`, `get_draft` | `GET /api/studio/drafts[/{id}]` |
 | `validate_rule_spec` (saves nothing) | `POST /api/studio/spec/validate` |
+| `list_connections` (your broker connections; never credentials) | `GET /api/connections` |
+| `get_connection_accounts` (external accounts and linked portfolios) | `GET /api/connections/{id}/accounts` |
 
 List-shaped responses come back as `{"items": [...]}`.
 
 `wait_for_job` returns `{"timed_out", "job", "result"}`. Once the job
 succeeded, `result` is the typed result from `/api/lab/backtests/{id}/result`,
-`/api/lab/runs/{id}/result`, `/api/ingest/jobs/{id}/result` or
-`/api/ticks/jobs/{id}/result` (by job kind). Studio jobs have no typed route,
+`/api/lab/runs/{id}/result`, `/api/lab/signal-ic/{id}/result`,
+`/api/ingest/jobs/{id}/result` or `/api/ticks/jobs/{id}/result` (by job kind). Studio jobs have no typed route,
 so their `result` is the job's own. Otherwise `result` is `null`.
 
 **Jobs and draft writes** (not destructive, not idempotent; research data only,
@@ -115,6 +117,7 @@ never orders):
 |------|-------|
 | `run_backtest` (`cost_model`: `zero` / `realistic` preset, or flat `slippage_bps` / `fee_per_trade`) | `POST /api/lab/backtests` |
 | `run_lab` (`walk_forward` and `mcpt` option blocks, with `walk_forward` / `permutation` in `survival_tests`) | `POST /api/lab/runs` |
+| `run_signal_ic` (IC, ICIR, decay, quantile spread, turnover of `estimate_return`; 10+ tickers) | `POST /api/lab/signal-ic` |
 | `run_ingest` (also `openWorld`: calls market-data vendors) | `POST /api/ingest/runs` |
 | `create_draft` | `POST /api/studio/drafts` |
 | `validate_draft` (smoke run; a code draft's Python runs in the API) | `POST /api/studio/drafts/{id}/validate` |
@@ -136,6 +139,10 @@ given).
 | `register_draft` (lands in shadow; not idempotent) | `POST /api/studio/drafts/{id}/register` |
 | `enable_draft`, `disable_draft` (active / back to shadow) | `POST /api/studio/drafts/{id}/{enable,disable}` |
 | `run_tick` (not idempotent) | `POST /api/ticks` |
+| `sync_connection` (idempotent, `openWorld`: reads from the broker, read-only there) | `POST /api/connections/{id}/sync` |
+
+Connecting, linking and removing a broker are console-only: they carry
+credentials (and, once login lands, a fresh second factor).
 
 Code drafts (`kind: "code"`) run Python inside the API server. The API answers
 403 unless `[api] allow_code_strategies = true`; the Studio tools pass that
@@ -155,9 +162,9 @@ Resource: `stonks://portfolio/summary` (cash, total value, positions).
   `kind: "alpaca"` with `paper: true`. A non-paper Alpaca broker is refused
   whatever `allow_live` says. So is any other or unreadable answer, including
   the route failing. Live ticks belong in the CLI or UI.
-- Every id put into a URL path (strategy, tick, job, draft) is validated
-  (letters, digits and `_ . : @ + -` only), so a crafted id cannot redirect a
-  request to another route.
+- Every id put into a URL path (strategy, tick, job, draft, connection) is
+  validated (letters, digits and `_ . : @ + -` only), so a crafted id cannot
+  redirect a request to another route.
 - No tool changes broker settings or configuration, or enables live trading.
 - The token is only sent as a bearer header. Tool output and errors are
   redacted, and logs go to stderr (stdout carries the MCP protocol).

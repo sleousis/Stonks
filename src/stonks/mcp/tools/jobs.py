@@ -46,6 +46,7 @@ RESULT_ROUTES: dict[str, str] = {
     "lab_run": "/api/lab/runs/{id}/result",
     "ingest": "/api/ingest/jobs/{id}/result",
     "tick": "/api/ticks/jobs/{id}/result",
+    "signal_ic": "/api/lab/signal-ic/{id}/result",
 }
 
 
@@ -230,6 +231,47 @@ def register(t: ToolContext) -> None:
         )
         return await queue_lab_run(t, "/api/lab/runs", body, confirm)
 
+    @server.tool(annotations=JOB)
+    async def run_signal_ic(
+        universe: Tickers,
+        start: IsoDate,
+        end: IsoDate,
+        strategy_id: Annotated[
+            str | None, Field(description="registered strategy id (or use class_path)")
+        ] = None,
+        class_path: Annotated[
+            str | None, Field(description="catalog class path, e.g. pkg.mod:Class")
+        ] = None,
+        params: Annotated[
+            dict[str, Any] | None, Field(description="strategy params (with class_path)")
+        ] = None,
+        interval: str = "1d",
+        horizons: Annotated[
+            list[int] | None,
+            Field(description="forward-return horizons in bars; default [1, 5, 21]"),
+        ] = None,
+        every_bars: Annotated[int, Field(ge=1, description="score every N bars")] = 5,
+        n_quantiles: Annotated[int, Field(ge=2, le=20)] = 5,
+    ) -> dict[str, Any]:
+        """Queue a signal IC analysis: does the strategy's estimate_return rank
+        future returns across the universe? Reports mean IC, ICIR, HAC t-stat
+        and quantile spread per horizon, plus turnover and the IC estimate.
+        Needs at least 10 tickers (else n/a). Returns the job; use wait_for_job
+        for the result. Research only: writes nothing."""
+        body = drop_none(
+            {
+                "strategy": strategy_ref(strategy_id, class_path, params),
+                "universe": universe,
+                "start": iso(start),
+                "end": iso(end),
+                "interval": interval,
+                "horizons": horizons,
+                "every_bars": every_bars,
+                "n_quantiles": n_quantiles,
+            }
+        )
+        return await t.post("/api/lab/signal-ic", body)
+
     @server.tool(annotations=JOB_OPEN_WORLD)
     async def run_ingest(
         kind: Literal["prices", "intraday", "fundamentals", "metadata"],
@@ -266,7 +308,7 @@ def register(t: ToolContext) -> None:
         """Poll a job until it finishes or the timeout passes. Returns
         {"timed_out": bool, "job": {...}, "result": {...} | null}: once the job
         succeeded, "result" is its typed result (BacktestResult, LabRunView,
-        ingest or tick result); otherwise null and the job carries its error."""
+        SignalICView, ingest or tick result); otherwise null and the job carries its error."""
         jid = seg(job_id)
         deadline = time.monotonic() + min(timeout_seconds, max_wait)
         while True:
