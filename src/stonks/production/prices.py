@@ -15,6 +15,7 @@ from datetime import date, timedelta
 
 import pandas as pd
 
+from stonks.core.timeutil import day_start
 from stonks.core.types import Order
 from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
@@ -70,6 +71,45 @@ def load_prices(
             if not pd.isna(row.volume):
                 volumes[row.ticker] = float(row.volume)
     return PriceBook(prices=prices, fresh=frozenset(fresh), volumes=volumes)
+
+
+_HISTORY_COLUMNS = ["open", "high", "low", "close", "volume"]
+
+
+def load_history(
+    lake: DuckDBLake, tickers: Sequence[str], as_of: date, *, bars: int = 260
+) -> dict[str, pd.DataFrame]:
+    """The last ``bars`` daily bars at or before ``as_of`` per ticker, in one
+    query: a date-indexed frame (oldest first) of adjusted
+    ``open, high, low, close, volume``. OHLC are scaled by
+    ``adj_close / close`` (raw where either is missing). Tickers without
+    bars are absent."""
+    if not tickers or bars < 1:
+        return {}
+    df = lake.sql(
+        """
+        SELECT ticker, CAST(timestamp AS DATE) AS date,
+               open, high, low, close, adj_close, volume
+          FROM (
+            SELECT *, row_number() OVER (PARTITION BY ticker ORDER BY timestamp DESC) AS rn
+              FROM bars
+             WHERE interval = '1d' AND ticker = ANY(?) AND timestamp < ?
+          )
+         WHERE rn <= ?
+         ORDER BY ticker, timestamp
+        """,
+        [sorted(set(tickers)), day_start(as_of + timedelta(days=1)), bars],
+    )
+    if df.empty:
+        return {}
+    factor = (df["adj_close"] / df["close"]).where(df["close"] > 0).fillna(1.0)
+    for col in ("open", "high", "low", "close"):
+        df[col] = df[col] * factor
+    df["date"] = pd.to_datetime(df["date"])
+    return {
+        str(ticker): group.set_index("date")[_HISTORY_COLUMNS].rename_axis("date")
+        for ticker, group in df.groupby("ticker", sort=True)
+    }
 
 
 def drop_stale_buys(
