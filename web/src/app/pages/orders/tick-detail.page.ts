@@ -15,14 +15,19 @@ import { formatDateTime, formatDuration, formatPercent } from '../../core/format
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
+import { SideTag } from '../../shared/ui/side-tag';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { FILL_COLUMNS } from './fills.page';
 import { OrdersTable } from './orders-table';
 import { humanize, tickNotes, tickOutcome } from './tick-summary';
 
+/** Fills shown on a run's page; the fills page has the rest. */
+export const TICK_FILLS_LIMIT = 200;
+
 /**
- * One tick: what it decided (winner or exit), what the risk policy changed,
- * the orders and fills it produced, and how each shadow strategy fared.
+ * One trading run (tick): what it decided (winner or exit), what the risk
+ * policy changed, the orders and fills it produced, and how each shadow
+ * strategy fared.
  */
 @Component({
   selector: 'app-tick-detail-page',
@@ -33,29 +38,37 @@ import { humanize, tickNotes, tickOutcome } from './tick-summary';
     TableCell,
     StatTile,
     StatusPill,
+    SideTag,
     OrdersTable,
     LoadingState,
     EmptyState,
     ErrorState,
   ],
   template: `
-    <a class="back-link" routerLink="/orders/ticks"><span aria-hidden="true">←</span> All ticks</a>
+    <a class="back-link" routerLink="/orders/ticks"
+      ><span aria-hidden="true">←</span> All trading runs</a
+    >
 
     @if (tick.error(); as err) {
-      <app-error-state title="Could not load this tick" [error]="err" (retry)="tick.reload()" />
+      <app-error-state
+        title="Could not load this trading run"
+        [error]="err"
+        (retry)="tick.reload()"
+      />
     } @else if (!tick.hasValue()) {
-      <app-loading-state label="Loading tick" [rows]="6" />
+      <app-loading-state label="Loading the trading run" [rows]="6" />
     } @else {
       @let t = tick.value();
       @let s = t.summary;
       <div class="detail-head">
-        <h2>
-          Tick <span class="mono">{{ t.id }}</span>
-        </h2>
+        <h2>Trading run of {{ dateTime(t.started_at) }}</h2>
         <app-status-pill [status]="t.status" />
+        <span class="run-id muted"
+          >Run id <span class="mono">{{ t.id }}</span></span
+        >
       </div>
 
-      <section class="tiles" aria-label="Tick summary">
+      <section class="tiles" aria-label="Trading run summary">
         <app-stat-tile
           label="Started"
           [value]="dateTime(t.started_at)"
@@ -131,7 +144,11 @@ import { humanize, tickNotes, tickOutcome } from './tick-summary';
               [columns]="riskColumns"
               [rowKey]="riskKey"
               [pageSize]="0"
-            />
+            >
+              <ng-template appCell="side" [appCellOf]="risks()" let-r>
+                <app-side-tag [side]="r.side" />
+              </ng-template>
+            </app-data-table>
           }
         </section>
 
@@ -143,11 +160,11 @@ import { humanize, tickNotes, tickOutcome } from './tick-summary';
           @if (t.orders.length === 0) {
             <app-empty-state
               title="No orders"
-              message="Dry runs and ticks without a winner place no orders."
+              message="Dry runs and runs without a winner place no orders."
             />
           } @else {
             <app-orders-table
-              caption="Orders this tick placed"
+              caption="Orders this trading run placed"
               [rows]="t.orders"
               [pageSize]="25"
               [linkTicks]="false"
@@ -158,21 +175,33 @@ import { humanize, tickNotes, tickOutcome } from './tick-summary';
         <section class="panel span-6" aria-labelledby="tick-fills-title">
           <div class="panel-head">
             <h2 id="tick-fills-title">Fills</h2>
+            @if (fillsCapped(); as cap) {
+              <a class="cell-link" routerLink="/orders/fills" [queryParams]="{ tick: t.id }"
+                ><span class="num">{{ cap.shown }} of {{ cap.total }}</span
+                >, see all fills</a
+              >
+            }
           </div>
           @if (fills.error(); as err) {
             <app-error-state title="Could not load fills" [error]="err" (retry)="fills.reload()" />
           } @else if (!fills.hasValue()) {
             <app-loading-state label="Loading fills" [rows]="3" />
           } @else if (fills.value().items.length === 0) {
-            <app-empty-state title="No fills" message="Nothing was filled on this tick." />
+            <app-empty-state title="No fills" message="Nothing was filled on this run." />
           } @else {
             <app-data-table
-              caption="Fills for this tick"
+              caption="Fills for this trading run"
               [rows]="fills.value().items"
               [columns]="fillColumns"
               [rowKey]="fillKey"
               [pageSize]="25"
-            />
+            >
+              <ng-template appCell="order_client_id" [appCellOf]="fills.value().items" let-f>
+                <a class="cell-link" [routerLink]="['/trades/orders', f.order_client_id]"
+                  >View order</a
+                >
+              </ng-template>
+            </app-data-table>
           }
         </section>
 
@@ -187,7 +216,7 @@ import { humanize, tickNotes, tickOutcome } from './tick-summary';
           @if (shadows().length === 0) {
             <app-empty-state
               title="No shadow strategies evaluated"
-              message="Shadow strategies run after real ticks (not dry runs) when shadow mode is on."
+              message="Shadow strategies run after real trading runs (not dry runs) when shadow mode is on."
             />
           } @else {
             <app-data-table
@@ -211,6 +240,11 @@ import { humanize, tickNotes, tickOutcome } from './tick-summary';
   `,
   styleUrl: './orders-views.scss',
   styles: `
+    .run-id {
+      flex-basis: 100%;
+      font-size: var(--text-xs);
+      overflow-wrap: anywhere;
+    }
     .reason-text {
       display: block;
       margin-top: 2px;
@@ -233,8 +267,14 @@ export class TickDetailPage {
     loader: ({ params }) => this.ticksApi.get(params.id),
   });
   protected readonly fills = resource({
-    params: () => ({ tick_id: this.id(), limit: 200 }),
+    params: () => ({ tick_id: this.id(), limit: TICK_FILLS_LIMIT }),
     loader: ({ params }) => this.ordersApi.fills(params),
+  });
+  /** The run's total fill count when this page shows only the first ones. */
+  protected readonly fillsCapped = computed(() => {
+    if (!this.fills.hasValue()) return null;
+    const page = this.fills.value();
+    return page.total > page.items.length ? { shown: page.items.length, total: page.total } : null;
   });
 
   private readonly summary = computed(() =>
