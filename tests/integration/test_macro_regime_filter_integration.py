@@ -70,6 +70,7 @@ def _wrapped_buy_and_hold() -> MacroRegimeFilter:
             "transform": "change",
             "threshold": 0.5,
             "publication_lag_days": 30,
+            "observation_stamp": "period_end",
         }
     )
 

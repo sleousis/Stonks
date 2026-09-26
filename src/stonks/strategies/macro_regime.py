@@ -5,8 +5,10 @@ Wraps an inner :class:`Strategy` and reads one series from
 the latest observation (``transform="level"``) or its change over
 ``change_periods`` observations (``transform="change"``), using only
 observations already published on ``as_of``: macro data describes a date
-but is released later, so an observation counts from
-``observation_date + publication_lag_days``.
+but is released after that period is over, so an observation counts from
+the end of its period plus ``publication_lag_days`` (``observation_stamp``
+says whether ``observation_date`` marks the period's start, as EODHD's
+annual series do, or its end).
 
 Risk off when the signal is above (or below) ``threshold``. In risk off
 ``estimate_return`` returns ``None`` for every ticker and ``decide`` exits:
@@ -127,10 +129,20 @@ class MacroRegimeFilter(BaseStrategy):
             ParameterSpec(
                 name="publication_lag_days",
                 kind="int",
-                default=90,
+                default=180,
                 bounds=(0, 730),
                 tunable=False,
-                description="Days after observation_date an observation is public.",
+                description="Days after its period ends an observation is public. "
+                "Annual series (World Bank style) appear months into the next year.",
+            ),
+            ParameterSpec(
+                name="observation_stamp",
+                kind="categorical",
+                default="period_start",
+                bounds=["period_start", "period_end"],
+                tunable=False,
+                description="Which end of its period observation_date marks. EODHD "
+                "stamps full-year 2023 as 2023-01-01 ('period_start').",
             ),
             ParameterSpec(
                 name="max_staleness_days",
@@ -231,6 +243,7 @@ class MacroRegimeFilter(BaseStrategy):
             self.params["country_iso"],
             self.params["indicator"],
             publication_lag_days=int(self.params["publication_lag_days"]),
+            stamped_at=self.params["observation_stamp"],
         )
         return [
             (obs, avail, float(v))

@@ -763,20 +763,41 @@ class DuckDBLake:
         *,
         as_of: Any = None,
         publication_lag_days: int = 0,
+        stamped_at: str = "period_start",
     ) -> pd.DataFrame:
         """One macro indicator series (``observation_date, period, value,
         available_date``), oldest first.
 
-        Macro data is published well after the date it describes, so
-        ``available_date = observation_date + publication_lag_days``. With
-        ``as_of`` set, only observations available on or before it are
-        returned.
+        An observation can't be known before the period it describes is
+        over, and is published some time after that:
+        ``available_date = period end + publication_lag_days``.
+
+        ``stamped_at`` says which end of its period ``observation_date``
+        marks. The default, ``"period_start"``, matches vendors (EODHD) that
+        stamp full-year 2023 as 2023-01-01; the period end is then derived
+        from ``period`` (``annual`` / ``quarterly`` / ``monthly``, and a
+        year when unknown, the conservative choice). ``"period_end"`` uses
+        ``observation_date`` itself. With ``as_of`` set, only observations
+        available on or before it are returned.
         """
         lag = _non_negative_lag(publication_lag_days)
+        if stamped_at == "period_start":
+            period_end = """CASE period
+                    WHEN 'monthly' THEN observation_date + INTERVAL 1 MONTH
+                    WHEN 'quarterly' THEN observation_date + INTERVAL 3 MONTH
+                    ELSE observation_date + INTERVAL 1 YEAR
+                END - INTERVAL 1 DAY"""
+        elif stamped_at == "period_end":
+            period_end = "observation_date"
+        else:
+            raise ValueError(
+                f"stamped_at must be 'period_start' or 'period_end', got {stamped_at!r}"
+            )
         df = self.con.execute(
-            """
+            f"""
             SELECT observation_date, period, value,
-                   CAST(observation_date + to_days(CAST(? AS INTEGER)) AS DATE) AS available_date
+                   CAST(CAST({period_end} AS DATE) + to_days(CAST(? AS INTEGER)) AS DATE)
+                       AS available_date
               FROM macro_indicators
              WHERE country_iso = ? AND indicator = ?
              ORDER BY observation_date

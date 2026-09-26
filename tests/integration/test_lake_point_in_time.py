@@ -4,7 +4,7 @@ unknown) and macro observations visible after a publication lag."""
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 import pytest
@@ -164,7 +164,7 @@ def macro_lake(lake):
 
 
 def test_macro_series_returns_one_series_oldest_first(macro_lake):
-    df = macro_lake.get_macro_series("USA", "unemployment_total_percent")
+    df = macro_lake.get_macro_series("USA", "unemployment_total_percent", stamped_at="period_end")
     assert list(df["observation_date"]) == [date(2022, 12, 31), date(2023, 12, 31)]
     assert list(df["value"]) == [3.6, 3.9]
     assert list(df["available_date"]) == list(df["observation_date"])
@@ -172,11 +172,19 @@ def test_macro_series_returns_one_series_oldest_first(macro_lake):
 
 def test_macro_series_as_of_respects_publication_lag(macro_lake):
     df = macro_lake.get_macro_series(
-        "USA", "unemployment_total_percent", as_of=date(2024, 3, 29), publication_lag_days=90
+        "USA",
+        "unemployment_total_percent",
+        as_of=date(2024, 3, 29),
+        publication_lag_days=90,
+        stamped_at="period_end",
     )
     assert list(df["observation_date"]) == [date(2022, 12, 31)]
     df = macro_lake.get_macro_series(
-        "USA", "unemployment_total_percent", as_of=date(2024, 3, 30), publication_lag_days=90
+        "USA",
+        "unemployment_total_percent",
+        as_of=date(2024, 3, 30),
+        publication_lag_days=90,
+        stamped_at="period_end",
     )
     assert list(df["observation_date"]) == [date(2022, 12, 31), date(2023, 12, 31)]
     assert df["available_date"].iloc[-1] == date(2024, 3, 30)
@@ -200,3 +208,41 @@ def test_shares_outstanding_history_oldest_first(lake):
 def test_macro_series_rejects_negative_lag(macro_lake):
     with pytest.raises(ValueError, match="lag"):
         macro_lake.get_macro_series("USA", "x", publication_lag_days=-1)
+
+
+@pytest.mark.parametrize(
+    ("observation_date", "period", "period_end"),
+    [
+        (date(2023, 1, 1), "annual", date(2023, 12, 31)),
+        (date(2023, 4, 1), "quarterly", date(2023, 6, 30)),
+        (date(2024, 2, 1), "monthly", date(2024, 2, 29)),
+        (date(2023, 1, 1), None, date(2023, 12, 31)),  # unknown cadence: assume a year
+    ],
+)
+def test_period_start_stamps_are_available_only_after_the_period_ends(
+    lake, observation_date, period, period_end
+):
+    """Vendors like EODHD stamp an annual observation at the start of the
+    year it describes (2023-01-01 = full-year 2023). It can't be known
+    before that year is over, whatever the publication lag."""
+    lake.upsert_macro_indicators(
+        pd.DataFrame(
+            [
+                {
+                    "country_iso": "USA",
+                    "indicator": "x",
+                    "observation_date": observation_date,
+                    "period": period,
+                    "country_name": "United States",
+                    "value": 1.0,
+                }
+            ]
+        )
+    )
+    df = lake.get_macro_series("USA", "x", publication_lag_days=10)  # default: period_start
+    assert df["available_date"].iloc[0] == period_end + timedelta(days=10)
+
+
+def test_macro_series_rejects_unknown_stamp(macro_lake):
+    with pytest.raises(ValueError, match="stamped_at"):
+        macro_lake.get_macro_series("USA", "x", stamped_at="middle")

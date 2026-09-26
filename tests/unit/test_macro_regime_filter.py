@@ -56,6 +56,7 @@ def _filter(**overrides):
         "threshold": 0.5,
         "risk_off_when": "above",
         "publication_lag_days": 90,
+        "observation_stamp": "period_end",
         **overrides,
     }
     return MacroRegimeFilter(params)
@@ -116,6 +117,29 @@ def test_publication_lag_hides_fresh_observations(lake):
     assert f.is_risk_off(date(2024, 3, 30), lake) is True
     assert f.is_risk_off(datetime(2024, 3, 29, 23, 59), lake) is False
     assert _filter(publication_lag_days=0).is_risk_off(date(2023, 12, 31), lake) is True
+
+
+def test_defaults_assume_period_start_stamps_and_a_long_publication_lag():
+    spec = {p.name: p.default for p in MacroRegimeFilter.parameter_spec()}
+    assert spec["observation_stamp"] == "period_start"
+    assert spec["publication_lag_days"] >= 90
+
+
+def test_period_start_stamp_waits_for_the_period_to_end(tmp_path):
+    """EODHD stamps full-year 2023 as 2023-01-01: it must stay invisible
+    until 2023 is over plus the publication lag."""
+    db = DuckDBLake(tmp_path / "start.duckdb")
+    db.migrate()
+    try:
+        _macro(db, [(date(2022, 1, 1), 3.6), (date(2023, 1, 1), 4.6)])
+        f = _filter(observation_stamp="period_start", publication_lag_days=60)
+        # 2023-12-31 + 60 days = 2024-02-29
+        assert f.is_risk_off(date(2024, 2, 28), db) is False
+        assert f.is_risk_off(date(2024, 2, 29), db) is True
+        # a naive observation_date + lag reading would flip in April 2023
+        assert f.is_risk_off(date(2023, 6, 1), db) is False
+    finally:
+        db.close()
 
 
 def test_level_transform_and_below_direction(lake):
