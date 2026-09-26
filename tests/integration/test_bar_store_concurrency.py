@@ -106,7 +106,7 @@ def test_readers_never_block_or_see_partial_writes_while_a_writer_upserts(tmp_pa
     for p in readers:
         p.join(timeout=60)
     assert writer.exitcode == 0
-    for reads, errors, seen in results:
+    for reads, errors, _seen in results:
         assert errors == []
         assert reads > 0
     # the readers really ran alongside the writer
