@@ -130,3 +130,14 @@ def test_rejects_bad_options():
         build_survival_test("event_study", {"alpha": 0.5})
     with pytest.raises(ValueError):
         build_survival_test("event_study", {"horizons": []})
+
+
+def test_bootstrap_block_covers_the_events_inside_one_horizon():
+    from stonks.lab.survival.event_study import event_block_length
+
+    # 400 events over 100 bars: an h=5 window holds about 20 overlapping events
+    assert event_block_length(5, n_events=400, n_bars=100) == pytest.approx(20.0)
+    # sparse events barely overlap: blocks of one event
+    assert event_block_length(5, n_events=10, n_bars=1000) == 1.0
+    # never longer than the sample
+    assert event_block_length(60, n_events=30, n_bars=40) == 30.0

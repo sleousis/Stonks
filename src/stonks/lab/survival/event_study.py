@@ -16,9 +16,11 @@ negative one in single stocks.)
 - **Baseline drift** is the mean of the same forward return over every
   bar of the tickers that produced events, in the same window.
 - **Excess** is the event mean minus the baseline. Its uncertainty comes
-  from a stationary block bootstrap of the time-ordered events (mean
-  block ``h`` events, since forward returns over ``h`` bars overlap;
-  ``n_boot`` draws, seeded): a percentile ``1 - alpha`` interval and the
+  from a stationary block bootstrap of the time-ordered events
+  (``n_boot`` draws, seeded). Forward returns over ``h`` bars overlap, so
+  a block covers the events expected inside one ``h``-bar span,
+  ``h * n_events / n_bars`` (at least one event; see
+  :func:`event_block_length`): a percentile ``1 - alpha`` interval and the
   one-sided p-value ``(#{excess* <= 0} + 1) / (n_boot + 1)``.
 - **Holding horizon**: ``holding_bars`` when set, else the average bars
   held of the strategy's backtest trade ledger over the window, else 20.
@@ -172,11 +174,21 @@ def _holding_bars(
     return DEFAULT_HOLDING_BARS, "default"
 
 
+def event_block_length(horizon: int, *, n_events: int, n_bars: int) -> float:
+    """Mean bootstrap block, in events: how many events fall inside one
+    ``horizon``-bar span on average (their forward returns overlap),
+    clipped to ``[1, n_events]``."""
+    if n_events < 1 or n_bars < 1:
+        return 1.0
+    return float(min(max(horizon * n_events / n_bars, 1.0), n_events))
+
+
 def _horizon_stats(
     events: np.ndarray,
     baseline: np.ndarray,
     horizon: int,
     *,
+    n_bars: int,
     n_boot: int,
     alpha: float,
     rng: np.random.Generator,
@@ -189,7 +201,8 @@ def _horizon_stats(
         return HorizonEvents(
             horizon, int(ev.size), mean, base_mean, mean - base_mean, math.nan, math.nan, 1.0
         )
-    idx = stationary_bootstrap_indices(ev.size, min(float(horizon), ev.size), n_boot, rng)
+    block = event_block_length(horizon, n_events=int(ev.size), n_bars=n_bars)
+    idx = stationary_bootstrap_indices(ev.size, block, n_boot, rng)
     boot = ev[idx].mean(axis=1) - base_mean
     lo, hi = np.quantile(boot, [alpha / 2, 1 - alpha / 2])
     mean = float(ev.mean())
@@ -255,7 +268,11 @@ def event_study(
             )
             base = np.concatenate([frame[t].to_numpy(float)[own_rows[t]] for t in with_events])
             rng = np.random.default_rng([seed, g_index, h])
-            stats.append(_horizon_stats(values, base, h, n_boot=n_boot, alpha=alpha, rng=rng))
+            stats.append(
+                _horizon_stats(
+                    values, base, h, n_bars=len(timeline), n_boot=n_boot, alpha=alpha, rng=rng
+                )
+            )
         groups.append(EventGroup(name, len(members), g_events, stats))
     return EventStudyResult(
         strategy_id=str(getattr(strategy, "id", type(strategy).__name__)),
