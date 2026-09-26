@@ -18,7 +18,7 @@ export type ChartValueFormat = 'money' | 'percent' | 'number';
 export interface ChartSeries {
   id: string;
   label: string;
-  /** `area` fills below the line (drawdown, underwater curves). */
+  /** `area` fills between the line and zero (drawdown, underwater curves). */
   kind: 'line' | 'area';
   color: ChartColor;
   /** 0 = main pane; 1 = a lower pane (e.g. drawdown under equity). */

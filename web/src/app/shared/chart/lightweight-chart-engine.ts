@@ -1,7 +1,7 @@
 // The only file that imports the charting library (TradingView Lightweight
 // Charts, Apache-2.0). Everything else talks to the ChartEngine interface.
 import {
-  AreaSeries,
+  BaselineSeries,
   type IChartApi,
   type ISeriesApi,
   LineSeries,
@@ -69,11 +69,14 @@ class LightweightChart implements ChartHandle {
   private specs: readonly ChartSeries[] = [];
   private theme: ChartTheme;
   private listener: ((r: CrosshairReadout) => void) | null = null;
+  private readonly resizeObserver: ResizeObserver | null = null;
+  private frame = 0;
 
   constructor(container: HTMLElement, theme: ChartTheme) {
     this.theme = theme;
     this.chart = createChart(container, {
-      autoSize: true,
+      width: container.clientWidth,
+      height: container.clientHeight,
       handleScroll: {
         vertTouchDrag: false,
         horzTouchDrag: true,
@@ -88,6 +91,17 @@ class LightweightChart implements ChartHandle {
     });
     this.applyTheme();
     this.chart.subscribeCrosshairMove((p) => this.emitCrosshair(p));
+    // Our own observer (instead of `autoSize`) resizes on the next frame, which
+    // avoids "ResizeObserver loop" errors when the layout reflows.
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => {
+        cancelAnimationFrame(this.frame);
+        this.frame = requestAnimationFrame(() =>
+          this.chart.resize(container.clientWidth, container.clientHeight),
+        );
+      });
+      this.resizeObserver.observe(container);
+    }
   }
 
   setSeries(specs: readonly ChartSeries[]): void {
@@ -104,7 +118,11 @@ class LightweightChart implements ChartHandle {
       if (!api) {
         api =
           spec.kind === 'area'
-            ? this.chart.addSeries(AreaSeries, {}, spec.pane ?? 0)
+            ? this.chart.addSeries(
+                BaselineSeries,
+                { baseValue: { type: 'price', price: 0 } },
+                spec.pane ?? 0,
+              )
             : this.chart.addSeries(LineSeries, {}, spec.pane ?? 0);
         this.series.set(spec.id, api);
       }
@@ -139,6 +157,8 @@ class LightweightChart implements ChartHandle {
 
   destroy(): void {
     this.listener = null;
+    this.resizeObserver?.disconnect();
+    cancelAnimationFrame(this.frame);
     this.chart.remove();
   }
 
@@ -159,13 +179,15 @@ class LightweightChart implements ChartHandle {
   private seriesStyle(spec: ChartSeries) {
     const color = this.theme.colors[spec.color];
     if (spec.kind === 'area') {
+      // Filled between the line and zero (drawdown hangs below the zero line).
       return {
-        lineColor: color,
-        topColor: withAlpha(color, 0.05),
-        bottomColor: withAlpha(color, 0.35),
+        topLineColor: color,
+        topFillColor1: withAlpha(color, 0.35),
+        topFillColor2: withAlpha(color, 0.05),
+        bottomLineColor: color,
+        bottomFillColor1: withAlpha(color, 0.05),
+        bottomFillColor2: withAlpha(color, 0.35),
         lineWidth: 1 as const,
-        // Drawdown is ≤ 0: fill from the zero line down.
-        invertFilledArea: true,
       };
     }
     return { color, lineWidth: 2 as const };

@@ -27,6 +27,7 @@ export type StatTone = 'gain' | 'loss' | '';
     :host {
       display: block;
       min-width: 0;
+      container-type: inline-size;
       padding: var(--space-3) var(--space-4);
       background: var(--color-surface);
       border: 1px solid var(--color-border);
@@ -41,14 +42,13 @@ export type StatTone = 'gain' | 'loss' | '';
     }
     .value {
       margin-top: var(--space-1);
-      font-size: var(--text-xl);
+      /* Shrinks on narrow tiles instead of breaking a figure across lines. */
+      font-size: clamp(var(--text-md), 14cqi, var(--text-xl));
       font-weight: var(--weight-semibold);
       letter-spacing: -0.01em;
-      overflow-wrap: anywhere;
-      white-space: normal;
     }
     :host(.featured) .value {
-      font-size: var(--text-2xl);
+      font-size: clamp(var(--text-lg), 12cqi, var(--text-2xl));
     }
     .detail {
       margin-top: var(--space-1);
