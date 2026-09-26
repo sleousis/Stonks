@@ -1080,6 +1080,7 @@ class DuckDBLake:
         "contract_size",
         "contract_unit",
     )
+    _DEFI_TVL_COLS = ("chain", "observation_date", "tvl_usd", "source")
     _MACRO_INDICATOR_COLS = (
         "country_iso",
         "indicator",
@@ -1247,6 +1248,45 @@ class DuckDBLake:
             cols=self._MACRO_INDICATOR_COLS,
             pk=("country_iso", "indicator", "observation_date"),
         )
+
+    def upsert_defi_tvl(self, df: pd.DataFrame) -> int:
+        """Upsert daily DeFi TVL observations keyed by
+        ``(chain, observation_date)``. Last write wins (``source`` and
+        ``tvl_usd`` both), so re-running a fetch is a no-op and vendor
+        revisions land in place."""
+        return self._upsert(
+            df,
+            table="defi_tvl",
+            cols=self._DEFI_TVL_COLS,
+            pk=("chain", "observation_date"),
+        )
+
+    def get_defi_tvl(
+        self,
+        chain: str,
+        *,
+        start: Any = None,
+        end: Any = None,
+    ) -> pd.DataFrame:
+        """One chain's TVL series (``observation_date, tvl_usd, source``),
+        oldest first, optionally limited to ``start <= observation_date <=
+        end`` (dates or datetimes' calendar days). ``observation_date`` is
+        the vendor stamp, not a publication date: callers add their own
+        availability lag."""
+        clauses = ["chain = ?"]
+        params: list[Any] = [chain]
+        if start is not None:
+            clauses.append("observation_date >= ?")
+            params.append(_as_calendar_date(start))
+        if end is not None:
+            clauses.append("observation_date <= ?")
+            params.append(_as_calendar_date(end))
+        df = self.con.execute(
+            "SELECT observation_date, tvl_usd, source FROM defi_tvl"
+            f" WHERE {' AND '.join(clauses)} ORDER BY observation_date",
+            params,
+        ).fetchdf()
+        return _dates_to_python(df, ("observation_date",))
 
     def upsert_institutional_holders(self, df: pd.DataFrame) -> int:
         return self._upsert_on_change(
