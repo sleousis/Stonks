@@ -146,23 +146,23 @@ def _store_alerts(settings) -> None:
 
 def test_alerts_are_listed_newest_first_and_paginated(client, settings):
     _store_alerts(settings)
-    page = client.get("/api/alerts", params={"limit": 2}).json()
+    page = client.get("/api/alerts", headers=AUTH, params={"limit": 2}).json()
     assert page["total"] == 4
     assert [a["title"] for a in page["items"]] == ["alert 3", "alert 2"]
     first = page["items"][0]
     assert first["context"] == {"i": 3}
     assert "test-token-123" not in json.dumps(page)
     assert set(first) >= {"id", "level", "title", "message", "context", "created_at"}
-    nxt = client.get("/api/alerts", params={"limit": 2, "offset": 2}).json()
+    nxt = client.get("/api/alerts", headers=AUTH, params={"limit": 2, "offset": 2}).json()
     assert [a["title"] for a in nxt["items"]] == ["alert 1", "alert 0"]
 
 
 def test_alerts_filter_by_level(client, settings):
     _store_alerts(settings)
-    page = client.get("/api/alerts", params={"level": "warning"}).json()
+    page = client.get("/api/alerts", headers=AUTH, params={"level": "warning"}).json()
     assert page["total"] == 2
     assert {a["level"] for a in page["items"]} == {"warning"}
-    assert client.get("/api/alerts", params={"level": "bogus"}).status_code == 422
+    assert client.get("/api/alerts", headers=AUTH, params={"level": "bogus"}).status_code == 422
 
 
 def test_alerts_need_token_remotely(remote):
