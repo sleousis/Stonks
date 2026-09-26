@@ -16,7 +16,7 @@ Auth: reads (`GET`) are open to loopback clients by default
 (`[api].open_reads_on_loopback`). Every other method needs
 `Authorization: Bearer $STONKS_API_TOKEN`.
 
-Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [connections](#connections-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [ticks](#ticks-endpoints)
+Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [connections](#connections-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [ticks](#ticks-endpoints)
 
 ## alerts endpoints
 
@@ -59,6 +59,16 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#broke
 | GET | `/api/connections/{connection_id}/accounts` | List Accounts | token, or open on loopback |  | list[[stonks__app__connections__BrokerAccountView](#stonks__app__connections__brokeraccountview)] |
 | POST | `/api/connections/{connection_id}/link` | Link Account | bearer token | [LinkAccountRequest](#linkaccountrequest) | [LinkResultView](#linkresultview) |
 | POST | `/api/connections/{connection_id}/sync` | Sync Connection | bearer token |  | [SyncResultView](#syncresultview) |
+
+## halts endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/halts` | List Halts | token, or open on loopback |  | list[[HaltView](#haltview)] |
+| POST | `/api/halts/kill` | Engage Kill Switch | bearer token | [KillSwitchRequest](#killswitchrequest) | [HaltView](#haltview) |
+| GET | `/api/halts/{halt_id}` | Get Halt | token, or open on loopback |  | [HaltView](#haltview) |
+| POST | `/api/halts/{halt_id}/clear` | Clear Halt | bearer token | [ClearHaltRequest](#clearhaltrequest) | [HaltView](#haltview) |
+| POST | `/api/halts/{halt_id}/resume` | Resume Kill Switch | bearer token | [ResumeRequest](#resumerequest) | [HaltView](#haltview) |
 
 ## health endpoints
 
@@ -358,6 +368,12 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `kind` | "simulated" \| "alpaca" | yes |  |
 | `paper` | boolean | yes |  |
 
+### ClearHaltRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `reason` | string | yes |  |
+
 ### ConnectWithKeysRequest
 
 API-key connect. ``fields`` are the provider's ``credential_fields`` (plus ``paper`` for brokers with a paper endpoint). They are write-only: never logged, stored only sealed, never returned.
@@ -609,6 +625,25 @@ Limits a paper-trading period must meet before ``stonks golive check`` passes (`
 | `status` | string | yes |  |
 | `strategy_id` | string | yes |  |
 
+### HaltView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `active` | boolean | yes |  |
+| `clear_reason` | string \| null | yes |  |
+| `cleared_at` | string \| null | yes |  |
+| `cleared_by` | string \| null | yes |  |
+| `expires_on` | date \| null | yes |  |
+| `halt` | "buys" \| "all" | yes |  |
+| `id` | integer | yes |  |
+| `kind` | "month_loss" \| "week_loss" \| "drawdown" \| "operational" \| "kill" | yes |  |
+| `portfolio_id` | string \| null | yes |  |
+| `reason` | string | yes |  |
+| `scope` | "global" \| "user" \| "portfolio" | yes |  |
+| `tripped_at` | string | yes |  |
+| `tripped_by` | string | yes |  |
+| `user_id` | string \| null | yes |  |
+
 ### Health
 
 | Field | Type | Required | Description |
@@ -761,6 +796,15 @@ One ``data:`` payload of the job event stream.
 | `progress` | number | yes |  |
 | `reason` | "timeout" \| "untracked" \| null | no |  |
 | `status` | "queued" \| "running" \| "succeeded" \| "failed" \| "cancelled" | yes |  |
+
+### KillSwitchRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `flatten` | boolean | no |  |
+| `portfolio_id` | string \| null | no |  |
+| `reason` | string | yes |  |
+| `scope` | "global" \| "user" \| "portfolio" | yes |  |
 
 ### LabRunRequest
 
@@ -1187,6 +1231,13 @@ The browser's ``PushSubscription.toJSON()`` plus its user agent.
 |-------|------|----------|-------------|
 | `end` | string \| null | no |  |
 | `start` | string \| null | no |  |
+
+### ResumeRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `confirmation` | string | yes |  |
+| `reason` | string | yes |  |
 
 ### RiskAdjustmentView
 

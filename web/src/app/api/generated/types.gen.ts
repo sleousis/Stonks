@@ -401,6 +401,16 @@ export type BrokerInfo = {
 };
 
 /**
+ * ClearHaltRequest
+ */
+export type ClearHaltRequest = {
+    /**
+     * Reason
+     */
+    reason: string;
+};
+
+/**
  * ConnectWithKeysRequest
  *
  * API-key connect. ``fields`` are the provider's ``credential_fields``
@@ -1090,6 +1100,68 @@ export type GoLiveReport = {
 };
 
 /**
+ * HaltView
+ */
+export type HaltView = {
+    /**
+     * Active
+     */
+    active: boolean;
+    /**
+     * Clear Reason
+     */
+    clear_reason: string | null;
+    /**
+     * Cleared At
+     */
+    cleared_at: string | null;
+    /**
+     * Cleared By
+     */
+    cleared_by: string | null;
+    /**
+     * Expires On
+     */
+    expires_on: string | null;
+    /**
+     * Halt
+     */
+    halt: 'buys' | 'all';
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Kind
+     */
+    kind: 'month_loss' | 'week_loss' | 'drawdown' | 'operational' | 'kill';
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string | null;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Scope
+     */
+    scope: 'global' | 'user' | 'portfolio';
+    /**
+     * Tripped At
+     */
+    tripped_at: string;
+    /**
+     * Tripped By
+     */
+    tripped_by: string;
+    /**
+     * User Id
+     */
+    user_id: string | null;
+};
+
+/**
  * Health
  */
 export type Health = {
@@ -1501,6 +1573,28 @@ export type JobEvent = {
      * Status
      */
     status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+};
+
+/**
+ * KillSwitchRequest
+ */
+export type KillSwitchRequest = {
+    /**
+     * Flatten
+     */
+    flatten?: boolean;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id?: string | null;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Scope
+     */
+    scope: 'global' | 'user' | 'portfolio';
 };
 
 /**
@@ -2609,6 +2703,20 @@ export type QuietHoursUpdate = {
      * Start
      */
     start?: string | null;
+};
+
+/**
+ * ResumeRequest
+ */
+export type ResumeRequest = {
+    /**
+     * Confirmation
+     */
+    confirmation: string;
+    /**
+     * Reason
+     */
+    reason: string;
 };
 
 /**
@@ -4783,6 +4891,235 @@ export type SyncConnectionResponses = {
 };
 
 export type SyncConnectionResponse = SyncConnectionResponses[keyof SyncConnectionResponses];
+
+export type ListHaltsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Include Cleared
+         *
+         * also cleared and expired halts
+         */
+        include_cleared?: boolean;
+    };
+    url: '/api/halts';
+};
+
+export type ListHaltsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListHaltsError = ListHaltsErrors[keyof ListHaltsErrors];
+
+export type ListHaltsResponses = {
+    /**
+     * Response Listhalts
+     *
+     * Successful Response
+     */
+    200: Array<HaltView>;
+};
+
+export type ListHaltsResponse = ListHaltsResponses[keyof ListHaltsResponses];
+
+export type EngageKillSwitchData = {
+    body: KillSwitchRequest;
+    path?: never;
+    query?: never;
+    url: '/api/halts/kill';
+};
+
+export type EngageKillSwitchErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type EngageKillSwitchError = EngageKillSwitchErrors[keyof EngageKillSwitchErrors];
+
+export type EngageKillSwitchResponses = {
+    /**
+     * Successful Response
+     */
+    201: HaltView;
+};
+
+export type EngageKillSwitchResponse = EngageKillSwitchResponses[keyof EngageKillSwitchResponses];
+
+export type GetHaltData = {
+    body?: never;
+    path: {
+        /**
+         * Halt Id
+         */
+        halt_id: number;
+    };
+    query?: never;
+    url: '/api/halts/{halt_id}';
+};
+
+export type GetHaltErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetHaltError = GetHaltErrors[keyof GetHaltErrors];
+
+export type GetHaltResponses = {
+    /**
+     * Successful Response
+     */
+    200: HaltView;
+};
+
+export type GetHaltResponse = GetHaltResponses[keyof GetHaltResponses];
+
+export type ClearHaltData = {
+    body: ClearHaltRequest;
+    path: {
+        /**
+         * Halt Id
+         */
+        halt_id: number;
+    };
+    query?: never;
+    url: '/api/halts/{halt_id}/clear';
+};
+
+export type ClearHaltErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ClearHaltError = ClearHaltErrors[keyof ClearHaltErrors];
+
+export type ClearHaltResponses = {
+    /**
+     * Successful Response
+     */
+    200: HaltView;
+};
+
+export type ClearHaltResponse = ClearHaltResponses[keyof ClearHaltResponses];
+
+export type ResumeKillSwitchData = {
+    body: ResumeRequest;
+    path: {
+        /**
+         * Halt Id
+         */
+        halt_id: number;
+    };
+    query?: never;
+    url: '/api/halts/{halt_id}/resume';
+};
+
+export type ResumeKillSwitchErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ResumeKillSwitchError = ResumeKillSwitchErrors[keyof ResumeKillSwitchErrors];
+
+export type ResumeKillSwitchResponses = {
+    /**
+     * Successful Response
+     */
+    200: HaltView;
+};
+
+export type ResumeKillSwitchResponse = ResumeKillSwitchResponses[keyof ResumeKillSwitchResponses];
 
 export type GetHealthData = {
     body?: never;

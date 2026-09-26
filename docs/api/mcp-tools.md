@@ -11,6 +11,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`create_draft`](#create_draft) | job | no |
 | [`disable_draft`](#disable_draft) | guarded | yes |
 | [`enable_draft`](#enable_draft) | guarded | yes |
+| [`engage_kill_switch`](#engage_kill_switch) | guarded | yes |
 | [`get_bars`](#get_bars) | read | no |
 | [`get_broker`](#get_broker) | read | no |
 | [`get_catalog`](#get_catalog) | read | no |
@@ -33,6 +34,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_cost_models`](#list_cost_models) | read | no |
 | [`list_drafts`](#list_drafts) | read | no |
 | [`list_fills`](#list_fills) | read | no |
+| [`list_halts`](#list_halts) | read | no |
 | [`list_ingest_runs`](#list_ingest_runs) | read | no |
 | [`list_jobs`](#list_jobs) | read | no |
 | [`list_orders`](#list_orders) | read | no |
@@ -275,6 +277,18 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `order_client_id` | string \| null | no | `null` |  |
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
+
+### `list_halts`
+
+Halts you can see, newest first: the kill switch, circuit-breaker
+trips (month loss, week loss, latched drawdown) and the operational
+halt. By default only those in force today.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `include_cleared` | boolean | no | `false` |  |
 
 ### `list_ingest_runs`
 
@@ -600,6 +614,22 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 | `reason` | string \| null | no | `null` | why (logged in the audit trail); required for demotions and overrides |
 | `override` | boolean | no | `false` | promote without a passing go-live check; needs a reason of at least 20 characters |
+
+### `engage_kill_switch`
+
+Stop new orders at once. Without confirm=true returns a preview
+and changes nothing. Resuming is done in the console or the CLI with
+a typed confirmation.
+
+Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `scope` | "global" \| "user" \| "portfolio" | yes |  | global: every portfolio (admins only); user: all of yours; portfolio: one of yours (give portfolio_id) |
+| `reason` | string | yes |  | audited |
+| `portfolio_id` | string \| null | no | `null` |  |
+| `flatten` | boolean | no | `false` | stop buys only; sells and exits still go through |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
 ### `lab_run_draft`
 

@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CancelJobData, CancelJobErrors, CancelJobResponses, CheckAuthData, CheckAuthErrors, CheckAuthResponses, CompleteConnectionPortalData, CompleteConnectionPortalErrors, CompleteConnectionPortalResponses, ConnectWithKeysData, ConnectWithKeysErrors, ConnectWithKeysResponses, CreateDraftData, CreateDraftErrors, CreateDraftResponses, CreatePushSubscriptionData, CreatePushSubscriptionErrors, CreatePushSubscriptionResponses, CreateStreamTokenData, CreateStreamTokenErrors, CreateStreamTokenResponses, DeleteConnectionData, DeleteConnectionErrors, DeleteConnectionResponses, DeleteDraftData, DeleteDraftErrors, DeleteDraftResponses, DeletePushSubscriptionData, DeletePushSubscriptionErrors, DeletePushSubscriptionResponses, DisableDraftData, DisableDraftErrors, DisableDraftResponses, EnableDraftData, EnableDraftErrors, EnableDraftResponses, GetAlpacaStatusData, GetAlpacaStatusErrors, GetAlpacaStatusResponses, GetBacktestResultData, GetBacktestResultErrors, GetBacktestResultResponses, GetBarsData, GetBarsErrors, GetBarsResponses, GetBrokerInfoData, GetBrokerInfoErrors, GetBrokerInfoResponses, GetConnectionData, GetConnectionErrors, GetConnectionResponses, GetDraftData, GetDraftErrors, GetDraftResponses, GetGoLiveReportData, GetGoLiveReportErrors, GetGoLiveReportResponses, GetHealthData, GetHealthReportData, GetHealthReportErrors, GetHealthReportResponses, GetHealthResponses, GetIngestResultData, GetIngestResultErrors, GetIngestResultResponses, GetJobData, GetJobErrors, GetJobResponses, GetLabRunResultData, GetLabRunResultErrors, GetLabRunResultResponses, GetLivenessData, GetLivenessErrors, GetLivenessResponses, GetNotificationPreferencesData, GetNotificationPreferencesErrors, GetNotificationPreferencesResponses, GetPnlData, GetPnlErrors, GetPnlResponses, GetPortfolioData, GetPortfolioErrors, GetPortfolioResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetRiskPolicyData, GetRiskPolicyErrors, GetRiskPolicyResponses, GetRuleSpecSchemaData, GetRuleSpecSchemaErrors, GetRuleSpecSchemaResponses, GetScheduleData, GetScheduleErrors, GetScheduleResponses, GetShadowPnlData, GetShadowPnlErrors, GetShadowPnlResponses, GetSignalIcResultData, GetSignalIcResultErrors, GetSignalIcResultResponses, GetStrategyData, GetStrategyErrors, GetStrategyHistoryData, GetStrategyHistoryErrors, GetStrategyHistoryResponses, GetStrategyResponses, GetStrategySummaryData, GetStrategySummaryErrors, GetStrategySummaryResponses, GetStudioCapabilitiesData, GetStudioCapabilitiesErrors, GetStudioCapabilitiesResponses, GetTickData, GetTickErrors, GetTickResponses, GetTickResultData, GetTickResultErrors, GetTickResultResponses, GetVapidKeyData, GetVapidKeyErrors, GetVapidKeyResponses, LinkConnectionAccountData, LinkConnectionAccountErrors, LinkConnectionAccountResponses, ListAlertsData, ListAlertsErrors, ListAlertsResponses, ListAssetClassesData, ListAssetClassesErrors, ListAssetClassesResponses, ListConnectionAccountsData, ListConnectionAccountsErrors, ListConnectionAccountsResponses, ListConnectionsData, ListConnectionsErrors, ListConnectionsResponses, ListCostModelsData, ListCostModelsErrors, ListCostModelsResponses, ListCoverageData, ListCoverageErrors, ListCoverageResponses, ListDataSourcesData, ListDataSourcesErrors, ListDataSourcesResponses, ListDraftsData, ListDraftsErrors, ListDraftsResponses, ListFillsData, ListFillsErrors, ListFillsResponses, ListIngestRunsData, ListIngestRunsErrors, ListIngestRunsResponses, ListInstrumentsData, ListInstrumentsErrors, ListInstrumentsResponses, ListIntervalsData, ListIntervalsErrors, ListIntervalsResponses, ListJobsData, ListJobsErrors, ListJobsResponses, ListNotificationsData, ListNotificationsErrors, ListNotificationsResponses, ListOrdersData, ListOrdersErrors, ListOrdersResponses, ListPortfolioSnapshotsData, ListPortfolioSnapshotsErrors, ListPortfolioSnapshotsResponses, ListProvidersData, ListProvidersErrors, ListProvidersResponses, ListPushSubscriptionsData, ListPushSubscriptionsErrors, ListPushSubscriptionsResponses, ListShadowDecisionsData, ListShadowDecisionsErrors, ListShadowDecisionsResponses, ListShadowPnlData, ListShadowPnlErrors, ListShadowPnlResponses, ListStrategiesData, ListStrategiesErrors, ListStrategiesResponses, ListStrategyClassesData, ListStrategyClassesErrors, ListStrategyClassesResponses, ListStudioTemplatesData, ListStudioTemplatesErrors, ListStudioTemplatesResponses, ListTicksData, ListTicksErrors, ListTicksResponses, MarkNotificationsReadData, MarkNotificationsReadErrors, MarkNotificationsReadResponses, PromoteStrategyData, PromoteStrategyErrors, PromoteStrategyResponses, RegisterDraftData, RegisterDraftErrors, RegisterDraftResponses, RetireStrategyData, RetireStrategyErrors, RetireStrategyResponses, RunScheduledJobNowData, RunScheduledJobNowErrors, RunScheduledJobNowResponses, SetNotificationWebhookData, SetNotificationWebhookErrors, SetNotificationWebhookResponses, SetQuietHoursData, SetQuietHoursErrors, SetQuietHoursResponses, ShadowStrategyData, ShadowStrategyErrors, ShadowStrategyResponses, StartBacktestData, StartBacktestErrors, StartBacktestResponses, StartConnectionPortalData, StartConnectionPortalErrors, StartConnectionPortalResponses, StartDraftBacktestData, StartDraftBacktestErrors, StartDraftBacktestResponses, StartDraftLabRunData, StartDraftLabRunErrors, StartDraftLabRunResponses, StartIngestData, StartIngestErrors, StartIngestResponses, StartLabRunData, StartLabRunErrors, StartLabRunResponses, StartSignalIcData, StartSignalIcErrors, StartSignalIcResponses, StartTickData, StartTickErrors, StartTickResponses, StreamJobEventsData, StreamJobEventsErrors, StreamJobEventsResponses, SyncConnectionData, SyncConnectionErrors, SyncConnectionResponses, UpdateDraftData, UpdateDraftErrors, UpdateDraftResponses, UpdateNotificationPreferencesData, UpdateNotificationPreferencesErrors, UpdateNotificationPreferencesResponses, ValidateDraftData, ValidateDraftErrors, ValidateDraftResponses, ValidateRuleSpecData, ValidateRuleSpecErrors, ValidateRuleSpecResponses } from './types.gen';
+import type { CancelJobData, CancelJobErrors, CancelJobResponses, CheckAuthData, CheckAuthErrors, CheckAuthResponses, ClearHaltData, ClearHaltErrors, ClearHaltResponses, CompleteConnectionPortalData, CompleteConnectionPortalErrors, CompleteConnectionPortalResponses, ConnectWithKeysData, ConnectWithKeysErrors, ConnectWithKeysResponses, CreateDraftData, CreateDraftErrors, CreateDraftResponses, CreatePushSubscriptionData, CreatePushSubscriptionErrors, CreatePushSubscriptionResponses, CreateStreamTokenData, CreateStreamTokenErrors, CreateStreamTokenResponses, DeleteConnectionData, DeleteConnectionErrors, DeleteConnectionResponses, DeleteDraftData, DeleteDraftErrors, DeleteDraftResponses, DeletePushSubscriptionData, DeletePushSubscriptionErrors, DeletePushSubscriptionResponses, DisableDraftData, DisableDraftErrors, DisableDraftResponses, EnableDraftData, EnableDraftErrors, EnableDraftResponses, EngageKillSwitchData, EngageKillSwitchErrors, EngageKillSwitchResponses, GetAlpacaStatusData, GetAlpacaStatusErrors, GetAlpacaStatusResponses, GetBacktestResultData, GetBacktestResultErrors, GetBacktestResultResponses, GetBarsData, GetBarsErrors, GetBarsResponses, GetBrokerInfoData, GetBrokerInfoErrors, GetBrokerInfoResponses, GetConnectionData, GetConnectionErrors, GetConnectionResponses, GetDraftData, GetDraftErrors, GetDraftResponses, GetGoLiveReportData, GetGoLiveReportErrors, GetGoLiveReportResponses, GetHaltData, GetHaltErrors, GetHaltResponses, GetHealthData, GetHealthReportData, GetHealthReportErrors, GetHealthReportResponses, GetHealthResponses, GetIngestResultData, GetIngestResultErrors, GetIngestResultResponses, GetJobData, GetJobErrors, GetJobResponses, GetLabRunResultData, GetLabRunResultErrors, GetLabRunResultResponses, GetLivenessData, GetLivenessErrors, GetLivenessResponses, GetNotificationPreferencesData, GetNotificationPreferencesErrors, GetNotificationPreferencesResponses, GetPnlData, GetPnlErrors, GetPnlResponses, GetPortfolioData, GetPortfolioErrors, GetPortfolioResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetRiskPolicyData, GetRiskPolicyErrors, GetRiskPolicyResponses, GetRuleSpecSchemaData, GetRuleSpecSchemaErrors, GetRuleSpecSchemaResponses, GetScheduleData, GetScheduleErrors, GetScheduleResponses, GetShadowPnlData, GetShadowPnlErrors, GetShadowPnlResponses, GetSignalIcResultData, GetSignalIcResultErrors, GetSignalIcResultResponses, GetStrategyData, GetStrategyErrors, GetStrategyHistoryData, GetStrategyHistoryErrors, GetStrategyHistoryResponses, GetStrategyResponses, GetStrategySummaryData, GetStrategySummaryErrors, GetStrategySummaryResponses, GetStudioCapabilitiesData, GetStudioCapabilitiesErrors, GetStudioCapabilitiesResponses, GetTickData, GetTickErrors, GetTickResponses, GetTickResultData, GetTickResultErrors, GetTickResultResponses, GetVapidKeyData, GetVapidKeyErrors, GetVapidKeyResponses, LinkConnectionAccountData, LinkConnectionAccountErrors, LinkConnectionAccountResponses, ListAlertsData, ListAlertsErrors, ListAlertsResponses, ListAssetClassesData, ListAssetClassesErrors, ListAssetClassesResponses, ListConnectionAccountsData, ListConnectionAccountsErrors, ListConnectionAccountsResponses, ListConnectionsData, ListConnectionsErrors, ListConnectionsResponses, ListCostModelsData, ListCostModelsErrors, ListCostModelsResponses, ListCoverageData, ListCoverageErrors, ListCoverageResponses, ListDataSourcesData, ListDataSourcesErrors, ListDataSourcesResponses, ListDraftsData, ListDraftsErrors, ListDraftsResponses, ListFillsData, ListFillsErrors, ListFillsResponses, ListHaltsData, ListHaltsErrors, ListHaltsResponses, ListIngestRunsData, ListIngestRunsErrors, ListIngestRunsResponses, ListInstrumentsData, ListInstrumentsErrors, ListInstrumentsResponses, ListIntervalsData, ListIntervalsErrors, ListIntervalsResponses, ListJobsData, ListJobsErrors, ListJobsResponses, ListNotificationsData, ListNotificationsErrors, ListNotificationsResponses, ListOrdersData, ListOrdersErrors, ListOrdersResponses, ListPortfolioSnapshotsData, ListPortfolioSnapshotsErrors, ListPortfolioSnapshotsResponses, ListProvidersData, ListProvidersErrors, ListProvidersResponses, ListPushSubscriptionsData, ListPushSubscriptionsErrors, ListPushSubscriptionsResponses, ListShadowDecisionsData, ListShadowDecisionsErrors, ListShadowDecisionsResponses, ListShadowPnlData, ListShadowPnlErrors, ListShadowPnlResponses, ListStrategiesData, ListStrategiesErrors, ListStrategiesResponses, ListStrategyClassesData, ListStrategyClassesErrors, ListStrategyClassesResponses, ListStudioTemplatesData, ListStudioTemplatesErrors, ListStudioTemplatesResponses, ListTicksData, ListTicksErrors, ListTicksResponses, MarkNotificationsReadData, MarkNotificationsReadErrors, MarkNotificationsReadResponses, PromoteStrategyData, PromoteStrategyErrors, PromoteStrategyResponses, RegisterDraftData, RegisterDraftErrors, RegisterDraftResponses, ResumeKillSwitchData, ResumeKillSwitchErrors, ResumeKillSwitchResponses, RetireStrategyData, RetireStrategyErrors, RetireStrategyResponses, RunScheduledJobNowData, RunScheduledJobNowErrors, RunScheduledJobNowResponses, SetNotificationWebhookData, SetNotificationWebhookErrors, SetNotificationWebhookResponses, SetQuietHoursData, SetQuietHoursErrors, SetQuietHoursResponses, ShadowStrategyData, ShadowStrategyErrors, ShadowStrategyResponses, StartBacktestData, StartBacktestErrors, StartBacktestResponses, StartConnectionPortalData, StartConnectionPortalErrors, StartConnectionPortalResponses, StartDraftBacktestData, StartDraftBacktestErrors, StartDraftBacktestResponses, StartDraftLabRunData, StartDraftLabRunErrors, StartDraftLabRunResponses, StartIngestData, StartIngestErrors, StartIngestResponses, StartLabRunData, StartLabRunErrors, StartLabRunResponses, StartSignalIcData, StartSignalIcErrors, StartSignalIcResponses, StartTickData, StartTickErrors, StartTickResponses, StreamJobEventsData, StreamJobEventsErrors, StreamJobEventsResponses, SyncConnectionData, SyncConnectionErrors, SyncConnectionResponses, UpdateDraftData, UpdateDraftErrors, UpdateDraftResponses, UpdateNotificationPreferencesData, UpdateNotificationPreferencesErrors, UpdateNotificationPreferencesResponses, ValidateDraftData, ValidateDraftErrors, ValidateDraftResponses, ValidateRuleSpecData, ValidateRuleSpecErrors, ValidateRuleSpecResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -219,6 +219,77 @@ export const syncConnection = <ThrowOnError extends boolean = false>(options: Op
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/connections/{connection_id}/sync',
     ...options
+});
+
+/**
+ * List Halts
+ *
+ * Halts you can see, newest first: global ones, your own and those of
+ * your portfolios. By default only those in force today.
+ */
+export const listHalts = <ThrowOnError extends boolean = false>(options?: Options<ListHaltsData, ThrowOnError>): RequestResult<ListHaltsResponses, ListHaltsErrors, ThrowOnError> => (options?.client ?? client).get<ListHaltsResponses, ListHaltsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/halts',
+    ...options
+});
+
+/**
+ * Engage Kill Switch
+ *
+ * Stop new orders: every portfolio (``global``, admins only), all of
+ * yours (``user``) or one of yours (``portfolio``). ``flatten`` stops buys
+ * only, so sells and exits still go through. Returns the open kill switch
+ * when one is already on at that scope.
+ */
+export const engageKillSwitch = <ThrowOnError extends boolean = false>(options: Options<EngageKillSwitchData, ThrowOnError>): RequestResult<EngageKillSwitchResponses, EngageKillSwitchErrors, ThrowOnError> => (options.client ?? client).post<EngageKillSwitchResponses, EngageKillSwitchErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/halts/kill',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get Halt
+ */
+export const getHalt = <ThrowOnError extends boolean = false>(options: Options<GetHaltData, ThrowOnError>): RequestResult<GetHaltResponses, GetHaltErrors, ThrowOnError> => (options.client ?? client).get<GetHaltResponses, GetHaltErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/halts/{halt_id}',
+    ...options
+});
+
+/**
+ * Clear Halt
+ *
+ * The logged reset of a circuit-breaker or operational halt (not the
+ * kill switch). A latched drawdown halt stays until this is called.
+ */
+export const clearHalt = <ThrowOnError extends boolean = false>(options: Options<ClearHaltData, ThrowOnError>): RequestResult<ClearHaltResponses, ClearHaltErrors, ThrowOnError> => (options.client ?? client).post<ClearHaltResponses, ClearHaltErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/halts/{halt_id}/clear',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Resume Kill Switch
+ *
+ * Turn a kill switch off. ``confirmation`` must be exactly
+ * ``RESUME TRADING``; the reason is audited.
+ */
+export const resumeKillSwitch = <ThrowOnError extends boolean = false>(options: Options<ResumeKillSwitchData, ThrowOnError>): RequestResult<ResumeKillSwitchResponses, ResumeKillSwitchErrors, ThrowOnError> => (options.client ?? client).post<ResumeKillSwitchResponses, ResumeKillSwitchErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/halts/{halt_id}/resume',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
