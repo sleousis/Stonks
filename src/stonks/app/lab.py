@@ -37,6 +37,7 @@ from stonks.lab.backtesting import run_backtest
 from stonks.lab.dataset import LabDataset, scoring_window
 from stonks.lab.objectives import CAGRObjective, FinalReturnObjective, SharpeObjective
 from stonks.lab.parallel import ParallelSettings
+from stonks.lab.preflight import PreflightError, PreflightReport
 from stonks.lab.runner import LabRunner, LabRunResult, costs_are_zero
 from stonks.lab.survival import registry as survival_registry
 from stonks.lab.survival.base import SurvivalSuite
@@ -363,6 +364,10 @@ class LabRunOptions(BaseModel):
     hypothesis: str | None = Field(default=None, max_length=4_000)
     #: How the strategy is expected to fail; recorded like ``hypothesis``.
     premortem: str | None = Field(default=None, max_length=4_000)
+    #: Run the BL-37 data preflight first; default ``[lab] preflight``.
+    preflight: bool | None = None
+    #: Treat preflight warnings as errors; default ``[lab] strict_preflight``.
+    strict_preflight: bool | None = None
 
     @property
     def registers(self) -> bool:
@@ -460,6 +465,40 @@ def check_embargo(window: Any, embargo_bars: int | None) -> None:
     )
 
 
+class PreflightIssueView(BaseModel):
+    #: e.g. ``missing_data``, ``late_start``, ``static_universe``.
+    code: str
+    severity: Literal["error", "warning"]
+    message: str
+    details: dict[str, Any] = {}
+
+
+class PreflightView(BaseModel):
+    """The BL-37 data preflight of a lab run. A run only starts with no
+    errors, so a result carries warnings (and ``ok`` true)."""
+
+    ok: bool
+    #: True when there was no lake to look at.
+    skipped: bool
+    issues: list[PreflightIssueView]
+
+    @classmethod
+    def of(cls, report: PreflightReport) -> PreflightView:
+        return cls(
+            ok=report.ok,
+            skipped=report.skipped,
+            issues=[
+                PreflightIssueView(
+                    code=i.code,
+                    severity=i.severity,
+                    message=i.message,
+                    details=to_jsonable(dict(i.details)),
+                )
+                for i in report.issues
+            ],
+        )
+
+
 class LabRunView(BaseModel):
     class_path: str
     best_params: dict[str, Any]
@@ -476,6 +515,8 @@ class LabRunView(BaseModel):
     #: The fitted strategy against its benchmark over the validation
     #: window; ``None`` when off or unpriced.
     benchmark: BenchmarkStatsView | None = None
+    #: The data preflight's warnings; ``None`` when it was turned off.
+    preflight: PreflightView | None = None
 
 
 @dataclass(frozen=True)
@@ -509,6 +550,7 @@ class LabExecution:
             n_trials_run=result.n_trials_run,
             n_trials_class=result.n_trials_class,
             benchmark=BenchmarkStatsView.of(self.benchmark) if self.benchmark else None,
+            preflight=PreflightView.of(result.preflight) if result.preflight else None,
         )
 
 
@@ -564,6 +606,12 @@ def execute_lab_run(
         budget=request.budget,
         ledger=ledger,
         settings=settings,
+        preflight=settings.lab.preflight if request.preflight is None else request.preflight,
+        strict_preflight=(
+            settings.lab.strict_preflight
+            if request.strict_preflight is None
+            else request.strict_preflight
+        ),
     )
     if progress is not None:
         progress.progress(0.05, "tuning")
@@ -584,13 +632,16 @@ def execute_lab_run(
         )
     except ValueError as exc:  # e.g. [lab] embargo_bars leaves no validation window
         raise ValidationError(str(exc)) from None
-    result = runner.run(
-        cls,
-        dataset,
-        fixed_params=fixed_params,
-        hypothesis=request.hypothesis,
-        premortem=request.premortem,
-    )
+    try:
+        result = runner.run(
+            cls,
+            dataset,
+            fixed_params=fixed_params,
+            hypothesis=request.hypothesis,
+            premortem=request.premortem,
+        )
+    except PreflightError as exc:  # the data can't support the run
+        raise ValidationError(str(exc)) from None
     benchmark = _validation_benchmark(result, dataset)
 
     registered: str | None = None

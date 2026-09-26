@@ -380,8 +380,30 @@ def ingest_fundamentals(
         lake.migrate()
         pipeline = build_ingest_pipeline(settings, source, lake)
         result = pipeline.run_fundamentals(ticker_list)
+        # BL-36: re-check the accounting identities of what just landed.
+        report = _audit(settings, lake, ticker_list)
 
     _print_result(result)
+    _print_audit(report)
+
+
+def _audit(settings: Settings, lake: DuckDBLake, tickers: list[str] | None) -> Any:
+    """Run the statement audit at the ``[audit]`` tolerances."""
+    from stonks.store.audit import audit_statements, build_checks
+
+    return audit_statements(lake, tickers, checks=build_checks(settings.audit.tolerances()))
+
+
+def _print_audit(report: Any) -> None:
+    if not report.counts:
+        console.print("statement audit: [green]no flags[/green]")
+        return
+    table = Table(title=f"statement audit: {report.n_flags} flag(s)")
+    for col in ("check", "flags"):
+        table.add_column(col)
+    for check_id, n in sorted(report.counts.items()):
+        table.add_row(check_id, str(n))
+    console.print(table)
 
 
 @ingest_app.command("metadata")
@@ -975,16 +997,18 @@ def health(
         False, "--notify/--no-notify", help="send an alert through [notify] when unhealthy"
     ),
 ) -> None:
-    """Check data freshness and stuck/failed runs. Exit code 1 when unhealthy,
-    so a scheduler can alert on it."""
-    from stonks.production.health import check_health, notify_unhealthy
+    """Check data freshness, stuck/failed runs and open risk halts. Stale data
+    or a stuck run opens the global operational halt (cleared by the next
+    healthy check). Exit code 1 when unhealthy, so a scheduler can alert."""
+    from stonks.production.halts import run_health
+    from stonks.production.health import notify_unhealthy
 
     settings = _settings()
     universe = _parse_tickers(tickers) or list(settings.production.universe)
     state = SqliteState(settings.state.path)
     try:
         with _open_lake(settings.lake.path) as lake:
-            report = check_health(state, lake, universe, settings.production.health)
+            report = run_health(state, lake, universe, settings.production.health)
     finally:
         state.close()
 
@@ -1092,6 +1116,25 @@ def serve(
 
 
 # ---- lab --------------------------------------------------------------------
+
+audit_app = typer.Typer(help="Data audits over the lake", no_args_is_help=True)
+app.add_typer(audit_app, name="audit")
+
+
+@audit_app.command("statements")
+def audit_statements_cmd(
+    tickers: str | None = typer.Option(
+        None, "--tickers", help="comma-separated tickers; default every ticker with statements"
+    ),
+) -> None:
+    """Check the three statements against each other (BL-36) and replace
+    the audited tickers' rows in statement_flags. Tolerances: [audit]."""
+    settings = _settings()
+    with _open_lake(settings.lake.path) as lake:
+        lake.migrate()
+        report = _audit(settings, lake, _parse_tickers(tickers) or None)
+    _print_audit(report)
+
 
 lab_app = typer.Typer(help="Strategy lab: tune, fit and run survival tests")
 app.add_typer(lab_app, name="lab")
@@ -1339,6 +1382,12 @@ def lab_run(
     ),
     test_option: list[str] | None = _TEST_OPTION,
     benchmark: str | None = _BENCHMARK,
+    strict: bool = typer.Option(
+        False, "--strict", help="treat data preflight warnings as errors ([lab] strict_preflight)"
+    ),
+    no_preflight: bool = typer.Option(
+        False, "--no-preflight", help="skip the data preflight ([lab] preflight)"
+    ),
     json_out: str | None = typer.Option(None, "--json-out", help="write the result as JSON"),
 ) -> None:
     """Tune a strategy on the train window, then run the survival suite.
@@ -1434,6 +1483,8 @@ def lab_run(
             test_options=test_options,
             benchmark=benchmark,
             embargo_bars=embargo_bars,
+            preflight=False if no_preflight else None,
+            strict_preflight=True if strict else None,
         )
     except ValueError as exc:  # pydantic ValidationError is a ValueError
         raise typer.BadParameter(str(exc)) from None
@@ -1457,6 +1508,9 @@ def lab_run(
         lake.close()
         state.close()
     result, registered_id = execution.result, execution.registered_id
+    preflight = execution.view().preflight
+    for issue in preflight.issues if preflight else []:
+        console.print(f"[yellow]preflight {issue.severity} [{issue.code}][/yellow] {issue.message}")
 
     table = Table(title=f"lab run: {strategy_cls.__name__}  verdict={result.verdict}")
     for col in ("test", "passed", "metrics"):
@@ -1510,6 +1564,7 @@ def lab_run(
             ],
             "registered_id": registered_id,
             "benchmark": execution.view().benchmark,
+            "preflight": preflight,
         }
         Path(json_out).write_text(json.dumps(to_jsonable(doc), indent=2, sort_keys=True))
 
@@ -1654,6 +1709,168 @@ def lab_sweep(
 
 
 # ---- go-live gate (4.3) -----------------------------------------------------
+
+# ---- risk halts and the kill switch ------------------------------------------
+
+halts_app = typer.Typer(help="Kill switch and risk halts (roadmap 12.6)", no_args_is_help=True)
+app.add_typer(halts_app, name="halts")
+
+_HALT_USER = typer.Option(
+    None,
+    "--user",
+    help="act as this user (email or id); default: the operator (service:cli)",
+)
+
+
+def _halt_scope(context: Any, user: str | None) -> Any:
+    """``service:cli`` (admin rights over every book), or the named user."""
+    from stonks.accounts import NotFound, Scope, UserRepository
+
+    if user is None:
+        return Scope.service("cli")
+    with context.state() as state:
+        users = UserRepository(state)
+        try:
+            found = users.get_by_email(user) if "@" in user else users.get(user)
+        except NotFound:
+            raise typer.BadParameter(f"no user {user!r}", param_hint="--user") from None
+    return Scope.for_user(found)
+
+
+def _halt_call(fn: Any) -> Any:
+    """Run a HaltService call, turning its errors into a usage error."""
+    from stonks.app.errors import AppError
+
+    try:
+        return fn()
+    except AppError as exc:
+        raise typer.BadParameter(str(exc)) from None
+    except ValueError as exc:  # request model validation
+        raise typer.BadParameter(str(exc)) from None
+
+
+def _halt_service() -> tuple[Any, Any]:
+    from stonks.app.context import AppContext
+    from stonks.app.halts import HaltService
+
+    context = AppContext(_settings())
+    with context.state() as state:
+        state.migrate()
+    return context, HaltService(context)
+
+
+def _print_halts(views: list[Any]) -> None:
+    table = Table(title="risk halts")
+    for col in ("id", "kind", "target", "halt", "reason", "tripped", "expires", "state"):
+        table.add_column(col)
+    for h in views:
+        target = (
+            "global"
+            if h.scope == "global"
+            else f"user {h.user_id}"
+            if h.scope == "user"
+            else f"portfolio {h.portfolio_id}"
+        )
+        state = (
+            "active" if h.active else f"cleared by {h.cleared_by}" if h.cleared_at else "expired"
+        )
+        table.add_row(
+            str(h.id),
+            h.kind,
+            target,
+            h.halt,
+            h.reason,
+            f"{h.tripped_at} by {h.tripped_by}",
+            h.expires_on.isoformat() if h.expires_on else "-",
+            state,
+        )
+    console.print(table)
+
+
+@halts_app.command("list")
+def halts_list(
+    include_cleared: bool = typer.Option(False, "--all", help="also cleared and expired halts"),
+    user: str | None = _HALT_USER,
+) -> None:
+    """Halts in force today (with --all, every halt), newest first."""
+    context, service = _halt_service()
+    views = _halt_call(
+        lambda: service.list(_halt_scope(context, user), include_cleared=include_cleared)
+    )
+    if not views:
+        console.print("no halt in force" if not include_cleared else "no halts")
+        return
+    _print_halts(views)
+
+
+@halts_app.command("kill")
+def halts_kill(
+    scope: str = typer.Option(
+        ...,
+        "--scope",
+        callback=_choice("--scope", ("global", "user", "portfolio")),
+        help="global (every portfolio) | user (every portfolio of --user) | portfolio",
+    ),
+    portfolio: str | None = typer.Option(
+        None, "--portfolio", help="portfolio id (--scope portfolio)"
+    ),
+    flatten: bool = typer.Option(
+        False, "--flatten", help="stop buys only; sells and exits still go through"
+    ),
+    reason: str = typer.Option(..., "--reason", help="why (audited)"),
+    user: str | None = _HALT_USER,
+) -> None:
+    """Engage the kill switch: no new orders (with --flatten, no new buys)."""
+    from stonks.app.halts import KillSwitchRequest
+
+    context, service = _halt_service()
+    who = _halt_scope(context, user)
+    view = _halt_call(
+        lambda: service.engage_kill(
+            who,
+            KillSwitchRequest(
+                scope=scope,  # type: ignore[arg-type]
+                portfolio_id=portfolio,
+                flatten=flatten,
+                reason=reason,
+            ),
+        )
+    )
+    console.print(f"[red]kill switch on[/red]: halt #{view.id} ({view.scope}, {view.halt})")
+
+
+@halts_app.command("resume")
+def halts_resume(
+    halt_id: int = typer.Argument(..., help="the kill switch's halt id"),
+    reason: str = typer.Option(..., "--reason", help="why trading may resume (audited)"),
+    user: str | None = _HALT_USER,
+) -> None:
+    """Turn a kill switch off. Asks you to type RESUME TRADING."""
+    from stonks.app.halts import RESUME_PHRASE, ResumeRequest
+
+    context, service = _halt_service()
+    who = _halt_scope(context, user)
+    typed = typer.prompt(f"Type {RESUME_PHRASE} to resume trading")
+    view = _halt_call(
+        lambda: service.resume_kill(who, halt_id, ResumeRequest(confirmation=typed, reason=reason))
+    )
+    console.print(f"[green]trading resumed[/green]: halt #{view.id} cleared")
+
+
+@halts_app.command("clear")
+def halts_clear(
+    halt_id: int = typer.Argument(..., help="a circuit-breaker or operational halt id"),
+    reason: str = typer.Option(..., "--reason", help="why it may be cleared (audited)"),
+    user: str | None = _HALT_USER,
+) -> None:
+    """The logged reset of a circuit-breaker or operational halt."""
+    from stonks.app.halts import ClearHaltRequest
+
+    context, service = _halt_service()
+    who = _halt_scope(context, user)
+    view = _halt_call(lambda: service.clear(who, halt_id, ClearHaltRequest(reason=reason)))
+    console.print(f"[green]cleared[/green]: halt #{view.id} ({view.kind})")
+
 
 golive_app = typer.Typer(help="Go-live gate for paper-traded strategies")
 app.add_typer(golive_app, name="golive")

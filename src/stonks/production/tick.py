@@ -109,6 +109,7 @@ from stonks.production.hooks import (
 from stonks.production.hooks.attribution import load_attribution
 from stonks.production.ledger import ledger_filter
 from stonks.production.prices import held_tickers, load_history, load_prices
+from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.ranker import Ranker, SignalSet, StrategyPool
 from stonks.production.risk import RiskPolicy, build_risk_context, needs_risk_context
 from stonks.production.shadow import evaluate_shadow_strategies, shadow_held_tickers
@@ -166,6 +167,8 @@ class TickSettings:
     #: Which strategies keep a model book: ``"shadow"`` (today) or ``"all"``
     #: non-retired strategies (design section 5; go-live then reads them).
     model_books: Literal["shadow", "all"] = "shadow"
+    #: ``[production.quit_rule]``: read by the ``quit_rule`` tick hook.
+    quit_rule: QuitRuleSettings = field(default_factory=QuitRuleSettings)
 
     def __post_init__(self) -> None:
         self.simulated_costs  # noqa: B018 - validates costs vs legacy (not both)
@@ -482,6 +485,8 @@ def _run_tick_body(
             signals=signals,
             portfolios={r.portfolio_id: r.summary for r in results},
             notify_signals=notify_signals,
+            settings=settings,
+            registry=registry,
         ),
         log,
     )
@@ -769,6 +774,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             portfolio_id=portfolio_id,
             owner_id=book.owner_id,
             dry_run=dry_run,
+            policy=book.spec.risk,
         ),
         log,
     )

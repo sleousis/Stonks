@@ -8,6 +8,7 @@ from fastapi import APIRouter
 from stonks.api.routers import (
     alerts,
     auth,
+    backups,
     brokers,
     catalog,
     connections,
@@ -27,6 +28,7 @@ from stonks.api.routers import (
     shadow,
     signals,
     sources,
+    statements,
     strategies,
     studio,
     ticks,
@@ -60,6 +62,8 @@ API_ROUTERS: list[APIRouter] = [
     schedule.router,
     signals.router,
     universes.router,
+    statements.router,
+    backups.router,
 ]
 
 #: Routers that always need a principal, even for reads on loopback.

@@ -139,3 +139,19 @@ def test_notify_unhealthy_is_silent_when_healthy(state, lake_trending):
     rec = Recorder()
     notify_unhealthy(report, rec)
     assert rec.sent == []
+
+
+def test_health_with_halts_opens_the_operational_halt_and_reports_it(state, lake_trending):
+    from stonks.production.halts import active_halts, run_health
+
+    later = NOW + timedelta(days=10)
+    report = run_health(state, lake_trending, UNIVERSE, HealthConfig(), now=later)
+    names = _by_name(report)
+    assert not names["freshness:UP.US"].ok
+    assert not names["risk_halts"].ok and "operational" in names["risk_halts"].detail
+    [halt] = active_halts(state, later.date())
+    assert (halt.kind, halt.scope) == ("operational", "global")
+
+    healthy = run_health(state, lake_trending, UNIVERSE, HealthConfig(), now=NOW)
+    assert healthy.healthy, healthy.failures
+    assert _by_name(healthy)["risk_halts"].ok

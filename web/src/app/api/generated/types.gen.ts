@@ -245,6 +245,20 @@ export type BacktestResult = {
 };
 
 /**
+ * BackupResultView
+ */
+export type BackupResultView = {
+    /**
+     * Backup Id
+     */
+    backup_id: string;
+    /**
+     * Pruned
+     */
+    pruned: Array<string>;
+};
+
+/**
  * BarSeries
  */
 export type BarSeries = {
@@ -822,6 +836,10 @@ export type DraftLabRunRequest = {
      */
     objective?: 'sharpe' | 'cagr' | 'final_return';
     /**
+     * Preflight
+     */
+    preflight?: boolean | null;
+    /**
      * Premortem
      */
     premortem?: string | null;
@@ -845,6 +863,10 @@ export type DraftLabRunRequest = {
      * Start
      */
     start: string;
+    /**
+     * Strict Preflight
+     */
+    strict_preflight?: boolean | null;
     /**
      * Survival Tests
      */
@@ -1840,6 +1862,10 @@ export type LabRunRequest = {
      */
     objective?: 'sharpe' | 'cagr' | 'final_return';
     /**
+     * Preflight
+     */
+    preflight?: boolean | null;
+    /**
      * Premortem
      */
     premortem?: string | null;
@@ -1864,6 +1890,10 @@ export type LabRunRequest = {
      */
     start: string;
     strategy: StrategyRef;
+    /**
+     * Strict Preflight
+     */
+    strict_preflight?: boolean | null;
     /**
      * Survival Tests
      */
@@ -1918,6 +1948,7 @@ export type LabRunView = {
      * N Trials Run
      */
     n_trials_run?: number;
+    preflight?: PreflightView | null;
     /**
      * Registered Strategy Id
      */
@@ -2492,6 +2523,28 @@ export type PageSnapshotView = {
 };
 
 /**
+ * Page[StatementFlagView]
+ */
+export type PageStatementFlagView = {
+    /**
+     * Items
+     */
+    items: Array<StatementFlagView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[StrategySummary]
  */
 export type PageStrategySummary = {
@@ -2882,6 +2935,51 @@ export type PreferencesView = {
      * Webhook
      */
     webhook: string | null;
+};
+
+/**
+ * PreflightIssueView
+ */
+export type PreflightIssueView = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Details
+     */
+    details?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Severity
+     */
+    severity: 'error' | 'warning';
+};
+
+/**
+ * PreflightView
+ *
+ * The BL-37 data preflight of a lab run. A run only starts with no
+ * errors, so a result carries warnings (and ``ok`` true).
+ */
+export type PreflightView = {
+    /**
+     * Issues
+     */
+    issues: Array<PreflightIssueView>;
+    /**
+     * Ok
+     */
+    ok: boolean;
+    /**
+     * Skipped
+     */
+    skipped: boolean;
 };
 
 /**
@@ -3702,6 +3800,40 @@ export type StartPortalRequest = {
      * Redirect Uri
      */
     redirect_uri: string;
+};
+
+/**
+ * StatementFlagView
+ */
+export type StatementFlagView = {
+    /**
+     * Check Id
+     */
+    check_id: string;
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Flagged At
+     */
+    flagged_at: string;
+    /**
+     * Frequency
+     */
+    frequency: string;
+    /**
+     * Period End
+     */
+    period_end: string;
+    /**
+     * Severity
+     */
+    severity: 'error' | 'warning';
+    /**
+     * Ticker
+     */
+    ticker: string;
 };
 
 /**
@@ -5741,6 +5873,93 @@ export type ResetUserPasswordResponses = {
 };
 
 export type ResetUserPasswordResponse = ResetUserPasswordResponses[keyof ResetUserPasswordResponses];
+
+export type StartBackupData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/backups';
+};
+
+export type StartBackupErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type StartBackupError = StartBackupErrors[keyof StartBackupErrors];
+
+export type StartBackupResponses = {
+    /**
+     * Successful Response
+     */
+    202: Job;
+};
+
+export type StartBackupResponse = StartBackupResponses[keyof StartBackupResponses];
+
+export type GetBackupResultData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/backups/jobs/{job_id}/result';
+};
+
+export type GetBackupResultErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetBackupResultError = GetBackupResultErrors[keyof GetBackupResultErrors];
+
+export type GetBackupResultResponses = {
+    /**
+     * Successful Response
+     */
+    200: BackupResultView;
+};
+
+export type GetBackupResultResponse = GetBackupResultResponses[keyof GetBackupResultResponses];
 
 export type GetBrokerInfoData = {
     body?: never;
@@ -8682,6 +8901,66 @@ export type ListDataSourcesResponses = {
 };
 
 export type ListDataSourcesResponse = ListDataSourcesResponses[keyof ListDataSourcesResponses];
+
+export type ListStatementFlagsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Ticker
+         */
+        ticker?: string | null;
+        /**
+         * Severity
+         */
+        severity?: 'error' | 'warning' | null;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/statements/flags';
+};
+
+export type ListStatementFlagsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListStatementFlagsError = ListStatementFlagsErrors[keyof ListStatementFlagsErrors];
+
+export type ListStatementFlagsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageStatementFlagView;
+};
+
+export type ListStatementFlagsResponse = ListStatementFlagsResponses[keyof ListStatementFlagsResponses];
 
 export type ListStrategiesData = {
     body?: never;

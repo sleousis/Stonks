@@ -445,3 +445,41 @@ def test_lab_ic_wraps_the_signal_eval_command(monkeypatch):
         "argv": ["--strategy", "momentum", "--tickers", "A.US,B.US", "--events"],
         "prog": "stonks lab ic",
     }
+
+
+def test_preflight_warnings_are_printed_and_saved(runner, lab_env):
+    out = lab_env / "result.json"
+    r = _run(
+        runner,
+        "buy_and_hold",
+        "--tickers", "UP.US,NOPE.US",
+        *WINDOW, *FAST, "--tests", "oos",
+        "--json-out", str(out),
+    )  # fmt: skip
+    assert r.exit_code == 0, r.output
+    assert "missing_data" in r.output
+    codes = [i["code"] for i in _result(out)["preflight"]["issues"]]
+    assert "missing_data" in codes
+
+
+def test_strict_turns_preflight_warnings_into_a_usage_error(runner, lab_env):
+    r = runner.invoke(
+        app,
+        ["lab", "run", "buy_and_hold", "--tickers", "UP.US,NOPE.US", *WINDOW, *FAST,
+         "--tests", "oos", "--strict"],
+    )  # fmt: skip
+    assert r.exit_code != 0
+    assert "missing_data" in r.output
+
+
+def test_no_preflight_skips_it(runner, lab_env):
+    out = lab_env / "result.json"
+    r = _run(
+        runner,
+        "buy_and_hold",
+        "--tickers", "UP.US,NOPE.US",
+        *WINDOW, *FAST, "--tests", "oos", "--no-preflight",
+        "--json-out", str(out),
+    )  # fmt: skip
+    assert r.exit_code == 0, r.output
+    assert _result(out)["preflight"] is None

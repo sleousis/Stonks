@@ -7,7 +7,7 @@ a route with query or path parameters is one small function in
 
 # No ``from __future__ import annotations`` (see common.py).
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import Field
 
@@ -208,6 +208,24 @@ def register(t: ToolContext) -> None:
         """Market-data ingest runs (source, kind, tickers ok/failed, status)."""
         return await t.get(
             "/api/ingest/runs", {"kind": kind, "status": status, "limit": limit, "offset": offset}
+        )
+
+    @server.tool(annotations=READ)
+    async def list_statement_flags(
+        ticker: Ticker | None = None,
+        severity: Annotated[
+            Literal["error", "warning"] | None, Field(description="only this severity")
+        ] = None,
+        limit: Limit = 50,
+        offset: Offset = 0,
+    ) -> dict[str, Any]:
+        """Statement periods the accounting audit flagged (BL-36): balance
+        identity, net income and cash mismatches, quarters vs annual, filings
+        dated before period end, negative shares. Error flags make lab
+        preflight warn."""
+        return await t.get(
+            "/api/statements/flags",
+            {"ticker": ticker, "severity": severity, "limit": limit, "offset": offset},
         )
 
     @server.tool(annotations=READ)

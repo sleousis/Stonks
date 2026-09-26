@@ -47,6 +47,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_shadow_decisions`](#list_shadow_decisions) | read | no |
 | [`list_shadow_pnl`](#list_shadow_pnl) | read | no |
 | [`list_sources`](#list_sources) | read | no |
+| [`list_statement_flags`](#list_statement_flags) | read | no |
 | [`list_strategies`](#list_strategies) | read | no |
 | [`list_studio_templates`](#list_studio_templates) | read | no |
 | [`list_ticks`](#list_ticks) | read | no |
@@ -405,6 +406,22 @@ Market-data sources an ingest can name, which is the default, and whether each i
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
+
+### `list_statement_flags`
+
+Statement periods the accounting audit flagged (BL-36): balance
+identity, net income and cash mismatches, quarters vs annual, filings
+dated before period end, negative shares. Error flags make lab
+preflight warn.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `ticker` | string \| null | no | `null` | instrument id, e.g. AAPL.US or BTC-USD.CC |
+| `severity` | "error" \| "warning" \| null | no | `null` | only this severity |
+| `limit` | integer | no | `50` | page size |
+| `offset` | integer | no | `0` | rows to skip |
 
 ### `list_strategies`
 

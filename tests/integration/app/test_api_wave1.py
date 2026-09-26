@@ -302,6 +302,9 @@ def test_health_report(client):
     assert checks["stuck_ticks"]["ok"] is True
     assert body["healthy"] is False
     assert body["checked_at"]
+    # stale data opens the global operational halt, and the report lists it
+    assert checks["risk_halts"]["ok"] is False
+    assert "operational" in checks["risk_halts"]["detail"]
 
 
 def test_health_report_exposes_its_thresholds(client, settings):

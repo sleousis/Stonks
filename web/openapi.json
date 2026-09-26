@@ -478,6 +478,27 @@
         "title": "BacktestResult",
         "type": "object"
       },
+      "BackupResultView": {
+        "properties": {
+          "backup_id": {
+            "title": "Backup Id",
+            "type": "string"
+          },
+          "pruned": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Pruned",
+            "type": "array"
+          }
+        },
+        "required": [
+          "backup_id",
+          "pruned"
+        ],
+        "title": "BackupResultView",
+        "type": "object"
+      },
       "BarSeries": {
         "properties": {
           "bars": {
@@ -1644,6 +1665,17 @@
             "title": "Objective",
             "type": "string"
           },
+          "preflight": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preflight"
+          },
           "premortem": {
             "anyOf": [
               {
@@ -1691,6 +1723,17 @@
             "format": "date",
             "title": "Start",
             "type": "string"
+          },
+          "strict_preflight": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strict Preflight"
           },
           "survival_tests": {
             "anyOf": [
@@ -3587,6 +3630,17 @@
             "title": "Objective",
             "type": "string"
           },
+          "preflight": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preflight"
+          },
           "premortem": {
             "anyOf": [
               {
@@ -3637,6 +3691,17 @@
           },
           "strategy": {
             "$ref": "#/components/schemas/StrategyRef"
+          },
+          "strict_preflight": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strict Preflight"
           },
           "survival_tests": {
             "anyOf": [
@@ -3797,6 +3862,16 @@
             "default": 0,
             "title": "N Trials Run",
             "type": "integer"
+          },
+          "preflight": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreflightView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "registered_strategy_id": {
             "anyOf": [
@@ -4757,6 +4832,37 @@
         "title": "Page[SnapshotView]",
         "type": "object"
       },
+      "Page_StatementFlagView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StatementFlagView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[StatementFlagView]",
+        "type": "object"
+      },
       "Page_StrategySummary_": {
         "properties": {
           "items": {
@@ -5455,6 +5561,66 @@
           "channels"
         ],
         "title": "PreferencesView",
+        "type": "object"
+      },
+      "PreflightIssueView": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Details",
+            "type": "object"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "message"
+        ],
+        "title": "PreflightIssueView",
+        "type": "object"
+      },
+      "PreflightView": {
+        "description": "The BL-37 data preflight of a lab run. A run only starts with no\nerrors, so a result carries warnings (and ``ok`` true).",
+        "properties": {
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/PreflightIssueView"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "skipped",
+          "issues"
+        ],
+        "title": "PreflightView",
         "type": "object"
       },
       "ProbeView": {
@@ -6898,6 +7064,55 @@
           "redirect_uri"
         ],
         "title": "StartPortalRequest",
+        "type": "object"
+      },
+      "StatementFlagView": {
+        "properties": {
+          "check_id": {
+            "title": "Check Id",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "flagged_at": {
+            "format": "date-time",
+            "title": "Flagged At",
+            "type": "string"
+          },
+          "frequency": {
+            "title": "Frequency",
+            "type": "string"
+          },
+          "period_end": {
+            "format": "date",
+            "title": "Period End",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker",
+          "period_end",
+          "frequency",
+          "check_id",
+          "severity",
+          "detail",
+          "flagged_at"
+        ],
+        "title": "StatementFlagView",
         "type": "object"
       },
       "StatusChangeRequest": {
@@ -10749,6 +10964,171 @@
         "summary": "Reset User Password",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/backups": {
+      "post": {
+        "description": "Queue a backup of the lake, state DB and artifacts to ``[backup]``'s\ntarget, pruned by its retention. Runs beside no ingest (lake lock).",
+        "operationId": "startBackup",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Backup",
+        "tags": [
+          "backups"
+        ]
+      }
+    },
+    "/api/backups/jobs/{job_id}/result": {
+      "get": {
+        "description": "The result of a succeeded backup job (409 until it has succeeded).",
+        "operationId": "getBackupResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupResultView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Backup Result",
+        "tags": [
+          "backups"
         ]
       }
     },
@@ -16796,6 +17176,152 @@
         "summary": "List Sources",
         "tags": [
           "sources"
+        ]
+      }
+    },
+    "/api/statements/flags": {
+      "get": {
+        "description": "Statement periods the audit flagged, by ticker, period and check.\nLab preflight warns about ``error`` flags in a run's universe.",
+        "operationId": "listStatementFlags",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ticker",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ticker"
+            }
+          },
+          {
+            "in": "query",
+            "name": "severity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "error",
+                    "warning"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Severity"
+            }
+          },
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_StatementFlagView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Statement Flags",
+        "tags": [
+          "statements"
         ]
       }
     },

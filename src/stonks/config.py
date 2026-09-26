@@ -24,8 +24,10 @@ from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
 from stonks.ops.config import BackupConfig
 from stonks.portfolio.settings import ConstructionSettings
+from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.rules.settings import RuleSettings
 from stonks.scheduling.config import SchedulerConfig
+from stonks.store.audit import AuditTolerances
 from stonks.store.bars import BarBackend
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
@@ -166,7 +168,8 @@ class RiskPolicy(BaseModel):
     min_order_notional: float = Field(default=0.0, ge=0.0)
     # ``[production.risk.rules.<rule>]``: the W3.1 rules (max_holding,
     # drawdown_scaling, portfolio_vol, risk_per_position, sector_cap,
-    # liquidity), every one off by default.
+    # liquidity) and the W3.2 halts (circuit_breaker, operational_halt),
+    # every one off by default.
     rules: RuleSettings = RuleSettings()
 
     def tighter_of(self, *overrides: RiskPolicy | Mapping[str, Any] | None) -> RiskPolicy:
@@ -219,6 +222,10 @@ class ProductionConfig(BaseModel):
     # active strategy. Off by default. When on, a newly promoted strategy
     # trades only once a subscription (e.g. on pf_default) includes it.
     books_from_subscriptions: bool = False
+    # ``[production.quit_rule]`` (BL-29): alert (and with auto_demote, move
+    # to shadow) an active strategy whose attributed drawdown passes
+    # quit_multiple x its backtest drawdown.
+    quit_rule: QuitRuleSettings = QuitRuleSettings()
 
 
 class GoLivePolicy(BaseModel):
@@ -277,10 +284,12 @@ class NotifyConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # Any of "log", "webhook", "store". Empty list disables notifications.
-    # "store" persists every notification (all levels, redacted) to the
-    # state DB's ``alerts`` table, which ``GET /api/alerts`` reads.
-    backends: list[Literal["log", "webhook", "store"]] = ["log", "store"]
+    # Any of "log", "webhook", "store", "outbox". Empty list disables
+    # notifications. "store" persists every notification (all levels,
+    # redacted) to the state DB's ``alerts`` table, which ``GET /api/alerts``
+    # reads. "outbox" sends each one to every active admin through the
+    # per-user outbox (Web Push, email, their webhook; see stonks.notify).
+    backends: list[Literal["log", "webhook", "store", "outbox"]] = ["log", "store"]
     # Notifications below this level are dropped (except by "store").
     min_level: Literal["info", "warning", "error"] = "warning"
     webhook: WebhookConfig = WebhookConfig()
@@ -376,6 +385,28 @@ class LabSettings(BaseModel):
     #: ``[lab.parallel]``: worker processes for tuning trials and sweeps
     #: (``max_workers = 0``: every core; 1: in-process) and BLAS threads each.
     parallel: ParallelSettings = ParallelSettings()
+    #: Run the BL-37 data preflight before tuning: errors stop the run,
+    #: warnings ride on the result (``--no-preflight``, request ``preflight``).
+    preflight: bool = True
+    #: Treat every preflight warning as an error (``--strict``, request
+    #: ``strict_preflight``).
+    strict_preflight: bool = False
+
+
+class AuditConfig(BaseModel):
+    """``[audit]``: relative gaps above which the statement audit (BL-36,
+    ``stonks audit statements``) flags a period."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    balance: float = Field(default=AuditTolerances.balance, gt=0.0)
+    net_income: float = Field(default=AuditTolerances.net_income, gt=0.0)
+    cash: float = Field(default=AuditTolerances.cash, gt=0.0)
+    gross_profit: float = Field(default=AuditTolerances.gross_profit, gt=0.0)
+    quarterly_sum: float = Field(default=AuditTolerances.quarterly_sum, gt=0.0)
+
+    def tolerances(self) -> AuditTolerances:
+        return AuditTolerances(**self.model_dump())
 
 
 class IngestConfig(BaseModel):
@@ -402,6 +433,7 @@ class Settings(BaseSettings):
     api: ApiConfig = Field(default_factory=ApiConfig)
     backtest: BacktestSettings = BacktestSettings()
     lab: LabSettings = LabSettings()
+    audit: AuditConfig = AuditConfig()
     golive: GoLivePolicy = GoLivePolicy()
     mcp: McpConfig = McpConfig()
     ingest: IngestConfig = IngestConfig()

@@ -118,6 +118,7 @@ READ_TOOLS = {
     "list_connections",
     "get_connection_accounts",
     "list_halts",
+    "list_statement_flags",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
@@ -214,6 +215,12 @@ async def test_market(mcp):
     assert len(bars["bars"]) == 5
     coverage = await call(mcp, "get_coverage", {"ticker": "UP.US"})
     assert coverage["items"][0]["ticker"] == "UP.US"
+
+
+@pytest.mark.anyio
+async def test_statement_flags(mcp):
+    flags = await call(mcp, "list_statement_flags", {"ticker": "UP.US", "severity": "error"})
+    assert flags == {"items": [], "total": 0, "limit": 50, "offset": 0}
 
 
 @pytest.mark.anyio

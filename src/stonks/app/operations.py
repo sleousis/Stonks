@@ -14,7 +14,7 @@ from stonks.app.errors import NotFoundError
 from stonks.app.pagination import Page
 from stonks.app.serialize import finite
 from stonks.config import HealthConfig, RiskPolicy
-from stonks.production.health import check_health
+from stonks.production.halts import run_health
 from stonks.production.pnl import PnlRow, load_pnl
 
 
@@ -92,11 +92,12 @@ class OperationsService:
 
     def health_report(self, tickers: Sequence[str] | None = None) -> HealthReportView:
         """Every check behind ``stonks health``; freshness covers ``tickers``
-        or, by default, ``[production].universe``."""
+        or, by default, ``[production].universe``. Like the CLI it opens or
+        clears the global operational halt and reports open halts."""
         p = self._ctx.settings.production
         universe = list(tickers) if tickers else list(p.universe)
         with self._ctx.state() as state, self._ctx.lake() as lake:
-            report = check_health(state, lake, universe, p.health)
+            report = run_health(state, lake, universe, p.health)
         return HealthReportView(
             healthy=report.healthy,
             checked_at=report.checked_at,

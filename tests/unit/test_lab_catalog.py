@@ -47,3 +47,12 @@ def test_catalog_lists_the_regime_and_last_trade_wrappers():
     catalog = strategy_catalog()
     assert catalog["feature_regime_filter"] is FeatureRegimeFilter
     assert catalog["last_trade_filter"] is LastTradeFilter
+
+
+def test_catalog_lists_the_trailing_stop_wrapper():
+    from stonks.lab.catalog import is_wrapper
+    from stonks.strategies.trailing_stop import TrailingStopWrapper
+
+    catalog = strategy_catalog()
+    assert catalog["trailing_stop"] is TrailingStopWrapper
+    assert is_wrapper(TrailingStopWrapper)

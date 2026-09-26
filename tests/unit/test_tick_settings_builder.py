@@ -133,3 +133,11 @@ def test_the_plan_comes_from_subscriptions_only_when_switched_on(tmp_path, monke
         assert seen["args"] == (state, runtime.settings)
     finally:
         state.close()
+
+
+def test_the_quit_rule_reaches_the_tick_settings():
+    settings = _settings()
+    settings.production.quit_rule = settings.production.quit_rule.model_copy(
+        update={"auto_demote": True}
+    )
+    assert build_tick_settings(settings, ["A.US"]).quit_rule.auto_demote is True

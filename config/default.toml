@@ -76,6 +76,29 @@ min_order_notional = 0.0
 # [production.risk.rules.drawdown_scaling]
 # schedule = [[0.10, 0.5], [0.20, 0.0]]   # size by drawdown from peak
 
+# Circuit breaker (BL-28): halts new buys after a loss. Off until a limit is
+# set. Recommended values below. A trip opens a risk_halts row the owner
+# sees and clears (`stonks halts list`, `stonks halts clear ID --reason ...`).
+[production.risk.rules.circuit_breaker]
+# max_month_loss = 0.06            # loss from the month's first snapshot
+# max_week_loss = 0.04             # loss over week_sessions snapshots
+# max_drawdown_halt = 0.20         # drawdown from the peak, held until cleared
+week_sessions = 5
+cooldown = "rest_of_month"         # or "none": lift once the loss is made back
+
+# Operational halt (BL-28): halts new buys when the newest bar is too old.
+# `stonks health` also opens a global halt on stale data or a stuck run.
+[production.risk.rules.operational_halt]
+# max_bar_age_days = 5
+
+[production.quit_rule]
+# Quit rule (BL-29): after each tick, alert the admins when an active
+# strategy's drawdown since promotion passes quit_multiple x its backtest
+# drawdown (or the Monte Carlo p95 when tighter).
+quit_multiple = 1.5
+auto_demote = false                # true: also move it to shadow
+min_eval_days = 126                # evaluation horizon before a retire needs no override
+
 [production.health]
 # `stonks health` thresholds.
 max_bar_age_days = 4
@@ -142,6 +165,11 @@ benchmark = "auto"
 # serially correlated features and labels can't leak across it. A strategy's
 # label_horizon_bars raises it per run. `--embargo-bars` / `embargo_bars` override.
 embargo_bars = 0
+# Data preflight before tuning (BL-37): coverage, warm-up, quarantined bars,
+# statement flags, survivorship. Errors stop the run, warnings ride on the
+# result. `--no-preflight` / `--strict` and the API fields override these.
+preflight = true
+strict_preflight = false           # true: every warning is an error
 
 [lab.walk_forward]
 # Defaults for `stonks lab run --walk-forward` (CLI flags override).
@@ -163,9 +191,21 @@ max_workers = 0
 # BLAS/OpenMP threads per worker (the pool is the parallelism).
 blas_threads = 1
 
+[audit]
+# Statement audit tolerances (BL-36): relative gaps above which
+# `stonks audit statements` (also run after `stonks ingest fundamentals`)
+# flags a period. Flags land in the lake's statement_flags table.
+balance = 0.02                     # assets vs liabilities + equity
+net_income = 0.05                  # income statement vs cash flow
+cash = 0.05                        # cash flow end cash vs balance sheet
+gross_profit = 0.02                # vs revenue - cost of revenue
+quarterly_sum = 0.05               # four quarters vs the annual figure
+
 [notify]
-# Backends: "log" (structlog), "webhook" (JSON POST) and/or "store" (the
-# state DB's alerts table, read by GET /api/alerts). [] disables alerts.
+# Backends: "log" (structlog), "webhook" (JSON POST), "store" (the state DB's
+# alerts table, read by GET /api/alerts) and/or "outbox" (every active admin's
+# feed and devices: Web Push, email, their own webhook). [] disables alerts.
+# Halt trips and quit-rule alerts always go through the outbox channels.
 backends = ["log", "store"]
 # Drop notifications below this level: info | warning | error. "store" keeps
 # every level.

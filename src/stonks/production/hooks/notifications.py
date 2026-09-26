@@ -33,9 +33,7 @@ class EnqueueNotifications(PostTickHook):
     def run(self, ctx: TickHookContext) -> Mapping[str, Any] | None:
         if ctx.dry_run or not ctx.notify_signals:
             return None
-        from stonks.notify.channels import build_channels
-        from stonks.notify.router import NotificationRouter, SignalNotice, notify_signals
-        from stonks.notify.settings import NotifySettings
+        from stonks.notify.router import SignalNotice, configured_router, notify_signals
 
         picks: dict[str, tuple[tuple[str, float], ...]] = {}
         for signal in ctx.notify_signals:
@@ -46,10 +44,7 @@ class EnqueueNotifications(PostTickHook):
             for strategy_id, ranked in picks.items()
             for ticker, _ in ranked[:MAX_PICKS]
         ]
-        notify = NotifySettings.from_env()
-        router = NotificationRouter(
-            ctx.state, build_channels(notify), notify.outbox, secrets=notify.secrets
-        )
+        router = configured_router(ctx.state)
         results = notify_signals(router, notices)
         queued = sum(len(r.notification_ids) for r in results)
         _log.info("tick.notify_signals.queued", tick_id=ctx.tick_id, signals=len(notices),

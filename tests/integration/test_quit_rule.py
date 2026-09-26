@@ -143,3 +143,17 @@ def test_the_hook_is_registered_and_skips_dry_runs(env):
         state=state, lake=None, tick_id="t", as_of=START, dry_run=True, signals=None, portfolios={}
     )
     assert hook.run(ctx) is None
+
+
+def test_a_breach_queues_deliveries_on_the_configured_channels(env):
+    from datetime import UTC, datetime
+
+    from stonks.notify.prefs import PreferenceStore
+
+    state, _ = env
+    PreferenceStore(state).set_webhook(
+        "usr_owner", "https://hooks.example.test/x", now=datetime.now(UTC)
+    )
+    apply_quit_rule(state, _loader([100.0, 80.0]), START + timedelta(days=1), QuitRuleSettings())
+    channels = [r["channel"] for r in state.sql("SELECT channel FROM notification_deliveries")]
+    assert channels == ["webhook"]
