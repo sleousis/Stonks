@@ -163,3 +163,50 @@ def test_as03_alpaca_status_is_cached_between_calls(alpaca_client):
     for _ in range(3):
         assert alpaca_client.get("/api/brokers/alpaca/status", headers=AUTH).status_code == 200
     assert _CountingAlpaca.calls == 1
+
+
+# ---- AS-04 / AS-10 halts ---------------------------------------------------------
+
+
+def _global_breaker(path) -> int:
+    from datetime import date
+
+    from stonks.production.halts import trip_halt
+
+    with SqliteState(path) as state:
+        halt, _ = trip_halt(
+            state,
+            "operational",
+            reason="dd",
+            actor="service:tick",
+            scope="global",
+            on=date.today(),
+        )
+    return halt.id
+
+
+def test_as04_global_halt_actions_need_the_admin_scope_not_just_the_role(
+    client, settings, auth, people
+):
+    ada = people["ada"]["id"]
+    trade_only = bearer(auth, ada, Role.ADMIN, ["read", "trade"])
+    kill = {"scope": "global", "reason": "r"}
+    denied = client.post("/api/halts/kill", json=kill, headers=trade_only)
+    assert denied.status_code == 403 and denied.json()["detail"].startswith("forbidden")
+    halt_id = _global_breaker(settings.state.path)
+    clear = client.post(f"/api/halts/{halt_id}/clear", json={"reason": "r"}, headers=trade_only)
+    assert clear.status_code == 403
+
+    full = people["ada"]["headers"]
+    assert client.post("/api/halts/kill", json=kill, headers=full).status_code == 201
+    ok = client.post(f"/api/halts/{halt_id}/clear", json={"reason": "r"}, headers=full)
+    assert ok.status_code == 200, ok.text
+
+
+def test_as10_a_trader_refused_a_global_action_gets_403_not_422(client, settings, people):
+    alice = people["alice"]["headers"]
+    kill = client.post("/api/halts/kill", json={"scope": "global", "reason": "r"}, headers=alice)
+    assert kill.status_code == 403 and kill.json()["detail"].startswith("forbidden")
+    halt_id = _global_breaker(settings.state.path)
+    clear = client.post(f"/api/halts/{halt_id}/clear", json={"reason": "r"}, headers=alice)
+    assert clear.status_code == 403

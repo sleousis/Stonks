@@ -33,6 +33,7 @@ from stonks.accounts import NotFound, Role, Scope, owned_portfolio
 from stonks.accounts.audit import AuditLog
 from stonks.app.context import AppContext
 from stonks.app.errors import NotFoundError, ValidationError
+from stonks.auth.errors import PermissionDenied
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.logging import get_logger
@@ -139,6 +140,15 @@ def _is_admin(scope: Scope) -> bool:
     return scope.is_service or scope.role == Role.ADMIN
 
 
+def _check(who: Who, permission: Permission, allowed: bool, message: str) -> None:
+    """A principal needs ``permission`` (role *and* credential scope); a bare
+    scope (CLI, services) needs ``allowed``. Refusals are 403."""
+    if isinstance(who, Principal):
+        require(who, permission)
+    elif not allowed:
+        raise PermissionDenied(message)
+
+
 class HaltService:
     def __init__(self, context: AppContext) -> None:
         self._context = context
@@ -173,14 +183,22 @@ class HaltService:
         """Stop new orders at ``request.scope``. Idempotent: a kill switch
         already on at that scope is returned as it is."""
         scope = _scope(who)
-        if not (scope.is_service or Role(scope.role).can_trade):
-            raise ValidationError("the kill switch needs a role that can trade")
+        _check(
+            who,
+            Permission.KILLSWITCH_USER,
+            scope.is_service or Role(scope.role).can_trade,
+            "the kill switch needs a role that can trade",
+        )
         user_id: str | None = None
         portfolio_id: str | None = None
         with self._state() as state:
             if request.scope == "global":
-                if not _is_admin(scope):
-                    raise ValidationError("only an admin can stop every portfolio")
+                _check(
+                    who,
+                    Permission.KILLSWITCH_GLOBAL,
+                    _is_admin(scope),
+                    "only an admin can stop every portfolio",
+                )
             elif request.scope == "user":
                 if scope.is_service:
                     raise ValidationError("a service has no portfolios of its own")
@@ -244,7 +262,7 @@ class HaltService:
             halt = self._load(state, scope, halt_id)
             if halt.kind != "kill":
                 raise ValidationError(f"halt {halt_id} is a {halt.kind} halt; clear it instead")
-            return self._clear(state, scope, halt, request.reason, "kill_switch.resume", ip)
+            return self._clear(state, who, halt, request.reason, "kill_switch.resume", ip)
 
     # ---- other halts -------------------------------------------------------------------
 
@@ -257,21 +275,27 @@ class HaltService:
             halt = self._load(state, scope, halt_id)
             if halt.kind == "kill":
                 raise ValidationError("the kill switch is turned off with resume")
-            return self._clear(state, scope, halt, request.reason, "risk_halt.clear", ip)
+            return self._clear(state, who, halt, request.reason, "risk_halt.clear", ip)
 
     # ---- helpers -----------------------------------------------------------------------
 
     def _clear(
         self,
         state: SqliteState,
-        scope: Scope,
+        who: Who,
         halt: Halt,
         reason: str,
         action: str,
         ip: str | None,
     ) -> HaltView:
-        if halt.scope == "global" and not _is_admin(scope):
-            raise ValidationError("only an admin can clear a global halt")
+        scope = _scope(who)
+        if halt.scope == "global":
+            _check(
+                who,
+                Permission.KILLSWITCH_GLOBAL if halt.kind == "kill" else Permission.RISK_GLOBAL,
+                _is_admin(scope),
+                "only an admin can clear a global halt",
+            )
         if halt.cleared:
             raise ValidationError(f"halt {halt.id} was already cleared")
         try:
