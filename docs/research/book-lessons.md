@@ -842,7 +842,7 @@ These apply to every package below. They are how the principles P43-P48 turn int
   - `ID = sign(r)·(%neg − %pos)` over the daily returns of the same window.
   - `score_universe` keeps the top decile by r, then the lowest-ID half, and gives each kept name conviction 1.0. Equal weight is left to the constructor.
   - The market filter is **not** built in: compose it with `RegimeFilter` (BL-42).
-  - Metadata: `alpha_family="trend"`, `required_history_bars=273`, `label_horizon_bars=63`, and a hypothesis (investor underreaction to gradual information).
+  - Metadata: `alpha_family="trend"`, `required_history_bars=253` (`C[t-252]` plus today; the skip month sits inside the window, so the 273 first written here double-counted it), `label_horizon_bars=63`, and a hypothesis (investor underreaction to gradual information).
 - **Seam:** `Strategy`, with `score_universe` and `features/cross_section`.
 - **Owns:** `strategies/examples/quant_momentum.py` and `features/momentum.py` (new: `trailing_return_skip`, `information_discreteness`, `is_quarter_rebalance_day`).
 - **Parallel:** through the lab (trials, walk-forward, MCPT).
