@@ -1,6 +1,12 @@
 """Perturbation test: run a baseline backtest, then repeat against copies of
 the universe's bars with multiplicative gaussian noise and check how
-correlated the equity curves stay.
+correlated the equity curves' per-bar returns stay.
+
+The gate is the correlation of per-bar returns (RS-10), not of equity
+levels: any two rising curves correlate above 0.8 in level even when the
+noisy run makes entirely different trades. The level correlation is still
+reported as ``level_correlation_min``. A pair of runs with no return
+variance (neither trades) correlates at 0 and fails.
 
 Like the MCPT, each noise level gets its own in-memory ``DuckDBLake``
 holding a perturbed copy of the ``bars`` table for the universe (every
@@ -110,7 +116,12 @@ class PerturbationTest:
             else []
         )
         by_sigma = dict(zip(noisy, curves, strict=True))
+        base_returns = _returns(baseline)
         correlations = [
+            1.0 if sigma == 0.0 else _pearson(base_returns, _returns(by_sigma[sigma]))
+            for sigma in self._sigmas
+        ]
+        levels = [
             1.0 if sigma == 0.0 else _pearson(baseline, by_sigma[sigma]) for sigma in self._sigmas
         ]
 
@@ -119,6 +130,7 @@ class PerturbationTest:
         metrics = {
             "correlation_mean": mean_corr,
             "correlation_min": min_corr,
+            "level_correlation_min": min(levels) if levels else 0.0,
             "levels_tested": float(len(self._sigmas)),
         }
         passed = min_corr >= self._min_corr
@@ -180,6 +192,12 @@ def _perturbed_lake(
     for code, frame in noisy.groupby("interval", sort=False):
         lake.upsert_bars(frame, interval=Interval.parse(code))
     return lake
+
+
+def _returns(curve: Sequence[float]) -> list[float]:
+    """Per-bar simple returns of an equity curve (0 where the prior mark is
+    not positive)."""
+    return [(b / a - 1.0) if a > 0 else 0.0 for a, b in zip(curve[:-1], curve[1:], strict=True)]
 
 
 def _pearson(a: Sequence[float], b: Sequence[float]) -> float:
