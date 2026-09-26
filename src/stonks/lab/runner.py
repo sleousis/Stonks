@@ -12,7 +12,8 @@ from stonks.core.protocols import (
     Tuner,
 )
 from stonks.lab.dataset import LabDataset
-from stonks.lab.survival.base import SurvivalSuite
+from stonks.lab.survival.base import SurvivalSuite, TuningSetup
+from stonks.lab.tuning.base import tune_and_fit
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.lab.runner")
@@ -42,14 +43,8 @@ class LabRunner:
         self._budget = budget
 
     def run(self, strategy_cls: type[Strategy], dataset: LabDataset) -> LabRunResult:
-        space = strategy_cls.parameter_spec()
-        tuned = self._tuner.tune(
-            strategy_cls=strategy_cls,
-            param_space=space,
-            objective=self._objective,
-            dataset=dataset,
-            budget=self._budget,
-        )
+        setup = TuningSetup(tuner=self._tuner, objective=self._objective, budget=self._budget)
+        strategy, tuned = tune_and_fit(strategy_cls, dataset, setup)
         _log.info(
             "lab.tune.done",
             best_params=tuned.best_params,
@@ -57,8 +52,12 @@ class LabRunner:
             trials=len(tuned.history),
         )
 
-        strategy = strategy_cls(tuned.best_params)
-        strategy.fit(dataset)  # no-op for rule-based
+        # Tests that re-tune (walk-forward, re-tuning MCPT) use the same
+        # tuner / objective / budget that picked ``strategy``.
+        for test in self._suite.tests:
+            bind = getattr(test, "bind_tuning", None)
+            if callable(bind):
+                bind(setup)
 
         reports = self._suite.run(strategy, dataset)
         verdict = "pass" if all(r.passed for r in reports) else "fail"

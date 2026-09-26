@@ -13,6 +13,8 @@ dependencies = [
     "structlog>=24.4",
     "typer>=0.13",
     "python-dotenv>=1.0",
+    "yfinance>=1.7.0",
+    "alpaca-py>=0.44.0",
 ]
 
 [project.scripts]

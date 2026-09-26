@@ -24,13 +24,24 @@ after the last bar are never filled. Per bar the engine:
 4. marks equity at those (carried-forward) closes.
 
 All bar prices for the universe / interval / window are loaded with one
-query up front.
+query up front, joined to ``instruments`` for each ticker's asset class
+(missing row or NULL -> ``equity``). The broker receives those asset
+classes and, when filling, each fill bar's volume, so its ``CostModel``
+can charge per-asset-class fees and volume-aware slippage.
+
+Annualization
+-------------
+Sharpe uses ``periods_per_year(interval, asset_classes)`` over the asset
+classes of the tickers that actually have bars in the window (a universe
+ticker with no bars adds no equity-curve points). A mixed universe uses the
+densest calendar present, since equity is marked on the union of bar
+timestamps; see ``stonks.backtest.calendar``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 
 import pandas as pd
@@ -40,7 +51,7 @@ from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy
 from stonks.core.timeutil import as_datetime, day_end, day_start
-from stonks.core.types import Order
+from stonks.core.types import AssetClass, Order
 from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
 
@@ -62,6 +73,8 @@ class BacktestConfig:
 class _Bar:
     open: float | None
     close: float
+    #: Units traded in the bar; ``None`` when the vendor gave no volume.
+    volume: float | None = None
 
 
 class Backtester:
@@ -78,7 +91,8 @@ class Backtester:
         self._config = config
 
     def run(self) -> BacktestReport:
-        bars_by_ts = self._load_bars()
+        bars_by_ts, asset_classes = self._load_bars()
+        self._broker.set_asset_classes(asset_classes)
         equity_dates: list[datetime] = []
         equity_curve: list[float] = []
         last_close: dict[str, float] = {}
@@ -119,21 +133,28 @@ class Backtester:
             strategy_id,
             equity_dates,
             equity_curve,
-            periods_per_year=periods_per_year(self._config.interval),
+            periods_per_year=periods_per_year(self._config.interval, set(asset_classes.values())),
         )
 
     # ---- internals ----------------------------------------------------------
 
-    def _load_bars(self) -> dict[datetime, dict[str, _Bar]]:
+    def _load_bars(
+        self,
+    ) -> tuple[dict[datetime, dict[str, _Bar]], dict[str, AssetClass]]:
         """All bars for the universe / interval / window, keyed by timestamp
-        (ascending) then ticker. One query for the whole run."""
+        (ascending) then ticker, plus the asset class of every ticker that
+        has bars (from ``instruments``; no row or NULL means equity). One
+        query for the whole run."""
         start_ts, end_ts = _to_window_bounds(self._config.start, self._config.end)
         df = self._lake.sql(
             """
-            SELECT timestamp, ticker, open, close FROM bars
-             WHERE ticker = ANY(?) AND interval = ?
-               AND timestamp BETWEEN ? AND ?
-             ORDER BY timestamp, ticker
+            SELECT b.timestamp, b.ticker, b.open, b.close, b.volume,
+                   COALESCE(i.asset_class, 'equity') AS asset_class
+              FROM bars b
+              LEFT JOIN instruments i ON i.id = b.ticker
+             WHERE b.ticker = ANY(?) AND b.interval = ?
+               AND b.timestamp BETWEEN ? AND ?
+             ORDER BY b.timestamp, b.ticker
             """,
             [
                 list(self._config.universe),
@@ -143,20 +164,28 @@ class Backtester:
             ],
         )
         out: dict[datetime, dict[str, _Bar]] = {}
+        asset_classes: dict[str, AssetClass] = {}
         for row in df.itertuples(index=False):
+            asset_classes[row.ticker] = row.asset_class
             open_ = None if pd.isna(row.open) else float(row.open)
+            volume = None if pd.isna(row.volume) else float(row.volume)
             out.setdefault(as_datetime(row.timestamp), {})[row.ticker] = _Bar(
-                open=open_, close=float(row.close)
+                open=open_, close=float(row.close), volume=volume
             )
-        return out
+        return out, asset_classes
 
     def _fill_pending(
         self, pending: list[Order], bars: dict[str, _Bar], as_of: datetime
     ) -> list[Order]:
         """Fill queued orders whose ticker has an open at this bar; return
-        the orders still waiting for their ticker's next bar."""
+        the orders still waiting for their ticker's next bar.
+
+        The broker's cost model sees this (fill) bar's volume. That is not
+        look-ahead: it only prices the execution of a fill that happens
+        inside this bar, and no strategy decision ever reads it."""
         opens = {t: b.open for t, b in bars.items() if b.open is not None and b.open > 0}
-        self._broker.set_prices(opens, as_of=as_of)
+        volumes = {t: bars[t].volume for t in opens if bars[t].volume is not None}
+        self._broker.set_prices(opens, as_of=as_of, volumes=volumes)
         waiting: list[Order] = []
         for order in pending:
             if order.ticker in opens:
@@ -166,19 +195,27 @@ class Backtester:
         return waiting
 
     def _decide(self, as_of: datetime, prices: dict[str, float]) -> list[Order]:
-        picks_by_strategy: dict[str, list[tuple[float, str]]] = {s.id: [] for s in self._strategies}
-        for strategy in self._strategies:
+        """Picks and orders are keyed by the strategy's *position* in the
+        engine, not its class-level ``id``, so two instances of one class
+        (different params) keep separate picks; each order's ``client_id``
+        is prefixed with ``"<index>:"`` so the broker's idempotency check
+        can't drop one instance's order as a duplicate of the other's."""
+        picks_by_strategy: list[list[tuple[float, str]]] = [[] for _ in self._strategies]
+        for index, strategy in enumerate(self._strategies):
             for ticker in self._config.universe:
                 r = strategy.estimate_return(ticker, as_of, self._lake)
                 if r is not None and r > self._config.threshold:
-                    picks_by_strategy[strategy.id].append((r, ticker))
+                    picks_by_strategy[index].append((r, ticker))
 
         portfolio = self._broker.fetch_portfolio()
         orders: list[Order] = []
-        for strategy in self._strategies:
-            picks = picks_by_strategy[strategy.id]
+        for index, strategy in enumerate(self._strategies):
+            picks = picks_by_strategy[index]
             picks.sort(key=lambda p: p[0], reverse=True)
-            orders.extend(strategy.decide(picks, portfolio, prices, as_of))
+            orders.extend(
+                replace(order, client_id=f"{index}:{order.client_id}")
+                for order in strategy.decide(picks, portfolio, prices, as_of)
+            )
         return orders
 
 

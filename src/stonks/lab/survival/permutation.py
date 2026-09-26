@@ -21,9 +21,9 @@ back into price space.
 
 from __future__ import annotations
 
-import copy
-from dataclasses import dataclass
-from pathlib import Path
+import dataclasses
+from datetime import date
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -31,6 +31,9 @@ import pandas as pd
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.lab.backtesting import run_backtest
+from stonks.lab.lake_copy import copy_universe_lake
+from stonks.lab.survival.base import TuningSetup
+from stonks.lab.tuning.base import tune_and_fit
 from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
 
@@ -112,30 +115,46 @@ def permute_bars(bars: pd.DataFrame, start_index: int = 0, seed: int | None = No
 
 # ---- MCPT survival test ----------------------------------------------------
 
-
-@dataclass(frozen=True)
-class _McptScoring:
-    metric: str  # "profit_factor" | "sharpe" | "final_return" | "cagr"
-    direction: str = "maximize"
+_METRICS = ("profit_factor", "sharpe", "final_return", "cagr")
 
 
 class MonteCarloPermutationTest:
     """Monte-Carlo permutation test: is the strategy's real score reliably
-    better than scores on time-shuffled bars?
+    better than its scores on time-shuffled bars?
 
-    For each of ``n_permutations`` runs we build an in-memory DuckDBLake,
-    copy the universe's bars into it under a fresh bar-shuffle permutation,
-    and score the strategy against the permuted lake. The p-value is the
-    fraction of permuted scores greater-or-equal to the real score
-    (conservatively +1-smoothed). The test passes when ``p_value`` falls
-    below ``max_p_value``.
+    Two modes, both scoring only data the strategy's parameters were not
+    chosen on unless re-tuning is part of the null:
 
-    Known limitation: this is an in-sample test without re-tuning. The
-    strategy keeps the params (and fitted state) chosen on the real bars
-    and is only re-scored on each permutation; it is not re-tuned or
-    re-fitted per permutation. It therefore asks "does this fixed
-    configuration beat noise?", not "does the whole tune-then-trade
-    process beat noise?", and understates the selection bias of tuning.
+    - **Out-of-sample (default, ``retune=False``).** The already-tuned
+      strategy is scored on the dataset's *validation* window. Each
+      permutation shuffles only the validation-window bars; every bar
+      before it stays real so indicator look-backs warm up on true
+      history, and bars after the window are dropped. Tuning happened on
+      the train window, so its selection bias cannot push the p-value
+      toward passing.
+    - **In-sample with re-tuning (``retune=True``, Masters).** Each
+      permutation shuffles only the *train*-window bars (earlier history
+      real, later bars dropped) and re-runs the full tune → fit process on
+      it; the score is the tuner's best objective value. The real score
+      comes from the same process on unshuffled bars. This asks whether
+      the whole tune-then-trade process beats noise. It costs
+      ``(n_permutations + 1) * budget`` backtests, so it is off by
+      default. The tuner / objective / budget come from ``tuning`` or, if
+      that is unset, from the ``LabRunner`` via ``bind_tuning``.
+
+    Every score — real and permuted — is computed on an in-memory lake
+    built the same way (see ``lab.lake_copy``): the universe's non-bar
+    tables copied as-is, the dataset-interval bars (real or permuted) up
+    to the window end, and any coarser interval present in the source
+    re-derived from those bars so no real coarse prices leak into a
+    permuted run. Finer intervals are not carried over.
+
+    The p-value is the +1-smoothed fraction of permuted scores at least as
+    good as the real one; the test passes when ``p_value <= max_p_value``.
+
+    In the default mode the same strategy instance is scored on every
+    lake; strategies that cache lake reads must key the cache by lake
+    (as ``Momentum`` does).
     """
 
     id = "mcpt"
@@ -145,67 +164,89 @@ class MonteCarloPermutationTest:
         n_permutations: int = 50,
         max_p_value: float = 0.05,
         metric: str = "profit_factor",
-        start_index_ratio: float = 0.0,
+        retune: bool = False,
         seed: int | None = 17,
+        tuning: TuningSetup | None = None,
     ) -> None:
         if n_permutations < 1:
             raise ValueError("n_permutations must be >= 1")
         if not 0.0 < max_p_value <= 1.0:
             raise ValueError("max_p_value must be in (0, 1]")
-        if metric not in ("profit_factor", "sharpe", "final_return", "cagr"):
+        if metric not in _METRICS:
             raise ValueError(f"unsupported metric {metric!r}")
-        if not 0.0 <= start_index_ratio < 1.0:
-            raise ValueError("start_index_ratio must be in [0, 1)")
         self._n = n_permutations
         self._max_p = max_p_value
         self._metric = metric
-        self._start_ratio = start_index_ratio
+        self._retune = retune
         self._seed = seed
+        self._tuning = tuning
+        self._bound: TuningSetup | None = None
 
-    def run(self, strategy: Strategy, context) -> SurvivalReport:
+    def bind_tuning(self, setup: TuningSetup) -> None:
+        """Receive the runner's tuning setup (used when ``tuning`` is unset)."""
+        self._bound = setup
+
+    def run(self, strategy: Strategy, context: Any) -> SurvivalReport:
+        setup = self._tuning or self._bound
+        if self._retune and setup is None:
+            raise ValueError(
+                "MCPT retune=True needs a tuning setup: pass tuning=... or run it under LabRunner"
+            )
+        window = context.train_window if self._retune else context.val_window
         interval = getattr(context, "interval", Interval.DAY_1)
-        universe = list(context.universe)
-        start, end = context.full_window
+        mode = "retune" if self._retune else "oos"
+        _log.info(
+            "mcpt.start", mode=mode, seed=self._seed, n=self._n, window=[str(w) for w in window]
+        )
 
-        real_bars_by_ticker: dict[str, pd.DataFrame] = {}
-        for ticker in universe:
-            bars = context.lake.get_bars(ticker, interval, start=start, end=end)
-            if not bars.empty:
-                real_bars_by_ticker[ticker] = bars
-
-        if not real_bars_by_ticker:
+        history = _history_bars(context, interval, window)
+        if not any(len(bars) > n_before for bars, n_before in history.values()):
             return SurvivalReport(
                 test_id=self.id,
                 passed=False,
                 metrics={"p_value": 1.0, "real_score": 0.0, "n_permutations": float(self._n)},
-                notes="no bars available for the universe; test skipped",
+                notes=f"mode={mode}; no bars in the scored window for the universe; test skipped",
             )
+        coarser = _coarser_intervals(context, interval)
 
-        real_score = _score(strategy, context, context.lake, self._metric)
+        def score(bars_by_ticker: dict[str, pd.DataFrame]) -> float:
+            with _modified_lake(context, bars_by_ticker, interval, coarser) as lake:
+                dataset = dataclasses.replace(context, lake=lake)
+                if self._retune:
+                    _, tuned = tune_and_fit(type(strategy), dataset, setup)
+                    return float(tuned.best_score)
+                report = run_backtest(strategy, dataset, window)
+                return float(getattr(report, self._metric))
+
+        real_score = score({t: bars for t, (bars, _) in history.items()})
+        minimize = self._retune and setup.objective.direction == "minimize"
 
         master_rng = np.random.default_rng(self._seed)
         perm_scores: list[float] = []
-        worse_or_equal = 0
+        at_least_as_good = 0
         for _ in range(self._n):
+            # permute_bars keeps its first ``start_index + 1`` rows: exactly
+            # the ``n_before`` pre-window bars (the first window bar when
+            # there is no earlier history, as the path needs an anchor).
             permuted = {
                 ticker: permute_bars(
                     bars,
-                    start_index=int(len(bars) * self._start_ratio),
+                    start_index=max(n_before - 1, 0),
                     seed=int(master_rng.integers(0, 2**31 - 1)),
                 )
-                for ticker, bars in real_bars_by_ticker.items()
+                for ticker, (bars, n_before) in history.items()
             }
-            with _build_permuted_lake(permuted, interval) as perm_lake:
-                perm_score = _score(strategy, context, perm_lake, self._metric)
+            perm_score = score(permuted)
             perm_scores.append(perm_score)
-            if perm_score >= real_score:
-                worse_or_equal += 1
+            if (perm_score <= real_score) if minimize else (perm_score >= real_score):
+                at_least_as_good += 1
 
         # +1 numerator/denominator — conservative p-value estimator.
-        p_value = (worse_or_equal + 1) / (self._n + 1)
+        p_value = (at_least_as_good + 1) / (self._n + 1)
         passed = p_value <= self._max_p
 
         arr = np.asarray(perm_scores, dtype=float)
+        metric = setup.objective.name if self._retune else self._metric
         return SurvivalReport(
             test_id=self.id,
             passed=passed,
@@ -216,40 +257,57 @@ class MonteCarloPermutationTest:
                 "perm_score_max": float(arr.max()) if arr.size else 0.0,
                 "n_permutations": float(self._n),
             },
-            notes=f"metric={self._metric}",
+            notes=f"mode={mode}; metric={metric}; seed={self._seed}",
         )
 
 
-def _score(strategy: Strategy, context, lake: DuckDBLake, metric: str) -> float:
-    report = run_backtest(strategy, context, context.full_window, lake=lake)
-    return float(getattr(report, metric))
+def _history_bars(
+    context: Any, interval: Interval, window: tuple[date, date]
+) -> dict[str, tuple[pd.DataFrame, int]]:
+    """Per ticker: every dataset-interval bar up to the window end (all
+    earlier history included, for look-backs) and how many of them fall
+    before the window start."""
+    start, end = window
+    frame = context.lake.sql(
+        """
+        SELECT ticker, timestamp, open, high, low, close, adj_close, volume
+          FROM bars
+         WHERE ticker = ANY(?) AND interval = ? AND CAST(timestamp AS DATE) <= ?
+         ORDER BY ticker, timestamp
+        """,
+        [list(context.universe), interval.code, end],
+    )
+    out: dict[str, tuple[pd.DataFrame, int]] = {}
+    for ticker, bars in frame.groupby("ticker", sort=False):
+        bars = bars.reset_index(drop=True)
+        n_before = int((pd.to_datetime(bars["timestamp"]).dt.date < start).sum())
+        out[str(ticker)] = (bars, n_before)
+    return out
 
 
-class _InMemLakeCtx:
-    """tiny context manager wrapper around a DuckDBLake for the `with` in run()."""
-
-    def __init__(self, lake: DuckDBLake) -> None:
-        self._lake = lake
-
-    def __enter__(self) -> DuckDBLake:
-        return self._lake
-
-    def __exit__(self, *exc) -> None:
-        self._lake.close()
+def _coarser_intervals(context: Any, interval: Interval) -> list[Interval]:
+    codes = context.lake.sql(
+        "SELECT DISTINCT interval FROM bars WHERE ticker = ANY(?)", [list(context.universe)]
+    )["interval"]
+    found = [Interval.parse(c) for c in codes]
+    return sorted((i for i in found if i.seconds > interval.seconds), key=lambda i: i.seconds)
 
 
-def _build_permuted_lake(
-    permuted_bars_by_ticker: dict[str, pd.DataFrame],
+def _modified_lake(
+    context: Any,
+    bars_by_ticker: dict[str, pd.DataFrame],
     interval: Interval,
-) -> _InMemLakeCtx:
-    lake = DuckDBLake(Path(":memory:"))
-    lake.migrate()
-    for bars in permuted_bars_by_ticker.values():
-        if bars.empty:
-            continue
-        lake.upsert_bars(bars, interval=interval)
-    return _InMemLakeCtx(lake)
-
-
-# silence unused-import warnings in tests that reach into this module
-_ = copy  # noqa: F841
+    coarser: list[Interval],
+) -> DuckDBLake:
+    lake = copy_universe_lake(context.lake, context.universe)
+    try:
+        for ticker, bars in bars_by_ticker.items():
+            if bars.empty:
+                continue
+            lake.upsert_bars(bars, interval=interval)
+            for target in coarser:
+                lake.aggregate_bars(ticker, source=interval, target=target)
+    except Exception:
+        lake.close()
+        raise
+    return lake

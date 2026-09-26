@@ -6,9 +6,31 @@ import itertools
 import math
 import random
 from collections.abc import Iterable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from stonks.core.params import ParameterSpec, ParamSpace, tunable_only
+from stonks.core.protocols import Strategy, TunerResult
+
+if TYPE_CHECKING:  # pragma: no cover
+    from stonks.lab.survival.base import TuningSetup
+
+
+def tune_and_fit(
+    strategy_cls: type[Strategy], dataset: Any, setup: TuningSetup
+) -> tuple[Strategy, TunerResult]:
+    """Tune ``strategy_cls`` on ``dataset``'s train window, then build and
+    fit the winning configuration on the same dataset. The one tune → fit
+    sequence shared by the runner and every re-tuning survival test."""
+    tuned = setup.tuner.tune(
+        strategy_cls=strategy_cls,
+        param_space=strategy_cls.parameter_spec(),
+        objective=setup.objective,
+        dataset=dataset,
+        budget=setup.budget,
+    )
+    strategy = strategy_cls(tuned.best_params)
+    strategy.fit(dataset)  # no-op for rule-based
+    return strategy, tuned
 
 
 def expand_grid(space: ParamSpace, grid_size: int) -> Iterable[dict[str, Any]]:

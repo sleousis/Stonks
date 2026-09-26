@@ -20,6 +20,8 @@ class RandomTuner:
         # Fixed default seed so a lab run is reproducible unless the caller
         # explicitly asks for a different draw.
         self._seed = seed
+        # the rng is re-created per tune() call (see tune), so every call
+        # draws the same candidates whatever ran before it
         self._rng = random.Random(seed)
 
     def tune(
@@ -35,6 +37,7 @@ class RandomTuner:
         best_score = -math.inf if objective.direction == "maximize" else math.inf
 
         tunable = tunable_only(param_space)
+        self._rng = random.Random(self._seed)
         _log.info("random.tune.start", seed=self._seed, budget=budget)
         for _ in range(budget):
             partial = {s.name: self._sample(s) for s in tunable}

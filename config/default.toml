@@ -57,3 +57,22 @@ base_url = "https://eodhd.com/api"
 timeout_seconds = 30
 max_retries = 3
 retry_backoff_seconds = 1.0
+
+[sources.yahoo]
+timeout_seconds = 30
+max_retries = 3
+retry_backoff_seconds = 2.0
+# Yahoo rate-limits aggressively; space consecutive requests out.
+min_request_interval_seconds = 0.5
+
+[brokers]
+# Broker the production tick trades through: "simulated" (in-memory) or "alpaca".
+kind = "simulated"
+
+[brokers.alpaca]
+# Paper trading by default. Real money needs BOTH paper = false AND
+# allow_live = true. Keys come from ALPACA_API_KEY / ALPACA_SECRET_KEY (env).
+paper = true
+allow_live = false
+max_retries = 3
+retry_backoff_seconds = 1.0

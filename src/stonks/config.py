@@ -12,7 +12,7 @@ import tomllib
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from stonks.core.types import AssetClass
@@ -28,8 +28,47 @@ class EodhdSourceConfig(BaseModel):
     api_key: str | None = None
 
 
+class YahooSourceConfig(BaseModel):
+    timeout_seconds: int = 30
+    max_retries: int = 3
+    retry_backoff_seconds: float = 2.0
+    # Yahoo rate-limits aggressively; space consecutive requests out.
+    min_request_interval_seconds: float = 0.5
+
+
 class SourcesConfig(BaseModel):
     eodhd: EodhdSourceConfig = EodhdSourceConfig()
+    yahoo: YahooSourceConfig = YahooSourceConfig()
+
+
+class AlpacaBrokerConfig(BaseModel):
+    """Alpaca trading API. Paper by default; the live endpoint additionally
+    requires ``allow_live = true``. Keys come from ``ALPACA_API_KEY`` /
+    ``ALPACA_SECRET_KEY`` (env wins over TOML) and are kept as SecretStr so
+    they never show up in reprs or logs."""
+
+    paper: bool = True
+    allow_live: bool = False
+    max_retries: int = 3
+    retry_backoff_seconds: float = 1.0
+    api_key: SecretStr | None = None
+    secret_key: SecretStr | None = None
+
+    @model_validator(mode="after")
+    def _keys_from_env(self) -> AlpacaBrokerConfig:
+        api_key = os.environ.get("ALPACA_API_KEY")
+        secret_key = os.environ.get("ALPACA_SECRET_KEY")
+        if api_key:
+            self.api_key = SecretStr(api_key)
+        if secret_key:
+            self.secret_key = SecretStr(secret_key)
+        return self
+
+
+class BrokersConfig(BaseModel):
+    # Which broker the production tick trades through.
+    kind: Literal["simulated", "alpaca"] = "simulated"
+    alpaca: AlpacaBrokerConfig = Field(default_factory=AlpacaBrokerConfig)
 
 
 class LakeConfig(BaseModel):
@@ -126,6 +165,7 @@ class Settings(BaseSettings):
     state: StateConfig = StateConfig()
     registry: RegistryConfig = RegistryConfig()
     logging: LoggingConfig = LoggingConfig()
+    brokers: BrokersConfig = Field(default_factory=BrokersConfig)
     sources: SourcesConfig = SourcesConfig()
     production: ProductionConfig = ProductionConfig()
     notify: NotifyConfig = NotifyConfig()
