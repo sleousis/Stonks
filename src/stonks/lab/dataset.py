@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from stonks.core.interval import Interval
 
 if TYPE_CHECKING:  # pragma: no cover
+    from stonks.backtest.costs import CostModelSettings
     from stonks.store.lake import DuckDBLake
 
 
@@ -27,6 +28,9 @@ class LabDataset:
     #: Explicit last day of the train window; overrides ``train_ratio``.
     #: Walk-forward folds set it so train/test boundaries are exact.
     train_end: date | None = None
+    #: Transaction costs for every backtest on this dataset (the CLI fills
+    #: it from ``[backtest.costs]``). ``None`` means zero costs.
+    costs: CostModelSettings | None = None
 
     def __post_init__(self) -> None:
         if self.train_end is not None and not (self.start <= self.train_end < self.end):

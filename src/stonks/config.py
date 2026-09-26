@@ -15,7 +15,9 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from stonks.backtest.costs import CostModelSettings
 from stonks.core.types import AssetClass
+from stonks.lab.survival.walk_forward import WalkForwardConfig
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
 
@@ -189,6 +191,24 @@ class ApiConfig(BaseModel):
         return data
 
 
+class BacktestSettings(BaseModel):
+    """``[backtest]``. ``costs`` (``[backtest.costs]``) is the transaction
+    cost model for lab backtests; zero costs unless configured. Production
+    can build the same model with ``settings.backtest.costs.build()``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    costs: CostModelSettings = CostModelSettings()
+
+
+class LabSettings(BaseModel):
+    """``[lab]``: defaults for ``stonks lab run``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    walk_forward: WalkForwardConfig = WalkForwardConfig()
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -201,6 +221,8 @@ class Settings(BaseSettings):
     production: ProductionConfig = ProductionConfig()
     notify: NotifyConfig = NotifyConfig()
     api: ApiConfig = Field(default_factory=ApiConfig)
+    backtest: BacktestSettings = BacktestSettings()
+    lab: LabSettings = LabSettings()
 
 
 def load_settings(config_path: Path | None = None) -> Settings:
