@@ -1,0 +1,228 @@
+<app-page-header title="Health" [description]="checkedAt()">
+  <button
+    actions
+    type="button"
+    class="btn"
+    [disabled]="refreshing()"
+    [attr.aria-busy]="refreshing()"
+    (click)="refresh()"
+  >
+    {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
+  </button>
+</app-page-header>
+
+<!-- Overall ---------------------------------------------------------------->
+@if (report.error(); as err) {
+  <app-error-state
+    title="Could not load the health report"
+    [error]="err"
+    (retry)="report.reload()"
+  />
+} @else if (!report.hasValue()) {
+  <app-loading-state label="Running health checks" [rows]="2" />
+} @else {
+  <section class="overall" [attr.data-level]="level()" aria-labelledby="overall-title">
+    <span class="glyph" aria-hidden="true"></span>
+    <div class="overall-text">
+      <h2 id="overall-title">
+        <span class="visually-hidden">Overall: </span>{{ levelLabel[level()] }}
+        <span class="overall-count">{{ headline() }}</span>
+      </h2>
+      <p>{{ advice() }}</p>
+    </div>
+    @if (version.hasValue()) {
+      <span class="muted version">API {{ version.value().version }}</span>
+    }
+  </section>
+}
+
+<section class="tiles" aria-label="Health summary">
+  <app-stat-tile
+    label="Fresh tickers"
+    [loading]="!report.hasValue() && !report.error()"
+    [value]="freshSummary()"
+    [detail]="freshDetail()"
+    [detailTone]="freshTone()"
+  />
+  <app-stat-tile
+    label="Stuck runs"
+    [loading]="!report.hasValue() && !report.error()"
+    [value]="report.hasValue() ? '' + stuckCount() : '–'"
+    [detail]="stuckCount() ? 'Ticks or ingest runs hung' : 'None running too long'"
+    [detailTone]="stuckCount() ? 'loss' : ''"
+  />
+  <app-stat-tile
+    label="Failed ingest runs"
+    [loading]="!failedIngest.hasValue() && !failedIngest.error()"
+    [value]="failedIngest.hasValue() ? '' + failedIngest.value().total : '–'"
+    detail="All time; latest below"
+  />
+  <app-stat-tile
+    label="Failed ticks"
+    [loading]="!failedTicks.hasValue() && !failedTicks.error()"
+    [value]="failedTicks.hasValue() ? '' + failedTicks.value().total : '–'"
+    detail="All time; latest below"
+  />
+</section>
+
+<div class="page-grid">
+  <!-- Freshness ------------------------------------------------------------>
+  <section class="panel span-7" aria-labelledby="fresh-title">
+    <div class="panel-head">
+      <h2 id="fresh-title">Data freshness</h2>
+      <span class="muted">
+        {{ tickers().length ? tickers().length + ' chosen tickers' : 'Production universe' }}
+      </span>
+    </div>
+    <form
+      class="ticker-form"
+      (submit)="$event.preventDefault(); applyTickers(tickerInput.value)"
+    >
+      <div class="field">
+        <label for="health-tickers">Tickers to check</label>
+        <input
+          #tickerInput
+          id="health-tickers"
+          class="input"
+          placeholder="Blank = production universe, e.g. AAPL.US MSFT.US"
+          autocapitalize="characters"
+          spellcheck="false"
+        />
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn">Check</button>
+        @if (tickers().length) {
+          <button type="button" class="btn btn-ghost" (click)="resetTickers(tickerInput)">
+            Use universe
+          </button>
+        }
+      </div>
+    </form>
+    @if (report.error()) {
+      <p class="panel-body muted">Freshness is unavailable until the report loads.</p>
+    } @else if (!report.hasValue()) {
+      <app-loading-state label="Loading freshness" [rows]="5" />
+    } @else if (freshness().length === 0) {
+      <app-empty-state
+        title="No tickers checked"
+        message="Set [production].universe in the config, or enter tickers above to check them."
+      />
+    } @else {
+      <app-data-table
+        caption="Latest daily bar per ticker"
+        [rows]="freshness()"
+        [columns]="freshnessColumns"
+        [rowKey]="freshnessKey"
+        [initialSort]="{ key: 'level', dir: 'desc' }"
+        [pageSize]="15"
+      >
+        <ng-template appCell="level" [appCellOf]="freshness()" let-row>
+          <app-status-pill
+            [status]="row.level"
+            [tone]="levelTone[row.level]"
+            [label]="levelLabel[row.level]"
+          />
+        </ng-template>
+      </app-data-table>
+    }
+  </section>
+
+  <!-- Runs ----------------------------------------------------------------->
+  <section class="panel span-5" aria-labelledby="runs-title">
+    <div class="panel-head">
+      <h2 id="runs-title">Runs</h2>
+    </div>
+    @if (report.error()) {
+      <p class="panel-body muted">Run checks are unavailable until the report loads.</p>
+    } @else if (!report.hasValue()) {
+      <app-loading-state label="Loading run checks" [rows]="3" />
+    } @else if (runChecks().length === 0) {
+      <app-empty-state title="No run checks" message="The report returned no run checks." />
+    } @else {
+      <ul class="checks">
+        @for (c of runChecks(); track c.name) {
+          <li [attr.data-level]="c.level">
+            <div class="check-head">
+              <p class="check-name">{{ checkTitle(c.name) }}</p>
+              <app-status-pill
+                [status]="c.level"
+                [tone]="levelTone[c.level]"
+                [label]="levelLabel[c.level]"
+              />
+            </div>
+            <p class="check-detail">{{ c.detail === 'none' ? 'None.' : c.detail }}</p>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+
+  <!-- Failures ------------------------------------------------------------->
+  <section class="panel span-7" aria-labelledby="ingest-fail-title">
+    <div class="panel-head">
+      <h2 id="ingest-fail-title">Recent ingest failures</h2>
+      @if (failedIngest.hasValue() && failedIngest.value().total > failedIngest.value().items.length) {
+        <span class="muted num">
+          Latest {{ failedIngest.value().items.length }} of {{ failedIngest.value().total }}
+        </span>
+      }
+    </div>
+    @if (failedIngest.error(); as err) {
+      <app-error-state
+        title="Could not load ingest runs"
+        [error]="err"
+        (retry)="failedIngest.reload()"
+      />
+    } @else if (!failedIngest.hasValue()) {
+      <app-loading-state label="Loading ingest failures" [rows]="4" />
+    } @else if (failedIngest.value().items.length === 0) {
+      <app-empty-state
+        title="No failed ingest runs"
+        message="Runs that end in error show here with the vendor's message."
+      />
+    } @else {
+      <app-data-table
+        caption="Most recent failed ingest runs"
+        [rows]="failedIngest.value().items"
+        [columns]="ingestColumns"
+        [rowKey]="ingestKey"
+        [pageSize]="0"
+      >
+        <ng-template appCell="error" [appCellOf]="failedIngest.value().items" let-run>
+          <span class="error-text">{{ run.error || 'No message recorded.' }}</span>
+        </ng-template>
+      </app-data-table>
+    }
+  </section>
+
+  <section class="panel span-5" aria-labelledby="tick-fail-title">
+    <div class="panel-head">
+      <h2 id="tick-fail-title">Recent tick failures</h2>
+    </div>
+    @if (failedTicks.error(); as err) {
+      <app-error-state title="Could not load ticks" [error]="err" (retry)="failedTicks.reload()" />
+    } @else if (!failedTicks.hasValue()) {
+      <app-loading-state label="Loading tick failures" [rows]="4" />
+    } @else if (failedTicks.value().items.length === 0) {
+      <app-empty-state
+        title="No failed ticks"
+        message="Ticks that fail show here with the reason from their summary."
+      />
+    } @else {
+      <app-data-table
+        caption="Most recent failed ticks"
+        [rows]="failedTicks.value().items"
+        [columns]="tickColumns"
+        [rowKey]="tickKey"
+        [pageSize]="0"
+      >
+        <ng-template appCell="status" [appCellOf]="failedTicks.value().items" let-t>
+          <app-status-pill [status]="t.status" />
+        </ng-template>
+        <ng-template appCell="error" [appCellOf]="failedTicks.value().items" let-t>
+          <span class="error-text">{{ t.summary?.error || t.summary?.reason || 'No reason recorded.' }}</span>
+        </ng-template>
+      </app-data-table>
+    }
+  </section>
+</div>

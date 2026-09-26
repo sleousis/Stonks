@@ -1,0 +1,161 @@
+@use 'breakpoints' as bp;
+
+// Overall state: text + shape + colour, never colour alone.
+.overall {
+  --level: var(--color-gain);
+  --level-soft: var(--color-gain-soft);
+
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--level);
+  border-radius: var(--radius-md);
+  background: linear-gradient(90deg, var(--level-soft), var(--color-surface) 60%);
+  box-shadow: var(--shadow-1);
+
+  &[data-level='warning'] {
+    --level: var(--color-warn);
+    --level-soft: var(--color-warn-soft);
+  }
+
+  &[data-level='critical'] {
+    --level: var(--color-loss);
+    --level-soft: var(--color-loss-soft);
+  }
+
+  h2 {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-1) var(--space-3);
+    font-size: var(--text-xl);
+    color: var(--level);
+  }
+
+  p {
+    margin-top: var(--space-1);
+    color: var(--color-ink-2);
+    max-width: 70ch;
+  }
+
+  .version {
+    grid-column: 1 / -1;
+    font-size: var(--text-sm);
+  }
+
+  @include bp.from-tablet {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+
+    .version {
+      grid-column: auto;
+    }
+  }
+}
+
+.overall-count {
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  color: var(--color-ink);
+}
+
+// Circle = good, triangle = warning, diamond = critical.
+.glyph {
+  width: 28px;
+  height: 28px;
+  background: var(--level);
+  border-radius: 50%;
+}
+
+.overall[data-level='warning'] .glyph {
+  border-radius: 0;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.overall[data-level='critical'] .glyph {
+  width: 22px;
+  height: 22px;
+  margin: 3px;
+  border-radius: 2px;
+  transform: rotate(45deg);
+}
+
+.tiles {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: var(--space-4);
+
+  @include bp.from-desktop {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.ticker-form {
+  display: grid;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+
+  @include bp.from-tablet {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+
+  @include bp.phone {
+    .btn {
+      flex: 1;
+    }
+  }
+}
+
+.checks {
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-2);
+  list-style: none;
+
+  li {
+    padding: var(--space-3) 0;
+
+    & + li {
+      border-top: 1px solid var(--color-border);
+    }
+  }
+}
+
+.check-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.check-name {
+  font-weight: var(--weight-semibold);
+}
+
+.check-detail {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.error-text {
+  display: inline-block;
+  max-width: 48ch;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: var(--color-loss);
+  font-size: var(--text-sm);
+}
