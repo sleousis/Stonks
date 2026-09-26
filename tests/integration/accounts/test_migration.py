@@ -200,8 +200,7 @@ def test_legacy_inserts_without_portfolio_id_land_in_the_sole_portfolio(populate
 
 def _second_portfolio(s: SqliteState) -> None:
     s.execute(
-        "INSERT INTO users (id, display_name, role, created_at)"
-        " VALUES ('usr_b', 'B', 'trader', ?)",
+        "INSERT INTO users (id, display_name, role, created_at) VALUES ('usr_b', 'B', 'trader', ?)",
         [NOW],
     )
     s.execute(
