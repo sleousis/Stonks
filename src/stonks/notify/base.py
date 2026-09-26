@@ -44,6 +44,10 @@ class Notification:
 
 
 class Notifier(ABC):
+    #: True for backends that record every notification (the alerts store):
+    #: :class:`CompositeNotifier` then skips its ``min_level`` filter for them.
+    receives_all_levels: bool = False
+
     def notify(self, notification: Notification) -> None:
         try:
             self._send(notification)
@@ -65,8 +69,8 @@ class Notifier(ABC):
 
 
 class CompositeNotifier(Notifier):
-    """Fans out to children, dropping notifications below ``min_level``.
-    Each child is isolated: one failing backend doesn't stop the others."""
+    """Fans out to children, dropping notifications below ``min_level``
+    (except for children that set ``receives_all_levels``). Each child is isolated: one failing backend doesn't stop the others."""
 
     def __init__(
         self, children: Sequence[Notifier], min_level: NotificationLevel = "warning"
@@ -75,9 +79,10 @@ class CompositeNotifier(Notifier):
         self.min_level = min_level
 
     def _send(self, notification: Notification) -> None:
-        if LEVEL_ORDER[notification.level] < LEVEL_ORDER[self.min_level]:
-            return
+        below = LEVEL_ORDER[notification.level] < LEVEL_ORDER[self.min_level]
         for child in self.children:
+            if below and not child.receives_all_levels:
+                continue
             child.notify(notification)
 
 

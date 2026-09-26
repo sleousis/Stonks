@@ -140,12 +140,12 @@ def test_notify_webhook_url_env_overrides_toml(tmp_path, monkeypatch):
     assert s.notify.webhook.url == "https://hooks.example.test/secret"
 
 
-def test_notify_defaults_to_log_backend(tmp_path, monkeypatch):
+def test_notify_defaults_to_log_and_store_backends(tmp_path, monkeypatch):
     monkeypatch.delenv("STONKS_NOTIFY_WEBHOOK_URL", raising=False)
     cfg = tmp_path / "cfg.toml"
     cfg.write_text("")
     s = load_settings(config_path=cfg)
-    assert s.notify.backends == ["log"]
+    assert s.notify.backends == ["log", "store"]
     assert s.notify.min_level == "warning"
     assert s.notify.webhook.url is None
 
@@ -158,5 +158,5 @@ def test_default_toml_parses(monkeypatch):
     s = load_settings(config_path=repo_cfg)
     assert s.production.risk.enabled is True
     assert s.production.health.max_bar_age_days == 4
-    assert s.notify.backends == ["log"]
+    assert s.notify.backends == ["log", "store"]
     assert s.notify.min_level == "warning"

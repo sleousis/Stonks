@@ -11,7 +11,7 @@ from stonks.config import Settings
 from stonks.core.protocols import Broker
 from stonks.core.types import Portfolio
 from stonks.execution.brokers import SimulatedCosts, make_broker
-from stonks.notify import Notifier, build_notifier
+from stonks.notify import Notifier, notifier_from_settings
 from stonks.production.tick import BrokerFactory, TickSettings
 
 
@@ -56,6 +56,6 @@ def build_tick_runtime(settings: Settings, universe: Sequence[str]) -> TickRunti
 
     return TickRuntime(
         settings=build_tick_settings(settings, universe),
-        notifier=build_notifier(settings.notify),
+        notifier=notifier_from_settings(settings),
         broker_factory=factory,
     )
