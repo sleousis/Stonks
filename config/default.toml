@@ -172,11 +172,23 @@ ui_dist = "web/dist"
 # `stonks golive check <id>` limits for a paper-trading period (shadow P&L for
 # shadow strategies, the real simulated portfolio for active ones). Missing
 # data fails a check. The gate never promotes; `stonks registry promote` does.
-min_days = 20
+min_days = 63                     # at least MinTRL of the oos Sharpe when incubation is on
 max_drawdown = 0.15               # deepest allowed drawdown, positive fraction
 max_drift = 0.10                  # max |paper return - backtest-expected return|
-min_trades = 5
+min_trades = 20
 require_all_survival_passed = true
+# Incubation grade (BL-25): adds within_mc_band, quit_rule, promotion_preset,
+# nonzero_costs, hypothesis_recorded and backtest_min_trades. false keeps the
+# six checks above.
+incubation = true
+use_min_trl = true                # min_days = max(min_days, MinTRL of the oos Sharpe)
+min_trl_cap_days = 252
+min_trl_alpha = 0.05              # the track record must reach PSR >= 1 - alpha
+periods_per_year = 252            # de-annualises the oos Sharpe for MinTRL
+quit_drawdown_multiple = 1.5      # quit beyond 1.5x the backtest drawdown (or MC p95)
+promotion_preset = "promotion"    # every test of this preset needs a stored report
+min_backtest_trades = 30
+min_hypothesis_chars = 20
 
 [mcp]
 # `stonks mcp` talks to the running REST API (`stonks serve`); it never opens

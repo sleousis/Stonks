@@ -171,3 +171,13 @@ def test_lab_benchmark_defaults_to_auto_in_code_and_toml(monkeypatch):
     assert Settings().lab.benchmark == "auto"
     repo_cfg = Path(__file__).parents[2] / "config" / "default.toml"
     assert load_settings(config_path=repo_cfg).lab.benchmark == "auto"
+
+
+def test_default_toml_golive_matches_the_code_defaults(monkeypatch):
+    from pathlib import Path
+
+    from stonks.config import GoLivePolicy
+
+    monkeypatch.delenv("STONKS_NOTIFY_WEBHOOK_URL", raising=False)
+    repo_cfg = Path(__file__).parents[2] / "config" / "default.toml"
+    assert load_settings(config_path=repo_cfg).golive == GoLivePolicy()

@@ -32,7 +32,7 @@ Its defaults are 63 days and 20 trades, and it adds:
   (trading days), capped at ``min_trl_cap_days``. A stored ``min_trl_bars``
   metric wins. No Sharpe fails the check;
 - ``within_mc_band``: paper max drawdown <= the ``mc_trades`` report's
-  ``p95_max_dd`` and, when ``p5_return`` is stored, the paper return >= that
+  ``p95_max_dd`` and, when ``p05_return`` is stored, the paper return >= that
   annual 5th percentile scaled to the period. No Monte Carlo report fails;
 - ``quit_rule``: paper drawdown <= ``quit_drawdown_multiple`` x the backtest
   max drawdown (``max_drawdown_oos``), or the Monte Carlo 95th percentile
@@ -454,7 +454,7 @@ def _mc_band_check(period: PaperPeriod) -> GoLiveCheck:
         )
     ok = dd <= p95
     detail = f"paper drawdown {dd:.2%} vs Monte Carlo p95 {p95:.2%}"
-    p5 = period.metric("mc_trades", "p5_return")
+    p5 = period.metric("mc_trades", "p05_return")  # mc_trades' metric name
     if p5 is None:
         detail += "; no Monte Carlo return floor stored (drawdown only)"
     else:

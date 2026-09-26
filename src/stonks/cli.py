@@ -1617,6 +1617,10 @@ def golive_check(
     for c in report.checks:
         table.add_row(c.name, "[green]PASS[/green]" if c.passed else "[red]FAIL[/red]", c.detail)
     console.print(table)
+    console.print("promotion checklist (context, not checks):")
+    for key, value in report.checklist.items():
+        shown = "-" if value is None else f"{value:.4g}" if isinstance(value, float) else value
+        console.print(f"  {key}: {shown}", markup=False)
     if report.passed:
         console.print("[green]PASS[/green]: ready for a human to promote")
         return

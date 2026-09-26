@@ -30,6 +30,16 @@ def client(app):
 
 # ---- 11.1 go-live -------------------------------------------------------------
 
+LEGACY_CHECKS = ["status", "min_days", "max_drawdown", "max_drift", "min_trades", "survival"]
+INCUBATION_CHECKS = [
+    "within_mc_band",
+    "quit_rule",
+    "promotion_preset",
+    "nonzero_costs",
+    "hypothesis_recorded",
+    "backtest_min_trades",
+]
+
 
 def test_golive_service_reports_every_check(services, seeded):
     view = GoLiveService(services.context).check(seeded["active_id"])
@@ -37,14 +47,24 @@ def test_golive_service_reports_every_check(services, seeded):
     assert view.status == "active"
     assert view.source == "portfolio"
     names = [c.name for c in view.checks]
-    assert names == ["status", "min_days", "max_drawdown", "max_drift", "min_trades", "survival"]
+    assert names == [*LEGACY_CHECKS, *INCUBATION_CHECKS]  # [golive] incubation = true
     # One paper day and no oos CAGR: the gate cannot pass yet.
     assert view.passed is False
     min_days = next(c for c in view.checks if c.name == "min_days")
     assert min_days.value == 1
-    assert min_days.limit == GoLivePolicy().min_days
+    # max(min_days, MinTRL of the oos Sharpe), capped: MinTRL here exceeds the cap
+    assert min_days.limit == GoLivePolicy().min_trl_cap_days
     assert min_days.passed is False
     assert view.policy == GoLivePolicy()
+    # promotion context for the reviewer: nothing recorded for this seed
+    assert view.checklist.n_trials_class is None
+    assert view.checklist.dsr is None and view.checklist.pbo is None
+
+
+def test_golive_service_legacy_policy_keeps_six_checks(services, seeded):
+    services.context.settings.golive = GoLivePolicy(incubation=False)
+    view = GoLiveService(services.context).check(seeded["active_id"])
+    assert [c.name for c in view.checks] == LEGACY_CHECKS
 
 
 def test_golive_route_returns_typed_report(client, seeded):
@@ -86,13 +106,15 @@ def test_golive_schema_names_are_an_enum(client):
     schema = client.get("/openapi.json").json()["components"]["schemas"]
     assert "GoLiveReport" in schema
     names = schema["GoLiveCheckView"]["properties"]["name"]
-    assert set(names["enum"]) == {
-        "status",
-        "min_days",
-        "max_drawdown",
-        "max_drift",
-        "min_trades",
-        "survival",
+    assert set(names["enum"]) == {*LEGACY_CHECKS, *INCUBATION_CHECKS}
+    checklist = schema["PromotionChecklistView"]["properties"]
+    assert set(checklist) == {
+        "n_trials_class",
+        "dsr",
+        "pbo",
+        "excess_cagr",
+        "premortem",
+        "hypothesis",
     }
 
 

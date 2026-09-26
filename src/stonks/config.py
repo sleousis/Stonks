@@ -197,17 +197,40 @@ class GoLivePolicy(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # Distinct days with a paper snapshot.
-    min_days: int = Field(default=20, ge=1)
+    # Distinct days with a paper snapshot (with ``incubation``, at least the
+    # MinTRL of the oos Sharpe, capped at ``min_trl_cap_days``).
+    min_days: int = Field(default=63, ge=1)
     # Deepest peak-to-trough fall allowed, as a positive fraction (0.15 = -15%).
     max_drawdown: float = Field(default=0.15, gt=0.0, le=1.0)
     # Largest allowed |paper return - backtest-expected return| over the
     # period; the expectation compounds the ``oos`` survival report's CAGR.
     max_drift: float = Field(default=0.10, ge=0.0)
     # Filled trades during the paper period.
-    min_trades: int = Field(default=5, ge=1)
+    min_trades: int = Field(default=20, ge=1)
     # Every stored survival report must have passed (and there must be one).
     require_all_survival_passed: bool = True
+
+    # ---- incubation grade (BL-25; ``stonks.production.golive``) ----
+    # Adds within_mc_band, quit_rule, promotion_preset, nonzero_costs,
+    # hypothesis_recorded and backtest_min_trades; false keeps the six
+    # legacy checks.
+    incubation: bool = True
+    # Day requirement = max(min_days, MinTRL of the oos Sharpe).
+    use_min_trl: bool = True
+    min_trl_cap_days: int = Field(default=252, ge=1)
+    # The track record must reach PSR >= 1 - alpha.
+    min_trl_alpha: float = Field(default=0.05, gt=0.0, lt=1.0)
+    # De-annualises the oos Sharpe to a per-bar Sharpe for MinTRL.
+    periods_per_year: float = Field(default=252.0, gt=0.0)
+    # Quit when the paper drawdown exceeds this multiple of the backtest's
+    # (or the Monte Carlo 95th percentile, when tighter).
+    quit_drawdown_multiple: float = Field(default=1.5, ge=1.0)
+    # Survival preset whose registered tests all need a stored report.
+    promotion_preset: str = "promotion"
+    # Closed trades the backtest must have made (oos or mc_trades n_trades).
+    min_backtest_trades: int = Field(default=30, ge=1)
+    # Characters of recorded hypothesis (lab run or strategy class).
+    min_hypothesis_chars: int = Field(default=20, ge=1)
 
 
 class WebhookConfig(BaseModel):
