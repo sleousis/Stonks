@@ -1182,7 +1182,7 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `max_p_value` | number | no |  |
-| `metric` | "profit_factor" \| "sharpe" \| "final_return" \| "cagr" | no |  |
+| `metric` | "profit_factor" \| "bar_profit_factor" \| "sharpe" \| "final_return" \| "cagr" | no |  |
 | `n_permutations` | integer | no |  |
 | `retune` | boolean \| "auto" | no |  |
 | `seed` | integer \| null | no |  |

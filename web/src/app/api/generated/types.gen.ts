@@ -2358,7 +2358,7 @@ export type McptOptions = {
     /**
      * Metric
      */
-    metric?: 'profit_factor' | 'sharpe' | 'final_return' | 'cagr';
+    metric?: 'profit_factor' | 'bar_profit_factor' | 'sharpe' | 'final_return' | 'cagr';
     /**
      * N Permutations
      */

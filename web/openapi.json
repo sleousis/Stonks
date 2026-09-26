@@ -4605,6 +4605,7 @@
             "default": "profit_factor",
             "enum": [
               "profit_factor",
+              "bar_profit_factor",
               "sharpe",
               "final_return",
               "cagr"
