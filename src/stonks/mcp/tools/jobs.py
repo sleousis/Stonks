@@ -27,6 +27,15 @@ from stonks.mcp.tools.common import (
 
 TERMINAL_JOB_STATUSES = frozenset({"succeeded", "failed", "cancelled"})
 
+#: Typed result route per job kind (``{id}`` is the validated job id). A
+#: kind missing here (e.g. studio jobs) reports the job's own ``result``.
+RESULT_ROUTES: dict[str, str] = {
+    "backtest": "/api/lab/backtests/{id}/result",
+    "lab_run": "/api/lab/runs/{id}/result",
+    "ingest": "/api/ingest/jobs/{id}/result",
+    "tick": "/api/ticks/jobs/{id}/result",
+}
+
 
 def strategy_ref(
     strategy_id: str | None, class_path: str | None, params: dict[str, Any] | None
@@ -152,14 +161,24 @@ def register(t: ToolContext) -> None:
         poll_seconds: Annotated[float, Field(ge=0.05, le=30)] = 1.0,
     ) -> dict[str, Any]:
         """Poll a job until it finishes or the timeout passes. Returns
-        {"timed_out": bool, "job": {...}}; the job carries its result or error."""
-        path = f"/api/jobs/{seg(job_id)}"
+        {"timed_out": bool, "job": {...}, "result": {...} | null}: once the job
+        succeeded, "result" is its typed result (BacktestResult, LabRunView,
+        ingest or tick result); otherwise null and the job carries its error."""
+        jid = seg(job_id)
         deadline = time.monotonic() + min(timeout_seconds, max_wait)
         while True:
-            job = await t.get(path)
+            job = await t.get(f"/api/jobs/{jid}")
             if job.get("status") in TERMINAL_JOB_STATUSES:
-                return {"timed_out": False, "job": job}
+                return {"timed_out": False, "job": job, "result": await typed_result(jid, job)}
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                return {"timed_out": True, "job": job}
+                return {"timed_out": True, "job": job, "result": None}
             await anyio.sleep(min(poll_seconds, remaining))
+
+    async def typed_result(jid: str, job: dict[str, Any]) -> Any:
+        if job.get("status") != "succeeded":
+            return None
+        route = RESULT_ROUTES.get(str(job.get("kind")))
+        if route is None:
+            return job.get("result")
+        return await t.get(route.format(id=jid))

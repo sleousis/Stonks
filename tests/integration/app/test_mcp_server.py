@@ -268,6 +268,9 @@ async def test_backtest_job_and_wait(mcp):
     assert done["timed_out"] is False
     assert done["job"]["status"] == "succeeded", done["job"]["error"]
     assert done["job"]["result"]["final_return"] > 0.5
+    # the typed BacktestResult from /api/lab/backtests/{id}/result
+    assert done["result"]["final_return"] == done["job"]["result"]["final_return"]
+    assert done["result"]["equity"] and "profit_factor" in done["result"]
     assert (await call(mcp, "get_job", {"job_id": job["id"]}))["status"] == "succeeded"
     assert (await call(mcp, "list_jobs", {"kind": "backtest"}))["total"] == 1
 
@@ -307,6 +310,8 @@ async def test_lab_job(mcp):
     done = await call(mcp, "wait_for_job", {"job_id": job["id"], "poll_seconds": 0.05})
     assert done["job"]["status"] == "succeeded", done["job"]["error"]
     assert done["job"]["result"]["verdict"] in ("pass", "fail")
+    assert done["result"]["verdict"] == done["job"]["result"]["verdict"]
+    assert done["result"]["class_path"].endswith(":Momentum")
 
 
 @pytest.mark.anyio
@@ -314,6 +319,7 @@ async def test_ingest_job(mcp):
     job = await call(mcp, "run_ingest", {"kind": "prices", "tickers": ["NEW.US"]})
     done = await call(mcp, "wait_for_job", {"job_id": job["id"], "poll_seconds": 0.05})
     assert done["job"]["status"] == "succeeded", done["job"]["error"]
+    assert done["result"]["kind"] == "prices" and done["result"]["tickers_ok"] == 1
     assert (await call(mcp, "list_ingest_runs"))["total"] == 1
 
 
@@ -366,6 +372,7 @@ async def test_run_tick_confirmed_defaults_to_dry_run(mcp):
     assert job["params"]["dry_run"] is True
     done = await call(mcp, "wait_for_job", {"job_id": job["id"], "poll_seconds": 0.05})
     assert done["job"]["status"] == "succeeded", done["job"]["error"]
+    assert done["result"]["dry_run"] is True and done["result"]["tick_id"]
 
 
 @pytest.mark.anyio
@@ -474,6 +481,42 @@ async def test_wait_for_job_times_out_and_clamps():
     assert result.structured_content["timed_out"] is True
     assert result.structured_content["job"]["status"] == "running"
     assert 2 <= len(polls) < 20
+
+
+def _job_transport(job: dict, seen: list[str]) -> httpx2.MockTransport:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request.url.path)
+        if request.url.path.endswith("/result"):
+            return httpx2.Response(200, json={"typed": True})
+        return httpx2.Response(200, json=job)
+
+    return httpx2.MockTransport(handler)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("kind", "status", "result_path", "expected"),
+    [
+        ("backtest", "succeeded", "/api/lab/backtests/j1/result", {"typed": True}),
+        ("lab_run", "succeeded", "/api/lab/runs/j1/result", {"typed": True}),
+        ("ingest", "succeeded", "/api/ingest/jobs/j1/result", {"typed": True}),
+        ("tick", "succeeded", "/api/ticks/jobs/j1/result", {"typed": True}),
+        # no typed route for studio jobs: the job's own result
+        ("studio_backtest", "succeeded", None, {"raw": 1}),
+        # only a succeeded job has a result to fetch
+        ("backtest", "failed", None, None),
+    ],
+)
+async def test_wait_for_job_fetches_typed_result(kind, status, result_path, expected):
+    seen: list[str] = []
+    job = {"id": "j1", "kind": kind, "status": status, "result": {"raw": 1}, "error": None}
+    if status != "succeeded":
+        job["result"] = None
+    api = ApiClient(BASE, token=API_TOKEN, transport=_job_transport(job, seen))
+    async with Client(build_server(api)) as c:
+        done = await call(c, "wait_for_job", {"job_id": "j1"})
+    assert done["result"] == expected
+    assert [p for p in seen if p.endswith("/result")] == ([result_path] if result_path else [])
 
 
 @pytest.mark.anyio
