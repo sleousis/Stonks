@@ -194,6 +194,20 @@ _CASH_FLOW_STATEMENT_COLS: tuple[str, ...] = (
 _STATEMENT_PK: tuple[str, ...] = ("ticker", "period_end", "frequency")
 
 
+def _last_per_key(df: pd.DataFrame, keys: tuple[str, ...]) -> pd.DataFrame:
+    """Drop rows whose ``keys`` repeat within the batch, keeping the last.
+
+    ``INSERT ... ON CONFLICT DO UPDATE`` can't apply two input rows to the
+    same target row: depending on the DuckDB version it either raises
+    ("can not update the same row twice") or silently keeps the first.
+    Vendors do send such batches (EODHD's annual and quarterly
+    shares-outstanding lists both carry the fiscal-year-end date), so we
+    collapse them up front with last-write-wins semantics. pandas treats
+    NaN/None as equal here, which matches our "NULLs equal" natural keys.
+    """
+    return df.drop_duplicates(subset=list(keys), keep="last")
+
+
 class DuckDBLake:
     def __init__(self, path: str | Path):
         self._path = Path(path)
@@ -526,7 +540,7 @@ class DuckDBLake:
         update_clause = ", ".join(
             f"{c} = COALESCE(CAST(EXCLUDED.{c} AS {col_types[c]}), {table}.{c})" for c in non_pk
         )
-        with self._registered(df[list(cols)]):
+        with self._registered(_last_per_key(df[list(cols)], pk)):
             self.con.execute(
                 f"INSERT INTO {table} ({', '.join(cols)}) "
                 f"SELECT {', '.join(cols)} FROM _in "
@@ -1021,7 +1035,7 @@ class DuckDBLake:
         # roster — wrap both statements in one transaction so the
         # caller either sees the new roster or the old one, never an
         # empty one.
-        with self._registered(frame), self.transaction():
+        with self._registered(_last_per_key(frame, ("ticker", "name"))), self.transaction():
             placeholders = ",".join(["?"] * len(tickers))
             self.con.execute(
                 f"DELETE FROM officers WHERE ticker IN ({placeholders})",
@@ -1060,7 +1074,7 @@ class DuckDBLake:
             action = "DO UPDATE SET " + ", ".join(f"{c} = EXCLUDED.{c}" for c in non_pk)
         else:
             action = "DO NOTHING"
-        with self._registered(df[list(cols)]):
+        with self._registered(_last_per_key(df[list(cols)], pk)):
             self.con.execute(
                 f"INSERT INTO {table} ({', '.join(cols)}) "
                 f"SELECT {', '.join(cols)} FROM _in "
@@ -1148,7 +1162,10 @@ class DuckDBLake:
         col_list = ", ".join(cols)
         pk_list = ", ".join((*identity_cols, snapshot_col))
 
-        with self._registered(df[cols]), self.transaction():
+        with (
+            self._registered(_last_per_key(df[cols], (*identity_cols, snapshot_col))),
+            self.transaction(),
+        ):
             before = int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
             sql = f"""
                     WITH ranked AS (
