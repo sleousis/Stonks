@@ -125,10 +125,12 @@ def in_process_ingest_metadata(ctx: RunContext) -> JobOutcome:
     if closed is not None:
         return closed
     job = ex.services.ingest.submit(
-        IngestRequest(
-            kind="metadata",
-            source=str(ctx.params.get("source", "eodhd")),
-            tickers=universe,
+        IngestRequest.model_validate(
+            {
+                "kind": "metadata",
+                "source": str(ctx.params.get("source", "eodhd")),
+                "tickers": universe,
+            }
         )
     )
     return ingest_job_outcome(*ex.run_job(job, INGEST_JOB, IngestResultView))

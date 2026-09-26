@@ -232,7 +232,7 @@ def test_engage_and_list_accept_a_principal(halts, people):
 
 
 def test_flatten_escalates_to_stop_all(halts, people, settings):
-    from datetime import date
+    from datetime import UTC, datetime
 
     from stonks.production.halts import active_halts
 
@@ -245,7 +245,7 @@ def test_flatten_escalates_to_stop_all(halts, people, settings):
     assert stop.halt == "all" and stop.active
     with SqliteState(settings.state.path) as state:
         [open_halt] = active_halts(
-            state, date.today(), portfolio_id="pf_default", user_id=DEFAULT_OWNER_ID
+            state, datetime.now(UTC).date(), portfolio_id="pf_default", user_id=DEFAULT_OWNER_ID
         )
     assert open_halt.id == stop.id and open_halt.halt == "all"
     [row] = _audit(settings, "kill_switch.escalate")

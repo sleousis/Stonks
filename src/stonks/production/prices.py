@@ -65,16 +65,17 @@ def load_prices(
     volumes: dict[str, float] = {}
     fresh: set[str] = set()
     bar_dates: dict[str, date] = {}
-    for row in df.itertuples(index=False):
-        bar_date = pd.Timestamp(row.date).date()
+    for record in df.to_dict("records"):
+        ticker = str(record["ticker"])
+        bar_date: date = pd.Timestamp(record["date"]).date()  # type: ignore[assignment]
         is_fresh = bar_date >= oldest
         if is_fresh:
-            fresh.add(row.ticker)
-        if is_fresh or row.ticker in held_set:
-            prices[row.ticker] = float(row.close)
-            bar_dates[row.ticker] = bar_date
-            if not pd.isna(row.volume):
-                volumes[row.ticker] = float(row.volume)
+            fresh.add(ticker)
+        if is_fresh or ticker in held_set:
+            prices[ticker] = float(record["close"])
+            bar_dates[ticker] = bar_date
+            if not pd.isna(record["volume"]):
+                volumes[ticker] = float(record["volume"])
     return PriceBook(prices=prices, fresh=frozenset(fresh), volumes=volumes, bar_dates=bar_dates)
 
 
