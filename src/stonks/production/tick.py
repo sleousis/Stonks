@@ -5,8 +5,15 @@ the tick is stateless across runs. Orders are idempotent via a deterministic
 ``client_id`` derived from (as_of date, strategy_id, ticker, side) — not from
 the per-run ``tick_id``, which stays unique so every run gets its own
 ``tick_runs`` row. Re-running a crashed tick for the same ``as_of`` therefore
-reproduces the same client_ids, and any order already recorded as ``filled``
-is skipped instead of being submitted (and applied to the portfolio) again.
+reproduces the same client_ids, and any order already in ``orders`` (unless
+``rejected`` / ``cancelled``) is skipped instead of being submitted (and
+applied to the portfolio) again.
+
+The broker is the simulated one unless ``TickSettings.broker_kind`` opts in
+to an external broker (``alpaca``, built by ``broker_factory``). Then the tick
+reconciles open orders before deciding, takes the portfolio from the broker
+account, records submitted orders as ``pending`` and books fills only through
+``execution.reconcile.reconcile_orders``.
 """
 
 from __future__ import annotations
@@ -21,8 +28,9 @@ from typing import Any, Literal
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.protocols import Broker
 from stonks.core.types import Fill, Order, OrderStatus, Portfolio
-from stonks.execution.brokers.base import BrokerKind
+from stonks.execution.brokers.base import BrokerKind, OrderRejectedError
 from stonks.execution.orders import make_client_id
+from stonks.execution.reconcile import reconcile_orders
 from stonks.logging import get_logger
 from stonks.notify import Notification, Notifier
 from stonks.production.prices import drop_stale_buys, held_tickers, load_prices
@@ -178,7 +186,28 @@ def _run_tick_body(
 
     # 2. prepare the portfolio, then price the universe plus every holding:
     #    a held ticker outside the universe must still be marked and sellable.
-    portfolio = _load_or_seed_portfolio(state, initial_cash=settings.initial_cash)
+    #    An external broker (opt-in, e.g. Alpaca) is the source of truth: sync
+    #    its order statuses and fills into the ledger first, then read the
+    #    portfolio from the account.
+    external = settings.broker_kind != "simulated"
+    broker: Broker | None = None
+    if external:
+        if broker_factory is None:
+            raise ValueError(
+                f"broker_kind={settings.broker_kind!r} needs a broker_factory "
+                "(build it with production.settings_builder.build_tick_runtime)"
+            )
+        broker = broker_factory(Portfolio(cash=0.0))
+        if not dry_run:
+            pre = reconcile_orders(broker, state)
+            log.info(
+                "tick.reconciled",
+                orders_checked=pre.orders_checked,
+                fills_inserted=pre.fills_inserted,
+            )
+        portfolio = broker.fetch_portfolio()
+    else:
+        portfolio = _load_or_seed_portfolio(state, initial_cash=settings.initial_cash)
     held = held_tickers(portfolio.positions)
     book = load_prices(
         lake,
@@ -243,7 +272,8 @@ def _run_tick_body(
     )
     risk_adjustments = list(risk_result.adjustments)
 
-    broker = _build_broker(portfolio, settings, prices, as_of, broker_factory)
+    if broker is None:
+        broker = _build_broker(portfolio, settings, prices, as_of, broker_factory)
     orders_with_tick = [
         replace(
             o,
@@ -261,9 +291,13 @@ def _run_tick_body(
     placed = 0
     fills_count = 0
     any_failure = False
-    # Broker outcomes are buffered and persisted together with the portfolio
-    # snapshot in one transaction, so a crash can't leave fills recorded
-    # without the snapshot that reflects them.
+    # Simulated: broker outcomes are buffered and persisted together with the
+    # portfolio snapshot in one transaction, so a crash can't leave fills
+    # recorded without the snapshot that reflects them. External: each order
+    # row is written the moment the broker has it (the order exists there
+    # whatever happens next), always as 'pending'; statuses and fills are
+    # then booked only by ``reconcile_orders``, from the broker's cumulative
+    # state, so no fill is ever booked twice.
     outcomes: list[tuple[Order, OrderStatus, Fill | None]] = []
 
     def place(batch: list[Order]) -> None:
@@ -272,23 +306,40 @@ def _run_tick_body(
             if dry_run:
                 placed += 1
                 continue
-            if _already_filled(state, order.client_id):
-                log.info("tick.order.skipped_already_filled", client_id=order.client_id)
+            existing = _live_order_status(state, order.client_id)
+            if existing is not None:
+                log.info(
+                    "tick.order.skipped_already_submitted",
+                    client_id=order.client_id,
+                    status=existing,
+                )
                 continue
             try:
                 fill = broker.place_order(order)
+            except OrderRejectedError as exc:
+                log.warning("tick.order.rejected", ticker=order.ticker, error=str(exc))
+                if external:
+                    _record_order(state, order, status="rejected")
+                outcomes.append((order, "rejected", None))
+                continue
             except Exception as exc:
                 any_failure = True
                 log.warning("tick.order.failed", ticker=order.ticker, error=str(exc))
                 continue
-            outcomes.append((order, "filled" if fill else "rejected", fill))
             placed += 1
+            if external:
+                _record_order(state, order, status="pending")
+                outcomes.append((order, "pending", None))
+                continue
+            outcomes.append((order, "filled" if fill else "rejected", fill))
             if fill is not None:
                 fills_count += 1
 
     # Sells first. The first risk pass counted their expected proceeds, so
     # buys are re-checked against the portfolio as it stands after the
-    # sells: a rejected or unfilled sell must not fund a buy.
+    # sells: a rejected or unfilled sell must not fund a buy. (An external
+    # broker's portfolio object is not updated by fills, so its buys are
+    # checked against the pre-sell cash: conservative by construction.)
     place(sells)
     if buys and not dry_run:
         second = apply_risk(
@@ -304,7 +355,13 @@ def _run_tick_body(
         buys = second.orders
     place(buys)
 
-    if not dry_run:
+    if not dry_run and external:
+        post = reconcile_orders(broker, state)
+        fills_count = post.fills_inserted
+        after = broker.fetch_portfolio()
+        with state.transaction():
+            _snapshot_portfolio(state, tick_id, after, prices, as_of)
+    elif not dry_run:
         with state.transaction():
             for order, order_status, fill in outcomes:
                 _record_order(state, order, status=order_status)
@@ -504,12 +561,14 @@ def _position_owner(
     return None
 
 
-def _already_filled(state: SqliteState, client_id: str | None) -> bool:
+def _live_order_status(state: SqliteState, client_id: str | None) -> str | None:
+    """Status of an order already in the ledger that must not be placed
+    again (anything but rejected/cancelled), or None when it may be placed."""
     rows = state.sql(
-        "SELECT 1 FROM orders WHERE client_id = ? AND status = 'filled'",
+        "SELECT status FROM orders WHERE client_id = ? AND status NOT IN ('rejected', 'cancelled')",
         [client_id],
     )
-    return bool(rows)
+    return rows[0]["status"] if rows else None
 
 
 def _record_order(state: SqliteState, order: Order, status: OrderStatus) -> None:

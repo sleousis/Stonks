@@ -62,9 +62,7 @@ class AlpacaBrokerConfig(BaseModel):
     max_retries: int = 3
     retry_backoff_seconds: float = 1.0
     api_key: SecretStr | None = Field(default_factory=lambda: _env_secret("ALPACA_API_KEY"))
-    secret_key: SecretStr | None = Field(
-        default_factory=lambda: _env_secret("ALPACA_SECRET_KEY")
-    )
+    secret_key: SecretStr | None = Field(default_factory=lambda: _env_secret("ALPACA_SECRET_KEY"))
 
     @model_validator(mode="before")
     @classmethod

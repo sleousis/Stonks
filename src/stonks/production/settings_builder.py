@@ -8,6 +8,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from stonks.config import Settings
+from stonks.core.protocols import Broker
+from stonks.core.types import Portfolio
+from stonks.execution.brokers import make_broker
 from stonks.notify import Notifier, build_notifier
 from stonks.production.tick import BrokerFactory, TickSettings
 
@@ -36,7 +39,18 @@ def build_tick_settings(settings: Settings, universe: Sequence[str]) -> TickSett
 
 
 def build_tick_runtime(settings: Settings, universe: Sequence[str]) -> TickRuntime:
+    """The simulated default gets no factory (the tick builds its in-memory
+    broker, no keys needed). ``alpaca`` is strictly opt-in via
+    ``[brokers].kind``; its factory connects lazily, inside the tick, so a
+    missing key fails that tick (recorded as ``error``), nothing else."""
+    factory: BrokerFactory | None = None
+    if settings.brokers.kind != "simulated":
+
+        def factory(portfolio: Portfolio) -> Broker:
+            return make_broker(settings, portfolio)
+
     return TickRuntime(
         settings=build_tick_settings(settings, universe),
         notifier=build_notifier(settings.notify),
+        broker_factory=factory,
     )
