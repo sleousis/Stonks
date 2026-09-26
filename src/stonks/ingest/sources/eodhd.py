@@ -1145,7 +1145,12 @@ def parse_dividends_response(ticker: str, payload: Any) -> Iterator[DividendRow]
                 dropped += 1
                 continue
             ex_date = _parse_date(row.get("date"))
-            amount = _coerce_optional_float(row.get("value"))
+            # ``value`` is restated for splits after the ex-date; the domain
+            # ``amount`` is the cash actually paid per share on the ex-date
+            # (``unadjustedValue``). Older payloads without it fall back.
+            amount = _coerce_optional_float(row.get("unadjustedValue"))
+            if amount is None:
+                amount = _coerce_optional_float(row.get("value"))
             if ex_date is None or amount is None or amount < 0:
                 dropped += 1
                 continue
