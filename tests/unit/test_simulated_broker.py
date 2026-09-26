@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime
 
 import pytest
 
+from stonks.backtest.costs import AssetClassCosts, CostModelSettings, Trade, TradeCost
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.types import Order, Portfolio
 
@@ -145,3 +146,117 @@ def test_reconcile_returns_all_recorded_fills(broker):
     fills = broker.reconcile()
     assert len(fills) == 2
     assert {f.ticker for f in fills} == {"AAPL.US", "MSFT.US"}
+
+
+# ---- CostModel seam ---------------------------------------------------------
+
+
+class _RecordingModel:
+    """Charges a flat 2.0 fee and 1% adverse price; records every trade."""
+
+    def __init__(self) -> None:
+        self.trades: list[Trade] = []
+
+    def cost(self, trade: Trade) -> TradeCost:
+        self.trades.append(trade)
+        mult = 1.01 if trade.side == "buy" else 0.99
+        return TradeCost(fill_price=trade.price * mult, fee=2.0)
+
+
+def test_cost_model_sets_fill_price_and_fee():
+    model = _RecordingModel()
+    broker = SimulatedBroker(Portfolio(cash=10_000.0, positions={}), cost_model=model)
+    broker.set_prices({"AAPL.US": 100.0}, as_of=date(2026, 4, 1))
+    fill = broker.place_order(_order("c1", qty=10.0))
+    assert fill.price == pytest.approx(101.0)
+    assert fill.fee == pytest.approx(2.0)
+    assert broker.fetch_portfolio().cash == pytest.approx(10_000.0 - 1_010.0 - 2.0)
+
+
+def test_cost_model_receives_bar_volume_and_asset_class():
+    model = _RecordingModel()
+    broker = SimulatedBroker(Portfolio(cash=10_000.0, positions={}), cost_model=model)
+    broker.set_asset_classes({"BTC-USD.CC": "crypto"})
+    broker.set_prices(
+        {"BTC-USD.CC": 100.0, "AAPL.US": 100.0},
+        as_of=date(2026, 4, 1),
+        volumes={"BTC-USD.CC": 5_000.0},
+    )
+    broker.place_order(_order("c1", ticker="BTC-USD.CC", qty=1.0))
+    broker.place_order(_order("c2", ticker="AAPL.US", qty=1.0))
+    btc, aapl = model.trades
+    assert (btc.asset_class, btc.bar_volume, btc.price, btc.quantity) == (
+        "crypto",
+        5_000.0,
+        100.0,
+        1.0,
+    )
+    # no asset-class mapping -> equity; no volume given -> unknown
+    assert (aapl.asset_class, aapl.bar_volume) == ("equity", None)
+
+
+def test_set_prices_without_volumes_clears_previous_volumes():
+    model = _RecordingModel()
+    broker = SimulatedBroker(Portfolio(cash=10_000.0, positions={}), cost_model=model)
+    broker.set_prices({"AAPL.US": 100.0}, as_of=date(2026, 4, 1), volumes={"AAPL.US": 9.0})
+    broker.set_prices({"AAPL.US": 100.0}, as_of=date(2026, 4, 2))
+    broker.place_order(_order("c1", qty=1.0))
+    assert model.trades[-1].bar_volume is None
+
+
+def test_cost_model_and_legacy_cost_args_are_mutually_exclusive():
+    with pytest.raises(ValueError):
+        SimulatedBroker(
+            Portfolio(cash=1.0, positions={}), slippage_bps=5.0, cost_model=_RecordingModel()
+        )
+
+
+def test_oversized_buy_with_bps_fee_and_impact_is_scaled_to_affordable():
+    settings = CostModelSettings(
+        default=AssetClassCosts(fee_flat=1.0, fee_bps=10.0, half_spread_bps=5.0),
+        impact_bps=100.0,
+    )
+    broker = SimulatedBroker(Portfolio(cash=10_000.0, positions={}), cost_model=settings.build())
+    broker.set_prices({"AAPL.US": 100.0}, as_of=date(2026, 4, 1), volumes={"AAPL.US": 1_000.0})
+    fill = broker.place_order(_order("big", qty=1_000.0))  # 10x the cash
+    assert fill is not None
+    cash = broker.fetch_portfolio().cash
+    assert cash >= -1e-6
+    # close to the maximum affordable size: little cash left over
+    assert cash < 1.0
+    # the recorded fill is self-consistent with the model at the filled size
+    expected = settings.build().cost(
+        Trade(
+            ticker="AAPL.US",
+            side="buy",
+            quantity=fill.quantity,
+            price=100.0,
+            bar_volume=1_000.0,
+        )
+    )
+    assert fill.price == pytest.approx(expected.fill_price)
+    assert fill.fee == pytest.approx(expected.fee)
+
+
+class _VolumeDiscountModel:
+    """Breaks the CostModel contract: per-unit price falls with size."""
+
+    def cost(self, trade: Trade) -> TradeCost:
+        return TradeCost(fill_price=trade.price * (1 + 1 / (1 + trade.quantity)), fee=0.0)
+
+
+def test_scaling_never_overdraws_cash_even_if_the_model_breaks_the_contract():
+    broker = SimulatedBroker(
+        Portfolio(cash=1_000.0, positions={}), cost_model=_VolumeDiscountModel()
+    )
+    broker.set_prices({"AAPL.US": 100.0}, as_of=date(2026, 4, 1))
+    broker.place_order(_order("big", qty=1_000.0))
+    assert broker.fetch_portfolio().cash >= -1e-9
+
+
+def test_buy_rejected_when_even_the_flat_fee_is_unaffordable_under_cost_model():
+    model = CostModelSettings(default=AssetClassCosts(fee_flat=5.0)).build()
+    broker = SimulatedBroker(Portfolio(cash=4.0, positions={}), cost_model=model)
+    broker.set_prices({"AAPL.US": 100.0}, as_of=date(2026, 4, 1))
+    assert broker.place_order(_order("broke", qty=1.0)) is None
+    assert broker.fetch_portfolio().cash == 4.0
