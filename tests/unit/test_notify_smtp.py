@@ -151,6 +151,23 @@ def test_error_classification_and_redaction(exc, outcome):
     assert PASSWORD not in (result.error or "")
 
 
+@pytest.mark.parametrize(
+    "exc",
+    [
+        smtplib.SMTPRecipientsRefused({"alice@example.com": (550, b"no such user")}),
+        smtplib.SMTPResponseException(550, b"5.1.1 <alice@example.com>: user unknown"),
+        smtplib.SMTPResponseException(451, b"4.2.0 <alice@example.com> greylisted"),
+        OSError("refused sending to alice@example.com"),
+    ],
+)
+def test_errors_never_carry_the_recipient_address(exc):
+    # Logs and last_error carry user ids, never email addresses.
+    FakeSMTP.fail_with = exc
+    result = _channel().send(_message(), "alice@example.com")
+    assert result.outcome != "sent"
+    assert "alice@example.com" not in (result.error or "")
+
+
 def test_target_is_the_users_email(tmp_path):
     from stonks.accounts import Role, UserRepository
     from stonks.store.state import SqliteState

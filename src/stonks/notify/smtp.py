@@ -25,6 +25,7 @@ from stonks.notify.settings import NotifySettings, SmtpSettings
 from stonks.store.state import SqliteState
 
 _EMAIL = re.compile(r"^[^@\s<>,;\"]+@[^@\s<>,;\"]+\.[^@\s<>,;\"]+$")
+_ANY_EMAIL = re.compile(r"[^@\s<>,;:'\"(){}\[\]]+@[^@\s<>,;:'\"(){}\[\]]+")
 
 
 @register_channel("email")
@@ -116,4 +117,7 @@ class EmailChannel(Channel):
             smtp.send_message(msg)
 
     def redact(self, text: str, target: Any = None) -> str:
-        return redact_secrets(text, [self._password] if self._password else [])
+        """Scrub the SMTP password and every email address: servers echo
+        the recipient in errors, and logs carry user ids, not addresses."""
+        text = redact_secrets(text, [self._password] if self._password else [])
+        return _ANY_EMAIL.sub("<address>", text)
