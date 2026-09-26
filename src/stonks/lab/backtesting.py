@@ -10,11 +10,15 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
+import pandas as pd
+
 from stonks.backtest.engine import BacktestConfig, Backtester
 from stonks.backtest.report import BacktestReport
 from stonks.backtest.simulated_broker import SimulatedBroker
+from stonks.backtest.trades import with_trades
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy
+from stonks.core.timeutil import day_end, day_start
 from stonks.core.types import Fill, Portfolio
 
 #: Starting cash for every lab backtest. Scores are scale-free
@@ -42,7 +46,8 @@ def run_backtest(
     window: tuple[date | datetime, date | datetime],
     lake: Any = None,
 ) -> BacktestReport:
-    """Backtest ``strategy`` on ``dataset`` over ``window``.
+    """Backtest ``strategy`` on ``dataset`` over ``window``, with the
+    round-trip trade ledger attached (``report.trades``/``trade_stats``).
 
     ``lake`` overrides ``dataset.lake`` — survival tests that build a
     modified copy of the bars (permuted, perturbed) pass it here.
@@ -65,10 +70,30 @@ def run_backtest_with_fills(
         portfolio=Portfolio(cash=LAB_INITIAL_CASH, positions={}),
         cost_model=costs.build() if costs is not None else None,
     )
-    report = Backtester(
-        strategies=[strategy],
-        broker=broker,
-        lake=lake if lake is not None else dataset.lake,
-        config=backtest_config(dataset, window),
-    ).run()
-    return report, broker.reconcile()
+    lake = lake if lake is not None else dataset.lake
+    config = backtest_config(dataset, window)
+    report = Backtester(strategies=[strategy], broker=broker, lake=lake, config=config).run()
+    fills = broker.fills
+    report = with_trades(
+        report,
+        fills,
+        _trade_bars(lake, config, sorted({f.ticker for f in fills})),
+        reference_price=broker.reference_price,
+    )
+    return report, list(fills)
+
+
+def _trade_bars(lake: Any, config: BacktestConfig, tickers: list[str]) -> pd.DataFrame | None:
+    """High/low/close of the traded tickers over the backtest window, for
+    MAE/MFE and open-lot marks; one query, skipped when nothing traded."""
+    if not tickers:
+        return None
+    return lake.sql(
+        """
+        SELECT ticker, timestamp, high, low, close
+          FROM bars
+         WHERE ticker = ANY(?) AND interval = ? AND timestamp BETWEEN ? AND ?
+         ORDER BY ticker, timestamp
+        """,
+        [tickers, config.interval.code, day_start(config.start), day_end(config.end)],
+    )

@@ -260,3 +260,28 @@ def test_buy_rejected_when_even_the_flat_fee_is_unaffordable_under_cost_model():
     broker.set_prices({"AAPL.US": 100.0}, as_of=date(2026, 4, 1))
     assert broker.place_order(_order("broke", qty=1.0)) is None
     assert broker.fetch_portfolio().cash == 4.0
+
+
+def test_fills_is_a_read_only_tuple_in_fill_order(broker):
+    broker.set_prices({"AAPL.US": 200.0}, as_of=date(2026, 4, 1))
+    broker.place_order(_order("a"))
+    broker.place_order(_order("a"))  # idempotent resubmission adds nothing
+    broker.place_order(_order("b", side="sell", qty=4.0))
+    fills = broker.fills
+    assert isinstance(fills, tuple)
+    assert [f.order_client_id for f in fills] == ["a", "b"]
+
+
+def test_reference_price_is_the_pre_cost_price():
+    broker = SimulatedBroker(Portfolio(cash=10_000.0), slippage_bps=100.0, fee_per_trade=1.0)
+    broker.set_prices({"AAPL.US": 200.0}, as_of=date(2026, 4, 1))
+    broker.place_order(_order("a"))
+    assert broker.fills[0].price == pytest.approx(202.0)
+    assert broker.reference_price("a") == 200.0
+    assert broker.reference_price("missing") is None
+
+
+def test_rejected_orders_have_no_reference_price(broker):
+    broker.set_prices({}, as_of=date(2026, 4, 1))
+    assert broker.place_order(_order("a")) is None
+    assert broker.reference_price("a") is None

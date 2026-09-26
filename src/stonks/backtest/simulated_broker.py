@@ -14,6 +14,8 @@ they're running in a backtest or in paper-mode production. Key properties:
 - fills are timestamped with the simulated ``as_of`` passed to
   ``set_prices`` (plain dates become UTC midnight, naive datetimes are
   treated as UTC); wall-clock ``now`` is used only when no ``as_of`` is set
+- ``fills`` and ``reference_price(client_id)`` (the pre-cost price) feed the
+  round-trip trade ledger (``stonks.backtest.trades``)
 """
 
 from __future__ import annotations
@@ -50,6 +52,7 @@ class SimulatedBroker:
         self._as_of: date | None = None
         self._fills_by_client_id: dict[str, Fill] = {}
         self._fills_order: list[Fill] = []
+        self._reference_prices: dict[str, float] = {}
 
     # ---- market data --------------------------------------------------------
 
@@ -128,7 +131,21 @@ class SimulatedBroker:
         self._portfolio.apply_fill(fill)
         self._fills_by_client_id[order.client_id] = fill
         self._fills_order.append(fill)
+        self._reference_prices[order.client_id] = price
         return fill
+
+    # ---- trade ledger inputs ------------------------------------------------
+
+    @property
+    def fills(self) -> tuple[Fill, ...]:
+        """Every fill, in fill order (read-only)."""
+        return tuple(self._fills_order)
+
+    def reference_price(self, client_id: str) -> float | None:
+        """The pre-cost price the fill of ``client_id`` was priced from (the
+        bar's open in a backtest), or ``None`` when it never filled. The gap
+        to ``Fill.price`` is the slippage and impact paid."""
+        return self._reference_prices.get(client_id)
 
     # ---- internals ----------------------------------------------------------
 
