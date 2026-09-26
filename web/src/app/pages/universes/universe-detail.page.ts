@@ -12,12 +12,14 @@ import { Router, RouterLink } from '@angular/router';
 
 import type { EnsureDataRequest, EnsureReport, UniverseRefreshView } from '../../api/models';
 import { UniversesService } from '../../api/universes.service';
+import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { DateTimePipe, NumPipe } from '../../shared/format.pipes';
 import { JobProgress } from '../../shared/ui/job-progress';
 import { PageHeader } from '../../shared/ui/page-header';
+import { PermissionNote } from '../../shared/ui/permission-note';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { KIND_LABEL } from './universe-form';
 
@@ -52,6 +54,7 @@ function isoDay(d: Date): string {
     RouterLink,
     DateTimePipe,
     NumPipe,
+    PermissionNote,
   ],
   templateUrl: './universe-detail.page.html',
   styleUrl: './universe-detail.page.scss',
@@ -63,6 +66,11 @@ export class UniverseDetailPage {
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly session = inject(SessionService);
+
+  /** Refresh and Ensure data are lab work; delete breaks strategies, so admins only. */
+  protected readonly canRefresh = computed(() => this.session.can('lab.run'));
+  protected readonly canDelete = computed(() => this.session.can('strategy.promote'));
 
   readonly id = input.required<string>();
 
@@ -80,6 +88,10 @@ export class UniverseDetailPage {
   protected readonly kindLabel = KIND_LABEL;
   protected readonly sources = SOURCES;
   protected readonly intervals = INTERVALS;
+  /** The universe's name, else its id. */
+  protected readonly name = computed(
+    () => (this.universe.hasValue() && this.universe.value().name) || this.id(),
+  );
   protected readonly specJson = computed(() =>
     this.universe.hasValue() ? JSON.stringify(this.universe.value().spec, null, 2) : '',
   );
@@ -90,12 +102,12 @@ export class UniverseDetailPage {
   protected readonly refreshing = signal(false);
 
   async refresh(): Promise<void> {
-    if (this.refreshing()) return;
+    if (this.refreshing() || !this.canRefresh()) return;
     const id = this.id();
     const ok = await this.confirm.confirm({
-      title: `Refresh ${id}?`,
+      title: `Refresh ${this.name()}?`,
       message:
-        'Rebuilds the membership from the definition. Running it twice changes nothing. Lab runs and ticks use the new members.',
+        'Rebuilds the membership from the definition. Running it twice changes nothing. Lab runs and trading runs use the new members.',
       confirmLabel: 'Refresh',
     });
     if (!ok) return;
@@ -110,7 +122,7 @@ export class UniverseDetailPage {
       if (last?.status === 'succeeded') {
         const result = await this.api.refreshResult(job.id);
         this.refreshResult.set(result);
-        this.toasts.success(`Refreshed ${id}: ${result.current_members} members today.`);
+        this.toasts.success(`Refreshed ${this.name()}: ${result.current_members} members today.`);
         this.universe.reload();
         this.members.reload();
       }
@@ -138,7 +150,7 @@ export class UniverseDetailPage {
 
   async ensure(): Promise<void> {
     this.ensureSubmitted.set(true);
-    if (this.windowError() || this.ensuring()) return;
+    if (!this.canRefresh() || this.windowError() || this.ensuring()) return;
     const id = this.id();
     const body: EnsureDataRequest = {
       start: this.start(),
@@ -147,8 +159,8 @@ export class UniverseDetailPage {
       source: this.source() || null,
     };
     const ok = await this.confirm.confirm({
-      title: `Fetch missing data for ${id}?`,
-      message: `Fetches only the ${body.interval} bars the lake lacks for the members from ${body.start} to ${body.end}. Paid data plans may charge per call.`,
+      title: `Fetch missing data for ${this.name()}?`,
+      message: `Fetches only the ${body.interval} prices our data is missing for the members from ${body.start} to ${body.end}. Paid data plans may charge per call.`,
       confirmLabel: 'Ensure data',
     });
     if (!ok) return;
@@ -178,9 +190,10 @@ export class UniverseDetailPage {
   protected readonly deleting = signal(false);
 
   async remove(): Promise<void> {
+    if (!this.canDelete()) return;
     const id = this.id();
     const ok = await this.confirm.confirm({
-      title: `Delete ${id}?`,
+      title: `Delete ${this.name()}?`,
       message:
         'Removes the definition and its membership rows. Strategies and lab runs that name it stop working.',
       confirmLabel: 'Delete universe',
@@ -191,7 +204,7 @@ export class UniverseDetailPage {
     this.deleting.set(true);
     try {
       await this.api.delete(id);
-      this.toasts.success(`Deleted ${id}.`);
+      this.toasts.success(`Deleted ${this.name()}.`);
       await this.router.navigate(['/universes']);
     } catch {
       // The error interceptor already showed the API's message.

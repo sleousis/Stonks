@@ -2,20 +2,27 @@
   title="Universes"
   description="The tickers a strategy may trade, kept point in time so backtests see the names of each date."
 >
-  <button
-    actions
-    type="button"
-    class="btn btn-primary"
-    [attr.aria-expanded]="creating()"
-    aria-controls="create-panel"
-    (click)="creating.set(!creating())"
-  >
-    {{ creating() ? 'Close form' : 'New universe' }}
-  </button>
+  @if (canEdit()) {
+    <button
+      actions
+      type="button"
+      class="btn btn-primary"
+      [attr.aria-expanded]="creating()"
+      aria-controls="create-panel"
+      (click)="creating.set(!creating())"
+    >
+      {{ creating() ? 'Close form' : 'New universe' }}
+    </button>
+  } @else {
+    <ng-container actions>
+      <button type="button" class="btn btn-primary" disabled>New universe</button>
+      <app-permission-note permission="lab.run" />
+    </ng-container>
+  }
 </app-page-header>
 
 <div class="page-grid">
-  @if (creating()) {
+  @if (creating() && canEdit()) {
     <!-- Create -------------------------------------------------------------->
     <section id="create-panel" class="panel span-12" aria-labelledby="create-title">
       <div class="panel-head">
@@ -135,7 +142,7 @@
                 (input)="patch({ specText: $any($event.target).value })"
               ></textarea>
               <p id="u-spec-hint" class="hint">
-                Starts from an example for the kind. Fields are listed in docs/universes.md.
+                Starts from an example for the kind. Change the values to suit.
               </p>
               @if (submitted() && errors().spec; as e) {
                 <p class="error">{{ e }}</p>
@@ -176,7 +183,7 @@
     } @else if (universes.value().length === 0) {
       <app-empty-state
         title="No universes yet"
-        message="Create one with New universe. A lab run or the tick can then use it by id."
+        message="Create one with New universe. Lab runs and the daily trading run can then use it."
       />
     } @else {
       @let rows = universes.value();
@@ -185,10 +192,10 @@
         [rows]="rows"
         [columns]="columns"
         [rowKey]="universeKey"
-        [initialSort]="{ key: 'id', dir: 'asc' }"
+        [initialSort]="{ key: 'name', dir: 'asc' }"
       >
-        <ng-template appCell="id" [appCellOf]="rows" let-u>
-          <a class="num cell-link" [routerLink]="['/universes', u.id]">{{ u.id }}</a>
+        <ng-template appCell="name" [appCellOf]="rows" let-u>
+          <a class="cell-link" [routerLink]="['/universes', u.id]">{{ u.name || u.id }}</a>
         </ng-template>
         <ng-template appCell="refreshed_at" [appCellOf]="rows" let-u>
           @if (!u.refreshed_at) {
@@ -273,9 +280,15 @@
         </div>
       </div>
       <div class="form-actions">
-        <button type="submit" class="btn" [disabled]="importing()" [attr.aria-busy]="importing()">
+        <button
+          type="submit"
+          class="btn"
+          [disabled]="importing() || !canEdit()"
+          [attr.aria-busy]="importing()"
+        >
           {{ importing() ? 'Importing…' : 'Import history' }}
         </button>
+        <app-permission-note permission="lab.run" />
       </div>
     </form>
   </section>

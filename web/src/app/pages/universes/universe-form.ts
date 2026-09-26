@@ -13,7 +13,7 @@ export const KIND_LABEL: Record<UniverseKind, string> = {
 export const KIND_HINT: Record<UniverseKind, string> = {
   list: 'Fixed tickers, or dated spans. Without spans a list has survivorship bias.',
   exchange: 'Every symbol a source lists on an exchange, delisted ones too.',
-  rule: 'Filters checked on the lake at each rebalance date.',
+  rule: 'Filters checked against our price data at each rebalance date.',
   index: 'Index members rebuilt from an imported change history.',
 };
 
