@@ -255,6 +255,7 @@ def test_notify_subscriptions_place_nothing_and_are_handed_to_the_hooks(env, mon
     assert plan.books == ()
     result = run_tick(state, lake, registry, SETTINGS, as_of=AS_OF, plan=plan)
 
+    assert result.status == "noop"  # no book to trade
     assert result.orders_placed == 0 and state.count_rows("orders") == 0
     [[signal]] = seen
     assert (signal.strategy_id, signal.picks) == ("bh_flat", (("FLAT.US", 1.0),))

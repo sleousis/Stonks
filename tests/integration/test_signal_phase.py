@@ -138,3 +138,18 @@ def test_shadow_book_decides_with_the_instance_that_scored(env):
 
     rows = state.sql("SELECT ticker, side, status FROM shadow_decisions")
     assert [tuple(r) for r in rows] == [("UP.US", "buy", "filled")]
+
+
+def test_model_books_for_every_strategy_share_the_scoring_instance(env):
+    """``model_books="all"``: an active strategy trades the real book and
+    keeps its own model book; both decide from the same day's evaluation,
+    and neither sees what the other decided."""
+    lake, state, registry = env
+    sid = _register(registry, RemembersItsScores({"ticker": "UP.US", "allocation": 0.5}))
+    settings = TickSettings(universe=UNIVERSE, initial_cash=10_000.0, model_books="all")
+
+    result = run_tick(state, lake, registry, settings, as_of=AS_OF)
+
+    assert result.fills == 1
+    rows = state.sql("SELECT strategy_id, ticker, side, status FROM shadow_decisions")
+    assert [tuple(r) for r in rows] == [(sid, "UP.US", "buy", "filled")]

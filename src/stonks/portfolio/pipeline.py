@@ -59,7 +59,7 @@ from stonks.portfolio.base import (
 from stonks.portfolio.orders import orders_from_targets
 from stonks.portfolio.signals import SignalContext, normalize
 from stonks.production.prices import drop_stale_buys
-from stonks.production.risk import RiskAdjustment, RiskContext, apply_risk
+from stonks.production.risk import RiskAdjustment, RiskContext, RiskResult, apply_risk
 
 _log = get_logger("stonks.portfolio.pipeline")
 
@@ -230,12 +230,10 @@ def apply_book_risk(
     book: BookInput,
     market: MarketView,
     policy: RiskPolicy | None = None,
-):
+) -> RiskResult:
     """The risk layer as the pipeline runs it (``book.risk`` unless a slice
     ``policy`` is given); the tick re-checks its buys after the sells with
     this. ``None`` everywhere passes the orders through."""
-    from stonks.production.risk import RiskResult
-
     policy = policy if policy is not None else book.risk
     if policy is None:
         return RiskResult(orders=list(orders), adjustments=[])

@@ -516,7 +516,7 @@ def _tick_status(results: Sequence[BookResult]) -> TickStatus:
         return results[0].status
     if any(r.status in ("error", "partial") for r in results):
         return "partial"
-    if results and all(r.status == "noop" for r in results):
+    if all(r.status == "noop" for r in results):  # also: no book to trade
         return "noop"
     return "ok"
 
@@ -683,7 +683,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     # 3. construct: the pipeline turns this book's signals into orders
     #    (decide or targets, stale buys dropped, then the risk layer).
     strategy_ids = _book_strategies(run, book)
-    signal_set = run.signals if book.legacy else run.all_signals()
+    signal_set = run.all_signals() if _needs_shadow_signals(run) else run.signals
     signals = {
         sid: _in_universe(signal_set.scores[sid], book.spec.universe)
         for sid in signal_set.scores
@@ -1026,7 +1026,7 @@ def _construction_mapping(construction: ConstructionSettings) -> dict[str, Any]:
 def _notify_signals(run: _TickRun) -> list[NotifySignal]:
     if not run.plan.notify:
         return []
-    signals = run.all_signals()
+    signals = run.all_signals() if _needs_shadow_signals(run) else run.signals
     out: list[NotifySignal] = []
     for sub in run.plan.notify:
         scores = signals.scores.get(sub.strategy_id)
