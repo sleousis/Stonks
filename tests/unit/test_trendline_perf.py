@@ -70,8 +70,9 @@ def test_strategy_outputs_match_pinned_values(lake_random_walk):
     s = TrendlineBreakoutStrategy({"lookback": 25, "ticker": "X.US"})
     for i, support, resistance, signal in PINNED:
         values = s.extract_features("X.US", dates[i].date(), lake).values
-        assert values["support"] == support, i
-        assert values["resistance"] == resistance, i
+        # Tiny tolerance: the last float bits differ across OSes and BLAS builds.
+        assert values["support"] == pytest.approx(support, rel=1e-9, abs=1e-12), i
+        assert values["resistance"] == pytest.approx(resistance, rel=1e-9, abs=1e-12), i
         assert values["signal"] == signal, i
 
 
