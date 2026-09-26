@@ -3,6 +3,7 @@ hasher, a fixed encryption key and a clock the test can move."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 
@@ -31,7 +32,11 @@ class Clock:
 
 
 def make_service(
-    path, *, clock: Clock | None = None, legacy: str | None = None, box: SecretBox | None = None
+    path,
+    *,
+    clock: Callable[[], datetime] | None = None,
+    legacy: str | None = None,
+    box: SecretBox | None = None,
 ) -> AuthService:
     @contextmanager
     def factory():
