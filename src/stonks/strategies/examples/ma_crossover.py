@@ -28,6 +28,14 @@ from stonks.strategies.examples._nt888_base import SingleTickerLongFlat, common_
 
 class MACrossoverStrategy(SingleTickerLongFlat):
     id = "ma_crossover"
+    hypothesis = (
+        "A fast average above a slow one marks a trend that tends to "
+        "persist, since investors adjust slowly to news. Fails in "
+        "sideways markets, where crossovers whipsaw."
+    )
+    alpha_family = "trend"
+    premise = "trend"
+    label_horizon_bars = 20
 
     def __init__(self, params: Any) -> None:
         super().__init__(params)

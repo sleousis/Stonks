@@ -51,6 +51,15 @@ from stonks.strategies.examples._nt888_base import SingleTickerLongFlat, common_
 
 class MarketProfileSRStrategy(SingleTickerLongFlat):
     id = "market_profile_sr"
+    hypothesis = (
+        "Prices where much trading happened act as support and "
+        "resistance. A close up through such a level shows buyers won and "
+        "price moves to the next level. Fails when levels are too close "
+        "to matter."
+    )
+    alpha_family = "trend"
+    premise = "trend"
+    label_horizon_bars = 24
 
     def __init__(self, params: Any) -> None:
         super().__init__(params)

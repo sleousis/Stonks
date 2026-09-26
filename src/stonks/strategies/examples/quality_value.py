@@ -112,6 +112,14 @@ def _ratio(num: float | None, den: float | None) -> float | None:
 
 class QualityValue(BaseStrategy):
     id = "quality_value"
+    hypothesis = (
+        "Cheap, profitable, low-debt firms beat the market because "
+        "investors overpay for exciting stories and neglect dull good "
+        "businesses. Fails in long growth-led rallies."
+    )
+    alpha_family = "value"
+    premise = "mean_reversion"
+    label_horizon_bars = 63
     applicable_asset_classes = ("equity",)
 
     def __init__(self, params: Any) -> None:

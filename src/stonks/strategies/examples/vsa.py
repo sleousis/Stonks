@@ -47,6 +47,14 @@ from stonks.strategies.examples._nt888_base import SingleTickerLongFlat, common_
 
 class VSAStrategy(SingleTickerLongFlat):
     id = "vsa"
+    hypothesis = (
+        "A small range on heavy volume shows large players absorbing "
+        "selling, so price turns up next. Fails when volume is noise or "
+        "the selling wins."
+    )
+    alpha_family = "reversion"
+    premise = "mean_reversion"
+    label_horizon_bars = 24
 
     @classmethod
     def parameter_spec(cls):

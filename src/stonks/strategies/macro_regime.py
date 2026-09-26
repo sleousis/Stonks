@@ -58,6 +58,11 @@ class _LakeState:
 
 class MacroRegimeFilter(BaseStrategy):
     id = "macro_regime_filter"
+    hypothesis = (
+        "Risk assets do badly when the economy turns down, and macro "
+        "series such as unemployment show the turn. Standing aside then "
+        "cuts drawdowns. Adds no alpha of its own and macro data is slow."
+    )
     # Instances mirror their inner strategy; the class default admits all.
     applicable_asset_classes: tuple[AssetClass, ...] = get_args(AssetClass)
 

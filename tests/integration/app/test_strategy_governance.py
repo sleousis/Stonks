@@ -137,14 +137,15 @@ def test_change_status_is_the_shared_entry_point(services, seeded):
 
 def test_views_carry_metadata(services, seeded):
     summary = services.strategies.list(limit=10, offset=0).items[0]
-    assert summary.metadata.alpha_family == "other"
+    assert summary.metadata.alpha_family == "benchmark"
     assert summary.metadata.premise == "none"
-    assert summary.metadata.hypothesis == ""
+    assert summary.metadata.hypothesis == BuyAndHold.hypothesis
     detail = services.strategies.get(seeded["active_id"])
     assert detail.metadata.label_horizon_bars == 0
 
 
-def test_promotion_warns_when_hypothesis_is_empty(services, seeded):
+def test_promotion_warns_when_hypothesis_is_empty(services, seeded, monkeypatch):
+    monkeypatch.setattr(BuyAndHold, "hypothesis", "")
     warnings = services.strategies.promotion_warnings(seeded["shadow_id"])
     assert any("hypothesis" in w for w in warnings)
 
@@ -178,7 +179,7 @@ def test_api_promote_passes_with_golive(client, ready_id):
     body = resp.json()
     assert body["status"] == "active"
     assert body["status_history"][0]["golive_passed"] is True
-    assert body["metadata"]["alpha_family"] == "other"
+    assert body["metadata"]["alpha_family"] == "benchmark"
 
 
 @pytest.mark.parametrize("action", ["retire", "shadow"])
