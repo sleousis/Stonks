@@ -261,6 +261,26 @@ def test_notify_subscriptions_place_nothing_and_are_handed_to_the_hooks(env, mon
     assert (signal.strategy_id, signal.picks) == ("bh_flat", (("FLAT.US", 1.0),))
 
 
+def test_notify_signals_reach_the_notification_outbox_once(env):
+    lake, state, registry = env
+    people = People(state)
+    carol = people.trader("Carol")
+    people.subs.subscribe(carol, strategy_id="bh_flat", mode=Mode.NOTIFY)
+    plan = load_tick_plan(state, SETTINGS)
+
+    run_tick(state, lake, registry, SETTINGS, as_of=AS_OF, plan=plan, dry_run=True)
+    assert state.count_rows("notification_outbox") == 0  # a dry run tells no one
+
+    result = run_tick(state, lake, registry, SETTINGS, as_of=AS_OF, plan=plan)
+    [row] = state.sql("SELECT * FROM notification_outbox")
+    assert row["category"] == "signal" and row["strategy_id"] == "bh_flat"
+    assert row["dedupe_key"] == "signal:bh_flat:FLAT.US:entry:2026-03-20"
+    assert _summary(state, result.tick_id)["notifications"] == {"signals": 1, "queued": 1}
+
+    run_tick(state, lake, registry, SETTINGS, as_of=AS_OF, plan=plan)  # a re-run
+    assert state.count_rows("notification_outbox") == 1
+
+
 def test_auto_counts_only_on_broker_portfolios_and_paused_portfolios_wait(env):
     lake, state, registry = env
     people = People(state)
