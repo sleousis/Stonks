@@ -165,30 +165,46 @@ def dataset_summary(dataset: Any) -> dict[str, Any] | None:
         return None
 
 
-def data_fingerprint(dataset: Any) -> dict[str, Any]:
-    """Per-ticker identity of the bars a lab run reads, from one query.
+#: Calendar days of warm-up history before the window start that the data
+#: fingerprint covers: about a year and a half, past the longest look-back
+#: of the catalogued strategies (RS-18).
+FINGERPRINT_WARMUP_DAYS = 550
 
-    Window is ``dataset.full_window`` with the end day inclusive, at the
-    dataset's interval. Tickers with no bars get ``count = 0``."""
+_BAR_COLUMNS = ("open", "high", "low", "close", "adj_close", "volume")
+
+
+def data_fingerprint(dataset: Any) -> dict[str, Any]:
+    """Per-ticker identity of the data a lab run reads, from a few queries.
+
+    Bars: every OHLCV column at the dataset's interval, from
+    :data:`FINGERPRINT_WARMUP_DAYS` before the window start (look-back
+    history) to the window end, end day inclusive. Corporate actions: every
+    ``stock_splits`` and ``dividends`` row up to the window end (they change
+    adjusted prices, fills and cash). So a corrected open, a new split or a
+    changed warm-up bar changes the hash (RS-18, P46). Tickers with no bars
+    get ``count = 0``."""
     start, end = dataset.full_window
     interval = _interval_code(dataset)
     universe = sorted(set(dataset.universe))
+    first_day = _as_date(start) - timedelta(days=FINGERPRINT_WARMUP_DAYS)
+    stop = _as_date(end) + timedelta(days=1)
+    row_sql = " || '|' || ".join(
+        f"COALESCE(CAST({c} AS VARCHAR), '')" for c in ("timestamp", *_BAR_COLUMNS)
+    )
     df = dataset.lake.sql(
-        """
+        f"""
         SELECT ticker,
-               COUNT(*) AS n,
-               MIN(timestamp) AS first_ts,
+               COUNT(*) FILTER (WHERE timestamp >= ?) AS n,
+               MIN(timestamp) FILTER (WHERE timestamp >= ?) AS first_ts,
                MAX(timestamp) AS last_ts,
-               md5(string_agg(
-                   CAST(close AS VARCHAR) || '|' || COALESCE(CAST(adj_close AS VARCHAR), ''),
-                   ',' ORDER BY timestamp
-               )) AS close_hash
+               md5(string_agg({row_sql}, ',' ORDER BY timestamp)) AS bars_hash
         FROM bars
         WHERE ticker = ANY(?) AND interval = ? AND timestamp >= ? AND timestamp < ?
         GROUP BY ticker
         """,
-        [universe, interval, _as_date(start), _as_date(end) + timedelta(days=1)],
+        [_as_date(start), _as_date(start), universe, interval, first_day, stop],
     )
+    actions = _actions_hashes(dataset.lake, universe, stop)
     found = {row.ticker: row for row in df.itertuples(index=False)}
     tickers: dict[str, dict[str, Any]] = {}
     for t in universe:
@@ -198,14 +214,39 @@ def data_fingerprint(dataset: Any) -> dict[str, Any]:
                 "count": int(row.n),
                 "first": _iso(row.first_ts),
                 "last": _iso(row.last_ts),
-                "close_hash": str(row.close_hash),
+                "bars_hash": str(row.bars_hash),
             }
             if row is not None
-            else {"count": 0, "first": None, "last": None, "close_hash": None}
+            else {"count": 0, "first": None, "last": None, "bars_hash": None}
         )
-    body = {"window": [str(start), str(end)], "interval": interval, "tickers": tickers}
+        if t in actions:
+            tickers[t]["actions_hash"] = actions[t]
+    body = {
+        "window": [str(start), str(end)],
+        "warmup_days": FINGERPRINT_WARMUP_DAYS,
+        "interval": interval,
+        "tickers": tickers,
+    }
     digest = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
     return {**body, "hash": digest}
+
+
+def _actions_hashes(lake: Any, universe: list[str], stop: date) -> dict[str, str]:
+    """Per ticker, a hash of its split and dividend rows dated before
+    ``stop`` (tickers with none are left out)."""
+    df = lake.sql(
+        """
+        SELECT ticker, md5(string_agg(row, ',' ORDER BY row)) AS h FROM (
+            SELECT ticker, 's|' || CAST(date AS VARCHAR) || '|' || CAST(ratio AS VARCHAR) AS row
+              FROM stock_splits WHERE ticker = ANY(?) AND date < ?
+            UNION ALL
+            SELECT ticker, 'd|' || CAST(ex_date AS VARCHAR) || '|' || CAST(amount AS VARCHAR)
+              FROM dividends WHERE ticker = ANY(?) AND ex_date < ?
+        ) GROUP BY ticker
+        """,
+        [universe, stop, universe, stop],
+    )
+    return {str(r.ticker): str(r.h) for r in df.itertuples(index=False)}
 
 
 def _safe_fingerprint(dataset: Any) -> dict[str, Any] | None:
