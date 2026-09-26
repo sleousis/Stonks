@@ -57,7 +57,7 @@ class BacktestReport:
     sharpe: float
     max_drawdown: float
     cagr: float
-    #: Per-bar profit factor — sum of positive per-bar returns divided by the
+    #: Per-bar profit factor â€” sum of positive per-bar returns divided by the
     #: absolute sum of negative ones. ``inf`` with gains and no losses,
     #: ``0.0`` with no gains. Not a trade-level figure: see
     #: ``trade_stats.trade_profit_factor``.

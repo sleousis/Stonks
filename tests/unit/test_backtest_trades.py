@@ -106,9 +106,7 @@ def test_open_lot_is_flagged_and_marked_at_the_last_close():
 
 
 def test_open_lot_without_bars_is_marked_at_the_given_marks():
-    (t,) = build_round_trips(
-        [_fill("buy", 10, 100.0, 1)], timeline=DAYS[:3], marks={"X.US": 90.0}
-    )
+    (t,) = build_round_trips([_fill("buy", 10, 100.0, 1)], timeline=DAYS[:3], marks={"X.US": 90.0})
     assert t.is_open and t.exit_px == 90.0 and t.pnl == pytest.approx(-100.0)
     assert t.exit_ts == DAYS[2]
 
@@ -280,9 +278,7 @@ def test_turnover_costs_and_exposure_on_a_two_trade_fixture():
         Fill("0:d", "X.US", 5.0, 100.0, 1.0, dates[3], "sell"),
     ]
     refs = {"0:a": 99.0, "0:b": 101.0, "0:c": 100.0, "0:d": 100.0}
-    report = with_trades(
-        compute_report("s", dates, curve), fills, reference_price=refs.get
-    )
+    report = with_trades(compute_report("s", dates, curve), fills, reference_price=refs.get)
     stats = report.trade_stats
     assert stats.n_trades == 2
     assert stats.turnover_annual == pytest.approx(2000.0 / 1000.0 / 1.0)

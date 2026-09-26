@@ -200,7 +200,16 @@ def build_round_trips(
         queue = lots.setdefault(key, deque())
         if fill.side == "buy":
             queue.append(
-                _Lot(key[0], fill.ticker, ts, fill.quantity, fill.quantity, fill.price, fill.fee, slip)
+                _Lot(
+                    key[0],
+                    fill.ticker,
+                    ts,
+                    fill.quantity,
+                    fill.quantity,
+                    fill.price,
+                    fill.fee,
+                    slip,
+                )
             )
             continue
         to_sell = fill.quantity
