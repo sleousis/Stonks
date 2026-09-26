@@ -151,7 +151,7 @@ class _SeesInterval:
 
         self.seen.append(_DECISION_INTERVAL.get())
         self.cutoffs.append((as_of, visible_cutoff(as_of, Interval.DAY_1)))
-        return None
+        return
 
     def decide(self, my_picks, portfolio, prices, as_of):
         return []
