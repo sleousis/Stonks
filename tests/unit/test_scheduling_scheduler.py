@@ -364,3 +364,23 @@ def test_next_runs(store):
     [n] = s.next_runs()
     assert n.next_fire.scheduled_for == _utc(2026, 9, 28, 20, 30)
     assert "XNYS" in n.trigger
+
+
+def test_heartbeat_and_watchdog_run_while_a_long_job_blocks_the_loop(store):
+    clock = FakeClock(_utc(2026, 9, 25, 20))
+    s = _sched(store, [_close_job()], clock, watchdog_seconds=0.01)
+    checked = threading.Event()
+
+    class Dog:
+        def check(self, now):
+            checked.set()
+            return []
+
+    def long_job(ctx):
+        assert checked.wait(5), "watchdog never ran while the job was running"
+        s.request_stop()
+        return JobOutcome("succeeded")
+
+    BEHAVIOUR["ingest"] = long_job
+    s.run_forever(wait=lambda seconds: clock.advance(hours=1), watchdog=Dog())
+    assert store.get("ingest", "2026-09-25").status == "succeeded"

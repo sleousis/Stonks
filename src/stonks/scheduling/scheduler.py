@@ -327,7 +327,7 @@ class Scheduler:
         wait = wait or self._stop.wait
         if not self._started:
             self.start()
-        dog_thread = self._start_watchdog(watchdog) if watchdog is not None else None
+        dog_thread = self._start_background(watchdog)
         try:
             while not self.stopping:
                 self.run_pending()
@@ -338,16 +338,21 @@ class Scheduler:
                 wait(self.seconds_until_next_wake(now))
         finally:
             self._stop.set()
-            if dog_thread is not None:
-                dog_thread.join(timeout=5)
+            dog_thread.join(timeout=5)
             self.stop()
 
-    def _start_watchdog(self, watchdog: DeadlineWatchdog) -> threading.Thread:
+    def _start_background(self, watchdog: DeadlineWatchdog | None) -> threading.Thread:
+        """Heartbeat (so liveness holds while a long job runs) and the
+        deadline watchdog, off the job thread."""
+
         def loop() -> None:
             while not self._stop.wait(self.config.watchdog_seconds):
                 try:
-                    watchdog.check(self.clock.now())
-                except Exception as exc:  # the watchdog must outlive a bad check
+                    now = self.clock.now()
+                    self.store.heartbeat(self.instance_id, now=now)
+                    if watchdog is not None:
+                        watchdog.check(now)
+                except Exception as exc:  # must outlive a bad check
                     _log.error("deadman.watchdog_failed", error=str(exc))
 
         thread = threading.Thread(target=loop, name="stonks-scheduler-watchdog", daemon=True)
