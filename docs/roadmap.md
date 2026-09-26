@@ -192,7 +192,7 @@ What it takes to run Stonks unattended every day and trust it.
 | 12.9 Releases | Semantic versions, tags, a changelog generated from commits, and a GitHub release per version. |
 | 12.10 Paper soak test | Run the full daily loop on the simulated broker for weeks of historical days in fast-forward, checking idempotency, crashes mid-tick, and reconciliation every day. |
 | 12.11 Runbooks | Short incident guides: tick failed, data stale, broker unreachable, disk full, restore from backup. |
-| 12.12 Repo hygiene | A LICENSE, SECURITY.md, CONTRIBUTING.md and a trading-risk disclaimer for the public repo. |
+| 12.12 Repo hygiene | LICENSE as all rights reserved (decided), SECURITY.md, CONTRIBUTING.md and a trading-risk disclaimer for the public repo. |
 
 ## Phase 13: Trader-ready UX
 
@@ -200,7 +200,7 @@ What a trader needs to use the console daily without the CLI.
 
 | WP | Scope |
 |----|-------|
-| 13.1 Login and roles | Real sign-in instead of pasting a token: local accounts, sessions, roles (viewer, trader, admin), and a second factor before any real-money action. |
+| 13.1 Login and roles | Several traders will use it (decided): accounts, sessions, roles (viewer, trader, admin), every action attributed to a person in the audit trail, and a second factor before any real-money action. Replaces pasting a token. |
 | 13.2 First-run wizard | Guided setup: data source key, universe, first ingest, pick a template strategy, backtest it, start paper trading. Helpful empty states everywhere. |
 | 13.3 Live updates and notifications | Portfolio, ticks, jobs and alerts update live (server-sent events); a notification center; installable PWA with push notifications on phones. |
 | 13.4 Universe and watchlist manager | Create and edit universes and watchlists in the UI instead of config files. |
@@ -214,6 +214,23 @@ What a trader needs to use the console daily without the CLI.
 | 13.12 Exports | CSV of trades, fills and P&L; PDF tear sheets; a tax-lot report from the trade ledger. |
 | 13.13 Accessibility, locale and polish | WCAG 2.2 AA audit, locale-aware numbers, currency and dates, timezone preference, a Lighthouse performance budget, and a usability pass with real tasks. |
 | 13.14 End-to-end tests | Playwright flows for the main trader journeys on desktop and phone sizes, in CI (was 5.4). |
+
+## Phase 14: Hosting and maintenance
+
+Decided: one small always-on cloud VM (for example Hetzner Cloud or DigitalOcean). Heavy lab runs stay on the owner's 32-core PC or a temporary bigger VM.
+
+| WP | Scope |
+|----|-------|
+| 14.1 Infrastructure as code | Provision the VM with a script (Terraform or cloud-init): Linux, Docker, firewall closed except SSH, automatic security updates. Rebuilding the server from scratch takes one command. |
+| 14.2 Compose stack | Docker Compose with the API and console, the scheduler worker, and Caddy for automatic HTTPS. Data (lake, Parquet bars, state, artifacts) lives on one mounted volume. |
+| 14.3 Private access | Tailscale or Cloudflare Tunnel so traders reach the console without open ports; public exposure only by choice. |
+| 14.4 Deploy pipeline | On a release tag CI builds and pushes images to GitHub Container Registry, then deploys to the VM over SSH with a health check and one-command rollback to the previous image. |
+| 14.5 Backups off the server | Nightly encrypted backups (restic) of the data volume to object storage (Backblaze B2 or Cloudflare R2), retention policy, and a monthly automated restore test. |
+| 14.6 Monitoring and alerting | External uptime check, dead-man pings from the scheduler (healthchecks.io or Uptime Kuma), disk, memory and CPU alerts, log retention, all routed to the existing webhook alerts. |
+| 14.7 Secrets management | Secrets only in the VM's environment (or a secrets file encrypted with sops), rotated on a schedule; never in images or the repo. |
+| 14.8 Maintenance routine | Dependabot or Renovate for Python, npm, Docker and GitHub Actions updates with CI gating; a monthly patch window; database migrations run automatically on deploy with a backup first. |
+| 14.9 Lab offload | Run heavy lab jobs on the 32-core PC or an on-demand large VM against a read-only copy of the Parquet bars, then send results back to the server's registry. |
+| 14.10 Cost and capacity | A sizing guide (CPU, RAM, disk for the lake), monthly cost estimate, and alerts before the disk fills. |
 
 ## Execution order
 
