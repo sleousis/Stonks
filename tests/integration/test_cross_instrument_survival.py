@@ -56,11 +56,25 @@ def test_mostly_losing_tickers_fail():
     assert "positive expectancy" in report.notes
 
 
-def test_small_universe_is_not_applicable():
+def test_small_universe_fails_for_insufficient_data():
+    # RS-24: a one- or two-ticker run has nothing to be consistent across;
+    # that is no evidence, so it must not pass the P4 check
     report = _run({"A.US": _UP, "B.US": _DOWN}, ["A.US", "B.US"])
-    assert report.passed
-    assert "n/a" in report.notes
+    assert not report.passed
+    assert "insufficient data" in report.notes
     assert report.metrics["n_tickers"] == 2
+
+
+def test_one_ticker_run_does_not_pass():
+    report = _run({"A.US": _UP}, ["A.US"])
+    assert not report.passed
+
+
+def test_promotion_preset_picks_held_out_tickers():
+    from stonks.lab.survival.registry import PRESET_OPTIONS
+
+    opts = PRESET_OPTIONS["promotion"]["cross_instrument"]
+    assert opts["held_out_auto"] >= CrossInstrumentOptions().min_tickers
 
 
 def test_no_trades_anywhere_is_insufficient_data():
