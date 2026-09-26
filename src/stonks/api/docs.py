@@ -20,7 +20,6 @@ DEFAULT_SPEC = Path("web/openapi.json")
 DEFAULT_OUTPUT = Path("docs/api/rest.md")
 
 _METHODS = ("get", "post", "put", "patch", "delete", "head", "options")
-_SAFE = {"get", "head", "options"}
 _REF_PREFIX = "#/components/schemas/"
 
 _DIAGRAM = """\
@@ -33,9 +32,10 @@ flowchart LR
 ```"""
 
 _AUTH_NOTE = """\
-Auth: reads (`GET`) are open to loopback clients by default
-(`[api].open_reads_on_loopback`). Every other method needs
-`Authorization: Bearer $STONKS_API_TOKEN`."""
+Auth: every route except health and sign-in needs a credential: the browser
+session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...`.
+The Auth column names the permission a route checks (see `docs/security.md`).
+"sign-in" means any signed-in user."""
 
 
 def _slug(name: str) -> str:
@@ -93,7 +93,8 @@ def _auth(method: str, op: dict[str, Any], spec: dict[str, Any]) -> str:
     security = op.get("security", spec.get("security"))
     if not security:
         return "none"
-    return "token, or open on loopback" if method in _SAFE else "bearer token"
+    permission = op.get("x-permission")
+    return f"`{permission}`" if permission else "sign-in"
 
 
 def _response_type(op: dict[str, Any]) -> str:
