@@ -188,7 +188,7 @@
         [initialSort]="{ key: 'id', dir: 'asc' }"
       >
         <ng-template appCell="id" [appCellOf]="rows" let-u>
-          <a class="num" [routerLink]="['/universes', u.id]">{{ u.id }}</a>
+          <a class="num cell-link" [routerLink]="['/universes', u.id]">{{ u.id }}</a>
         </ng-template>
         <ng-template appCell="refreshed_at" [appCellOf]="rows" let-u>
           @if (!u.refreshed_at) {

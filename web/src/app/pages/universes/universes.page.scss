@@ -59,3 +59,12 @@ fieldset.source {
     }
   }
 }
+
+// Card title links on phones get a full touch target.
+@include bp.phone {
+  .cell-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-min);
+  }
+}

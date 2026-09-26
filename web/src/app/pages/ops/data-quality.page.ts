@@ -111,7 +111,7 @@ type SeverityFilter = '' | StatementFlagView['severity'];
           (pageChange)="offset.set($event.offset)"
         >
           <ng-template appCell="ticker" [appCellOf]="page.items" let-f>
-            <a class="num" routerLink="/data" [queryParams]="{ instrument: f.ticker }">{{
+            <a class="num cell-link" routerLink="/data" [queryParams]="{ instrument: f.ticker }">{{
               f.ticker
             }}</a>
           </ng-template>
@@ -134,6 +134,13 @@ type SeverityFilter = '' | StatementFlagView['severity'];
       border-bottom: 1px solid var(--color-border);
       @include bp.from-tablet {
         grid-template-columns: minmax(0, 14rem) minmax(0, 10rem) auto;
+      }
+    }
+    @include bp.phone {
+      .cell-link {
+        display: inline-flex;
+        align-items: center;
+        min-height: var(--touch-min);
       }
     }
     .actions {
