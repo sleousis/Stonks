@@ -18,14 +18,19 @@ from rich.table import Table
 from stonks.config import Settings, load_settings
 from stonks.core.types import AssetClass
 from stonks.ingest.pipeline import IngestPipeline, IngestRunResult
-from stonks.ingest.sources.base import DataSource
+from stonks.ingest.sources.base import DataSource, DataSourceError
 from stonks.ingest.sources.eodhd import (
     EODHD_DEFAULT_MACRO_INDICATOR,
     EODHD_MACRO_INDICATORS,
-    EodhdDataSource,
     EodhdFreeTierError,
     classify_asset_class,
     eodhd_exchange_for_asset_class,
+)
+from stonks.ingest.sources.registry import (
+    DEFAULT_SOURCE_ID,
+    SOURCE_IDS,
+    SourceConfigError,
+    build_source,
 )
 from stonks.logging import configure_logging, get_logger
 from stonks.production.tick import TickSettings, run_tick
@@ -99,19 +104,37 @@ def _settings() -> Settings:
     return settings
 
 
-def _build_source(settings: Settings) -> DataSource:
-    api_key = settings.sources.eodhd.api_key
-    if not api_key:
-        raise typer.BadParameter(
-            "EODHD_API_KEY is not set (add it to .env or your shell environment)"
-        )
-    return EodhdDataSource(
-        api_key=api_key,
-        base_url=settings.sources.eodhd.base_url,
-        timeout_seconds=settings.sources.eodhd.timeout_seconds,
-        max_retries=settings.sources.eodhd.max_retries,
-        retry_backoff_seconds=settings.sources.eodhd.retry_backoff_seconds,
+def _validate_source(value: str) -> str:
+    if value in SOURCE_IDS:
+        return value
+    raise typer.BadParameter(f"--source must be one of {list(SOURCE_IDS)}, got {value!r}")
+
+
+def _source_option() -> typer.models.OptionInfo:
+    # A fresh OptionInfo per command: Typer mutates them during registration.
+    return typer.Option(
+        DEFAULT_SOURCE_ID,
+        "--source",
+        help=f"data source ({'|'.join(SOURCE_IDS)})",
+        callback=_validate_source,
     )
+
+
+def _build_source(settings: Settings, source_id: str) -> DataSource:
+    try:
+        return build_source(source_id, settings.sources)
+    except SourceConfigError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+def _list_tickers_or_usage_error(source: DataSource, exchange: str) -> list[str]:
+    try:
+        return source.list_tickers(exchange)
+    except DataSourceError as exc:
+        raise typer.BadParameter(
+            f"source {source.source_id!r} cannot list tickers for {exchange!r} ({exc}); "
+            "pass --tickers explicitly"
+        ) from exc
 
 
 def _open_lake(path: Path) -> DuckDBLake:
@@ -185,12 +208,12 @@ def db_info() -> None:
 
 
 @ingest_app.command("exchanges")
-def ingest_exchanges() -> None:
+def ingest_exchanges(source_id: str = _source_option()) -> None:
     """List the exchanges supported by the configured data source."""
     import requests
 
     settings = _settings()
-    source = _build_source(settings)
+    source = _build_source(settings, source_id)
     try:
         rows = sorted(source.list_exchanges(), key=lambda r: r.code)
     except EodhdFreeTierError as exc:
@@ -246,9 +269,10 @@ def ingest_prices(
     until: str | None = typer.Option(
         None, "--until", help="latest date (YYYY-MM-DD)", callback=_validate_iso_date
     ),
+    source_id: str = _source_option(),
 ) -> None:
     settings = _settings()
-    source = _build_source(settings)
+    source = _build_source(settings, source_id)
 
     with _open_lake(settings.lake.path) as lake:
         lake.migrate()
@@ -272,7 +296,7 @@ def ingest_prices(
                 exchange = resolved
 
         if not ticker_list and exchange:
-            ticker_list = source.list_tickers(exchange)
+            ticker_list = _list_tickers_or_usage_error(source, exchange)
         if not ticker_list:
             raise typer.BadParameter("provide --tickers or --exchange (or --asset-class)")
 
@@ -298,6 +322,7 @@ def ingest_fundamentals(
         ),
         callback=_validate_asset_class,
     ),
+    source_id: str = _source_option(),
 ) -> None:
     """Pull income / balance-sheet / cash-flow statements per ticker.
 
@@ -309,7 +334,7 @@ def ingest_fundamentals(
     no-op the request.
     """
     settings = _settings()
-    source = _build_source(settings)
+    source = _build_source(settings, source_id)
 
     if asset_class is not None and asset_class != "equity":
         raise typer.BadParameter(
@@ -349,6 +374,7 @@ def ingest_metadata(
         ),
         callback=_validate_asset_class,
     ),
+    source_id: str = _source_option(),
 ) -> None:
     """Pull the full metadata bundle per ticker.
 
@@ -360,7 +386,7 @@ def ingest_metadata(
     bond_profile / commodity_contract) is populated.
     """
     settings = _settings()
-    source = _build_source(settings)
+    source = _build_source(settings, source_id)
 
     with _open_lake(settings.lake.path) as lake:
         lake.migrate()
@@ -377,7 +403,7 @@ def ingest_metadata(
                         f"--asset-class={ac} doesn't map to a single exchange — pass "
                         "--tickers explicitly for equity."
                     )
-                ticker_list = source.list_tickers(resolved)
+                ticker_list = _list_tickers_or_usage_error(source, resolved)
 
         if not ticker_list:
             raise typer.BadParameter("provide --tickers or --asset-class")
@@ -391,21 +417,25 @@ def ingest_metadata(
 @ingest_app.command("intraday")
 def ingest_intraday(
     tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),
-    interval: str = typer.Option("5m", "--interval", help="native intraday: 1m | 5m | 1h"),
+    interval: str = typer.Option(
+        "5m", "--interval", help="native intraday: eodhd 1m|5m|1h, yahoo 1m|5m|15m|30m|1h"
+    ),
     since: str | None = typer.Option(
         None, "--since", help="earliest date (YYYY-MM-DD)", callback=_validate_iso_date
     ),
     until: str | None = typer.Option(
         None, "--until", help="latest date (YYYY-MM-DD)", callback=_validate_iso_date
     ),
+    source_id: str = _source_option(),
 ) -> None:
-    """Pull sub-daily OHLCV bars at a native intraday interval. Only 1m,
-    5m, and 1h are available from EODHD; coarser sub-daily bars (4h, 6h,
-    12h) are produced by ``stonks ingest aggregate``."""
+    """Pull sub-daily OHLCV bars at a native intraday interval (EODHD:
+    1m, 5m, 1h; Yahoo: 1m, 5m, 15m, 30m, 1h within Yahoo's lookback
+    limits). Coarser sub-daily bars (4h, 6h, 12h) are produced by
+    ``stonks ingest aggregate``."""
     from stonks.core.interval import Interval
 
     settings = _settings()
-    source = _build_source(settings)
+    source = _build_source(settings, source_id)
     parsed = Interval.parse(interval)
 
     with _open_lake(settings.lake.path) as lake:
@@ -436,6 +466,7 @@ def ingest_macro(
             "Reference list: https://eodhd.com/financial-apis/macroeconomics-data-api/"
         ),
     ),
+    source_id: str = _source_option(),
 ) -> None:
     """Pull macroeconomic time series for one or more countries × indicators.
 
@@ -445,7 +476,7 @@ def ingest_macro(
     vendor revisions to a previously-published value land in place.
     """
     settings = _settings()
-    source = _build_source(settings)
+    source = _build_source(settings, source_id)
 
     country_list = _parse_tickers(countries)
     if not country_list:
@@ -524,14 +555,15 @@ def ingest_all_intervals(
         "but EODHD caps 1m history at ~120 days so setting this explicitly avoids long failing fetches",
         callback=_validate_iso_date,
     ),
+    source_id: str = _source_option(),
 ) -> None:
     """Populate every canonical interval for each ticker: native 1m / 5m /
-    1h / 1d / 1w / 1mo from EODHD, plus derived 4h / 6h / 12h / 3d / 5d /
-    6mo / 1y / 5y via aggregation."""
+    1h / 1d from the source, plus derived 4h / 6h / 12h / 3d / 5d / 1w /
+    1mo / 6mo / 1y / 5y via aggregation."""
     from stonks.core.interval import Interval
 
     settings = _settings()
-    source = _build_source(settings)
+    source = _build_source(settings, source_id)
 
     since_d = date.fromisoformat(since) if since else None
     until_d = date.fromisoformat(until) if until else None

@@ -25,8 +25,17 @@ class EodhdSourceConfig(BaseModel):
     api_key: str | None = None
 
 
+class YahooSourceConfig(BaseModel):
+    timeout_seconds: int = 30
+    max_retries: int = 3
+    retry_backoff_seconds: float = 2.0
+    # Yahoo rate-limits aggressively; space consecutive requests out.
+    min_request_interval_seconds: float = 0.5
+
+
 class SourcesConfig(BaseModel):
     eodhd: EodhdSourceConfig = EodhdSourceConfig()
+    yahoo: YahooSourceConfig = YahooSourceConfig()
 
 
 class LakeConfig(BaseModel):
