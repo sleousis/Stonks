@@ -196,3 +196,25 @@ def test_non_json_body_is_not_retried(no_sleep):
     with pytest.raises(ValueError):
         _source(session).fetch_prices("AAPL.US")
     assert session.calls == 1
+
+
+# ---------------------------------------------------------------- executor reuse
+
+
+def test_fetch_metadata_reuses_one_executor_across_tickers(monkeypatch, no_sleep):
+    created: list[Any] = []
+    real = eodhd.ThreadPoolExecutor
+
+    def _counting(*args, **kwargs):
+        pool = real(*args, **kwargs)
+        created.append(pool)
+        return pool
+
+    monkeypatch.setattr(eodhd, "ThreadPoolExecutor", _counting)
+    session = _ScriptedSession([_Response(200, {})])
+    source = _source(session, max_retries=1)
+    source.fetch_metadata("AAPL.US")
+    source.fetch_metadata("MSFT.US")
+    source.fetch_metadata("GOOG.US")
+    assert len(created) <= 1
+    source.close()
