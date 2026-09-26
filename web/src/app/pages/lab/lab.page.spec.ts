@@ -13,7 +13,7 @@ import type { Job, Page } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { JOB_FETCH, JOB_POLL_MS } from '../../core/jobs/jobs.service';
-import { LabPage, canCancel, jobStrategy } from './lab.page';
+import { LabPage, canCancel, jobStrategy, sweepCommand } from './lab.page';
 
 function job(patch: Partial<Job>): Job {
   return {
@@ -301,6 +301,15 @@ describe('LabPage', () => {
     await settle();
     expect(confirmed.at(-1)).toBe('Cancel this lab run?');
     expect(posted.at(-1)?.url).toBe('/api/jobs/lr-1/cancel');
+  });
+
+  it('explains the sweep command, since no API route serves sweep results', async () => {
+    await settle();
+    const sweep = el.querySelector('section[aria-labelledby="lab-sweep-title"]')!;
+    expect(sweep.querySelector('app-cli-command code')?.textContent).toContain('stonks lab sweep');
+    expect(sweepCommand(new Date(2026, 8, 26))).toBe(
+      'stonks lab sweep --tickers SPY.US,QQQ.US,IWM.US --start 2025-09-26 --end 2026-09-26',
+    );
   });
 
   it('knows which jobs can be cancelled and names their strategy', async () => {

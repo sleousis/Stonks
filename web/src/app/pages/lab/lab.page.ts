@@ -27,13 +27,14 @@ import { type JobHandle, JobsService, isTerminal } from '../../core/jobs/jobs.se
 import { formatPercent } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
 import { PctPipe } from '../../shared/format.pipes';
+import { CliCommand } from '../../shared/ui/cli-command';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { BacktestFormView } from './backtest-form';
 import { BacktestResultView } from './backtest-result';
-import { suiteTests } from './lab-requests';
+import { defaultWindow, suiteTests } from './lab-requests';
 import { LabRunFormView } from './lab-run-form';
 import { LabRunResultView } from './lab-run-result';
 import { type StrategyPreset, presetFromStrategy } from './strategy-preset';
@@ -88,6 +89,7 @@ export function canCancel(kind: string, status: string | null | undefined): bool
     LabRunFormView,
     BacktestResultView,
     LabRunResultView,
+    CliCommand,
   ],
   templateUrl: './lab.page.html',
   styleUrl: './lab.page.scss',
@@ -177,6 +179,9 @@ export class LabPage {
     const f = this.followed();
     return !!f && !f.handle.done() && canCancel(f.kind, f.handle.status() ?? 'queued');
   });
+
+  /** No API route serves sweep results yet (roadmap 13.6): point at the CLI. */
+  protected readonly sweepCommand = sweepCommand();
 
   protected readonly kindLabel = kindLabel;
   protected readonly jobStrategy = jobStrategy;
@@ -322,6 +327,12 @@ export class LabPage {
       this.resultLoading.set(false);
     }
   }
+}
+
+/** A ready-to-run `stonks lab sweep` over the last year. */
+export function sweepCommand(today?: Date): string {
+  const { start, end } = defaultWindow(today);
+  return `stonks lab sweep --tickers SPY.US,QQQ.US,IWM.US --start ${start} --end ${end}`;
 }
 
 function shortName(classPath: string | null | undefined): string {
