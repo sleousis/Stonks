@@ -397,6 +397,11 @@ class JobRunner:
                 ) from None
             return future.result()  # it started just now: let it finish
 
+    def lane(self, kind: str) -> str | None:
+        """The lock lane ``kind`` runs on, or ``None`` for the general pool."""
+        reg = self._handlers.get(kind)
+        return reg.lock if reg is not None else None
+
     def is_operation(self, kind: str) -> bool:
         """True for operator jobs (ticks, ingests, backups), whose cancel
         needs an admin (see :meth:`register`)."""
