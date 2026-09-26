@@ -150,3 +150,61 @@ def prune(dest: Path | None = _DEST, config: Path | None = _CONFIG) -> None:
     for old in expired_backups(target.list(), settings.backup.retention):
         target.delete(old.id)
         typer.echo(f"pruned {old.id}")
+
+
+_SNAPSHOT_ROOT = typer.Argument(..., help="folder a restic snapshot was restored into")
+_TARGET_DIR = typer.Option(..., "--data-dir", help="the data folder to restore into")
+_RESTORED_DIR = typer.Argument(..., help="the restored data folder")
+_SNAPSHOT_OPT = typer.Option(
+    ..., "--snapshot", help="the restic restore folder it came from (for row counts)"
+)
+
+
+def _counts_text(counts: dict[str, int]) -> str:
+    return " ".join(f"{table}={n}" for table, n in counts.items())
+
+
+@app.command("restore-snapshot")
+def restore_snapshot_cmd(
+    root: Path = _SNAPSHOT_ROOT,
+    data_dir: Path = _TARGET_DIR,
+) -> None:
+    """Restore state, artifacts and lake from a restored restic snapshot.
+
+    Existing data in the data folder is moved aside, never deleted. Used by
+    deploy/backup/restore.sh.
+    """
+    from stonks.ops.disaster import DisasterRestoreError, restore_snapshot
+
+    try:
+        result = restore_snapshot(root, data_dir)
+    except DisasterRestoreError as exc:
+        _fail(f"restore refused: {exc}")
+    typer.echo(f"restored {result.snapshot.kind} {result.snapshot.path} into {data_dir}")
+    typer.echo(f"rows checked: {_counts_text(result.expected)}")
+    for aside in result.moved_aside:
+        typer.echo(f"previous data kept at {aside}")
+
+
+@app.command("check-restore")
+def check_restore_cmd(
+    data_dir: Path = _RESTORED_DIR,
+    snapshot: Path = _SNAPSHOT_OPT,
+) -> None:
+    """Fail unless the restored state DB holds the snapshot's users,
+    strategies and orders, and the lake and artifacts are there."""
+    from stonks.ops.disaster import (
+        DisasterRestoreError,
+        check_restored,
+        expected_counts,
+        find_snapshot,
+    )
+
+    try:
+        expected = expected_counts(find_snapshot(snapshot))
+    except DisasterRestoreError as exc:
+        _fail(f"restore check FAILED: {exc}")
+    problems = check_restored(data_dir, expected)
+    if problems:
+        _fail("\n".join(["restore check FAILED:", *problems]))
+    typer.echo(f"restore check passed: {_counts_text(expected)}")

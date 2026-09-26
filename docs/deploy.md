@@ -192,7 +192,7 @@ Use `--with-data` only if the newer version's migrations broke the older one. It
 |------|-------|------|-------|
 | Pre-deploy snapshot | `/srv/stonks/snapshots/pre-<tag>-<time>.tar.gz` | Every deploy | Last 5 |
 | Off-server backup (restic, encrypted) | B2 or R2 bucket | 02:30 UTC nightly, and every deploy | 7 daily, 4 weekly, 12 monthly |
-| Restore test | Scratch volume, wiped after | 1st of the month, 04:00 UTC | Result in healthchecks.io |
+| Restore test | Scratch volume, wiped after | 1st of the month, 04:00 UTC | Result in healthchecks.io. Fails if the state DB is missing or lost rows |
 
 `backup.sh` uses `python -m stonks.ops backup` when the image has it (a consistent copy with no downtime, written to `/data/backups`). Otherwise it stops the api and scheduler for the upload and backs up the whole volume.
 
@@ -219,7 +219,9 @@ After losing the server: create a new one (section 1), set `.env` (same `RESTIC_
 /opt/stonks/deploy/backup/restore.sh            # latest; or pass a snapshot id
 ```
 
-It asks you to type `RESTORE`, keeps a local copy of the current data, replaces `/data` with the backup, restarts and checks health.
+It asks you to type `RESTORE` and keeps a local copy of the current data. Then `python -m stonks.ops restore-snapshot` brings back the state DB, the artifacts and the lake together. It moves the files already in `/data` aside as `<name>.pre-restore-<time>`, never deletes them, and checks that the users, strategies and orders row counts match the snapshot. A snapshot without the state DB or the lake is refused and nothing changes. Then it restarts and checks health.
+
+The monthly restore test runs the same restore into a scratch folder and then `python -m stonks.ops check-restore`. It fails when the state DB is missing, empty or has fewer rows than the snapshot.
 
 ## 8. Monitoring
 
