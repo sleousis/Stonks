@@ -164,6 +164,21 @@ def test_split_rescales_the_open_lot():
     assert t.return_pct == pytest.approx(395.0 / 4004.0)
 
 
+def test_partial_exit_then_split_then_exit_of_the_remainder():
+    split = CorporateActionRecord(DAYS[3], "X.US", "split", 2.0, 6.0, 12.0, 0.0)
+    fills = [
+        _fill("buy", 10, 100.0, 0, fee=2.0),
+        _fill("sell", 4, 110.0, 2),
+        _fill("sell", 12, 60.0, 4),
+    ]
+    first, second = build_round_trips(fills, timeline=DAYS, corporate_actions=[split])
+    assert (first.qty, first.entry_px) == (4, 100.0)
+    assert first.pnl == pytest.approx(40.0 - 0.8)
+    assert (second.qty, second.entry_px) == (pytest.approx(12.0), pytest.approx(50.0))
+    assert second.fees == pytest.approx(1.2)
+    assert second.pnl == pytest.approx(120.0 - 1.2)
+
+
 def test_split_adjusts_mae_and_mfe_bars():
     split = CorporateActionRecord(DAYS[2], "X.US", "split", 4.0, 10.0, 40.0, 0.0)
     bars = pd.DataFrame(

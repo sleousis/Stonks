@@ -135,6 +135,11 @@ def test_fitness_floors_turnover():
     assert m.fitness(2.0, -0.16, 0.5) == pytest.approx(2.0 * math.sqrt(0.16 / 0.5))
 
 
+def test_fitness_with_zero_sharpe_and_infinite_cagr_is_zero_not_nan():
+    assert m.fitness(0.0, math.inf, 0.2) == 0.0
+    assert m.fitness(1.0, math.inf, 0.2) == math.inf
+
+
 def test_profit_factor_conventions():
     assert m.profit_factor([1.0, -0.5, 2.0]) == pytest.approx(6.0)
     assert m.profit_factor([1.0]) == math.inf

@@ -181,7 +181,10 @@ def lower_tail_ratio(returns: Series) -> float:
 
 
 def fitness(sharpe_ratio: float, cagr: float, turnover_daily: float) -> float:
-    """Tulchinsky's fitness ``sharpe * sqrt(|cagr| / max(turnover, 0.125))``."""
+    """Tulchinsky's fitness ``sharpe * sqrt(|cagr| / max(turnover, 0.125))``
+    (0 when Sharpe is 0, even with an infinite CAGR)."""
+    if sharpe_ratio == 0:
+        return 0.0
     return sharpe_ratio * math.sqrt(abs(cagr) / max(turnover_daily, FITNESS_TURNOVER_FLOOR))
 
 
