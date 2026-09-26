@@ -92,6 +92,7 @@ def _run(tmp_path: Path, lake) -> dict:
         registry.register(strategy, reports=reports, strategy_id=sid)
         if status != "shadow":
             seed_status(registry, sid, status)
+
     def settings(threshold: float) -> TickSettings:
         return TickSettings(
             universe=["UP.US", "FLAT.US", "DOWN.US"],
@@ -119,7 +120,7 @@ def _run(tmp_path: Path, lake) -> dict:
     out: dict = {"results": [_legacy_result(r) for r in results]}
     for table, cols in LEDGER.items():
         rows = state.sql(f"SELECT {cols} FROM {table} ORDER BY rowid")
-        out[table] = [list(tuple(r)) for r in rows]
+        out[table] = [list(r) for r in rows]
     state.close()
     return out
 
