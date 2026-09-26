@@ -164,10 +164,10 @@ class MarginCall(RiskRule):
                     adjustment(order, self.name, 0.0, f"margin model {model.name} allows no shorts")
                 )
                 continue
-            ac = ctx.asset_classes.get(order.ticker, "equity")
+            ac: Any = ctx.asset_classes.get(order.ticker, "equity")
             per_share = model.initial_requirement(
                 order.ticker, signed(order) / order.quantity, p, ac
-            )  # type: ignore[arg-type]
+            )
             qty = min(order.quantity, max(room, 0.0) / per_share)
             if qty < order.quantity:
                 reason = f"initial margin {per_share:.2f}/share leaves room for {qty:.4f}"

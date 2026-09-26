@@ -514,8 +514,7 @@ class Backtester:
         """Queue the margin-call closes and recall covers (see the module
         doc); they replace other orders queued for their tickers."""
         forced: dict[str, Order] = {}
-        margin_call = getattr(self._broker, "margin_call", None)
-        plan = margin_call() if callable(margin_call) else []
+        plan = self._broker.margin_call()
         if plan:
             _log.warning("margin_call", bar=as_of.isoformat(), plan=plan)
         for ticker, qty in plan:
@@ -529,9 +528,8 @@ class Backtester:
                 strategy_id="margin",
                 position_effect="close",
             )
-        recalled = getattr(self._broker, "recalled", None)
         positions = self._broker.fetch_portfolio().positions
-        for ticker in recalled(as_of) if callable(recalled) else []:
+        for ticker in self._broker.recalled(as_of):
             forced[ticker] = Order(
                 client_id=f"recall:{as_of.isoformat()}:{ticker}:cover",
                 ticker=ticker,
