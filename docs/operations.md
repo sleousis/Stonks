@@ -75,7 +75,7 @@ Alerts go through the `Notifier` seam in `src/stonks/notify/`. It is configured 
 
 ```toml
 [notify]
-backends = ["log", "webhook"]   # [] disables alerts
+backends = ["log", "store", "webhook"]   # [] disables alerts; default ["log", "store"]
 min_level = "warning"           # info | warning | error
 
 [notify.webhook]
@@ -91,6 +91,7 @@ STONKS_NOTIFY_WEBHOOK_URL=https://hooks.slack.com/services/...
 Backends:
 
 - **log** writes a `notify` event to the structured log at the alert's level.
+- **store** records every alert, whatever `min_level` says, in the state DB's `alerts` table, which the trader console reads through `GET /api/alerts`. Configured credentials (API token, broker keys, EODHD key, webhook URL), `key=value` credential pairs and `Bearer ...` values are scrubbed from the title, message and context before the row is written, and context entries whose key names a credential (`token`, `api_key`, `password`, ...) are replaced with `***`.
 - **webhook** POSTs JSON: `{"level", "title", "message", "fields", "text"}`. `text` is a one-line summary, so Slack and Mattermost incoming webhooks show it as is. Other receivers can read the structured fields. The URL is never logged: error messages show only `scheme://host/***`.
 
 A notifier never raises. A down webhook is logged as `notify.webhook.failed` and the tick or health check carries on with its own result.
