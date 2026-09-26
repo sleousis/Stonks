@@ -21,6 +21,7 @@ from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
+from tests.fixtures.governance import seed_status
 
 API_TOKEN = "test-token-123"
 
@@ -125,7 +126,7 @@ def seeded(settings) -> dict:
             reports=[SurvivalReport(test_id="oos", passed=True, metrics={"sharpe_oos": 1.5})],
             strategy_id="bah_active",
         )
-        registry.set_status(active_id, "active")
+        seed_status(registry, active_id, "active")
         shadow_id = registry.register(
             BuyAndHold({"ticker": "DOWN.US", "allocation": 1.0}),
             reports=[],

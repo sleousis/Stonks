@@ -12,6 +12,7 @@ from stonks.production.tick import BackdatedTickError, TickSettings, run_tick
 from stonks.registry.store import StrategyRegistry
 from stonks.store.state import MIGRATIONS_DIR, SqliteState
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
+from tests.fixtures.governance import seed_status
 
 SETTINGS = TickSettings(universe=["UP.US"], threshold=0.0, initial_cash=10_000.0)
 
@@ -21,7 +22,8 @@ def tick_env(tmp_path, lake_trending):
     state = SqliteState(tmp_path / "state.sqlite")
     state.migrate()
     registry = StrategyRegistry(state=state, artifacts_dir=tmp_path / "artifacts")
-    registry.set_status(
+    seed_status(
+        registry,
         registry.register(
             BuyAndHold({"ticker": "UP.US", "allocation": 1.0}),
             reports=[SurvivalReport(test_id="oos", passed=True, metrics={})],

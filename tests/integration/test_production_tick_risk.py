@@ -13,6 +13,7 @@ from stonks.production.tick import TickSettings, run_tick
 from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
+from tests.fixtures.governance import seed_status
 
 AS_OF = date(2026, 3, 20)
 
@@ -26,7 +27,7 @@ def tick_env(tmp_path, lake_trending):
         BuyAndHold({"ticker": "UP.US", "allocation": 1.0}),
         reports=[SurvivalReport(test_id="oos", passed=True, metrics={})],
     )
-    registry.set_status(sid, "active")
+    seed_status(registry, sid, "active")
     yield lake_trending, state, registry
     state.close()
 
@@ -142,7 +143,7 @@ def test_buys_are_not_funded_by_sells_that_failed(tmp_path, lake_trending, monke
             RotateByEquity({"ticker": "UP.US", "allocation": 1.0}),
             reports=[SurvivalReport(test_id="oos", passed=True, metrics={})],
         )
-        registry.set_status(sid, "active")
+        seed_status(registry, sid, "active")
         # fully invested in DOWN.US, no cash
         state.execute("INSERT INTO tick_runs (id, started_at, status) VALUES ('t0', 'x', 'ok')")
         state.execute(
@@ -170,7 +171,7 @@ def test_buys_use_proceeds_of_sells_that_filled(tmp_path, lake_trending):
             RotateByEquity({"ticker": "UP.US", "allocation": 1.0}),
             reports=[SurvivalReport(test_id="oos", passed=True, metrics={})],
         )
-        registry.set_status(sid, "active")
+        seed_status(registry, sid, "active")
         state.execute("INSERT INTO tick_runs (id, started_at, status) VALUES ('t0', 'x', 'ok')")
         state.execute(
             "INSERT INTO portfolio_snapshots (tick_id, taken_at, cash, positions_json, "
