@@ -421,13 +421,15 @@ def _momentum_lab_request(**overrides) -> LabRunRequest:
     return LabRunRequest(**base)
 
 
-def test_lab_run_stops_at_first_trial_once_cancelled(services):
+def test_lab_run_stops_at_first_trial_once_cancelled(services, capsys):
     from stonks.app.jobs import JobCancelled, JobContext
 
     ctx = JobContext(job_id="job_none", _store=services.runner.store)
     ctx.request_cancel()
     with pytest.raises(JobCancelled):
         services.lab.run_lab(_momentum_lab_request(budget=500), progress=ctx)
+    # tuners swallow per-trial Exceptions; cancellation must not be one of them
+    assert "trial.failed" not in capsys.readouterr().out
 
 
 def test_running_lab_run_job_can_be_cancelled(services):
