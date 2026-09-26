@@ -140,7 +140,9 @@ def test_cancelled_after_partial_fill_books_fill_and_status(state):
     assert fills_for(state, "c1")[0]["quantity"] == pytest.approx(3.0)
 
 
-def test_unknown_and_failing_orders_are_reported_and_left_alone(state):
+def test_unknown_orders_are_rejected_and_failing_orders_left_alone(state):
+    # Roadmap 8.5: rows are written 'pending' before submission, so a row the
+    # broker has never seen was never received (a crash before the submit).
     broker = FakeStateBroker()
     insert_order(state, "missing")
     insert_order(state, "boom")
@@ -152,9 +154,36 @@ def test_unknown_and_failing_orders_are_reported_and_left_alone(state):
     assert s.unknown_orders == ("missing",)
     assert s.failed_orders == ("boom",)
     assert s.fills_inserted == 1
-    assert order_row(state, "missing")["status"] == "pending"
+    assert s.orders_updated == 2  # 'ok' filled, 'missing' rejected
+    missing = order_row(state, "missing")
+    assert missing["status"] == "rejected"
+    assert "not found at the broker" in missing["status_reason"]
     assert order_row(state, "boom")["status"] == "pending"
+    assert order_row(state, "boom")["status_reason"] is None
     assert order_row(state, "ok")["status"] == "filled"
+
+
+def test_unknown_order_with_booked_fills_is_left_alone(state):
+    # A row with fills was certainly received: "not found" is then a broker
+    # anomaly to investigate, never grounds to reject the order.
+    broker = FakeStateBroker()
+    insert_order(state, "gone")
+    state.execute(
+        "INSERT INTO fills (order_client_id, ticker, quantity, price, fee, filled_at)"
+        " VALUES ('gone', 'AAPL.US', 1, 10, 0, '2026-01-05T00:00:00+00:00')"
+    )
+    s = reconcile_orders(broker, state)
+    assert s.unknown_orders == ("gone",)
+    assert order_row(state, "gone")["status"] == "pending"
+
+
+def test_unknown_order_with_a_broker_id_is_left_alone(state):
+    broker = FakeStateBroker()
+    insert_order(state, "acked")
+    state.execute("UPDATE orders SET broker_order_id = 'b-9' WHERE client_id = 'acked'")
+    s = reconcile_orders(broker, state)
+    assert s.unknown_orders == ("acked",)
+    assert order_row(state, "acked")["status"] == "pending"
 
 
 def test_terminal_orders_are_not_queried(state):
