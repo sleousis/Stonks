@@ -17,11 +17,17 @@ independent permutation shuffles ``r_o`` (gaps). The first
 ``start_index + 1`` bars are preserved unchanged; the rest are
 reconstructed bar-by-bar from the shuffled relatives, exponentiated
 back into price space.
+
+For a multi-ticker universe the MCPT uses :func:`permute_bars_together`:
+both permutations are drawn once over the union timeline and applied to
+every ticker (Masters' multi-market MCPT), so the null keeps cross-asset
+correlation and only destroys time structure.
 """
 
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Mapping
 from datetime import date
 from typing import Any
 
@@ -54,13 +60,62 @@ def permute_bars(bars: pd.DataFrame, start_index: int = 0, seed: int | None = No
     """
     if bars.empty or len(bars) <= start_index + 1:
         return bars.copy()
+    rng = np.random.default_rng(seed)
+    perm_n = len(bars) - (start_index + 1)
+    perm1 = rng.permutation(perm_n)  # intra-bar (h, l, c)
+    perm2 = rng.permutation(perm_n)  # gap (o)
+    return _apply_permutation(bars, start_index, perm1, perm2)
 
+
+def permute_bars_together(
+    history: Mapping[str, tuple[pd.DataFrame, int]], seed: int | None = None
+) -> dict[str, pd.DataFrame]:
+    """Permute several tickers' bars with **one shared ordering** (Masters'
+    multi-market permutation), so cross-asset correlation survives: on a
+    common timeline every ticker's bar at a given slot draws its relatives
+    from the same source timestamp.
+
+    ``history`` maps ticker -> ``(bars, start_index)`` with the same
+    ``start_index`` meaning as :func:`permute_bars`. The permutation is
+    drawn over the sorted union of every ticker's permutable timestamps;
+    each ticker keeps the union order restricted to its own bars. With a
+    single ticker (or identical timelines) this is exactly
+    :func:`permute_bars` for the same ``seed``; a ticker missing bars on
+    some timestamps keeps the shared order of the ones it has.
+    """
+    permutable: dict[str, np.ndarray] = {}
+    for ticker, (bars, start_index) in history.items():
+        if len(bars) > start_index + 1:
+            ts = pd.to_datetime(bars["timestamp"]).to_numpy()[start_index + 1 :]
+            permutable[ticker] = ts
+    out = {t: bars.copy() for t, (bars, _) in history.items()}
+    if not permutable:
+        return out
+    union = np.unique(np.concatenate(list(permutable.values())))
+    rng = np.random.default_rng(seed)
+    shared1 = rng.permutation(len(union))  # intra-bar (h, l, c)
+    shared2 = rng.permutation(len(union))  # gap (o)
+    for ticker, ts in permutable.items():
+        bars, start_index = history[ticker]
+        # local index of each union slot this ticker has, -1 elsewhere
+        local = np.full(len(union), -1)
+        local[np.searchsorted(union, ts)] = np.arange(len(ts))
+        perm1 = local[shared1]
+        perm2 = local[shared2]
+        out[ticker] = _apply_permutation(bars, start_index, perm1[perm1 >= 0], perm2[perm2 >= 0])
+    return out
+
+
+def _apply_permutation(
+    bars: pd.DataFrame, start_index: int, perm1: np.ndarray, perm2: np.ndarray
+) -> pd.DataFrame:
+    """Rebuild ``bars`` after ``start_index`` from its log relatives,
+    reordered by ``perm1`` (intra-bar high/low/close) and ``perm2`` (gaps)."""
     df = bars.reset_index(drop=True).copy()
     perm_index = start_index + 1
     n = len(df)
     perm_n = n - perm_index
 
-    rng = np.random.default_rng(seed)
     log_open = np.log(df["open"].to_numpy(dtype=float))
     log_high = np.log(df["high"].to_numpy(dtype=float))
     log_low = np.log(df["low"].to_numpy(dtype=float))
@@ -73,9 +128,6 @@ def permute_bars(bars: pd.DataFrame, start_index: int = 0, seed: int | None = No
     r_h = log_high - log_open
     r_l = log_low - log_open
     r_c = log_close - log_open
-
-    perm1 = rng.permutation(perm_n)  # intra-bar (h, l, c)
-    perm2 = rng.permutation(perm_n)  # gap (o)
 
     shuffled_h = r_h[perm_index:][perm1]
     shuffled_l = r_l[perm_index:][perm1]
@@ -226,17 +278,18 @@ class MonteCarloPermutationTest:
         perm_scores: list[float] = []
         at_least_as_good = 0
         for _ in range(self._n):
-            # permute_bars keeps its first ``start_index + 1`` rows: exactly
-            # the ``n_before`` pre-window bars (the first window bar when
-            # there is no earlier history, as the path needs an anchor).
-            permuted = {
-                ticker: permute_bars(
-                    bars,
-                    start_index=max(n_before - 1, 0),
-                    seed=int(master_rng.integers(0, 2**31 - 1)),
-                )
-                for ticker, (bars, n_before) in history.items()
-            }
+            # The permutation keeps each ticker's first ``start_index + 1``
+            # rows: exactly its ``n_before`` pre-window bars (the first
+            # window bar when there is no earlier history, as the path needs
+            # an anchor). One shared ordering for the whole universe keeps
+            # cross-asset correlation intact.
+            permuted = permute_bars_together(
+                {
+                    ticker: (bars, max(n_before - 1, 0))
+                    for ticker, (bars, n_before) in history.items()
+                },
+                seed=int(master_rng.integers(0, 2**31 - 1)),
+            )
             perm_score = score(permuted)
             perm_scores.append(perm_score)
             if (perm_score <= real_score) if minimize else (perm_score >= real_score):

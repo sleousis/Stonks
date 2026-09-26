@@ -6,6 +6,7 @@ one backtest each, p-value against a configurable threshold.
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import date, datetime
 
 import numpy as np
@@ -219,6 +220,50 @@ def test_permutes_only_the_window_and_keeps_real_history_for_lookbacks(lake_gbm)
     # the real copy plus 3 distinct permutations of the window
     assert tuple(np.round(real_inside["close"].to_numpy(), 10)) in inside_variants
     assert len(inside_variants) == 4
+
+
+def test_multi_ticker_permutations_keep_cross_asset_co_movement(lake_gbm):
+    """One shared permutation for the whole universe (Masters): a ticker
+    that moves in lockstep with another still does in every permuted lake."""
+    lake, dates = lake_gbm
+    real = lake.get_bars("RND.US", Interval.DAY_1, FAR_PAST, FAR_FUTURE)
+    twin = real.assign(ticker="TWIN.US")
+    for col in ("open", "high", "low", "close", "adj_close"):
+        twin[col] = twin[col] * 2.0
+    lake.upsert_bars(twin, interval=Interval.DAY_1)
+
+    seen: list[tuple[pd.DataFrame, pd.DataFrame]] = []
+
+    class _PairSpy(BaseStrategy):
+        id = "pair_spy"
+
+        def __init__(self, params):
+            super().__init__(params)
+            self._lakes: list = []
+
+        def estimate_return(self, ticker, as_of, lake):
+            if not any(lake is x for x in self._lakes):
+                self._lakes.append(lake)
+                seen.append(
+                    tuple(
+                        lake.get_bars(t, Interval.DAY_1, FAR_PAST, FAR_FUTURE)
+                        for t in ("RND.US", "TWIN.US")
+                    )
+                )
+            return
+
+        def decide(self, my_picks, portfolio, prices, as_of):
+            return []
+
+    ds = dataclasses.replace(_gbm_dataset(lake, dates), universe=["RND.US", "TWIN.US"])
+    MonteCarloPermutationTest(n_permutations=3, max_p_value=1.0, seed=5).run(_PairSpy({}), ds)
+
+    assert len(seen) == 4
+    variants = set()
+    for rnd, tw in seen:
+        np.testing.assert_allclose(tw["close"].to_numpy(), 2.0 * rnd["close"].to_numpy())
+        variants.add(tuple(np.round(rnd["close"].to_numpy(), 8)))
+    assert len(variants) == 4  # the permutations did shuffle
 
 
 def test_permuted_lakes_carry_non_bar_tables(lake_gbm):
