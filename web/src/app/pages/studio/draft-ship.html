@@ -50,14 +50,12 @@
       }
       @default {
         <p>
-          Registered as
-          <a class="mono" routerLink="/strategies">{{ strategyId() }}</a
+          Registered as <strong class="mono">{{ strategyId() }}</strong
           >.
           @if (enabled()) {
             It is <strong>active</strong> and places orders on each tick.
           } @else {
-            It is in <strong>shadow</strong>: evaluated on each tick, no orders. Follow it on the
-            <a routerLink="/shadow">Shadow</a> page.
+            It is in <strong>shadow</strong>: evaluated on each tick, no orders.
           }
         </p>
         <button
@@ -80,6 +78,10 @@
               : 'Turn on to make it active. You will be asked to type its id.'
           }}
         </p>
+        <div class="links">
+          <a class="btn btn-ghost" routerLink="/shadow">Watch in Shadow</a>
+          <a class="btn btn-ghost" routerLink="/strategies">Open Strategies</a>
+        </div>
       }
     }
   </div>

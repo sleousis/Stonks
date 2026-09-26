@@ -162,7 +162,13 @@ export class DraftPage {
   );
   protected readonly issues = computed<SpecIssue[]>(() => {
     const s = this.spec();
-    return s ? mergeIssues(this.apiIssues(), localIssues(s, this.kinds())) : [];
+    if (!s) return [];
+    // The API is the validator of record: where it has spoken about a field,
+    // its message replaces the local one.
+    const api = this.apiIssues();
+    const covered = new Set(api.map((i) => i.path));
+    const local = localIssues(s, this.kinds()).filter((i) => !covered.has(i.path));
+    return mergeIssues(api, local);
   });
   protected readonly issueMap = computed(() => toIssueMap(this.issues()));
   protected readonly validationState = computed<'checking' | 'valid' | 'invalid' | 'unknown'>(

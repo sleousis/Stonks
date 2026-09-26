@@ -88,10 +88,7 @@
           <option value="custom">Custom</option>
         </select>
         <p id="t-cost-hint" class="hint">
-          {{ costSummary() }}
-          @if (presetDescription(); as d) {
-            . {{ d }}
-          }
+          {{ costHint() }}
         </p>
       </div>
       @if (cost() === 'custom') {
@@ -171,7 +168,7 @@
     <div class="job" aria-live="polite">
       <div class="job-line">
         <app-status-pill [status]="bt.status() ?? 'queued'" />
-        <span class="job-message">{{ bt.message() || 'Waiting for a worker…' }}</span>
+        <span class="job-message">{{ jobText(bt) }}</span>
         @if (isRunning(bt)) {
           <button type="button" class="btn btn-ghost" (click)="cancel(bt)">Cancel</button>
         }
@@ -281,7 +278,7 @@
     <div class="job" aria-live="polite">
       <div class="job-line">
         <app-status-pill [status]="lr.status() ?? 'queued'" />
-        <span class="job-message">{{ lr.message() || 'Waiting for a worker…' }}</span>
+        <span class="job-message">{{ jobText(lr) }}</span>
         @if (isRunning(lr)) {
           <button type="button" class="btn btn-ghost" (click)="cancel(lr)">Cancel</button>
         }

@@ -158,6 +158,17 @@
   &:hover {
     text-decoration: underline;
   }
+
+  @include bp.phone {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-min);
+  }
+  @include bp.coarse {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-min);
+  }
 }
 
 .draft-meta {

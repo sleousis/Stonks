@@ -164,10 +164,29 @@ export class DraftTest {
     const c = this.costs();
     return `${formatNumber(c.slippage_bps)} bps slippage, ${formatMoney(c.fee_per_trade)} per trade`;
   });
-  protected readonly presetDescription = computed(() => {
-    if (!this.costModels.hasValue()) return null;
-    return this.costModels.value().find((p) => p.name === this.cost())?.description ?? null;
+  protected readonly costHint = computed(() => {
+    const summary = this.costSummary();
+    if (this.cost() !== 'realistic') return `${summary}.`;
+    // Draft backtests take flat slippage and fees, so the preset's spread and
+    // percentage fee are folded into slippage; size-dependent impact is not.
+    return `≈ ${summary}, from the realistic preset's spread and fees for ${this.assetClass()}.`;
   });
+
+  protected jobText(h: JobHandle): string {
+    const msg = h.message();
+    switch (h.status()) {
+      case 'running':
+        return msg || 'Running…';
+      case 'succeeded':
+        return 'Finished.';
+      case 'failed':
+        return h.error() ? 'Failed.' : msg || 'Failed.';
+      case 'cancelled':
+        return 'Cancelled.';
+      default:
+        return 'Waiting for a worker…';
+    }
+  }
 
   // ---- backtest --------------------------------------------------------------
   protected readonly btRun = signal<JobHandle | null>(null);
