@@ -53,47 +53,59 @@ def copy_universe_lake(
     target = DuckDBLake(Path(":memory:"))
     try:
         target.migrate()
-        target_tables = set(_base_tables(target))
-        for table in _base_tables(source):
+        target_columns = _columns_by_table(target)
+        for table, src_cols in _columns_by_table(source).items():
             if table in skip:
                 continue
-            if table not in target_tables:
+            if table not in target_columns:
                 # Source is ahead of this code's migrations; nothing to
                 # write into. Log rather than invent a schema.
                 _log.warning("lake_copy.table_missing_in_copy", table=table)
                 continue
-            _copy_table(source, target, table, tickers)
+            shared = set(target_columns[table])
+            cols = [c for c in src_cols if c in shared]
+            _copy_table(
+                source, target, table, cols, filter_on_key=_key(table) in src_cols, tickers=tickers
+            )
     except Exception:
         target.close()
         raise
     return target
 
 
-def _base_tables(lake: DuckDBLake) -> list[str]:
+def _columns_by_table(lake: DuckDBLake) -> dict[str, list[str]]:
+    """Column names (in table order) of every base table in ``main``."""
     rows = lake.con.execute(
-        "SELECT table_name FROM information_schema.tables"
-        " WHERE table_schema = 'main' AND table_type = 'BASE TABLE' ORDER BY table_name"
+        "SELECT c.table_name, c.column_name"
+        "  FROM information_schema.columns c"
+        "  JOIN information_schema.tables t"
+        "    ON t.table_schema = c.table_schema AND t.table_name = c.table_name"
+        " WHERE c.table_schema = 'main' AND t.table_type = 'BASE TABLE'"
+        " ORDER BY c.table_name, c.ordinal_position"
     ).fetchall()
-    return [r[0] for r in rows]
+    out: dict[str, list[str]] = {}
+    for table, column in rows:
+        out.setdefault(table, []).append(column)
+    return out
 
 
-def _columns(lake: DuckDBLake, table: str) -> list[str]:
-    rows = lake.con.execute(
-        "SELECT column_name FROM information_schema.columns"
-        " WHERE table_schema = 'main' AND table_name = ? ORDER BY ordinal_position",
-        [table],
-    ).fetchall()
-    return [r[0] for r in rows]
+def _key(table: str) -> str:
+    return _ID_KEYED_TABLES.get(table, "ticker")
 
 
-def _copy_table(source: DuckDBLake, target: DuckDBLake, table: str, tickers: list[str]) -> None:
-    src_cols = _columns(source, table)
-    cols = [c for c in src_cols if c in set(_columns(target, table))]
+def _copy_table(
+    source: DuckDBLake,
+    target: DuckDBLake,
+    table: str,
+    cols: list[str],
+    *,
+    filter_on_key: bool,
+    tickers: list[str],
+) -> None:
     col_sql = ", ".join(f'"{c}"' for c in cols)
-    key = _ID_KEYED_TABLES.get(table, "ticker")
-    if key in src_cols:
+    if filter_on_key:
         frame = source.con.execute(
-            f'SELECT {col_sql} FROM "{table}" WHERE "{key}" = ANY(?)', [tickers]
+            f'SELECT {col_sql} FROM "{table}" WHERE "{_key(table)}" = ANY(?)', [tickers]
         ).fetchdf()
     else:
         frame = source.con.execute(f'SELECT {col_sql} FROM "{table}"').fetchdf()
