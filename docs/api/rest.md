@@ -286,7 +286,7 @@ Settings for ``AssetClassCostModel``. Zero costs by default; ``CostModelSettings
 | `configured` | boolean | yes |  |
 | `default` | boolean | yes |  |
 | `detail` | string \| null | no |  |
-| `id` | "eodhd" \| "yahoo" | yes |  |
+| `id` | "eodhd" \| "yahoo" \| "defillama" | yes |  |
 
 ### Draft
 
@@ -413,7 +413,7 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `interval` | string \| null | no |  |
 | `kind` | "prices" \| "intraday" \| "fundamentals" \| "metadata" | yes |  |
 | `since` | date \| null | no |  |
-| `source` | "eodhd" \| "yahoo" | no |  |
+| `source` | "eodhd" \| "yahoo" \| "defillama" | no |  |
 | `tickers` | list[string] | no |  |
 | `until` | date \| null | no |  |
 

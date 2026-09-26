@@ -7,29 +7,51 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 
 | Tool | Kind | Needs confirm |
 |------|------|---------------|
+| [`backtest_draft`](#backtest_draft) | job | no |
+| [`create_draft`](#create_draft) | job | no |
+| [`disable_draft`](#disable_draft) | guarded | yes |
+| [`enable_draft`](#enable_draft) | guarded | yes |
 | [`get_bars`](#get_bars) | read | no |
+| [`get_broker`](#get_broker) | read | no |
 | [`get_catalog`](#get_catalog) | read | no |
 | [`get_coverage`](#get_coverage) | read | no |
+| [`get_draft`](#get_draft) | read | no |
+| [`get_health_report`](#get_health_report) | read | no |
 | [`get_job`](#get_job) | read | no |
+| [`get_pnl`](#get_pnl) | read | no |
 | [`get_portfolio`](#get_portfolio) | read | no |
+| [`get_risk_policy`](#get_risk_policy) | read | no |
+| [`get_rule_schema`](#get_rule_schema) | read | no |
+| [`get_shadow_pnl`](#get_shadow_pnl) | read | no |
 | [`get_strategy`](#get_strategy) | read | no |
 | [`get_tick`](#get_tick) | read | no |
 | [`health`](#health) | read | no |
+| [`lab_run_draft`](#lab_run_draft) | guarded | yes |
+| [`list_cost_models`](#list_cost_models) | read | no |
+| [`list_drafts`](#list_drafts) | read | no |
 | [`list_fills`](#list_fills) | read | no |
 | [`list_ingest_runs`](#list_ingest_runs) | read | no |
 | [`list_jobs`](#list_jobs) | read | no |
 | [`list_orders`](#list_orders) | read | no |
 | [`list_portfolio_snapshots`](#list_portfolio_snapshots) | read | no |
+| [`list_shadow_decisions`](#list_shadow_decisions) | read | no |
+| [`list_shadow_pnl`](#list_shadow_pnl) | read | no |
+| [`list_sources`](#list_sources) | read | no |
 | [`list_strategies`](#list_strategies) | read | no |
+| [`list_studio_templates`](#list_studio_templates) | read | no |
 | [`list_ticks`](#list_ticks) | read | no |
 | [`promote_strategy`](#promote_strategy) | guarded | yes |
+| [`register_draft`](#register_draft) | guarded | yes |
 | [`retire_strategy`](#retire_strategy) | guarded | yes |
 | [`run_backtest`](#run_backtest) | job | no |
 | [`run_ingest`](#run_ingest) | job | no |
-| [`run_lab`](#run_lab) | job | no |
+| [`run_lab`](#run_lab) | guarded | yes |
 | [`run_tick`](#run_tick) | guarded | yes |
 | [`search_instruments`](#search_instruments) | read | no |
 | [`shadow_strategy`](#shadow_strategy) | guarded | yes |
+| [`update_draft`](#update_draft) | job | no |
+| [`validate_draft`](#validate_draft) | job | no |
+| [`validate_rule_spec`](#validate_rule_spec) | read | no |
 | [`wait_for_job`](#wait_for_job) | read | no |
 
 ## Read tools
@@ -49,6 +71,14 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `start` | date \| null | no | `null` | YYYY-MM-DD |
 | `end` | date \| null | no | `null` | YYYY-MM-DD |
 | `limit` | integer \| null | no | `null` | max bars |
+
+### `get_broker`
+
+The broker production ticks trade through: kind (simulated/alpaca), paper, allow_live and whether credentials are configured (keys are never shown). Read-only.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
 
 ### `get_catalog`
 
@@ -72,6 +102,27 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
 
+### `get_draft`
+
+One Studio draft: spec, kind, status and its registered strategy's status.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `draft_id` | string | yes |  |  |
+
+### `get_health_report`
+
+Operational health (every `stonks health` check): bar freshness, stuck
+ticks and ingest runs, recent ingest failures; see `healthy`.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `tickers` | list[string] \| null | no | `null` | bar-freshness tickers; default [production].universe |
+
 ### `get_job`
 
 One background job: status, progress, and its result once finished.
@@ -82,14 +133,51 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `job_id` | string | yes |  |  |
 
+### `get_pnl`
+
+Daily P&L of the real portfolio (last snapshot per UTC day). Returns
+and drawdown are measured from inception even when since trims the rows.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `since` | date \| null | no | `null` | YYYY-MM-DD; first day to include |
+
 ### `get_portfolio`
 
-Current portfolio: cash, positions valued at the latest stored closes,
-weights and total value, from the latest snapshot.
+Current portfolio: cash, positions valued at the latest stored closes, weights and total value, from the latest snapshot.
 
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
+
+### `get_risk_policy`
+
+The [production.risk] limits applied between a strategy's orders and the broker (max weights, order caps, ...).
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
+### `get_rule_schema`
+
+JSON Schema of a Studio rule spec (version 1): indicators, entry/exit conditions, ranking. Use it to write a draft's spec.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
+### `get_shadow_pnl`
+
+Daily P&L of one shadow strategy's virtual portfolio.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `strategy_id` | string | yes |  |  |
+| `since` | date \| null | no | `null` | YYYY-MM-DD; first day to include |
 
 ### `get_strategy`
 
@@ -118,6 +206,25 @@ Check that the Stonks API is up and report its version.
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
+
+### `list_cost_models`
+
+Transaction-cost presets run_backtest accepts as cost_model, with their settings.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
+### `list_drafts`
+
+Studio drafts (strategies being edited), with status and registered strategy.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `limit` | integer | no | `50` | page size |
+| `offset` | integer | no | `0` | rows to skip |
 
 ### `list_fills`
 
@@ -155,7 +262,7 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `status` | "queued" \| "running" \| "succeeded" \| "failed" \| "cancelled" \| null | no | `null` |  |
-| `kind` | string \| null | no | `null` | backtest, lab_run, ingest or tick |
+| `kind` | string \| null | no | `null` | backtest, lab_run, ingest, tick, studio_backtest, studio_lab_run |
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
 
@@ -185,6 +292,41 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
 
+### `list_shadow_decisions`
+
+Virtual orders shadow strategies placed (never sent to a broker), newest first.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `strategy_id` | string \| null | no | `null` |  |
+| `ticker` | string \| null | no | `null` |  |
+| `as_of` | date \| null | no | `null` | YYYY-MM-DD |
+| `limit` | integer | no | `50` | page size |
+| `offset` | integer | no | `0` | rows to skip |
+
+### `list_shadow_pnl`
+
+Latest value, return and worst drawdown of every shadow strategy's
+virtual portfolio.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `since` | date \| null | no | `null` | YYYY-MM-DD; first day to include |
+| `limit` | integer | no | `50` | page size |
+| `offset` | integer | no | `0` | rows to skip |
+
+### `list_sources`
+
+Market-data sources an ingest can name, which is the default, and whether each is configured.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
 ### `list_strategies`
 
 Registered strategies (id, class, params, status), optionally by status.
@@ -196,6 +338,14 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `status` | "active" \| "shadow" \| "retired" \| null | no | `null` |  |
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
+
+### `list_studio_templates`
+
+Starter rule specs (id, title, description, spec) for building a rule draft.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
 
 ### `list_ticks`
 
@@ -222,10 +372,22 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
 
+### `validate_rule_spec`
+
+Validate a rule spec without saving it (no smoke run): valid + issues.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `spec` | object | yes |  | rule spec (see get_rule_schema); constructor params for code drafts |
+
 ### `wait_for_job`
 
 Poll a job until it finishes or the timeout passes. Returns
-{"timed_out": bool, "job": {...}}; the job carries its result or error.
+{"timed_out": bool, "job": {...}, "result": {...} | null}: once the job
+succeeded, "result" is its typed result (BacktestResult, LabRunView,
+ingest or tick result); otherwise null and the job carries its error.
 
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
@@ -238,6 +400,41 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 ## Job tools
 
 Queue background work on the API. Research data only, never orders.
+
+### `backtest_draft`
+
+Queue a backtest of a draft. Returns the job; wait_for_job gives the
+BacktestResult. Simulated only: never places real orders.
+
+Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `draft_id` | string | yes |  |  |
+| `universe` | list[string] | yes |  | instrument ids |
+| `start` | date | yes |  | YYYY-MM-DD |
+| `end` | date | yes |  | YYYY-MM-DD |
+| `interval` | string | no | `"1d"` |  |
+| `initial_cash` | number | no | `10000.0` |  |
+| `threshold` | number | no | `0.0` |  |
+| `rebalance_every_bars` | integer | no | `1` |  |
+| `slippage_bps` | number | no | `0.0` |  |
+| `fee_per_trade` | number | no | `0.0` |  |
+
+### `create_draft`
+
+Create a Studio draft (saved, not registered, never traded). Rule
+drafts take a spec; code drafts take source_code and are refused (403)
+unless the API allows code strategies.
+
+Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `name` | string | yes |  | draft name |
+| `spec` | object \| null | no | `null` | rule spec (see get_rule_schema); constructor params for code drafts |
+| `kind` | "rule" \| "code" | no | `"rule"` |  |
+| `source_code` | string \| null | no | `null` | Python source of a code draft (API must allow code strategies) |
 
 ### `run_backtest`
 
@@ -261,6 +458,7 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 | `rebalance_every_bars` | integer | no | `1` |  |
 | `slippage_bps` | number | no | `0.0` |  |
 | `fee_per_trade` | number | no | `0.0` |  |
+| `cost_model` | "zero" \| "realistic" \| null | no | `null` | transaction-cost preset (see list_cost_models); replaces slippage_bps/fee_per_trade. Neither: the configured [backtest.costs] |
 
 ### `run_ingest`
 
@@ -278,31 +476,87 @@ Safety: writes, non-destructive, not idempotent, open world. Needs confirm: no.
 | `until` | date \| null | no | `null` | YYYY-MM-DD |
 | `interval` | string \| null | no | `null` | for intraday, e.g. 5m |
 
-### `run_lab`
+### `update_draft`
 
-Queue a lab run: tune a strategy class, fit, run the survival suite and
-give a pass/fail verdict. Returns the job; use wait_for_job for the result.
+Overwrite fields of a draft (only the ones given). A registered
+strategy keeps the version it was registered with.
+
+Safety: writes, destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `draft_id` | string | yes |  |  |
+| `name` | string \| null | no | `null` |  |
+| `spec` | object \| null | no | `null` | replaces the spec |
+| `source_code` | string \| null | no | `null` | Python source of a code draft (API must allow code strategies) |
+
+### `validate_draft`
+
+Validate a draft and smoke-run it (on lake tickers or synthetic data).
+Saves nothing, but a code draft's Python runs inside the API server.
 
 Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no.
 
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `class_path` | string | yes |  | catalog class path to tune |
+| `draft_id` | string | yes |  |  |
+| `tickers` | list[string] \| null | no | `null` | lake tickers to smoke-run on; default sample data |
+| `as_of` | date \| null | no | `null` | YYYY-MM-DD |
+| `bars` | integer \| null | no | `null` | bars to evaluate |
+
+## Guarded tools
+
+Need `confirm=true` to act. Without it they return a preview and change nothing.
+
+### `disable_draft`
+
+Move a registered draft's strategy back to shadow (stops trading it).
+Without confirm=true returns a preview and changes nothing.
+
+Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `draft_id` | string | yes |  |  |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
+### `enable_draft`
+
+Promote a registered draft's strategy to active so production ticks rank
+and trade it. Without confirm=true returns a preview (survival results,
+warnings) and changes nothing.
+
+Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `draft_id` | string | yes |  |  |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
+### `lab_run_draft`
+
+Queue tune -> fit -> survival suite for a draft (a rule draft's spec
+is fixed; a code draft is tuned). Returns the job; wait_for_job gives
+the verdict and survival reports. With register_strategy=true it needs
+confirm=true (preview otherwise), like register_draft.
+
+Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `draft_id` | string | yes |  |  |
 | `universe` | list[string] | yes |  | instrument ids |
 | `start` | date | yes |  | YYYY-MM-DD |
 | `end` | date | yes |  | YYYY-MM-DD |
-| `survival_tests` | list["oos" \| "period_stability" \| "perturbation" \| "drift" \| "runs_test" \| "permutation"] \| null | no | `null` | survival suite; server default when omitted |
+| `survival_tests` | list["oos" \| "period_stability" \| "perturbation" \| "drift" \| "runs_test" \| "permutation" \| "walk_forward"] \| null | no | `null` | survival suite; server default when omitted |
 | `tuner` | "grid" \| "random" | no | `"random"` |  |
 | `objective` | "sharpe" \| "cagr" \| "final_return" | no | `"sharpe"` |  |
 | `budget` | integer | no | `20` | tuner trials |
 | `train_ratio` | number | no | `0.7` |  |
 | `interval` | string | no | `"1d"` |  |
 | `seed` | integer | no | `0` |  |
-| `register_strategy` | boolean | no | `false` | register the tuned strategy (lands in shadow status) |
-
-## Guarded tools
-
-Need `confirm=true` to act. Without it they return a preview and change nothing.
+| `register_strategy` | boolean | no | `false` | register the result in shadow status (needs confirm=true) |
+| `confirm` | boolean | no | `false` | must be true with register_strategy=true; otherwise a preview |
 
 ### `promote_strategy`
 
@@ -317,6 +571,18 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 | `strategy_id` | string | yes |  |  |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
+### `register_draft`
+
+Register a draft's strategy in shadow (virtual portfolio, never traded
+until enabled). Without confirm=true returns a preview and changes nothing.
+
+Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `draft_id` | string | yes |  |  |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
 ### `retire_strategy`
 
 Retire a strategy: it stops being ranked or evaluated.
@@ -329,12 +595,38 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 | `strategy_id` | string | yes |  |  |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
+### `run_lab`
+
+Queue a lab run: tune a strategy class, fit, run the survival suite and
+give a pass/fail verdict. Returns the job; use wait_for_job for the result.
+With register_strategy=true it needs confirm=true (preview otherwise).
+
+Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `class_path` | string | yes |  | catalog class path to tune |
+| `universe` | list[string] | yes |  | instrument ids |
+| `start` | date | yes |  | YYYY-MM-DD |
+| `end` | date | yes |  | YYYY-MM-DD |
+| `survival_tests` | list["oos" \| "period_stability" \| "perturbation" \| "drift" \| "runs_test" \| "permutation" \| "walk_forward"] \| null | no | `null` | survival suite; server default when omitted |
+| `tuner` | "grid" \| "random" | no | `"random"` |  |
+| `objective` | "sharpe" \| "cagr" \| "final_return" | no | `"sharpe"` |  |
+| `budget` | integer | no | `20` | tuner trials |
+| `train_ratio` | number | no | `0.7` |  |
+| `interval` | string | no | `"1d"` |  |
+| `seed` | integer | no | `0` |  |
+| `register_strategy` | boolean | no | `false` | register the result in shadow status (needs confirm=true) |
+| `confirm` | boolean | no | `false` | must be true with register_strategy=true; otherwise a preview |
+| `walk_forward` | any \| null | no | `null` | walk_forward test settings; add 'walk_forward' to survival_tests |
+| `mcpt` | any \| null | no | `null` | permutation (MCPT) settings; add 'permutation' to survival_tests |
+
 ### `run_tick`
 
 Queue one production tick (rank active strategies, then trade the winner).
 Dry run by default. Without confirm=true returns a preview and queues
-nothing. A real tick (dry_run=false) is refused unless the API reports
-the broker is paper/simulated.
+nothing. A real tick (dry_run=false) is refused unless GET /api/brokers
+reports a simulated or paper broker.
 
 Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes**.
 
