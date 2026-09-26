@@ -51,6 +51,14 @@ describe('SettingsPage', () => {
     (await nextRequest(http, '/api/risk/policy')).flush(RISK);
     (await nextRequest(http, '/api/sources')).flush(SOURCES);
     (await nextRequest(http, '/api/lab/cost-models')).flush(COSTS);
+    (await nextRequest(http, '/api/notifications/preferences')).flush({
+      channels: ['inapp'],
+      preferences: [],
+      quiet_start: null,
+      quiet_end: null,
+      timezone: 'UTC',
+      webhook: null,
+    });
     await tick();
     fixture.detectChanges();
   }

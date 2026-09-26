@@ -11,18 +11,27 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
+import {
+  type ActivatedRouteSnapshot,
+  ActivationEnd,
+  NavigationEnd,
+  Router,
+  RouterLink,
+  RouterOutlet,
+} from '@angular/router';
 import { filter, skip } from 'rxjs';
 
 import { AuthTokenService } from '../core/auth/auth-token.service';
+import { SessionService } from '../core/auth/session.service';
+import { StepUpDialog } from '../core/auth/step-up-dialog';
 import { ShortcutsService } from '../core/commands/shortcuts.service';
 import { HaltStateService } from '../core/halts/halt-state.service';
 import { ConnectivityService } from '../core/pwa/connectivity.service';
 import { ThemeService } from '../core/theme/theme.service';
 import { CommandPalette } from '../shared/ui/command-palette/command-palette';
 import { ConfirmDialog } from '../shared/ui/confirm-dialog';
-import { SessionStrip } from '../shared/ui/session-strip';
 import { OfflinePage } from '../shared/ui/offline-page';
+import { SessionStrip } from '../shared/ui/session-strip';
 import { ShortcutHelp } from '../shared/ui/shortcut-help';
 import { ToastOutlet } from '../shared/ui/toast-outlet';
 import { Nav } from './nav';
@@ -48,6 +57,7 @@ import { registerShellCommands } from './shell-commands';
     CommandPalette,
     ShortcutHelp,
     OfflinePage,
+    StepUpDialog,
     // ops
     SessionStrip,
   ],
@@ -58,6 +68,7 @@ import { registerShellCommands } from './shell-commands';
 export class Shell {
   protected readonly theme = inject(ThemeService);
   protected readonly auth = inject(AuthTokenService);
+  protected readonly session = inject(SessionService);
   protected readonly shortcuts = inject(ShortcutsService);
   protected readonly connectivity = inject(ConnectivityService);
   private readonly router = inject(Router);
@@ -66,6 +77,8 @@ export class Shell {
   private readonly main = viewChild.required<ElementRef<HTMLElement>>('main');
 
   protected readonly drawerOpen = signal(false);
+  /** Pages with `data: { bare: true }` (sign-in) render without the app frame. */
+  protected readonly bare = signal(false);
   protected readonly modKey = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '')
     ? '⌘'
     : 'Ctrl';
@@ -74,6 +87,13 @@ export class Shell {
     registerShellCommands();
     // ops: keep the halt state in the session strip current
     inject(HaltStateService).watch(inject(DestroyRef));
+    // The deepest route's data decides, before its component is created.
+    this.router.events
+      .pipe(
+        filter((e) => e instanceof ActivationEnd && !e.snapshot.firstChild),
+        takeUntilDestroyed(),
+      )
+      .subscribe((e) => this.bare.set(isBare((e as ActivationEnd).snapshot)));
     this.router.events
       .pipe(
         filter((e) => e instanceof NavigationEnd),
@@ -112,9 +132,21 @@ export class Shell {
     this.shortcuts.openPalette();
   }
 
+  protected async signOut(): Promise<void> {
+    this.closeDrawer();
+    await this.session.logout();
+    await this.router.navigateByUrl('/login');
+  }
+
   private focusPage(): void {
+    if (this.bare()) return;
     const main = this.main().nativeElement;
     const heading = main.querySelector<HTMLElement>('h1');
     (heading ?? main).focus({ preventScroll: false });
   }
+}
+
+/** True when the route or one of its parents has `data: { bare: true }`. */
+function isBare(snapshot: ActivatedRouteSnapshot): boolean {
+  return snapshot.pathFromRoot.some((r) => r.data['bare'] === true);
 }

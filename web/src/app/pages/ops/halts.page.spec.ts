@@ -170,22 +170,6 @@ describe('HaltsPage', () => {
     expect(TestBed.inject(HaltStateService).kills()).toEqual([]);
   });
 
-  it('asks for a fresh second factor again when the API wants one', async () => {
-    const error = vi.spyOn(TestBed.inject(ToastService), 'error');
-    stepUp.mockImplementation((_r: string, o?: { force?: boolean }) => Promise.resolve(!o?.force));
-    button('Resume trading')!.click();
-    await settle();
-    answerDialog(fixture, { reason: 'Broker back', typed: 'RESUME TRADING' });
-    const post = await nextRequest(http, '/api/halts/1/resume', 'POST');
-    post.flush(
-      { title: 'Forbidden', status: 403, detail: 'step_up_required: verify your code' },
-      { status: 403, statusText: 'Forbidden' },
-    );
-    await settle();
-    expect(stepUp).toHaveBeenLastCalledWith('Resume trading', { force: true });
-    expect(error).toHaveBeenCalledWith(expect.stringContaining('second factor'));
-  });
-
   it('clears a breaker halt with a reason', async () => {
     button('Clear')!.click();
     await settle();

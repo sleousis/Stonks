@@ -18,6 +18,7 @@ import { formatDateTime, formatMoney, formatNumber, formatPercent } from '../../
 import { ToastService } from '../../core/notify/toast.service';
 import { type ThemeMode, ThemeService } from '../../core/theme/theme.service';
 import { DisplayPrefs } from '../../shared/ui/display-prefs';
+import { NotificationPrefs } from '../../shared/ui/notification-prefs';
 import { NotificationSettings } from '../../shared/ui/notification-settings';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -41,6 +42,7 @@ interface CostRow {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     DisplayPrefs,
+    NotificationPrefs,
     NotificationSettings,
     PageHeader,
     ReactiveFormsModule,

@@ -18,9 +18,9 @@
       </div>
       <div class="panel-body">
         <p class="lead">
-          Actions that change something (promote, retire, run a tick, start a backtest or ingest)
-          need the token from <code>STONKS_API_TOKEN</code>. It stays in this tab only and is
-          cleared when the tab closes.
+          Signed in? You need no token. Use one for local work: an API token from your Profile, or
+          <code>STONKS_API_TOKEN</code>. It stays in this tab only and is cleared when the tab
+          closes.
         </p>
 
         <form class="form-grid" [formGroup]="tokenForm" (ngSubmit)="saveToken()">
@@ -140,6 +140,8 @@
     <app-display-prefs />
 
     <app-notification-settings />
+
+    <app-notification-prefs />
 
     <!-- Keyboard -------------------------------------------------------------->
     <section class="panel" aria-labelledby="keys-title">

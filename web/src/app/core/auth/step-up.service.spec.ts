@@ -1,21 +1,98 @@
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
-import { ApiError } from '../http/api-error';
-import { NoopStepUpService, StepUpService, isStepUpRequired } from './step-up.service';
+import { provideApi } from '../../api/provide-api';
+import { TRADER } from '../../../testing/auth-fixtures';
+import { nextRequest } from '../../../testing/http';
+import { ToastService } from '../notify/toast.service';
+import { SessionService } from './session.service';
+import { StepUpService } from './step-up.service';
 
 describe('StepUpService', () => {
-  it('defaults to a no-op that lets the API decide', async () => {
-    const stepUp = TestBed.inject(StepUpService);
-    expect(stepUp).toBeInstanceOf(NoopStepUpService);
-    expect(await stepUp.ensure('Resume trading')).toBe(true);
-    // Without a prompt it cannot answer a forced step-up.
-    expect(await stepUp.ensure('Resume trading', { force: true })).toBe(false);
+  let stepUp: StepUpService;
+  let session: SessionService;
+  let controller: HttpTestingController;
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    TestBed.configureTestingModule({
+      providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting()],
+    });
+    stepUp = TestBed.inject(StepUpService);
+    session = TestBed.inject(SessionService);
+    controller = TestBed.inject(HttpTestingController);
   });
 
-  it('spots the API asking for a fresh second factor', () => {
-    expect(isStepUpRequired(new ApiError(403, 'Forbidden', 'step_up_required: verify'))).toBe(true);
-    expect(isStepUpRequired(new ApiError(403, 'Forbidden', 'forbidden: admins only'))).toBe(false);
-    expect(isStepUpRequired(new ApiError(401, 'Unauthorized', 'step_up_required'))).toBe(false);
-    expect(isStepUpRequired(null)).toBe(false);
+  afterEach(() => controller.verify());
+
+  async function signIn(me = TRADER) {
+    const loading = session.load();
+    (await nextRequest(controller, '/api/auth/me')).flush(me);
+    await loading;
+  }
+
+  it('opens a request and resolves true once a code is accepted', async () => {
+    await signIn();
+    const result = stepUp.prompt('Turn on auto');
+    expect(stepUp.request()?.reason).toBe('Turn on auto');
+
+    const submitted = stepUp.submit({ code: '123456' });
+    const req = await nextRequest(controller, '/api/auth/mfa/verify', 'POST');
+    expect(req.request.body).toEqual({ code: '123456' });
+    req.flush({ method: 'totp', csrf_token: null, recovery_codes_left: 10 });
+    await submitted;
+
+    expect(await result).toBe(true);
+    expect(stepUp.request()).toBeNull();
+    expect(session.me()?.mfa_fresh).toBe(true);
+  });
+
+  it('keeps the request open when the code is wrong', async () => {
+    await signIn();
+    const result = stepUp.prompt();
+    const submitted = stepUp.submit({ code: '000000' });
+    (await nextRequest(controller, '/api/auth/mfa/verify', 'POST')).flush(
+      { title: 'Unauthorized', status: 401, detail: 'invalid_credentials' },
+      { status: 401, statusText: 'Unauthorized' },
+    );
+    await expect(submitted).rejects.toMatchObject({ code: 'invalid_credentials' });
+    expect(stepUp.request()).not.toBeNull();
+    stepUp.cancel();
+    expect(await result).toBe(false);
+  });
+
+  it('shares one prompt between concurrent asks', async () => {
+    await signIn();
+    const a = stepUp.prompt();
+    const b = stepUp.prompt();
+    stepUp.cancel();
+    expect(await a).toBe(false);
+    expect(await b).toBe(false);
+  });
+
+  it('refuses with a toast when signed in with an API token', async () => {
+    await signIn({ ...TRADER, via: 'token' });
+    const error = vi.spyOn(TestBed.inject(ToastService), 'error');
+    expect(await stepUp.prompt()).toBe(false);
+    expect(error).toHaveBeenCalled();
+    expect(stepUp.request()).toBeNull();
+  });
+
+  it('ensure() skips the prompt while the last check is fresh', async () => {
+    await signIn();
+    const ok = stepUp.ensure('Turn on auto');
+    (await nextRequest(controller, '/api/auth/me')).flush({ ...TRADER, mfa_fresh: true });
+    expect(await ok).toBe(true);
+    expect(stepUp.request()).toBeNull();
+  });
+
+  it('ensure() prompts when the check is stale', async () => {
+    await signIn();
+    const ok = stepUp.ensure('Turn on auto');
+    (await nextRequest(controller, '/api/auth/me')).flush(TRADER);
+    await vi.waitFor(() => expect(stepUp.request()).not.toBeNull());
+    stepUp.cancel();
+    expect(await ok).toBe(false);
   });
 });

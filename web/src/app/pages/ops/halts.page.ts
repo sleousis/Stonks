@@ -10,7 +10,7 @@ import {
 
 import { HaltsService, RESUME_CONFIRMATION } from '../../api/halts.service';
 import type { HaltView, KillSwitchRequest } from '../../api/models';
-import { StepUpService, isStepUpRequired } from '../../core/auth/step-up.service';
+import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { HaltStateService, haltScopeText } from '../../core/halts/halt-state.service';
 import { ToastService } from '../../core/notify/toast.service';
@@ -159,19 +159,9 @@ export class HaltsPage {
     if (!(await this.stepUp.ensure('Resume trading'))) return;
     this.busyId.set(h.id);
     try {
-      const request = { confirmation: RESUME_CONFIRMATION, reason: body.reason ?? '' };
-      try {
-        await this.api.resume(h.id, request);
-      } catch (e) {
-        if (!isStepUpRequired(e)) throw e;
-        if (!(await this.stepUp.ensure('Resume trading', { force: true }))) {
-          this.toasts.error(
-            'Resuming needs a second factor from the last few minutes. Sign in with your code, then try again.',
-          );
-          return;
-        }
-        await this.api.resume(h.id, request);
-      }
+      // A stale second factor comes back as 403 step_up_required: the session
+      // interceptor prompts for a code and retries once.
+      await this.api.resume(h.id, { confirmation: RESUME_CONFIRMATION, reason: body.reason ?? '' });
       this.toasts.success('Resumed trading.');
       await this.reload();
     } catch {

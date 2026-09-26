@@ -1,11 +1,31 @@
 import type { Routes } from '@angular/router';
 
+import { adminGuard } from './core/auth/auth.guards';
+
 /**
  * One lazy route file per page (`pages/<name>/<name>.routes.ts`). Page agents
  * add child routes inside their own route file, not here.
+ *
+ * Every route needs a signed-in user (or open reads in dev): app.config.ts
+ * wraps this list with `protectRoutes()`. Mark a page `data: { public: true }`
+ * to skip that, and `bare: true` to show it without the app frame.
  */
 export const routes: Routes = [
-  { path: '', loadChildren: () => import('./pages/dashboard/dashboard.routes') },
+  // Sign-in and the trader's own pages (S9) --------------------------------
+  {
+    path: 'login',
+    data: { public: true, bare: true },
+    loadChildren: () => import('./pages/login/login.routes'),
+  },
+  { path: '', pathMatch: 'full', loadChildren: () => import('./pages/home/home.routes') },
+  { path: 'profile', loadChildren: () => import('./pages/profile/profile.routes') },
+  {
+    path: 'admin/users',
+    canActivate: [adminGuard],
+    loadChildren: () => import('./pages/admin-users/admin-users.routes'),
+  },
+  // ---------------------------------------------------------------------------
+  { path: 'dashboard', loadChildren: () => import('./pages/dashboard/dashboard.routes') },
   { path: 'strategies', loadChildren: () => import('./pages/strategies/strategies.routes') },
   { path: 'studio', loadChildren: () => import('./pages/studio/studio.routes') },
   { path: 'lab', loadChildren: () => import('./pages/lab/lab.routes') },
