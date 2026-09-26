@@ -159,3 +159,98 @@ def test_tick_asset_class_filter_rejects_invalid_class(runner, seeded):
     )
     assert result.exit_code != 0, result.output
     assert "must be one of" in result.output
+
+
+def test_tick_applies_risk_policy_from_config(runner, seeded):
+    tmp_path, _ = seeded
+    cfg = tmp_path / "config" / "default.toml"
+    cfg.write_text(
+        cfg.read_text().replace(
+            "[sources.eodhd]", "[production.risk]\nmax_open_positions = 0\n\n[sources.eodhd]"
+        )
+    )
+    result = runner.invoke(app, ["tick", "--as-of", "2026-03-20"])
+    assert result.exit_code == 0, result.output
+    assert "orders=0" in result.output
+
+
+def _add_shadow_strategy(tmp_path):
+    state = SqliteState(tmp_path / "data" / "state.sqlite")
+    try:
+        registry = StrategyRegistry(state=state, artifacts_dir=tmp_path / "data" / "artifacts")
+        sid = registry.register(
+            BuyAndHold({"ticker": "UP.US", "allocation": 0.5}),
+            reports=[SurvivalReport(test_id="oos", passed=True, metrics={})],
+        )
+        registry.set_status(sid, "shadow")
+    finally:
+        state.close()
+
+
+def _count(tmp_path, table):
+    state = SqliteState(tmp_path / "data" / "state.sqlite")
+    try:
+        return state.count_rows(table)
+    finally:
+        state.close()
+
+
+def test_tick_evaluates_shadow_strategies(runner, seeded):
+    tmp_path, _ = seeded
+    _add_shadow_strategy(tmp_path)
+    result = runner.invoke(app, ["tick", "--as-of", "2026-03-20"])
+    assert result.exit_code == 0, result.output
+    assert _count(tmp_path, "shadow_portfolio_snapshots") == 1
+
+
+def test_tick_respects_shadow_disabled_in_config(runner, seeded):
+    tmp_path, _ = seeded
+    _add_shadow_strategy(tmp_path)
+    cfg = tmp_path / "config" / "default.toml"
+    cfg.write_text(cfg.read_text().replace("[production]", "[production]\nshadow_enabled = false"))
+    result = runner.invoke(app, ["tick", "--as-of", "2026-03-20"])
+    assert result.exit_code == 0, result.output
+    assert _count(tmp_path, "shadow_portfolio_snapshots") == 0
+
+
+def test_tick_failure_posts_to_configured_webhook(runner, seeded, monkeypatch):
+    import stonks.notify.webhook as webhook_mod
+    import stonks.production.tick as tick_mod
+
+    posts: list[dict] = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+    class FakeSession:
+        def post(self, url, json=None, timeout=None, headers=None):
+            posts.append({"url": url, "json": json})
+            return FakeResponse()
+
+    monkeypatch.setattr(webhook_mod.requests, "Session", FakeSession)
+    monkeypatch.setenv("STONKS_NOTIFY_WEBHOOK_URL", "https://hooks.example.test/tok")
+
+    def boom(*a, **k):
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(tick_mod, "_snapshot_portfolio", boom)
+    tmp_path, _ = seeded
+    cfg = tmp_path / "config" / "default.toml"
+    cfg.write_text(
+        cfg.read_text().replace(
+            "[sources.eodhd]", '[notify]\nbackends = ["webhook"]\n\n[sources.eodhd]'
+        )
+    )
+    result = runner.invoke(app, ["tick", "--as-of", "2026-03-20"])
+    assert result.exit_code != 0
+    assert len(posts) == 1
+    assert posts[0]["json"]["level"] == "error"
+
+
+def test_backdated_tick_exits_1_with_clear_error(runner, seeded):
+    assert runner.invoke(app, ["tick", "--as-of", "2026-03-20"]).exit_code == 0
+    result = runner.invoke(app, ["tick", "--as-of", "2026-03-19"])
+    assert result.exit_code == 1
+    assert "2026-03-20" in result.output
+    assert "Traceback" not in result.output

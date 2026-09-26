@@ -10,9 +10,14 @@ from __future__ import annotations
 import os
 import tomllib
 from pathlib import Path
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from stonks.backtest.costs import CostModelSettings
+from stonks.core.types import AssetClass
+from stonks.lab.survival.walk_forward import WalkForwardConfig
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
 
@@ -25,8 +30,67 @@ class EodhdSourceConfig(BaseModel):
     api_key: str | None = None
 
 
+class YahooSourceConfig(BaseModel):
+    timeout_seconds: int = 30
+    max_retries: int = 3
+    retry_backoff_seconds: float = 2.0
+    # Yahoo rate-limits aggressively; space consecutive requests out.
+    min_request_interval_seconds: float = 0.5
+
+
 class SourcesConfig(BaseModel):
     eodhd: EodhdSourceConfig = EodhdSourceConfig()
+    yahoo: YahooSourceConfig = YahooSourceConfig()
+
+
+def _env_secret(name: str) -> SecretStr | None:
+    value = os.environ.get(name)
+    return SecretStr(value) if value else None
+
+
+class AlpacaBrokerConfig(BaseModel):
+    """Alpaca trading API, used only when ``[brokers].kind = "alpaca"``.
+    Paper by default; the live endpoint additionally requires
+    ``allow_live = true``. Keys are env-only (``ALPACA_API_KEY`` /
+    ``ALPACA_SECRET_KEY``), exactly like the API token, so they can never land
+    in a checked-in TOML file, and are kept as SecretStr so they never show
+    up in reprs or logs."""
+
+    # A rejected TOML key must not be echoed back in the validation error.
+    model_config = ConfigDict(hide_input_in_errors=True)
+
+    paper: bool = True
+    allow_live: bool = False
+    max_retries: int = 3
+    retry_backoff_seconds: float = 1.0
+    api_key: SecretStr | None = Field(default_factory=lambda: _env_secret("ALPACA_API_KEY"))
+    secret_key: SecretStr | None = Field(default_factory=lambda: _env_secret("ALPACA_SECRET_KEY"))
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_file_keys(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        found = [k for k in ("api_key", "secret_key") if k in data]
+        if found:
+            # Outer models render the offending input in their error message;
+            # blank the secrets in place so it can't echo them.
+            for key in found:
+                data[key] = "**********"
+            names = ", ".join(f"brokers.alpaca.{k}" for k in found)
+            raise ValueError(
+                f"{names} must not be set in config; use ALPACA_API_KEY / ALPACA_SECRET_KEY"
+            )
+        return data
+
+
+class BrokersConfig(BaseModel):
+    model_config = ConfigDict(hide_input_in_errors=True)
+
+    # Which broker the production tick trades through. "simulated" (default)
+    # needs no keys; "alpaca" is opt-in and needs ALPACA_API_KEY/SECRET_KEY.
+    kind: Literal["simulated", "alpaca"] = "simulated"
+    alpaca: AlpacaBrokerConfig = Field(default_factory=AlpacaBrokerConfig)
 
 
 class LakeConfig(BaseModel):
@@ -45,6 +109,45 @@ class LoggingConfig(BaseModel):
     level: str = "INFO"
 
 
+class RiskPolicy(BaseModel):
+    """Portfolio construction limits applied between ``strategy.decide`` and
+    the broker (``[production.risk]``). Defaults are permissive, so an
+    unconfigured install trades exactly what the strategy asks for.
+
+    Weights are fractions of total portfolio value (cash + marked positions)
+    before the tick's orders. Sells are never blocked, only clipped to the
+    held quantity so they cannot open a short.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    # None = unlimited. Counts distinct tickers held after the tick's orders.
+    max_open_positions: int | None = Field(default=None, ge=0)
+    max_weight_per_ticker: float = Field(default=1.0, ge=0.0, le=1.0)
+    # e.g. {"crypto": 0.2}. Classes not listed are uncapped; when any cap is
+    # set, buys of tickers whose class is unknown are blocked.
+    max_weight_per_asset_class: dict[AssetClass, Annotated[float, Field(ge=0.0, le=1.0)]] = {}
+    # Fraction of portfolio value that must stay in cash after buys.
+    cash_buffer_fraction: float = Field(default=0.0, ge=0.0, le=1.0)
+    # Buys whose (possibly clipped) notional falls below this are dropped.
+    min_order_notional: float = Field(default=0.0, ge=0.0)
+
+
+class HealthConfig(BaseModel):
+    """Thresholds for ``stonks health`` (``[production.health]``)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Latest daily bar older than this many calendar days is stale. 4 covers
+    # a Monday check against Friday's close plus one day of vendor lag.
+    max_bar_age_days: int = Field(default=4, ge=0)
+    stuck_tick_minutes: int = Field(default=60, ge=1)
+    stuck_ingest_minutes: int = Field(default=180, ge=1)
+    # Ingest runs with status 'error' started within this window are unhealthy.
+    ingest_failure_lookback_hours: int = Field(default=24, ge=1)
+
+
 class ProductionConfig(BaseModel):
     universe: list[str] = []
     threshold: float = 0.0
@@ -52,6 +155,121 @@ class ProductionConfig(BaseModel):
     slippage_bps: float = 0.0
     fee_per_trade: float = 0.0
     max_price_staleness_days: int = 7
+    # Evaluate shadow strategies each tick against virtual portfolios.
+    shadow_enabled: bool = True
+    risk: RiskPolicy = RiskPolicy()
+    health: HealthConfig = HealthConfig()
+
+
+class GoLivePolicy(BaseModel):
+    """Limits a paper-trading period must meet before ``stonks golive check``
+    passes (``[golive]``). The gate only reports; promotion stays a human
+    action. Every limit is strict about missing data: a period with no
+    snapshots, no fills or no backtest expectation fails."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Distinct days with a paper snapshot.
+    min_days: int = Field(default=20, ge=1)
+    # Deepest peak-to-trough fall allowed, as a positive fraction (0.15 = -15%).
+    max_drawdown: float = Field(default=0.15, gt=0.0, le=1.0)
+    # Largest allowed |paper return - backtest-expected return| over the
+    # period; the expectation compounds the ``oos`` survival report's CAGR.
+    max_drift: float = Field(default=0.10, ge=0.0)
+    # Filled trades during the paper period.
+    min_trades: int = Field(default=5, ge=1)
+    # Every stored survival report must have passed (and there must be one).
+    require_all_survival_passed: bool = True
+
+
+class WebhookConfig(BaseModel):
+    # Secret-bearing (Slack/Discord URLs embed a token): prefer the
+    # STONKS_NOTIFY_WEBHOOK_URL env var over committing it to TOML.
+    url: str | None = None
+    timeout_seconds: float = Field(default=5.0, gt=0)
+
+
+class NotifyConfig(BaseModel):
+    """Alert routing (``[notify]``)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Any of "log", "webhook". Empty list disables notifications.
+    backends: list[Literal["log", "webhook"]] = ["log"]
+    # Notifications below this level are dropped.
+    min_level: Literal["info", "warning", "error"] = "warning"
+    webhook: WebhookConfig = WebhookConfig()
+
+
+def _api_token_from_env() -> SecretStr | None:
+    token = os.environ.get("STONKS_API_TOKEN")
+    return SecretStr(token) if token else None
+
+
+class ApiConfig(BaseModel):
+    """REST API server (``stonks serve``). The bearer token is env-only
+    (``STONKS_API_TOKEN``) so it can never land in a checked-in TOML file."""
+
+    host: str = "127.0.0.1"
+    port: int = 8000
+    # The only browser origin CORS lets through (the Angular dev server).
+    ui_origin: str = "http://localhost:4200"
+    # GET routes skip the token when the peer is a loopback address.
+    open_reads_on_loopback: bool = True
+    # Extra Host header values accepted besides localhost / 127.0.0.1 / ::1.
+    allowed_hosts: list[str] = []
+    # Size of the general job pool (backtests, lab runs); ticks and ingests
+    # each have one dedicated worker on top.
+    max_concurrent_jobs: int = Field(default=2, ge=1)
+    # A job event stream closes (event ``end``, reason ``timeout``) after this.
+    sse_max_stream_seconds: float = Field(default=3600.0, gt=0)
+    # Lifetime of a job-scoped ``?token=`` for event streams (EventSource
+    # can't send the bearer header); see POST /api/jobs/{id}/stream-token.
+    stream_token_ttl_seconds: int = Field(default=300, ge=10, le=3600)
+    default_page_size: int = Field(default=50, ge=1)
+    max_page_size: int = Field(default=500, ge=1)
+    ui_dist: Path = Path("web/dist")
+    token: SecretStr | None = Field(default_factory=_api_token_from_env)
+    # Strategy Studio: allow saving and running user Python strategies
+    # (arbitrary code with the server's privileges). Off by default.
+    allow_code_strategies: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_file_token(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "token" in data:
+            raise ValueError("api.token must not be set in config; use STONKS_API_TOKEN")
+        return data
+
+
+class McpConfig(BaseModel):
+    """MCP server (``stonks mcp``): a client of the running REST API, never
+    of the lake. The bearer token comes from ``STONKS_API_TOKEN`` only."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    api_url: str = "http://127.0.0.1:8000"
+    timeout_seconds: float = Field(default=30.0, gt=0)
+    # Upper bound for the wait_for_job tool's timeout argument.
+    max_wait_seconds: float = Field(default=600.0, gt=0)
+
+
+class BacktestSettings(BaseModel):
+    """``[backtest]``. ``costs`` (``[backtest.costs]``) is the transaction
+    cost model for lab backtests; zero costs unless configured. Production
+    can build the same model with ``settings.backtest.costs.build()``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    costs: CostModelSettings = CostModelSettings()
+
+
+class LabSettings(BaseModel):
+    """``[lab]``: defaults for ``stonks lab run``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    walk_forward: WalkForwardConfig = WalkForwardConfig()
 
 
 class Settings(BaseSettings):
@@ -61,8 +279,15 @@ class Settings(BaseSettings):
     state: StateConfig = StateConfig()
     registry: RegistryConfig = RegistryConfig()
     logging: LoggingConfig = LoggingConfig()
+    brokers: BrokersConfig = Field(default_factory=BrokersConfig)
     sources: SourcesConfig = SourcesConfig()
     production: ProductionConfig = ProductionConfig()
+    notify: NotifyConfig = NotifyConfig()
+    api: ApiConfig = Field(default_factory=ApiConfig)
+    backtest: BacktestSettings = BacktestSettings()
+    lab: LabSettings = LabSettings()
+    golive: GoLivePolicy = GoLivePolicy()
+    mcp: McpConfig = McpConfig()
 
 
 def load_settings(config_path: Path | None = None) -> Settings:
@@ -89,6 +314,10 @@ def _overlay_env(data: dict) -> None:
     api_key = os.environ.get("EODHD_API_KEY")
     if api_key:
         data.setdefault("sources", {}).setdefault("eodhd", {})["api_key"] = api_key
+
+    webhook_url = os.environ.get("STONKS_NOTIFY_WEBHOOK_URL")
+    if webhook_url:
+        data.setdefault("notify", {}).setdefault("webhook", {})["url"] = webhook_url
 
     log_level = os.environ.get("STONKS_LOG_LEVEL")
     if log_level:

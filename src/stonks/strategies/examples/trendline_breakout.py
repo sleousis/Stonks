@@ -23,7 +23,7 @@ from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
 from stonks.features.library import trendline_breakout_latest
-from stonks.strategies._common import get_last_n_bars, iso
+from stonks.strategies._common import LakeBarCaches, iso
 from stonks.strategies.base import BaseStrategy
 
 # Bound on memoized window fits per strategy instance (~0.6 KB each at the
@@ -76,6 +76,7 @@ class TrendlineBreakoutStrategy(BaseStrategy):
         # window's raw bytes. Stepping bar by bar through a backtest reuses
         # every earlier window, so each one is fitted once per instance.
         self._fit_cache: dict[bytes, tuple[float, float] | None] = {}
+        self._bar_caches = LakeBarCaches()
 
     # ---- Strategy Protocol -------------------------------------------------
 
@@ -156,11 +157,12 @@ class TrendlineBreakoutStrategy(BaseStrategy):
 
         # Need at least lookback + 1 bars; the extra tail lets the
         # forward-filled signal carry an older breakout.
-        df = get_last_n_bars(lake, ticker, interval, as_of, lookback * 3 + 10)
-        if df.empty or len(df) < lookback + 1:
+        closes = self._bar_caches.for_lake(lake).last_n_closes(
+            ticker, interval, as_of, lookback * 3 + 10
+        )
+        if len(closes) < lookback + 1:
             return None
 
-        closes = df["close"].astype(float).to_numpy()
         if len(self._fit_cache) > _FIT_CACHE_MAX:
             self._fit_cache.clear()
         support, resistance, sig = trendline_breakout_latest(

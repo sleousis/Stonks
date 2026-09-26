@@ -41,7 +41,7 @@ from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
 from stonks.features.library import rsi
-from stonks.strategies._common import as_datetime, get_last_n_bars, iso
+from stonks.strategies._common import LakeBarCaches, as_datetime, iso
 from stonks.strategies.base import BaseStrategy
 
 
@@ -128,6 +128,7 @@ class RSIPCAStrategy(BaseStrategy):
         self._coefs: np.ndarray | None = None  # shape (n_components,)
         self._long_thresh: float | None = None
         self._short_thresh: float | None = None
+        self._bar_caches = LakeBarCaches()
 
     # ---- Strategy Protocol -------------------------------------------------
 
@@ -300,10 +301,11 @@ class RSIPCAStrategy(BaseStrategy):
         rsi_max = int(self.params["rsi_period_max"])
         # RSI is recursive (Wilder smoothing), so give it a warm-up tail of
         # several periods beyond the longest one.
-        bars = get_last_n_bars(lake, ticker, interval, as_of, rsi_max * 4 + 20)
-        if bars.empty:
+        closes = pd.Series(
+            self._bar_caches.for_lake(lake).last_n_closes(ticker, interval, as_of, rsi_max * 4 + 20)
+        )
+        if closes.empty:
             return None
-        closes = bars["close"].astype(float)
 
         periods = list(
             range(int(self.params["rsi_period_min"]), int(self.params["rsi_period_max"]))

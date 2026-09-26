@@ -136,7 +136,7 @@ def fake_source(monkeypatch):
     src = _FakeMultiAssetSource()
     from stonks import cli as cli_module
 
-    monkeypatch.setattr(cli_module, "_build_source", lambda settings: src)
+    monkeypatch.setattr(cli_module, "_build_source", lambda settings, source_id="eodhd": src)
     return src
 
 

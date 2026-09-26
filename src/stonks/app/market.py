@@ -1,0 +1,200 @@
+"""MarketDataService — instruments, bars and per-ticker data coverage."""
+
+from __future__ import annotations
+
+from datetime import date, datetime
+from typing import Any
+
+import pandas as pd
+from pydantic import BaseModel
+
+from stonks.app.context import AppContext
+from stonks.app.errors import ValidationError
+from stonks.app.pagination import Page
+from stonks.app.serialize import finite
+from stonks.core.interval import Interval
+from stonks.core.timeutil import day_end, day_start
+
+DEFAULT_BAR_LIMIT = 5_000
+MAX_BAR_LIMIT = 50_000
+
+
+class InstrumentView(BaseModel):
+    id: str
+    name: str | None
+    asset_class: str | None
+    exchange: str | None
+    currency: str | None
+    sector: str | None
+    industry: str | None
+    is_delisted: bool | None
+
+
+class BarView(BaseModel):
+    timestamp: datetime
+    open: float | None
+    high: float | None
+    low: float | None
+    close: float | None
+    adj_close: float | None
+    volume: float | None
+
+
+class BarSeries(BaseModel):
+    ticker: str
+    interval: str
+    bars: list[BarView]
+    #: True when the window held more bars than ``limit``; the most recent
+    #: ``limit`` bars are returned.
+    truncated: bool
+
+
+class CoverageRow(BaseModel):
+    ticker: str
+    interval: str
+    first_bar: datetime
+    last_bar: datetime
+    rows: int
+
+
+class MarketDataService:
+    def __init__(self, context: AppContext) -> None:
+        self._ctx = context
+
+    def instruments(
+        self,
+        *,
+        q: str | None = None,
+        asset_class: str | None = None,
+        limit: int,
+        offset: int,
+    ) -> Page[InstrumentView]:
+        where: list[str] = []
+        params: list[Any] = []
+        if q:
+            where.append("(id ILIKE ? ESCAPE '!' OR name ILIKE ? ESCAPE '!')")
+            pattern = f"%{_escape_like(q)}%"
+            params += [pattern, pattern]
+        if asset_class:
+            where.append("asset_class = ?")
+            params.append(asset_class)
+        clause = f" WHERE {' AND '.join(where)}" if where else ""
+        with self._ctx.lake() as lake:
+            total = int(lake.sql(f"SELECT COUNT(*) AS n FROM instruments{clause}", params).n[0])
+            df = lake.sql(
+                "SELECT id, name, asset_class, exchange, currency, sector, industry, is_delisted "
+                f"FROM instruments{clause} ORDER BY id LIMIT ? OFFSET ?",
+                [*params, limit, offset],
+            )
+        items = [InstrumentView(**_clean(r)) for r in df.to_dict(orient="records")]
+        return Page[InstrumentView](items=items, total=total, limit=limit, offset=offset)
+
+    def bars(
+        self,
+        ticker: str,
+        *,
+        interval: str = "1d",
+        start: date | datetime | None = None,
+        end: date | datetime | None = None,
+        limit: int = DEFAULT_BAR_LIMIT,
+    ) -> BarSeries:
+        iv = _parse_interval(interval)
+        if not 1 <= limit <= MAX_BAR_LIMIT:
+            raise ValidationError(f"limit must be between 1 and {MAX_BAR_LIMIT}")
+        lo = day_start(start) if start is not None else datetime(1900, 1, 1)
+        hi = day_end(end) if end is not None else datetime(2200, 1, 1)
+        with self._ctx.lake() as lake:
+            # newest ``limit + 1`` rows, so we can tell whether we truncated
+            df = lake.sql(
+                """
+                SELECT timestamp, open, high, low, close, adj_close, volume FROM bars
+                 WHERE ticker = ? AND interval = ? AND timestamp BETWEEN ? AND ?
+                 ORDER BY timestamp DESC LIMIT ?
+                """,
+                [ticker, iv.code, lo, hi, limit + 1],
+            )
+        truncated = len(df) > limit
+        records = df.head(limit).to_dict(orient="records")[::-1]
+        bars = [
+            BarView(
+                timestamp=pd.Timestamp(r["timestamp"]).to_pydatetime(),
+                **{k: finite(_nan_to_none(r[k])) for k in _PRICE_COLS},
+            )
+            for r in records
+        ]
+        return BarSeries(ticker=ticker, interval=iv.code, bars=bars, truncated=truncated)
+
+    def coverage(
+        self,
+        *,
+        ticker: str | None = None,
+        interval: str | None = None,
+        limit: int,
+        offset: int,
+    ) -> Page[CoverageRow]:
+        where: list[str] = []
+        params: list[Any] = []
+        if ticker:
+            where.append("ticker = ?")
+            params.append(ticker)
+        if interval:
+            where.append("interval = ?")
+            params.append(_parse_interval(interval).code)
+        clause = f" WHERE {' AND '.join(where)}" if where else ""
+        with self._ctx.lake() as lake:
+            total = int(
+                lake.sql(
+                    f"SELECT COUNT(*) AS n FROM (SELECT DISTINCT ticker, interval FROM bars{clause})",
+                    params,
+                ).n[0]
+            )
+            df = lake.sql(
+                "SELECT ticker, interval, MIN(timestamp) AS first_bar, MAX(timestamp) AS last_bar, "
+                f"COUNT(*) AS rows FROM bars{clause} GROUP BY ticker, interval "
+                "ORDER BY ticker, interval LIMIT ? OFFSET ?",
+                [*params, limit, offset],
+            )
+        items = [
+            CoverageRow(
+                ticker=r["ticker"],
+                interval=r["interval"],
+                first_bar=pd.Timestamp(r["first_bar"]).to_pydatetime(),
+                last_bar=pd.Timestamp(r["last_bar"]).to_pydatetime(),
+                rows=int(r["rows"]),
+            )
+            for r in df.to_dict(orient="records")
+        ]
+        return Page[CoverageRow](items=items, total=total, limit=limit, offset=offset)
+
+
+_PRICE_COLS = ("open", "high", "low", "close", "adj_close", "volume")
+
+
+def _parse_interval(code: str) -> Interval:
+    try:
+        return Interval.parse(code)
+    except (ValueError, TypeError) as exc:
+        raise ValidationError(f"invalid interval {code!r}: {exc}") from None
+
+
+def _escape_like(text: str) -> str:
+    """Match user text literally inside ``ILIKE ... ESCAPE '!'``."""
+    return text.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+
+
+def _nan_to_none(value: Any) -> Any:
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    return value
+
+
+def _clean(record: dict[str, Any]) -> dict[str, Any]:
+    out = {k: _nan_to_none(v) for k, v in record.items()}
+    if out.get("is_delisted") is not None:
+        out["is_delisted"] = bool(out["is_delisted"])
+    return out

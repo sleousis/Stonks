@@ -11,7 +11,7 @@ from datetime import datetime
 
 import pytest
 
-from stonks.store.state import SqliteState
+from stonks.store.state import MIGRATIONS_DIR, SqliteState
 
 
 @pytest.fixture
@@ -49,7 +49,8 @@ def test_migrate_is_idempotent(tmp_path):
     with SqliteState(path) as s:
         s.migrate()  # must not raise on second run
         versions = s.applied_migrations()
-    assert versions == [1]
+    # every migration file applied exactly once
+    assert versions == sorted(int(p.stem.split("_", 1)[0]) for p in MIGRATIONS_DIR.glob("*.sql"))
 
 
 def test_applied_migrations_starts_empty_before_migrate(tmp_path):

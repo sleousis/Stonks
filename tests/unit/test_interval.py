@@ -147,3 +147,10 @@ def test_duckdb_interval_literal_preserves_calendar_units():
     assert Interval.parse("3d").duckdb_interval == "INTERVAL '3 days'"
     assert Interval.parse("6mo").duckdb_interval == "INTERVAL '6 months'"
     assert Interval.parse("1y").duckdb_interval == "INTERVAL '1 years'"
+
+
+def test_amount_and_unit_split_the_canonical_code():
+    assert (Interval.MIN_5.amount, Interval.MIN_5.unit) == (5, "m")
+    assert (Interval.HOUR_4.amount, Interval.HOUR_4.unit) == (4, "h")
+    assert (Interval.MONTH_6.amount, Interval.MONTH_6.unit) == (6, "mo")
+    assert (Interval.YEAR_1.amount, Interval.YEAR_1.unit) == (1, "y")

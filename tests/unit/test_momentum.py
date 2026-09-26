@@ -108,15 +108,15 @@ def test_decide_sells_positions_that_fell_off_ranking(lake_with_trend):
 
 
 class _CountingLake:
-    """Delegates to a real lake and counts ``get_prices`` calls."""
+    """Delegates to a real lake and counts bar reads (``get_bars``)."""
 
     def __init__(self, lake):
         self._lake = lake
         self.calls = 0
 
-    def get_prices(self, *args, **kwargs):
+    def get_bars(self, *args, **kwargs):
         self.calls += 1
-        return self._lake.get_prices(*args, **kwargs)
+        return self._lake.get_bars(*args, **kwargs)
 
 
 def test_lookback_return_loads_each_ticker_once_per_instance(lake_with_trend):

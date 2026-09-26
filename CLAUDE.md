@@ -16,7 +16,8 @@ All commands assume `uv` (installed via `pipx install uv`). Run from the repo ro
 
 ```bash
 uv sync                         # install deps into .venv with Python 3.12+
-uv run pytest                   # unit + integration tests; no network
+uv run pytest -n auto           # full suite in parallel on every core (~1 min); no network
+uv run pytest                   # same suite on one core; use for a single file or test
 uv run pytest -m live           # live API contract tests (requires STONKS_RUN_LIVE_TESTS=1 and a real EODHD key in .env)
 uv run pytest tests/unit/test_params_spec.py -k "tunable"   # single test by path + keyword
 uv run ruff check .
@@ -33,6 +34,7 @@ uv run stonks tick [--dry-run] [--as-of YYYY-MM-DD] [--tickers AAPL.US,MSFT.US]
 
 ## Working rules (enforced)
 
+- **Principles.** `docs/principles.md` lists the research, validation, risk and engineering rules every change must respect. Its backlog is `docs/research/book-lessons.md`.
 - **TDD.** Write a failing unit test first, then the implementation. Every new component ships with unit tests. Integration tests live under `tests/integration/`; any test that hits a real network goes under `tests/integration/live/` and is gated by `@pytest.mark.live` + `STONKS_RUN_LIVE_TESTS=1`.
 - **No live-API calls in default test runs.** Default `pytest` must be hermetic. Use `FakeDataSource` (canned data) for pipeline tests.
 - **Secrets never land in git.** `.env` is gitignored; `.env.example` is the only checked-in template.

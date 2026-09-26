@@ -19,9 +19,121 @@ slippage_bps = 0.0
 fee_per_trade = 0.0
 # Ignore closes older than this many calendar days before the tick's as_of.
 max_price_staleness_days = 7
+# Evaluate shadow strategies each tick against their own virtual portfolios
+# (written to shadow_decisions / shadow_portfolio_snapshots; never traded).
+shadow_enabled = true
+
+[production.risk]
+# Risk layer between strategy.decide and the broker. Sells are never blocked.
+# Weights are fractions of portfolio value before the tick's orders.
+enabled = true
+# max_open_positions = 10          # omit for unlimited
+max_weight_per_ticker = 1.0
+cash_buffer_fraction = 0.0
+min_order_notional = 0.0
+
+[production.risk.max_weight_per_asset_class]
+# crypto = 0.2                     # classes not listed are uncapped
+
+[production.health]
+# `stonks health` thresholds.
+max_bar_age_days = 4
+stuck_tick_minutes = 60
+stuck_ingest_minutes = 180
+ingest_failure_lookback_hours = 24
+
+[backtest.costs]
+# Transaction costs for lab backtests (`stonks lab run`). All zero = no costs.
+# Production can build the same model via settings.backtest.costs.build().
+# Square-root-law impact in bps of an order the size of the whole bar, capped.
+impact_bps = 0.0
+max_impact_bps = 500.0
+
+[backtest.costs.default]
+# Fallback for asset classes not listed under [backtest.costs.asset_classes.*].
+fee_flat = 0.0
+half_spread_bps = 0.0
+fee_bps = 0.0
+
+# [backtest.costs.asset_classes.crypto]
+# half_spread_bps = 5.0
+# fee_bps = 10.0
+
+[lab.walk_forward]
+# Defaults for `stonks lab run --walk-forward` (CLI flags override).
+n_splits = 4
+# test_days = 30                   # omit: split the validation window evenly
+# train_days = 120                 # omit: everything before the first test window
+anchored = false
+metric = "sharpe"
+min_positive_share = 0.5
+min_mean_score = 0.0
+
+[notify]
+# Backends: "log" (structlog) and/or "webhook" (JSON POST). [] disables alerts.
+backends = ["log"]
+# Drop notifications below this level: info | warning | error.
+min_level = "warning"
+
+[notify.webhook]
+# Set the URL via STONKS_NOTIFY_WEBHOOK_URL in .env; it usually embeds a token.
+timeout_seconds = 5.0
 
 [sources.eodhd]
 base_url = "https://eodhd.com/api"
 timeout_seconds = 30
 max_retries = 3
 retry_backoff_seconds = 1.0
+
+[sources.yahoo]
+timeout_seconds = 30
+max_retries = 3
+retry_backoff_seconds = 2.0
+# Yahoo rate-limits aggressively; space consecutive requests out.
+min_request_interval_seconds = 0.5
+
+[brokers]
+# Broker `stonks tick` (CLI and API) trades through. "simulated" (default)
+# fills in memory against the last portfolio snapshot and needs no keys.
+# "alpaca" is opt-in: the tick reconciles open orders, reads the portfolio
+# from the Alpaca account, and books fills only through reconciliation.
+kind = "simulated"
+
+[brokers.alpaca]
+# Paper trading by default. Real money needs BOTH paper = false AND
+# allow_live = true. Only read when kind = "alpaca". Keys are env-only
+# (ALPACA_API_KEY / ALPACA_SECRET_KEY); api_key / secret_key here are rejected.
+paper = true
+allow_live = false
+max_retries = 3
+retry_backoff_seconds = 1.0
+
+[api]
+# REST API for `stonks serve`. The bearer token is read from STONKS_API_TOKEN
+# only (never from this file); mutating routes fail closed without it.
+host = "127.0.0.1"
+port = 8000
+ui_origin = "http://localhost:4200"
+open_reads_on_loopback = true
+allowed_hosts = []
+max_concurrent_jobs = 2
+default_page_size = 50
+max_page_size = 500
+ui_dist = "web/dist"
+
+[golive]
+# `stonks golive check <id>` limits for a paper-trading period (shadow P&L for
+# shadow strategies, the real simulated portfolio for active ones). Missing
+# data fails a check. The gate never promotes; `stonks registry promote` does.
+min_days = 20
+max_drawdown = 0.15               # deepest allowed drawdown, positive fraction
+max_drift = 0.10                  # max |paper return - backtest-expected return|
+min_trades = 5
+require_all_survival_passed = true
+
+[mcp]
+# `stonks mcp` talks to the running REST API (`stonks serve`); it never opens
+# the lake. Write and job tools send STONKS_API_TOKEN (env only).
+api_url = "http://127.0.0.1:8000"
+timeout_seconds = 30.0
+max_wait_seconds = 600.0

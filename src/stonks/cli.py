@@ -18,17 +18,24 @@ from rich.table import Table
 from stonks.config import Settings, load_settings
 from stonks.core.types import AssetClass
 from stonks.ingest.pipeline import IngestPipeline, IngestRunResult
-from stonks.ingest.sources.base import DataSource
+from stonks.ingest.sources.base import DataSource, DataSourceError
 from stonks.ingest.sources.eodhd import (
     EODHD_DEFAULT_MACRO_INDICATOR,
     EODHD_MACRO_INDICATORS,
-    EodhdDataSource,
     EodhdFreeTierError,
     classify_asset_class,
     eodhd_exchange_for_asset_class,
 )
+from stonks.ingest.sources.registry import (
+    DEFAULT_SOURCE_ID,
+    SOURCE_IDS,
+    SourceConfigError,
+    build_source,
+)
 from stonks.logging import configure_logging, get_logger
-from stonks.production.tick import TickSettings, run_tick
+from stonks.notify import build_notifier
+from stonks.production.settings_builder import build_tick_runtime
+from stonks.production.tick import BackdatedTickError, run_tick
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
@@ -99,19 +106,37 @@ def _settings() -> Settings:
     return settings
 
 
-def _build_source(settings: Settings) -> DataSource:
-    api_key = settings.sources.eodhd.api_key
-    if not api_key:
-        raise typer.BadParameter(
-            "EODHD_API_KEY is not set (add it to .env or your shell environment)"
-        )
-    return EodhdDataSource(
-        api_key=api_key,
-        base_url=settings.sources.eodhd.base_url,
-        timeout_seconds=settings.sources.eodhd.timeout_seconds,
-        max_retries=settings.sources.eodhd.max_retries,
-        retry_backoff_seconds=settings.sources.eodhd.retry_backoff_seconds,
+def _validate_source(value: str) -> str:
+    if value in SOURCE_IDS:
+        return value
+    raise typer.BadParameter(f"--source must be one of {list(SOURCE_IDS)}, got {value!r}")
+
+
+def _source_option() -> typer.models.OptionInfo:
+    # A fresh OptionInfo per command: Typer mutates them during registration.
+    return typer.Option(
+        DEFAULT_SOURCE_ID,
+        "--source",
+        help=f"data source ({'|'.join(SOURCE_IDS)})",
+        callback=_validate_source,
     )
+
+
+def _build_source(settings: Settings, source_id: str) -> DataSource:
+    try:
+        return build_source(source_id, settings.sources)
+    except SourceConfigError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+def _list_tickers_or_usage_error(source: DataSource, exchange: str) -> list[str]:
+    try:
+        return source.list_tickers(exchange)
+    except DataSourceError as exc:
+        raise typer.BadParameter(
+            f"source {source.source_id!r} cannot list tickers for {exchange!r} ({exc}); "
+            "pass --tickers explicitly"
+        ) from exc
 
 
 def _open_lake(path: Path) -> DuckDBLake:
@@ -185,12 +210,12 @@ def db_info() -> None:
 
 
 @ingest_app.command("exchanges")
-def ingest_exchanges() -> None:
+def ingest_exchanges(source_id: str = _source_option()) -> None:
     """List the exchanges supported by the configured data source."""
     import requests
 
     settings = _settings()
-    source = _build_source(settings)
+    source = _build_source(settings, source_id)
     try:
         rows = sorted(source.list_exchanges(), key=lambda r: r.code)
     except EodhdFreeTierError as exc:
@@ -246,9 +271,10 @@ def ingest_prices(
     until: str | None = typer.Option(
         None, "--until", help="latest date (YYYY-MM-DD)", callback=_validate_iso_date
     ),
+    source_id: str = _source_option(),
 ) -> None:
     settings = _settings()
-    source = _build_source(settings)
+    source = _build_source(settings, source_id)
 
     with _open_lake(settings.lake.path) as lake:
         lake.migrate()
@@ -272,7 +298,7 @@ def ingest_prices(
                 exchange = resolved
 
         if not ticker_list and exchange:
-            ticker_list = source.list_tickers(exchange)
+            ticker_list = _list_tickers_or_usage_error(source, exchange)
         if not ticker_list:
             raise typer.BadParameter("provide --tickers or --exchange (or --asset-class)")
 
@@ -298,6 +324,7 @@ def ingest_fundamentals(
         ),
         callback=_validate_asset_class,
     ),
+    source_id: str = _source_option(),
 ) -> None:
     """Pull income / balance-sheet / cash-flow statements per ticker.
 
@@ -309,7 +336,7 @@ def ingest_fundamentals(
     no-op the request.
     """
     settings = _settings()
-    source = _build_source(settings)
+    source = _build_source(settings, source_id)
 
     if asset_class is not None and asset_class != "equity":
         raise typer.BadParameter(
@@ -349,6 +376,7 @@ def ingest_metadata(
         ),
         callback=_validate_asset_class,
     ),
+    source_id: str = _source_option(),
 ) -> None:
     """Pull the full metadata bundle per ticker.
 
@@ -360,7 +388,7 @@ def ingest_metadata(
     bond_profile / commodity_contract) is populated.
     """
     settings = _settings()
-    source = _build_source(settings)
+    source = _build_source(settings, source_id)
 
     with _open_lake(settings.lake.path) as lake:
         lake.migrate()
@@ -377,7 +405,7 @@ def ingest_metadata(
                         f"--asset-class={ac} doesn't map to a single exchange — pass "
                         "--tickers explicitly for equity."
                     )
-                ticker_list = source.list_tickers(resolved)
+                ticker_list = _list_tickers_or_usage_error(source, resolved)
 
         if not ticker_list:
             raise typer.BadParameter("provide --tickers or --asset-class")
@@ -391,21 +419,25 @@ def ingest_metadata(
 @ingest_app.command("intraday")
 def ingest_intraday(
     tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),
-    interval: str = typer.Option("5m", "--interval", help="native intraday: 1m | 5m | 1h"),
+    interval: str = typer.Option(
+        "5m", "--interval", help="native intraday: eodhd 1m|5m|1h, yahoo 1m|5m|15m|30m|1h"
+    ),
     since: str | None = typer.Option(
         None, "--since", help="earliest date (YYYY-MM-DD)", callback=_validate_iso_date
     ),
     until: str | None = typer.Option(
         None, "--until", help="latest date (YYYY-MM-DD)", callback=_validate_iso_date
     ),
+    source_id: str = _source_option(),
 ) -> None:
-    """Pull sub-daily OHLCV bars at a native intraday interval. Only 1m,
-    5m, and 1h are available from EODHD; coarser sub-daily bars (4h, 6h,
-    12h) are produced by ``stonks ingest aggregate``."""
+    """Pull sub-daily OHLCV bars at a native intraday interval (EODHD:
+    1m, 5m, 1h; Yahoo: 1m, 5m, 15m, 30m, 1h within Yahoo's lookback
+    limits). Coarser sub-daily bars (4h, 6h, 12h) are produced by
+    ``stonks ingest aggregate``."""
     from stonks.core.interval import Interval
 
     settings = _settings()
-    source = _build_source(settings)
+    source = _build_source(settings, source_id)
     parsed = Interval.parse(interval)
 
     with _open_lake(settings.lake.path) as lake:
@@ -436,6 +468,7 @@ def ingest_macro(
             "Reference list: https://eodhd.com/financial-apis/macroeconomics-data-api/"
         ),
     ),
+    source_id: str = _source_option(),
 ) -> None:
     """Pull macroeconomic time series for one or more countries × indicators.
 
@@ -445,7 +478,7 @@ def ingest_macro(
     vendor revisions to a previously-published value land in place.
     """
     settings = _settings()
-    source = _build_source(settings)
+    source = _build_source(settings, source_id)
 
     country_list = _parse_tickers(countries)
     if not country_list:
@@ -524,14 +557,15 @@ def ingest_all_intervals(
         "but EODHD caps 1m history at ~120 days so setting this explicitly avoids long failing fetches",
         callback=_validate_iso_date,
     ),
+    source_id: str = _source_option(),
 ) -> None:
     """Populate every canonical interval for each ticker: native 1m / 5m /
-    1h / 1d / 1w / 1mo from EODHD, plus derived 4h / 6h / 12h / 3d / 5d /
-    6mo / 1y / 5y via aggregation."""
+    1h / 1d from the source, plus derived 4h / 6h / 12h / 3d / 5d / 1w /
+    1mo / 6mo / 1y / 5y via aggregation."""
     from stonks.core.interval import Interval
 
     settings = _settings()
-    source = _build_source(settings)
+    source = _build_source(settings, source_id)
 
     since_d = date.fromisoformat(since) if since else None
     until_d = date.fromisoformat(until) if until else None
@@ -744,23 +778,21 @@ def tick(
                         "ingest profiles first or relax the filter"
                     )
 
-            tick_settings = TickSettings(
-                universe=universe,
-                threshold=settings.production.threshold,
-                initial_cash=settings.production.initial_cash,
-                slippage_bps=settings.production.slippage_bps,
-                fee_per_trade=settings.production.fee_per_trade,
-                max_price_staleness_days=settings.production.max_price_staleness_days,
-            )
-
-            result = run_tick(
-                state=state,
-                lake=lake,
-                registry=registry,
-                settings=tick_settings,
-                as_of=as_of_date,
-                dry_run=dry_run,
-            )
+            runtime = build_tick_runtime(settings, universe)
+            try:
+                result = run_tick(
+                    state=state,
+                    lake=lake,
+                    registry=registry,
+                    settings=runtime.settings,
+                    as_of=as_of_date,
+                    dry_run=dry_run,
+                    notifier=runtime.notifier,
+                    broker_factory=runtime.broker_factory,
+                )
+            except BackdatedTickError as exc:
+                console.print(f"[red]{exc}[/red]")
+                raise typer.Exit(code=1) from None
     finally:
         state.close()
 
@@ -775,8 +807,478 @@ def tick(
     )
 
 
+# ---- operations: health + pnl ----------------------------------------------
+
+
+@app.command("health")
+def health(
+    tickers: str | None = typer.Option(
+        None,
+        "--tickers",
+        help="comma-separated tickers to check for fresh bars; overrides config.production.universe",
+    ),
+    notify: bool = typer.Option(
+        False, "--notify/--no-notify", help="send an alert through [notify] when unhealthy"
+    ),
+) -> None:
+    """Check data freshness and stuck/failed runs. Exit code 1 when unhealthy,
+    so a scheduler can alert on it."""
+    from stonks.production.health import check_health, notify_unhealthy
+
+    settings = _settings()
+    universe = _parse_tickers(tickers) or list(settings.production.universe)
+    state = SqliteState(settings.state.path)
+    try:
+        with _open_lake(settings.lake.path) as lake:
+            report = check_health(state, lake, universe, settings.production.health)
+    finally:
+        state.close()
+
+    table = Table(title="health")
+    for col in ("check", "status", "detail"):
+        table.add_column(col)
+    for c in report.checks:
+        table.add_row(c.name, "[green]ok[/green]" if c.ok else "[red]FAIL[/red]", c.detail)
+    console.print(table)
+
+    if report.healthy:
+        console.print("[green]healthy[/green]")
+        return
+    console.print(f"[red]UNHEALTHY[/red]: {len(report.failures)} check(s) failed")
+    if notify:
+        notify_unhealthy(report, build_notifier(settings.notify))
+    raise typer.Exit(code=1)
+
+
+@app.command("pnl")
+def pnl(
+    since: str | None = typer.Option(
+        None,
+        "--since",
+        help="first day to show (YYYY-MM-DD); returns are still measured from inception",
+        callback=_validate_iso_date,
+    ),
+    strategy: str | None = typer.Option(
+        None, "--strategy", help="show a shadow strategy's virtual P&L instead of the real one"
+    ),
+) -> None:
+    """Daily P&L from portfolio snapshots, one row per tick as_of: value,
+    change since the previous row (blank when more than 4 days apart, see
+    ``days``), cumulative return and drawdown from the running peak."""
+    from stonks.production.pnl import load_pnl
+
+    settings = _settings()
+    since_d = date.fromisoformat(since) if since else None
+    state = SqliteState(settings.state.path)
+    try:
+        rows = load_pnl(state, since=since_d, strategy_id=strategy)
+    finally:
+        state.close()
+
+    if not rows:
+        console.print("[yellow]no portfolio snapshots yet[/yellow]")
+        return
+
+    def pct(x: float | None) -> str:
+        return "-" if x is None else f"{x:+.2%}"
+
+    title = f"P&L ({'shadow ' + strategy if strategy else 'portfolio'})"
+    table = Table(title=title)
+    for col in ("date", "days", "value", "change", "daily", "cumulative", "drawdown"):
+        table.add_column(col, justify="right")
+    for r in rows:
+        table.add_row(
+            r.day.isoformat(),
+            "-" if r.days_elapsed is None else str(r.days_elapsed),
+            f"{r.total_value:,.2f}",
+            "-" if r.daily_change is None else f"{r.daily_change:+,.2f}",
+            pct(r.daily_return),
+            pct(r.cumulative_return),
+            pct(r.drawdown),
+        )
+    console.print(table)
+
+
 # Re-export bound logger so tests / users can discover it easily
 log = get_logger("stonks.cli")
+
+
+# ---- REST API server --------------------------------------------------------
+
+
+@app.command("serve")
+def serve(
+    host: str | None = typer.Option(None, "--host", help="bind address; default [api].host"),
+    port: int | None = typer.Option(None, "--port", help="bind port; default [api].port"),
+    reload: bool = typer.Option(False, "--reload", help="auto-reload on code changes (dev)"),
+) -> None:
+    """Run the REST API (and the built UI from web/dist, if present) with uvicorn.
+
+    Binds 127.0.0.1 by default. Mutating routes need STONKS_API_TOKEN.
+    """
+    import uvicorn
+
+    settings = _settings()
+    bind_host = host or settings.api.host
+    bind_port = port or settings.api.port
+    if settings.api.token is None:
+        console.print(
+            "[yellow]STONKS_API_TOKEN is not set: mutating routes will return 503[/yellow]"
+        )
+    if bind_host not in ("127.0.0.1", "localhost", "::1"):
+        log.warning("serve.non_loopback_bind", host=bind_host)
+    uvicorn.run(
+        "stonks.api.server:app_factory",
+        factory=True,
+        host=bind_host,
+        port=bind_port,
+        reload=reload,
+        log_config=None,
+    )
+
+
+# ---- lab --------------------------------------------------------------------
+
+lab_app = typer.Typer(help="Strategy lab: tune, fit and run survival tests")
+app.add_typer(lab_app, name="lab")
+
+_LAB_TUNERS = ("grid", "random")
+_LAB_OBJECTIVES = ("sharpe", "cagr", "final_return")
+_LAB_TESTS = ("oos", "period_stability", "perturbation", "runs_test", "drift")
+
+
+def _choice(flag: str, choices: tuple[str, ...]):
+    def check(value: str) -> str:
+        if value not in choices:
+            raise typer.BadParameter(f"{flag} must be one of {list(choices)}, got {value!r}")
+        return value
+
+    return check
+
+
+@lab_app.command("run")
+def lab_run(
+    strategy: str = typer.Argument(
+        ..., help="strategy id, class name or module:Class (see stonks.lab.catalog)"
+    ),
+    params: str = typer.Option(
+        "{}",
+        "--params",
+        help="JSON object of params to pin; tunable params left out are tuned",
+    ),
+    tickers: str | None = typer.Option(
+        None, "--tickers", help="comma-separated universe; default [production].universe"
+    ),
+    start: str = typer.Option(..., "--start", callback=_validate_iso_date, help="YYYY-MM-DD"),
+    end: str = typer.Option(..., "--end", callback=_validate_iso_date, help="YYYY-MM-DD"),
+    interval: str = typer.Option("1d", "--interval", help="bar interval (1d, 1h, 5m, ...)"),
+    train_ratio: float = typer.Option(0.7, "--train-ratio", min=0.05, max=0.95),
+    tuner: str = typer.Option(
+        "grid", "--tuner", callback=_choice("--tuner", _LAB_TUNERS), help="grid|random"
+    ),
+    grid_size: int = typer.Option(5, "--grid-size", min=1, help="points per numeric axis"),
+    budget: int = typer.Option(20, "--budget", min=1, help="tuning trials"),
+    seed: int = typer.Option(0, "--seed", help="tuner seed"),
+    objective: str = typer.Option(
+        "sharpe",
+        "--objective",
+        callback=_choice("--objective", _LAB_OBJECTIVES),
+        help="sharpe|cagr|final_return",
+    ),
+    tests: str = typer.Option(
+        "oos", "--tests", help=f"comma-separated base survival tests ({'|'.join(_LAB_TESTS)})"
+    ),
+    mcpt: bool = typer.Option(False, "--mcpt", help="out-of-sample permutation test"),
+    mcpt_retune: bool = typer.Option(
+        False, "--mcpt-retune", help="permutation test re-tuning on each permuted train window"
+    ),
+    mcpt_permutations: int = typer.Option(50, "--mcpt-permutations", min=1),
+    mcpt_max_p: float = typer.Option(0.05, "--mcpt-max-p", min=0.0, max=1.0),
+    mcpt_seed: int = typer.Option(17, "--mcpt-seed"),
+    walk_forward: bool = typer.Option(False, "--walk-forward", help="add walk-forward test"),
+    wf_splits: int | None = typer.Option(
+        None, "--wf-splits", min=1, help="default [lab.walk_forward].n_splits"
+    ),
+    wf_test_days: int | None = typer.Option(
+        None, "--wf-test-days", min=1, help="default [lab.walk_forward].test_days"
+    ),
+    wf_anchored: bool | None = typer.Option(
+        None, "--wf-anchored/--wf-rolling", help="default [lab.walk_forward].anchored"
+    ),
+    register: bool = typer.Option(
+        False, "--register", help="register the strategy in shadow if the verdict is pass"
+    ),
+    json_out: str | None = typer.Option(None, "--json-out", help="write the result as JSON"),
+) -> None:
+    """Tune a strategy on the train window, then run the survival suite.
+
+    Transaction costs come from [backtest.costs]; walk-forward defaults
+    from [lab.walk_forward].
+    """
+    import json
+
+    from stonks.app.serialize import to_jsonable
+    from stonks.core.interval import Interval
+    from stonks.lab.catalog import resolve_strategy
+    from stonks.lab.dataset import LabDataset
+    from stonks.lab.objectives import CAGRObjective, FinalReturnObjective, SharpeObjective
+    from stonks.lab.runner import LabRunner
+    from stonks.lab.survival.base import SurvivalSuite
+    from stonks.lab.survival.drift import DriftTest
+    from stonks.lab.survival.oos import OutOfSampleTest
+    from stonks.lab.survival.period_stability import PeriodStabilityTest
+    from stonks.lab.survival.permutation import MonteCarloPermutationTest
+    from stonks.lab.survival.perturbation import PerturbationTest
+    from stonks.lab.survival.runs_test import RunsTestSurvivalTest
+    from stonks.lab.survival.walk_forward import WalkForwardTest
+    from stonks.lab.tuning.grid import GridTuner
+    from stonks.lab.tuning.random import RandomTuner
+
+    # -- validate everything before touching the lake ------------------------
+    try:
+        strategy_cls = resolve_strategy(strategy)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc), param_hint="STRATEGY") from None
+    try:
+        pinned = json.loads(params)
+    except json.JSONDecodeError as exc:
+        raise typer.BadParameter(f"not valid JSON ({exc})", param_hint="--params") from None
+    if not isinstance(pinned, dict):
+        raise typer.BadParameter("must be a JSON object", param_hint="--params")
+    try:
+        strategy_cls(pinned)  # validates names, types and bounds
+    except (ValueError, TypeError) as exc:
+        raise typer.BadParameter(str(exc), param_hint="--params") from None
+    start_d, end_d = date.fromisoformat(start), date.fromisoformat(end)
+    if start_d >= end_d:
+        raise typer.BadParameter("--start must be before --end")
+    try:
+        bar_interval = Interval.parse(interval)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--interval") from None
+    if mcpt and mcpt_retune:
+        raise typer.BadParameter("pass one of --mcpt / --mcpt-retune, not both")
+    base_tests = _parse_tickers(tests)
+    unknown = [t for t in base_tests if t not in _LAB_TESTS]
+    if unknown:
+        raise typer.BadParameter(f"unknown tests {unknown}; choose from {list(_LAB_TESTS)}")
+
+    settings = _settings()
+    universe = _parse_tickers(tickers) or list(settings.production.universe)
+    if not universe:
+        raise typer.BadParameter("pass --tickers or set [production].universe")
+
+    factories = {
+        "oos": OutOfSampleTest,
+        "period_stability": PeriodStabilityTest,
+        "perturbation": PerturbationTest,
+        "runs_test": RunsTestSurvivalTest,
+        "drift": DriftTest,
+    }
+    suite_tests = [factories[t]() for t in base_tests]
+    if mcpt or mcpt_retune:
+        suite_tests.append(
+            MonteCarloPermutationTest(
+                n_permutations=mcpt_permutations,
+                max_p_value=mcpt_max_p,
+                retune=mcpt_retune,
+                seed=mcpt_seed,
+            )
+        )
+    if walk_forward:
+        overrides = {
+            k: v
+            for k, v in {
+                "n_splits": wf_splits,
+                "test_days": wf_test_days,
+                "anchored": wf_anchored,
+            }.items()
+            if v is not None
+        }
+        suite_tests.append(WalkForwardTest(settings.lab.walk_forward.model_copy(update=overrides)))
+
+    objectives = {
+        "sharpe": SharpeObjective,
+        "cagr": CAGRObjective,
+        "final_return": FinalReturnObjective,
+    }
+    lab_tuner = (
+        GridTuner(grid_size=grid_size, seed=seed) if tuner == "grid" else RandomTuner(seed=seed)
+    )
+    runner = LabRunner(
+        tuner=lab_tuner,
+        objective=objectives[objective](),
+        suite=SurvivalSuite(suite_tests),
+        budget=budget,
+    )
+
+    lake = _open_lake(settings.lake.path)
+    try:
+        dataset = LabDataset(
+            lake=lake,
+            universe=universe,
+            start=start_d,
+            end=end_d,
+            train_ratio=train_ratio,
+            interval=bar_interval,
+            costs=settings.backtest.costs,
+        )
+        result = runner.run(strategy_cls, dataset, fixed_params=pinned)
+    finally:
+        lake.close()
+
+    registered_id: str | None = None
+    if register and result.verdict == "pass":
+        state, registry = _open_registry(settings)
+        try:
+            state.migrate()
+            registered_id = registry.register(result.strategy, result.survival_reports)
+        finally:
+            state.close()
+
+    table = Table(title=f"lab run: {strategy_cls.__name__}  verdict={result.verdict}")
+    for col in ("test", "passed", "metrics"):
+        table.add_column(col)
+    for rep in result.survival_reports:
+        metrics = ", ".join(f"{k}={v:.4g}" for k, v in sorted(rep.metrics.items()))
+        table.add_row(rep.test_id, "yes" if rep.passed else "no", metrics)
+    console.print(f"best params: {dict(result.best_params)}")
+    console.print(f"best {objective} (train): {result.best_score:.4g}")
+    console.print(table)
+    colour = "green" if result.verdict == "pass" else "red"
+    console.print(f"[{colour}]verdict: {result.verdict}[/{colour}]")
+    if register:
+        if registered_id is not None:
+            console.print(f"[green]registered {registered_id} (shadow)[/green]")
+        else:
+            console.print("[yellow]not registered: verdict is fail[/yellow]")
+
+    if json_out is not None:
+        doc = {
+            "strategy": f"{strategy_cls.__module__}:{strategy_cls.__name__}",
+            "universe": universe,
+            "window": [start, end],
+            "interval": bar_interval.code,
+            "best_params": dict(result.best_params),
+            "best_score": result.best_score,
+            "verdict": result.verdict,
+            "survival_reports": [
+                {
+                    "test_id": rep.test_id,
+                    "passed": rep.passed,
+                    "metrics": dict(rep.metrics),
+                    "notes": rep.notes,
+                }
+                for rep in result.survival_reports
+            ],
+            "registered_id": registered_id,
+        }
+        Path(json_out).write_text(json.dumps(to_jsonable(doc), indent=2, sort_keys=True))
+
+
+# ---- go-live gate (4.3) -----------------------------------------------------
+
+golive_app = typer.Typer(help="Go-live gate for paper-traded strategies")
+app.add_typer(golive_app, name="golive")
+
+
+@golive_app.command("check")
+def golive_check(
+    strategy_id: str,
+    since: str | None = typer.Option(
+        None,
+        "--since",
+        help="start the paper period on this day (YYYY-MM-DD); default: all of it",
+        callback=_validate_iso_date,
+    ),
+) -> None:
+    """Evaluate a strategy's paper period against [golive]. Exit code 1 when
+    any check fails. Never changes the strategy's status."""
+    from stonks.production.golive import evaluate_golive
+
+    settings = _settings()
+    since_d = date.fromisoformat(since) if since else None
+    state, registry = _open_registry(settings)
+    try:
+        report = evaluate_golive(state, registry, strategy_id, settings.golive, since=since_d)
+    except KeyError:
+        console.print(f"[red]no strategy with id {strategy_id!r}[/red]")
+        raise typer.Exit(code=1) from None
+    finally:
+        state.close()
+
+    table = Table(title=f"go-live gate: {strategy_id} ({report.status}, {report.source} P&L)")
+    for col in ("check", "status", "detail"):
+        table.add_column(col)
+    for c in report.checks:
+        table.add_row(c.name, "[green]PASS[/green]" if c.passed else "[red]FAIL[/red]", c.detail)
+    console.print(table)
+    if report.passed:
+        console.print("[green]PASS[/green]: ready for a human to promote")
+        return
+    console.print(f"[red]FAIL[/red]: {len(report.failures)} check(s) failed")
+    raise typer.Exit(code=1)
+
+
+# ---- static HTML report (4.1) -----------------------------------------------
+
+
+_REPORT_OUT = typer.Option(
+    Path("data/reports/report.html"), "--out", help="where to write the HTML file"
+)
+_REPORT_STRATEGIES = typer.Option(
+    None, "--strategy", help="only these strategy ids (repeatable); default: all"
+)
+
+
+@app.command("report")
+def report(
+    out: Path = _REPORT_OUT,
+    strategies: list[str] | None = _REPORT_STRATEGIES,
+    since: str | None = typer.Option(
+        None,
+        "--since",
+        help="first day to show (YYYY-MM-DD); returns are still measured from inception",
+        callback=_validate_iso_date,
+    ),
+) -> None:
+    """Write a self-contained static HTML report: equity curve, drawdown,
+    positions, orders/fills, and per-strategy verdicts, shadow P&L and drift."""
+    from stonks.reporting import build_report, render_html
+
+    settings = _settings()
+    since_d = date.fromisoformat(since) if since else None
+    state, registry = _open_registry(settings)
+    try:
+        data = build_report(
+            state, registry, settings.golive, strategy_ids=strategies or None, since=since_d
+        )
+    finally:
+        state.close()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(render_html(data), encoding="utf-8")
+    console.print(f"[green]wrote[/green] {out}")
+
+
+# ---- MCP server -------------------------------------------------------------
+
+
+@app.command("mcp")
+def mcp_server() -> None:
+    """Run the MCP server over stdio for Claude Code / Claude Desktop.
+
+    A client of the running REST API ([mcp].api_url, start it with
+    `stonks serve`); it never opens the lake. Write and job tools send
+    STONKS_API_TOKEN. See docs/mcp.md.
+    """
+    from stonks.mcp.entry import McpConfigError, run
+
+    try:
+        run(_settings())
+    except McpConfigError as exc:
+        # stdout belongs to the MCP protocol; report on stderr.
+        typer.echo(f"stonks mcp: {exc}", err=True)
+        raise typer.Exit(code=2) from None
 
 
 if __name__ == "__main__":

@@ -1,0 +1,55 @@
+from __future__ import annotations
+
+from fastapi import APIRouter, Response
+
+from stonks.api.deps import ServicesDep
+from stonks.api.errors import PROBLEM_RESPONSES
+from stonks.api.routers._jobs_common import JOB_CREATED, accepted
+from stonks.app.jobs import Job
+from stonks.app.lab import (
+    BACKTEST_JOB,
+    LAB_RUN_JOB,
+    BacktestRequest,
+    BacktestResult,
+    CostModelPreset,
+    LabRunRequest,
+    LabRunView,
+)
+
+router = APIRouter(prefix="/api/lab", tags=["lab"], responses=PROBLEM_RESPONSES)
+
+
+@router.post("/backtests", **JOB_CREATED, operation_id="startBacktest")
+def start_backtest(body: BacktestRequest, services: ServicesDep, response: Response) -> Job:
+    """Queue a backtest; fetch the typed result from
+    ``GET /api/lab/backtests/{job_id}/result`` once it succeeds."""
+    return accepted(services.lab.submit_backtest(body), response)
+
+
+@router.post("/runs", **JOB_CREATED, operation_id="startLabRun")
+def start_lab_run(body: LabRunRequest, services: ServicesDep, response: Response) -> Job:
+    """Queue tune → fit → survival suite; fetch the typed result from
+    ``GET /api/lab/runs/{job_id}/result`` once it succeeds."""
+    return accepted(services.lab.submit_lab_run(body), response)
+
+
+@router.get(
+    "/backtests/{job_id}/result",
+    response_model=BacktestResult,
+    operation_id="getBacktestResult",
+)
+def get_backtest_result(job_id: str, services: ServicesDep) -> BacktestResult:
+    """The result of a succeeded backtest job (409 until it has succeeded)."""
+    return services.jobs.typed_result(job_id, BACKTEST_JOB, BacktestResult)
+
+
+@router.get("/runs/{job_id}/result", response_model=LabRunView, operation_id="getLabRunResult")
+def get_lab_run_result(job_id: str, services: ServicesDep) -> LabRunView:
+    """The result of a succeeded lab-run job (409 until it has succeeded)."""
+    return services.jobs.typed_result(job_id, LAB_RUN_JOB, LabRunView)
+
+
+@router.get("/cost-models", response_model=list[CostModelPreset], operation_id="listCostModels")
+def list_cost_models(services: ServicesDep) -> list[CostModelPreset]:
+    """Transaction-cost presets a backtest request can name in ``cost_model``."""
+    return services.lab.cost_models()

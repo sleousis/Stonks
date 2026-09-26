@@ -236,3 +236,16 @@ def test_ranker_skips_strategy_whose_load_fails(seeded_registry, capsys):
     out = capsys.readouterr().out
     assert "ranker.strategy_load.failed" in out
     assert mom_id in out
+
+
+def test_ranker_ranks_only_the_requested_status(seeded_registry):
+    registry, lake, (bh_id, mom_id) = seeded_registry
+    registry.set_status(mom_id, "shadow")
+
+    active = Ranker(registry=registry, lake=lake, universe=["UP.US"], threshold=0.0)
+    shadow = Ranker(
+        registry=registry, lake=lake, universe=["UP.US"], threshold=0.0, status="shadow"
+    )
+    as_of = date(2026, 3, 20)
+    assert {sid for _, sid, _ in active.rank(as_of=as_of)} == {bh_id}
+    assert {sid for _, sid, _ in shadow.rank(as_of=as_of)} == {mom_id}
