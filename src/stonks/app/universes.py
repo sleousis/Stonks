@@ -135,8 +135,12 @@ class UniverseService:
     def __init__(self, context: AppContext, runner: JobRunner) -> None:
         self._ctx = context
         self._runner = runner
-        runner.register(UNIVERSE_REFRESH_JOB, self._handle_refresh, lock=LAKE_WRITE_LANE)
-        runner.register(UNIVERSE_ENSURE_JOB, self._handle_ensure, lock=LAKE_WRITE_LANE)
+        # Research work on the lake lane: whoever queued it may cancel it.
+        for kind, handler in (
+            (UNIVERSE_REFRESH_JOB, self._handle_refresh),
+            (UNIVERSE_ENSURE_JOB, self._handle_ensure),
+        ):
+            runner.register(kind, handler, lock=LAKE_WRITE_LANE, operation=False)
 
     # ---- definitions -------------------------------------------------------------
 

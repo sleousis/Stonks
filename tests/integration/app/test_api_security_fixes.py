@@ -305,3 +305,43 @@ def test_as07_a_universe_cannot_be_deleted_while_its_refresh_is_pending(client, 
     assert resp.status_code == 409 and queued.id in resp.json()["detail"]
     store.cancel(queued.id)
     assert client.delete("/api/universes/busy", headers=AUTH).status_code == 200
+
+
+# ---- AS-09 / AS-19 read-permission POSTs for viewers --------------------------------
+
+
+def test_as09_a_viewer_gets_a_stream_token_for_their_own_job_but_cannot_write(client, app, people):
+    from tests.integration.app.test_api import _backtest_body
+
+    vic = people["vic"]
+    job = app.state.services.runner.store.create("backtest", {}, owner_id=vic["id"])
+    token = client.post(f"/api/jobs/{job.id}/stream-token", headers=vic["headers"])
+    assert token.status_code == 200, token.text
+    denied = client.post("/api/lab/backtests", json=_backtest_body(), headers=vic["headers"])
+    assert denied.status_code == 403
+
+
+def test_as19_a_viewer_can_mark_their_feed_read(client, settings, people):
+    vic = people["vic"]
+    _insert_alert(settings.state.path, "for-vic", vic["id"])
+    assert client.get("/api/notifications", headers=vic["headers"]).json()["unread_count"] == 1
+    resp = client.post("/api/notifications/read", json={}, headers=vic["headers"])
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["unread_count"] == 0
+
+
+# ---- AS-13 cancel permission per job kind ------------------------------------------
+
+
+def test_as13_a_trader_cancels_their_own_queued_universe_job(client, app, people):
+    from stonks.app.universes import UNIVERSE_ENSURE_JOB, UNIVERSE_REFRESH_JOB
+
+    store = app.state.services.runner.store
+    alice = people["alice"]
+    for kind in (UNIVERSE_REFRESH_JOB, UNIVERSE_ENSURE_JOB):
+        job = store.create(kind, {"universe_id": "u"}, owner_id=alice["id"])
+        resp = client.post(f"/api/jobs/{job.id}/cancel", headers=alice["headers"])
+        assert resp.status_code == 200, (kind, resp.text)
+    # Operator jobs stay admin-only.
+    ingest = store.create("ingest", {}, owner_id=alice["id"])
+    assert client.post(f"/api/jobs/{ingest.id}/cancel", headers=alice["headers"]).status_code == 403

@@ -920,7 +920,7 @@ class LabService:
         # Cooperative: stops between tuning trials and survival tests.
         runner.register(LAB_RUN_JOB, self._handle_lab_run, cancellable=True)
         # Fetching a lab run's missing bars writes the lake: one writer lane.
-        runner.register(LAB_ENSURE_JOB, self._handle_lab_ensure, lock="lake_write")
+        runner.register(LAB_ENSURE_JOB, self._handle_lab_ensure, lock="lake_write", operation=False)
         runner.register(LAB_SWEEP_JOB, self._handle_sweep)
 
     # ---- backtests ---------------------------------------------------------

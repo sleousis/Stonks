@@ -280,6 +280,7 @@ class _Registration:
     handler: JobHandler
     lock: str | None
     cancellable: bool
+    operation: bool
 
 
 #: Back-off between retries of a job-row write that hit a SQLite error
@@ -324,14 +325,21 @@ class JobRunner:
         *,
         lock: str | None = None,
         cancellable: bool = False,
+        operation: bool | None = None,
     ) -> None:
         """Register ``handler`` for ``kind``. Jobs sharing a ``lock`` name
         run one at a time on that lock's own worker (e.g. every lake writer
         uses ``"lake_write"``). ``cancellable`` handlers call
-        :meth:`JobContext.check_cancelled`, so a running job can be stopped."""
+        :meth:`JobContext.check_cancelled`, so a running job can be stopped.
+        ``operation`` marks operator jobs (ticks, ingests, backups) whose
+        cancel needs an admin; it defaults to "holds a lock lane", and
+        research jobs on a lane (universe refresh) pass ``False``."""
         with self._guard:
             self._handlers[kind] = _Registration(
-                handler=handler, lock=lock, cancellable=cancellable
+                handler=handler,
+                lock=lock,
+                cancellable=cancellable,
+                operation=lock is not None if operation is None else operation,
             )
             if lock is not None and lock not in self._lanes:
                 self._lanes[lock] = ThreadPoolExecutor(
@@ -390,10 +398,10 @@ class JobRunner:
             return future.result()  # it started just now: let it finish
 
     def is_operation(self, kind: str) -> bool:
-        """True for operator jobs (ticks, ingests, backups): the kinds that
-        hold a lock lane. Lab kinds share the general pool."""
+        """True for operator jobs (ticks, ingests, backups), whose cancel
+        needs an admin (see :meth:`register`)."""
         reg = self._handlers.get(kind)
-        return reg is not None and reg.lock is not None
+        return reg is not None and reg.operation
 
     def cancel(self, job_id: str) -> Job:
         """Cancel a queued job, or request cancellation of a running job whose

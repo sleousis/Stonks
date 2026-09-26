@@ -146,8 +146,9 @@ def list_notifications(
     "/read",
     response_model=MarkReadView,
     operation_id="markNotificationsRead",
-    dependencies=needs(Permission.NOTIFICATIONS_MANAGE),
+    dependencies=needs(Permission.READ),
 )
 def mark_read(body: MarkReadRequest, services: ServicesDep, scope: ScopeDep) -> MarkReadView:
-    """Mark notifications read (all of yours when ``ids`` is omitted)."""
+    """Mark notifications read (all of yours when ``ids`` is omitted). Only
+    touches your own rows, so viewers may do it too."""
     return services.notifications.mark_read(scope, body)
