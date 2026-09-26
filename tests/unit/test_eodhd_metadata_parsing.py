@@ -324,11 +324,28 @@ def test_employee_count_snapshot_uses_general_full_time_employees():
 
 def test_dividends_parse_from_div_endpoint_fixture():
     rows = list(parse_dividends_response("AAPL.US", _load("aapl_dividends.json")))
-    assert len(rows) == 2
+    assert len(rows) == 3
     row = next(r for r in rows if r.ex_date == date(2026, 2, 10))
     assert row.amount == 0.25
     assert row.currency == "USD"
     assert row.pay_date == date(2026, 2, 13)
+
+
+def test_dividends_store_cash_paid_not_split_adjusted_value():
+    # EODHD's ``value`` is restated for later splits (AAPL's 4:1 in 2020);
+    # ``amount`` is the cash actually paid per share on the ex-date.
+    rows = list(parse_dividends_response("AAPL.US", _load("aapl_dividends.json")))
+    pre_split = next(r for r in rows if r.ex_date == date(2020, 8, 7))
+    assert pre_split.amount == 0.82
+
+
+def test_dividends_fall_back_to_value_without_unadjusted_value():
+    payload = [
+        {"date": "2026-02-10", "value": 0.25},
+        {"date": "2026-05-10", "value": 0.26, "unadjustedValue": None},
+    ]
+    rows = list(parse_dividends_response("AAPL.US", payload))
+    assert [r.amount for r in rows] == [0.25, 0.26]
 
 
 def test_dividends_skip_negative_amounts_and_missing_dates():

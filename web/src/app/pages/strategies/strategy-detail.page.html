@@ -1,0 +1,142 @@
+<app-page-header [title]="id()" [description]="description()">
+  @for (a of actions(); track a.key) {
+    <button
+      actions
+      type="button"
+      class="btn"
+      [class.btn-primary]="a.key === 'promote'"
+      [class.btn-danger]="a.key === 'retire'"
+      [disabled]="busy() !== null"
+      [attr.aria-busy]="busy() === a.key"
+      (click)="run(a.key)"
+    >
+      {{ busy() === a.key ? 'Working…' : a.spec.label }}
+    </button>
+  }
+</app-page-header>
+
+<nav class="related" aria-label="Related pages">
+  <a routerLink="/strategies" class="related-link"
+    ><span aria-hidden="true">←</span> All strategies</a
+  >
+  <a routerLink="/lab" [queryParams]="{ strategy: id() }" class="related-link">Re-run in Lab</a>
+  <a routerLink="/go-live" [queryParams]="{ strategy: id() }" class="related-link">Go-live check</a>
+</nav>
+
+@if (strategy.error(); as err) {
+  <section class="panel">
+    <app-error-state
+      title="Could not load this strategy"
+      [error]="err"
+      (retry)="strategy.reload()"
+    />
+  </section>
+} @else if (detail(); as s) {
+  <div class="page-grid">
+    <!-- Overview ---------------------------------------------------------->
+    <section class="panel span-5" aria-labelledby="overview-title">
+      <div class="panel-head">
+        <h2 id="overview-title">Overview</h2>
+        <app-status-pill [status]="s.status" />
+      </div>
+      <dl class="facts">
+        <div>
+          <dt>Class</dt>
+          <dd>
+            <span class="class-name">{{ shortClass(s.class_path) }}</span>
+            <span class="class-path">{{ s.class_path }}</span>
+          </dd>
+        </div>
+        <div>
+          <dt>Asset classes</dt>
+          <dd>
+            <ul class="chips" aria-label="Applicable asset classes">
+              @for (a of s.applicable_asset_classes; track a) {
+                <li class="chip">{{ a }}</li>
+              } @empty {
+                <li class="muted">None declared</li>
+              }
+            </ul>
+          </dd>
+        </div>
+        <div>
+          <dt>Registered</dt>
+          <dd class="num">{{ date(s.created_at) }}</dd>
+        </div>
+        <div>
+          <dt>Last changed</dt>
+          <dd class="num">{{ dateTime(s.updated_at) }}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <!-- Parameters -------------------------------------------------------->
+    <section class="panel span-7" aria-labelledby="params-title">
+      <div class="panel-head">
+        <h2 id="params-title">Parameters</h2>
+        <span class="muted num">{{ params().length }}</span>
+      </div>
+      @if (params().length === 0) {
+        <app-empty-state
+          title="No parameters"
+          message="This strategy runs with its class defaults; a lab run records tuned values here."
+        />
+      } @else {
+        <dl class="params">
+          @for (p of params(); track p.key) {
+            <div>
+              <dt>{{ p.key }}</dt>
+              <dd class="num">{{ p.value }}</dd>
+            </div>
+          }
+        </dl>
+      }
+    </section>
+
+    <!-- Survival reports -------------------------------------------------->
+    <section class="panel span-12" aria-labelledby="survival-title">
+      <div class="panel-head">
+        <h2 id="survival-title">Survival reports</h2>
+        @if (reportSummary(); as sum) {
+          <app-status-pill [status]="sum.allPassed ? 'pass' : 'fail'" [label]="sum.label" />
+        }
+      </div>
+      @if (s.survival_reports.length === 0) {
+        <app-empty-state
+          title="No survival reports"
+          message="Reports are written when a lab run tests this strategy (out-of-sample, period stability, perturbation, drift). Re-run it in Lab to add them."
+        >
+          <a routerLink="/lab" [queryParams]="{ strategy: s.id }" class="btn">Re-run in Lab</a>
+        </app-empty-state>
+      } @else {
+        <ul class="reports">
+          @for (r of reports(); track r.test_id + $index) {
+            <li class="report" [class.failed]="!r.passed">
+              <div class="report-head">
+                <h3>{{ r.test_id }}</h3>
+                <app-status-pill [status]="r.passed ? 'pass' : 'fail'" />
+              </div>
+              @if (r.notes) {
+                <p class="notes">{{ r.notes }}</p>
+              }
+              @if (r.metricList.length) {
+                <dl class="metrics">
+                  @for (m of r.metricList; track m.key) {
+                    <div>
+                      <dt>{{ m.key }}</dt>
+                      <dd class="num">{{ m.value }}</dd>
+                    </div>
+                  }
+                </dl>
+              }
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  </div>
+} @else {
+  <section class="panel">
+    <app-loading-state label="Loading strategy" [rows]="6" />
+  </section>
+}

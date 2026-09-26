@@ -1,0 +1,370 @@
+# Trader console (web UI)
+
+The Angular app in `web/` is the trader console: dashboard, strategies, studio,
+lab, data, orders, shadow, go-live, health and settings. It talks only to the
+REST API (`src/stonks/api/`) through a client generated from the checked-in
+contract `web/openapi.json`.
+
+![Dashboard, desktop, light theme](img/ui-dashboard-desktop-light.png)
+
+## Run it
+
+Node 22+ and npm. From `web/`:
+
+```bash
+npm install                 # once
+npm start                   # dev server on http://localhost:4200, proxies /api to 127.0.0.1:8000
+```
+
+In another terminal, from the repo root, run the API:
+
+```bash
+STONKS_API_TOKEN=... uv run stonks serve     # 127.0.0.1:8000
+```
+
+`npm run build` writes the production bundle to `web/dist/`; `stonks serve` then
+serves it at `/` with single-page fallback (`[api].ui_dist`), so one process
+serves both. The dev server origin (`http://localhost:4200`) is the API's
+`[api].ui_origin` for CORS, although the proxy makes CORS unnecessary in dev.
+
+Reads are open on loopback, so the console works read-only without a token.
+Enter `STONKS_API_TOKEN` in **Settings** to enable actions; it is kept in
+`sessionStorage` for that tab only.
+
+| Command | What it does |
+|---|---|
+| `npm start` | Dev server with the `/api` proxy (`proxy.conf.json`) |
+| `npm run build` | Production build into `web/dist/` |
+| `npm test` | Unit tests once, headless (Vitest + jsdom via `ng test`) |
+| `npm run test:watch` | Unit tests in watch mode |
+| `npm run lint` | ESLint (angular-eslint, template accessibility rules) |
+| `npm run format` / `format:check` | Prettier |
+| `npm run api:generate` | Regenerate the typed client from `openapi.json` |
+| `npm run api:check` | Regenerate and fail if the committed client differs (CI) |
+
+When the backend changes a route: `uv run python -m stonks.api.openapi` (writes
+`web/openapi.json`), then `npm run api:generate` in `web/`, and commit both.
+
+## Stack
+
+- Angular 22 (standalone components, signals, `resource()`, new control flow,
+  zoneless, OnPush everywhere), TypeScript 6 strict with strict templates.
+- `@hey-api/openapi-ts` generates `src/app/api/generated/` (Angular HttpClient
+  client, so interceptors apply). Never edit it; ESLint and Prettier skip it.
+- TradingView Lightweight Charts, behind the `ChartEngine` seam.
+- Public Sans (self-hosted via `@fontsource-variable/public-sans`).
+- Vitest (Angular's default runner) with jsdom; ESLint; Prettier.
+
+## Folders
+
+```
+web/src/
+  styles.scss                 global primitives: buttons, fields, panels, page grid
+  styles/_tokens.scss         design tokens + light/dark palettes
+  styles/_breakpoints.scss    phone / tablet / desktop mixins
+  testing/                    test helpers (nextRequest, tick, fake chart)
+  app/
+    api/                      the only code that touches the generated client
+      generated/              openapi-ts output (do not edit)
+      models.ts               contract types re-exported for the app
+      api-call.ts             unwrap(): SDK result -> data or ApiError
+      provide-api.ts          HttpClient + interceptors + client binding
+      <domain>.service.ts     portfolio, ticks, health, strategies, lab, market,
+                              orders, shadow, ingest, studio, system, jobs-api
+    core/                     cross-cutting services
+      auth/                   AuthTokenService (sessionStorage only)
+      http/                   ApiError + problem-details mapping, interceptors
+      jobs/                   JobsService (SSE via fetch + polling), SseParser
+      notify/                 ToastService
+      confirm/                ConfirmService
+      theme/                  ThemeService
+      format/                 money / percent / date formatting
+    shared/
+      ui/                     page header, stat tile, status pill, data table,
+                              loading/empty/error states, confirm dialog, toasts
+      chart/                  ChartEngine seam, lightweight-charts engine,
+                              <app-time-series-chart>
+      format.pipes.ts         money, pct, num, day, dateTime, ago pipes
+    shell/                    app frame, navigation, keyboard shortcuts
+    pages/<name>/             one folder per page: <name>.routes.ts + <name>.page.*
+```
+
+## Conventions for page agents
+
+Follow these exactly; the dashboard (`pages/dashboard/`) is the reference
+implementation.
+
+### Add or build a page
+
+1. Your page already has a folder, a lazy route file and a placeholder
+   component (`pages/<name>/`). Replace the placeholder's template; delete the
+   `<app-planned-page>` usage.
+2. Child routes (e.g. `strategies/:id`) go in your own `<name>.routes.ts`:
+   ```ts
+   export default [
+     { path: '', title: 'Strategies', loadComponent: () => import('./strategies.page').then((m) => m.StrategiesPage) },
+     { path: ':id', title: 'Strategy', loadComponent: () => import('./strategy-detail.page').then((m) => m.StrategyDetailPage) },
+   ] satisfies Routes;
+   ```
+   Route params bind to inputs (`withComponentInputBinding`): `readonly id = input.required<string>()`.
+   Do not edit `app.routes.ts` or `shell/nav-items.ts` unless you add a new
+   top-level page.
+3. Every page starts with `<app-page-header title=".." description="..">` and
+   puts page actions in `<button actions ...>`. The shell focuses the page's
+   `h1` after each navigation.
+4. Components: standalone, `ChangeDetectionStrategy.OnPush`, `inject()` (no
+   constructor injection), `input()` / `output()` / `model()`, signals and
+   `computed()`, `@if` / `@for` / `@switch`. Page-only components live in the
+   page folder; anything two pages use goes to `shared/ui/`.
+5. Name files `<thing>.page.ts` for routed pages, plain `<thing>.ts` for
+   components; styles in `.scss` next to them, using tokens only.
+
+### Load data
+
+- Call domain services in `src/app/api/`; never import from
+  `api/generated/sdk.gen` or `api/generated/client` in components (ESLint
+  enforces it). Types come from `api/models`.
+- Missing a call? Add a method to the matching domain service, one line per
+  route: `get(id: string) { return unwrap(getThing({ path: { thing_id: id } })); }`.
+- Reads use `resource()`, one per panel, so one failing route never blanks the
+  page:
+  ```ts
+  protected readonly strategies = resource({
+    params: () => ({ status: this.status() }),
+    loader: ({ params }) => this.strategiesApi.list(params),
+  });
+  ```
+- Every panel renders four states in this order:
+  ```html
+  @if (res.error(); as err) { <app-error-state [error]="err" (retry)="res.reload()" /> }
+  @else if (!res.hasValue()) { <app-loading-state label="Loading strategies" /> }
+  @else if (res.value().items.length === 0) { <app-empty-state title=".." message="what fills this and how" /> }
+  @else { ...data... }
+  ```
+  Never read `res.value()` without `hasValue()`; it throws in the error state.
+- Errors are `ApiError`s with a ready-to-show `message` (the API's
+  problem-details `detail`, field errors for 422s, a Settings hint for 401s).
+  Failed mutations are toasted by the error interceptor; don't toast them again.
+
+### Mutations (promote, retire, tick, ingest, backtest, ...)
+
+Every mutating action asks first, then calls the service, then says what
+happened with the same verb:
+
+```ts
+async promote(s: StrategySummary) {
+  const ok = await this.confirm.confirm({
+    title: `Promote ${s.id}?`,
+    message: 'It becomes active and trades from the next tick.',
+    confirmLabel: 'Promote',
+    typedConfirmation: s.id,          // required for promote and tick
+  });
+  if (!ok) return;
+  try {
+    await this.strategiesApi.promote(s.id);
+    this.toasts.success(`Promoted ${s.id}.`);
+    this.list.reload();
+  } catch {
+    // The error interceptor already showed the API's message.
+  }
+}
+```
+
+Use `tone: 'danger'` for retire/delete and anything touching a live broker.
+Disable the triggering button while the request runs.
+
+### Background jobs
+
+Backtests, lab runs, ingest and ticks return a `Job`. Follow it with
+`JobsService.track()`, which streams progress over SSE (short-lived stream
+token in the URL, never the bearer token) and falls back to polling:
+
+```ts
+private readonly jobs = inject(JobsService);
+private readonly destroyRef = inject(DestroyRef);
+protected readonly run = signal<JobHandle | null>(null);
+
+async start(request: BacktestRequest) {
+  const job = await this.lab.startBacktest(request);
+  const handle = this.jobs.track(job.id, this.destroyRef);
+  this.run.set(handle);
+  const last = await handle.finished;
+  if (last?.status === 'succeeded') this.result.set(await this.lab.backtestResult(job.id));
+}
+```
+
+Template: `handle.progress()` (0..1, show as `<progress>` with a label),
+`handle.message()`, `handle.status()` in an `<app-status-pill>`,
+`handle.error()`. Offer Cancel via `JobsApiService.cancel()` where the API
+supports it (queued jobs, lab runs).
+
+### Tables
+
+```ts
+protected readonly columns: TableColumn<OrderView>[] = [
+  { key: 'ticker', label: 'Ticker', mobile: 'title' },     // card heading on phones
+  { key: 'side', label: 'Side' },
+  { key: 'quantity', label: 'Qty', format: 'number' },
+  { key: 'status', label: 'Status' },                      // custom cell below
+  { key: 'created_at', label: 'Created', format: 'datetime', mobile: 'hide' },
+];
+```
+```html
+<app-data-table caption="Orders placed by ticks" [rows]="page.items" [columns]="columns"
+                [rowKey]="orderKey" [total]="page.total" [pageSize]="50"
+                (pageChange)="offset.set($event.offset)">
+  <ng-template appCell="status" [appCellOf]="page.items" let-o>
+    <app-status-pill [status]="o.status" />
+  </ng-template>
+</app-data-table>
+```
+
+- Formats: `text`, `number`, `money`, `signedMoney`, `percent`, `signedPercent`
+  (fractions), `date`, `datetime`; `tone: true` colours numbers by sign.
+- Client paging by default; pass `total` for server paging and refetch on
+  `pageChange` (put `offset` in the resource `params`).
+- Always give a `caption` (screen readers) and a `rowKey`.
+- Links in rows: put an `<a routerLink>` in a custom cell of the title column.
+
+### Charts
+
+Use `<app-time-series-chart>` only; never import `lightweight-charts`
+outside `shared/chart/lightweight-chart-engine.ts`.
+
+```html
+<app-time-series-chart ariaLabel="Backtest equity, with drawdown below"
+  [summary]="summary()" [series]="series()" [height]="300" />
+```
+
+Series: `{ id, label, kind: 'line' | 'area', color: 'brass' | 'primary' | 'gain' | 'loss' | 'muted', pane?: 0 | 1, format?: 'money' | 'percent' | 'number', points: { time, value }[] }`.
+`time` is `YYYY-MM-DD` for daily data or an ISO timestamp. Equity is a brass
+line in pane 0; drawdown is a `loss` area in pane 1. Always pass a one or two
+sentence `summary` (the canvas is invisible to screen readers). Tests use
+`provideFakeChart()` from `src/testing/fake-chart.ts`.
+
+### Formatting and copy
+
+- Numbers through `formatMoney/formatPercent/...` or the `money`, `pct`, `num`,
+  `day`, `dateTime`, `ago` pipes; percentages are fractions from the API.
+  Numeric cells get `.num` (tabular figures).
+- Sentence case, plain verbs, buttons name the action ("Run tick", not "OK").
+  Errors say what failed and what to do; empty states say what will fill the
+  space and how.
+
+### Tests
+
+- Each service and component ships a `*.spec.ts` next to it.
+- HTTP: `...provideApi(), provideHttpClientTesting()` and `HttpTestingController`.
+  SDK calls go out a few microtasks late, so wait with
+  `await nextRequest(controller, '/api/path', 'POST')` (from `src/testing/http.ts`)
+  instead of `expectOne`. `match()` consumes every hit; flush them all.
+- Components with resources: don't `await fixture.whenStable()` while requests
+  are pending (it waits for them); flush, then `await tick()` and
+  `fixture.detectChanges()` (see `dashboard.page.spec.ts`).
+
+## Design system
+
+Direction: a calm trading desk. Cool mist background, flat bordered panels (no
+shadow stack), one signature colour (brass) used only for the active nav marker,
+focus rings, the headline tile rule and the equity line. Gains and losses keep
+their conventional green and red, always paired with a sign or shape, never
+colour alone.
+
+Tokens (`styles/_tokens.scss`), always via `var(--…)`:
+
+| Group | Tokens |
+|---|---|
+| Colour | `--color-bg`, `--color-surface`, `-surface-2`, `-surface-3`, `--color-border`, `-border-strong`, `--color-ink`, `-ink-2` (secondary), `-ink-3` (muted, still 4.5:1), `--color-brass`, `--color-primary`, `--color-gain`, `--color-loss`, `--color-warn`, `--color-info`, each with a `-soft` background, `--color-focus`, `--color-scrim` |
+| Type | `--font-sans` (Public Sans), `--text-xs` 12 / `sm` 13 / `md` 14 (body) / `lg` 16 / `xl` 22 / `2xl` 30, `--weight-*`, `--leading-*` |
+| Space | `--space-1`…`--space-8` = 4, 8, 12, 16, 24, 32, 48, 64 px; `--gutter` (24px, 16px on phones) |
+| Radius | `--radius-sm` 4 (controls, pills), `--radius-md` 8 (panels), `--radius-lg` 12 (dialogs) |
+| Elevation | `--shadow-1` (panels, hairline), `--shadow-2` (dialogs, drawer, toasts) |
+| Motion | `--dur-fast` 120ms, `--dur` 200ms, `--ease`; both 0 under reduced motion |
+| Size | `--control-h` 32, `--touch-min` 44, `--row-h` 34, `--sidebar-w` 220 |
+
+Themes: light by default; dark when the OS prefers dark, or forced with the
+toggle (`html[data-theme]`, remembered in `localStorage`). Charts re-read the
+tokens when the theme changes.
+
+Global primitives (`styles.scss`): `.btn` (+ `.btn-primary`, `.btn-danger`,
+`.btn-ghost`, `.btn-icon`), `.field` / `.input` / `.check` / `.hint` / `.error`,
+`.form-grid` (+ `.form-grid-2`), `.panel` / `.panel-head` / `.panel-body`,
+`.page-grid` with `.span-4…12`, `.num`, `.gain`, `.loss`, `.muted`,
+`.visually-hidden`.
+
+Reusable components: `app-page-header`, `app-stat-tile` (`featured` for the one
+headline figure), `app-status-pill` (active/shadow/retired, pass/fail,
+job and order statuses, `tone` override), `app-data-table`, `app-loading-state`,
+`app-empty-state`, `app-error-state`, `app-time-series-chart`; the shell hosts
+`app-confirm-dialog` and `app-toast-outlet`.
+
+## Mobile and responsive rules
+
+The console must work on phones (360–430px) as well as tablets and desktops.
+
+| Breakpoint | Width | Layout |
+|---|---|---|
+| phone | < 768px | Top bar with menu button opening the nav drawer; one column; 16px gutter; tables become cards; dialogs are full-screen sheets |
+| tablet | 768–1099px | Sidebar nav; single-column page grid; two-column tiles and forms |
+| desktop | ≥ 1100px | Sidebar nav; 12-column `.page-grid` |
+
+Use the mixins (`@use 'breakpoints' as bp;` then `@include bp.phone { … }`,
+`bp.from-tablet`, `bp.from-desktop`, `bp.coarse`) and write phone styles first.
+
+- **No horizontal page scroll.** Wide content scrolls inside its own box
+  (the data table does this on tablets). Use `min-width: 0` on grid and flex
+  children that hold tables or charts.
+- **Tables:** under 768px each row is a card. Mark the key column
+  `mobile: 'title'`, keep ticker / quantity / value / P&L / status visible, and
+  mark secondary columns `mobile: 'hide'`. Sorting headers are hidden on phones,
+  so set a sensible `initialSort`.
+- **Charts** size to their container (plot height is 80% on phones); the legend
+  shows values at the crosshair (tap and hold), and vertical swipes scroll the
+  page, not the chart.
+- **Touch:** every control is at least 44×44px on phones and coarse pointers
+  (`.btn`, `.input`, `.check` do this already; custom controls use
+  `--touch-min`). No hover-only information: anything in a hover state must
+  also be visible or reachable by tap and keyboard.
+- **Dialogs** (confirm) become full-screen sheets with the actions at the
+  bottom; the nav drawer is a modal `<dialog>`.
+- **Safe areas:** the top bar, main padding, drawer, sheets and toasts add
+  `env(safe-area-inset-*)`; do the same for anything fixed to a screen edge.
+- **Tiles and headers wrap:** stat tiles size their figure to the tile width
+  (container queries); page header actions wrap under the title.
+- **Forms:** one column on phones (`.form-grid`); `.form-grid-2` from tablet up.
+
+Checked by hand in Chromium (Playwright) at 375×812, 390×844, 820×1000 and
+1440×900 in both themes, with `scrollWidth === clientWidth` (no sideways
+scroll) and every visible button and link at least 44px tall on phones:
+
+| Phone, light (375) | Phone, dark (390) | Nav drawer (390) |
+|---|---|---|
+| ![](img/ui-dashboard-phone-375.png) | ![](img/ui-dashboard-phone-390-dark.png) | ![](img/ui-nav-drawer-390.png) |
+
+Repeat the check for every new page. Playwright smoke tests (WP 5.4) will
+automate it.
+
+## Accessibility
+
+- Semantic landmarks: skip link, `nav aria-label="Main"`, `main`, sections
+  labelled by their `h2`. One `h1` per page (from the page header).
+- Keyboard: everything reachable by Tab with the brass focus ring;
+  `g` then a key jumps between pages (`g d` dashboard, `g s` strategies, `g w`
+  shadow, `g o` orders, `g u` studio, `g l` lab, `g a` data, `g g` go-live,
+  `g h` health, `g ,` settings); Escape closes dialogs and the drawer.
+- Status is text plus shape (`app-status-pill`), never colour alone; signed
+  numbers carry `+`/`-`.
+- Loading regions use `role="status"`, errors `role="alert"`, toasts an
+  `aria-live` region; the table announces sort changes.
+- Colour pairs meet WCAG AA (4.5:1 text, 3:1 focus and UI) in both themes.
+- Motion is limited to the drawer slide, toast rise and skeleton shimmer, all
+  off under `prefers-reduced-motion`.
+
+## Security
+
+- The bearer token lives in memory and `sessionStorage` only. It is attached
+  only to same-origin `/api/` requests: every non-GET request, stream-token
+  calls, and GETs when "send the token when reading data" is on. It is never
+  logged, never put in a URL, never written to `localStorage`.
+- Job event streams use the short-lived, job-scoped stream token in `?token=`.
+- The console never talks to a broker directly; everything goes through the API.

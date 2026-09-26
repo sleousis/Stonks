@@ -74,6 +74,15 @@ def authorize(
     _check_token(cfg, creds)
 
 
+def require_token(
+    request: Request,
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+) -> None:
+    """Always demands the bearer token, whatever the method or peer: for
+    routes whose whole point is to verify it (``GET /api/auth/check``)."""
+    _check_token(get_api_config(request), creds)
+
+
 def authorize_stream(
     request: Request,
     job_id: str,

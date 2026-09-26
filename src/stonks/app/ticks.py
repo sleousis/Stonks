@@ -4,10 +4,11 @@ dry-run), mirroring ``stonks tick``."""
 from __future__ import annotations
 
 import json
-from datetime import date
-from typing import Any
+import re
+from datetime import date, datetime
+from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
@@ -19,6 +20,12 @@ from stonks.production.settings_builder import build_tick_runtime
 from stonks.production.tick import BackdatedTickError, run_tick
 
 TICK_JOB = "tick"
+
+#: ``tick_runs.status`` (its CHECK constraint). A no-op tick is ``ok`` with
+#: ``summary.reason`` set.
+TickStatus = Literal["running", "ok", "partial", "error"]
+
+_TICK_ID_DATE = re.compile(r"^tick_(\d{4}-\d{2}-\d{2})_")
 
 
 class TickRequest(BaseModel):
@@ -32,9 +39,13 @@ class TickRequest(BaseModel):
 
 class TickRunView(BaseModel):
     id: str
-    started_at: str
-    finished_at: str | None
-    status: str
+    as_of: date | None = Field(
+        default=None,
+        description="The trading date the tick ran for (null for rows that predate it).",
+    )
+    started_at: datetime
+    finished_at: datetime | None
+    status: TickStatus
     summary: dict[str, Any] | None
 
 
@@ -59,14 +70,16 @@ class TickService:
         # ticks mutate the book; never run two at once
         runner.register(TICK_JOB, self._handle, lock="tick")
 
-    def list(self, *, status: str | None = None, limit: int, offset: int) -> Page[TickRunView]:
+    def list(
+        self, *, status: TickStatus | None = None, limit: int, offset: int
+    ) -> Page[TickRunView]:
         clause = " WHERE status = ?" if status else ""
         params: list[Any] = [status] if status else []
         with self._ctx.state() as state:
             total = int(state.sql(f"SELECT COUNT(*) FROM tick_runs{clause}", params)[0][0])
             rows = state.sql(
-                f"SELECT * FROM tick_runs{clause} ORDER BY started_at DESC, rowid DESC "
-                "LIMIT ? OFFSET ?",
+                f"SELECT t.*, {_AS_OF_SQL} FROM tick_runs t{clause} "
+                "ORDER BY started_at DESC, rowid DESC LIMIT ? OFFSET ?",
                 [*params, limit, offset],
             )
         return Page[TickRunView](
@@ -75,7 +88,7 @@ class TickService:
 
     def get(self, tick_id: str) -> TickRunDetail:
         with self._ctx.state() as state:
-            rows = state.sql("SELECT * FROM tick_runs WHERE id = ?", [tick_id])
+            rows = state.sql(f"SELECT t.*, {_AS_OF_SQL} FROM tick_runs t WHERE id = ?", [tick_id])
         if not rows:
             raise NotFoundError(f"no tick with id {tick_id!r}")
         orders = self._orders.orders(tick_id=tick_id, limit=10_000, offset=0).items
@@ -131,10 +144,33 @@ class TickService:
         return self.run(TickRequest.model_validate(params))
 
 
+#: The tick's trading date as recorded on its portfolio snapshot (ticks that
+#: traded); no-op and dry-run ticks fall back to the date in their id.
+_AS_OF_SQL = (
+    "(SELECT MAX(s.as_of) FROM portfolio_snapshots s WHERE s.tick_id = t.id) AS snapshot_as_of"
+)
+
+
+def _as_of(row: Any) -> date | None:
+    for raw in (row["snapshot_as_of"], _id_date(row["id"])):
+        if raw:
+            try:
+                return date.fromisoformat(raw)
+            except ValueError:
+                continue
+    return None
+
+
+def _id_date(tick_id: str) -> str | None:
+    m = _TICK_ID_DATE.match(tick_id)
+    return m.group(1) if m else None
+
+
 def _row_to_view(row: Any) -> TickRunView:
     summary = row["summary_json"]
     return TickRunView(
         id=row["id"],
+        as_of=_as_of(row),
         started_at=row["started_at"],
         finished_at=row["finished_at"],
         status=row["status"],

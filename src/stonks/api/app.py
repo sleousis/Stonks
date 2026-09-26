@@ -19,9 +19,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from stonks.api.deps import authorize, authorize_stream
+from stonks.api.deps import authorize, authorize_stream, require_token
 from stonks.api.errors import PROBLEM_MEDIA_TYPE, install_error_handlers
-from stonks.api.routers import API_ROUTERS, PUBLIC_ROUTERS, STREAM_ROUTERS
+from stonks.api.routers import API_ROUTERS, PUBLIC_ROUTERS, STREAM_ROUTERS, TOKEN_ROUTERS
 from stonks.api.routers.health import _version
 from stonks.api.routers.jobs import JobEvent
 from stonks.api.static import mount_spa
@@ -75,6 +75,8 @@ def create_app(
         app.include_router(router)
     for router in API_ROUTERS:
         app.include_router(router, dependencies=[Depends(authorize)])
+    for router in TOKEN_ROUTERS:
+        app.include_router(router, dependencies=[Depends(require_token)])
     for router in STREAM_ROUTERS:
         app.include_router(router, dependencies=[Depends(authorize_stream)])
     if cfg.ui_dist.is_dir():

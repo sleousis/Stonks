@@ -1,0 +1,180 @@
+@if (compareNode(); as c) {
+  <div class="compare" [class.root]="isRoot()">
+    <div class="compare-row">
+      <div class="operand">
+        <select
+          class="input"
+          aria-label="Left side"
+          [attr.data-path]="path() + '.left.id'"
+          [attr.aria-invalid]="issuesAt('left.id').length > 0"
+          (change)="setOperand('left', $any($event.target).value)"
+        >
+          @for (id of operandOptions(c.left); track id) {
+            <option [selected]="operandKey(c.left) === 'i:' + id" [value]="'i:' + id">
+              {{ id || '(no id)' }}
+            </option>
+          }
+          <option [selected]="c.left.type === 'constant'" value="const">Number…</option>
+        </select>
+        @if (c.left.type === 'constant') {
+          <input
+            class="input num-input"
+            type="number"
+            inputmode="decimal"
+            step="any"
+            aria-label="Left number"
+            [attr.data-path]="path() + '.left.value'"
+            [value]="constantValue(c.left)"
+            (change)="setConstant('left', $any($event.target).value)"
+          />
+        }
+      </div>
+
+      <select
+        class="input op"
+        aria-label="Comparison"
+        [attr.data-path]="path() + '.op'"
+        [attr.aria-invalid]="issuesAt('op').length > 0"
+        (change)="setOp($any($event.target).value)"
+      >
+        @for (op of ops; track op.value) {
+          <option [selected]="op.value === c.op" [value]="op.value">{{ op.label }}</option>
+        }
+      </select>
+
+      <div class="operand">
+        <select
+          class="input"
+          aria-label="Right side"
+          [attr.data-path]="path() + '.right.id'"
+          [attr.aria-invalid]="issuesAt('right.id').length > 0"
+          (change)="setOperand('right', $any($event.target).value)"
+        >
+          @for (id of operandOptions(c.right); track id) {
+            <option [selected]="operandKey(c.right) === 'i:' + id" [value]="'i:' + id">
+              {{ id || '(no id)' }}
+            </option>
+          }
+          <option [selected]="c.right.type === 'constant'" value="const">Number…</option>
+        </select>
+        @if (c.right.type === 'constant') {
+          <input
+            class="input num-input"
+            type="number"
+            inputmode="decimal"
+            step="any"
+            aria-label="Right number"
+            [attr.data-path]="path() + '.right.value'"
+            [value]="constantValue(c.right)"
+            (change)="setConstant('right', $any($event.target).value)"
+          />
+        }
+      </div>
+
+      <div class="node-actions">
+        @if (isRoot()) {
+          <button type="button" class="btn btn-ghost" (click)="addSibling()">Add condition</button>
+        }
+        <button type="button" class="btn btn-ghost" title="Negate" (click)="negate()">Not</button>
+        @if (removable()) {
+          <button
+            type="button"
+            class="btn btn-ghost btn-icon remove"
+            aria-label="Remove comparison"
+            title="Remove comparison"
+            (click)="remove.emit()"
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+        }
+      </div>
+    </div>
+    @for (msg of compareIssues(); track $index) {
+      <p class="issue" role="alert">{{ msg }}</p>
+    }
+  </div>
+} @else if (groupNode(); as g) {
+  <fieldset class="group" [class.root]="isRoot()" [attr.data-path]="path()">
+    <legend class="visually-hidden">{{ g.type === 'all' ? 'All of' : 'Any of' }} these</legend>
+    <div class="group-head">
+      <select
+        class="input group-type"
+        aria-label="Group match"
+        [value]="g.type"
+        (change)="setType($any($event.target).value)"
+      >
+        <option value="all">All of these are true</option>
+        <option value="any">Any of these is true</option>
+      </select>
+      <div class="node-actions">
+        <button type="button" class="btn btn-ghost" title="Negate" (click)="negate()">Not</button>
+        @if (removable()) {
+          <button
+            type="button"
+            class="btn btn-ghost btn-icon remove"
+            aria-label="Remove group"
+            title="Remove group"
+            (click)="remove.emit()"
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+        }
+      </div>
+    </div>
+    @for (msg of nodeIssues(); track $index) {
+      <p class="issue" role="alert">{{ msg }}</p>
+    }
+    <ol class="children">
+      @for (child of g.conditions; track $index; let i = $index) {
+        <li>
+          <app-condition-editor
+            [node]="child"
+            [path]="childPath(i)"
+            [indicatorIds]="indicatorIds()"
+            [issues]="issues()"
+            [depth]="depth() + 1"
+            (nodeChange)="childChanged(i, $event)"
+            (remove)="childRemoved(i)"
+          />
+        </li>
+      }
+    </ol>
+    <div class="group-foot">
+      <button type="button" class="btn" [disabled]="!canAddChild(g)" (click)="addComparison()">
+        + Comparison
+      </button>
+      <button
+        type="button"
+        class="btn"
+        [disabled]="!canAddChild(g) || !canNest()"
+        (click)="addGroup()"
+      >
+        + Group
+      </button>
+    </div>
+  </fieldset>
+} @else if (notNode(); as n) {
+  <div class="not" [class.root]="isRoot()">
+    <div class="not-head">
+      <span class="not-label">Not</span>
+      <span class="muted">true when the condition below is false</span>
+      <div class="node-actions">
+        <button type="button" class="btn btn-ghost" (click)="unwrapNot()">Remove not</button>
+      </div>
+    </div>
+    <app-condition-editor
+      [node]="n.condition"
+      [path]="path() + '.condition'"
+      [indicatorIds]="indicatorIds()"
+      [issues]="issues()"
+      [depth]="depth() + 1"
+      [removable]="removable()"
+      (nodeChange)="innerChanged($event)"
+      (remove)="remove.emit()"
+    />
+  </div>
+} @else {
+  <p class="issue" role="alert">
+    This condition is not something the builder understands. Fix it in the JSON view.
+  </p>
+}

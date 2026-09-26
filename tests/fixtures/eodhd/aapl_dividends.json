@@ -18,5 +18,15 @@
     "value": 0.24,
     "unadjustedValue": 0.24,
     "currency": "USD"
+  },
+  {
+    "date": "2020-08-07",
+    "declarationDate": "2020-07-30",
+    "recordDate": "2020-08-10",
+    "paymentDate": "2020-08-13",
+    "period": "Quarterly",
+    "value": 0.205,
+    "unadjustedValue": 0.82,
+    "currency": "USD"
   }
 ]

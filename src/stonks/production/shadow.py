@@ -30,9 +30,11 @@ from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
+from stonks.core.corporate_actions import CorporateActions
 from stonks.core.types import Fill, Order, Portfolio
 from stonks.execution.orders import make_client_id
 from stonks.logging import get_logger
+from stonks.production.corporate_actions import apply_corporate_actions
 from stonks.production.prices import drop_stale_buys, held_tickers
 from stonks.production.risk import apply_risk
 from stonks.registry.store import StrategyRegistry
@@ -77,10 +79,14 @@ def evaluate_shadow_strategies(
     settings: TickSettings,
     buyable: Collection[str] | None = None,
     volumes: Mapping[str, float] | None = None,
+    corporate_actions: CorporateActions | None = None,
 ) -> list[ShadowOutcome]:
     """``buyable`` restricts buys to tickers with a fresh close (default:
     any ticker in ``prices``). ``volumes`` (of each priced bar) feed the
-    cost model's impact term, as in the real tick."""
+    cost model's impact term, as in the real tick. ``corporate_actions``
+    due since a virtual portfolio's snapshot are applied to it before it
+    decides, exactly as for the real portfolio (and persisted with its
+    new snapshot, so once)."""
     fresh = set(prices) if buyable is None else set(buyable)
     picks_by_strategy: dict[str, list[tuple[float, str]]] = {}
     for r, sid, ticker in ranked:
@@ -102,6 +108,7 @@ def evaluate_shadow_strategies(
                 settings,
                 fresh,
                 volumes or {},
+                corporate_actions or CorporateActions(),
             )
         except Exception as exc:
             log.warning("shadow.failed", error=str(exc), error_type=type(exc).__name__)
@@ -126,6 +133,7 @@ def _evaluate_one(
     settings: TickSettings,
     fresh: Collection[str],
     volumes: Mapping[str, float],
+    corporate_actions: CorporateActions,
 ) -> ShadowOutcome:
     latest = state.sql(
         "SELECT as_of FROM shadow_portfolio_snapshots WHERE strategy_id = ? AND as_of >= ? "
@@ -138,7 +146,14 @@ def _evaluate_one(
         )
         return ShadowOutcome(strategy_id=strategy_id, status=status)
 
-    portfolio = _load_virtual_portfolio(state, strategy_id, settings.initial_cash)
+    portfolio, since = _load_virtual_portfolio(state, strategy_id, settings.initial_cash)
+    apply_corporate_actions(
+        portfolio,
+        corporate_actions,
+        since=since,
+        as_of=as_of,
+        withholding_rate=settings.dividend_withholding_rate,
+    )
     # Load even without picks: the Ranker silently skips a strategy that
     # fails to load, and that must surface as ``failed``, not ``evaluated``.
     strategy = registry.load(strategy_id)
@@ -224,15 +239,21 @@ def _evaluate_one(
     )
 
 
-def _load_virtual_portfolio(state: SqliteState, strategy_id: str, initial_cash: float) -> Portfolio:
+def _load_virtual_portfolio(
+    state: SqliteState, strategy_id: str, initial_cash: float
+) -> tuple[Portfolio, date | None]:
+    """The latest virtual portfolio and its snapshot's ``as_of`` (``None``
+    when freshly seeded)."""
     rows = state.sql(
-        "SELECT cash, positions_json FROM shadow_portfolio_snapshots WHERE strategy_id = ? "
-        "ORDER BY as_of DESC, id DESC LIMIT 1",
+        "SELECT as_of, cash, positions_json FROM shadow_portfolio_snapshots"
+        " WHERE strategy_id = ? ORDER BY as_of DESC, id DESC LIMIT 1",
         [strategy_id],
     )
     if not rows:
-        return Portfolio(cash=initial_cash, positions={})
-    return Portfolio(cash=float(rows[0]["cash"]), positions=json.loads(rows[0]["positions_json"]))
+        return Portfolio(cash=initial_cash, positions={}), None
+    row = rows[0]
+    portfolio = Portfolio(cash=float(row["cash"]), positions=json.loads(row["positions_json"]))
+    return portfolio, date.fromisoformat(row["as_of"]) if row["as_of"] else None
 
 
 def shadow_held_tickers(state: SqliteState) -> list[str]:

@@ -1,0 +1,90 @@
+import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+
+import type {
+  BacktestRequest,
+  CostModelPreset,
+  IntervalInfo,
+  StrategyClassInfo,
+} from '../../api/models';
+import { ParamForm } from '../../shared/ui/param-form/param-form';
+import { type ParamValues, defaultParamValues } from '../../shared/ui/param-form/param-spec';
+import {
+  type BacktestForm,
+  type CostChoice,
+  type WindowForm,
+  backtestErrors,
+  buildBacktestRequest,
+  defaultBacktestForm,
+} from './lab-requests';
+import { StrategyPicker } from './strategy-picker';
+import { WindowFields } from './window-fields';
+
+/** Backtest one strategy class with chosen parameters; emits the request body. */
+@Component({
+  selector: 'app-backtest-form',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [StrategyPicker, ParamForm, WindowFields],
+  templateUrl: './backtest-form.html',
+  styleUrl: './lab-form.scss',
+})
+export class BacktestFormView {
+  readonly classes = input.required<readonly StrategyClassInfo[]>();
+  readonly intervals = input<readonly IntervalInfo[]>([]);
+  readonly costModels = input<readonly CostModelPreset[]>([]);
+  readonly busy = input(false);
+  readonly submitted = output<BacktestRequest>();
+
+  protected readonly form = signal<BacktestForm>(defaultBacktestForm());
+  protected readonly tried = signal(false);
+
+  protected readonly selected = computed(
+    () => this.classes().find((c) => c.class_path === this.form().classPath) ?? null,
+  );
+  private readonly allErrors = computed(() => backtestErrors(this.form(), this.selected()));
+  /** Shown only after a submit attempt, so a fresh form isn't all red. */
+  protected readonly errors = computed(() => (this.tried() ? this.allErrors() : {}));
+  protected readonly errorCount = computed(() => Object.keys(this.errors()).length);
+  protected readonly costHint = computed(() => {
+    const c = this.form().cost;
+    if (c === 'configured') return 'The costs in the server settings ([backtest.costs]).';
+    if (c === 'flat') return 'A flat slippage on every fill and a fixed fee per trade.';
+    return this.costModels().find((m) => m.name === c)?.description ?? '';
+  });
+
+  protected selectClass(classPath: string): void {
+    const cls = this.classes().find((c) => c.class_path === classPath);
+    this.form.update((f) => ({
+      ...f,
+      classPath,
+      params: cls ? defaultParamValues(cls.parameters) : {},
+    }));
+  }
+
+  protected patch(p: Partial<BacktestForm> | Partial<WindowForm>): void {
+    this.form.update((f) => ({ ...f, ...p }));
+  }
+
+  protected setParams(params: ParamValues): void {
+    this.patch({ params });
+  }
+
+  protected setCost(cost: string): void {
+    this.patch({ cost: cost as CostChoice });
+  }
+
+  protected setNumber(key: keyof BacktestForm, raw: string): void {
+    const n = raw.trim() === '' ? null : Number(raw);
+    this.patch({ [key]: n === null || Number.isNaN(n) ? null : n });
+  }
+
+  protected resetParams(): void {
+    const cls = this.selected();
+    if (cls) this.patch({ params: defaultParamValues(cls.parameters) });
+  }
+
+  protected submit(): void {
+    this.tried.set(true);
+    if (Object.keys(this.allErrors()).length) return;
+    this.submitted.emit(buildBacktestRequest(this.form(), this.selected()));
+  }
+}

@@ -160,6 +160,21 @@ Integration 1: realistic costs by default (BL-13), `[lab.parallel]`, the CLI and
 | 9.5.5 Stress (BL-48) | Crisis windows, stress simulation, `VolForecaster` with GARCH (arch, wrapped). | `lab/survival/crisis.py`, `lab/survival/stress.py`, `features/vol_forecast.py` |
 | 9.5.6 Engineering guards (BL-49) | Point-in-time lake proxy, universe membership in engine and ranker, pyright, Hypothesis property tests, vectorised pre-screen. | `store/pit.py`, `lab/vectorized.py`, `pyrightconfig.json`, `backtest/engine.py`, `production/ranker.py`, `.github/workflows/ci.yml`, `tests/property/*` |
 
+## Phase 11: Console and platform follow-ups
+
+Found while building the console and merging Waves 2 and 3.
+
+| WP | Scope | Owns |
+|----|-------|------|
+| 11.1 Go-live API route | `GET /api/strategies/{id}/golive` returning each check (name, passed, value, limit) so the Go-live page shows real results. | `app/`, `api/`, `web/` go-live page |
+| 11.2 Order rejection reasons | Expose `orders.status_reason` on `OrderView` and type `exit_strategy_id` and `stale_buys_dropped` on the tick summary. | `app/`, `api/`, `web/` orders page |
+| 11.3 Richer backtest results | Trade count and a drawdown series in `BacktestResult` (builds on the trade ledger, 9.1). | `app/lab.py`, `backtest/report.py` |
+| 11.4 Register only if tests pass | A lab-run option that registers the strategy only when the survival suite passes, used by the Lab page, the Studio and MCP. | `app/lab.py`, `app/studio.py`, `web/`, `mcp/` |
+| 11.5 Token check in Settings | Settings calls `GET /api/auth/check` instead of the stream-token probe. | `web/` settings page |
+| 11.6 Smaller API and UI gaps | Lab run cost-model option, multi-kind job filter, strategy list search, health thresholds in the report, Lab and Go-live pages read `?strategy=`, 44px sort headers on phones. | `app/`, `api/`, `web/` |
+| 11.7 Production polish | `[production] dividend_withholding_rate` in config; PIP miner and trendline meta-label reuse their bar cache when training; the risk cash buffer accounts for the cost model. | `config.py`, `production/`, `strategies/` |
+| 11.8 Docs refresh | Bring `CLAUDE.md`, `docs/architecture.md`, `docs/operations.md`, the block docs and the wiki in line with everything that landed (was 8.4). | docs, wiki |
+
 ## Execution order
 
 1. Wave 1 in parallel: backtest (1.2, 1.3, 3.5), lab (1.4, 1.5, 3.3), production (2.3, 2.4, 2.5), broker (2.1, 2.2), data (3.4), strategies (3.1, 3.2, 4.2), and the service layer plus REST API for existing features (5.1).

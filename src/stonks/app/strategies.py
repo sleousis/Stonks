@@ -62,6 +62,15 @@ class StrategyDetail(StrategySummary):
     survival_reports: list[SurvivalReportView]
 
 
+class StrategyStatusCounts(BaseModel):
+    """How many registered strategies are in each lifecycle status."""
+
+    active: int
+    shadow: int
+    retired: int
+    total: int
+
+
 class StrategyService:
     def __init__(self, context: AppContext, catalog: CatalogService) -> None:
         self._ctx = context
@@ -74,6 +83,17 @@ class StrategyService:
             handles = registry.list_all(status=status)
         items = [self._summary(h) for h in handles[offset : offset + limit]]
         return Page[StrategySummary](items=items, total=len(handles), limit=limit, offset=offset)
+
+    def counts(self) -> StrategyStatusCounts:
+        with self._ctx.state() as state:
+            rows = state.sql("SELECT status, COUNT(*) AS n FROM strategies GROUP BY status")
+        by_status = dict.fromkeys(_STATUSES, 0) | {r["status"]: int(r["n"]) for r in rows}
+        return StrategyStatusCounts(
+            active=by_status["active"],
+            shadow=by_status["shadow"],
+            retired=by_status["retired"],
+            total=sum(by_status.values()),
+        )
 
     def get(self, strategy_id: str) -> StrategyDetail:
         with self._ctx.registry() as registry:

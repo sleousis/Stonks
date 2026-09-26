@@ -1,6 +1,6 @@
 .venv/
 .worktrees/
-data/
+/data/
 .env
 __pycache__/
 *.pyc

@@ -6,10 +6,15 @@ from __future__ import annotations
 import json
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from stonks.app.context import AppContext
+from stonks.app.cost_basis import FillLot, average_costs
 from stonks.app.pagination import Page
+
+#: Reporting currency when the held instruments don't agree on one (or the
+#: book is empty, or the lake has no currency for them).
+DEFAULT_CURRENCY = "USD"
 
 
 class PositionView(BaseModel):
@@ -19,6 +24,21 @@ class PositionView(BaseModel):
     price_date: date | None
     market_value: float | None
     weight: float | None
+    currency: str | None = Field(
+        default=None, description="The instrument's trading currency; null when unknown."
+    )
+    avg_cost: float | None = Field(
+        default=None,
+        description="Average cost per share from the fill history (weighted average, fees "
+        "included); null when the ledger has no fills for the position.",
+    )
+    cost_basis: float | None = Field(default=None, description="avg_cost * quantity.")
+    unrealized_pnl: float | None = Field(
+        default=None, description="(price - avg_cost) * quantity at the latest stored close."
+    )
+    unrealized_pnl_pct: float | None = Field(
+        default=None, description="unrealized_pnl / |cost_basis| (0.05 = +5%)."
+    )
 
 
 class PortfolioView(BaseModel):
@@ -32,6 +52,18 @@ class PortfolioView(BaseModel):
     total_value: float
     #: Total value recorded at snapshot time (valued at that tick's prices).
     snapshot_total_value: float | None
+    currency: str = Field(
+        default=DEFAULT_CURRENCY,
+        description="Reporting currency: the currency every held instrument shares, else "
+        f"{DEFAULT_CURRENCY!r} (also for an empty book or unknown currencies). Amounts are not "
+        "FX-converted.",
+    )
+    cost_basis: float = Field(
+        default=0.0, description="Sum of the positions' cost_basis (positions with a known cost)."
+    )
+    unrealized_pnl: float = Field(
+        default=0.0, description="Sum of the positions' unrealized_pnl (priced, known cost)."
+    )
 
 
 class SnapshotView(BaseModel):
@@ -64,6 +96,8 @@ class PortfolioService:
         row = rows[0]
         holdings: dict[str, float] = json.loads(row["positions_json"])
         latest = self._latest_closes(list(holdings))
+        currencies = self._currencies(list(holdings))
+        costs = self._average_costs()
         cash = float(row["cash"])
 
         positions: list[PositionView] = []
@@ -71,21 +105,18 @@ class PortfolioService:
             qty = float(holdings[ticker])
             price, price_date = latest.get(ticker, (None, None))
             positions.append(
-                PositionView(
-                    ticker=ticker,
-                    quantity=qty,
-                    price=price,
-                    price_date=price_date,
-                    market_value=None if price is None else qty * price,
-                    weight=None,
-                )
+                _position(ticker, qty, price, price_date, costs.get(ticker), currencies.get(ticker))
             )
         positions_value = sum(p.market_value or 0.0 for p in positions)
         total = cash + positions_value
         for p in positions:
             if p.market_value is not None and total:
                 p.weight = p.market_value / total
+        held_currencies = {currencies.get(t) for t in holdings}
         return PortfolioView(
+            currency=_single(held_currencies) or DEFAULT_CURRENCY,
+            cost_basis=sum(p.cost_basis or 0.0 for p in positions),
+            unrealized_pnl=sum(p.unrealized_pnl or 0.0 for p in positions),
             taken_at=datetime.fromisoformat(row["taken_at"]),
             tick_id=row["tick_id"],
             cash=cash,
@@ -115,6 +146,35 @@ class PortfolioService:
         ]
         return Page[SnapshotView](items=items, total=total, limit=limit, offset=offset)
 
+    def _average_costs(self) -> dict[str, float]:
+        with self._ctx.state() as state:
+            rows = state.sql(
+                """
+                SELECT f.ticker, f.quantity, f.price, f.fee, o.side
+                  FROM fills f JOIN orders o ON o.client_id = f.order_client_id
+                 ORDER BY f.filled_at, f.id
+                """
+            )
+        return average_costs(
+            FillLot(
+                ticker=r["ticker"],
+                quantity=float(r["quantity"]) * (1 if r["side"] == "buy" else -1),
+                price=float(r["price"]),
+                fee=float(r["fee"] or 0.0),
+            )
+            for r in rows
+        )
+
+    def _currencies(self, tickers: list[str]) -> dict[str, str]:
+        if not tickers:
+            return {}
+        with self._ctx.lake() as lake:
+            df = lake.sql(
+                "SELECT id, currency FROM instruments WHERE id = ANY(?) AND currency IS NOT NULL",
+                [tickers],
+            )
+        return {r.id: str(r.currency).upper() for r in df.itertuples(index=False) if r.currency}
+
     def _latest_closes(self, tickers: list[str]) -> dict[str, tuple[float, date]]:
         if not tickers:
             return {}
@@ -132,3 +192,36 @@ class PortfolioService:
             r.ticker: (float(r.close), r.date.date() if isinstance(r.date, datetime) else r.date)
             for r in df.itertuples(index=False)
         }
+
+
+def _position(
+    ticker: str,
+    qty: float,
+    price: float | None,
+    price_date: date | None,
+    avg_cost: float | None,
+    currency: str | None,
+) -> PositionView:
+    cost_basis = None if avg_cost is None else avg_cost * qty
+    pnl = pnl_pct = None
+    if avg_cost is not None and price is not None:
+        pnl = (price - avg_cost) * qty
+        pnl_pct = pnl / abs(cost_basis) if cost_basis else None
+    return PositionView(
+        ticker=ticker,
+        quantity=qty,
+        price=price,
+        price_date=price_date,
+        market_value=None if price is None else qty * price,
+        weight=None,
+        currency=currency,
+        avg_cost=avg_cost,
+        cost_basis=cost_basis,
+        unrealized_pnl=pnl,
+        unrealized_pnl_pct=pnl_pct,
+    )
+
+
+def _single(values: set[str | None]) -> str | None:
+    """The one value every element shares, else ``None``."""
+    return next(iter(values)) if len(values) == 1 else None

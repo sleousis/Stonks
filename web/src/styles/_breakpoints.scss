@@ -1,0 +1,36 @@
+// Breakpoints. Mobile-first: write the phone layout as the default and add
+// `@include bp.from-tablet { ... }` / `@include bp.from-desktop { ... }`.
+//
+//   phone    0 – 767px     one column, top bar + drawer nav, card tables
+//   tablet   768 – 1099px  sidebar nav, two-column grids
+//   desktop  1100px +      full grid
+//
+// Use in a component stylesheet: `@use 'breakpoints' as bp;`
+
+$tablet: 768px;
+$desktop: 1100px;
+
+@mixin phone {
+  @media (max-width: ($tablet - 0.02px)) {
+    @content;
+  }
+}
+
+@mixin from-tablet {
+  @media (min-width: $tablet) {
+    @content;
+  }
+}
+
+@mixin from-desktop {
+  @media (min-width: $desktop) {
+    @content;
+  }
+}
+
+// Touch devices (any width): grow hit targets to --touch-min.
+@mixin coarse {
+  @media (pointer: coarse) {
+    @content;
+  }
+}

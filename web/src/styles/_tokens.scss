@@ -1,0 +1,147 @@
+// Design tokens. Components read these CSS custom properties only; never
+// hard-code a colour, size or shadow in a component stylesheet.
+//
+// Themes: light is the default. Dark applies when the OS prefers dark and the
+// user has not forced light (`html[data-theme='light']`), or when the user
+// forces dark (`html[data-theme='dark']`). ThemeService sets the attribute.
+
+:root {
+  color-scheme: light;
+
+  // Type
+  --font-sans:
+    'Public Sans Variable', 'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --text-xs: 0.75rem; // 12px: captions, table meta
+  --text-sm: 0.8125rem; // 13px: table cells, secondary text
+  --text-md: 0.875rem; // 14px: body
+  --text-lg: 1rem; // 16px: panel titles
+  --text-xl: 1.375rem; // 22px: page titles, stat values
+  --text-2xl: 1.875rem; // 30px: headline figure
+  --leading-tight: 1.2;
+  --leading-body: 1.45;
+  --weight-regular: 400;
+  --weight-medium: 520;
+  --weight-semibold: 620;
+  --weight-bold: 720;
+
+  // Spacing (4px grid)
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --gutter: var(--space-5); // page side gutter; 16px on phones
+
+  // Radius: small things are tighter than big things.
+  --radius-sm: 4px; // pills, inputs, buttons
+  --radius-md: 8px; // panels, tables
+  --radius-lg: 12px; // dialogs, drawer
+
+  // Sizing
+  --control-h: 32px; // dense desktop control height
+  --touch-min: 44px; // minimum touch target on coarse pointers / phones
+  --row-h: 34px;
+  --sidebar-w: 220px;
+  --content-max: 1440px;
+
+  // Motion
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  // Palette: light
+  --color-bg: #eef1f4;
+  --color-surface: #ffffff;
+  --color-surface-2: #f5f7f9;
+  --color-surface-3: #e8ecf0;
+  --color-border: #d3dae1;
+  --color-border-strong: #aeb8c2;
+  --color-ink: #121a23;
+  --color-ink-2: #45515e;
+  --color-ink-3: #5f6b78;
+  --color-brass: #a26d12; // signature: active nav, focus, equity line
+  --color-brass-soft: #f6ead3;
+  --color-primary: #22477a; // primary buttons, links
+  --color-primary-ink: #ffffff;
+  --color-primary-soft: #e3ebf6;
+  --color-gain: #17784a;
+  --color-gain-soft: #e0f2e8;
+  --color-loss: #b8342a;
+  --color-loss-soft: #fbe5e2;
+  --color-warn: #8f5d00;
+  --color-warn-soft: #fbefd6;
+  --color-info: #2a5db0;
+  --color-info-soft: #e3ebf8;
+  --color-neutral-soft: #e8ecf0;
+  --color-focus: #a26d12;
+  --color-scrim: rgb(18 26 35 / 45%);
+
+  // Elevation: panels are flat (border only); overlays lift.
+  --shadow-1: 0 1px 0 rgb(18 26 35 / 4%);
+  --shadow-2: 0 12px 32px rgb(18 26 35 / 18%), 0 2px 6px rgb(18 26 35 / 10%);
+
+  // Chart palette (read by the chart engine at runtime)
+  --chart-line: var(--color-brass);
+  --chart-line-2: var(--color-primary);
+  --chart-grid: #e3e8ed;
+  --chart-text: var(--color-ink-3);
+}
+
+@mixin dark-palette {
+  color-scheme: dark;
+  --color-bg: #0e141b;
+  --color-surface: #151d26;
+  --color-surface-2: #1a2430;
+  --color-surface-3: #223040;
+  --color-border: #2a3743;
+  --color-border-strong: #41505e;
+  --color-ink: #e6ebf0;
+  --color-ink-2: #aab5c1;
+  --color-ink-3: #8f9ba8;
+  --color-brass: #dcaa4c;
+  --color-brass-soft: #3a2f1a;
+  --color-primary: #86ace3;
+  --color-primary-ink: #0e141b;
+  --color-primary-soft: #1d2d44;
+  --color-gain: #4cc488;
+  --color-gain-soft: #163226;
+  --color-loss: #f2786f;
+  --color-loss-soft: #3a1d1b;
+  --color-warn: #e5b35a;
+  --color-warn-soft: #362b17;
+  --color-info: #86ace3;
+  --color-info-soft: #1d2d44;
+  --color-neutral-soft: #223040;
+  --color-focus: #dcaa4c;
+  --color-scrim: rgb(0 0 0 / 60%);
+  --shadow-1: 0 1px 0 rgb(0 0 0 / 30%);
+  --shadow-2: 0 16px 40px rgb(0 0 0 / 55%), 0 2px 8px rgb(0 0 0 / 40%);
+  --chart-grid: #1f2a35;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    @include dark-palette;
+  }
+}
+
+:root[data-theme='dark'] {
+  @include dark-palette;
+}
+
+// Phones: 16px gutter.
+@media (max-width: 767.98px) {
+  :root {
+    --gutter: var(--space-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur: 0ms;
+  }
+}

@@ -78,7 +78,7 @@ def test_fetch_metadata_assembles_full_bundle_from_all_endpoints():
     assert bundle.ticker_snapshot is not None
     assert bundle.ticker_snapshot.beta == 1.25
     # Standalone-endpoint fields
-    assert len(bundle.dividends) == 2
+    assert len(bundle.dividends) == 3
     assert len(bundle.splits) == 5
     assert len(bundle.market_cap_history) == 4
     assert len(bundle.news) == 2

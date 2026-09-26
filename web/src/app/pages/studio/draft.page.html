@@ -1,0 +1,283 @@
+@if (draftRes.error(); as err) {
+  <app-page-header title="Draft" description="Strategy Studio draft." />
+  <app-error-state title="Could not load this draft" [error]="err" (retry)="draftRes.reload()" />
+  <p class="back"><a routerLink="/studio">Back to drafts</a></p>
+} @else if (!draft()) {
+  <app-page-header title="Draft" description="Loading the draft…" />
+  <app-loading-state label="Loading draft" [rows]="8" />
+} @else {
+  @let d = draft()!;
+  <app-page-header
+    [title]="d.name"
+    [description]="
+      (isCode() ? 'Python code strategy' : 'Rule strategy') + ', edited ' + (d.updated_at | ago)
+    "
+  >
+    <div class="meta">
+      <a routerLink="/studio" class="back-link">← Drafts</a>
+      @if (d.status === 'registered') {
+        <app-status-pill [status]="d.strategy_status ?? 'shadow'" />
+      } @else {
+        <app-status-pill status="draft" />
+      }
+      @if (dirty()) {
+        <app-status-pill status="pending" label="Unsaved changes" />
+      }
+    </div>
+    <button actions type="button" class="btn" (click)="startRename()">Rename</button>
+    <button
+      actions
+      type="button"
+      class="btn"
+      [class.btn-primary]="dirty()"
+      [disabled]="!dirty() || saving()"
+      [attr.aria-busy]="saving()"
+      (click)="save()"
+    >
+      {{ saving() ? 'Saving…' : dirty() ? 'Save' : 'Saved' }}
+    </button>
+  </app-page-header>
+
+  @if (renaming()) {
+    <form class="rename panel" (submit)="$event.preventDefault(); rename()">
+      <div class="field">
+        <label for="draft-rename">Draft name</label>
+        <input
+          id="draft-rename"
+          class="input"
+          maxlength="100"
+          required
+          [value]="nameDraft()"
+          (input)="nameDraft.set($any($event.target).value)"
+        />
+      </div>
+      <div class="rename-actions">
+        <button type="button" class="btn" (click)="renaming.set(false)">Cancel</button>
+        <button type="submit" class="btn btn-primary" [disabled]="!nameDraft().trim()">
+          Rename
+        </button>
+      </div>
+    </form>
+  }
+
+  <div class="tabs" role="tablist" aria-label="Draft steps">
+    @for (t of tabs; track t.id; let i = $index) {
+      <button
+        type="button"
+        role="tab"
+        class="tab"
+        [id]="'tab-' + t.id"
+        [attr.aria-selected]="tab() === t.id"
+        [attr.aria-controls]="'panel-' + t.id"
+        [tabIndex]="tab() === t.id ? 0 : -1"
+        (click)="tab.set(t.id)"
+        (keydown)="onTabKey($event)"
+      >
+        <span class="tab-step" aria-hidden="true">{{ i + 1 }}</span>
+        {{ t.label }}
+        @if (t.id === 'build' && !isCode() && issues().length) {
+          <span class="tab-badge" [attr.aria-label]="issues().length + ' problems'">
+            {{ issues().length }}
+          </span>
+        }
+      </button>
+    }
+  </div>
+
+  <!-- Build ------------------------------------------------------------------>
+  <div role="tabpanel" id="panel-build" aria-labelledby="tab-build" [hidden]="tab() !== 'build'">
+    @if (isCode()) {
+      @if (d.source_code === null) {
+        <div class="callout" role="note">
+          <p class="callout-title">Code strategies are turned off</p>
+          <p>
+            This draft holds Python code, which runs inside the server with its full privileges. The
+            operator must set <code>allow_code_strategies = true</code> under <code>[api]</code> in
+            the server config and restart <code>stonks serve</code> before it can be viewed, tested
+            or registered.
+          </p>
+        </div>
+      } @else {
+        <section class="panel" aria-labelledby="code-title">
+          <div class="panel-head">
+            <h2 id="code-title">Source</h2>
+            <button
+              type="button"
+              class="btn"
+              [disabled]="checking()"
+              [attr.aria-busy]="checking()"
+              (click)="check()"
+            >
+              {{ checking() ? 'Checking…' : 'Check on sample data' }}
+            </button>
+          </div>
+          <div class="panel-body code-body">
+            <p class="hint">
+              One <code>BaseStrategy</code> subclass per module. It runs in the server process with
+              no sandbox.
+            </p>
+            <label class="visually-hidden" for="code-source">Python source</label>
+            <textarea
+              id="code-source"
+              class="code"
+              spellcheck="false"
+              autocapitalize="off"
+              autocomplete="off"
+              wrap="off"
+              [value]="source()"
+              (input)="source.set($any($event.target).value)"
+            ></textarea>
+            <div class="field">
+              <label for="code-params">Constructor parameters (JSON)</label>
+              <textarea
+                id="code-params"
+                class="code params"
+                spellcheck="false"
+                autocapitalize="off"
+                [attr.aria-invalid]="!!paramsError()"
+                [value]="paramsText()"
+                (input)="paramsText.set($any($event.target).value)"
+              ></textarea>
+              @if (paramsError(); as e) {
+                <p class="error">{{ e }}</p>
+              }
+            </div>
+          </div>
+        </section>
+      }
+    } @else if (spec(); as s) {
+      <div class="build-grid">
+        <section class="panel builder" aria-labelledby="rules-title">
+          <div class="panel-head">
+            <h2 id="rules-title">Rules</h2>
+            <div class="head-actions">
+              @switch (validationState()) {
+                @case ('valid') {
+                  <app-status-pill status="pass" label="Valid" />
+                }
+                @case ('invalid') {
+                  <app-status-pill
+                    status="fail"
+                    [label]="issues().length === 1 ? '1 problem' : issues().length + ' problems'"
+                  />
+                }
+                @case ('checking') {
+                  <app-status-pill status="running" label="Checking…" />
+                }
+              }
+              <button
+                type="button"
+                class="btn"
+                [disabled]="checking()"
+                [attr.aria-busy]="checking()"
+                (click)="check()"
+              >
+                {{ checking() ? 'Checking…' : 'Check on sample data' }}
+              </button>
+            </div>
+          </div>
+          @if (validationHint(); as h) {
+            <p class="notice">{{ h }}</p>
+          }
+          @if (issues().length) {
+            <div class="issues" role="region" aria-label="Problems to fix">
+              <p class="issues-title">Fix these before testing:</p>
+              <ul>
+                @for (issue of issues(); track $index) {
+                  <li>
+                    <button type="button" class="issue-link" (click)="focusIssue(issue.path)">
+                      <span class="issue-path">{{ describePath(issue.path) }}</span>
+                      <span>{{ issue.message }}</span>
+                    </button>
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+          @if (smoke(); as sm) {
+            <div class="smoke" role="status">
+              <app-status-pill
+                [status]="sm.valid && sm.smoke?.ok ? 'pass' : 'fail'"
+                [label]="sm.valid && sm.smoke?.ok ? 'Runs' : 'Fails'"
+              />
+              @if (sm.smoke; as run) {
+                <span>
+                  {{ run.evaluations }} evaluations on
+                  {{ run.data === 'sample' ? 'synthetic sample data' : run.tickers.join(', ') }},
+                  {{ run.signals }} {{ run.signals === 1 ? 'signal' : 'signals' }}.
+                </span>
+                @for (e of run.errors; track $index) {
+                  <p class="error">{{ e }}</p>
+                }
+              } @else {
+                <span>Fix the problems above, then check again.</span>
+              }
+            </div>
+          }
+          <app-rule-builder
+            [spec]="s"
+            (specChange)="setSpec($event)"
+            [kinds]="kinds()"
+            [assetClasses]="assetClasses()"
+            [issues]="issueMap()"
+          />
+        </section>
+
+        <aside class="panel json" aria-labelledby="json-title">
+          <div class="panel-head">
+            <h2 id="json-title">JSON</h2>
+            <span class="muted">What the API stores</span>
+          </div>
+          <div class="panel-body">
+            <app-spec-json [spec]="s" (apply)="applyJson($event)" />
+          </div>
+        </aside>
+      </div>
+    }
+  </div>
+
+  <!-- Test ------------------------------------------------------------------->
+  <div role="tabpanel" id="panel-test" aria-labelledby="tab-test" [hidden]="tab() !== 'test'">
+    @if (isCode() && d.source_code === null) {
+      <div class="callout" role="note">
+        <p class="callout-title">Code strategies are turned off</p>
+        <p>The operator must enable <code>[api] allow_code_strategies</code> to test this draft.</p>
+      </div>
+    } @else {
+      @if (!isCode() && issues().length) {
+        <p class="notice">
+          The rules have {{ issues().length === 1 ? 'a problem' : issues().length + ' problems' }};
+          the API will refuse to test them until they are fixed on the Build tab.
+        </p>
+      }
+      <app-draft-test
+        [draft]="d"
+        [specInterval]="spec()?.interval ?? '1d'"
+        [specTickers]="spec()?.universe?.tickers ?? null"
+        [assetClass]="spec()?.universe?.asset_classes?.[0] ?? 'equity'"
+        [ensureSaved]="ensureSaved"
+      />
+    }
+  </div>
+
+  <!-- Ship ------------------------------------------------------------------->
+  <div role="tabpanel" id="panel-ship" aria-labelledby="tab-ship" [hidden]="tab() !== 'ship'">
+    <app-draft-ship [draft]="d" [ensureSaved]="ensureSaved" (changed)="onDraftChanged($event)" />
+  </div>
+
+  @if (dirty()) {
+    <div class="save-bar" role="region" aria-label="Unsaved changes">
+      <span>Unsaved changes</span>
+      <button type="button" class="btn" (click)="discard()">Discard</button>
+      <button
+        type="button"
+        class="btn btn-primary"
+        [disabled]="saving()"
+        [attr.aria-busy]="saving()"
+        (click)="save()"
+      >
+        {{ saving() ? 'Saving…' : 'Save' }}
+      </button>
+    </div>
+  }
+}

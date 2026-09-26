@@ -1,0 +1,236 @@
+<app-page-header
+  title="Lab"
+  description="Backtest a strategy class, or tune it and run the survival suite before it goes to shadow."
+/>
+
+<div class="lab-layout">
+  <!-- Forms ---------------------------------------------------------------->
+  <section class="panel form-panel" aria-labelledby="lab-form-title">
+    <div class="panel-head">
+      <h2 id="lab-form-title">New run</h2>
+      <div class="tabs" role="tablist" aria-label="Run type">
+        <button
+          id="lab-tab-backtest"
+          type="button"
+          role="tab"
+          aria-controls="lab-panel-backtest"
+          [attr.aria-selected]="mode() === 'backtest'"
+          [attr.tabindex]="mode() === 'backtest' ? 0 : -1"
+          (click)="selectMode('backtest')"
+          (keydown)="onTabKey($event)"
+        >
+          Backtest
+        </button>
+        <button
+          id="lab-tab-lab_run"
+          type="button"
+          role="tab"
+          aria-controls="lab-panel-lab_run"
+          [attr.aria-selected]="mode() === 'lab_run'"
+          [attr.tabindex]="mode() === 'lab_run' ? 0 : -1"
+          (click)="selectMode('lab_run')"
+          (keydown)="onTabKey($event)"
+        >
+          Lab run
+        </button>
+      </div>
+    </div>
+
+    @if (classes.error(); as err) {
+      <app-error-state
+        title="Could not load the strategy catalog"
+        [error]="err"
+        (retry)="classes.reload()"
+      />
+    } @else if (!classes.hasValue()) {
+      <app-loading-state label="Loading strategy classes" [rows]="6" />
+    } @else if (classes.value().length === 0) {
+      <app-empty-state
+        title="No strategy classes"
+        message="The catalog lists classes from the configured strategy sources. Add a strategy module and restart the API."
+      />
+    } @else {
+      <div
+        id="lab-panel-backtest"
+        class="panel-body"
+        role="tabpanel"
+        aria-labelledby="lab-tab-backtest"
+        [hidden]="mode() !== 'backtest'"
+      >
+        <p class="lead">
+          Replays one parameter set over the window and reports return, risk and the equity curve.
+        </p>
+        <app-backtest-form
+          [classes]="classes.value()"
+          [intervals]="intervalList()"
+          [costModels]="costModelList()"
+          [busy]="starting()"
+          (submitted)="startBacktest($event)"
+        />
+      </div>
+      <div
+        id="lab-panel-lab_run"
+        class="panel-body"
+        role="tabpanel"
+        aria-labelledby="lab-tab-lab_run"
+        [hidden]="mode() !== 'lab_run'"
+      >
+        <p class="lead">
+          Searches the parameter space on the training share, then checks the winner with the
+          survival tests you pick.
+        </p>
+        <app-lab-run-form
+          [classes]="classes.value()"
+          [intervals]="intervalList()"
+          [busy]="starting()"
+          (submitted)="startLabRun($event)"
+        />
+      </div>
+    }
+  </section>
+
+  <div class="side">
+    <!-- Current job and result ------------------------------------------------>
+    <section #resultPanel class="panel result-panel" aria-labelledby="lab-result-title">
+      <div class="panel-head">
+        <h2 id="lab-result-title">Result</h2>
+        @if (followed(); as f) {
+          <span class="muted head-meta">{{ kindLabel(f.kind) }} · {{ f.label }}</span>
+        }
+      </div>
+      <div class="panel-body">
+        @if (followed(); as f) {
+          @let status = f.handle.status();
+          @if (!f.handle.done() || status !== 'succeeded') {
+            <div class="job" aria-live="polite">
+              <div class="job-head">
+                <app-status-pill [status]="status ?? 'queued'" />
+                <span class="job-id num muted">Job {{ f.jobId }}</span>
+              </div>
+              @if (!f.handle.done()) {
+                <div class="progress">
+                  <p class="progress-label" id="lab-progress-label">
+                    <span>{{ f.handle.message() ?? 'Waiting for a worker' }}</span>
+                    <span class="num">{{ f.handle.progress() | pct: { digits: 0 } }}</span>
+                  </p>
+                  <progress
+                    max="1"
+                    aria-labelledby="lab-progress-label"
+                    [value]="f.handle.progress()"
+                  ></progress>
+                </div>
+              }
+              @if (f.handle.error(); as e) {
+                <p class="job-error" role="alert">{{ e }}</p>
+              } @else if (status === 'cancelled') {
+                <p class="muted">The job was cancelled before it finished.</p>
+              }
+              @if (followedCancellable()) {
+                <button
+                  type="button"
+                  class="btn btn-danger"
+                  [disabled]="cancelling() === f.jobId"
+                  [attr.aria-busy]="cancelling() === f.jobId"
+                  (click)="cancel(f.jobId, f.kind, f.label)"
+                >
+                  {{
+                    cancelling() === f.jobId
+                      ? 'Cancelling…'
+                      : 'Cancel ' + kindLabel(f.kind).toLowerCase()
+                  }}
+                </button>
+              }
+            </div>
+          }
+
+          @if (resultError(); as err) {
+            <app-error-state
+              title="Could not load the result"
+              [error]="err"
+              (retry)="reloadResult()"
+            />
+          } @else if (resultLoading()) {
+            <app-loading-state label="Loading the result" [rows]="6" />
+          } @else if (shown(); as s) {
+            @switch (s.kind) {
+              @case ('backtest') {
+                <app-backtest-result [result]="s.result" />
+              }
+              @case ('lab_run') {
+                <app-lab-run-result [result]="s.result" />
+              }
+            }
+          }
+        } @else {
+          <app-empty-state
+            title="No run open"
+            message="Start a backtest or lab run, or open a finished job from the history below. Progress streams here while it runs."
+          />
+        }
+      </div>
+    </section>
+
+    <!-- History -------------------------------------------------------------->
+    <section class="panel" aria-labelledby="lab-history-title">
+      <div class="panel-head">
+        <h2 id="lab-history-title">Recent lab jobs</h2>
+        <button
+          type="button"
+          class="btn"
+          [disabled]="history.isLoading()"
+          [attr.aria-busy]="history.isLoading()"
+          (click)="history.reload()"
+        >
+          {{ history.isLoading() ? 'Refreshing…' : 'Refresh' }}
+        </button>
+      </div>
+      @if (history.error(); as err) {
+        <app-error-state title="Could not load lab jobs" [error]="err" (retry)="history.reload()" />
+      } @else if (!history.hasValue()) {
+        <app-loading-state label="Loading lab jobs" [rows]="5" />
+      } @else if (history.value().length === 0) {
+        <app-empty-state
+          title="No lab jobs yet"
+          message="Backtests and lab runs you start here (or over MCP) are listed with their status."
+        />
+      } @else {
+        <app-data-table
+          caption="Recent backtests and lab runs, newest first"
+          [rows]="history.value()"
+          [columns]="historyColumns"
+          [rowKey]="jobKey"
+          [initialSort]="{ key: 'created_at', dir: 'desc' }"
+          [pageSize]="10"
+        >
+          <ng-template appCell="status" [appCellOf]="history.value()" let-job>
+            <app-status-pill [status]="job.status" />
+          </ng-template>
+          <ng-template appCell="actions" [appCellOf]="history.value()" let-job>
+            <span class="row-actions">
+              <button
+                type="button"
+                class="btn"
+                [attr.aria-label]="'Open ' + kindLabel(job.kind).toLowerCase() + ' of ' + job.id"
+                [attr.aria-pressed]="followed()?.jobId === job.id"
+                (click)="open(job)"
+              >
+                {{ isTerminal(job.status) ? 'Open' : 'Follow' }}
+              </button>
+              @if (canCancel(job.kind, job.status)) {
+                <button
+                  type="button"
+                  class="btn btn-ghost cancel"
+                  [disabled]="cancelling() === job.id"
+                  [attr.aria-label]="'Cancel job ' + job.id"
+                  (click)="cancel(job.id, job.kind, jobStrategy(job))"
+                >
+                  Cancel
+                </button>
+              }
+            </span>
+          </ng-template>
+        </app-data-table>
+      }
+    </section>
+  </div>
+</div>

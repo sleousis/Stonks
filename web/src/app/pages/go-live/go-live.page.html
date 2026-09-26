@@ -1,0 +1,172 @@
+<app-page-header
+  title="Go-live"
+  description="Checks a strategy's paper period must pass before a human promotes it to trade."
+/>
+
+<div class="page-grid">
+  <!-- Strategy picker ------------------------------------------------------>
+  <section class="panel span-12" aria-labelledby="pick-title">
+    <div class="panel-head">
+      <h2 id="pick-title">Strategy</h2>
+    </div>
+    @if (strategies.error(); as err) {
+      <app-error-state
+        title="Could not load strategies"
+        [error]="err"
+        (retry)="strategies.reload()"
+      />
+    } @else if (!strategies.hasValue()) {
+      <app-loading-state label="Loading strategies" [rows]="2" />
+    } @else if (strategies.value().items.length === 0) {
+      <app-empty-state
+        title="No strategies registered"
+        message="Register one from a lab run first; shadow strategies are the usual go-live candidates."
+      >
+        <a routerLink="/lab" class="btn">Open Lab</a>
+      </app-empty-state>
+    } @else {
+      <div class="picker panel-body">
+        <div class="field">
+          <label for="golive-strategy">Strategy to check</label>
+          <select
+            id="golive-strategy"
+            class="input"
+            aria-describedby="golive-strategy-hint"
+            [value]="selectedId()"
+            (change)="onSelect($event)"
+          >
+            <option value="" [selected]="!selectedId()">Choose a strategy…</option>
+            @for (g of groups(); track g.label) {
+              <optgroup [label]="g.label">
+                @for (s of g.items; track s.id) {
+                  <option [value]="s.id" [selected]="s.id === selectedId()">{{ s.id }}</option>
+                }
+              </optgroup>
+            }
+          </select>
+          <span id="golive-strategy-hint" class="hint"
+            >Shadow strategies are listed first: they are the ones building a paper record.</span
+          >
+        </div>
+
+        @if (selected(); as s) {
+          <div class="selected">
+            <app-status-pill [status]="s.status" />
+            <span class="selected-class">{{ s.class_path }}</span>
+            <a class="selected-link" [routerLink]="['/strategies', s.id]">Open strategy</a>
+          </div>
+        }
+      </div>
+    }
+  </section>
+
+  <!-- Go-live check -------------------------------------------------------->
+  <section class="panel span-8" aria-labelledby="check-title">
+    <div class="panel-head">
+      <h2 id="check-title">Go-live check</h2>
+      @if (selectedId()) {
+        <app-status-pill status="unavailable" label="Not available yet" tone="neutral" />
+      }
+    </div>
+
+    @if (!selectedId()) {
+      <app-empty-state
+        title="Pick a strategy"
+        message="The check compares its paper period with the limits in the [golive] settings."
+      />
+    } @else if (unknownId(); as missing) {
+      <app-empty-state
+        title="Strategy not found"
+        [message]="
+          'No registered strategy has the id “' + missing + '”. Pick one from the list above.'
+        "
+      />
+    } @else {
+      <div class="unavailable panel-body">
+        <p>
+          The API does not serve the go-live check yet, so the console cannot show its results. Run
+          it on the command line; it exits with code 1 when any check fails and never changes the
+          strategy's status.
+        </p>
+        <app-cli-command [command]="command()" />
+      </div>
+
+      <h3 class="checks-title" id="checks-title">What the check evaluates</h3>
+      <ul class="checks" aria-labelledby="checks-title">
+        @for (c of checks; track c.name) {
+          <li>
+            <p class="check-name">{{ c.name }}</p>
+            <p class="check-detail">{{ c.measures }}</p>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+
+  <!-- Broker and risk ------------------------------------------------------>
+  <div class="aside span-4">
+    <section class="panel" aria-labelledby="broker-title">
+      <div class="panel-head">
+        <h2 id="broker-title">Broker</h2>
+      </div>
+      @if (broker.error(); as err) {
+        <app-error-state
+          title="Could not load the broker"
+          [error]="err"
+          (retry)="broker.reload()"
+        />
+      } @else if (!broker.hasValue()) {
+        <app-loading-state label="Loading broker" [rows]="3" />
+      } @else {
+        @let b = broker.value();
+        <dl class="facts">
+          <div>
+            <dt>Kind</dt>
+            <dd>{{ b.kind === 'alpaca' ? 'Alpaca' : 'Simulated' }}</dd>
+          </div>
+          <div>
+            <dt>Account</dt>
+            <dd>
+              <app-status-pill
+                [status]="b.paper ? 'shadow' : 'warn'"
+                [label]="b.paper ? 'Paper' : 'Live'"
+              />
+            </dd>
+          </div>
+          <div>
+            <dt>Live trading</dt>
+            <dd>{{ b.allow_live ? 'Allowed' : 'Not allowed' }}</dd>
+          </div>
+          <div>
+            <dt>Credentials</dt>
+            <dd>{{ b.credentials_configured ? 'Configured' : 'Not configured' }}</dd>
+          </div>
+        </dl>
+      }
+    </section>
+
+    <section class="panel" aria-labelledby="risk-title">
+      <div class="panel-head">
+        <h2 id="risk-title">Risk policy</h2>
+      </div>
+      @if (risk.error(); as err) {
+        <app-error-state
+          title="Could not load the risk policy"
+          [error]="err"
+          (retry)="risk.reload()"
+        />
+      } @else if (!risk.hasValue()) {
+        <app-loading-state label="Loading risk policy" [rows]="4" />
+      } @else {
+        <dl class="facts">
+          @for (row of riskRows(); track row.label) {
+            <div>
+              <dt>{{ row.label }}</dt>
+              <dd class="num">{{ row.value }}</dd>
+            </div>
+          }
+        </dl>
+      }
+    </section>
+  </div>
+</div>

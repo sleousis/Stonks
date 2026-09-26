@@ -1,0 +1,196 @@
+@use 'breakpoints' as bp;
+
+:host {
+  display: block;
+  min-height: 100dvh;
+}
+
+.skip-link {
+  position: absolute;
+  z-index: 100;
+  top: var(--space-2);
+  left: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  color: var(--color-primary-ink);
+  transform: translateY(-200%);
+
+  &:focus {
+    transform: none;
+  }
+}
+
+.brand {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.02em;
+  color: var(--color-ink);
+  text-decoration: none;
+}
+
+// Phone top bar ------------------------------------------------------------
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: env(safe-area-inset-top) calc(var(--space-2) + env(safe-area-inset-right)) 0
+    calc(var(--space-2) + env(safe-area-inset-left));
+  min-height: calc(52px + env(safe-area-inset-top));
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-min);
+    padding: 0 var(--space-2);
+  }
+
+  @include bp.from-tablet {
+    display: none;
+  }
+}
+
+// Frame ---------------------------------------------------------------------
+.frame {
+  display: block;
+
+  @include bp.from-tablet {
+    display: grid;
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+    min-height: 100dvh;
+    // Keep the sidebar colour running the full page height.
+    background: linear-gradient(
+      to right,
+      var(--color-surface) calc(var(--sidebar-w) - 1px),
+      var(--color-border) 0 var(--sidebar-w),
+      transparent 0
+    );
+  }
+}
+
+.sidebar {
+  display: none;
+
+  @include bp.from-tablet {
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    height: 100dvh;
+    overflow-y: auto;
+    padding: var(--space-4) var(--space-3);
+    padding-left: calc(var(--space-3) + env(safe-area-inset-left));
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+
+    > .brand {
+      padding: var(--space-1) var(--space-3) var(--space-2);
+    }
+  }
+}
+
+main {
+  min-width: 0;
+  max-width: var(--content-max);
+  padding: var(--space-5) var(--gutter) calc(var(--space-7) + env(safe-area-inset-bottom));
+  padding-left: calc(var(--gutter) + env(safe-area-inset-left));
+  padding-right: calc(var(--gutter) + env(safe-area-inset-right));
+  outline: none;
+
+  @include bp.phone {
+    padding-top: var(--space-4);
+  }
+}
+
+.sidebar-foot {
+  display: grid;
+  gap: var(--space-1);
+  margin-top: auto;
+  padding-top: var(--space-4);
+}
+
+.token-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--color-ink-2);
+  text-decoration: none;
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1.5px solid var(--color-ink-3);
+  }
+
+  &.set .dot {
+    border-color: var(--color-gain);
+    background: var(--color-gain);
+  }
+
+  &:hover {
+    background: var(--color-surface-2);
+  }
+}
+
+.theme-toggle {
+  justify-content: flex-start;
+  padding: 0 var(--space-3);
+  color: var(--color-ink-2);
+}
+
+// Phone drawer ------------------------------------------------------------
+.drawer {
+  width: min(320px, 86vw);
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  box-shadow: var(--shadow-2);
+
+  &::backdrop {
+    background: var(--color-scrim);
+  }
+
+  &[open] {
+    animation: slide-in var(--dur) var(--ease);
+  }
+}
+
+.drawer-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: calc(var(--space-3) + env(safe-area-inset-top)) var(--space-3)
+    calc(var(--space-4) + env(safe-area-inset-bottom))
+    calc(var(--space-3) + env(safe-area-inset-left));
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: var(--space-3);
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(-100%);
+  }
+}

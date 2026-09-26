@@ -16,6 +16,13 @@ account, commits each order row as ``pending`` *before* submitting it (so a
 crash never leaves a submitted order unrecorded) and books statuses and fills
 only through ``execution.reconcile``, from the broker's state looked up by
 client id.
+
+Corporate actions: before anything decides, splits and cash dividends whose
+ex-date falls after the stored snapshot's ``as_of`` and on or before this
+tick's ``as_of`` are applied to the stored portfolio (simulated broker; an
+external broker's account already reflects them) and splits to orders
+still working from earlier ticks, exactly once per event; see
+``production.corporate_actions``. Valuing and sizing stay on raw quotes.
 """
 
 from __future__ import annotations
@@ -41,6 +48,13 @@ from stonks.execution.reconcile import (
 )
 from stonks.logging import get_logger
 from stonks.notify import Notification, Notifier
+from stonks.production.corporate_actions import (
+    adjust_working_orders,
+    apply_corporate_actions,
+    load_corporate_actions,
+    record_as_dict,
+    working_orders,
+)
 from stonks.production.prices import drop_stale_buys, held_tickers, load_prices
 from stonks.production.ranker import Ranker
 from stonks.production.risk import RiskPolicy, apply_risk
@@ -88,9 +102,15 @@ class TickSettings:
     # "alpaca" trades through ``run_tick``'s ``broker_factory``; the broker
     # account is then the source of truth for the portfolio.
     broker_kind: BrokerKind = "simulated"
+    #: Fraction of each cash dividend withheld as tax (0 = credit in full).
+    dividend_withholding_rate: float = 0.0
 
     def __post_init__(self) -> None:
         self.simulated_costs  # noqa: B018 - validates costs vs legacy (not both)
+        if not 0.0 <= self.dividend_withholding_rate <= 1.0:
+            raise ValueError(
+                f"dividend_withholding_rate must be in [0, 1], got {self.dividend_withholding_rate}"
+            )
 
     @property
     def simulated_costs(self) -> SimulatedCosts:
@@ -236,6 +256,35 @@ def _run_tick_body(
         portfolio = broker.fetch_portfolio()
     else:
         portfolio = _load_or_seed_portfolio(state, initial_cash=settings.initial_cash)
+
+    # 2b. corporate actions since the stored snapshot, before anything sizes.
+    #     Derived from the snapshot's as_of, so persisted exactly when this
+    #     tick's snapshot is (see production.corporate_actions).
+    since = _latest_snapshot_as_of(state)
+    working = working_orders(state)
+    actions = load_corporate_actions(lake, [*held_tickers(portfolio.positions), *working.values()])
+    applied = []
+    if not external:
+        applied = apply_corporate_actions(
+            portfolio,
+            actions,
+            since=since,
+            as_of=as_of,
+            withholding_rate=settings.dividend_withholding_rate,
+        )
+        for record in applied:
+            log.info("tick.corporate_action", **record_as_dict(record))
+    corporate_summary: dict[str, Any] = (
+        {"corporate_actions": [record_as_dict(r) for r in applied]} if applied else {}
+    )
+
+    def persist_corporate_actions() -> int:
+        """Split-adjust the working orders; call inside the transaction
+        that writes this tick's snapshot."""
+        return adjust_working_orders(
+            state, list(working), actions, since=since, as_of=as_of, now=_iso_now()
+        )
+
     held = held_tickers(portfolio.positions)
     book = load_prices(
         lake,
@@ -247,7 +296,12 @@ def _run_tick_body(
     prices = book.prices
 
     def noop(reason: str) -> TickResult:
-        summary: dict[str, Any] = {"reason": reason}
+        if not dry_run:
+            # nothing trades, but applied events must still be persisted
+            with state.transaction():
+                if persist_corporate_actions() or applied:
+                    _snapshot_portfolio(state, tick_id, portfolio, prices, as_of)
+        summary: dict[str, Any] = {"reason": reason, **corporate_summary}
         summary.update(_shadow_phase(state, lake, registry, settings, as_of, dry_run, tick_id, log))
         _close_tick(state, tick_id, status="noop", summary=summary)
         log.info("tick.noop", reason=reason)
@@ -433,6 +487,7 @@ def _run_tick_body(
                 ).prices
             )
         with state.transaction():
+            persist_corporate_actions()
             _snapshot_portfolio(state, tick_id, after, marks, as_of)
     elif not dry_run:
         with state.transaction():
@@ -440,6 +495,7 @@ def _run_tick_body(
                 _record_order(state, order, status=order_status)
                 if fill is not None:
                     _record_fill(state, fill)
+            persist_corporate_actions()
             _snapshot_portfolio(state, tick_id, portfolio, prices, as_of)
 
     rejected = [order.ticker for order, st, _ in outcomes if st == "rejected"]
@@ -476,6 +532,7 @@ def _run_tick_body(
             "orders_placed": placed,
             "fills": fills_count,
             "risk_adjustments": [a.as_dict() for a in risk_adjustments],
+            **corporate_summary,
             **shadow_summary,
         },
     )
@@ -539,6 +596,7 @@ def _shadow_phase(
         ).rank(as_of=as_of)
         # Shadow portfolios may hold tickers outside the universe too.
         shadow_held = shadow_held_tickers(state)
+        shadow_actions = load_corporate_actions(lake, shadow_held)
         book = load_prices(
             lake,
             settings.universe,
@@ -557,6 +615,7 @@ def _shadow_phase(
             settings,
             buyable=book.fresh,
             volumes=book.volumes,
+            corporate_actions=shadow_actions,
         )
     except Exception as exc:
         log.error("tick.shadow_failed", error=str(exc), error_type=type(exc).__name__)
@@ -601,6 +660,12 @@ def _refuse_backdated(state: SqliteState, as_of: date, log: Any) -> None:
             f"refusing to trade as_of {as_of.isoformat()}: the portfolio already has a "
             f"snapshot for {latest}; run with --dry-run to inspect a past date"
         )
+
+
+def _latest_snapshot_as_of(state: SqliteState) -> date | None:
+    """``as_of`` of the latest dated portfolio snapshot (``None``: none)."""
+    latest = state.sql("SELECT MAX(as_of) AS as_of FROM portfolio_snapshots")[0]["as_of"]
+    return date.fromisoformat(latest) if latest else None
 
 
 def _load_or_seed_portfolio(state: SqliteState, initial_cash: float) -> Portfolio:
