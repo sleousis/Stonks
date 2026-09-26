@@ -16,7 +16,10 @@ _log = get_logger("stonks.lab.tuning.random")
 
 
 class RandomTuner:
-    def __init__(self, seed: int | None = None) -> None:
+    def __init__(self, seed: int = 0) -> None:
+        # Fixed default seed so a lab run is reproducible unless the caller
+        # explicitly asks for a different draw.
+        self._seed = seed
         self._rng = random.Random(seed)
 
     def tune(
@@ -32,11 +35,13 @@ class RandomTuner:
         best_score = -math.inf if objective.direction == "maximize" else math.inf
 
         tunable = tunable_only(param_space)
+        _log.info("random.tune.start", seed=self._seed, budget=budget)
         for _ in range(budget):
             partial = {s.name: self._sample(s) for s in tunable}
             params = merge_with_defaults(partial, param_space)
-            strategy = strategy_cls(params)
             try:
+                strategy = strategy_cls(params)
+                strategy.fit(dataset)  # same call LabRunner makes after tuning
                 score = objective.score(strategy, dataset)
             except Exception as exc:
                 _log.warning("random.trial.failed", params=params, error=str(exc))

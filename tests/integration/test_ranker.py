@@ -219,3 +219,20 @@ def test_ranker_includes_tickers_when_strategy_lists_their_class(tmp_path, lake_
         assert tickers_attempted >= {"UP.US"}
     finally:
         state.close()
+
+
+def test_ranker_skips_strategy_whose_load_fails(seeded_registry, capsys):
+    registry, lake, (bh_id, mom_id) = seeded_registry
+    # Corrupt one strategy's class path, as if the module was renamed.
+    registry._state.execute(
+        "UPDATE strategies SET class_path = 'stonks.no_such_module:Gone' WHERE id = ?",
+        [mom_id],
+    )
+
+    ranker = Ranker(registry=registry, lake=lake, universe=["UP.US"], threshold=0.0)
+    picks = ranker.rank(as_of=date(2026, 3, 20))
+
+    assert {sid for _, sid, _ in picks} == {bh_id}
+    out = capsys.readouterr().out
+    assert "ranker.strategy_load.failed" in out
+    assert mom_id in out

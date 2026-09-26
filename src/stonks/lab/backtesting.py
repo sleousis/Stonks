@@ -1,0 +1,56 @@
+"""The one place the lab turns a ``LabDataset`` + window into a backtest.
+
+Objectives and survival tests all go through here so the dataset's
+interval, universe and starting cash can't drift between call sites
+(previously several of them silently backtested intraday datasets at 1d).
+"""
+
+from __future__ import annotations
+
+from datetime import date, datetime
+from typing import Any
+
+from stonks.backtest.engine import BacktestConfig, Backtester
+from stonks.backtest.report import BacktestReport
+from stonks.backtest.simulated_broker import SimulatedBroker
+from stonks.core.interval import Interval
+from stonks.core.protocols import Strategy
+from stonks.core.types import Portfolio
+
+#: Starting cash for every lab backtest. Scores are scale-free
+#: (Sharpe, returns), so the value only needs to be consistent.
+LAB_INITIAL_CASH = 10_000.0
+
+
+def backtest_config(
+    dataset: Any, window: tuple[date | datetime, date | datetime]
+) -> BacktestConfig:
+    """Build a ``BacktestConfig`` for ``dataset`` over ``window``."""
+    start, end = window
+    return BacktestConfig(
+        start=start,
+        end=end,
+        universe=list(dataset.universe),
+        interval=getattr(dataset, "interval", Interval.DAY_1),
+        threshold=0.0,
+    )
+
+
+def run_backtest(
+    strategy: Strategy,
+    dataset: Any,
+    window: tuple[date | datetime, date | datetime],
+    lake: Any = None,
+) -> BacktestReport:
+    """Backtest ``strategy`` on ``dataset`` over ``window``.
+
+    ``lake`` overrides ``dataset.lake`` — survival tests that build a
+    modified copy of the bars (permuted, perturbed) pass it here.
+    """
+    broker = SimulatedBroker(portfolio=Portfolio(cash=LAB_INITIAL_CASH, positions={}))
+    return Backtester(
+        strategies=[strategy],
+        broker=broker,
+        lake=lake if lake is not None else dataset.lake,
+        config=backtest_config(dataset, window),
+    ).run()

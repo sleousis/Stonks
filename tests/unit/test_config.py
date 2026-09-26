@@ -52,3 +52,16 @@ def test_missing_api_key_is_none_not_error(tmp_path, monkeypatch):
     cfg.write_text('[sources.eodhd]\nbase_url = "https://example.test/api"\n')
     settings = load_settings(config_path=cfg)
     assert settings.sources.eodhd.api_key is None
+
+
+def test_production_max_price_staleness_days_reads_from_toml(tmp_path, monkeypatch):
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text(
+        """
+[production]
+max_price_staleness_days = 3
+""".strip()
+    )
+
+    settings = load_settings(config_path=cfg)
+    assert settings.production.max_price_staleness_days == 3

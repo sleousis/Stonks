@@ -49,11 +49,23 @@ class StrategyRegistry:
         strategy_id: str | None = None,
     ) -> str:
         sid = strategy_id or self._generate_id(strategy)
+        # Check before writing any artifact file: a failed INSERT after the
+        # write would otherwise overwrite the existing strategy's artifact.
+        if self._state.sql("SELECT 1 FROM strategies WHERE id = ?", [sid]):
+            raise ValueError(f"strategy id {sid!r} is already registered")
         class_path = f"{type(strategy).__module__}:{type(strategy).__name__}"
         params = dict(getattr(strategy, "params", {}))
         now = _iso_now()
         artifact_path = self._artifacts_dir / sid
 
+        # The strategy persists itself first (params + any fitted state such
+        # as ``fitted_state.json``); the bundle then adds reports and merges
+        # its registry metadata into ``meta.json`` without dropping the
+        # strategy's own keys.
+        save = getattr(strategy, "save", None)
+        if callable(save):
+            artifact_path.mkdir(parents=True, exist_ok=True)
+            save(artifact_path)
         ArtifactBundle(
             path=artifact_path,
             class_path=class_path,
@@ -92,10 +104,12 @@ class StrategyRegistry:
     def set_status(self, strategy_id: str, status: str) -> None:
         if status not in _ALLOWED_STATUSES:
             raise ValueError(f"status must be one of {_ALLOWED_STATUSES}, got {status!r}")
-        self._state.execute(
+        cur = self._state.execute(
             "UPDATE strategies SET status = ?, updated_at = ? WHERE id = ?",
             [status, _iso_now(), strategy_id],
         )
+        if cur.rowcount == 0:
+            raise KeyError(strategy_id)
 
     # ---- reads -------------------------------------------------------------
 
@@ -104,6 +118,11 @@ class StrategyRegistry:
         module_name, cls_name = handle.class_path.split(":", 1)
         module = importlib.import_module(module_name)
         cls = getattr(module, cls_name)
+        # Prefer the class's own loader so fitted state saved at register
+        # time is restored; bare constructors only get the params.
+        loader = getattr(cls, "load", None)
+        if callable(loader):
+            return loader(handle.artifact_path)
         return cls(handle.params)
 
     def list_active(self) -> list[StrategyHandle]:

@@ -97,6 +97,16 @@ def test_registry_promote_and_retire(runner, cli_env):
     assert b in r4.output
 
 
+@pytest.mark.parametrize("command", ["promote", "retire"])
+def test_registry_status_change_unknown_id_errors(runner, cli_env, command):
+    runner.invoke(app, ["db", "init"])
+    _seed_registry(cli_env)
+    result = runner.invoke(app, ["registry", command, "no_such_strategy"])
+    assert result.exit_code == 1, result.output
+    assert "no strategy with id" in result.output
+    assert "→" not in result.output
+
+
 def test_registry_list_asset_class_filter(runner, cli_env):
     """``--asset-class`` filters to strategies whose
     ``applicable_asset_classes`` contains the requested class. The

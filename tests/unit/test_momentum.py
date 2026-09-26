@@ -105,3 +105,37 @@ def test_decide_sells_positions_that_fell_off_ranking(lake_with_trend):
     )
     sells = [o for o in orders if o.side == "sell"]
     assert any(o.ticker == "DOWN.US" for o in sells)
+
+
+class _CountingLake:
+    """Delegates to a real lake and counts ``get_prices`` calls."""
+
+    def __init__(self, lake):
+        self._lake = lake
+        self.calls = 0
+
+    def get_prices(self, *args, **kwargs):
+        self.calls += 1
+        return self._lake.get_prices(*args, **kwargs)
+
+
+def test_lookback_return_loads_each_ticker_once_per_instance(lake_with_trend):
+    lake = _CountingLake(lake_with_trend)
+    s = Momentum({"lookback_days": 20})
+    days = pd.bdate_range("2026-02-02", "2026-03-13")
+    for d in days:
+        for ticker in ("UP.US", "DOWN.US", "FLAT.US"):
+            s.estimate_return(ticker, d.date(), lake)
+    assert lake.calls == 3
+
+
+def test_cached_lookback_matches_fresh_instance_and_ignores_future_rows(lake_with_trend):
+    cached = Momentum({"lookback_days": 20})
+    # Warm the cache on the latest date first so later calls must slice back.
+    cached.estimate_return("UP.US", date(2026, 3, 13), lake_with_trend)
+    for d in pd.bdate_range("2026-01-02", "2026-03-13"):
+        fresh = Momentum({"lookback_days": 20})
+        for ticker in ("UP.US", "DOWN.US", "FLAT.US"):
+            assert cached.extract_features(ticker, d.date(), lake_with_trend) == (
+                fresh.extract_features(ticker, d.date(), lake_with_trend)
+            )

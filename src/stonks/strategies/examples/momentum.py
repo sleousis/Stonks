@@ -8,17 +8,35 @@ that no longer appear in the current ranking.
 
 from __future__ import annotations
 
+import weakref
 from collections.abc import Mapping, Sequence
-from datetime import date, timedelta
+from datetime import date
 from typing import Any
+
+import numpy as np
 
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
 from stonks.strategies.base import BaseStrategy
 
+# Bounds wide enough to cover every daily bar a lake can hold.
+_HISTORY_START = date(1900, 1, 1)
+_HISTORY_END = date(2200, 1, 1)
+
 
 class Momentum(BaseStrategy):
     id = "momentum"
+
+    def __init__(self, params: Any) -> None:
+        super().__init__(params)
+        # Per-lake, per-ticker daily closes, loaded once per instance. A
+        # backtest calls estimate_return for every ticker on every bar, and
+        # re-querying the same history each time dominated tuning runtime.
+        # Keyed weakly by lake so MCPT/perturbation lakes don't share entries.
+        # Instances are short-lived (one per trial or per tick), so rows
+        # added to the lake after the first read are not expected.
+        self._closes: weakref.WeakKeyDictionary[Any, dict[str, tuple[np.ndarray, np.ndarray]]]
+        self._closes = weakref.WeakKeyDictionary()
 
     @classmethod
     def parameter_spec(cls):
@@ -114,13 +132,28 @@ class Momentum(BaseStrategy):
         if lake is None:
             return None
         lookback = int(self.params["lookback_days"])
-        # pull a generous calendar window to ensure enough trading days
-        start = as_of - timedelta(days=int(lookback * 1.75) + 14)
-        df = lake.get_prices(ticker, start=start, end=as_of)
-        if df is None or len(df) < lookback + 1:
+        dates, closes = self._daily_closes(ticker, lake)
+        # Only bars on or before ``as_of`` are visible: no look-ahead.
+        end = int(np.searchsorted(dates, np.datetime64(as_of, "D"), side="right"))
+        if end < lookback + 1:
             return None
-        closes = df["close"].astype(float).tolist()
-        past, now = closes[-(lookback + 1)], closes[-1]
+        past, now = closes[end - lookback - 1], closes[end - 1]
         if past <= 0:
             return None
-        return now / past - 1.0
+        return float(now / past - 1.0)
+
+    def _daily_closes(self, ticker: str, lake: Any) -> tuple[np.ndarray, np.ndarray]:
+        try:
+            per_lake = self._closes.setdefault(lake, {})
+        except TypeError:  # lake can't be weakly referenced; skip the cache
+            per_lake = {}
+        if ticker not in per_lake:
+            df = lake.get_prices(ticker, start=_HISTORY_START, end=_HISTORY_END)
+            if df is None or df.empty:
+                per_lake[ticker] = (np.array([], dtype="datetime64[D]"), np.array([]))
+            else:
+                per_lake[ticker] = (
+                    np.asarray(df["date"], dtype="datetime64[D]"),
+                    df["close"].to_numpy(dtype=float),
+                )
+        return per_lake[ticker]

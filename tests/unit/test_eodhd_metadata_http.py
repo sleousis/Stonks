@@ -94,8 +94,9 @@ def test_fetch_metadata_assembles_full_bundle_from_all_endpoints():
     assert len(bundle.esg_activities) == 5
     assert len(bundle.cross_listings) == 2
     assert len(bundle.officers) == 3
-    # full history from fundamentals.outstandingShares
-    assert len(bundle.shares_outstanding) == 5
+    # full history from fundamentals.outstandingShares, one row per date
+    # (2025-09-30 appears in both annual and quarterly in the fixture)
+    assert len(bundle.shares_outstanding) == 4
     assert len(bundle.employee_count) == 1
 
 

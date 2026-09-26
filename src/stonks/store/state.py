@@ -60,14 +60,26 @@ class SqliteState:
             version = int(path.stem.split("_", 1)[0])
             if version in applied:
                 continue
-            # SQLite's executescript() manages its own transaction and auto-commits,
-            # so we can't wrap it in our own BEGIN/COMMIT. Migrations must therefore
-            # be idempotent at the statement level (use IF NOT EXISTS).
-            self.con.executescript(path.read_text())
-            self.con.execute(
-                "INSERT INTO schema_migrations VALUES (?, ?)",
-                [version, datetime.now(UTC).isoformat(timespec="seconds")],
+            # executescript() COMMITs any pending transaction before running,
+            # so an outer BEGIN from Python wouldn't cover it. Instead the
+            # BEGIN/COMMIT and the schema_migrations row go *inside* the
+            # script: the migration and its version row land atomically, and
+            # a failure part-way leaves neither (we ROLLBACK the open tx).
+            # version is an int and the timestamp is ISO-8601, so inlining
+            # them is safe.
+            applied_at = datetime.now(UTC).isoformat(timespec="seconds")
+            script = (
+                "BEGIN;\n"
+                f"{path.read_text()}\n;\n"
+                f"INSERT INTO schema_migrations VALUES ({version}, '{applied_at}');\n"
+                "COMMIT;\n"
             )
+            try:
+                self.con.executescript(script)
+            except Exception:
+                if self.con.in_transaction:
+                    self.con.execute("ROLLBACK")
+                raise
 
     def applied_migrations(self) -> list[int]:
         if not self._has_table("schema_migrations"):
@@ -108,6 +120,18 @@ class SqliteState:
 
     @contextmanager
     def transaction(self) -> Iterator[None]:
+        """Group writes into one atomic unit: COMMIT on clean exit,
+        ROLLBACK + re-raise on exception.
+
+        Re-entrant: when a transaction is already open (an outer
+        ``transaction()`` or an explicit BEGIN), the inner call joins it
+        and the outermost owner keeps the COMMIT/ROLLBACK responsibility —
+        an exception escaping the inner block rolls back everything once
+        it reaches the outer one. Mirrors ``DuckDBLake.transaction()``.
+        """
+        if self.con.in_transaction:
+            yield
+            return
         self.con.execute("BEGIN")
         try:
             yield

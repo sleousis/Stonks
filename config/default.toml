@@ -17,6 +17,8 @@ threshold = 0.0
 initial_cash = 10000.0
 slippage_bps = 0.0
 fee_per_trade = 0.0
+# Ignore closes older than this many calendar days before the tick's as_of.
+max_price_staleness_days = 7
 
 [sources.eodhd]
 base_url = "https://eodhd.com/api"

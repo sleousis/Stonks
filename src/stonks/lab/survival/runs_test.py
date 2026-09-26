@@ -16,12 +16,9 @@ import math
 
 import numpy as np
 
-from stonks.backtest.engine import BacktestConfig, Backtester
-from stonks.backtest.simulated_broker import SimulatedBroker
-from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy, SurvivalReport
-from stonks.core.types import Portfolio
 from stonks.features.library import count_runs, runs_test_z_score
+from stonks.lab.backtesting import run_backtest
 from stonks.lab.dataset import LabDataset
 
 
@@ -34,23 +31,7 @@ class RunsTestSurvivalTest:
         self._max_abs_z = max_abs_z_score
 
     def run(self, strategy: Strategy, context: LabDataset) -> SurvivalReport:
-        interval = getattr(context, "interval", Interval.DAY_1)
-        universe = list(context.universe)
-        start, end = context.full_window
-
-        broker = SimulatedBroker(portfolio=Portfolio(cash=10_000.0, positions={}))
-        report = Backtester(
-            strategies=[strategy],
-            broker=broker,
-            lake=context.lake,
-            config=BacktestConfig(
-                start=start,
-                end=end,
-                universe=universe,
-                interval=interval,
-                threshold=0.0,
-            ),
-        ).run()
+        report = run_backtest(strategy, context, context.full_window)
 
         curve = np.asarray(report.equity_curve, dtype=float)
         if curve.size < 3:

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import itertools
+import math
+import random
 from collections.abc import Iterable
 from typing import Any
 
@@ -14,14 +16,41 @@ def expand_grid(space: ParamSpace, grid_size: int) -> Iterable[dict[str, Any]]:
     ``space``, discretizing numeric bounds into ``grid_size`` evenly-spaced
     points. Non-tunable params are filled from their defaults by the caller.
     """
-    tunable = tunable_only(space)
-    axes: list[tuple[str, list[Any]]] = []
-    for spec in tunable:
-        values = _axis_values(spec, grid_size)
-        axes.append((spec.name, values))
+    axes = grid_axes(space, grid_size)
     names = [n for n, _ in axes]
     for combo in itertools.product(*(v for _, v in axes)):
         yield dict(zip(names, combo, strict=False))
+
+
+def grid_axes(space: ParamSpace, grid_size: int) -> list[tuple[str, list[Any]]]:
+    """``(name, values)`` per tunable parameter, in spec order."""
+    return [(spec.name, _axis_values(spec, grid_size)) for spec in tunable_only(space)]
+
+
+def grid_size_of(axes: list[tuple[str, list[Any]]]) -> int:
+    return math.prod(len(values) for _, values in axes)
+
+
+def sample_grid(
+    axes: list[tuple[str, list[Any]]], k: int, rng: random.Random
+) -> list[dict[str, Any]]:
+    """Draw ``k`` distinct grid combinations uniformly at random.
+
+    Combinations are addressed by their flat index into the cartesian
+    product and decoded mixed-radix, so the full grid is never
+    materialized. Returned in grid order for readable trial logs.
+    """
+    total = grid_size_of(axes)
+    indices = sorted(rng.sample(range(total), min(k, total)))
+    return [_decode(i, axes) for i in indices]
+
+
+def _decode(index: int, axes: list[tuple[str, list[Any]]]) -> dict[str, Any]:
+    combo: dict[str, Any] = {}
+    for name, values in reversed(axes):
+        index, pos = divmod(index, len(values))
+        combo[name] = values[pos]
+    return {name: combo[name] for name, _ in axes}
 
 
 def _axis_values(spec: ParameterSpec, grid_size: int) -> list[Any]:

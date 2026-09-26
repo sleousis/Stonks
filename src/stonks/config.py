@@ -51,6 +51,7 @@ class ProductionConfig(BaseModel):
     initial_cash: float = 10_000.0
     slippage_bps: float = 0.0
     fee_per_trade: float = 0.0
+    max_price_staleness_days: int = 7
 
 
 class Settings(BaseSettings):
