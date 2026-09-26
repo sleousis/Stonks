@@ -30,6 +30,15 @@ def test_serve_defaults_to_loopback(captured):
     assert kwargs["reload"] is False
 
 
+def test_serve_trusts_forwarded_headers_only_from_configured_proxies(captured, monkeypatch):
+    monkeypatch.setenv("STONKS_API_TRUSTED_PROXIES", "172.31.250.0/24")
+    result = CliRunner().invoke(app, ["serve"])
+    assert result.exit_code == 0, result.output
+    _, kwargs = captured[0]
+    assert kwargs["proxy_headers"] is True
+    assert kwargs["forwarded_allow_ips"] == "172.31.250.0/24"
+
+
 def test_serve_options_override(captured):
     result = CliRunner().invoke(app, ["serve", "--host", "::1", "--port", "9123", "--reload"])
     assert result.exit_code == 0, result.output

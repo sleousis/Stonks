@@ -1068,17 +1068,17 @@ def serve(
 ) -> None:
     """Run the REST API (and the built UI from web/dist, if present) with uvicorn.
 
-    Binds 127.0.0.1 by default. Mutating routes need STONKS_API_TOKEN.
+    Binds 127.0.0.1 by default. Every call needs a sign-in or an API token
+    (docs/security.md). X-Forwarded-For is trusted only from
+    [api].trusted_proxies (env STONKS_API_TRUSTED_PROXIES).
     """
     import uvicorn
 
     settings = _settings()
     bind_host = host or settings.api.host
     bind_port = port or settings.api.port
-    if settings.api.token is None:
-        console.print(
-            "[yellow]STONKS_API_TOKEN is not set: mutating routes will return 503[/yellow]"
-        )
+    if settings.api.open_reads_on_loopback:
+        console.print("[yellow]dev profile: reads from 127.0.0.1 need no credential[/yellow]")
     if bind_host not in ("127.0.0.1", "localhost", "::1"):
         log.warning("serve.non_loopback_bind", host=bind_host)
     uvicorn.run(
@@ -1088,6 +1088,10 @@ def serve(
         port=bind_port,
         reload=reload,
         log_config=None,
+        # The client IP feeds the login limit and the audit log: believe a
+        # forwarded header only from the reverse proxy.
+        proxy_headers=True,
+        forwarded_allow_ips=",".join(settings.api.trusted_proxies),
     )
 
 

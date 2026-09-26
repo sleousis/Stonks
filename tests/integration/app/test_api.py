@@ -347,6 +347,29 @@ def test_cors_allows_only_configured_origin(client):
     assert "access-control-allow-origin" not in bad.headers
 
 
+def test_cors_lets_the_dev_origin_send_cookies_and_the_csrf_header(client):
+    ok = client.options(
+        "/api/halts/kill",
+        headers={
+            "Origin": "http://localhost:4200",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "x-csrf-token, content-type",
+        },
+    )
+    assert ok.status_code == 200
+    assert ok.headers.get("access-control-allow-credentials") == "true"
+    assert "x-csrf-token" in ok.headers.get("access-control-allow-headers", "").lower()
+    bad = client.options(
+        "/api/halts/kill",
+        headers={
+            "Origin": "http://evil.example",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "x-csrf-token",
+        },
+    )
+    assert "access-control-allow-origin" not in bad.headers
+
+
 # ---- OpenAPI ----------------------------------------------------------------
 
 
