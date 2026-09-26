@@ -37,6 +37,14 @@
       [intervals]="intervals()"
       (patch)="patch($event)"
     />
+    <div class="grid-2">
+      <app-benchmark-field
+        idPrefix="bt"
+        [value]="form()"
+        [error]="errors()['benchmarkTicker'] ?? null"
+        (patch)="patch($event)"
+      />
+    </div>
   </fieldset>
 
   <fieldset class="group">

@@ -42,10 +42,12 @@ const RISK: RiskPolicy = {
   max_weight_per_asset_class: { crypto: 0.1 },
 };
 
+let reportStatus = 'active';
+
 function report(id: string, passed: boolean): GoLiveReport {
   return {
     strategy_id: id,
-    status: 'shadow',
+    status: id === 'momentum-v3' ? reportStatus : 'shadow',
     source: 'shadow',
     passed,
     policy: { min_days: 20, max_drawdown: 0.15, max_drift: 0.1, min_trades: 5 },
@@ -80,7 +82,39 @@ function report(id: string, passed: boolean): GoLiveReport {
       },
       { name: 'min_trades', passed: true, value: 7, limit: 5, detail: '7 filled trade(s)' },
       { name: 'survival', passed: true, value: 4, limit: 4, detail: '4/4 passed' },
+      {
+        name: 'within_mc_band',
+        passed: true,
+        value: 0.042,
+        limit: 0.12,
+        detail: 'paper drawdown 4.20% vs Monte Carlo p95 12.00%',
+      },
+      { name: 'quit_rule', passed: true, value: 0.042, limit: 0.12, detail: 'within' },
+      {
+        name: 'promotion_preset',
+        passed: true,
+        value: 10,
+        limit: 10,
+        detail: "10/10 'promotion' preset tests on record",
+      },
+      { name: 'nonzero_costs', passed: true, value: 2, limit: 1, detail: 'fee, spread' },
+      {
+        name: 'hypothesis_recorded',
+        passed: true,
+        value: 64,
+        limit: 40,
+        detail: 'hypothesis of 64 character(s), need >= 40',
+      },
+      { name: 'backtest_min_trades', passed: true, value: 48, limit: 30, detail: '48 trades' },
     ],
+    checklist: {
+      n_trials_class: 140,
+      dsr: 0.972,
+      pbo: null,
+      excess_cagr: 0.031,
+      hypothesis: 'Recent winners keep winning for a while.',
+      premortem: null,
+    },
   };
 }
 
@@ -94,6 +128,7 @@ describe('GoLivePage', () => {
   beforeEach(() => {
     goliveRequests = [];
     goliveError = false;
+    reportStatus = 'active';
     TestBed.configureTestingModule({
       imports: [GoLivePage],
       providers: [...provideApi(), provideHttpClientTesting(), provideRouter([])],
@@ -157,10 +192,11 @@ describe('GoLivePage', () => {
     expect(goliveRequests).toEqual(['buyhold-spy']);
     const check = el.querySelector('section[aria-labelledby="check-title"]')!;
     expect(check.querySelector('.verdict')?.textContent).toContain('Not ready');
-    expect(check.textContent).toContain('1 of 6 checks failed');
+    expect(check.textContent).toContain('1 of 12 checks failed');
     const rows = Array.from(check.querySelectorAll('.checks li'));
-    expect(rows.length).toBe(6);
+    expect(rows.length).toBe(12);
     const minDays = rows[1];
+    expect(minDays.textContent).toContain('Paper days');
     expect(minDays.textContent).toContain('min_days');
     expect(minDays.querySelector('app-status-pill')?.textContent).toContain('fail');
     expect(minDays.querySelector('.check-value')?.textContent).toContain('3');
@@ -169,6 +205,12 @@ describe('GoLivePage', () => {
     expect(rows[3].querySelector('.check-value')?.textContent).toContain('-1.30%');
     expect(checkRow({ ...report('x', true).checks[2], value: -0 }).value).toBe('0.00%');
     expect(rows[5].querySelector('.check-value')?.textContent).toContain('4 of 4');
+    expect(rows[6].querySelector('.check-limit')?.textContent).toContain('≤ 12.00%');
+    expect(rows[8].querySelector('.check-value')?.textContent).toContain('10 of 10');
+    expect(rows[10].querySelector('.check-value')?.textContent).toContain('64 chars');
+    expect(rows[10].querySelector('.check-limit')?.textContent).toContain('≥ 40 chars');
+    expect(rows[11].querySelector('.check-limit')?.textContent).toContain('≥ 30');
+    expect(check.querySelector('.ready')).toBeNull();
     expect(check.querySelector('app-cli-command code')?.textContent).toContain(
       'stonks golive check buyhold-spy',
     );
@@ -189,9 +231,36 @@ describe('GoLivePage', () => {
     expect(goliveRequests).toEqual(['momentum-v3']);
     const check = el.querySelector('section[aria-labelledby="check-title"]')!;
     expect(check.querySelector('.verdict')?.textContent).toContain('Ready for promotion');
+    // Shadow strategies that pass are handed to a human; active ones already trade.
+    expect(check.querySelector('.ready')).toBeNull();
+    expect(check.textContent).toContain('It is already active');
     expect(check.querySelector('app-cli-command code')?.textContent).toContain(
       'stonks golive check momentum-v3',
     );
+  });
+
+  it('shows the ready state and the promotion checklist, nulls as n/a', async () => {
+    reportStatus = 'shadow';
+    fixture.componentRef.setInput('strategy', 'momentum-v3');
+    fixture.detectChanges();
+    await flushAll();
+
+    const check = el.querySelector('section[aria-labelledby="check-title"]')!;
+    const ready = check.querySelector('.ready')!;
+    expect(ready.textContent).toContain('Ready for a human to promote');
+    expect(ready.querySelector('a')?.getAttribute('href')).toBe('/strategies/momentum-v3');
+
+    const items = Array.from(check.querySelectorAll('.checklist-grid > div')).map((d) =>
+      d.textContent!.replace(/\s+/g, ' ').trim(),
+    );
+    expect(items).toEqual([
+      'Trials of this class 140',
+      'Deflated Sharpe 0.972',
+      'PBO n/a',
+      'Excess CAGR +3.10%',
+      'Hypothesis Recent winners keep winning for a while.',
+      'Premortem Not recorded',
+    ]);
   });
 
   it('shows an error when the check cannot load', async () => {

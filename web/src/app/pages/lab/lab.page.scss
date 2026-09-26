@@ -186,3 +186,17 @@ progress {
     border-left-color: var(--color-loss);
   }
 }
+
+.sweep {
+  display: grid;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+
+  p {
+    max-width: 70ch;
+  }
+
+  code {
+    font-size: var(--text-xs);
+  }
+}

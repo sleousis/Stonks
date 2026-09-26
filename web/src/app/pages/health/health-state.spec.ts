@@ -1,5 +1,5 @@
 import type { HealthCheckView } from '../../api/models';
-import { checkLevel, overallLevel, splitChecks, worstLevel } from './health-state';
+import { checkLevel, checkThreshold, overallLevel, splitChecks, worstLevel } from './health-state';
 
 function check(name: string, ok: boolean, detail = 'none'): HealthCheckView {
   return { name, ok, detail };
@@ -83,5 +83,27 @@ describe('splitChecks', () => {
     expect(split.freshness.map((f) => f.ticker)).toEqual(['MSFT.US', 'AAPL.US']);
     expect(split.freshness[0].level).toBe('critical');
     expect(split.other.map((c) => c.name)).toEqual(['freshness', 'stuck_ticks']);
+  });
+});
+
+describe('checkThreshold', () => {
+  const t = {
+    max_bar_age_days: 4,
+    stuck_tick_minutes: 30,
+    stuck_ingest_minutes: 120,
+    ingest_failure_lookback_hours: 24,
+  };
+
+  it('names the limit each check compares against', () => {
+    expect(checkThreshold('stuck_ticks', t)).toBe('Stuck when running over 30 min');
+    expect(checkThreshold('stuck_ingest_runs', t)).toBe('Stuck when running over 120 min');
+    expect(checkThreshold('ingest_failures', t)).toBe('Failures in the last 24 h');
+    expect(checkThreshold('freshness:AAPL.US', t)).toBe('Latest bar at most 4 days old');
+  });
+
+  it('shows nothing when the API sent no threshold', () => {
+    expect(checkThreshold('stuck_ticks', {})).toBeNull();
+    expect(checkThreshold('stuck_ticks', null)).toBeNull();
+    expect(checkThreshold('something_new', t)).toBeNull();
   });
 });
