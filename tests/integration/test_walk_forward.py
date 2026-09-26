@@ -149,6 +149,32 @@ def test_folds_keep_the_wrapped_inner_strategy_and_fixed_params(lake_trending, m
     assert report.metrics["positive_share"] == 1.0
 
 
+def test_params_pinned_on_the_runner_stay_pinned_in_every_fold(lake_trending, monkeypatch):
+    """A tunable param the caller pinned (``fixed_params``) must not be
+    re-tuned by walk-forward: the folds validate the configuration the
+    runner produced, not a different search."""
+    from stonks.lab.survival import walk_forward as wf
+
+    scored: list = []
+    real_backtest = wf.run_backtest
+
+    def recording_backtest(strategy, dataset, window, lake=None):
+        scored.append(strategy)
+        return real_backtest(strategy, dataset, window, lake)
+
+    monkeypatch.setattr(wf, "run_backtest", recording_backtest)
+    runner = LabRunner(
+        tuner=GridTuner(grid_size=3),
+        objective=SharpeObjective(),
+        suite=SurvivalSuite(tests=[WalkForwardTest(WalkForwardConfig(n_splits=2, test_days=30))]),
+        budget=9,
+    )
+    result = runner.run(Momentum, _ds(lake_trending), fixed_params={"lookback_days": 7})
+    assert result.best_params["lookback_days"] == 7
+    assert len(scored) == 2
+    assert all(s.params["lookback_days"] == 7 for s in scored)
+
+
 def test_requires_a_tuning_setup(lake_trending):
     with pytest.raises(ValueError, match="tuning"):
         WalkForwardTest().run(Momentum({}), _ds(lake_trending))

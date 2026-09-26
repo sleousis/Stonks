@@ -39,7 +39,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.lab.backtesting import run_backtest
 from stonks.lab.survival.base import TuningSetup
-from stonks.lab.tuning.base import fixed_params_of, tune_and_fit
+from stonks.lab.tuning.base import tune_and_fit
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.lab.survival.walk_forward")
@@ -155,7 +155,7 @@ class WalkForwardTest:
             anchored=cfg.anchored,
         )
         strategy_cls = type(strategy)
-        fixed = fixed_params_of(strategy)  # e.g. a wrapper's inner strategy
+        fixed = setup.retune_fixed_params(strategy)  # e.g. a wrapper's inner strategy
         metrics: dict[str, float] = {}
         oos_scores: list[float] = []
         is_scores: list[float] = []

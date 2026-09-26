@@ -51,9 +51,14 @@ class LabRunner:
     ) -> LabRunResult:
         """``fixed_params`` pin params for tuning (e.g. a
         ``MacroRegimeFilter``'s inner strategy, a ticker); survival tests
-        that re-tune carry the tuned strategy's non-tunable params over."""
-        setup = TuningSetup(tuner=self._tuner, objective=self._objective, budget=self._budget)
-        strategy, tuned = tune_and_fit(strategy_cls, dataset, setup, fixed_params)
+        that re-tune keep them pinned, plus the strategy's non-tunable params."""
+        setup = TuningSetup(
+            tuner=self._tuner,
+            objective=self._objective,
+            budget=self._budget,
+            fixed_params=dict(fixed_params or {}),
+        )
+        strategy, tuned = tune_and_fit(strategy_cls, dataset, setup, setup.fixed_params)
         _log.info(
             "lab.tune.done",
             best_params=tuned.best_params,

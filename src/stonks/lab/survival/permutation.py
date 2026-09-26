@@ -39,7 +39,7 @@ from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.lab.backtesting import run_backtest
 from stonks.lab.lake_copy import copy_universe_lake
 from stonks.lab.survival.base import TuningSetup
-from stonks.lab.tuning.base import fixed_params_of, tune_and_fit
+from stonks.lab.tuning.base import tune_and_fit
 from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
 
@@ -260,7 +260,8 @@ class MonteCarloPermutationTest:
                 notes=f"mode={mode}; no bars in the scored window for the universe; test skipped",
             )
         coarser = _coarser_intervals(context, interval)
-        fixed = fixed_params_of(strategy)  # re-tunes keep e.g. a wrapper's inner
+        # re-tunes keep e.g. a wrapper's inner strategy and any pinned params
+        fixed = setup.retune_fixed_params(strategy) if self._retune else {}
 
         def score(bars_by_ticker: dict[str, pd.DataFrame]) -> float:
             with _modified_lake(context, bars_by_ticker, interval, coarser) as lake:
