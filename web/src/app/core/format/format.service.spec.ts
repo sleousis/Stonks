@@ -46,6 +46,14 @@ describe('FormatService', () => {
     expect(formatPercent(0.0123)).toBe('1.23%');
   });
 
+  it('formats money in the given currency', () => {
+    const svc = create();
+    svc.update({ locale: 'en-US' });
+    expect(formatMoney(12.5, { currency: 'EUR' })).toBe('€12.50');
+    expect(formatMoney(12.5, { currency: 'GBP', signed: true })).toBe('+£12.50');
+    expect(formatMoney(12.5, { currency: null })).toBe('$12.50');
+  });
+
   it('shows date-times in the chosen time zone', () => {
     const svc = create();
     svc.update({ locale: 'en-US', timeZone: 'America/New_York' });

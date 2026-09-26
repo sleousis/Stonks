@@ -41,6 +41,8 @@ export interface TableColumn<T> {
   sortable?: boolean;
   /** Colour numbers by sign (gain/loss). */
   tone?: boolean;
+  /** Money columns: the row's currency (ISO 4217); USD when missing. */
+  currency?: (row: T) => string | null | undefined;
   /**
    * Phone card layout: `title` is the card heading (use it for the key
    * column, e.g. ticker or id), `hide` drops the column on phones, and the
@@ -234,9 +236,9 @@ export class DataTable<T extends object> {
     if (value === null || value === undefined || value === '') return '–';
     switch (col.format) {
       case 'money':
-        return formatMoney(value as number);
+        return formatMoney(value as number, { currency: col.currency?.(row) });
       case 'signedMoney':
-        return formatMoney(value as number, { signed: true });
+        return formatMoney(value as number, { signed: true, currency: col.currency?.(row) });
       case 'percent':
         return formatPercent(value as number);
       case 'signedPercent':
