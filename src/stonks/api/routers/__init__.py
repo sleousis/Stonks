@@ -22,6 +22,7 @@ from stonks.api.routers import (
     pnl,
     portfolio,
     risk,
+    schedule,
     shadow,
     sources,
     strategies,
@@ -52,6 +53,7 @@ API_ROUTERS: list[APIRouter] = [
     connections.router,
     notifications.push_router,
     notifications.router,
+    schedule.router,
 ]
 
 #: Routers that always need the bearer token, even for reads on loopback.
@@ -63,5 +65,8 @@ STREAM_ROUTERS: list[APIRouter] = [
     jobs.events_router,
 ]
 
-#: Routers that stay open (liveness probes).
-PUBLIC_ROUTERS: list[APIRouter] = [health.router]
+#: Routers that stay open (liveness and readiness probes).
+PUBLIC_ROUTERS: list[APIRouter] = [health.router, schedule.probes_router]
+
+#: ``GET /metrics``: the scrape token or a loopback peer (``authorize_metrics``).
+METRICS_ROUTERS: list[APIRouter] = [schedule.metrics_router]

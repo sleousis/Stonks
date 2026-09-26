@@ -19,9 +19,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from stonks.api.deps import authorize, authorize_stream, require_token
+from stonks.api.deps import (
+    MetricsAccessConfig,
+    authorize,
+    authorize_metrics,
+    authorize_stream,
+    require_token,
+)
 from stonks.api.errors import PROBLEM_MEDIA_TYPE, install_error_handlers
-from stonks.api.routers import API_ROUTERS, PUBLIC_ROUTERS, STREAM_ROUTERS, TOKEN_ROUTERS
+from stonks.api.routers import (
+    API_ROUTERS,
+    METRICS_ROUTERS,
+    PUBLIC_ROUTERS,
+    STREAM_ROUTERS,
+    TOKEN_ROUTERS,
+)
 from stonks.api.routers.health import _version
 from stonks.api.routers.jobs import JobEvent
 from stonks.api.static import mount_spa
@@ -48,10 +60,16 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         svc.start()
+        # Hosts the scheduler loop when [scheduler].backend resolves to
+        # in_process; a no-op otherwise.
+        svc.schedule.start_hosted()
         _log.info("api.started", host=cfg.host, port=cfg.port)
         try:
             yield
         finally:
+            # Stop the loop first (it waits for a running job), so no new
+            # job is submitted to a runner that is shutting down.
+            svc.schedule.stop_hosted()
             # Queued jobs are cancelled and running lab runs asked to stop at
             # their next trial. wait=False only returns early: the
             # interpreter still joins running workers (ticks, ingests) at
@@ -69,6 +87,7 @@ def create_app(
     )
     app.state.services = svc
     app.state.sse_poll_seconds = sse_poll_seconds
+    app.state.metrics_access = MetricsAccessConfig()
 
     install_error_handlers(app)
     for router in PUBLIC_ROUTERS:
@@ -79,6 +98,8 @@ def create_app(
         app.include_router(router, dependencies=[Depends(require_token)])
     for router in STREAM_ROUTERS:
         app.include_router(router, dependencies=[Depends(authorize_stream)])
+    for router in METRICS_ROUTERS:
+        app.include_router(router, dependencies=[Depends(authorize_metrics)])
     if cfg.ui_dist.is_dir():
         mount_spa(app, cfg.ui_dist)
     _install_openapi_postprocessing(app)

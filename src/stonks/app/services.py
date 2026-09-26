@@ -25,6 +25,7 @@ from stonks.app.operations import OperationsService
 from stonks.app.orders import OrdersService
 from stonks.app.pagination import Page
 from stonks.app.portfolio import PortfolioService
+from stonks.app.schedule import ScheduleService
 from stonks.app.strategies import StrategyService
 from stonks.app.stream_tokens import IssuedStreamToken, StreamTokenSigner
 from stonks.app.studio import RuleStrategySource, StudioService, user_strategies_dir
@@ -129,6 +130,7 @@ class Services:
     alerts: AlertService
     connections: ConnectionsAppService
     notifications: NotificationsAppService
+    schedule: ScheduleService
     _user_finder: UserStrategyFinder | None = field(default=None, repr=False)
 
     @classmethod
@@ -153,7 +155,7 @@ class Services:
         strategies = StrategyService(context, catalog)
         orders = OrdersService(context)
         lab = LabService(context, strategies, runner)
-        return cls(
+        services = cls(
             context=context,
             runner=runner,
             jobs=JobService(
@@ -177,7 +179,10 @@ class Services:
             alerts=AlertService(context),
             connections=ConnectionsAppService(context),
             notifications=NotificationsAppService(context),
+            schedule=ScheduleService(context),
         )
+        services.schedule.bind(services)
+        return services
 
     def bootstrap_scope(self) -> Scope:
         """The data scope of the bootstrap admin (``usr_owner``), who owns

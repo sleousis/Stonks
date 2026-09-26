@@ -9,6 +9,8 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from stonks.accounts import Scope
 from stonks.app.services import Services
@@ -123,6 +125,41 @@ def current_scope(
 
 
 ScopeDep = Annotated[Scope, Depends(current_scope)]
+
+
+class MetricsAccessConfig(BaseSettings):
+    """Who may scrape ``GET /metrics`` (env-only, like the API token):
+
+    - ``STONKS_METRICS_TOKEN``: a scrape-only bearer token. The API token is
+      deliberately not accepted, so Prometheus never holds an admin credential.
+    - ``STONKS_METRICS_ALLOW_LOOPBACK`` (default true): scrapes from a
+      loopback peer need no token.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="STONKS_METRICS_", extra="ignore")
+
+    token: SecretStr | None = None
+    allow_loopback: bool = True
+
+
+def authorize_metrics(
+    request: Request,
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+) -> None:
+    cfg: MetricsAccessConfig = request.app.state.metrics_access
+    if creds is None:
+        client = request.client.host if request.client else None
+        if cfg.allow_loopback and _is_loopback(client):
+            return
+    elif cfg.token is not None and hmac.compare_digest(
+        creds.credentials.encode("utf-8"), cfg.token.get_secret_value().encode("utf-8")
+    ):
+        return
+    raise HTTPException(
+        status_code=401,
+        detail="metrics need the scrape token (STONKS_METRICS_TOKEN) or a loopback peer",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 @dataclass(frozen=True)
