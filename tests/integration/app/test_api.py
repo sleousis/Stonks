@@ -384,3 +384,67 @@ def test_serves_built_ui_with_spa_fallback(settings, seeded, tmp_path):
             assert "top secret" not in c.get(evil).text
         # API 404s stay API 404s
         assert c.get("/api/nope").status_code == 404
+
+
+def _sse_events(client: TestClient, url: str, **kw) -> list[tuple[str, dict]]:
+    events: list[tuple[str, dict]] = []
+    name = "message"
+    with client.stream("GET", url, **kw) as resp:
+        assert resp.status_code == 200, resp.read()
+        for line in resp.iter_lines():
+            if line.startswith("event:"):
+                name = line[len("event:") :].strip()
+            elif line.startswith("data:"):
+                events.append((name, json.loads(line[len("data:") :])))
+    return events
+
+
+def test_job_events_stream_ends_for_a_job_no_runner_tracks(client, app):
+    # A row left non-terminal (e.g. its final status write kept failing)
+    # must not keep the stream polling forever.
+    orphan = app.state.services.runner.store.create("backtest", {})
+    events = _sse_events(client, f"/api/jobs/{orphan.id}/events")
+    name, data = events[-1]
+    assert name == "end"
+    assert data["reason"] == "untracked"
+    assert data["status"] == "queued"
+
+
+def test_job_events_stream_times_out(settings, seeded, fake_source):
+    import threading
+
+    settings.api.allowed_hosts = ["testserver"]
+    settings.api.sse_max_stream_seconds = 0.3
+    app = create_app(settings, source_factory=lambda: fake_source, sse_poll_seconds=0.02)
+    gate = threading.Event()
+    with TestClient(app, client=LOOPBACK) as c:
+        runner = app.state.services.runner
+        runner.register("block", lambda p, ctx: gate.wait(10))
+        job = runner.submit("block", {})
+        try:
+            started = time.monotonic()
+            events = _sse_events(c, f"/api/jobs/{job.id}/events")
+            assert time.monotonic() - started < 5
+        finally:
+            gate.set()
+    name, data = events[-1]
+    assert name == "end"
+    assert data["reason"] == "timeout"
+
+
+def test_unhandled_error_log_scrubs_configured_secrets(settings, seeded, capsys):
+    settings.api.allowed_hosts = ["testserver"]
+    settings.sources.eodhd.api_key = "vendor-key-xyz"
+    app = create_app(settings)
+
+    @app.get("/api/_boom")
+    def boom() -> dict:
+        raise RuntimeError("upstream said: bad key vendor-key-xyz")
+
+    with TestClient(app, client=LOOPBACK, raise_server_exceptions=False) as c:
+        resp = c.get("/api/_boom")
+    assert resp.status_code == 500
+    assert "vendor-key-xyz" not in resp.text
+    out = capsys.readouterr().out
+    assert "api.unhandled_error" in out
+    assert "vendor-key-xyz" not in out

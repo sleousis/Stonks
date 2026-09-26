@@ -1,8 +1,97 @@
 {
   "components": {
     "schemas": {
+      "AlpacaStatus": {
+        "properties": {
+          "account": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BrokerAccountView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clock": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MarketClockView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "paper": {
+            "title": "Paper",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "paper",
+          "connected"
+        ],
+        "title": "AlpacaStatus",
+        "type": "object"
+      },
+      "AssetClassCosts": {
+        "description": "Fee and spread for one asset class.",
+        "properties": {
+          "fee_bps": {
+            "default": 0.0,
+            "minimum": 0.0,
+            "title": "Fee Bps",
+            "type": "number"
+          },
+          "fee_flat": {
+            "default": 0.0,
+            "minimum": 0.0,
+            "title": "Fee Flat",
+            "type": "number"
+          },
+          "half_spread_bps": {
+            "default": 0.0,
+            "minimum": 0.0,
+            "title": "Half Spread Bps",
+            "type": "number"
+          }
+        },
+        "title": "AssetClassCosts",
+        "type": "object"
+      },
       "BacktestRequest": {
         "properties": {
+          "cost_model": {
+            "anyOf": [
+              {
+                "enum": [
+                  "zero",
+                  "realistic"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Model"
+          },
           "end": {
             "format": "date",
             "title": "End",
@@ -66,6 +155,104 @@
           "end"
         ],
         "title": "BacktestRequest",
+        "type": "object"
+      },
+      "BacktestResult": {
+        "properties": {
+          "cagr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cagr"
+          },
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "equity": {
+            "items": {
+              "$ref": "#/components/schemas/EquityPoint"
+            },
+            "title": "Equity",
+            "type": "array"
+          },
+          "final_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Return"
+          },
+          "interval": {
+            "title": "Interval",
+            "type": "string"
+          },
+          "max_drawdown": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Drawdown"
+          },
+          "profit_factor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profit Factor"
+          },
+          "sharpe": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharpe"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_id",
+          "interval",
+          "start",
+          "end",
+          "final_return",
+          "sharpe",
+          "max_drawdown",
+          "cagr",
+          "profit_factor",
+          "equity"
+        ],
+        "title": "BacktestResult",
         "type": "object"
       },
       "BarSeries": {
@@ -185,6 +372,154 @@
         "title": "BarView",
         "type": "object"
       },
+      "BrokerAccountView": {
+        "properties": {
+          "buying_power": {
+            "title": "Buying Power",
+            "type": "number"
+          },
+          "can_trade": {
+            "title": "Can Trade",
+            "type": "boolean"
+          },
+          "cash": {
+            "title": "Cash",
+            "type": "number"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "equity": {
+            "title": "Equity",
+            "type": "number"
+          },
+          "pattern_day_trader": {
+            "title": "Pattern Day Trader",
+            "type": "boolean"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "trading_blocked": {
+            "title": "Trading Blocked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "cash",
+          "equity",
+          "buying_power",
+          "currency",
+          "status",
+          "trading_blocked",
+          "pattern_day_trader",
+          "can_trade"
+        ],
+        "title": "BrokerAccountView",
+        "type": "object"
+      },
+      "BrokerInfo": {
+        "properties": {
+          "allow_live": {
+            "title": "Allow Live",
+            "type": "boolean"
+          },
+          "credentials_configured": {
+            "title": "Credentials Configured",
+            "type": "boolean"
+          },
+          "kind": {
+            "enum": [
+              "simulated",
+              "alpaca"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "paper": {
+            "title": "Paper",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "paper",
+          "allow_live",
+          "credentials_configured"
+        ],
+        "title": "BrokerInfo",
+        "type": "object"
+      },
+      "CostModelPreset": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "enum": [
+              "zero",
+              "realistic"
+            ],
+            "title": "Name",
+            "type": "string"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/CostModelSettings"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "settings"
+        ],
+        "title": "CostModelPreset",
+        "type": "object"
+      },
+      "CostModelSettings": {
+        "description": "Settings for ``AssetClassCostModel``. Zero costs by default;\n``CostModelSettings.realistic()`` is a sensible starting point.",
+        "properties": {
+          "asset_classes": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AssetClassCosts"
+            },
+            "propertyNames": {
+              "enum": [
+                "equity",
+                "crypto",
+                "commodity",
+                "bond"
+              ]
+            },
+            "title": "Asset Classes",
+            "type": "object"
+          },
+          "default": {
+            "$ref": "#/components/schemas/AssetClassCosts",
+            "default": {
+              "fee_bps": 0.0,
+              "fee_flat": 0.0,
+              "half_spread_bps": 0.0
+            }
+          },
+          "impact_bps": {
+            "default": 0.0,
+            "minimum": 0.0,
+            "title": "Impact Bps",
+            "type": "number"
+          },
+          "max_impact_bps": {
+            "default": 500.0,
+            "minimum": 0.0,
+            "title": "Max Impact Bps",
+            "type": "number"
+          }
+        },
+        "title": "CostModelSettings",
+        "type": "object"
+      },
       "CoverageRow": {
         "properties": {
           "first_bar": {
@@ -218,6 +553,44 @@
           "rows"
         ],
         "title": "CoverageRow",
+        "type": "object"
+      },
+      "DataSourceInfo": {
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "default": {
+            "title": "Default",
+            "type": "boolean"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "id": {
+            "enum": [
+              "eodhd",
+              "yahoo"
+            ],
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "default",
+          "configured"
+        ],
+        "title": "DataSourceInfo",
         "type": "object"
       },
       "Draft": {
@@ -471,7 +844,8 @@
                 "perturbation",
                 "drift",
                 "runs_test",
-                "permutation"
+                "permutation",
+                "walk_forward"
               ],
               "type": "string"
             },
@@ -586,6 +960,25 @@
         "title": "DraftValidation",
         "type": "object"
       },
+      "EquityPoint": {
+        "properties": {
+          "timestamp": {
+            "format": "date-time",
+            "title": "Timestamp",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "timestamp",
+          "value"
+        ],
+        "title": "EquityPoint",
+        "type": "object"
+      },
       "FillView": {
         "properties": {
           "fee": {
@@ -659,6 +1052,56 @@
         "title": "Health",
         "type": "object"
       },
+      "HealthCheckView": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "ok",
+          "detail"
+        ],
+        "title": "HealthCheckView",
+        "type": "object"
+      },
+      "HealthReportView": {
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/HealthCheckView"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "healthy": {
+            "title": "Healthy",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "healthy",
+          "checked_at",
+          "checks"
+        ],
+        "title": "HealthReportView",
+        "type": "object"
+      },
       "IngestRequest": {
         "properties": {
           "exchange": {
@@ -705,6 +1148,15 @@
             ],
             "title": "Since"
           },
+          "source": {
+            "default": "eodhd",
+            "enum": [
+              "eodhd",
+              "yahoo"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
           "tickers": {
             "default": [],
             "items": {
@@ -730,6 +1182,39 @@
           "kind"
         ],
         "title": "IngestRequest",
+        "type": "object"
+      },
+      "IngestResultView": {
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "tickers_failed": {
+            "title": "Tickers Failed",
+            "type": "integer"
+          },
+          "tickers_ok": {
+            "title": "Tickers Ok",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "kind",
+          "status",
+          "tickers_ok",
+          "tickers_failed"
+        ],
+        "title": "IngestResultView",
         "type": "object"
       },
       "IngestRunView": {
@@ -1073,6 +1558,22 @@
             "title": "Progress",
             "type": "number"
           },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "timeout",
+                  "untracked"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason"
+          },
           "status": {
             "enum": [
               "queued",
@@ -1113,6 +1614,16 @@
             "title": "Interval",
             "type": "string"
           },
+          "mcpt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/McptOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "objective": {
             "default": "sharpe",
             "enum": [
@@ -1149,7 +1660,8 @@
                 "perturbation",
                 "drift",
                 "runs_test",
-                "permutation"
+                "permutation",
+                "walk_forward"
               ],
               "type": "string"
             },
@@ -1180,6 +1692,16 @@
             "minItems": 1,
             "title": "Universe",
             "type": "array"
+          },
+          "walk_forward": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WalkForwardConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -1189,6 +1711,147 @@
           "end"
         ],
         "title": "LabRunRequest",
+        "type": "object"
+      },
+      "LabRunView": {
+        "properties": {
+          "best_params": {
+            "additionalProperties": true,
+            "title": "Best Params",
+            "type": "object"
+          },
+          "best_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Score"
+          },
+          "class_path": {
+            "title": "Class Path",
+            "type": "string"
+          },
+          "registered_strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registered Strategy Id"
+          },
+          "survival_reports": {
+            "items": {
+              "$ref": "#/components/schemas/SurvivalReportView"
+            },
+            "title": "Survival Reports",
+            "type": "array"
+          },
+          "verdict": {
+            "enum": [
+              "pass",
+              "fail"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "class_path",
+          "best_params",
+          "best_score",
+          "verdict",
+          "survival_reports",
+          "registered_strategy_id"
+        ],
+        "title": "LabRunView",
+        "type": "object"
+      },
+      "MarketClockView": {
+        "properties": {
+          "is_open": {
+            "title": "Is Open",
+            "type": "boolean"
+          },
+          "next_close": {
+            "format": "date-time",
+            "title": "Next Close",
+            "type": "string"
+          },
+          "next_open": {
+            "format": "date-time",
+            "title": "Next Open",
+            "type": "string"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "title": "Timestamp",
+            "type": "string"
+          }
+        },
+        "required": [
+          "timestamp",
+          "is_open",
+          "next_open",
+          "next_close"
+        ],
+        "title": "MarketClockView",
+        "type": "object"
+      },
+      "McptOptions": {
+        "additionalProperties": false,
+        "description": "Monte-Carlo permutation test settings (survival test ``permutation``).",
+        "properties": {
+          "max_p_value": {
+            "default": 0.05,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "Max P Value",
+            "type": "number"
+          },
+          "metric": {
+            "default": "profit_factor",
+            "enum": [
+              "profit_factor",
+              "sharpe",
+              "final_return",
+              "cagr"
+            ],
+            "title": "Metric",
+            "type": "string"
+          },
+          "n_permutations": {
+            "default": 50,
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "N Permutations",
+            "type": "integer"
+          },
+          "retune": {
+            "default": false,
+            "title": "Retune",
+            "type": "boolean"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 17,
+            "title": "Seed"
+          }
+        },
+        "title": "McptOptions",
         "type": "object"
       },
       "OrderView": {
@@ -1504,6 +2167,68 @@
         "title": "Page[OrderView]",
         "type": "object"
       },
+      "Page_ShadowDecisionView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ShadowDecisionView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[ShadowDecisionView]",
+        "type": "object"
+      },
+      "Page_ShadowPnlSummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ShadowPnlSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[ShadowPnlSummary]",
+        "type": "object"
+      },
       "Page_SnapshotView_": {
         "properties": {
           "items": {
@@ -1566,11 +2291,11 @@
         "title": "Page[StrategySummary]",
         "type": "object"
       },
-      "Page_TickRunView_": {
+      "Page_TickRun_": {
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/TickRunView"
+              "$ref": "#/components/schemas/TickRun"
             },
             "title": "Items",
             "type": "array"
@@ -1594,7 +2319,7 @@
           "limit",
           "offset"
         ],
-        "title": "Page[TickRunView]",
+        "title": "Page[TickRun]",
         "type": "object"
       },
       "ParameterInfo": {
@@ -1638,6 +2363,106 @@
           "description"
         ],
         "title": "ParameterInfo",
+        "type": "object"
+      },
+      "PnlRowView": {
+        "properties": {
+          "cumulative_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cumulative Return"
+          },
+          "daily_change": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Change"
+          },
+          "daily_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Return"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "days_elapsed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Elapsed"
+          },
+          "drawdown": {
+            "title": "Drawdown",
+            "type": "number"
+          },
+          "total_value": {
+            "title": "Total Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "day",
+          "total_value",
+          "daily_change",
+          "daily_return",
+          "cumulative_return",
+          "drawdown"
+        ],
+        "title": "PnlRowView",
+        "type": "object"
+      },
+      "PnlSeries": {
+        "description": "One row per day. ``strategy_id`` is ``None`` for the real portfolio\nand a shadow strategy's id for its virtual portfolio.",
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/PnlRowView"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Id"
+          }
+        },
+        "required": [
+          "strategy_id",
+          "rows"
+        ],
+        "title": "PnlSeries",
         "type": "object"
       },
       "PortfolioView": {
@@ -1835,6 +2660,108 @@
         "title": "ProblemDetails",
         "type": "object"
       },
+      "RiskAdjustmentView": {
+        "description": "One order the risk policy clipped or dropped.",
+        "properties": {
+          "adjusted_quantity": {
+            "title": "Adjusted Quantity",
+            "type": "number"
+          },
+          "original_quantity": {
+            "title": "Original Quantity",
+            "type": "number"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "side": {
+            "title": "Side",
+            "type": "string"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker",
+          "side",
+          "rule",
+          "original_quantity",
+          "adjusted_quantity",
+          "reason"
+        ],
+        "title": "RiskAdjustmentView",
+        "type": "object"
+      },
+      "RiskPolicy": {
+        "additionalProperties": false,
+        "description": "Portfolio construction limits applied between ``strategy.decide`` and\nthe broker (``[production.risk]``). Defaults are permissive, so an\nunconfigured install trades exactly what the strategy asks for.\n\nWeights are fractions of total portfolio value (cash + marked positions)\nbefore the tick's orders. Sells are never blocked, only clipped to the\nheld quantity so they cannot open a short.",
+        "properties": {
+          "cash_buffer_fraction": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Cash Buffer Fraction",
+            "type": "number"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "max_open_positions": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Open Positions"
+          },
+          "max_weight_per_asset_class": {
+            "additionalProperties": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "default": {},
+            "propertyNames": {
+              "enum": [
+                "equity",
+                "crypto",
+                "commodity",
+                "bond"
+              ]
+            },
+            "title": "Max Weight Per Asset Class",
+            "type": "object"
+          },
+          "max_weight_per_ticker": {
+            "default": 1.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Max Weight Per Ticker",
+            "type": "number"
+          },
+          "min_order_notional": {
+            "default": 0.0,
+            "minimum": 0.0,
+            "title": "Min Order Notional",
+            "type": "number"
+          }
+        },
+        "title": "RiskPolicy",
+        "type": "object"
+      },
       "RuleTemplateView": {
         "properties": {
           "description": {
@@ -1862,6 +2789,216 @@
           "spec"
         ],
         "title": "RuleTemplateView",
+        "type": "object"
+      },
+      "ShadowDecisionView": {
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          },
+          "side": {
+            "title": "Side",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          },
+          "tick_id": {
+            "title": "Tick Id",
+            "type": "string"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tick_id",
+          "strategy_id",
+          "as_of",
+          "ticker",
+          "side",
+          "quantity",
+          "price",
+          "status",
+          "created_at"
+        ],
+        "title": "ShadowDecisionView",
+        "type": "object"
+      },
+      "ShadowOutcomeView": {
+        "description": "How one shadow strategy was evaluated during the tick.",
+        "properties": {
+          "decisions": {
+            "default": 0,
+            "title": "Decisions",
+            "type": "integer"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "fills": {
+            "default": 0,
+            "title": "Fills",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          },
+          "total_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Value"
+          }
+        },
+        "required": [
+          "strategy_id",
+          "status"
+        ],
+        "title": "ShadowOutcomeView",
+        "type": "object"
+      },
+      "ShadowPnlSummary": {
+        "properties": {
+          "cumulative_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cumulative Return"
+          },
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "first_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Day"
+          },
+          "latest_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Day"
+          },
+          "max_drawdown": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Drawdown"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          },
+          "total_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Value"
+          }
+        },
+        "required": [
+          "strategy_id",
+          "status",
+          "days",
+          "first_day",
+          "latest_day",
+          "total_value",
+          "cumulative_return",
+          "max_drawdown"
+        ],
+        "title": "ShadowPnlSummary",
         "type": "object"
       },
       "SmokeCheck": {
@@ -2165,6 +3302,30 @@
         "title": "StrategySummary",
         "type": "object"
       },
+      "StreamToken": {
+        "properties": {
+          "events_url": {
+            "title": "Events Url",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "expires_at",
+          "events_url"
+        ],
+        "title": "StreamToken",
+        "type": "object"
+      },
       "SurvivalReportView": {
         "properties": {
           "metrics": {
@@ -2257,7 +3418,98 @@
         "title": "TickRequest",
         "type": "object"
       },
-      "TickRunDetail": {
+      "TickResultView": {
+        "properties": {
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "fills": {
+            "title": "Fills",
+            "type": "integer"
+          },
+          "orders_placed": {
+            "title": "Orders Placed",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "tick_id": {
+            "title": "Tick Id",
+            "type": "string"
+          },
+          "winner_strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Winner Strategy Id"
+          }
+        },
+        "required": [
+          "tick_id",
+          "status",
+          "winner_strategy_id",
+          "orders_placed",
+          "fills",
+          "dry_run"
+        ],
+        "title": "TickResultView",
+        "type": "object"
+      },
+      "TickRun": {
+        "properties": {
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TickSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "started_at",
+          "finished_at",
+          "status",
+          "summary"
+        ],
+        "title": "TickRun",
+        "type": "object"
+      },
+      "TickRunWithOrders": {
         "properties": {
           "finished_at": {
             "anyOf": [
@@ -2292,14 +3544,12 @@
           "summary": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/TickSummary"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Summary"
+            ]
           }
         },
         "required": [
@@ -2310,12 +3560,13 @@
           "summary",
           "orders"
         ],
-        "title": "TickRunDetail",
+        "title": "TickRunWithOrders",
         "type": "object"
       },
-      "TickRunView": {
+      "TickSummary": {
+        "additionalProperties": true,
         "properties": {
-          "finished_at": {
+          "error": {
             "anyOf": [
               {
                 "type": "string"
@@ -2324,41 +3575,103 @@
                 "type": "null"
               }
             ],
-            "title": "Finished At"
+            "title": "Error"
           },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "started_at": {
-            "title": "Started At",
-            "type": "string"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "summary": {
+          "error_type": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Summary"
+            "title": "Error Type"
+          },
+          "fills": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fills"
+          },
+          "orders_placed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orders Placed"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "risk_adjustments": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RiskAdjustmentView"
+            },
+            "title": "Risk Adjustments",
+            "type": "array"
+          },
+          "shadow": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ShadowOutcomeView"
+            },
+            "title": "Shadow",
+            "type": "array"
+          },
+          "shadow_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shadow Error"
+          },
+          "winner_expected_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Winner Expected Return"
+          },
+          "winner_strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Winner Strategy Id"
           }
         },
-        "required": [
-          "id",
-          "started_at",
-          "finished_at",
-          "status",
-          "summary"
-        ],
-        "title": "TickRunView",
+        "title": "TickSummary",
         "type": "object"
       },
       "ValidateRequest": {
@@ -2412,6 +3725,71 @@
         ],
         "title": "ValidationIssue",
         "type": "object"
+      },
+      "WalkForwardConfig": {
+        "additionalProperties": false,
+        "description": "Walk-forward settings. ``test_days=None`` splits the dataset's\nvalidation window evenly over the folds;\n``train_days=None`` means \"everything before the first test window\".",
+        "properties": {
+          "anchored": {
+            "default": false,
+            "title": "Anchored",
+            "type": "boolean"
+          },
+          "metric": {
+            "default": "sharpe",
+            "enum": [
+              "sharpe",
+              "cagr",
+              "final_return"
+            ],
+            "title": "Metric",
+            "type": "string"
+          },
+          "min_mean_score": {
+            "default": 0.0,
+            "title": "Min Mean Score",
+            "type": "number"
+          },
+          "min_positive_share": {
+            "default": 0.5,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Min Positive Share",
+            "type": "number"
+          },
+          "n_splits": {
+            "default": 4,
+            "minimum": 1.0,
+            "title": "N Splits",
+            "type": "integer"
+          },
+          "test_days": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test Days"
+          },
+          "train_days": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Train Days"
+          }
+        },
+        "title": "WalkForwardConfig",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -2429,6 +3807,160 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/brokers": {
+      "get": {
+        "description": "The broker the production tick trades through (keys never shown).",
+        "operationId": "getBrokerInfo",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrokerInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Broker Info",
+        "tags": [
+          "brokers"
+        ]
+      }
+    },
+    "/api/brokers/alpaca/status": {
+      "get": {
+        "description": "Connect to Alpaca and read the account and market clock (read-only).\n409 unless ``[brokers].kind`` is ``alpaca``; missing keys or API errors\ncome back as ``connected=false`` with the reason.",
+        "operationId": "getAlpacaStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlpacaStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Alpaca Status",
+        "tags": [
+          "brokers"
+        ]
+      }
+    },
     "/api/catalog/asset-classes": {
       "get": {
         "operationId": "listAssetClasses",
@@ -2687,6 +4219,194 @@
         "summary": "Liveness probe",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/health/report": {
+      "get": {
+        "description": "Every ``stonks health`` check: bar freshness, stuck ticks and ingest\nruns, recent ingest failures. Always 200; see ``healthy``.",
+        "operationId": "getHealthReport",
+        "parameters": [
+          {
+            "description": "freshness check tickers; default [production].universe",
+            "in": "query",
+            "name": "tickers",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "freshness check tickers; default [production].universe",
+              "title": "Tickers"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthReportView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Health Report",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/ingest/jobs/{job_id}/result": {
+      "get": {
+        "description": "The result of a succeeded ingest job (409 until it has succeeded).",
+        "operationId": "getIngestResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResultView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Ingest Result",
+        "tags": [
+          "ingest"
         ]
       }
     },
@@ -3151,7 +4871,7 @@
     },
     "/api/jobs/{job_id}/cancel": {
       "post": {
-        "description": "Cancel a queued job. Running jobs cannot be interrupted (409).",
+        "description": "Cancel a queued job, or ask a running lab run to stop at its next\ntrial (it ends ``cancelled``). Other running jobs cannot be interrupted\n(409).",
         "operationId": "cancelJob",
         "parameters": [
           {
@@ -3239,7 +4959,7 @@
     },
     "/api/jobs/{job_id}/events": {
       "get": {
-        "description": "Server-sent events with the job's status/progress until it finishes.\n\nThe stream ends when the job reaches a terminal status or the client\ndisconnects; the store is polled off the event loop.",
+        "description": "Server-sent events with the job's status/progress until it finishes.\n\nEvents: ``status`` on every change, then ``done`` when the job reaches\na terminal status, or ``end`` (with ``reason``) when the stream gives up\nfirst: after ``api.sse_max_stream_seconds``, or when no worker in this\nprocess tracks the job any more. The stream also ends when the client\ndisconnects; the store is polled off the event loop.",
         "operationId": "streamJobEvents",
         "parameters": [
           {
@@ -3249,6 +4969,25 @@
             "schema": {
               "title": "Job Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Stream token from POST /api/jobs/{job_id}/stream-token, for clients (browser EventSource) that cannot send the bearer header.",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stream token from POST /api/jobs/{job_id}/stream-token, for clients (browser EventSource) that cannot send the bearer header.",
+              "title": "Token"
             }
           }
         ],
@@ -3343,9 +5082,97 @@
         ]
       }
     },
+    "/api/jobs/{job_id}/stream-token": {
+      "post": {
+        "description": "A short-lived token (``api.stream_token_ttl_seconds``) that lets a\nclient which cannot send the bearer header (browser ``EventSource``)\nread this job's event stream, and nothing else.",
+        "operationId": "createStreamToken",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamToken"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Stream Token",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
     "/api/lab/backtests": {
       "post": {
-        "description": "Queue a backtest; the job result is a ``BacktestResult``.",
+        "description": "Queue a backtest; fetch the typed result from\n``GET /api/lab/backtests/{job_id}/result`` once it succeeds.",
         "operationId": "startBacktest",
         "requestBody": {
           "content": {
@@ -3430,9 +5257,178 @@
         ]
       }
     },
+    "/api/lab/backtests/{job_id}/result": {
+      "get": {
+        "description": "The result of a succeeded backtest job (409 until it has succeeded).",
+        "operationId": "getBacktestResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Backtest Result",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
+    "/api/lab/cost-models": {
+      "get": {
+        "description": "Transaction-cost presets a backtest request can name in ``cost_model``.",
+        "operationId": "listCostModels",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CostModelPreset"
+                  },
+                  "title": "Response Listcostmodels",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Cost Models",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
     "/api/lab/runs": {
       "post": {
-        "description": "Queue tune → fit → survival suite; the job result is a ``LabRunView``.",
+        "description": "Queue tune → fit → survival suite; fetch the typed result from\n``GET /api/lab/runs/{job_id}/result`` once it succeeds.",
         "operationId": "startLabRun",
         "requestBody": {
           "content": {
@@ -3512,6 +5508,94 @@
           }
         ],
         "summary": "Start Lab Run",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
+    "/api/lab/runs/{job_id}/result": {
+      "get": {
+        "description": "The result of a succeeded lab-run job (409 until it has succeeded).",
+        "operationId": "getLabRunResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabRunView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Lab Run Result",
         "tags": [
           "lab"
         ]
@@ -4279,6 +6363,102 @@
         ]
       }
     },
+    "/api/pnl": {
+      "get": {
+        "description": "Daily P&L of the real portfolio (last snapshot per UTC day). Returns\nand drawdown are measured from inception even when ``since`` trims it.",
+        "operationId": "getPnl",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PnlSeries"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Pnl",
+        "tags": [
+          "pnl"
+        ]
+      }
+    },
     "/api/portfolio": {
       "get": {
         "description": "Latest snapshot, positions valued at the latest stored closes.",
@@ -4461,6 +6641,553 @@
         "summary": "List Snapshots",
         "tags": [
           "portfolio"
+        ]
+      }
+    },
+    "/api/risk/policy": {
+      "get": {
+        "description": "The ``[production.risk]`` limits applied between a strategy's orders\nand the broker.",
+        "operationId": "getRiskPolicy",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiskPolicy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Risk Policy",
+        "tags": [
+          "risk"
+        ]
+      }
+    },
+    "/api/shadow/decisions": {
+      "get": {
+        "description": "Virtual orders shadow strategies placed, newest first.",
+        "operationId": "listShadowDecisions",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "strategy_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Strategy Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ticker",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ticker"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          },
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ShadowDecisionView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Shadow Decisions",
+        "tags": [
+          "shadow"
+        ]
+      }
+    },
+    "/api/shadow/pnl": {
+      "get": {
+        "description": "Latest value, return and worst drawdown of every shadow portfolio.",
+        "operationId": "listShadowPnl",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ShadowPnlSummary_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Shadow Pnl",
+        "tags": [
+          "shadow"
+        ]
+      }
+    },
+    "/api/shadow/strategies/{strategy_id}/pnl": {
+      "get": {
+        "description": "Daily P&L of one shadow strategy's virtual portfolio.",
+        "operationId": "getShadowPnl",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "strategy_id",
+            "required": true,
+            "schema": {
+              "title": "Strategy Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PnlSeries"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Shadow Pnl",
+        "tags": [
+          "shadow"
+        ]
+      }
+    },
+    "/api/sources": {
+      "get": {
+        "description": "Data sources an ingest request can name, and whether each is configured.",
+        "operationId": "listDataSources",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DataSourceInfo"
+                  },
+                  "title": "Response Listdatasources",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Sources",
+        "tags": [
+          "sources"
         ]
       }
     },
@@ -6409,7 +9136,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_TickRunView_"
+                  "$ref": "#/components/schemas/Page_TickRun_"
                 }
               }
             },
@@ -6562,6 +9289,94 @@
         ]
       }
     },
+    "/api/ticks/jobs/{job_id}/result": {
+      "get": {
+        "description": "The result of a succeeded tick job (409 until it has succeeded).",
+        "operationId": "getTickResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TickResultView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Tick Result",
+        "tags": [
+          "ticks"
+        ]
+      }
+    },
     "/api/ticks/{tick_id}": {
       "get": {
         "operationId": "getTick",
@@ -6581,7 +9396,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TickRunDetail"
+                  "$ref": "#/components/schemas/TickRunWithOrders"
                 }
               }
             },

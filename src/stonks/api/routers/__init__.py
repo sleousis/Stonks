@@ -6,6 +6,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from stonks.api.routers import (
+    brokers,
     catalog,
     health,
     ingest,
@@ -13,7 +14,11 @@ from stonks.api.routers import (
     lab,
     market,
     orders,
+    pnl,
     portfolio,
+    risk,
+    shadow,
+    sources,
     strategies,
     studio,
     ticks,
@@ -31,6 +36,18 @@ API_ROUTERS: list[APIRouter] = [
     catalog.router,
     jobs.router,
     studio.router,
+    sources.router,
+    risk.router,
+    shadow.router,
+    pnl.router,
+    health.report_router,
+    brokers.router,
+]
+
+#: Routers that run their own auth dependency instead of :func:`authorize`
+#: (the job event stream also accepts a job-scoped ``?token=``).
+STREAM_ROUTERS: list[APIRouter] = [
+    jobs.events_router,
 ]
 
 #: Routers that stay open (liveness probes).

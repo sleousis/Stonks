@@ -74,6 +74,28 @@ def authorize(
     _check_token(cfg, creds)
 
 
+def authorize_stream(
+    request: Request,
+    job_id: str,
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+    token: Annotated[
+        str | None,
+        Query(
+            max_length=512,
+            description="Stream token from POST /api/jobs/{job_id}/stream-token, for "
+            "clients (browser EventSource) that cannot send the bearer header.",
+        ),
+    ] = None,
+) -> None:
+    """Auth for a job's event stream: a valid stream token for *this* job,
+    or whatever :func:`authorize` accepts. A bad token is always 401."""
+    if token is not None:
+        if get_services(request).jobs.verify_stream_token(job_id, token):
+            return
+        raise HTTPException(status_code=401, detail="invalid or expired stream token")
+    authorize(request, creds)
+
+
 @dataclass(frozen=True)
 class PageParams:
     limit: int

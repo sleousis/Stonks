@@ -13,9 +13,15 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
-from stonks.app.errors import ConfigurationError
+from stonks.app.errors import ConfigurationError, ValidationError
 from stonks.config import Settings
 from stonks.ingest.sources.base import DataSource
+from stonks.ingest.sources.registry import (
+    DEFAULT_SOURCE_ID,
+    SOURCE_IDS,
+    SourceConfigError,
+    build_source,
+)
 from stonks.logging import get_logger
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
@@ -76,20 +82,20 @@ class AppContext:
     def registry_on(self, state: SqliteState) -> StrategyRegistry:
         return StrategyRegistry(state=state, artifacts_dir=self.settings.registry.artifacts_dir)
 
-    def build_source(self) -> DataSource:
-        """The configured data source; raises ``ConfigurationError`` when
-        it can't be built (e.g. no EODHD key)."""
+    def build_source(self, source_id: str | None = None) -> DataSource:
+        """The data source ``source_id`` (default: the registry's default)
+        built from ``[sources]`` via :func:`stonks.ingest.sources.registry.build_source`.
+
+        Raises ``ValidationError`` for an unknown id and
+        ``ConfigurationError`` when it can't be built (e.g. no EODHD key).
+        A ``source_factory`` given at construction (tests) wins for every id.
+        """
         if self._source_factory is not None:
             return self._source_factory()
-        eodhd = self.settings.sources.eodhd
-        if not eodhd.api_key:
-            raise ConfigurationError("EODHD_API_KEY is not set; ingest is unavailable")
-        from stonks.ingest.sources.eodhd import EodhdDataSource
-
-        return EodhdDataSource(
-            api_key=eodhd.api_key,
-            base_url=eodhd.base_url,
-            timeout_seconds=eodhd.timeout_seconds,
-            max_retries=eodhd.max_retries,
-            retry_backoff_seconds=eodhd.retry_backoff_seconds,
-        )
+        sid = source_id or DEFAULT_SOURCE_ID
+        if sid not in SOURCE_IDS:
+            raise ValidationError(f"unknown source {sid!r}; choose one of {list(SOURCE_IDS)}")
+        try:
+            return build_source(sid, self.settings.sources)
+        except SourceConfigError as exc:
+            raise ConfigurationError(f"{sid} source unavailable: {exc}") from None

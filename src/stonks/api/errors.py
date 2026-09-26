@@ -97,11 +97,22 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
-        # Never echo internals (paths, SQL, credentials) to the client.
+        # Never echo internals (paths, SQL, credentials) to the client, and
+        # scrub the configured credentials from the log line too.
         _log.error(
             "api.unhandled_error",
             path=request.url.path,
-            error=redact_secrets(str(exc)),
+            error=redact_secrets(str(exc), _configured_secrets(request)),
             error_type=type(exc).__name__,
         )
         return problem(request, 500, detail="internal server error")
+
+
+def _configured_secrets(request: Request) -> list[str]:
+    services = getattr(request.app.state, "services", None)
+    if services is None:
+        return []
+    try:
+        return list(services.runner.secrets())
+    except Exception:  # a broken secrets hook must not mask the original error
+        return []

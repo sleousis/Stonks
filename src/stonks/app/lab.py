@@ -7,13 +7,14 @@ from collections.abc import Callable
 from datetime import date, datetime
 from typing import Any, Literal, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from stonks.app.context import AppContext
 from stonks.app.errors import ValidationError
 from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.app.serialize import finite, to_jsonable
 from stonks.app.strategies import StrategyRef, StrategyService, SurvivalReportView
+from stonks.backtest.costs import CostModel, CostModelSettings
 from stonks.backtest.engine import BacktestConfig, Backtester
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.interval import Interval
@@ -29,6 +30,7 @@ from stonks.lab.survival.period_stability import PeriodStabilityTest
 from stonks.lab.survival.permutation import MonteCarloPermutationTest
 from stonks.lab.survival.perturbation import PerturbationTest
 from stonks.lab.survival.runs_test import RunsTestSurvivalTest
+from stonks.lab.survival.walk_forward import WalkForwardConfig, WalkForwardTest
 from stonks.lab.tuning.grid import GridTuner
 from stonks.lab.tuning.random import RandomTuner
 from stonks.logging import get_logger
@@ -39,8 +41,9 @@ LAB_RUN_JOB = "lab_run"
 TunerName = Literal["grid", "random"]
 ObjectiveName = Literal["sharpe", "cagr", "final_return"]
 SurvivalTestName = Literal[
-    "oos", "period_stability", "perturbation", "drift", "runs_test", "permutation"
+    "oos", "period_stability", "perturbation", "drift", "runs_test", "permutation", "walk_forward"
 ]
+CostModelName = Literal["zero", "realistic"]
 
 _OBJECTIVES: dict[str, Callable[[], Objective]] = {
     "sharpe": SharpeObjective,
@@ -54,6 +57,15 @@ _SURVIVAL_TESTS: dict[str, Callable[[], SurvivalTest]] = {
     "drift": DriftTest,
     "runs_test": RunsTestSurvivalTest,
     "permutation": MonteCarloPermutationTest,
+    "walk_forward": WalkForwardTest,
+}
+
+_COST_MODELS: dict[str, tuple[str, Callable[[], CostModelSettings]]] = {
+    "zero": ("No fees, spread or impact.", CostModelSettings),
+    "realistic": (
+        "Retail-broker-ish per-asset-class fees and spreads plus square-root market impact.",
+        CostModelSettings.realistic,
+    ),
 }
 
 _log = get_logger("stonks.app.lab")
@@ -79,6 +91,35 @@ class BacktestRequest(_WindowRequest):
     rebalance_every_bars: int = Field(default=1, ge=1)
     slippage_bps: float = Field(default=0.0, ge=0)
     fee_per_trade: float = Field(default=0.0, ge=0)
+    #: A preset from ``GET /api/lab/cost-models``; replaces the flat
+    #: ``slippage_bps`` / ``fee_per_trade`` (set one or the other). With
+    #: neither, the configured ``[backtest.costs]`` apply.
+    cost_model: CostModelName | None = None
+
+    @model_validator(mode="after")
+    def _one_cost_source(self) -> Self:
+        if self.cost_model is not None and (self.slippage_bps or self.fee_per_trade):
+            raise ValueError("set cost_model or slippage_bps/fee_per_trade, not both")
+        return self
+
+
+class CostModelPreset(BaseModel):
+    name: CostModelName
+    description: str
+    settings: CostModelSettings
+
+
+class McptOptions(BaseModel):
+    """Monte-Carlo permutation test settings (survival test ``permutation``)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    n_permutations: int = Field(default=50, ge=1, le=1_000)
+    max_p_value: float = Field(default=0.05, gt=0, le=1)
+    metric: Literal["profit_factor", "sharpe", "final_return", "cagr"] = "profit_factor"
+    #: Re-tune on every permutation (Masters); costs ``(n + 1) * budget`` backtests.
+    retune: bool = False
+    seed: int | None = 17
 
 
 class EquityPoint(BaseModel):
@@ -112,8 +153,20 @@ class LabRunRequest(_WindowRequest):
     survival_tests: list[SurvivalTestName] = Field(
         default_factory=lambda: ["oos", "period_stability"], min_length=1
     )
+    #: Settings for the ``walk_forward`` survival test (defaults when omitted).
+    walk_forward: WalkForwardConfig | None = None
+    #: Settings for the ``permutation`` (MCPT) survival test.
+    mcpt: McptOptions | None = None
     #: Register the fitted strategy (status ``shadow``) with its reports.
     register_strategy: bool = False
+
+    @model_validator(mode="after")
+    def _options_need_their_test(self) -> Self:
+        if self.walk_forward is not None and "walk_forward" not in self.survival_tests:
+            raise ValueError("walk_forward options given: add 'walk_forward' to survival_tests")
+        if self.mcpt is not None and "permutation" not in self.survival_tests:
+            raise ValueError("mcpt options given: add 'permutation' to survival_tests")
+        return self
 
 
 class LabRunView(BaseModel):
@@ -131,7 +184,8 @@ class LabService:
         self._strategies = strategies
         self._runner = runner
         runner.register(BACKTEST_JOB, self._handle_backtest)
-        runner.register(LAB_RUN_JOB, self._handle_lab_run)
+        # Cooperative: stops between tuning trials and survival tests.
+        runner.register(LAB_RUN_JOB, self._handle_lab_run, cancellable=True)
 
     # ---- backtests ---------------------------------------------------------
 
@@ -147,6 +201,7 @@ class LabService:
             portfolio=Portfolio(cash=request.initial_cash, positions={}),
             slippage_bps=request.slippage_bps,
             fee_per_trade=request.fee_per_trade,
+            cost_model=self._cost_model(request),
         )
         config = BacktestConfig(
             start=request.start,
@@ -176,6 +231,21 @@ class LabService:
             ],
         )
 
+    def _cost_model(self, request: BacktestRequest) -> CostModel | None:
+        """A named preset, else flat slippage / fee when given, else the
+        configured ``[backtest.costs]`` (zero costs unless configured)."""
+        if request.cost_model is not None:
+            return _COST_MODELS[request.cost_model][1]().build()
+        if request.slippage_bps or request.fee_per_trade:
+            return None
+        return self._ctx.settings.backtest.costs.build()
+
+    def cost_models(self) -> list[CostModelPreset]:
+        return [
+            CostModelPreset(name=name, description=desc, settings=factory())  # type: ignore[arg-type]
+            for name, (desc, factory) in _COST_MODELS.items()
+        ]
+
     # ---- lab runs ----------------------------------------------------------
 
     def submit_lab_run(self, request: LabRunRequest) -> Job:
@@ -189,10 +259,15 @@ class LabService:
         tuner: Tuner = (
             GridTuner(seed=request.seed) if request.tuner == "grid" else RandomTuner(request.seed)
         )
+        objective: Objective = _OBJECTIVES[request.objective]()
+        tests: list[SurvivalTest] = [_survival_test(t, request) for t in request.survival_tests]
+        if progress is not None:
+            objective = _CancellableObjective(objective, progress)
+            tests = [_CancellableTest(t, progress) for t in tests]
         runner = LabRunner(
             tuner=tuner,
-            objective=_OBJECTIVES[request.objective](),
-            suite=SurvivalSuite([_SURVIVAL_TESTS[t]() for t in request.survival_tests]),
+            objective=objective,
+            suite=SurvivalSuite(tests),
             budget=request.budget,
         )
         if progress is not None:
@@ -205,6 +280,7 @@ class LabService:
                 end=request.end,
                 train_ratio=request.train_ratio,
                 interval=interval,
+                costs=self._ctx.settings.backtest.costs,
             )
             result = runner.run(cls, dataset)
 
@@ -240,6 +316,46 @@ class LabService:
 
     def _handle_lab_run(self, params: dict[str, Any], ctx: JobContext) -> LabRunView:
         return self.run_lab(LabRunRequest.model_validate(params), progress=ctx)
+
+
+class _CancellableObjective:
+    """Objective wrapper that honours job cancellation before every trial
+    (including the re-tuning trials of walk-forward / MCPT)."""
+
+    def __init__(self, inner: Objective, ctx: JobContext) -> None:
+        self._inner = inner
+        self._ctx = ctx
+        self.name = inner.name
+        self.direction = inner.direction
+
+    def score(self, strategy: Any, dataset: Any) -> float:
+        self._ctx.check_cancelled()
+        return self._inner.score(strategy, dataset)
+
+
+class _CancellableTest:
+    """Survival-test wrapper that honours job cancellation before the test
+    starts; forwards everything else (``id``, ``bind_tuning``)."""
+
+    def __init__(self, inner: SurvivalTest, ctx: JobContext) -> None:
+        self._inner = inner
+        self._ctx = ctx
+        self.id = inner.id
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+    def run(self, strategy: Any, context: Any) -> Any:
+        self._ctx.check_cancelled()
+        return self._inner.run(strategy, context)
+
+
+def _survival_test(name: str, request: LabRunRequest) -> SurvivalTest:
+    if name == "walk_forward" and request.walk_forward is not None:
+        return WalkForwardTest(config=request.walk_forward)
+    if name == "permutation" and request.mcpt is not None:
+        return MonteCarloPermutationTest(**request.mcpt.model_dump())
+    return _SURVIVAL_TESTS[name]()
 
 
 def _parse_interval(code: str) -> Interval:

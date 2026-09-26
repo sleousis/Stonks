@@ -15,14 +15,24 @@ from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.app.pagination import Page
 from stonks.core.interval import Interval
 from stonks.ingest.pipeline import IngestPipeline, IngestRunResult
+from stonks.ingest.sources.registry import (
+    DEFAULT_SOURCE_ID,
+    SOURCE_IDS,
+    SourceConfigError,
+    build_source,
+)
 
 INGEST_JOB = "ingest"
 
 IngestKind = Literal["prices", "intraday", "fundamentals", "metadata"]
+#: Mirrors ``stonks.ingest.sources.registry.SOURCE_IDS`` (a test pins it).
+SourceId = Literal["eodhd", "yahoo"]
 
 
 class IngestRequest(BaseModel):
     kind: IngestKind
+    #: Which configured data source to ingest from.
+    source: SourceId = "eodhd"
     tickers: list[str] = []
     #: Fetch every ticker the source lists on this exchange (prices only).
     exchange: str | None = None
@@ -64,6 +74,16 @@ class IngestResultView(BaseModel):
     tickers_failed: int
 
 
+class DataSourceInfo(BaseModel):
+    id: SourceId
+    #: Used when an ingest request names no source.
+    default: bool
+    #: Whether the source can be built from the current settings.
+    configured: bool
+    #: Why it is not configured (e.g. a missing API key).
+    detail: str | None = None
+
+
 class IngestService:
     def __init__(self, context: AppContext, runner: JobRunner) -> None:
         self._ctx = context
@@ -99,12 +119,12 @@ class IngestService:
 
     def submit(self, request: IngestRequest) -> Job:
         self._validate(request)
-        self._ctx.build_source()  # fail fast when no source is configured
+        self._ctx.build_source(request.source)  # fail fast when it isn't configured
         return self._runner.submit(INGEST_JOB, request.model_dump(mode="json"))
 
     def run(self, request: IngestRequest, progress: JobContext | None = None) -> IngestResultView:
         self._validate(request)
-        source = self._ctx.build_source()
+        source = self._ctx.build_source(request.source)
         with self._ctx.lake() as lake:
             pipeline = IngestPipeline(source=source, lake=lake)
             tickers = list(request.tickers)
@@ -120,6 +140,30 @@ class IngestService:
             tickers_ok=result.tickers_ok,
             tickers_failed=result.tickers_failed,
         )
+
+    def sources(self) -> list[DataSourceInfo]:
+        """Every data source the registry knows and whether it is usable.
+        Builds each source (no network) to find out; the configured test
+        override (``source_factory``) is ignored here."""
+        out: list[DataSourceInfo] = []
+        for sid in SOURCE_IDS:
+            try:
+                build_source(sid, self._ctx.settings.sources)
+            except SourceConfigError as exc:
+                configured, detail = False, str(exc)
+            except Exception as exc:  # e.g. a vendor library failing to import
+                configured, detail = False, f"{type(exc).__name__}: {exc}"
+            else:
+                configured, detail = True, None
+            out.append(
+                DataSourceInfo(
+                    id=sid,  # type: ignore[arg-type]
+                    default=sid == DEFAULT_SOURCE_ID,
+                    configured=configured,
+                    detail=detail,
+                )
+            )
+        return out
 
     def _dispatch(
         self, pipeline: IngestPipeline, req: IngestRequest, tickers: list[str]

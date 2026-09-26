@@ -46,3 +46,17 @@ def test_app_factory_builds_app(tmp_path, monkeypatch):
 
     fastapi_app = app_factory()
     assert fastapi_app.title == "Stonks API"
+
+
+def test_app_factory_silences_uvicorn_access_log(monkeypatch, tmp_path):
+    """uvicorn's access log prints query strings, which can carry a stream
+    token; the app's own request log records the path only."""
+    import logging
+
+    from stonks.api import server
+
+    monkeypatch.chdir(tmp_path)
+    access = logging.getLogger("uvicorn.access")
+    monkeypatch.setattr(access, "disabled", False)
+    server.app_factory()
+    assert access.disabled is True
