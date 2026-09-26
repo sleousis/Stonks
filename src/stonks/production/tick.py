@@ -62,7 +62,7 @@ def run_tick(
     as_of: date | None = None,
     dry_run: bool = False,
 ) -> TickResult:
-    as_of = as_of or date.today()
+    as_of = as_of or utc_today()
     tick_id = _new_tick_id(as_of)
     started = _iso_now()
     log = _log.bind(tick_id=tick_id, as_of=as_of.isoformat(), dry_run=dry_run)
@@ -219,6 +219,11 @@ def _run_tick_body(
 
 
 # ---- helpers ---------------------------------------------------------------
+
+
+def utc_today() -> date:
+    """Today's date in UTC — the calendar all stored timestamps use."""
+    return datetime.now(UTC).date()
 
 
 def _new_tick_id(as_of: date) -> str:

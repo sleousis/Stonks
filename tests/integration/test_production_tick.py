@@ -152,6 +152,24 @@ def test_crash_before_snapshot_rolls_back_orders_and_fills_and_marks_tick_error(
     assert "disk full" in json.loads(runs[0]["summary_json"])["error"]
 
 
+def test_utc_today_matches_utc_clock():
+    from datetime import UTC, datetime
+
+    from stonks.production.tick import utc_today
+
+    assert utc_today() == datetime.now(UTC).date()
+
+
+def test_default_as_of_is_the_utc_date(tick_env, monkeypatch):
+    import stonks.production.tick as tick_mod
+
+    lake, state, registry = tick_env
+    monkeypatch.setattr(tick_mod, "utc_today", lambda: date(2026, 3, 20))
+    settings = TickSettings(universe=["UP.US"], threshold=0.0, initial_cash=10_000.0)
+    result = run_tick(state, lake, registry, settings, as_of=None)
+    assert result.tick_id.startswith("tick_2026-03-20_")
+
+
 def test_tick_settings_default_price_staleness_is_seven_days():
     assert TickSettings(universe=["UP.US"]).max_price_staleness_days == 7
 

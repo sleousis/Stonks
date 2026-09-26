@@ -115,6 +115,15 @@ def test_tick_full_run_smoke(runner, seeded):
         state.close()
 
 
+def test_tick_without_as_of_uses_utc_date(runner, seeded, monkeypatch):
+    import stonks.production.tick as tick_mod
+
+    monkeypatch.setattr(tick_mod, "utc_today", lambda: pd.Timestamp("2026-03-20").date())
+    result = runner.invoke(app, ["tick", "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert "tick_2026-03-20_" in result.output
+
+
 def test_tick_with_tickers_override(runner, seeded):
     result = runner.invoke(
         app, ["tick", "--dry-run", "--as-of", "2026-03-20", "--tickers", "UP.US"]

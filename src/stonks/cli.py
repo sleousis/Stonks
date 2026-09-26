@@ -603,7 +603,7 @@ def registry_retire(strategy_id: str) -> None:
 def tick(
     dry_run: bool = typer.Option(False, "--dry-run", help="rank + log, place no orders"),
     as_of: str | None = typer.Option(
-        None, "--as-of", help="override date (YYYY-MM-DD); default is today"
+        None, "--as-of", help="override date (YYYY-MM-DD); default is today in UTC"
     ),
     tickers: str | None = typer.Option(
         None,
@@ -631,7 +631,8 @@ def tick(
             "[production].universe in config/default.toml"
         )
 
-    as_of_date = date.fromisoformat(as_of) if as_of else date.today()
+    # None → run_tick defaults to the UTC date (stored timestamps are UTC).
+    as_of_date = date.fromisoformat(as_of) if as_of else None
     state, registry = _open_registry(settings)
     try:
         with _open_lake(settings.lake.path) as lake:
