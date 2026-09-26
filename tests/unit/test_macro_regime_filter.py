@@ -246,6 +246,24 @@ def test_inner_exit_mode_keeps_only_the_inner_strategys_sells(lake):
 # ---- persistence ----------------------------------------------------------------
 
 
+def test_regimes_are_not_shared_between_lakes(lake, tmp_path):
+    """The lab hands one instance several lakes (permuted / perturbed
+    copies); a regime judged on one must not answer for another."""
+    other = DuckDBLake(tmp_path / "other.duckdb")
+    other.migrate()
+    try:
+        f = _filter(when_unknown="risk_on")
+        day = date(2024, 6, 1)
+        assert f.is_risk_off(day, lake) is True
+        assert f.is_risk_off(day, other) is False  # no macro data there
+        # decide follows the lake seen last: risk on there, so no forced exit
+        orders = f.decide([], Portfolio(cash=0.0, positions={"AAPL.US": 1.0}), {}, day)
+        assert orders == []
+        assert f.is_risk_off(day, lake) is True
+    finally:
+        other.close()
+
+
 def test_save_load_round_trip(tmp_path, lake):
     f = _filter(threshold=0.25)
     f.save(tmp_path / "art")

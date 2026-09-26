@@ -30,11 +30,11 @@ originally.
 
 from __future__ import annotations
 
-import contextlib
 import importlib
 import json
 import weakref
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 from typing import Any, get_args
@@ -46,6 +46,12 @@ from stonks.strategies._common import as_datetime, iso
 from stonks.strategies.base import BaseStrategy
 
 _INNER_DIR = "inner"
+
+
+@dataclass
+class _LakeState:
+    observations: list[tuple[date, date, float]] | None = None
+    regimes: dict[date, tuple[bool, float | None]] = field(default_factory=dict)
 
 
 class MacroRegimeFilter(BaseStrategy):
@@ -161,11 +167,10 @@ class MacroRegimeFilter(BaseStrategy):
         inner_cls = _import_strategy_class(self.params["inner_class_path"])
         self._inner: Strategy = inner_cls(dict(inner_params))
         self._adopt_inner()
-        # series cache per lake; regime per calendar day; last lake seen so
-        # ``decide`` (which gets no lake) can judge a day on its own.
-        self._series: weakref.WeakKeyDictionary[Any, list[tuple[date, date, float]]]
-        self._series = weakref.WeakKeyDictionary()
-        self._regimes: dict[date, tuple[bool, float | None]] = {}
+        # Per lake (weakly held, so the lab's permuted / perturbed copies
+        # never share state): the macro series and the regime per day. The
+        # last lake seen lets ``decide`` (which gets no lake) judge a day.
+        self._lakes: weakref.WeakKeyDictionary[Any, _LakeState] = weakref.WeakKeyDictionary()
         self._last_lake: weakref.ref | None = None
 
     def _adopt_inner(self) -> None:
@@ -187,25 +192,27 @@ class MacroRegimeFilter(BaseStrategy):
 
     def _regime(self, as_of: Any, lake: Any) -> tuple[bool, float | None]:
         day = as_datetime(as_of).date()
-        if lake is not None:
-            self._remember(lake)
-        cached = self._regimes.get(day)
-        if cached is not None:
-            return cached
-        signal = self._signal(day, lake) if lake is not None else None
-        if signal is None:
-            risk_off = self.params["when_unknown"] == "risk_off"
-        elif self.params["risk_off_when"] == "above":
-            risk_off = signal > float(self.params["threshold"])
-        else:
-            risk_off = signal < float(self.params["threshold"])
-        result = (risk_off, signal)
-        if lake is not None:
-            self._regimes[day] = result
-        return result
+        if lake is None:
+            return self._classify(None)
+        state = self._state(lake)
+        cached = state.regimes.get(day)
+        if cached is None:
+            if state.observations is None:
+                state.observations = self._load_observations(lake)
+            cached = self._classify(self._signal(day, state.observations))
+            state.regimes[day] = cached
+        return cached
 
-    def _signal(self, day: date, lake: Any) -> float | None:
-        visible = [(obs, v) for obs, avail, v in self._observations(lake) if avail <= day]
+    def _classify(self, signal: float | None) -> tuple[bool, float | None]:
+        if signal is None:
+            return self.params["when_unknown"] == "risk_off", None
+        threshold = float(self.params["threshold"])
+        if self.params["risk_off_when"] == "above":
+            return signal > threshold, signal
+        return signal < threshold, signal
+
+    def _signal(self, day: date, observations: list[tuple[date, date, float]]) -> float | None:
+        visible = [(obs, v) for obs, avail, v in observations if avail <= day]
         if not visible:
             return None
         latest_obs, latest = visible[-1]
@@ -218,35 +225,34 @@ class MacroRegimeFilter(BaseStrategy):
             return None
         return latest - visible[-1 - n][1]
 
-    def _observations(self, lake: Any) -> list[tuple[date, date, float]]:
+    def _load_observations(self, lake: Any) -> list[tuple[date, date, float]]:
         """(observation_date, available_date, value) oldest first, NULLs dropped."""
-        try:
-            cached = self._series.get(lake)
-        except TypeError:
-            cached = None
-        if cached is not None:
-            return cached
         df = lake.get_macro_series(
             self.params["country_iso"],
             self.params["indicator"],
             publication_lag_days=int(self.params["publication_lag_days"]),
         )
-        rows = [
+        return [
             (obs, avail, float(v))
             for obs, avail, v in zip(
                 df["observation_date"], df["available_date"], df["value"], strict=True
             )
             if v is not None and v == v  # drop NULL / NaN
         ]
-        with contextlib.suppress(TypeError):  # lake can't be weakly referenced
-            self._series[lake] = rows
-        return rows
 
-    def _remember(self, lake: Any) -> None:
+    def _state(self, lake: Any) -> _LakeState:
+        """This lake's cached state; remembers it as the last lake seen. A
+        lake that can't be weakly referenced gets fresh (uncached) state."""
         try:
+            state = self._lakes.get(lake)
+            if state is None:
+                state = _LakeState()
+                self._lakes[lake] = state
             self._last_lake = weakref.ref(lake)
         except TypeError:
             self._last_lake = None
+            return _LakeState()
+        return state
 
     # ---- Strategy Protocol ---------------------------------------------------
 
@@ -276,9 +282,8 @@ class MacroRegimeFilter(BaseStrategy):
         as_of: Any,
     ) -> list[Order]:
         lake = self._last_lake() if self._last_lake is not None else None
-        day = as_datetime(as_of).date()
-        known = day in self._regimes or lake is not None
-        if not known or not self._regime(as_of, lake)[0]:
+        # No lake seen yet: the regime can't be judged here, stay transparent.
+        if lake is None or not self._regime(as_of, lake)[0]:
             return self._inner.decide(my_picks, portfolio, prices, as_of)
         if self.params["risk_off_exit"] == "inner":
             return [o for o in self._inner.decide([], portfolio, prices, as_of) if o.side == "sell"]
