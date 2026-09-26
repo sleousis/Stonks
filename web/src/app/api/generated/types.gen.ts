@@ -935,7 +935,7 @@ export type DraftLabRunRequest = {
     /**
      * Survival Tests
      */
-    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'runs_test' | 'signal_ic' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
+    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cpcv' | 'crisis' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'runs_test' | 'signal_ic' | 'stress' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
     /**
      * Test Options
      */
@@ -2115,7 +2115,7 @@ export type LabRunRequest = {
     /**
      * Survival Tests
      */
-    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'runs_test' | 'signal_ic' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
+    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cpcv' | 'crisis' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'runs_test' | 'signal_ic' | 'stress' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
     /**
      * Test Options
      */
@@ -4907,7 +4907,7 @@ export type SweepRequest = {
     /**
      * Survival Tests
      */
-    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'runs_test' | 'signal_ic' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
+    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cpcv' | 'crisis' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'runs_test' | 'signal_ic' | 'stress' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
     /**
      * Test Options
      */
