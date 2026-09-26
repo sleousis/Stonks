@@ -167,3 +167,61 @@ def test_backtest_and_tick_build_the_same_target_book(tick_env, monkeypatch):
     assert set(tick_weights) == {"UP.US", "DOWN.US"}
     assert book.weights == pytest.approx(tick_weights, rel=1e-12)
     assert tick_weights["UP.US"] != pytest.approx(tick_weights["DOWN.US"])
+
+
+# ---- RS-04: the trade ledger pairs lots per ticker in pipeline runs ---------------
+
+
+class _Window(BuyAndHold):
+    """Scores ``ticker`` 1.0 on days inside [first, last], nothing otherwise."""
+
+    id = "window_fake"
+
+    def __init__(self, ticker: str, first: date, last: date) -> None:
+        super().__init__({"ticker": ticker, "allocation": 1.0})
+        self._first, self._last = first, last
+
+    def estimate_return(self, ticker, as_of, lake):
+        day = as_of.date() if hasattr(as_of, "date") else as_of
+        return 1.0 if ticker == self.params["ticker"] and self._first <= day <= self._last else None
+
+
+def _ledger(lake, strategies, **config):
+    from stonks.backtest.trades import with_trades
+
+    _, report, broker = _run(lake, strategies, **config)
+    return with_trades(report, broker.fills, reference_price=broker.reference_price), broker
+
+
+def test_owner_change_between_buy_and_sell_closes_the_lot(lake_trending):
+    report, broker = _ledger(
+        lake_trending,
+        [
+            _Window("UP.US", date(2026, 1, 5), date(2026, 1, 20)),
+            _Window("UP.US", date(2026, 1, 12), date(2026, 2, 10)),
+        ],
+        construction="equal_weight_top_n",
+    )
+    keys = {f.order_client_id.partition(":")[0] for f in broker.fills}
+    assert len(keys) == 2, keys  # the owner flipped between the buy and the sell
+    assert broker.fetch_portfolio().positions.get("UP.US", 0.0) == pytest.approx(0.0)
+    assert report.trades and not any(t.is_open for t in report.trades)
+    pnl = sum(t.pnl for t in report.trades)
+    assert pnl == pytest.approx(report.equity_curve[-1] - report.equity_curve[0], rel=1e-9)
+
+
+def test_max_holding_exit_closes_the_lot(lake_trending):
+    from stonks.production.rules.max_holding import MaxHoldingSettings
+    from stonks.production.rules.settings import RuleSettings
+
+    report, broker = _ledger(
+        lake_trending,
+        [_Window("UP.US", date(2026, 1, 5), date(2026, 2, 27))],
+        construction="equal_weight_top_n",
+        risk=RiskPolicy(rules=RuleSettings(max_holding=MaxHoldingSettings(max_holding_bars=3))),
+    )
+    sells = [f for f in broker.fills if f.side == "sell"]
+    assert any(not f.order_client_id.startswith("0:") for f in sells), sells
+    assert not any(t.is_open for t in report.trades)
+    pnl = sum(t.pnl for t in report.trades)
+    assert pnl == pytest.approx(report.equity_curve[-1] - report.equity_curve[0], rel=1e-9)

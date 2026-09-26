@@ -74,9 +74,12 @@ runs the same pipeline as the production tick
 are combined by the constructor (``strategy_weights`` in strategy order,
 equal by default), diffed into orders with the no-trade buffer and passed
 through every registered risk rule when ``BacktestConfig.risk`` is set, with
-a ``RiskContext`` from the engine's own equity curve and daily history. The
-history a decision sees ends at its bar (daily) or the day before
-(intraday), never later. Strategies are keyed ``"0"``, ``"1"``, ... by
+a ``RiskContext`` from the engine's own equity curve, daily history and
+the entry date of each held position (from the broker's fills, so
+``max_holding`` works in a backtest). The history a decision sees ends at
+its bar (daily) or the day before (intraday), never later. A rule's order
+carries a date-keyed client id, so the engine adds the bar time to it: two
+forced exits on one intraday day stay two orders. Strategies are keyed ``"0"``, ``"1"``, ... by
 position; each decision's target book is kept in ``target_books``.
 
 Annualization
@@ -455,6 +458,7 @@ class Backtester:
             build_orders,
             vols_from_history,
         )
+        from stonks.production.risk import entry_dates_from_fills
         from stonks.production.rules import RiskContext
 
         construction = self._config.construction_settings
@@ -487,6 +491,10 @@ class Backtester:
                 policy=policy,
                 history=history,
                 equity_curve=[(ts.date(), value) for ts, value in self._equity],
+                entry_dates=entry_dates_from_fills(
+                    (f.ticker, f.side, f.quantity, as_datetime(f.filled_at).date())
+                    for f in getattr(self._broker, "fills", ())
+                ),
             )
         book = BookInput(
             portfolio=portfolio,
@@ -510,7 +518,11 @@ class Backtester:
         )
         self.target_books[as_of] = result.target_book
         self._attribution = {**self._attribution, **result.attribution}
-        return list(result.orders)
+        stamp = as_of.isoformat()
+        return [
+            o if stamp in o.client_id else replace(o, client_id=f"{o.client_id}@{stamp}")
+            for o in result.orders
+        ]
 
     def _exit_owner(self, positions: Mapping[str, float]) -> str | None:
         """The strategy behind the most recent fill on a held ticker."""

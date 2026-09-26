@@ -6,14 +6,19 @@ backtests, reporting, survival tests) reads ``BacktestReport.trades`` and
 
 Pairing (long-only, FIFO)
 -------------------------
-- Fills are grouped by (strategy key, ticker). The strategy key is the
-  ``"<index>:"`` prefix the engine puts on each ``client_id`` (``""`` when
-  there is none), so two strategy instances in one backtest keep separate
-  ledgers.
-- Every buy opens a lot; a sell closes the oldest lots first. Each (lot,
-  sell) pair is one ``RoundTrip``, so a partial exit splits the lot and one
-  sell can close several lots. Sell quantity beyond the open lots (a short,
-  which the long-only broker never fills) is ignored with a warning.
+- A backtest trades one portfolio, so lots are pooled per ticker (RS-04).
+  Every buy opens a lot labelled with its strategy key: the ``"<index>:"``
+  prefix the engine puts on each ``client_id`` (``""`` when there is none).
+- A sell closes the oldest lots with its own strategy key first, then the
+  oldest lots of any other key. So two strategy instances keep their own
+  round trips while each sells what it bought, and a sell whose key owns no
+  lot (a construction pipeline whose owner changed, a risk-rule exit whose
+  client id starts with a date) still closes the shares the portfolio holds.
+  The key is a label for attribution, never a reason to leave a lot open.
+- Each (lot, sell) pair is one ``RoundTrip``, so a partial exit splits the
+  lot and one sell can close several lots. Sell quantity beyond the open
+  lots (a short, which the long-only broker never fills) is ignored with a
+  warning.
 - Lots still open at the end are marked at the last close (``bars``), else
   at ``marks``, else at the ticker's last fill price, and flagged
   ``is_open``.
@@ -45,7 +50,6 @@ from __future__ import annotations
 
 import bisect
 import math
-from collections import deque
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
@@ -186,7 +190,7 @@ def build_round_trips(
         end = len(clock) if exit_ is None else bisect.bisect_left(clock, exit_)
         return max(end - start, 0)
 
-    lots: dict[tuple[str, str], deque[_Lot]] = {}
+    lots: dict[str, list[_Lot]] = {}
     last_price: dict[str, float] = {}
     trades: list[RoundTrip] = []
     for ts, _, event in events:
@@ -195,13 +199,13 @@ def build_round_trips(
             continue
         fill = event
         last_price[fill.ticker] = fill.price
-        key = (_strategy_key(fill.order_client_id), fill.ticker)
+        key = _strategy_key(fill.order_client_id)
         slip = _slippage(fill, reference_price)
-        queue = lots.setdefault(key, deque())
+        queue = lots.setdefault(fill.ticker, [])
         if fill.side == "buy":
             queue.append(
                 _Lot(
-                    key[0],
+                    key,
                     fill.ticker,
                     ts,
                     fill.quantity,
@@ -213,8 +217,9 @@ def build_round_trips(
             )
             continue
         to_sell = fill.quantity
-        while queue and to_sell > _DUST * fill.quantity:
-            lot = queue[0]
+        for lot in _sell_order(queue, key):
+            if to_sell <= _DUST * fill.quantity:
+                break
             qty = min(lot.qty, to_sell)
             share = qty / fill.quantity
             trades.append(
@@ -231,8 +236,7 @@ def build_round_trips(
                 )
             )
             to_sell -= qty
-            if lot.qty <= _DUST * lot.size:
-                queue.popleft()
+        queue[:] = [lot for lot in queue if lot.qty > _DUST * lot.size]
         if to_sell > _DUST * fill.quantity:
             _log.warning("sell_exceeds_open_lots", ticker=fill.ticker, excess=to_sell)
 
@@ -297,10 +301,16 @@ def _trip(
     )
 
 
-def _apply_corporate_action(
-    lots: Mapping[tuple[str, str], deque[_Lot]], record: CorporateActionRecord
-) -> None:
-    held = [lot for (_, ticker), q in lots.items() if ticker == record.ticker for lot in q]
+def _sell_order(queue: Sequence[_Lot], key: str) -> list[_Lot]:
+    """The lots a sell under ``key`` closes, in order: its own lots oldest
+    first, then every other lot oldest first."""
+    return [lot for lot in queue if lot.strategy_key == key] + [
+        lot for lot in queue if lot.strategy_key != key
+    ]
+
+
+def _apply_corporate_action(lots: Mapping[str, list[_Lot]], record: CorporateActionRecord) -> None:
+    held = list(lots.get(record.ticker, ()))
     if record.kind == "split":
         for lot in held:
             lot.qty *= record.value
