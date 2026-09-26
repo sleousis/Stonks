@@ -163,6 +163,7 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#broke
 |--------|------|---------|------|---------|----------|
 | GET | `/api/portfolio` | Get Portfolio | token, or open on loopback |  | [PortfolioView](#portfolioview) |
 | GET | `/api/portfolio/snapshots` | List Snapshots | token, or open on loopback |  | [Page_SnapshotView_](#page_snapshotview_) |
+| GET | `/api/portfolio/totals` | Get Totals | token, or open on loopback |  | [PortfolioTotalsView](#portfoliototalsview) |
 
 ## push endpoints
 
@@ -1211,6 +1212,17 @@ One row per day. ``strategy_id`` is ``None`` for the real portfolio and a shadow
 | `positions` | integer | yes |  |
 | `snapshot_id` | integer \| null | yes |  |
 | `unmapped` | list[string] | yes |  |
+
+### PortfolioTotalsView
+
+Sums over every active portfolio's latest snapshot, for admins. No tickers and no per-person numbers (decision 2026-09-26).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cash` | number | yes |  |
+| `owners` | integer | yes | People who own those portfolios. |
+| `portfolios` | integer | yes | Active portfolios with at least one snapshot. |
+| `total_value` | number | yes | Sum of each book's value at its latest snapshot. |
 
 ### PortfolioView
 

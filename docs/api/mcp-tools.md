@@ -22,6 +22,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_job`](#get_job) | read | no |
 | [`get_pnl`](#get_pnl) | read | no |
 | [`get_portfolio`](#get_portfolio) | read | no |
+| [`get_portfolio_totals`](#get_portfolio_totals) | read | no |
 | [`get_risk_policy`](#get_risk_policy) | read | no |
 | [`get_rule_schema`](#get_rule_schema) | read | no |
 | [`get_shadow_pnl`](#get_shadow_pnl) | read | no |
@@ -153,7 +154,7 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 ### `get_pnl`
 
-Daily P&L of the real portfolio (last snapshot per UTC day). Returns
+Daily P&L of one of your portfolios (last snapshot per UTC day). Returns
 and drawdown are measured from inception even when since trims the rows.
 
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
@@ -161,10 +162,22 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `since` | date \| null | no | `null` | YYYY-MM-DD; first day to include |
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
 
 ### `get_portfolio`
 
-Current portfolio: cash, positions valued at the latest stored closes, weights and total value, from the latest snapshot.
+Current portfolio: cash, positions valued at the latest stored closes,
+weights and total value, from the latest snapshot.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
+
+### `get_portfolio_totals`
+
+Admins only: cash and value summed across every active portfolio (no holdings).
 
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
@@ -272,6 +285,7 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
 | `tick_id` | string \| null | no | `null` |  |
 | `ticker` | string \| null | no | `null` |  |
 | `order_client_id` | string \| null | no | `null` |  |
@@ -324,6 +338,7 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
 | `tick_id` | string \| null | no | `null` |  |
 | `strategy_id` | string \| null | no | `null` |  |
 | `ticker` | string \| null | no | `null` |  |
@@ -339,6 +354,7 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
 

@@ -2559,6 +2559,37 @@ export type PortfolioSyncView = {
 };
 
 /**
+ * PortfolioTotalsView
+ *
+ * Sums over every active portfolio's latest snapshot, for admins. No
+ * tickers and no per-person numbers (decision 2026-09-26).
+ */
+export type PortfolioTotalsView = {
+    /**
+     * Cash
+     */
+    cash: number;
+    /**
+     * Owners
+     *
+     * People who own those portfolios.
+     */
+    owners: number;
+    /**
+     * Portfolios
+     *
+     * Active portfolios with at least one snapshot.
+     */
+    portfolios: number;
+    /**
+     * Total Value
+     *
+     * Sum of each book's value at its latest snapshot.
+     */
+    total_value: number;
+};
+
+/**
  * PortfolioView
  */
 export type PortfolioView = {
@@ -7657,6 +7688,12 @@ export type ListOrdersData = {
          * Offset
          */
         offset?: number;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
     };
     url: '/api/orders';
 };
@@ -7721,6 +7758,12 @@ export type ListFillsData = {
          * Offset
          */
         offset?: number;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
     };
     url: '/api/orders/fills';
 };
@@ -7767,6 +7810,12 @@ export type GetPnlData = {
          * Since
          */
         since?: string | null;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
     };
     url: '/api/pnl';
 };
@@ -7808,7 +7857,14 @@ export type GetPnlResponse = GetPnlResponses[keyof GetPnlResponses];
 export type GetPortfolioData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
     url: '/api/portfolio';
 };
 
@@ -7860,6 +7916,12 @@ export type ListPortfolioSnapshotsData = {
          * Offset
          */
         offset?: number;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
     };
     url: '/api/portfolio/snapshots';
 };
@@ -7897,6 +7959,47 @@ export type ListPortfolioSnapshotsResponses = {
 };
 
 export type ListPortfolioSnapshotsResponse = ListPortfolioSnapshotsResponses[keyof ListPortfolioSnapshotsResponses];
+
+export type GetPortfolioTotalsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/portfolio/totals';
+};
+
+export type GetPortfolioTotalsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetPortfolioTotalsError = GetPortfolioTotalsErrors[keyof GetPortfolioTotalsErrors];
+
+export type GetPortfolioTotalsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PortfolioTotalsView;
+};
+
+export type GetPortfolioTotalsResponse = GetPortfolioTotalsResponses[keyof GetPortfolioTotalsResponses];
 
 export type DeletePushSubscriptionData = {
     body: PushUnsubscribeRequest;
