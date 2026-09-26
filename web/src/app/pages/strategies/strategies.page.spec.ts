@@ -6,7 +6,7 @@ import {
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
-import type { Page, StrategySummary } from '../../api/models';
+import type { Page, ShadowPnlSummary, StrategySummary } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { nextRequest, tick } from '../../../testing/http';
 import { STRATEGY_METADATA } from '../../../testing/strategy-fixtures';
@@ -35,9 +35,24 @@ function statusParam(req: TestRequest): string | null {
   return new URL(req.request.urlWithParams, 'http://localhost').searchParams.get('status');
 }
 
-function page(items: StrategySummary[]): Page<StrategySummary> {
+function page<T = StrategySummary>(items: T[]): Page<T> {
   return { items, total: items.length, limit: 500, offset: 0 };
 }
+
+const PAPER: ShadowPnlSummary[] = [
+  {
+    strategy_id: 'buyhold-spy',
+    status: 'shadow',
+    days: 23,
+    first_day: '2026-09-01',
+    latest_day: '2026-09-24',
+    cumulative_return: 0.0412,
+    max_drawdown: -0.031,
+    total_value: 10412,
+  },
+];
+
+const isPaper = (req: { url: string }) => req.url.split('?')[0] === '/api/shadow/pnl';
 
 describe('StrategiesPage', () => {
   let fixture: ComponentFixture<StrategiesPage>;
@@ -57,9 +72,21 @@ describe('StrategiesPage', () => {
 
   afterEach(() => controller.verify());
 
+  /** Paper summaries answer on their own; `paperFails` makes them fail. */
+  let paperFails = false;
   async function settle(): Promise<void> {
     for (let i = 0; i < 4; i++) {
       await tick(5);
+      for (const req of controller.match(isPaper)) {
+        if (paperFails) {
+          req.flush(
+            { title: 'Server error', status: 500, detail: 'boom' },
+            { status: 500, statusText: 'Server Error' },
+          );
+        } else {
+          req.flush(page(PAPER));
+        }
+      }
       fixture.detectChanges();
     }
   }
@@ -81,7 +108,42 @@ describe('StrategiesPage', () => {
     const link = el.querySelector('a[href="/strategies/momentum-v3"]');
     expect(link?.textContent).toContain('momentum-v3');
     expect(el.textContent).toContain('3 strategies');
-    expect(el.textContent).toContain('MomentumStrategy');
+    expect(el.textContent).toContain('Momentum strategy');
+    expect(el.textContent).not.toContain('stonks.strategies');
+  });
+
+  it('shows paper return, max drawdown and days on paper where there is a paper book', async () => {
+    (await nextRequest(controller, '/api/strategies')).flush(page(ALL));
+    await settle();
+
+    const headers = Array.from(el.querySelectorAll('thead th')).map((th) => th.textContent ?? '');
+    expect(headers.join('|')).toContain('Paper return');
+    expect(headers.join('|')).toContain('Max drawdown');
+    expect(headers.join('|')).toContain('Days on paper');
+
+    const row = Array.from(el.querySelectorAll('tbody tr')).find((tr) =>
+      tr.textContent?.includes('buyhold-spy'),
+    )!;
+    expect(row.textContent).toContain('+4.12%');
+    expect(row.textContent).toContain('-3.10%');
+    expect(row.textContent).toContain('23');
+  });
+
+  it('keeps the list when the paper results fail', async () => {
+    paperFails = true;
+    (await nextRequest(controller, '/api/strategies')).flush(page(ALL));
+    await settle();
+    paperFails = false;
+    expect(rowIds().length).toBe(3);
+    expect(el.textContent).toContain('Paper results could not be loaded');
+  });
+
+  it('does not send traders to the command line when empty', async () => {
+    (await nextRequest(controller, '/api/strategies')).flush(page([]));
+    await settle();
+    expect(el.textContent).toContain('No strategies registered');
+    expect(el.textContent).not.toContain('stonks');
+    expect(el.textContent).not.toContain('command line');
   });
 
   it('refetches with the chosen status filter', async () => {

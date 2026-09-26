@@ -11,6 +11,8 @@ import { RouterLink } from '@angular/router';
 import type { TickRun } from '../../api/models';
 import { TicksService } from '../../api/ticks.service';
 import { formatDuration } from '../../core/format/format';
+import { autoRefresh } from '../../shared/auto-refresh';
+import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { DateTimePipe } from '../../shared/format.pipes';
@@ -27,7 +29,7 @@ const TICK_STATUSES = [
   { value: 'running', label: 'Running' },
 ];
 
-/** Tick history (server paged, filter by status) and the run-tick form. */
+/** Trading run history (server paged, filter by status) and the runner. */
 @Component({
   selector: 'app-ticks-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -46,7 +48,7 @@ const TICK_STATUSES = [
     <div class="page-grid">
       <section class="panel span-8 history" aria-labelledby="ticks-title">
         <div class="panel-head">
-          <h2 id="ticks-title">Tick history</h2>
+          <h2 id="ticks-title">Trading runs</h2>
           <div class="head-tools">
             <label class="visually-hidden" for="tick-status">Status</label>
             <select
@@ -62,41 +64,47 @@ const TICK_STATUSES = [
             </select>
           </div>
         </div>
+        @let p = page();
         @if (ticks.error(); as err) {
-          <app-error-state title="Could not load ticks" [error]="err" (retry)="ticks.reload()" />
-        } @else if (!ticks.hasValue()) {
-          <app-loading-state label="Loading ticks" [rows]="6" />
-        } @else if (ticks.value().items.length === 0) {
+          <app-error-state
+            title="Could not load trading runs"
+            [error]="err"
+            (retry)="ticks.reload()"
+          />
+        } @else if (!p) {
+          <app-loading-state label="Loading trading runs" [rows]="6" />
+        } @else if (p.items.length === 0) {
           <app-empty-state
-            [title]="status() ? 'No ticks with this status' : 'No ticks yet'"
+            [title]="status() ? 'No runs with this status' : 'No trading runs yet'"
             [message]="
               status()
-                ? 'Pick another status or show all ticks.'
-                : 'Run a dry-run tick to see what the active strategies would trade.'
+                ? 'Pick another status or show all runs.'
+                : 'Start a dry run to see what the active strategies would trade.'
             "
           />
         } @else {
           @for (k of [status()]; track k) {
             <app-data-table
-              caption="Production ticks, newest first"
-              [rows]="ticks.value().items"
+              caption="Trading runs, newest first"
+              [rows]="p.items"
               [columns]="columns"
               [rowKey]="key"
-              [total]="ticks.value().total"
-              [offset]="ticks.value().offset"
+              [total]="p.total"
+              [offset]="p.offset"
+              [busy]="ticks.isLoading()"
               [pageSize]="pageSize"
               [initialSort]="{ key: 'started_at', dir: 'desc' }"
               (pageChange)="offset.set($event.offset)"
             >
-              <ng-template appCell="started_at" [appCellOf]="ticks.value().items" let-t>
+              <ng-template appCell="started_at" [appCellOf]="p.items" let-t>
                 <a class="cell-link" [routerLink]="['/orders/ticks', t.id]">{{
                   t.started_at | dateTime
                 }}</a>
               </ng-template>
-              <ng-template appCell="status" [appCellOf]="ticks.value().items" let-t>
+              <ng-template appCell="status" [appCellOf]="p.items" let-t>
                 <app-status-pill [status]="t.status" />
               </ng-template>
-              <ng-template appCell="outcome" [appCellOf]="ticks.value().items" let-t>
+              <ng-template appCell="outcome" [appCellOf]="p.items" let-t>
                 <span
                   [class.muted]="outcome(t).kind === 'none'"
                   [class.loss]="outcome(t).kind === 'error'"
@@ -143,6 +151,9 @@ export class TicksPage {
     params: () => ({ status: this.status() || null, limit: PAGE_SIZE, offset: this.offset() }),
     loader: ({ params }) => this.ticksApi.list(params),
   });
+  /** The last loaded page stays on screen while the next one loads. */
+  protected readonly page = keepLatest(this.ticks);
+  protected readonly auto = autoRefresh(() => [this.ticks]);
 
   protected readonly columns: TableColumn<TickRun>[] = [
     { key: 'started_at', label: 'Started', format: 'datetime', mobile: 'title' },

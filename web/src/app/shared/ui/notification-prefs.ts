@@ -10,7 +10,10 @@ import {
 
 import type { PreferenceItem, PreferencesView } from '../../api/models';
 import { NotificationsService } from '../../api/notifications.service';
+import { SessionService } from '../../core/auth/session.service';
+import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
+import { PermissionNote } from './permission-note';
 import { ErrorState, LoadingState } from './states';
 
 type Category = PreferenceItem['category'];
@@ -39,7 +42,7 @@ const ALWAYS_ON = 'inapp';
 @Component({
   selector: 'app-notification-prefs',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LoadingState, ErrorState],
+  imports: [LoadingState, ErrorState, PermissionNote],
   template: `
     <section class="panel" aria-labelledby="prefs-title">
       <div class="panel-head">
@@ -56,6 +59,7 @@ const ALWAYS_ON = 'inapp';
       } @else {
         <div class="panel-body body">
           <p class="lead">Everything shows in the app. Choose what else reaches you.</p>
+          <app-permission-note permission="notifications.manage" />
           @if (channels().length === 0) {
             <p class="note">This server has no push, email or webhook delivery set up yet.</p>
           } @else {
@@ -81,7 +85,7 @@ const ALWAYS_ON = 'inapp';
                           <input
                             type="checkbox"
                             [checked]="isOn(cat.value, c)"
-                            [disabled]="saving()"
+                            [disabled]="locked()"
                             (change)="setPref(cat.value, c, $event)"
                           />
                           <span class="visually-hidden"
@@ -109,6 +113,7 @@ const ALWAYS_ON = 'inapp';
                   id="quiet-start"
                   class="input"
                   type="time"
+                  [disabled]="!canManage()"
                   [value]="quietStart()"
                   (input)="quietStart.set($any($event.target).value)"
                 />
@@ -119,6 +124,7 @@ const ALWAYS_ON = 'inapp';
                   id="quiet-end"
                   class="input"
                   type="time"
+                  [disabled]="!canManage()"
                   [value]="quietEnd()"
                   (input)="quietEnd.set($any($event.target).value)"
                 />
@@ -128,14 +134,14 @@ const ALWAYS_ON = 'inapp';
               <p class="error" role="alert">{{ err }}</p>
             }
             <div class="actions">
-              <button type="button" class="btn" [disabled]="saving()" (click)="saveQuiet()">
+              <button type="button" class="btn" [disabled]="locked()" (click)="saveQuiet()">
                 Save quiet hours
               </button>
               @if (view()?.quiet_start) {
                 <button
                   type="button"
                   class="btn btn-ghost"
-                  [disabled]="saving()"
+                  [disabled]="locked()"
                   (click)="clearQuiet()"
                 >
                   Turn off
@@ -143,6 +149,56 @@ const ALWAYS_ON = 'inapp';
               }
             </div>
           </fieldset>
+
+          @if (hasWebhook()) {
+            <fieldset class="quiet">
+              <legend>Your webhook</legend>
+              <p class="hint">
+                Alerts you send to Webhook above are posted to this address. It must start with
+                https. For your safety the full address is never shown again after you save it.
+              </p>
+              @if (view()?.webhook; as current) {
+                <p class="current">
+                  Sending to <span class="num">{{ current }}</span>
+                </p>
+              } @else {
+                <p class="current muted">No webhook set.</p>
+              }
+              <div class="field">
+                <label for="webhook-url">{{ view()?.webhook ? 'New address' : 'Address' }}</label>
+                <input
+                  id="webhook-url"
+                  class="input"
+                  type="url"
+                  inputmode="url"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="https://"
+                  [disabled]="!canManage()"
+                  [value]="webhookUrl()"
+                  (input)="webhookUrl.set($any($event.target).value)"
+                />
+              </div>
+              @if (webhookError(); as err) {
+                <p class="error" role="alert">{{ err }}</p>
+              }
+              <div class="actions">
+                <button type="button" class="btn" [disabled]="locked()" (click)="saveWebhook()">
+                  Save webhook
+                </button>
+                @if (view()?.webhook) {
+                  <button
+                    type="button"
+                    class="btn btn-ghost"
+                    [disabled]="locked()"
+                    (click)="removeWebhook()"
+                  >
+                    Remove webhook
+                  </button>
+                }
+              </div>
+            </fieldset>
+          }
         </div>
       }
     </section>
@@ -223,6 +279,10 @@ const ALWAYS_ON = 'inapp';
       font-size: var(--text-sm);
       color: var(--color-loss);
     }
+    .current {
+      font-size: var(--text-sm);
+      overflow-wrap: anywhere;
+    }
     .actions {
       display: flex;
       flex-wrap: wrap;
@@ -233,6 +293,8 @@ const ALWAYS_ON = 'inapp';
 export class NotificationPrefs {
   private readonly api = inject(NotificationsService);
   private readonly toasts = inject(ToastService);
+  private readonly confirm = inject(ConfirmService);
+  private readonly session = inject(SessionService);
 
   protected readonly categories = CATEGORIES;
   protected readonly prefs = resource({ loader: () => this.api.preferences() });
@@ -247,6 +309,15 @@ export class NotificationPrefs {
   protected readonly quietEnd = linkedSignal(() => this.view()?.quiet_end ?? '');
   protected readonly quietError = signal<string | null>(null);
   protected readonly saving = signal(false);
+  protected readonly canManage = computed(() => this.session.can('notifications.manage'));
+  /** Controls are off while a save runs, or for a user who may not change settings. */
+  protected readonly locked = computed(() => this.saving() || !this.canManage());
+  protected readonly hasWebhook = computed(
+    () => this.view()?.channels.includes('webhook') ?? false,
+  );
+  /** Write-only: never filled from the server, cleared after each save. */
+  protected readonly webhookUrl = signal('');
+  protected readonly webhookError = signal<string | null>(null);
 
   protected channelLabel(channel: string): string {
     return CHANNEL_LABELS[channel] ?? channel;
@@ -285,6 +356,33 @@ export class NotificationPrefs {
     this.quietError.set(null);
     if (await this.save(() => this.api.setQuietHours({ start: null, end: null }))) {
       this.toasts.success('Quiet hours are off.');
+    }
+  }
+
+  protected async saveWebhook(): Promise<void> {
+    const url = this.webhookUrl().trim();
+    if (!/^https:\/\/[^/\s]+/i.test(url)) {
+      this.webhookError.set('Enter an address that starts with https://');
+      return;
+    }
+    this.webhookError.set(null);
+    if (await this.save(() => this.api.setWebhook(url))) {
+      this.webhookUrl.set('');
+      this.toasts.success('Saved the webhook.');
+    }
+  }
+
+  protected async removeWebhook(): Promise<void> {
+    const ok = await this.confirm.confirm({
+      title: 'Remove your webhook?',
+      message: 'Alerts stop going to it. You can add an address again at any time.',
+      confirmLabel: 'Remove webhook',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    this.webhookError.set(null);
+    if (await this.save(() => this.api.setWebhook(null))) {
+      this.toasts.success('Removed the webhook.');
     }
   }
 

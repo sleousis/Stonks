@@ -14,11 +14,13 @@ import { StrategiesService } from '../../api/strategies.service';
 import { SystemService } from '../../api/system.service';
 import { formatMoney, formatPercent } from '../../core/format/format';
 import { type CheckRow, checkRow, checklistItems } from '../../shared/golive-checks';
+import { LIFECYCLE } from '../../shared/governance-labels';
 import { HelpTip } from '../../shared/ui/help-tip';
-import { CliCommand } from '../../shared/ui/cli-command';
+import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { strategyKindName } from '../strategies/strategy-format';
 
 export { CHECK_MEASURES, checkRow, type CheckRow } from '../../shared/golive-checks';
 
@@ -36,7 +38,7 @@ const STATUS_ORDER: Record<StrategySummary['status'], number> = {
     HelpTip,
     PageHeader,
     StatusPill,
-    CliCommand,
+    ModeStamp,
     LoadingState,
     EmptyState,
     ErrorState,
@@ -86,7 +88,7 @@ export class GoLivePage {
     const items = [...this.strategies.value().items].sort(
       (a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || a.id.localeCompare(b.id),
     );
-    const labels = { shadow: 'Shadow', active: 'Active', retired: 'Retired' } as const;
+    const labels = { shadow: 'Paper trading', active: 'Live', retired: 'Stopped' } as const;
     return (['shadow', 'active', 'retired'] as const)
       .map((status) => ({ label: labels[status], items: items.filter((s) => s.status === status) }))
       .filter((g) => g.items.length > 0);
@@ -104,7 +106,8 @@ export class GoLivePage {
     return id && this.strategies.hasValue() && !this.selected() ? id : null;
   });
 
-  protected readonly command = computed(() => `stonks golive check ${this.selectedId()}`);
+  protected readonly goLiveLabel = LIFECYCLE.live.label;
+  protected readonly kindName = strategyKindName;
 
   protected readonly riskRows = computed(() => {
     if (!this.risk.hasValue()) return [];

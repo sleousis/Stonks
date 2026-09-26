@@ -1,15 +1,9 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  type ElementRef,
-  computed,
-  effect,
-  signal,
-  viewChild,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 
 import type { GoLiveReport, StatusChangeRequest } from '../../api/models';
 import { type CheckRow, checkRow } from '../golive-checks';
+import { Sheet, TypedConfirm, typedMatches } from './sheet';
+import { HoldButton } from './sheet-hold-button';
 import { StatusPill } from './status-pill';
 
 /** A promotion override needs a reason of at least this many characters (API rule). */
@@ -27,6 +21,11 @@ export interface StatusChangeOptions {
   reasonHint?: string;
   /** The trader must type this exact text to enable the confirm button. */
   typedConfirmation?: string;
+  /**
+   * Confirm by holding the button for about a second instead of typing
+   * (gate-passing promotions). Ignored when `typedConfirmation` is set.
+   */
+  hold?: boolean;
   /** Ask the API to promote past a failing go-live gate. */
   override?: boolean;
   /** The go-live result to show first (promotions). */
@@ -53,19 +52,19 @@ let nextId = 0;
 @Component({
   selector: 'app-status-change-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [StatusPill],
+  imports: [StatusPill, Sheet, TypedConfirm, HoldButton],
   template: `
-    <dialog
-      #dialog
-      class="sheet"
-      [attr.aria-labelledby]="id + '-title'"
-      [attr.aria-describedby]="id + '-message'"
-      (cancel)="$event.preventDefault(); answer(false)"
+    <app-sheet
+      [open]="!!current()"
+      [wide]="true"
+      [labelledBy]="id + '-title'"
+      [describedBy]="id + '-message'"
+      (dismiss)="answer(false)"
     >
       @if (current(); as req) {
-        <form (submit)="$event.preventDefault(); answer(true)">
+        <form class="sheet-form" (submit)="$event.preventDefault(); answer(true)">
           <h2 [id]="id + '-title'">{{ req.title }}</h2>
-          <p [id]="id + '-message'" class="message">{{ req.message }}</p>
+          <p [id]="id + '-message'" class="sheet-message">{{ req.message }}</p>
 
           @if (req.golive; as g) {
             <div class="golive" [class.failed]="!g.passed" role="status">
@@ -122,64 +121,39 @@ let nextId = 0;
           </div>
 
           @if (req.typedConfirmation) {
-            <div class="field">
-              <label [for]="id + '-typed'">
-                Type <strong class="phrase">{{ req.typedConfirmation }}</strong> to confirm
-              </label>
-              <input
-                class="input"
-                autocomplete="off"
-                autocapitalize="off"
-                spellcheck="false"
-                [id]="id + '-typed'"
-                [value]="typed()"
-                (input)="typed.set($any($event.target).value)"
-              />
-            </div>
+            <app-typed-confirm
+              [inputId]="id + '-typed'"
+              [phrase]="req.typedConfirmation"
+              [(value)]="typed"
+            />
           }
 
-          <div class="actions">
+          <div class="sheet-actions">
             <button type="button" class="btn" (click)="answer(false)">Cancel</button>
-            <button
-              type="submit"
-              class="btn"
-              [class.btn-danger]="req.tone === 'danger'"
-              [class.btn-primary]="req.tone !== 'danger'"
-              [disabled]="!canConfirm()"
-            >
-              {{ req.confirmLabel }}
-            </button>
+            @if (holdMode()) {
+              <app-hold-button
+                [label]="req.confirmLabel"
+                [tone]="req.tone ?? 'default'"
+                [disabled]="!canConfirm()"
+                (confirmed)="answer(true, true)"
+              />
+            } @else {
+              <button
+                type="submit"
+                class="btn"
+                [class.btn-danger]="req.tone === 'danger'"
+                [class.btn-primary]="req.tone !== 'danger'"
+                [disabled]="!canConfirm()"
+              >
+                {{ req.confirmLabel }}
+              </button>
+            }
           </div>
         </form>
       }
-    </dialog>
+    </app-sheet>
   `,
   styles: `
-    @use 'breakpoints' as bp;
-
-    .sheet {
-      width: min(520px, calc(100vw - 32px));
-      max-height: calc(100dvh - 32px);
-      padding: 0;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-lg);
-      background: var(--color-surface);
-      color: var(--color-ink);
-      box-shadow: var(--shadow-2);
-    }
-    .sheet::backdrop {
-      background: var(--color-scrim);
-    }
-    form {
-      display: grid;
-      gap: var(--space-4);
-      padding: var(--space-5);
-    }
-    h2 {
-      font-size: var(--text-lg);
-      overflow-wrap: anywhere;
-    }
-    .message,
     .note {
       color: var(--color-ink-2);
     }
@@ -230,44 +204,9 @@ let nextId = 0;
     .hint.error {
       color: var(--color-loss);
     }
-    .phrase {
-      font-weight: var(--weight-bold);
-      user-select: all;
-      overflow-wrap: anywhere;
-    }
-    .actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: var(--space-2);
-    }
-    @include bp.phone {
-      .sheet {
-        width: 100vw;
-        max-width: 100vw;
-        height: 100dvh;
-        max-height: 100dvh;
-        margin: 0;
-        border: 0;
-        border-radius: 0;
-      }
-      form {
-        min-height: 100%;
-        align-content: start;
-        padding: calc(var(--space-5) + env(safe-area-inset-top)) var(--space-4)
-          calc(var(--space-4) + env(safe-area-inset-bottom));
-      }
-      .actions {
-        margin-top: auto;
-        flex-direction: column-reverse;
-      }
-      .actions .btn {
-        width: 100%;
-      }
-    }
   `,
 })
 export class StatusChangeDialog {
-  private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
   protected readonly id = `status-change-${nextId++}`;
 
   protected readonly current = signal<Open | null>(null);
@@ -293,7 +232,7 @@ export class StatusChangeDialog {
     if (min > 1) {
       const left = Math.max(0, min - this.reasonLength());
       return left
-        ? `At least ${min} characters; ${left} more to go. It is kept in the audit history.`
+        ? `At least ${min} characters, ${left} more to go. It is kept in the audit history.`
         : 'Kept in the audit history with your override.';
     }
     if (this.showReasonError()) return 'Enter a reason to continue.';
@@ -303,20 +242,14 @@ export class StatusChangeDialog {
   protected readonly canConfirm = computed(() => {
     const req = this.current();
     if (!req) return false;
-    const typedOk = !req.typedConfirmation || this.typed().trim() === req.typedConfirmation;
-    return typedOk && this.reasonOk();
+    return typedMatches(req.typedConfirmation, this.typed()) && this.reasonOk();
   });
 
-  constructor() {
-    effect(() => {
-      const el = this.dialog().nativeElement;
-      if (this.current()) {
-        if (!el.open) el.showModal?.();
-      } else if (el.open) {
-        el.close();
-      }
-    });
-  }
+  /** Hold to confirm, unless the trader must type something. */
+  protected readonly holdMode = computed(() => {
+    const req = this.current();
+    return !!req?.hold && !req.typedConfirmation;
+  });
 
   /** Resolves to the request body, or `null` when the trader cancels. */
   open(options: StatusChangeOptions): Promise<StatusChangeRequest | null> {
@@ -335,7 +268,7 @@ export class StatusChangeDialog {
     });
   }
 
-  protected answer(confirmed: boolean): void {
+  protected answer(confirmed: boolean, fromHold = false): void {
     const req = this.current();
     if (!req) return;
     if (!confirmed) {
@@ -343,7 +276,8 @@ export class StatusChangeDialog {
       return;
     }
     this.tried.set(true);
-    if (!this.canConfirm()) return;
+    // Enter in a field submits the form: in hold mode only the hold confirms.
+    if (!this.canConfirm() || (this.holdMode() && !fromHold)) return;
     req.resolve({ reason: this.reason().trim(), override: !!req.override });
   }
 }

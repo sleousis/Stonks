@@ -106,6 +106,65 @@ describe('TickDetailPage', () => {
     expect(shadow?.textContent).toContain('KeyError: close');
   });
 
+  it('names the run by its time and keeps the id as secondary text', async () => {
+    (await nextRequest(controller, '/api/ticks/t1')).flush(TICK);
+    (await nextRequest(controller, '/api/orders/fills')).flush({
+      items: [],
+      total: 0,
+      limit: 200,
+      offset: 0,
+    });
+    await settle();
+    const h2 = el.querySelector('.detail-head h2')?.textContent ?? '';
+    expect(h2).toContain('Trading run of');
+    expect(h2).not.toContain('t1');
+    expect(el.querySelector('.run-id')?.textContent).toContain('t1');
+    const risk = el.querySelector('section[aria-labelledby="risk-title"]');
+    expect(risk?.querySelector('app-side-tag')?.textContent).toContain('Buy');
+    expect(el.querySelector('.back-link')?.textContent).toContain('All trading runs');
+  });
+
+  it('shows a link when total > items', async () => {
+    (await nextRequest(controller, '/api/ticks/t1')).flush(TICK);
+    const items = Array.from({ length: 200 }, (_, i) => ({
+      id: i,
+      order_client_id: `o${i}`,
+      ticker: 'AAPL.US',
+      quantity: 1,
+      price: 100,
+      fee: 0,
+      tick_id: 't1',
+      filled_at: '2026-09-25T21:00:03Z',
+    }));
+    (await nextRequest(controller, '/api/orders/fills')).flush({
+      items,
+      total: 340,
+      limit: 200,
+      offset: 0,
+    });
+    await settle();
+    const fills = el.querySelector('section[aria-labelledby="tick-fills-title"]')!;
+    const link = fills.querySelector<HTMLAnchorElement>('.panel-head a')!;
+    expect(link.textContent).toContain('200 of 340');
+    expect(link.getAttribute('href')).toBe('/orders/fills?tick=t1');
+    expect(fills.querySelector('td a[href="/trades/orders/o0"]')?.textContent).toContain(
+      'View order',
+    );
+  });
+
+  it('shows no cap link when every fill fits', async () => {
+    (await nextRequest(controller, '/api/ticks/t1')).flush(TICK);
+    (await nextRequest(controller, '/api/orders/fills')).flush({
+      items: [],
+      total: 0,
+      limit: 200,
+      offset: 0,
+    });
+    await settle();
+    const fills = el.querySelector('section[aria-labelledby="tick-fills-title"]')!;
+    expect(fills.querySelector('.panel-head a')).toBeNull();
+  });
+
   it('names the exit strategy when no candidate qualified', async () => {
     (await nextRequest(controller, '/api/ticks/t1')).flush({
       ...TICK,

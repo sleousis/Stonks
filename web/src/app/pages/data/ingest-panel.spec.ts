@@ -3,9 +3,11 @@ import { type ComponentFixture, TestBed } from '@angular/core/testing';
 
 import type { DataSourceInfo, Job } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
+import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { JOB_FETCH, JOB_POLL_MS } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
+import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
 import { IngestPanel } from './ingest-panel';
 
@@ -51,7 +53,7 @@ describe('IngestPanel', () => {
     fixture.detectChanges();
   }
 
-  beforeEach(async () => {
+  async function setup(me = ADMIN): Promise<void> {
     TestBed.configureTestingModule({
       providers: [
         ...provideApi(),
@@ -63,12 +65,106 @@ describe('IngestPanel', () => {
     });
     http = TestBed.inject(HttpTestingController);
     confirm = TestBed.inject(ConfirmService);
+    const loading = TestBed.inject(SessionService).load();
+    (await nextRequest(http, '/api/auth/me')).flush(me);
+    await loading;
     fixture = TestBed.createComponent(IngestPanel);
     el = fixture.nativeElement;
     fixture.detectChanges();
     (await nextRequest(http, '/api/sources')).flush(SOURCES);
     await tick();
     fixture.detectChanges();
+  }
+
+  beforeEach(async () => {
+    if (!expect.getState().currentTestName?.includes('trader')) await setup();
+  });
+
+  /** Fill the form, confirm, and bring the job to `succeeded`. */
+  async function runToSuccess(): Promise<void> {
+    set('ingest-tickers', 'aapl.us');
+    submit();
+    await tick();
+    confirm.request()!.resolve(true);
+    (await nextRequest(http, '/api/ingest/runs', 'POST')).flush(job('queued'), {
+      status: 202,
+      statusText: 'Accepted',
+    });
+    (await nextRequest(http, '/api/jobs/job_1')).flush(job('succeeded', 1));
+  }
+
+  it('a trader sees why Run ingest is off and nothing is asked', async () => {
+    await setup(TRADER);
+    const button = el.querySelector<HTMLButtonElement>('button[type=submit]')!;
+    expect(button.disabled).toBe(true);
+    expect(el.querySelector('.permission-note')?.textContent).toContain('Admins only.');
+    expect(el.textContent).not.toContain('API token');
+    set('ingest-tickers', 'aapl.us');
+    submit();
+    await tick();
+    expect(confirm.request()).toBeNull();
+  });
+
+  it('result 500 after success shows an inline error with retry', async () => {
+    await runToSuccess();
+    (await nextRequest(http, '/api/ingest/jobs/job_1/result')).flush(
+      { title: 'x', status: 500, detail: 'Result store unavailable.' },
+      { status: 500, statusText: 'Server Error' },
+    );
+    await tick();
+    fixture.detectChanges();
+    const error = el.querySelector('app-error-state')!;
+    expect(error.textContent).toContain('its result could not load');
+    error.querySelector<HTMLButtonElement>('button')!.click();
+    (await nextRequest(http, '/api/ingest/jobs/job_1/result')).flush({
+      run_id: 7,
+      kind: 'prices',
+      status: 'ok',
+      tickers_ok: 1,
+      tickers_failed: 0,
+    });
+    await tick();
+    fixture.detectChanges();
+    expect(el.querySelector('app-error-state')).toBeNull();
+    expect(el.textContent).toContain('Run #7 ok');
+  });
+
+  it('cancel asks first ("Cancel job" / "Keep running") and only then cancels', async () => {
+    set('ingest-tickers', 'aapl.us');
+    submit();
+    await tick();
+    confirm.request()!.resolve(true);
+    (await nextRequest(http, '/api/ingest/runs', 'POST')).flush(job('queued'), {
+      status: 202,
+      statusText: 'Accepted',
+    });
+    (await nextRequest(http, '/api/jobs/job_1')).flush(job('queued'));
+    await tick(5);
+    fixture.detectChanges();
+    expect(el.textContent).not.toContain('job_1');
+
+    const cancel = () =>
+      [...el.querySelectorAll<HTMLButtonElement>('.job button')].find(
+        (b) => b.textContent?.trim() === 'Cancel',
+      )!;
+    cancel().click();
+    await tick();
+    const ask = confirm.request()!;
+    expect(ask.confirmLabel).toBe('Cancel job');
+    expect(ask.cancelLabel).toBe('Keep running');
+    ask.resolve(false);
+    await tick();
+    expect(http.match((r) => r.method === 'POST' && r.url.includes('cancel')).length).toBe(0);
+
+    cancel().click();
+    await tick();
+    confirm.request()!.resolve(true);
+    const post = await nextRequest(http, '/api/jobs/job_1/cancel', 'POST');
+    post.flush(job('cancelled'));
+    // Let polling see the cancelled job so the handle settles.
+    for (const r of http.match((req) => req.url.endsWith('/api/jobs/job_1'))) {
+      r.flush(job('cancelled'));
+    }
   });
 
   it('offers every source the API lists and flags unconfigured ones', () => {
@@ -107,7 +203,7 @@ describe('IngestPanel', () => {
 
     const request = confirm.request()!;
     expect(request.message).toBe(
-      'Fetches prices for 2 tickers (AAPL.US, MSFT.US) from yahoo since 2026-01-02 and writes them to the lake.',
+      'Fetches prices for 2 tickers (AAPL.US, MSFT.US) from yahoo since 2026-01-02 and saves them.',
     );
     request.resolve(true);
 

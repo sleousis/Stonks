@@ -11,8 +11,11 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import type { FillView } from '../../api/models';
 import { OrdersService } from '../../api/orders.service';
+import { autoRefresh } from '../../shared/auto-refresh';
+import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 
 const PAGE_SIZE = 50;
 
@@ -23,8 +26,8 @@ export const FILL_COLUMNS: TableColumn<FillView>[] = [
   { key: 'price', label: 'Price', format: 'money' },
   { key: 'value', label: 'Value', format: 'money', value: (f) => f.quantity * f.price },
   { key: 'fee', label: 'Fee', format: 'money' },
-  { key: 'tick_id', label: 'Tick', mobile: 'hide' },
-  { key: 'order_client_id', label: 'Order', mobile: 'hide' },
+  { key: 'tick_id', label: 'Run', sortable: false, mobile: 'hide' },
+  { key: 'order_client_id', label: 'Order', sortable: false, mobile: 'hide' },
   { key: 'filled_at', label: 'Filled', format: 'datetime' },
 ];
 
@@ -37,8 +40,8 @@ export const FILL_COLUMNS: TableColumn<FillView>[] = [
     <section class="panel" aria-labelledby="fills-title">
       <div class="panel-head">
         <h2 id="fills-title">Fills</h2>
-        @if (fills.hasValue()) {
-          <span class="count num">{{ fills.value().total }} matching</span>
+        @if (page(); as p) {
+          <span class="count num">{{ p.total }} matching</span>
         }
       </div>
 
@@ -60,21 +63,21 @@ export const FILL_COLUMNS: TableColumn<FillView>[] = [
           />
         </div>
         <div class="field">
-          <label for="ff-tick">Tick</label>
+          <label for="ff-tick">Trading run</label>
           <input
             id="ff-tick"
             class="input"
-            placeholder="Tick id"
+            placeholder="Run id"
             [value]="tick() ?? ''"
             (change)="setFilter('tick', $any($event.target).value)"
           />
         </div>
         <div class="field">
-          <label for="ff-order">Order client id</label>
+          <label for="ff-order">Order</label>
           <input
             id="ff-order"
             class="input"
-            placeholder="Client id"
+            placeholder="Order id"
             [value]="order() ?? ''"
             (change)="setFilter('order', $any($event.target).value)"
           />
@@ -86,43 +89,45 @@ export const FILL_COLUMNS: TableColumn<FillView>[] = [
         </div>
       </form>
 
+      @let p = page();
       @if (fills.error(); as err) {
         <app-error-state title="Could not load fills" [error]="err" (retry)="fills.reload()" />
-      } @else if (!fills.hasValue()) {
+      } @else if (!p) {
         <app-loading-state label="Loading fills" [rows]="6" />
-      } @else if (fills.value().items.length === 0) {
+      } @else if (p.items.length === 0) {
         <app-empty-state
           [title]="hasFilters() ? 'No fills match these filters' : 'No fills yet'"
           [message]="
             hasFilters()
-              ? 'Clear a filter; ids must match exactly.'
-              : 'Fills are recorded when a real (not dry-run) tick sends orders the broker fills.'
+              ? 'Clear a filter. Ids must match exactly.'
+              : 'Fills are recorded when a real trading run (not a dry run) sends orders the broker fills.'
           "
         />
       } @else {
         @for (k of [filterKey()]; track k) {
           <app-data-table
             caption="Fills received for orders"
-            [rows]="fills.value().items"
+            [rows]="p.items"
             [columns]="columns"
             [rowKey]="key"
-            [total]="fills.value().total"
-            [offset]="fills.value().offset"
+            [total]="p.total"
+            [offset]="p.offset"
+            [busy]="fills.isLoading()"
             [pageSize]="pageSize"
             [initialSort]="{ key: 'filled_at', dir: 'desc' }"
             (pageChange)="offset.set($event.offset)"
           >
-            <ng-template appCell="tick_id" [appCellOf]="fills.value().items" let-f>
+            <ng-template appCell="tick_id" [appCellOf]="p.items" let-f>
               @if (f.tick_id) {
-                <a class="cell-link mono" [routerLink]="['/orders/ticks', f.tick_id]">{{
-                  f.tick_id
-                }}</a>
+                <a class="cell-link" [routerLink]="['/orders/ticks', f.tick_id]">View run</a>
               } @else {
-                <span class="mono">–</span>
+                <span class="muted">–</span>
               }
             </ng-template>
-            <ng-template appCell="order_client_id" [appCellOf]="fills.value().items" let-f>
-              <span class="mono id">{{ f.order_client_id }}</span>
+            <ng-template appCell="order_client_id" [appCellOf]="p.items" let-f>
+              <a class="cell-link" [routerLink]="['/trades/orders', f.order_client_id]"
+                >View order</a
+              >
             </ng-template>
           </app-data-table>
         }
@@ -149,14 +154,25 @@ export class FillsPage {
     tick_id: this.tick() || null,
     order_client_id: this.order() || null,
   }));
-  protected readonly filterKey = computed(() => JSON.stringify(this.filters()));
+  private readonly portfolioCtx = inject(PortfolioContextService);
+  protected readonly filterKey = computed(() =>
+    JSON.stringify({ ...this.filters(), portfolio: this.portfolioCtx.selectedId() }),
+  );
   protected readonly hasFilters = computed(() => Object.values(this.filters()).some(Boolean));
   protected readonly offset = linkedSignal({ source: this.filterKey, computation: () => 0 });
 
   protected readonly fills = resource({
-    params: () => ({ ...this.filters(), limit: PAGE_SIZE, offset: this.offset() }),
+    params: () => ({
+      ...this.filters(),
+      ...this.portfolioCtx.query(),
+      limit: PAGE_SIZE,
+      offset: this.offset(),
+    }),
     loader: ({ params }) => this.ordersApi.fills(params),
   });
+  /** The last loaded page stays on screen while the next one loads. */
+  protected readonly page = keepLatest(this.fills);
+  protected readonly auto = autoRefresh(() => [this.fills]);
 
   protected setFilter(name: 'ticker' | 'tick' | 'order', raw: string): void {
     let value: string | null = raw.trim() || null;

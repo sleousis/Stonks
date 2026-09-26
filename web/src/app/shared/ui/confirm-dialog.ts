@@ -1,52 +1,56 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  type ElementRef,
-  computed,
-  effect,
-  inject,
-  linkedSignal,
-  viewChild,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, linkedSignal } from '@angular/core';
 
 import { ConfirmService } from '../../core/confirm/confirm.service';
+import { ModeStamp } from './mode-stamp';
+import { Sheet, TypedConfirm, typedMatches } from './sheet';
+import { SideTag } from './side-tag';
 
 /**
- * Renders ConfirmService requests in a modal <dialog>. Mounted once, in the
- * shell. On phones it becomes a full-screen sheet.
+ * Renders ConfirmService requests in a modal sheet. Mounted once, in the
+ * shell. With a `ticket`, the request reads as an order ticket: side mark,
+ * PAPER or LIVE, and the lines in tabular mono.
  */
 @Component({
   selector: 'app-confirm-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [Sheet, TypedConfirm, SideTag, ModeStamp],
   template: `
-    <dialog
-      #dialog
-      class="sheet"
-      aria-labelledby="confirm-title"
-      aria-describedby="confirm-message"
-      (cancel)="$event.preventDefault(); answer(false)"
+    <app-sheet
+      [open]="!!request()"
+      labelledBy="confirm-title"
+      describedBy="confirm-message"
+      (dismiss)="answer(false)"
     >
       @if (request(); as req) {
-        <form method="dialog" (submit)="$event.preventDefault(); answer(true)">
+        <form class="sheet-form" method="dialog" (submit)="$event.preventDefault(); answer(true)">
           <h2 id="confirm-title">{{ req.title }}</h2>
-          <p id="confirm-message" class="message">{{ req.message }}</p>
-          @if (req.typedConfirmation) {
-            <div class="field">
-              <label for="confirm-typed">
-                Type <strong class="phrase">{{ req.typedConfirmation }}</strong> to confirm
-              </label>
-              <input
-                id="confirm-typed"
-                class="input"
-                autocomplete="off"
-                autocapitalize="off"
-                spellcheck="false"
-                [value]="typed()"
-                (input)="typed.set($any($event.target).value)"
-              />
+          @if (req.ticket; as t) {
+            <div class="ticket" [class.live]="t.live" aria-label="Order ticket" role="group">
+              <p class="ticket-head">
+                @if (t.side) {
+                  <app-side-tag [side]="t.side" />
+                }
+                <app-mode-stamp [live]="t.live" />
+              </p>
+              <dl class="ticket-lines">
+                @for (line of t.lines; track line.label) {
+                  <div>
+                    <dt>{{ line.label }}</dt>
+                    <dd class="num">{{ line.value }}</dd>
+                  </div>
+                }
+              </dl>
             </div>
           }
-          <div class="actions">
+          <p id="confirm-message" class="sheet-message">{{ req.message }}</p>
+          @if (req.typedConfirmation) {
+            <app-typed-confirm
+              inputId="confirm-typed"
+              [phrase]="req.typedConfirmation"
+              [(value)]="typed"
+            />
+          }
+          <div class="sheet-actions">
             <button type="button" class="btn" (click)="answer(false)">
               {{ req.cancelLabel ?? 'Cancel' }}
             </button>
@@ -62,91 +66,57 @@ import { ConfirmService } from '../../core/confirm/confirm.service';
           </div>
         </form>
       }
-    </dialog>
+    </app-sheet>
   `,
   styles: `
-    @use 'breakpoints' as bp;
-
-    .sheet {
-      width: min(460px, calc(100vw - 32px));
-      padding: 0;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-lg);
-      background: var(--color-surface);
-      color: var(--color-ink);
-      box-shadow: var(--shadow-2);
-    }
-    .sheet::backdrop {
-      background: var(--color-scrim);
-    }
-    form {
+    .ticket {
       display: grid;
-      gap: var(--space-4);
-      padding: var(--space-5);
+      gap: var(--space-2);
+      padding: var(--space-3);
+      border: 1px dashed var(--color-border-strong);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface-2);
     }
-    h2 {
-      font-size: var(--text-lg);
+    .ticket.live {
+      border-style: solid;
+      border-color: var(--color-brass);
     }
-    .message {
-      color: var(--color-ink-2);
-    }
-    .phrase {
-      font-weight: var(--weight-bold);
-      user-select: all;
-    }
-    .actions {
+    .ticket-head {
       display: flex;
-      justify-content: flex-end;
+      align-items: center;
       gap: var(--space-2);
     }
-    @include bp.phone {
-      .sheet {
-        width: 100vw;
-        max-width: 100vw;
-        height: 100dvh;
-        max-height: 100dvh;
-        margin: 0;
-        border: 0;
-        border-radius: 0;
-      }
-      form {
-        min-height: 100%;
-        align-content: start;
-        padding: calc(var(--space-5) + env(safe-area-inset-top)) var(--space-4)
-          calc(var(--space-4) + env(safe-area-inset-bottom));
-      }
-      .actions {
-        margin-top: auto;
-        flex-direction: column-reverse;
-      }
-      .actions .btn {
-        width: 100%;
-      }
+    .ticket-lines {
+      display: grid;
+      gap: var(--space-1);
+      margin: 0;
+    }
+    .ticket-lines div {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-3);
+      min-width: 0;
+    }
+    .ticket-lines dt {
+      color: var(--color-ink-2);
+    }
+    .ticket-lines dd {
+      margin: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      text-align: right;
+      overflow-wrap: anywhere;
     }
   `,
 })
 export class ConfirmDialog {
   private readonly confirm = inject(ConfirmService);
-  private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
 
   protected readonly request = this.confirm.request;
   protected readonly typed = linkedSignal({ source: this.request, computation: () => '' });
   protected readonly canConfirm = computed(() => {
     const req = this.request();
-    if (!req) return false;
-    return !req.typedConfirmation || this.typed().trim() === req.typedConfirmation;
+    return !!req && typedMatches(req.typedConfirmation, this.typed());
   });
-
-  constructor() {
-    effect(() => {
-      const el = this.dialog().nativeElement;
-      if (this.request()) {
-        if (!el.open) el.showModal?.();
-      } else if (el.open) {
-        el.close();
-      }
-    });
-  }
 
   protected answer(confirmed: boolean): void {
     const req = this.request();

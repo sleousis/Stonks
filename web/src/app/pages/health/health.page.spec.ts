@@ -59,6 +59,10 @@ describe('HealthPage', () => {
     const ticks = await nextRequest(http, '/api/ticks');
     expect(ticks.request.urlWithParams).toContain('status=error');
     ticks.flush(NO_TICKS);
+    // The system alerts panel loads on its own, once.
+    http
+      .match((r) => r.url.split('?')[0] === '/api/alerts')
+      .forEach((r) => r.flush({ items: [], total: 0, limit: 20, offset: 0 }));
     await tick();
     fixture.detectChanges();
   }
@@ -90,7 +94,7 @@ describe('HealthPage', () => {
   it('shows recent ingest failures with their error text', async () => {
     await flushAll();
     expect(el.textContent).toContain('HTTP 402 payment required');
-    expect(el.textContent).toContain('No failed ticks');
+    expect(el.textContent).toContain('No failed trading runs');
   });
 
   it('is critical when a run is stuck', async () => {
@@ -115,6 +119,11 @@ describe('HealthPage', () => {
     expect(el.textContent).toContain('The check passes');
   });
 
+  it('shows the recent system alerts panel (UI-07)', async () => {
+    await flushAll();
+    expect(el.querySelector('app-alerts-panel')).not.toBeNull();
+  });
+
   it('checks chosen tickers', async () => {
     await flushAll();
     const input = el.querySelector<HTMLInputElement>('#health-tickers')!;
@@ -135,5 +144,16 @@ describe('HealthPage', () => {
     refresh.click();
     await flushAll();
     http.verify();
+  });
+
+  it('explains a missing trading universe in plain words', async () => {
+    await flushAll({
+      ...REPORT,
+      checks: REPORT.checks.filter((c) => !c.name.startsWith('freshness:')),
+    });
+    const text = el.querySelector('[aria-labelledby="fresh-title"]')!.textContent!;
+    expect(text).toContain('No universe is set for trading yet. Ask your admin');
+    expect(el.textContent).not.toMatch(/\[[a-z_.]+\]/);
+    expect(el.textContent).not.toContain('ingest');
   });
 });

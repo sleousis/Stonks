@@ -96,7 +96,7 @@
           (change)="setCost($any($event.target).value)"
         >
           <option value="configured" [selected]="form().cost === 'configured'">
-            Server default
+            Default costs
           </option>
           @for (m of costModels(); track m.name) {
             <option [value]="m.name" [selected]="form().cost === m.name">
@@ -152,8 +152,14 @@
         Fix {{ n === 1 ? 'the highlighted field' : 'the ' + n + ' highlighted fields' }} to run it.
       </p>
     }
-    <button type="submit" class="btn btn-primary" [disabled]="busy()" [attr.aria-busy]="busy()">
+    <button
+      type="submit"
+      class="btn btn-primary"
+      [disabled]="busy() || !canRun()"
+      [attr.aria-busy]="busy()"
+    >
       {{ busy() ? 'Starting…' : 'Run backtest' }}
     </button>
+    <app-permission-note permission="lab.run" />
   </div>
 </form>

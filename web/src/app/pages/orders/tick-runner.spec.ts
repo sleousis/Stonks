@@ -5,7 +5,10 @@ import { provideRouter } from '@angular/router';
 
 import type { BrokerInfo, Job, TickResultView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
+import { TicksService } from '../../api/ticks.service';
+import { SessionService } from '../../core/auth/session.service';
 import { JOB_FETCH, JOB_POLL_MS } from '../../core/jobs/jobs.service';
+import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { ConfirmDialog } from '../../shared/ui/confirm-dialog';
 import { nextRequest, tick } from '../../../testing/http';
 import { TickRunner } from './tick-runner';
@@ -49,7 +52,7 @@ describe('TickRunner', () => {
   let controller: HttpTestingController;
   let el: HTMLElement;
 
-  beforeEach(async () => {
+  async function setup(me = ADMIN): Promise<void> {
     TestBed.configureTestingModule({
       imports: [Host],
       providers: [
@@ -62,11 +65,18 @@ describe('TickRunner', () => {
       ],
     });
     controller = TestBed.inject(HttpTestingController);
+    const loading = TestBed.inject(SessionService).load();
+    (await nextRequest(controller, '/api/auth/me')).flush(me);
+    await loading;
     fixture = TestBed.createComponent(Host);
     el = fixture.nativeElement.querySelector('app-tick-runner');
     fixture.detectChanges();
     (await nextRequest(controller, '/api/brokers')).flush(PAPER);
     await settle();
+  }
+
+  beforeEach(async () => {
+    if (!expect.getState().currentTestName?.includes('trader')) await setup();
   });
 
   afterEach(() => controller.verify());
@@ -86,20 +96,36 @@ describe('TickRunner', () => {
     );
   const runButton = () => el.querySelector<HTMLButtonElement>('button[type="submit"]')!;
   const dryRunBox = () => el.querySelector<HTMLInputElement>('input[name="dryRun"]')!;
+  const ticketEl = () => el.querySelector('app-tick-ticket-dialog') as HTMLElement;
+  const ticketButton = (label: string) =>
+    [...ticketEl().querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent?.trim() === label,
+    );
 
-  it('starts with dry run on and the broker shown', () => {
+  it('starts with dry run on and the broker shown with its PAPER stamp', () => {
     expect(dryRunBox().checked).toBe(true);
-    expect(runButton().textContent).toContain('Run dry run');
+    expect(runButton().textContent).toContain('Start dry run');
     expect(el.querySelector('.broker')?.textContent).toContain('alpaca paper');
+    expect(el.querySelector('.broker app-mode-stamp')?.textContent).toContain('PAPER');
+    expect(el.querySelector('.permission-note')).toBeNull();
+  });
+
+  it('a trader sees why the run button is off', async () => {
+    await setup(TRADER);
+    expect(runButton().disabled).toBe(true);
+    expect(el.querySelector('.permission-note')?.textContent).toContain('Admins only.');
+    runButton().click();
+    await settle();
+    expect(controller.match((r) => r.method === 'POST').length).toBe(0);
   });
 
   it('runs a dry run after a plain confirmation, no typing', async () => {
     runButton().click();
     await settle();
 
-    expect(dialogEl().textContent).toContain('Run a dry-run tick?');
+    expect(dialogEl().textContent).toContain('Start a dry run?');
     expect(dialogEl().querySelector('#confirm-typed')).toBeNull();
-    const confirm = dialogButton('Run dry run')!;
+    const confirm = dialogButton('Start dry run')!;
     expect(confirm.disabled).toBe(false);
     confirm.click();
     await settle();
@@ -117,32 +143,63 @@ describe('TickRunner', () => {
     await settle();
 
     expect(el.querySelector('.result')?.textContent).toContain('Dry-run result');
-    expect(el.querySelector('.result a')?.getAttribute('href')).toBe('/orders/ticks/20260926-abc');
+    const link = el.querySelector('.result a');
+    expect(link?.getAttribute('href')).toBe('/orders/ticks/20260926-abc');
+    expect(link?.textContent?.trim()).toBe('Open this run');
   });
 
-  it('makes a real tick show the broker and require typing its label', async () => {
+  it('result 500 after success shows an inline error with retry', async () => {
+    const ticks = TestBed.inject(TicksService);
+    runButton().click();
+    await settle();
+    dialogButton('Start dry run')!.click();
+    await settle();
+    (await nextRequest(controller, '/api/ticks', 'POST')).flush(job('queued'));
+    (await nextRequest(controller, '/api/jobs/job-1')).flush(job('succeeded', 1));
+    (await nextRequest(controller, '/api/ticks/jobs/job-1/result')).flush(
+      { title: 'x', status: 500, detail: 'Result store unavailable.' },
+      { status: 500, statusText: 'Server Error' },
+    );
+    await settle();
+
+    expect(ticks.finished()).toBe(1);
+    const error = el.querySelector('app-error-state');
+    expect(error?.textContent).toContain('its result could not load');
+    const retry = [...error!.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
+      b.textContent?.includes('Try again'),
+    )!;
+    retry.click();
+    (await nextRequest(controller, '/api/ticks/jobs/job-1/result')).flush(RESULT);
+    await settle();
+    expect(el.querySelector('app-error-state')).toBeNull();
+    expect(el.querySelector('.result')?.textContent).toContain('momentum-v3');
+  });
+
+  it('makes a real run show an order ticket and require typing the broker label', async () => {
     dryRunBox().click();
     await settle();
     expect(el.querySelector('.alert')?.textContent).toContain('alpaca paper');
-    expect(runButton().textContent).toContain('Run tick');
+    expect(runButton().textContent).toContain('Start trading run');
 
     runButton().click();
     await settle();
 
-    expect(dialogEl().textContent).toContain('Run a real tick on the alpaca paper broker?');
-    const typed = dialogEl().querySelector<HTMLInputElement>('#confirm-typed')!;
+    expect(ticketEl().textContent).toContain('Trading run ticket');
+    expect(ticketEl().querySelector('app-mode-stamp')?.textContent).toContain('PAPER');
+    expect(ticketEl().textContent).toContain('All in the universe');
+    const typed = ticketEl().querySelector<HTMLInputElement>('#ticket-typed')!;
     expect(typed).not.toBeNull();
-    expect(dialogButton('Run tick')!.disabled).toBe(true);
+    expect(ticketButton('Start trading run')!.disabled).toBe(true);
 
     typed.value = 'alpaca';
     typed.dispatchEvent(new Event('input'));
     await settle();
-    expect(dialogButton('Run tick')!.disabled).toBe(true);
+    expect(ticketButton('Start trading run')!.disabled).toBe(true);
 
     typed.value = 'alpaca paper';
     typed.dispatchEvent(new Event('input'));
     await settle();
-    dialogButton('Run tick')!.click();
+    ticketButton('Start trading run')!.click();
 
     const post = await nextRequest(controller, '/api/ticks', 'POST');
     expect(post.request.body).toMatchObject({ dry_run: false });
@@ -154,12 +211,12 @@ describe('TickRunner', () => {
     expect(el.querySelector('.result')?.textContent).toContain('momentum-v3');
   });
 
-  it('sends nothing when the real tick is cancelled', async () => {
+  it('sends nothing when the real run is cancelled', async () => {
     dryRunBox().click();
     await settle();
     runButton().click();
     await settle();
-    dialogButton('Cancel')!.click();
+    ticketButton('Keep editing')!.click();
     await settle();
     expect(controller.match((r) => r.method === 'POST').length).toBe(0);
   });

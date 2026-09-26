@@ -22,11 +22,13 @@ import type {
   LabRunView,
 } from '../../api/models';
 import { StudioService } from '../../api/studio.service';
+import { SessionService } from '../../core/auth/session.service';
 import { formatMoney, formatNumber, formatPercent } from '../../core/format/format';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { BacktestResultView } from '../../shared/lab-results/backtest-result';
 import { LabRunResultView } from '../../shared/lab-results/lab-run-result';
+import { PermissionNote } from '../../shared/ui/permission-note';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { INTERVALS } from './rule-spec';
 
@@ -84,7 +86,7 @@ function isoDay(d: Date): string {
 @Component({
   selector: 'app-draft-test',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BacktestResultView, LabRunResultView, StatusPill],
+  imports: [BacktestResultView, LabRunResultView, StatusPill, PermissionNote],
   templateUrl: './draft-test.html',
   styleUrl: './draft-test.scss',
 })
@@ -96,6 +98,10 @@ export class DraftTest {
   private readonly jobsApi = inject(JobsApiService);
   private readonly toasts = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly session = inject(SessionService);
+
+  /** Backtests and lab runs need `lab.run`. */
+  protected readonly canLab = computed(() => this.session.can('lab.run'));
 
   readonly draft = input.required<Draft>();
   /** Interval and allow-list of the spec being edited (defaults for the form). */
@@ -213,7 +219,7 @@ export class DraftTest {
 
   async runBacktest(): Promise<void> {
     this.submitted.set(true);
-    if (!this.formValid() || this.btBusy()) return;
+    if (!this.formValid() || this.btBusy() || !this.canLab()) return;
     this.btBusy.set(true);
     try {
       if (!(await this.ensureSaved()())) return;
@@ -243,7 +249,7 @@ export class DraftTest {
 
   async runLab(): Promise<void> {
     this.submitted.set(true);
-    if (!this.formValid() || this.labBusy() || !this.tests().length) return;
+    if (!this.formValid() || this.labBusy() || !this.tests().length || !this.canLab()) return;
     this.labBusy.set(true);
     try {
       if (!(await this.ensureSaved()())) return;

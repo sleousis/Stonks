@@ -20,6 +20,9 @@
     </button>
     <a routerLink="/" class="brand">Stonks</a>
     <span class="topbar-actions">
+      @if (session.me()) {
+        <app-notification-bell />
+      }
       <button
         type="button"
         class="btn btn-ghost btn-icon"
@@ -45,7 +48,12 @@
 
   <div class="frame">
     <aside class="sidebar">
-      <a routerLink="/" class="brand">Stonks</a>
+      <span class="sidebar-head">
+        <a routerLink="/" class="brand">Stonks</a>
+        @if (session.me()) {
+          <app-notification-bell />
+        }
+      </span>
       <button
         type="button"
         class="search-button"
@@ -57,7 +65,7 @@
         <span class="search-label">Search</span>
         <kbd aria-hidden="true">{{ modKey }} K</kbd>
       </button>
-      <app-nav />
+      <app-nav idPrefix="sidebar" />
       <ng-container *ngTemplateOutlet="footer" />
     </aside>
 
@@ -97,7 +105,7 @@
         </svg>
       </button>
     </div>
-    <app-nav (navigate)="closeDrawer()" />
+    <app-nav idPrefix="drawer" (navigate)="closeDrawer()" />
     <ng-container *ngTemplateOutlet="footer" />
   </div>
 </dialog>
@@ -107,7 +115,12 @@
     @if (session.me(); as me) {
       <a routerLink="/profile" class="token-status set">
         <span class="dot" aria-hidden="true"></span>
-        {{ me.display_name }}{{ me.via === 'session' ? '' : ', API token' }}
+        <span class="who">
+          <span class="who-name">{{ me.display_name }}</span>
+          <span class="who-role"
+            >{{ roleLabel[me.role] }}{{ me.via === 'session' ? '' : ', API token' }}</span
+          >
+        </span>
       </a>
       <button type="button" class="btn btn-ghost theme-toggle" (click)="signOut()">Sign out</button>
     } @else {

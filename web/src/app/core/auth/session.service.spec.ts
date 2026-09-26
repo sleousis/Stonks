@@ -159,4 +159,23 @@ describe('SessionService', () => {
     expect(session.me()).toBeNull();
     expect(TestBed.inject(AuthTokenService).token()).toBeNull();
   });
+
+  describe('permissions (UI-06)', () => {
+    it('knows nothing is allowed before /me answers', () => {
+      expect(session.can('lab.run')).toBe(false);
+      expect(session.whyNot('lab.run')).toBe('Sign in to do this.');
+    });
+
+    it('answers can() and canCall() from /me', async () => {
+      const loading = session.load();
+      (await nextRequest(controller, '/api/auth/me')).flush(TRADER);
+      await loading;
+      expect(session.can('lab.run')).toBe(true);
+      expect(session.can('strategy.promote')).toBe(false);
+      expect(session.whyNot('strategy.promote')).toBe('Admins only.');
+      expect(session.canCall('POST', '/api/ticks')).toBe(false);
+      expect(session.canCall('POST', '/api/lab/backtests')).toBe(true);
+      expect(session.canCall('GET', '/api/portfolio')).toBe(true);
+    });
+  });
 });

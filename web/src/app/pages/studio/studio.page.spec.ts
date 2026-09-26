@@ -1,9 +1,11 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
 import type { Page, Draft, RuleTemplateView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
+import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { nextRequest, tick } from '../../../testing/http';
 import { RSI_TEMPLATE_SPEC, makeDraft } from '../../../testing/studio-fixtures';
@@ -28,8 +30,10 @@ describe('StudioPage', () => {
   let el: HTMLElement;
   let confirm: ReturnType<typeof vi.fn>;
   let navigate: ReturnType<typeof vi.spyOn>;
+  const allowed = signal(true);
 
   beforeEach(() => {
+    allowed.set(true);
     confirm = vi.fn().mockResolvedValue(true);
     TestBed.configureTestingModule({
       imports: [StudioPage],
@@ -41,6 +45,11 @@ describe('StudioPage', () => {
       ],
     });
     controller = TestBed.inject(HttpTestingController);
+    const session = TestBed.inject(SessionService);
+    vi.spyOn(session, 'can').mockImplementation(() => allowed());
+    vi.spyOn(session, 'whyNot').mockImplementation(() =>
+      allowed() ? null : 'Traders and admins only.',
+    );
     navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     fixture = TestBed.createComponent(StudioPage);
     el = fixture.nativeElement;
@@ -145,8 +154,12 @@ describe('StudioPage', () => {
       { status: 403, statusText: 'Forbidden' },
     );
     await settle();
-    expect(el.textContent).toContain('Code strategies are turned off');
-    expect(el.textContent).toContain('allow_code_strategies');
+    expect(el.textContent).toContain(
+      'Code strategies are turned off on this server. Ask your admin.',
+    );
+    expect(el.textContent).not.toContain('allow_code_strategies');
+    expect(el.textContent).not.toContain('stonks serve');
+    expect(el.textContent).not.toContain('[api]');
     expect(buttonNamed('Create draft').disabled).toBe(true);
   });
 
@@ -205,5 +218,52 @@ describe('StudioPage', () => {
     );
     await settle();
     expect(el.textContent).toContain('Dip buyer v2');
+    expect(document.activeElement?.getAttribute('data-rename-for')).toBe('draft_abc123');
+  });
+
+  describe('rename focus (UI-21)', () => {
+    it('focuses the input after render, and Cancel returns focus to Rename', async () => {
+      await load([makeDraft()]);
+      buttonNamed('Rename').click();
+      await fixture.whenStable();
+      expect(document.activeElement?.id).toBe('rename-draft_abc123');
+
+      buttonNamed('Cancel', el.querySelector('.rename') as HTMLElement).click();
+      await fixture.whenStable();
+      expect(el.querySelector('.rename')).toBeNull();
+      expect(document.activeElement?.getAttribute('data-rename-for')).toBe('draft_abc123');
+    });
+
+    it('Escape cancels and returns focus too', async () => {
+      await load([makeDraft()]);
+      buttonNamed('Rename').click();
+      await fixture.whenStable();
+      (document.activeElement as HTMLElement).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      );
+      await fixture.whenStable();
+      expect(document.activeElement?.textContent?.trim()).toBe('Rename');
+    });
+  });
+
+  describe('permissions (UI-06)', () => {
+    it('disables create, rename and delete with a reason without lab.run', async () => {
+      allowed.set(false);
+      await load([makeDraft()]);
+      const header = el.querySelector('app-page-header') as HTMLElement;
+      expect(buttonNamed('New draft', header).disabled).toBe(true);
+      expect(header.textContent).toContain('Traders and admins only.');
+      expect(buttonNamed('Rename').disabled).toBe(true);
+      expect(buttonNamed('Delete').disabled).toBe(true);
+      buttonNamed('Delete').click();
+      await tick();
+      expect(confirm).not.toHaveBeenCalled();
+    });
+
+    it('shows no note for traders with lab.run', async () => {
+      await load([makeDraft()]);
+      expect(el.textContent).not.toContain('Traders and admins only.');
+      expect(buttonNamed('Rename').disabled).toBe(false);
+    });
   });
 });

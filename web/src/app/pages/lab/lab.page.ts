@@ -19,28 +19,37 @@ import type {
   Job,
   LabRunRequest,
   LabRunView,
+  SignalIcView,
+  SweepResultView,
 } from '../../api/models';
+import { SignalsService } from '../../api/signals.service';
 import { StrategiesService } from '../../api/strategies.service';
 import { SystemService } from '../../api/system.service';
+import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { type JobHandle, JobsService, isTerminal } from '../../core/jobs/jobs.service';
 import { formatPercent } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
 import { PctPipe } from '../../shared/format.pipes';
-import { CliCommand } from '../../shared/ui/cli-command';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { BacktestFormView } from './backtest-form';
 import { BacktestResultView } from '../../shared/lab-results/backtest-result';
-import { defaultWindow, suiteTests } from './lab-requests';
+import { suiteTests } from './lab-requests';
 import { LabRunFormView } from './lab-run-form';
 import { LabRunResultView } from '../../shared/lab-results/lab-run-result';
+import { SignalIcResult } from '../../shared/lab-results/signal-ic-result';
+import { SweepResult } from '../../shared/lab-results/sweep-result';
+import { LabNav } from './lab-nav';
 import { type StrategyPreset, presetFromStrategy } from './strategy-preset';
 
-export type LabKind = 'backtest' | 'lab_run';
-const LAB_KINDS: readonly LabKind[] = ['backtest', 'lab_run'];
+/** The run types the forms on this screen start. */
+export type FormKind = 'backtest' | 'lab_run';
+/** Every job kind the history lists and the result panel can show. */
+export type LabKind = FormKind | 'lab_sweep' | 'signal_ic';
+const LAB_KINDS: readonly LabKind[] = ['backtest', 'lab_run', 'lab_sweep', 'signal_ic'];
 const HISTORY_SIZE = 20;
 
 /** The job the result panel follows: one just started, or one opened from history. */
@@ -53,14 +62,29 @@ interface Followed {
 
 type Shown =
   | { kind: 'backtest'; jobId: string; result: BacktestResult }
-  | { kind: 'lab_run'; jobId: string; result: LabRunView };
+  | { kind: 'lab_run'; jobId: string; result: LabRunView }
+  | { kind: 'lab_sweep'; jobId: string; result: SweepResultView }
+  | { kind: 'signal_ic'; jobId: string; result: SignalIcView };
+
+const KIND_LABELS: Record<string, string> = {
+  backtest: 'Backtest',
+  lab_run: 'Lab run',
+  lab_sweep: 'Sweep',
+  signal_ic: 'Signal IC',
+};
 
 export function kindLabel(kind: string): string {
-  return kind === 'lab_run' ? 'Lab run' : kind === 'backtest' ? 'Backtest' : kind;
+  return KIND_LABELS[kind] ?? kind;
 }
 
 /** Strategy a lab job ran, from its stored request: class name or registered id. */
 export function jobStrategy(job: Pick<Job, 'params'>): string {
+  if (!('strategy' in job.params) && 'start' in job.params) {
+    // A sweep: its strategy list, or every strategy.
+    const list = job.params['strategies'] as string[] | null | undefined;
+    if (!list?.length) return 'All strategies';
+    return list.length === 1 ? (list[0].split(':').at(-1) ?? list[0]) : `${list.length} strategies`;
+  }
   const ref = job.params['strategy'] as
     { class_path?: string | null; strategy_id?: string | null } | undefined;
   if (ref?.strategy_id) return ref.strategy_id;
@@ -89,13 +113,19 @@ export function canCancel(kind: string, status: string | null | undefined): bool
     LabRunFormView,
     BacktestResultView,
     LabRunResultView,
-    CliCommand,
+    SweepResult,
+    SignalIcResult,
+    LabNav,
   ],
   templateUrl: './lab.page.html',
   styleUrl: './lab.page.scss',
 })
 export class LabPage {
   private readonly lab = inject(LabService);
+  private readonly signals = inject(SignalsService);
+  private readonly session = inject(SessionService);
+  /** Starting and cancelling lab jobs needs `lab.run`. */
+  protected readonly canRun = computed(() => this.session.can('lab.run'));
   private readonly system = inject(SystemService);
   private readonly strategiesApi = inject(StrategiesService);
   private readonly jobsApi = inject(JobsApiService);
@@ -104,7 +134,7 @@ export class LabPage {
   private readonly toasts = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
 
-  protected readonly mode = signal<LabKind>('backtest');
+  protected readonly mode = signal<FormKind>('backtest');
 
   /** Query param `?strategy=<id>`: start both forms from a registered strategy. */
   readonly strategy = input<string | undefined>();
@@ -177,18 +207,17 @@ export class LabPage {
 
   protected readonly followedCancellable = computed(() => {
     const f = this.followed();
-    return !!f && !f.handle.done() && canCancel(f.kind, f.handle.status() ?? 'queued');
+    return (
+      this.canRun() && !!f && !f.handle.done() && canCancel(f.kind, f.handle.status() ?? 'queued')
+    );
   });
-
-  /** No API route serves sweep results yet (roadmap 13.6): point at the CLI. */
-  protected readonly sweepCommand = sweepCommand();
 
   protected readonly kindLabel = kindLabel;
   protected readonly jobStrategy = jobStrategy;
   protected readonly canCancel = canCancel;
   protected readonly isTerminal = isTerminal;
 
-  protected selectMode(mode: LabKind, focus = false): void {
+  protected selectMode(mode: FormKind, focus = false): void {
     this.mode.set(mode);
     if (focus) document.getElementById(`lab-tab-${mode}`)?.focus();
   }
@@ -316,10 +345,21 @@ export class LabPage {
     this.resultLoading.set(true);
     this.resultError.set(null);
     try {
-      const shown: Shown =
-        kind === 'backtest'
-          ? { kind, jobId, result: await this.lab.backtestResult(jobId) }
-          : { kind, jobId, result: await this.lab.labRunResult(jobId) };
+      let shown: Shown;
+      switch (kind) {
+        case 'backtest':
+          shown = { kind, jobId, result: await this.lab.backtestResult(jobId) };
+          break;
+        case 'lab_run':
+          shown = { kind, jobId, result: await this.lab.labRunResult(jobId) };
+          break;
+        case 'lab_sweep':
+          shown = { kind, jobId, result: await this.lab.sweepResult(jobId) };
+          break;
+        case 'signal_ic':
+          shown = { kind, jobId, result: await this.signals.signalIcResult(jobId) };
+          break;
+      }
       if (this.followed()?.jobId === jobId) this.shown.set(shown);
     } catch (err) {
       if (this.followed()?.jobId === jobId) this.resultError.set(err);
@@ -327,12 +367,6 @@ export class LabPage {
       this.resultLoading.set(false);
     }
   }
-}
-
-/** A ready-to-run `stonks lab sweep` over the last year. */
-export function sweepCommand(today?: Date): string {
-  const { start, end } = defaultWindow(today);
-  return `stonks lab sweep --tickers SPY.US,QQQ.US,IWM.US --start ${start} --end ${end}`;
 }
 
 function shortName(classPath: string | null | undefined): string {

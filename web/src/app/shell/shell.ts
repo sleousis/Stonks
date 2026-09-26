@@ -21,6 +21,7 @@ import {
 } from '@angular/router';
 import { filter, skip } from 'rxjs';
 
+import type { Role } from '../api/models';
 import { AuthTokenService } from '../core/auth/auth-token.service';
 import { SessionService } from '../core/auth/session.service';
 import { StepUpDialog } from '../core/auth/step-up-dialog';
@@ -28,6 +29,7 @@ import { ShortcutsService } from '../core/commands/shortcuts.service';
 import { HaltStateService } from '../core/halts/halt-state.service';
 import { ConnectivityService } from '../core/pwa/connectivity.service';
 import { ThemeService } from '../core/theme/theme.service';
+import { NotificationBell } from '../shared/ui/notification-bell';
 import { CommandPalette } from '../shared/ui/command-palette/command-palette';
 import { ConfirmDialog } from '../shared/ui/confirm-dialog';
 import { OfflinePage } from '../shared/ui/offline-page';
@@ -60,6 +62,7 @@ import { registerShellCommands } from './shell-commands';
     StepUpDialog,
     // ops
     SessionStrip,
+    NotificationBell,
   ],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
@@ -77,6 +80,11 @@ export class Shell {
   private readonly main = viewChild.required<ElementRef<HTMLElement>>('main');
 
   protected readonly drawerOpen = signal(false);
+  protected readonly roleLabel: Readonly<Record<Role, string>> = {
+    viewer: 'Viewer',
+    trader: 'Trader',
+    admin: 'Admin',
+  };
   /** Pages with `data: { bare: true }` (sign-in) render without the app frame. */
   protected readonly bare = signal(false);
   protected readonly modKey = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '')

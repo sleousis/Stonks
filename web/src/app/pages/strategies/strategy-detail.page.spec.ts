@@ -1,14 +1,24 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
-import type { StatusChangeView, StrategyDetail } from '../../api/models';
+import type { OrderView, PnlRowView, StatusChangeView, StrategyDetail } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
+import { SessionService } from '../../core/auth/session.service';
 import { ToastService } from '../../core/notify/toast.service';
+import { FakeChartEngine, provideFakeChart } from '../../../testing/fake-chart';
 import { nextRequest, tick } from '../../../testing/http';
-import { answerDialog, dialogForm, fillDialog, goLiveReport } from '../../../testing/status-dialog';
+import {
+  answerDialog,
+  dialogForm,
+  fillDialog,
+  goLiveReport,
+  isHoldDialog,
+} from '../../../testing/status-dialog';
 import { STRATEGY_METADATA } from '../../../testing/strategy-fixtures';
-import { StrategyDetailPage, historyEntries } from './strategy-detail.page';
+import { LIFECYCLE } from '../../shared/governance-labels';
+import { StrategyDetailPage, historyEntries, paperPerformance } from './strategy-detail.page';
 
 const DETAIL: StrategyDetail = {
   id: 'momentum-v3',
@@ -53,17 +63,77 @@ const HISTORY: StatusChangeView[] = [
   },
 ];
 
+const PNL: PnlRowView[] = [
+  {
+    day: '2026-09-01',
+    total_value: 10000,
+    cumulative_return: 0,
+    drawdown: 0,
+    daily_change: null,
+    daily_return: null,
+    days_elapsed: 0,
+  },
+  {
+    day: '2026-09-02',
+    total_value: 9500,
+    cumulative_return: -0.05,
+    drawdown: -0.05,
+    daily_change: -500,
+    daily_return: -0.05,
+    days_elapsed: 1,
+  },
+  {
+    day: '2026-09-22',
+    total_value: 10800,
+    cumulative_return: 0.08,
+    drawdown: 0,
+    daily_change: 100,
+    daily_return: 0.01,
+    days_elapsed: 21,
+  },
+];
+
+const ORDER: OrderView = {
+  client_id: 'c1',
+  tick_id: 't1',
+  strategy_id: 'momentum-v3',
+  ticker: 'AAPL.US',
+  side: 'buy',
+  quantity: 12,
+  order_type: 'market',
+  limit_price: null,
+  status: 'filled',
+  status_reason: null,
+  broker_order_id: null,
+  created_at: '2026-09-20T14:00:00Z',
+  updated_at: '2026-09-20T14:00:00Z',
+};
+
+const page = <T>(items: T[]) => ({ items, total: items.length, limit: 10, offset: 0 });
+
 describe('StrategyDetailPage', () => {
   let fixture: ComponentFixture<StrategyDetailPage>;
   let controller: HttpTestingController;
   let toasts: ToastService;
   let el: HTMLElement;
+  let chart: FakeChartEngine;
+  const allowed = signal(true);
 
   beforeEach(() => {
+    allowed.set(true);
+    chart = new FakeChartEngine();
     TestBed.configureTestingModule({
       imports: [StrategyDetailPage],
-      providers: [...provideApi(), provideHttpClientTesting(), provideRouter([])],
+      providers: [
+        ...provideApi(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        provideFakeChart(chart),
+      ],
     });
+    const session = TestBed.inject(SessionService);
+    vi.spyOn(session, 'can').mockImplementation(() => allowed());
+    vi.spyOn(session, 'whyNot').mockImplementation(() => (allowed() ? null : 'Admins only.'));
     controller = TestBed.inject(HttpTestingController);
     toasts = TestBed.inject(ToastService);
     fixture = TestBed.createComponent(StrategyDetailPage);
@@ -81,10 +151,26 @@ describe('StrategyDetailPage', () => {
     }
   }
 
-  async function load(detail = DETAIL, history = HISTORY): Promise<void> {
+  /** Flush the page's reads; a paper strategy also loads its go-live verdict and value. */
+  async function load(
+    detail = DETAIL,
+    history = HISTORY,
+    opts: { passed?: boolean; pnl?: PnlRowView[]; orders?: OrderView[] } = {},
+  ): Promise<void> {
     (await nextRequest(controller, '/api/strategies/momentum-v3')).flush(detail);
     (await nextRequest(controller, '/api/strategies/momentum-v3/history')).flush(history);
+    (await nextRequest(controller, '/api/orders')).flush(page(opts.orders ?? []));
     await settle();
+    if (detail.status === 'shadow') {
+      (await nextRequest(controller, '/api/strategies/momentum-v3/golive')).flush(
+        goLiveReport('momentum-v3', opts.passed ?? false),
+      );
+      (await nextRequest(controller, '/api/shadow/strategies/momentum-v3/pnl')).flush({
+        strategy_id: 'momentum-v3',
+        rows: opts.pnl ?? PNL,
+      });
+      await settle();
+    }
   }
 
   async function reloaded(status: StrategyDetail['status']): Promise<void> {
@@ -99,12 +185,19 @@ describe('StrategyDetailPage', () => {
     );
   }
 
-  it('renders class, params, research card and survival reports', async () => {
+  it('renders kind, params, research card and survival reports', async () => {
     await load();
     const text = el.textContent ?? '';
 
     expect(el.querySelector('h1')?.textContent).toContain('momentum-v3');
-    expect(text).toContain('MomentumStrategy');
+    // A name, not the Python class path, under the title.
+    const subtitle = el.querySelector('app-page-header p')?.textContent ?? '';
+    expect(subtitle).toContain('Momentum strategy. Paper trading.');
+    expect(subtitle).not.toContain('stonks.');
+    // The class path is secondary, inside a details block.
+    expect(el.querySelector('details.tech')?.textContent).toContain(
+      'stonks.strategies.momentum.MomentumStrategy',
+    );
     expect(text).toContain('equity');
     expect(text).toContain('2026-09-01');
     expect(text).toContain('lookback');
@@ -119,6 +212,11 @@ describe('StrategyDetailPage', () => {
 
     const reports = el.querySelectorAll('.report');
     expect(reports.length).toBe(2);
+    // Survival test headings use labels, not ids like "oos".
+    const headings = [...el.querySelectorAll('.report h3')].map((h) => h.textContent?.trim());
+    expect(headings[0]).toContain('Out of sample');
+    expect(headings[1]).toContain('Drift');
+    expect(headings.join(' ')).not.toMatch(/\boos\b/);
     expect(reports[0].textContent).toContain('CAGR (held out)');
     expect(reports[0].textContent).toContain('12.34%');
     expect(reports[1].textContent).toContain('n/a');
@@ -142,11 +240,15 @@ describe('StrategyDetailPage', () => {
   });
 
   it('keeps the page when only the history fails', async () => {
-    (await nextRequest(controller, '/api/strategies/momentum-v3')).flush(DETAIL);
+    (await nextRequest(controller, '/api/strategies/momentum-v3')).flush({
+      ...DETAIL,
+      status: 'retired',
+    });
     (await nextRequest(controller, '/api/strategies/momentum-v3/history')).flush(
       { title: 'Server error', status: 500, detail: 'boom' },
       { status: 500, statusText: 'Server Error' },
     );
+    (await nextRequest(controller, '/api/orders')).flush(page([]));
     await settle();
     expect(el.textContent).toContain('Could not load the status history');
     expect(el.querySelectorAll('.report').length).toBe(2);
@@ -154,49 +256,52 @@ describe('StrategyDetailPage', () => {
 
   it('offers only the actions that change the status', async () => {
     await load();
-    expect(button('Promote to active')).toBeDefined();
-    expect(button('Retire')).toBeDefined();
-    expect(button('Move to shadow')).toBeUndefined();
+    expect(button(LIFECYCLE.live.label)).toBeDefined();
+    expect(button(LIFECYCLE.stop.label)).toBeDefined();
+    expect(button(LIFECYCLE.pause.label)).toBeUndefined();
   });
 
-  it('promotes with a reason after showing the go-live result', async () => {
+  it('goes live with a reason and a hold after showing the go-live result', async () => {
     await load();
     const success = vi.spyOn(toasts, 'success');
 
-    button('Promote to active')!.click();
+    button(LIFECYCLE.live.label)!.click();
     (await nextRequest(controller, '/api/strategies/momentum-v3/golive')).flush(
       goLiveReport('momentum-v3', true),
     );
     await settle();
 
     const form = dialogForm(el)!;
+    expect(form.textContent).toContain('Go live with momentum-v3?');
     expect(form.textContent).toContain('Go-live check passed');
     expect(form.textContent).toContain('All 2 checks passed');
-    // Needs both a reason and the typed id.
-    expect(fillDialog(fixture, { reason: '', typed: 'momentum-v3' }).disabled).toBe(true);
-    answerDialog(fixture, { reason: 'Paper period passed the gate', typed: 'momentum-v3' });
+    // A passing promotion is confirmed by holding, not by typing the id.
+    expect(isHoldDialog(el)).toBe(true);
+    expect(form.querySelector('input')).toBeNull();
+    expect(fillDialog(fixture, { reason: '' }).disabled).toBe(true);
+    answerDialog(fixture, { reason: 'Paper period passed the gate' });
 
     const post = await nextRequest(controller, '/api/strategies/momentum-v3/promote', 'POST');
     expect(post.request.body).toEqual({ reason: 'Paper period passed the gate', override: false });
     post.flush({ ...DETAIL, status: 'active' });
     await reloaded('active');
 
-    expect(success).toHaveBeenCalledWith('Promoted momentum-v3.');
-    expect(button('Promote to active')).toBeUndefined();
-    expect(button('Move to shadow')).toBeDefined();
+    expect(success).toHaveBeenCalledWith(LIFECYCLE.live.done('momentum-v3'));
+    expect(button(LIFECYCLE.live.label)).toBeUndefined();
+    expect(button(LIFECYCLE.pause.label)).toBeDefined();
   });
 
   it('offers an override with a long reason when the gate refuses (409)', async () => {
     await load();
     const error = vi.spyOn(toasts, 'error');
 
-    button('Promote to active')!.click();
+    button(LIFECYCLE.live.label)!.click();
     (await nextRequest(controller, '/api/strategies/momentum-v3/golive')).flush(
       goLiveReport('momentum-v3', false),
     );
     await settle();
     expect(dialogForm(el)!.textContent).toContain('3 paper day(s), need >= 20');
-    answerDialog(fixture, { reason: 'Try it', typed: 'momentum-v3' });
+    answerDialog(fixture, { reason: 'Try it' });
 
     (await nextRequest(controller, '/api/strategies/momentum-v3/promote', 'POST')).flush(
       { title: 'Conflict', status: 409, detail: 'go-live gate failed: min_days' },
@@ -222,12 +327,12 @@ describe('StrategyDetailPage', () => {
     });
     post.flush({ ...DETAIL, status: 'active' });
     await reloaded('active');
-    expect(button('Move to shadow')).toBeDefined();
+    expect(button(LIFECYCLE.pause.label)).toBeDefined();
   });
 
-  it('retires only with a reason and does nothing when cancelled', async () => {
+  it('stops only with a reason and does nothing when cancelled', async () => {
     await load();
-    button('Retire')!.click();
+    button(LIFECYCLE.stop.label)!.click();
     await settle();
     const form = dialogForm(el)!;
     expect(form.querySelector('button.btn-danger')).not.toBeNull();
@@ -240,7 +345,7 @@ describe('StrategyDetailPage', () => {
     expect(dialogForm(el)).toBeNull();
     expect(controller.match(() => true)).toEqual([]);
 
-    button('Retire')!.click();
+    button(LIFECYCLE.stop.label)!.click();
     await settle();
     answerDialog(fixture, { reason: 'Edge is gone' });
     const post = await nextRequest(controller, '/api/strategies/momentum-v3/retire', 'POST');
@@ -255,9 +360,114 @@ describe('StrategyDetailPage', () => {
       { status: 404, statusText: 'Not Found' },
     );
     (await nextRequest(controller, '/api/strategies/momentum-v3/history')).flush([]);
+    (await nextRequest(controller, '/api/orders')).flush(page([]));
     await settle();
     expect(el.querySelector('[role="alert"]')?.textContent).toContain(
       'no strategy with id momentum-v3',
     );
+  });
+
+  describe('permissions (UI-06)', () => {
+    it('disables the status actions with a reason for non-admins', async () => {
+      allowed.set(false);
+      await load();
+      for (const label of [LIFECYCLE.live.label, LIFECYCLE.stop.label]) {
+        expect(button(label)!.disabled).toBe(true);
+      }
+      expect(el.querySelector('app-page-header app-permission-note')?.textContent).toContain(
+        'Admins only.',
+      );
+      button(LIFECYCLE.live.label)!.click();
+      await settle();
+      expect(dialogForm(el)).toBeNull();
+    });
+
+    it('shows no permission note for admins', async () => {
+      await load();
+      expect(button(LIFECYCLE.live.label)!.disabled).toBe(false);
+      expect(el.querySelector('app-permission-note')).toBeNull();
+    });
+  });
+
+  describe('stage bar (UI-11)', () => {
+    const current = () => el.querySelector('app-stage-bar [aria-current="step"]')?.textContent;
+
+    it('shows Paper and links to the go-live check while the gate fails', async () => {
+      await load();
+      expect(current()).toContain('Paper');
+      const link = el.querySelector<HTMLAnchorElement>('app-stage-bar a')!;
+      expect(link.getAttribute('href')).toBe('/go-live?strategy=momentum-v3');
+    });
+
+    it('shows Ready and offers Go live once the gate passes', async () => {
+      await load(DETAIL, HISTORY, { passed: true });
+      expect(current()).toContain('Ready');
+      const go = el.querySelector<HTMLButtonElement>('app-stage-bar button')!;
+      expect(go.textContent?.trim()).toBe(LIFECYCLE.live.label);
+      go.click();
+      (await nextRequest(controller, '/api/strategies/momentum-v3/golive')).flush(
+        goLiveReport('momentum-v3', true),
+      );
+      await settle();
+      expect(dialogForm(el)?.textContent).toContain('Go live with momentum-v3?');
+    });
+
+    it('shows Live for an active strategy and links to its orders', async () => {
+      await load({ ...DETAIL, status: 'active' });
+      expect(current()).toContain('Live');
+      expect(el.querySelector('app-stage-bar a')?.getAttribute('href')).toBe('/orders');
+      expect(button(LIFECYCLE.pause.label)).toBeDefined();
+    });
+  });
+
+  describe('performance and orders (UI-16)', () => {
+    it('shows the paper return, drawdown and days with a value chart', async () => {
+      await load();
+      const perf = el.querySelector('.perf')!.textContent!;
+      expect(perf).toContain('+8.00%');
+      expect(perf).toContain('-5.00%');
+      expect(perf).toContain('21');
+      const summary = el.querySelector('app-time-series-chart')!.textContent!;
+      expect(summary).toContain('a return of +8.00%');
+      await settle();
+      expect(chart.last?.map((s) => s.id)).toEqual(['value', 'drawdown']);
+      expect(chart.last?.[0].points).toHaveLength(3);
+    });
+
+    it('explains the missing chart for a live strategy', async () => {
+      await load({ ...DETAIL, status: 'active' });
+      expect(el.textContent).toContain('It trades live now.');
+      expect(el.querySelector('app-time-series-chart')).toBeNull();
+    });
+
+    it('lists recent orders with the side mark', async () => {
+      await load({ ...DETAIL, status: 'active' }, HISTORY, { orders: [ORDER] });
+      const orders = el.querySelector('section[aria-labelledby="orders-title"]')!;
+      expect(orders.textContent).toContain('AAPL.US');
+      expect(orders.querySelector('app-side-tag')?.textContent).toContain('Buy');
+    });
+
+    it("asks for this strategy's orders only", async () => {
+      (await nextRequest(controller, '/api/strategies/momentum-v3')).flush({
+        ...DETAIL,
+        status: 'retired',
+      });
+      (await nextRequest(controller, '/api/strategies/momentum-v3/history')).flush([]);
+      const req = await nextRequest(controller, '/api/orders');
+      expect(req.request.urlWithParams).toContain('strategy_id=momentum-v3');
+      req.flush(page([]));
+      await settle();
+      expect(el.textContent).toContain('No orders yet');
+    });
+
+    it('computes performance from the P&L rows', () => {
+      controller.match(() => true); // the page's own reads are not needed here
+      expect(paperPerformance([])).toBeNull();
+      expect(paperPerformance(PNL)).toMatchObject({
+        totalReturn: 0.08,
+        maxDrawdown: -0.05,
+        days: 21,
+      });
+    });
   });
 });

@@ -96,5 +96,5 @@ export function describeIngest(r: IngestRequest): string {
     scope = `every ticker on ${r.exchange}`;
   }
   const range = (r.since ? ` since ${r.since}` : '') + (r.until ? ` until ${r.until}` : '');
-  return `Fetches ${what} for ${scope} from ${r.source ?? 'eodhd'}${range} and writes them to the lake.`;
+  return `Fetches ${what} for ${scope} from ${r.source ?? 'eodhd'}${range} and saves them.`;
 }

@@ -13,3 +13,6 @@ export interface Page<T> {
 export type StrategyStatus = 'active' | 'shadow' | 'retired';
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
 export const TERMINAL_JOB_STATUSES: readonly JobStatus[] = ['succeeded', 'failed', 'cancelled'];
+
+/** An account a broker connection found (the connections flavour of BrokerAccountView). */
+export type { StonksAppConnectionsBrokerAccountView as ConnectedAccountView } from './generated/types.gen';

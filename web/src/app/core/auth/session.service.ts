@@ -4,6 +4,7 @@ import { AuthService } from '../../api/auth.service';
 import type { MeView, MfaCodeRequest } from '../../api/models';
 import { ApiError } from '../http/api-error';
 import { AuthTokenService } from './auth-token.service';
+import { type Permission, allowed, denial, routePermission } from './permissions';
 
 /**
  * - `unknown`: not asked yet.
@@ -56,6 +57,26 @@ export class SessionService {
   /** Signed in through the browser session (step-up works only here). */
   readonly viaSession = computed(() => this.meSignal()?.via === 'session');
   readonly signedIn = computed(() => this.statusSignal() === 'signed-in');
+
+  /**
+   * May the current user do this? Mirrors the server's policy (see
+   * `permissions.ts`); use it to hide or disable actions. Reactive: reads
+   * the `me` signal.
+   */
+  can(permission: Permission): boolean {
+    return allowed(this.meSignal(), permission);
+  }
+
+  /** Why the current user may not do this (a short hint), or null. */
+  whyNot(permission: Permission): string | null {
+    return denial(this.meSignal(), permission);
+  }
+
+  /** `can()` for a route template from openapi.json (`POST`, `/api/ticks`). */
+  canCall(method: string, path: string): boolean {
+    const permission = routePermission(method, path);
+    return permission === null ? this.meSignal() !== null : this.can(permission);
+  }
 
   /** The token for `X-CSRF-Token` on unsafe requests made with the session cookie. */
   csrfToken(): string | null {

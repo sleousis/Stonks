@@ -122,7 +122,18 @@
   overflow-wrap: anywhere;
 }
 
+.head-action {
+  display: grid;
+  justify-items: end;
+  min-width: 0;
+}
+
 @include bp.phone {
+  .head-action {
+    width: 100%;
+    justify-items: stretch;
+  }
+
   .panel-head .btn {
     width: 100%;
   }

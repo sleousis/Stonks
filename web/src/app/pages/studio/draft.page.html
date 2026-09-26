@@ -24,18 +24,30 @@
         <app-status-pill status="pending" label="Unsaved changes" />
       }
     </div>
-    <button actions type="button" class="btn" (click)="startRename()">Rename</button>
+    <button
+      actions
+      id="draft-rename-button"
+      type="button"
+      class="btn"
+      [disabled]="!canLab()"
+      (click)="startRename()"
+    >
+      Rename
+    </button>
     <button
       actions
       type="button"
       class="btn"
       [class.btn-primary]="dirty()"
-      [disabled]="!dirty() || saving()"
+      [disabled]="!dirty() || saving() || !canLab()"
       [attr.aria-busy]="saving()"
       (click)="save()"
     >
       {{ saving() ? 'Saving…' : dirty() ? 'Save' : 'Saved' }}
     </button>
+    @if (!canLab()) {
+      <span actions><app-permission-note permission="lab.run" /></span>
+    }
   </app-page-header>
 
   @if (renaming()) {
@@ -49,10 +61,11 @@
           required
           [value]="nameDraft()"
           (input)="nameDraft.set($any($event.target).value)"
+          (keydown.escape)="closeRename()"
         />
       </div>
       <div class="rename-actions">
-        <button type="button" class="btn" (click)="renaming.set(false)">Cancel</button>
+        <button type="button" class="btn" (click)="closeRename()">Cancel</button>
         <button type="submit" class="btn btn-primary" [disabled]="!nameDraft().trim()">
           Rename
         </button>
@@ -90,12 +103,7 @@
       @if (d.source_code === null) {
         <div class="callout" role="note">
           <p class="callout-title">Code strategies are turned off</p>
-          <p>
-            This draft holds Python code, which runs inside the server with its full privileges. The
-            operator must set <code>allow_code_strategies = true</code> under <code>[api]</code> in
-            the server config and restart <code>stonks serve</code> before it can be viewed, tested
-            or registered.
-          </p>
+          <p>Code strategies are turned off on this server. Ask your admin.</p>
         </div>
       } @else {
         <section class="panel" aria-labelledby="code-title">
@@ -104,7 +112,7 @@
             <button
               type="button"
               class="btn"
-              [disabled]="checking()"
+              [disabled]="checking() || !canLab()"
               [attr.aria-busy]="checking()"
               (click)="check()"
             >
@@ -168,7 +176,7 @@
               <button
                 type="button"
                 class="btn"
-                [disabled]="checking()"
+                [disabled]="checking() || !canLab()"
                 [attr.aria-busy]="checking()"
                 (click)="check()"
               >
@@ -241,7 +249,7 @@
     @if (isCode() && d.source_code === null) {
       <div class="callout" role="note">
         <p class="callout-title">Code strategies are turned off</p>
-        <p>The operator must enable <code>[api] allow_code_strategies</code> to test this draft.</p>
+        <p>Code strategies are turned off on this server. Ask your admin.</p>
       </div>
     } @else {
       @if (!isCode() && issues().length) {
@@ -272,7 +280,7 @@
       <button
         type="button"
         class="btn btn-primary"
-        [disabled]="saving()"
+        [disabled]="saving() || !canLab()"
         [attr.aria-busy]="saving()"
         (click)="save()"
       >

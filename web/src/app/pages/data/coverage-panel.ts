@@ -13,6 +13,7 @@ import type { CoverageRow } from '../../api/models';
 import { MarketService } from '../../api/market.service';
 import { formatDateTime } from '../../core/format/format';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
+import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { FRESHNESS_LABEL, FRESHNESS_TONE, type Freshness, freshnessOf } from './freshness';
@@ -54,18 +55,18 @@ export function barTime(timestamp: string, interval: string): string {
           <button type="button" class="btn btn-ghost" (click)="cleared.emit()">
             Show all tickers
           </button>
-        } @else if (list.hasValue()) {
-          <span class="muted num count">{{ list.value().total }} series</span>
+        } @else if (page(); as p) {
+          <span class="muted num count">{{ p.total }} series</span>
         }
       </div>
       @if (list.error(); as err) {
         <app-error-state title="Could not load coverage" [error]="err" (retry)="list.reload()" />
-      } @else if (!list.hasValue()) {
+      } @else if (!page()) {
         <app-loading-state label="Loading coverage" [rows]="5" />
       } @else if (rows().length === 0) {
         <app-empty-state
-          [title]="ticker() ? 'No bars for ' + ticker() : 'No bars in the lake'"
-          message="Run a prices or intraday ingest below to fill it."
+          [title]="ticker() ? 'No price data for ' + ticker() : 'No price data yet'"
+          message="Run a prices or intraday ingest below to add some."
         />
       } @else {
         <app-data-table
@@ -77,8 +78,9 @@ export function barTime(timestamp: string, interval: string): string {
           [rows]="rows()"
           [columns]="columns"
           [rowKey]="key"
-          [total]="ticker() ? null : list.value().total"
-          [offset]="ticker() ? null : list.value().offset"
+          [total]="ticker() ? null : (page()?.total ?? null)"
+          [offset]="ticker() ? null : (page()?.offset ?? null)"
+          [busy]="list.isLoading()"
           [pageSize]="ticker() ? 0 : pageSize"
           [initialSort]="ticker() ? { key: 'interval', dir: 'asc' } : null"
           (pageChange)="offset.set($event.offset)"
@@ -130,13 +132,14 @@ export class CoveragePanel {
     },
     loader: ({ params }) => this.market.coverage(params),
   });
+  /** The last loaded page stays on screen while the next one loads. */
+  protected readonly page = keepLatest(this.list);
 
   protected readonly rows = computed<CoverageView[]>(() => {
-    if (!this.list.hasValue()) return [];
+    const page = this.page();
+    if (!page) return [];
     const now = new Date();
-    return this.list
-      .value()
-      .items.map((r) => ({ ...r, freshness: freshnessOf(r.last_bar, r.interval, now) }));
+    return page.items.map((r) => ({ ...r, freshness: freshnessOf(r.last_bar, r.interval, now) }));
   });
 
   protected readonly columns: TableColumn<CoverageView>[] = [

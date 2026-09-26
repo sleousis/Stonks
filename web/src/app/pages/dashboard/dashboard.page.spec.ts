@@ -6,15 +6,9 @@ import {
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
-import type {
-  HealthReportView,
-  Page,
-  PnlSeries,
-  PortfolioView,
-  StrategySummary,
-  TickRun,
-} from '../../api/models';
+import type { HealthReportView, Page, PnlSeries, PortfolioView, TickRun } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
+import { TicksService } from '../../api/ticks.service';
 import { FakeChartEngine, provideFakeChart } from '../../../testing/fake-chart';
 import { nextRequest, tick } from '../../../testing/http';
 import { DashboardPage } from './dashboard.page';
@@ -109,9 +103,7 @@ const HEALTH: HealthReportView = {
   ],
 };
 
-function strategiesPage(total: number): Page<StrategySummary> {
-  return { items: [], total, limit: 1, offset: 0 };
-}
+const STRATEGY_COUNTS = { active: 3, shadow: 2, retired: 1, total: 6 };
 
 describe('DashboardPage', () => {
   let fixture: ComponentFixture<DashboardPage>;
@@ -173,8 +165,8 @@ describe('DashboardPage', () => {
         case '/api/health':
           req.flush({ status: 'ok', version: '0.1.0' });
           break;
-        case '/api/strategies':
-          req.flush(strategiesPage(url.searchParams.get('status') === 'active' ? 3 : 2));
+        case '/api/strategies/summary':
+          req.flush(STRATEGY_COUNTS);
           break;
         default:
           throw new Error(`unexpected request ${url.pathname}`);
@@ -275,12 +267,67 @@ describe('DashboardPage', () => {
     const text = el.textContent ?? '';
     expect(text).toContain('No open positions');
     expect(text).toContain('No P&L yet');
-    expect(text).toContain('No ticks yet');
+    expect(text).toContain('No trading runs yet');
     // The tick runner lives on Orders, then Ticks (UI-10).
     const ticks = el.querySelector('section[aria-labelledby="ticks-title"]')!;
     expect(ticks.querySelector('a')!.getAttribute('href')).toBe('/orders/ticks');
     expect(ticks.textContent).not.toContain('`');
     flushPending();
+  });
+
+  it('calls /api/strategies/summary once instead of two list calls', async () => {
+    const summary = await nextRequest(controller, '/api/strategies/summary');
+    expect(controller.match((r) => r.url.split('?')[0] === '/api/strategies').length).toBe(0);
+    summary.flush(STRATEGY_COUNTS);
+    await flushAll();
+    expect(el.textContent).toContain('3 active');
+    expect(el.textContent).toContain('2 in shadow');
+  });
+
+  it('tick row links to its detail', async () => {
+    await flushAll();
+    const section = el.querySelector('section[aria-labelledby="ticks-title"]')!;
+    const links = [...section.querySelectorAll<HTMLAnchorElement>('tbody a')].map((a) =>
+      a.getAttribute('href'),
+    );
+    expect(links).toContain(`/orders/ticks/${TICKS.items[0].id}`);
+    expect(section.querySelector('h2')?.textContent).toBe('Recent trading runs');
+  });
+
+  it('health list shows check titles', async () => {
+    const pending = await nextRequest(controller, '/api/health/report');
+    pending.flush({
+      ...HEALTH,
+      checks: [
+        { name: 'stuck_ticks', ok: true, detail: 'none' },
+        { name: 'freshness:AAPL.US', ok: false, detail: '3 days old' },
+      ],
+    });
+    await flushAll();
+    const names = [...el.querySelectorAll('.check-name')].map((p) => p.textContent?.trim());
+    expect(names).toEqual(['Stuck trading runs', 'Freshness of AAPL.US']);
+  });
+
+  it('shows when it last updated and reloads when a trading run ends', async () => {
+    await flushAll();
+    expect(el.querySelector('app-updated-ago')?.textContent).toContain('Updated just now');
+    TestBed.inject(TicksService).announceFinished();
+    TestBed.tick();
+    await tick(5);
+    const again = controller.match(() => true);
+    const paths = again.map((r) => r.request.url.split('?')[0]).sort();
+    expect(paths).toEqual(
+      [
+        '/api/health',
+        '/api/health/report',
+        '/api/pnl',
+        '/api/portfolio',
+        '/api/strategies/summary',
+        '/api/ticks',
+      ].sort(),
+    );
+    again.forEach(respond);
+    await settle();
   });
 
   it('shows unrealized P&L with sign and tone, in the portfolio currency', async () => {

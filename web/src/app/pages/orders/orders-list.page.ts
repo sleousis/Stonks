@@ -10,14 +10,17 @@ import {
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { OrdersService } from '../../api/orders.service';
+import { autoRefresh } from '../../shared/auto-refresh';
+import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { ORDER_STATUS_OPTIONS } from './order-status';
 import { OrdersTable } from './orders-table';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 
 const PAGE_SIZE = 50;
 
 /**
- * Orders placed by ticks, filtered from the server. Filters live in the URL
+ * Orders placed by trading runs, filtered from the server. Filters live in the URL
  * (`?ticker=&strategy=&tick=&status=`) so other pages can link to a filtered
  * view and the back button restores it.
  */
@@ -29,8 +32,8 @@ const PAGE_SIZE = 50;
     <section class="panel" aria-labelledby="orders-title">
       <div class="panel-head">
         <h2 id="orders-title">Orders</h2>
-        @if (orders.hasValue()) {
-          <span class="count num">{{ orders.value().total }} matching</span>
+        @if (page(); as p) {
+          <span class="count num">{{ p.total }} matching</span>
         }
       </div>
 
@@ -62,11 +65,11 @@ const PAGE_SIZE = 50;
           />
         </div>
         <div class="field">
-          <label for="f-tick">Tick</label>
+          <label for="f-tick">Trading run</label>
           <input
             id="f-tick"
             class="input"
-            placeholder="Tick id"
+            placeholder="Run id"
             [value]="tick() ?? ''"
             (change)="setFilter('tick', $any($event.target).value)"
           />
@@ -92,29 +95,31 @@ const PAGE_SIZE = 50;
         </div>
       </form>
 
+      @let p = page();
       @if (orders.error(); as err) {
         <app-error-state title="Could not load orders" [error]="err" (retry)="orders.reload()" />
-      } @else if (!orders.hasValue()) {
+      } @else if (!p) {
         <app-loading-state label="Loading orders" [rows]="6" />
-      } @else if (orders.value().items.length === 0) {
+      } @else if (p.items.length === 0) {
         @if (hasFilters()) {
           <app-empty-state
             title="No orders match these filters"
-            message="Clear a filter or widen the search; filters match ids exactly."
+            message="Clear a filter or widen the search. Filters match ids exactly."
           />
         } @else {
           <app-empty-state
             title="No orders yet"
-            message="Orders appear here after a tick runs. Start one from the Ticks tab (dry run first)."
+            message="Orders appear here after a trading run. Start one from the Trading runs tab, with a dry run first."
           />
         }
       } @else {
         <!-- Re-created per filter set so paging restarts on page one. -->
         @for (k of [filterKey()]; track k) {
           <app-orders-table
-            [rows]="orders.value().items"
-            [total]="orders.value().total"
-            [offset]="orders.value().offset"
+            [rows]="p.items"
+            [total]="p.total"
+            [offset]="p.offset"
+            [busy]="orders.isLoading()"
             [pageSize]="pageSize"
             (pageChange)="offset.set($event.offset)"
           />
@@ -144,14 +149,25 @@ export class OrdersListPage {
     tick_id: this.tick() || null,
     status: this.status() || null,
   }));
-  protected readonly filterKey = computed(() => JSON.stringify(this.filters()));
+  private readonly portfolioCtx = inject(PortfolioContextService);
+  protected readonly filterKey = computed(() =>
+    JSON.stringify({ ...this.filters(), portfolio: this.portfolioCtx.selectedId() }),
+  );
   protected readonly hasFilters = computed(() => Object.values(this.filters()).some(Boolean));
   protected readonly offset = linkedSignal({ source: this.filterKey, computation: () => 0 });
 
   protected readonly orders = resource({
-    params: () => ({ ...this.filters(), limit: PAGE_SIZE, offset: this.offset() }),
+    params: () => ({
+      ...this.filters(),
+      ...this.portfolioCtx.query(),
+      limit: PAGE_SIZE,
+      offset: this.offset(),
+    }),
     loader: ({ params }) => this.ordersApi.list(params),
   });
+  /** The last loaded page stays on screen while the next one loads. */
+  protected readonly page = keepLatest(this.orders);
+  protected readonly auto = autoRefresh(() => [this.orders]);
 
   protected setFilter(name: 'ticker' | 'strategy' | 'tick' | 'status', raw: string): void {
     let value: string | null = raw.trim() || null;

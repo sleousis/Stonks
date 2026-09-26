@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router, provideRouter } from '@angular/router';
 
 import type { TableColumn } from './data-table/data-table';
 import { DataTable } from './data-table/data-table';
@@ -39,13 +40,14 @@ describe('HelpTip', () => {
   let fixture: ComponentFixture<Host>;
 
   beforeEach(async () => {
+    TestBed.configureTestingModule({ providers: [provideRouter([])] });
     fixture = TestBed.createComponent(Host);
     fixture.detectChanges();
     await fixture.whenStable();
     el = fixture.nativeElement;
   });
 
-  it('renders a labelled button that opens the one-line help and wiki link', async () => {
+  it('renders a labelled button that opens the one-line help and glossary link', async () => {
     const host = el.querySelector('#direct')!;
     const button = host.querySelector('button')!;
     expect(button.getAttribute('aria-label')).toBe('What is Max drawdown?');
@@ -60,10 +62,32 @@ describe('HelpTip', () => {
     await fixture.whenStable();
     expect(panel.textContent).toContain('largest fall from a peak');
     const link = panel.querySelector('a')!;
-    expect(link.getAttribute('href')).toBe('https://github.com/sleousis/Stonks/wiki/Glossary');
-    expect(link.getAttribute('rel')).toContain('noopener');
+    expect(link.getAttribute('href')).toBe('/help/glossary#max_drawdown');
+    expect(link.getAttribute('target')).toBeNull();
 
     panel.dispatchEvent(Object.assign(new Event('toggle'), { newState: 'closed' }));
+    fixture.detectChanges();
+    expect(panel.textContent?.trim()).toBe('');
+  });
+
+  it('opens the in-app glossary without reloading the page (UI-13)', async () => {
+    const router = TestBed.inject(Router);
+    const nav = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+    const panel = el.querySelector<HTMLElement>('#direct [popover]')!;
+    panel.dispatchEvent(Object.assign(new Event('toggle'), { newState: 'open' }));
+    fixture.detectChanges();
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+    panel.querySelector('a')!.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(true);
+    expect(nav).toHaveBeenCalledWith('/help/glossary#max_drawdown');
+  });
+
+  it('closes when the page scrolls (UI-33)', async () => {
+    const panel = el.querySelector<HTMLElement>('#direct [popover]')!;
+    panel.dispatchEvent(Object.assign(new Event('toggle'), { newState: 'open' }));
+    fixture.detectChanges();
+    expect(panel.textContent).toContain('largest fall');
+    window.dispatchEvent(new Event('scroll'));
     fixture.detectChanges();
     expect(panel.textContent?.trim()).toBe('');
   });

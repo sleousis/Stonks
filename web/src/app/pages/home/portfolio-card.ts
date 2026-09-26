@@ -5,6 +5,7 @@ import { PortfolioService } from '../../api/portfolio.service';
 import { formatMoney, formatNumber, formatPercent, toneClass } from '../../core/format/format';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 
 const TOP_HOLDINGS = 8;
 
@@ -125,8 +126,16 @@ const TOP_HOLDINGS = 8;
 export class PortfolioCard {
   private readonly api = inject(PortfolioService);
 
-  protected readonly portfolio = resource({ loader: () => this.api.get() });
-  protected readonly pnl = resource({ loader: () => this.api.pnl() });
+  private readonly portfolioCtx = inject(PortfolioContextService);
+
+  protected readonly portfolio = resource({
+    params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
+    loader: () => this.api.get(),
+  });
+  protected readonly pnl = resource({
+    params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
+    loader: () => this.api.pnl(),
+  });
 
   private readonly latest = computed(() =>
     this.pnl.hasValue() ? (this.pnl.value().rows.at(-1) ?? null) : null,

@@ -13,6 +13,23 @@ function type(el: HTMLInputElement | HTMLTextAreaElement | null, text: string): 
   el.dispatchEvent(new Event('input'));
 }
 
+/**
+ * The dialog's confirm control: the submit button, or the hold-to-confirm
+ * button when the dialog asks for a hold instead of typing.
+ */
+export function confirmButton(form: HTMLFormElement): HTMLButtonElement {
+  const button =
+    form.querySelector<HTMLButtonElement>('button[type="submit"]') ??
+    form.querySelector<HTMLButtonElement>('app-hold-button button');
+  if (!button) throw new Error('no confirm button');
+  return button;
+}
+
+/** True when the open dialog confirms by holding rather than typing. */
+export function isHoldDialog(root: HTMLElement): boolean {
+  return !!dialogForm(root)?.querySelector('app-hold-button');
+}
+
 /** Fill the reason (and the typed confirmation when asked) without submitting. */
 export function fillDialog(
   fixture: ComponentFixture<unknown>,
@@ -23,17 +40,25 @@ export function fillDialog(
   type(form.querySelector('textarea'), answer.reason);
   if (answer.typed !== undefined) type(form.querySelector('input'), answer.typed);
   fixture.detectChanges();
-  return form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+  return confirmButton(form);
 }
 
-/** Fill and press the dialog's confirm button. */
+/**
+ * Fill and confirm. A hold dialog is confirmed through its screen reader
+ * fallback (two presses with no pointer), which needs no fake timers.
+ */
 export function answerDialog(
   fixture: ComponentFixture<unknown>,
   answer: { reason: string; typed?: string },
 ): void {
-  const submit = fillDialog(fixture, answer);
-  if (submit.disabled) throw new Error('confirm button is disabled');
-  submit.click();
+  const hold = isHoldDialog(fixture.nativeElement as HTMLElement);
+  const button = fillDialog(fixture, answer);
+  if (button.disabled) throw new Error('confirm button is disabled');
+  button.click();
+  if (hold) {
+    fixture.detectChanges();
+    button.click();
+  }
   fixture.detectChanges();
 }
 

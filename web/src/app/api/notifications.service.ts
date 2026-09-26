@@ -1,5 +1,8 @@
-import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Injectable, inject } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 
+import { toApiError } from '../core/http/api-error';
 import { SILENT_HEADERS } from '../core/http/interceptors';
 import { unwrap } from './api-call';
 import {
@@ -30,6 +33,8 @@ import type {
  */
 @Injectable({ providedIn: 'root' })
 export class NotificationsService {
+  private readonly http = inject(HttpClient);
+
   vapidKey() {
     return unwrap(getVapidKey({ headers: SILENT_HEADERS }));
   }
@@ -44,6 +49,24 @@ export class NotificationsService {
 
   pushDevices() {
     return unwrap(listPushSubscriptions());
+  }
+
+  /**
+   * Remove another registered device by its id. The device list carries no
+   * endpoints, so this uses the planned `DELETE /api/push/subscriptions/{id}`
+   * (HttpClient, silent). Until the server has it, the call fails with 404
+   * or 405: check with `isMissingRoute()`.
+   */
+  async removePushDevice(id: string): Promise<void> {
+    try {
+      await firstValueFrom(
+        this.http.delete(`/api/push/subscriptions/${encodeURIComponent(id)}`, {
+          headers: SILENT_HEADERS,
+        }),
+      );
+    } catch (err) {
+      throw toApiError(err);
+    }
   }
 
   preferences() {
@@ -63,8 +86,9 @@ export class NotificationsService {
     return unwrap(setNotificationWebhook({ body: { url } }));
   }
 
-  feed(query?: ListNotificationsData['query']) {
-    return unwrap(listNotifications({ query }));
+  /** `silent` skips error toasts (the bell's background refresh). */
+  feed(query?: ListNotificationsData['query'], silent = false) {
+    return unwrap(listNotifications({ query, headers: silent ? SILENT_HEADERS : undefined }));
   }
 
   /** Mark these ids read, or every notification when `ids` is omitted. */

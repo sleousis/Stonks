@@ -17,7 +17,12 @@ import { SseParser } from './sse-parser';
 /** Minimal fetch surface the job stream needs (swapped for a fake in tests). */
 export type FetchLike = (
   input: string,
-  init: { headers: Record<string, string>; signal: AbortSignal; cache: RequestCache },
+  init: {
+    headers: Record<string, string>;
+    credentials: RequestCredentials;
+    signal: AbortSignal;
+    cache: RequestCache;
+  },
 ) => Promise<{
   ok: boolean;
   status: number;
@@ -67,7 +72,7 @@ export function isTerminal(status: JobStatus | undefined | null): boolean {
  * Progress arrives over the SSE stream (`GET /api/jobs/{id}/events`), read
  * with fetch so the short-lived stream token from `POST .../stream-token`
  * goes in the URL and the bearer token never does. Without an API token the
- * stream is opened directly (reads are open on loopback). If the stream
+ * stream is opened directly with the session cookie. If the stream
  * cannot be opened or stops early, the service polls `GET /api/jobs/{id}`.
  */
 @Injectable({ providedIn: 'root' })
@@ -111,7 +116,12 @@ export class JobsService {
         resolveFinished(event());
       },
     });
-    const stop = () => sub.unsubscribe();
+    // Stopping settles `finished` with the last event, so nobody waits forever.
+    const stop = () => {
+      sub.unsubscribe();
+      ended.set(true);
+      resolveFinished(event());
+    };
     destroyRef?.onDestroy(stop);
 
     return {
@@ -154,6 +164,7 @@ export class JobsService {
     }
     const res = await this.fetchFn(url, {
       headers: { Accept: 'text/event-stream' },
+      credentials: 'include',
       signal,
       cache: 'no-store',
     });
@@ -219,16 +230,17 @@ function toEvent(job: Job): JobEvent {
   };
 }
 
+/** Waits `ms`, or less when aborted. Leaves no abort listener behind. */
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms);
-    signal.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timer);
-        resolve();
-      },
-      { once: true },
-    );
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener('abort', onAbort, { once: true });
   });
 }

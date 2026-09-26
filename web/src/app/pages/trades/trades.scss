@@ -1,0 +1,100 @@
+@use 'breakpoints' as bp;
+
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.tiles {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: var(--space-4);
+
+  @include bp.from-desktop {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.lead {
+  padding: 0 var(--space-4) var(--space-4);
+  max-width: 70ch;
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  min-width: 0;
+
+  @include bp.from-tablet {
+    display: inline-grid;
+    grid-template-columns: repeat(3, auto);
+  }
+}
+
+.segment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(var(--control-h) - 4px);
+  padding: 0 var(--space-3);
+  border-radius: 3px;
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    color: var(--color-ink);
+  }
+
+  &.selected {
+    background: var(--color-surface);
+    color: var(--color-ink);
+    box-shadow: var(--shadow-1);
+  }
+
+  &:has(input:focus-visible) {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 1px;
+  }
+
+  @include bp.phone {
+    min-height: var(--touch-min);
+  }
+
+  @include bp.coarse {
+    min-height: var(--touch-min);
+  }
+}
+
+.ticker-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+
+  a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--control-h);
+    font-weight: var(--weight-semibold);
+    overflow-wrap: anywhere;
+
+    @include bp.phone {
+      min-height: var(--touch-min);
+    }
+
+    @include bp.coarse {
+      min-height: var(--touch-min);
+    }
+  }
+}

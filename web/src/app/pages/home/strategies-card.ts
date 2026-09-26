@@ -21,6 +21,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
+import { PermissionNote } from '../../shared/ui/permission-note';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { MODES, autoBlockedReason } from './strategy-modes';
@@ -39,7 +40,7 @@ interface Row {
 @Component({
   selector: 'app-strategies-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, StatusPill, LoadingState, EmptyState, ErrorState],
+  imports: [RouterLink, StatusPill, LoadingState, EmptyState, ErrorState, PermissionNote],
   template: `
     <section class="panel" aria-labelledby="home-strategies">
       <div class="panel-head">
@@ -108,6 +109,7 @@ interface Row {
                       [checked]="row.sub.mode === m.value"
                       [disabled]="
                         busy() === row.sub.id ||
+                        (m.value === 'auto' && !canAuto()) ||
                         (m.value === 'auto' && !!row.autoReason && row.sub.mode !== 'auto')
                       "
                       [attr.aria-describedby]="
@@ -130,6 +132,9 @@ interface Row {
             </li>
           }
         </ul>
+        <div class="gate">
+          <app-permission-note permission="portfolio.manage" />
+        </div>
       }
     </section>
   `,
@@ -271,6 +276,9 @@ interface Row {
       color: var(--color-ink-3);
       cursor: not-allowed;
     }
+    .gate {
+      padding: 0 var(--space-4);
+    }
     .help,
     .why {
       font-size: var(--text-sm);
@@ -297,7 +305,10 @@ export class StrategiesCard {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   protected readonly modes = MODES;
-  protected readonly canTrade = this.session.canTrade;
+  /** Switching strategies on or off and changing modes. */
+  protected readonly canTrade = computed(() => this.session.can('portfolio.manage'));
+  /** Auto places real orders: its own permission. */
+  protected readonly canAuto = computed(() => this.session.can('subscription.auto_enable'));
   protected readonly busy = signal<string | null>(null);
 
   protected readonly subs = resource({ loader: () => this.api.list() });

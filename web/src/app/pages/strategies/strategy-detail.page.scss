@@ -318,3 +318,57 @@ blockquote {
   color: var(--color-ink-3);
   font-size: var(--text-xs);
 }
+
+// Stage bar, performance and orders -----------------------------------------
+app-stage-bar {
+  display: block;
+  margin-bottom: var(--space-4);
+}
+
+.action-note {
+  display: flex;
+  flex-basis: 100%;
+  justify-content: flex-end;
+}
+
+.tech {
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+
+  summary {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    color: var(--color-ink-2);
+    cursor: pointer;
+
+    @include bp.phone {
+      min-height: var(--touch-min);
+    }
+
+    @include bp.coarse {
+      min-height: var(--touch-min);
+    }
+  }
+}
+
+.perf {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) 0;
+
+  > div {
+    min-width: 0;
+  }
+
+  dd {
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+  }
+}
+
+.chart {
+  min-width: 0;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}

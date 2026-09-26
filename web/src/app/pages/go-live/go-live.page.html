@@ -1,6 +1,6 @@
 <app-page-header
   title="Go-live"
-  description="Checks a strategy's paper period must pass before a human promotes it to trade."
+  description="Checks a strategy's paper period must pass before someone takes it live."
 />
 
 <div class="page-grid">
@@ -45,14 +45,14 @@
             }
           </select>
           <span id="golive-strategy-hint" class="hint"
-            >Shadow strategies are listed first: they are the ones building a paper record.</span
+            >Paper trading strategies are listed first: they are the ones building a record.</span
           >
         </div>
 
         @if (selected(); as s) {
           <div class="selected">
             <app-status-pill [status]="s.status" />
-            <span class="selected-class">{{ s.class_path }}</span>
+            <span class="selected-class">{{ kindName(s.class_path) }}</span>
             <a class="selected-link" [routerLink]="['/strategies', s.id]">Open strategy</a>
           </div>
         }
@@ -68,7 +68,7 @@
         <app-status-pill
           class="verdict"
           [status]="report.value().passed ? 'pass' : 'fail'"
-          [label]="report.value().passed ? 'Ready for promotion' : 'Not ready'"
+          [label]="report.value().passed ? 'Ready to go live' : 'Not ready'"
         />
       }
     </div>
@@ -76,7 +76,7 @@
     @if (!selectedId()) {
       <app-empty-state
         title="Pick a strategy"
-        message="The check compares its paper period with the limits in the [golive] settings."
+        message="The check compares its paper period with the go-live limits set for this server."
       />
     } @else if (unknownId(); as missing) {
       <app-empty-state
@@ -97,13 +97,13 @@
       @let r = report.value();
       @if (r.passed && r.status !== 'active') {
         <div class="ready panel-body" role="status">
-          <p class="ready-title">Ready for a human to promote</p>
+          <p class="ready-title">Ready for someone to take it live</p>
           <p>
-            All {{ rows().length }} checks passed. Nothing promotes on its own: read the checklist
-            below, then promote it from the strategy page with a reason.
+            All {{ rows().length }} checks passed. Nothing goes live on its own: read the checklist
+            below, then use {{ goLiveLabel }} on the strategy page with a reason.
           </p>
           <a class="btn btn-primary" [routerLink]="['/strategies', r.strategy_id]"
-            >Review and promote</a
+            >Review and go live</a
           >
         </div>
       }
@@ -133,7 +133,6 @@
             <div class="check-head">
               <span class="check-label">{{ c.label }}</span>
               <app-status-pill [status]="c.passed ? 'pass' : 'fail'" />
-              <span class="check-name">{{ c.name }}</span>
             </div>
             @if (c.name !== 'status') {
               <dl class="check-figures">
@@ -171,10 +170,6 @@
           }
         </dl>
       </section>
-      <div class="cli panel-body">
-        <p>The same check on the command line exits with code 1 when any check fails.</p>
-        <app-cli-command [command]="command()" />
-      </div>
     }
   </section>
 
@@ -201,12 +196,7 @@
           </div>
           <div>
             <dt>Account</dt>
-            <dd>
-              <app-status-pill
-                [status]="b.paper ? 'shadow' : 'warn'"
-                [label]="b.paper ? 'Paper' : 'Live'"
-              />
-            </dd>
+            <dd><app-mode-stamp [live]="!b.paper" /></dd>
           </div>
           <div>
             <dt>Live trading</dt>

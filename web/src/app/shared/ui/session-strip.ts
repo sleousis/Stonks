@@ -13,7 +13,9 @@ import type { ScheduledJobView } from '../../api/models';
 import { ScheduleService } from '../../api/schedule.service';
 import { HaltStateService } from '../../core/halts/halt-state.service';
 import { haltSummary } from '../../core/halts/halt-view';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { humanize } from './param-form/param-spec';
+import { PortfolioPicker } from './portfolio-picker';
 
 /** How often the strip re-reads the schedule (the countdown ticks every second). */
 export const SCHEDULE_POLL_MS = new InjectionToken<number>('SCHEDULE_POLL_MS', {
@@ -55,17 +57,19 @@ export function countdown(ms: number): string {
  * live countdown, and the halt state. It turns red while a kill switch is
  * on (amber for a breaker) and links to the halts page.
  *
+ * It also holds the portfolio picker when the user has more than one.
+ *
  * Owned here: the halt state. The trading-day part (pre-open, open, close)
  * waits for session times from the API.
  */
 @Component({
   selector: 'app-session-strip',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink],
+  imports: [RouterLink, PortfolioPicker],
   template: `
     @let halt = halted();
     <div aria-live="polite">
-      @if (halt || next()) {
+      @if (halt || next() || portfolios.hasChoice()) {
         <div class="strip" [attr.data-tone]="halt?.tone ?? 'calm'">
           @if (halt) {
             <span class="mark" aria-hidden="true"></span>
@@ -74,6 +78,7 @@ export function countdown(ms: number): string {
             </p>
             <a class="strip-link" routerLink="/ops/halts">Review halts</a>
           }
+          <app-portfolio-picker />
           @if (next(); as n) {
             <a class="next" routerLink="/ops/schedule" [attr.aria-label]="nextLabel()">
               <span class="muted">Next</span>
@@ -182,6 +187,7 @@ export class SessionStrip {
   private readonly schedule = inject(ScheduleService);
   private readonly halts = inject(HaltStateService);
   private readonly pollMs = inject(SCHEDULE_POLL_MS);
+  protected readonly portfolios = inject(PortfolioContextService);
 
   private readonly jobs = signal<readonly ScheduledJobView[]>([]);
   private readonly now = signal(Date.now());

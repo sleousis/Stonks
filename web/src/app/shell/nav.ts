@@ -3,6 +3,7 @@ import {
   Component,
   computed,
   inject,
+  input,
   output,
   signal,
 } from '@angular/core';
@@ -36,7 +37,6 @@ const ADVANCED_KEY = 'stonks.navAdvanced';
               routerLinkActive="active"
               ariaCurrentWhenActive="page"
               [routerLinkActiveOptions]="{ exact: item.path === '/' }"
-              [attr.aria-keyshortcuts]="'g ' + item.key"
               (click)="navigate.emit()"
             >
               <span>{{ item.label }}</span>
@@ -48,15 +48,14 @@ const ADVANCED_KEY = 'stonks.navAdvanced';
       <details [open]="advancedOpen()" (toggle)="onToggle($event)">
         <summary>Advanced</summary>
         @for (group of groups; track group) {
-          <p class="group" [id]="'nav-group-' + group">{{ group }}</p>
-          <ul [attr.aria-labelledby]="'nav-group-' + group">
+          <p class="group" [id]="idPrefix() + '-group-' + group">{{ group }}</p>
+          <ul [attr.aria-labelledby]="idPrefix() + '-group-' + group">
             @for (item of itemsIn(group); track item.path) {
               <li>
                 <a
                   [routerLink]="item.path"
                   routerLinkActive="active"
                   ariaCurrentWhenActive="page"
-                  [attr.aria-keyshortcuts]="'g ' + item.key"
                   (click)="navigate.emit()"
                 >
                   <span>{{ item.label }}</span>
@@ -177,6 +176,8 @@ const ADVANCED_KEY = 'stonks.navAdvanced';
 })
 export class Nav {
   readonly navigate = output<void>();
+  /** Keeps ids unique: the sidebar and the drawer both render a nav. */
+  readonly idPrefix = input('nav');
   private readonly session = inject(SessionService);
   private readonly router = inject(Router);
 

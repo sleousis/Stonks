@@ -38,20 +38,28 @@ describe('HTTP interceptors', () => {
       req.flush({});
     });
 
-    it('does not send the token on reads by default', () => {
+    it('sends the token on reads too', () => {
       auth.setToken('s3cret');
-      http.get('/api/portfolio').subscribe();
-      const req = controller.expectOne('/api/portfolio');
-      expect(req.request.headers.has('Authorization')).toBe(false);
-      req.flush({});
-    });
-
-    it('sends the token on reads when the trader opts in', () => {
-      auth.setToken('s3cret');
-      auth.setSendOnReads(true);
       http.get('/api/portfolio').subscribe();
       const req = controller.expectOne('/api/portfolio');
       expect(req.request.headers.get('Authorization')).toBe('Bearer s3cret');
+      req.flush({});
+    });
+
+    it('asks the browser to send the session cookie on every API request', () => {
+      http.get('/api/portfolio').subscribe();
+      http.post('/api/ticks', {}).subscribe();
+      expect(controller.expectOne('/api/portfolio').request.withCredentials).toBe(true);
+      expect(controller.expectOne('/api/ticks').request.withCredentials).toBe(true);
+      controller.match(() => true).forEach((r) => r.flush({}));
+    });
+
+    it('treats a same-origin absolute URL as an API request', () => {
+      auth.setToken('s3cret');
+      http.get(`${window.location.origin}/api/portfolio`).subscribe();
+      const req = controller.expectOne(`${window.location.origin}/api/portfolio`);
+      expect(req.request.headers.get('Authorization')).toBe('Bearer s3cret');
+      expect(req.request.withCredentials).toBe(true);
       req.flush({});
     });
 
@@ -63,15 +71,16 @@ describe('HTTP interceptors', () => {
       req.flush({});
     });
 
-    it('never sends the token to another origin', () => {
+    it('never sends the token or cookies to another origin', () => {
       auth.setToken('s3cret');
       http.post('https://example.com/api/x', null).subscribe();
       const req = controller.expectOne('https://example.com/api/x');
       expect(req.request.headers.has('Authorization')).toBe(false);
+      expect(req.request.withCredentials).toBe(false);
       req.flush({});
     });
 
-    it('sends nothing without a token', () => {
+    it('sends no bearer header without a token (the cookie does the work)', () => {
       http.post('/api/ticks', {}).subscribe();
       const req = controller.expectOne('/api/ticks');
       expect(req.request.headers.has('Authorization')).toBe(false);

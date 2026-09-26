@@ -40,7 +40,7 @@ type SeverityFilter = '' | StatementFlagView['severity'];
   template: `
     <app-page-header
       title="Data quality"
-      description="Statement periods the audit flagged. Lab runs warn when their universe has errors here."
+      description="Company report periods that failed a check. Lab runs warn when their tickers have errors here."
     />
 
     <section class="panel" aria-labelledby="flags-title">
@@ -96,7 +96,7 @@ type SeverityFilter = '' | StatementFlagView['severity'];
           [message]="
             filtered()
               ? 'Try another ticker or severity.'
-              : 'The audit runs after each fundamentals ingest, or with stonks audit statements.'
+              : 'Company reports are checked each time their figures are updated. Periods that do not add up show here.'
           "
         />
       } @else {
