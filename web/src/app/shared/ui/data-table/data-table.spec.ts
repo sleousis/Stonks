@@ -41,6 +41,12 @@ describe('DataTable', () => {
     expect(el.querySelector('caption')?.textContent).toContain('Test table');
   });
 
+  it('names its scroll region apart from the panel heading it repeats (A11Y-2)', async () => {
+    const { el } = await render({ caption: 'Stored universes' });
+    const region = el.querySelector('[role="region"]');
+    expect(region?.getAttribute('aria-label')).toBe('Stored universes, scrollable table');
+  });
+
   it('sorts on header click and exposes aria-sort', async () => {
     const { fixture, el, firstCells } = await render({});
     const [tickerBtn, valueBtn] = el.querySelectorAll<HTMLButtonElement>('th button');

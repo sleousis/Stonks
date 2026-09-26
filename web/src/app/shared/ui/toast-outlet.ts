@@ -24,7 +24,7 @@ import { ToastService } from '../../core/notify/toast.service';
   selector: 'app-toast-outlet',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section #layer class="toasts" popover="manual" aria-label="Notifications">
+    <section #layer class="toasts" popover="manual" aria-label="Messages">
       @for (t of toasts.toasts(); track t.id) {
         <div
           class="toast"
