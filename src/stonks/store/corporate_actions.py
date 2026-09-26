@@ -39,10 +39,8 @@ def actions_from_frame(df: pd.DataFrame | None) -> CorporateActions:
     for row in df.itertuples(index=False):
         ex_date = pd.Timestamp(row.ex_date).date()
         value = float(row.value)
-        if row.kind == "split":
-            if value > 0 and value != 1.0:
-                events.append(Split(row.ticker, ex_date, value))
-        elif row.kind == "dividend":
-            if value > 0:
-                events.append(Dividend(row.ticker, ex_date, value))
+        if row.kind == "split" and value > 0 and value != 1.0:
+            events.append(Split(row.ticker, ex_date, value))
+        elif row.kind == "dividend" and value > 0:
+            events.append(Dividend(row.ticker, ex_date, value))
     return CorporateActions.from_events(events)
