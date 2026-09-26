@@ -101,6 +101,27 @@ def test_ingest_prices_via_fake_source(runner, cli_env, monkeypatch):
     assert "ok" in result.output.lower()
 
 
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["ingest", "prices", "--tickers", "AAPL.US", "--since", "2026-13-01"],
+        ["ingest", "prices", "--tickers", "AAPL.US", "--until", "yesterday"],
+        ["ingest", "intraday", "--tickers", "AAPL.US", "--since", "03/01/2026"],
+        ["ingest", "all-intervals", "--tickers", "AAPL.US", "--intraday-since", "nope"],
+        ["tick", "--as-of", "2026-02-30"],
+    ],
+)
+def test_bad_date_options_give_usage_error_not_traceback(runner, cli_env, monkeypatch, args):
+    from stonks import cli as cli_module
+
+    monkeypatch.setattr(cli_module, "_build_source", lambda settings: _FakeSource())
+    runner.invoke(app, ["db", "init"])
+    result = runner.invoke(app, args)
+    assert result.exit_code == 2, result.output
+    assert "YYYY-MM-DD" in result.output
+    assert not isinstance(result.exception, ValueError)
+
+
 def test_ingest_metadata_via_fake_source(runner, cli_env, monkeypatch):
     """`stonks ingest metadata` runs against a FakeSource that returns a
     minimal non-empty MetadataBundle; the run should report ok."""

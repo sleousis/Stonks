@@ -2,9 +2,11 @@
 
 Each invocation is a fresh process. State lives in SqliteState + DuckDBLake;
 the tick is stateless across runs. Orders are idempotent via a deterministic
-``client_id`` derived from (tick_id, strategy_id, ticker, side), so a crashed
-tick re-run on the same day will short-circuit duplicate submissions at the
-broker.
+``client_id`` derived from (as_of date, strategy_id, ticker, side) — not from
+the per-run ``tick_id``, which stays unique so every run gets its own
+``tick_runs`` row. Re-running a crashed tick for the same ``as_of`` therefore
+reproduces the same client_ids, and any order already recorded as ``filled``
+is skipped instead of being submitted (and applied to the portfolio) again.
 """
 
 from __future__ import annotations
@@ -13,11 +15,11 @@ import json
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from datetime import UTC, date, datetime
-from typing import Literal
+from datetime import UTC, date, datetime, timedelta
+from typing import Any, Literal
 
 from stonks.backtest.simulated_broker import SimulatedBroker
-from stonks.core.types import Order, OrderStatus, Portfolio
+from stonks.core.types import Fill, Order, OrderStatus, Portfolio
 from stonks.execution.orders import make_client_id
 from stonks.logging import get_logger
 from stonks.production.ranker import Ranker
@@ -38,6 +40,9 @@ class TickSettings:
     initial_cash: float = 10_000.0
     slippage_bps: float = 0.0
     fee_per_trade: float = 0.0
+    # Closes older than this many calendar days before ``as_of`` are ignored,
+    # so delisted / failed-ingest tickers never fill at months-old prices.
+    max_price_staleness_days: int = 7
 
 
 @dataclass(frozen=True)
@@ -57,7 +62,7 @@ def run_tick(
     as_of: date | None = None,
     dry_run: bool = False,
 ) -> TickResult:
-    as_of = as_of or date.today()
+    as_of = as_of or utc_today()
     tick_id = _new_tick_id(as_of)
     started = _iso_now()
     log = _log.bind(tick_id=tick_id, as_of=as_of.isoformat(), dry_run=dry_run)
@@ -67,6 +72,37 @@ def run_tick(
         [tick_id, started],
     )
 
+    # Any failure past this point closes the tick as 'error' so the ledger
+    # never keeps a row stuck at 'running'; the exception still propagates.
+    try:
+        return _run_tick_body(
+            state, lake, registry, settings, as_of, dry_run, tick_id=tick_id, log=log
+        )
+    except Exception as exc:
+        log.error("tick.error", error=str(exc), error_type=type(exc).__name__)
+        try:
+            _close_tick(
+                state,
+                tick_id,
+                status="error",
+                summary={"error": str(exc), "error_type": type(exc).__name__},
+            )
+        except Exception as close_exc:  # pragma: no cover - best effort
+            log.error("tick.close_failed", error=str(close_exc))
+        raise
+
+
+def _run_tick_body(
+    state: SqliteState,
+    lake: DuckDBLake,
+    registry: StrategyRegistry,
+    settings: TickSettings,
+    as_of: date,
+    dry_run: bool,
+    *,
+    tick_id: str,
+    log: Any,
+) -> TickResult:
     # 1. rank
     ranker = Ranker(
         registry=registry,
@@ -99,7 +135,12 @@ def run_tick(
 
     # 2. prepare portfolio + prices
     portfolio = _load_or_seed_portfolio(state, initial_cash=settings.initial_cash)
-    prices = _current_prices(lake, settings.universe, as_of)
+    prices = _current_prices(
+        lake,
+        settings.universe,
+        as_of,
+        max_staleness_days=settings.max_price_staleness_days,
+    )
 
     broker = SimulatedBroker(
         portfolio=portfolio,
@@ -116,7 +157,7 @@ def run_tick(
             tick_id=tick_id,
             strategy_id=winner_id,
             client_id=make_client_id(
-                tick_id=tick_id, strategy_id=winner_id, ticker=o.ticker, side=o.side
+                as_of=as_of, strategy_id=winner_id, ticker=o.ticker, side=o.side
             ),
         )
         for o in orders
@@ -125,9 +166,16 @@ def run_tick(
     placed = 0
     fills_count = 0
     any_failure = False
+    # Broker outcomes are buffered and persisted together with the portfolio
+    # snapshot in one transaction, so a crash can't leave fills recorded
+    # without the snapshot that reflects them.
+    outcomes: list[tuple[Order, OrderStatus, Fill | None]] = []
     for order in orders_with_tick:
         if dry_run:
             placed += 1
+            continue
+        if _already_filled(state, order.client_id):
+            log.info("tick.order.skipped_already_filled", client_id=order.client_id)
             continue
         try:
             fill = broker.place_order(order)
@@ -136,16 +184,20 @@ def run_tick(
             log.warning("tick.order.failed", ticker=order.ticker, error=str(exc))
             continue
 
-        _record_order(state, order, status="filled" if fill else "rejected")
+        outcomes.append((order, "filled" if fill else "rejected", fill))
         placed += 1
         if fill is not None:
-            _record_fill(state, fill)
             fills_count += 1
 
     if not dry_run:
-        _snapshot_portfolio(state, tick_id, portfolio, prices, as_of)
+        with state.transaction():
+            for order, order_status, fill in outcomes:
+                _record_order(state, order, status=order_status)
+                if fill is not None:
+                    _record_fill(state, fill)
+            _snapshot_portfolio(state, tick_id, portfolio, prices, as_of)
 
-    status = "ok" if not any_failure else "partial"
+    status: TickStatus = "ok" if not any_failure else "partial"
     _close_tick(
         state,
         tick_id,
@@ -169,6 +221,11 @@ def run_tick(
 # ---- helpers ---------------------------------------------------------------
 
 
+def utc_today() -> date:
+    """Today's date in UTC — the calendar all stored timestamps use."""
+    return datetime.now(UTC).date()
+
+
 def _new_tick_id(as_of: date) -> str:
     return f"tick_{as_of.isoformat()}_{uuid.uuid4().hex[:8]}"
 
@@ -187,23 +244,40 @@ def _load_or_seed_portfolio(state: SqliteState, initial_cash: float) -> Portfoli
     return Portfolio(cash=float(row["cash"]), positions=json.loads(row["positions_json"]))
 
 
-def _current_prices(lake: DuckDBLake, universe: Sequence[str], as_of: date) -> dict[str, float]:
+def _current_prices(
+    lake: DuckDBLake,
+    universe: Sequence[str],
+    as_of: date,
+    *,
+    max_staleness_days: int = 7,
+) -> dict[str, float]:
     if not universe:
         return {}
     # Single grouped query: per ticker, take the latest close at or before
-    # ``as_of``. Avoids the N+1 pattern of one LIMIT-1 query per ticker.
+    # ``as_of`` but no older than ``max_staleness_days`` calendar days.
+    # Tickers with only older closes are dropped (no price → no trade).
+    # Avoids the N+1 pattern of one LIMIT-1 query per ticker.
+    oldest = as_of - timedelta(days=max_staleness_days)
     df = lake.sql(
         """
         SELECT ticker, close
           FROM prices
-         WHERE ticker = ANY(?) AND date <= ?
+         WHERE ticker = ANY(?) AND date <= ? AND date >= ?
          QUALIFY ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY date DESC) = 1
         """,
-        [list(universe), as_of],
+        [list(universe), as_of, oldest],
     )
     if df.empty:
         return {}
     return {row.ticker: float(row.close) for row in df.itertuples(index=False)}
+
+
+def _already_filled(state: SqliteState, client_id: str | None) -> bool:
+    rows = state.sql(
+        "SELECT 1 FROM orders WHERE client_id = ? AND status = 'filled'",
+        [client_id],
+    )
+    return bool(rows)
 
 
 def _record_order(state: SqliteState, order: Order, status: OrderStatus) -> None:
@@ -240,7 +314,7 @@ def _record_order(state: SqliteState, order: Order, status: OrderStatus) -> None
     )
 
 
-def _record_fill(state: SqliteState, fill) -> None:  # type: ignore[no-untyped-def]
+def _record_fill(state: SqliteState, fill: Fill) -> None:
     state.execute(
         """
         INSERT INTO fills
