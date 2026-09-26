@@ -124,7 +124,10 @@ def _render_schema(name: str, schema: dict[str, Any]) -> list[str]:
     if not props:
         return [*lines, f"Type: {_type(schema)}", ""]
     required = set(schema.get("required", []))
-    lines += ["| Field | Type | Required | Description |", "|-------|------|----------|-------------|"]
+    lines += [
+        "| Field | Type | Required | Description |",
+        "|-------|------|----------|-------------|",
+    ]
     for field, prop in props.items():
         req = "yes" if field in required else "no"
         prop_desc = _cell(_first_paragraph(prop.get("description", "")))
