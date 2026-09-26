@@ -221,7 +221,7 @@ Found while building the console and merging Waves 2 and 3.
 **Status:**
 
 - Done: 12.1 calendars, 12.2 scheduler (`python -m stonks.scheduling`), 12.4 backups (`python -m stonks.ops`), 12.7 Docker and Compose, 12.8 security checks in CI, 12.9 releases, 12.12 repo hygiene.
-- Partly: 12.3 (deadlines, pings and Prometheus text on the CLI; no HTTP metrics or readiness route yet), 12.5 (validation and quarantine done; the fallback source and `[ingest.quality]` are not wired to config yet), 12.11 (runbooks for stale data, restore and failed deploys).
+- Partly: 12.3 (deadlines, pings, `GET /metrics`, live and ready probes; backup, push delivery and sync jobs still missing), 12.5 (validation and quarantine done; the fallback source and `[ingest.quality]` are not wired to config yet), 12.11 (runbooks for stale data, restore and failed deploys).
 - Not started: 12.6 kill switch (the `TradeGate` seam exists), 12.10 soak test.
 
 What it takes to run Stonks unattended every day and trust it.

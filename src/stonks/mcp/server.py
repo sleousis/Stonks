@@ -1,7 +1,7 @@
 """MCP tools and resources over the Stonks REST API (official ``mcp`` SDK).
 
 Tools live in :mod:`stonks.mcp.tools`, one module per safety class
-(``reads``, ``jobs``, ``guarded``, ``studio``). Each tool is a small async
+(``reads``, ``jobs``, ``guarded``, ``studio``, ``connections``). Each tool is a small async
 function over :class:`~stonks.mcp.tools.common.ToolContext` returning plain
 JSON-able data; a parameterless read route is just a ``RouteRead`` row.
 ``mcp`` types stay inside ``stonks.mcp``.
@@ -9,13 +9,15 @@ JSON-able data; a parameterless read route is just a ``RouteRead`` row.
 Safety model
 ------------
 - Read tools only issue GETs (plus pure validation POSTs that save nothing).
-- Job tools (backtest, lab run, ingest, draft backtest/lab run) queue
+- Job tools (backtest, lab run, signal IC, ingest, draft backtest/lab run) queue
   background work on the API; they write research data only, never orders.
 - Guarded tools (strategy status changes, draft register/enable/disable,
   run_tick) need ``confirm=true``; without it they return a preview and
   send nothing mutating. ``run_tick`` defaults to ``dry_run=true``, and a
   real tick is refused unless ``GET /api/brokers`` reports a simulated or
-  paper broker.
+  paper broker. ``sync_connection`` (read-only at the broker) needs
+  ``confirm=true`` too; connecting, linking or removing a broker is
+  console-only.
 - No tool changes broker settings, configuration, or enables live trading.
 """
 
@@ -28,10 +30,11 @@ from stonks.mcp.tools import register_all
 from stonks.mcp.tools.common import ToolContext
 
 INSTRUCTIONS = """Stonks research + trading system. Tools talk to the local REST API started
-with `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs
-and ingests; follow up with wait_for_job. Status changes, draft
-register/enable/disable and production ticks need confirm=true; call them
-first without it to get a preview and show it to the user before confirming.
+with `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs,
+signal IC analyses and ingests; follow up with wait_for_job. Status changes,
+draft register/enable/disable, broker syncs and production ticks need
+confirm=true; call them first without it to get a preview and show it to the
+user before confirming.
 run_tick is a dry run unless dry_run=false, and a real tick is refused unless
 the API reports a paper/simulated broker. No tool can change broker settings
 or enable live trading."""

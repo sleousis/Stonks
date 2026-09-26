@@ -9,7 +9,10 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from stonks.accounts import Scope
 from stonks.app.services import Services
 from stonks.config import ApiConfig
 
@@ -103,6 +106,60 @@ def authorize_stream(
             return
         raise HTTPException(status_code=401, detail="invalid or expired stream token")
     authorize(request, creds)
+
+
+def current_scope(
+    request: Request,
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+) -> Scope:
+    """The authenticated principal's data scope, for user-scoped routes
+    (connections, push, notifications, audited runs).
+
+    Always demands the bearer token: loopback reads carry no principal, so
+    personal data has no open-reads exemption. Until login and per-user
+    tokens land (step S2, which swaps this one function), the token belongs
+    to the bootstrap admin ``usr_owner``.
+    """
+    _check_token(get_api_config(request), creds)
+    return get_services(request).bootstrap_scope()
+
+
+ScopeDep = Annotated[Scope, Depends(current_scope)]
+
+
+class MetricsAccessConfig(BaseSettings):
+    """Who may scrape ``GET /metrics`` (env-only, like the API token):
+
+    - ``STONKS_METRICS_TOKEN``: a scrape-only bearer token. The API token is
+      deliberately not accepted, so Prometheus never holds an admin credential.
+    - ``STONKS_METRICS_ALLOW_LOOPBACK`` (default true): scrapes from a
+      loopback peer need no token.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="STONKS_METRICS_", extra="ignore")
+
+    token: SecretStr | None = None
+    allow_loopback: bool = True
+
+
+def authorize_metrics(
+    request: Request,
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+) -> None:
+    cfg: MetricsAccessConfig = request.app.state.metrics_access
+    if creds is None:
+        client = request.client.host if request.client else None
+        if cfg.allow_loopback and _is_loopback(client):
+            return
+    elif cfg.token is not None and hmac.compare_digest(
+        creds.credentials.encode("utf-8"), cfg.token.get_secret_value().encode("utf-8")
+    ):
+        return
+    raise HTTPException(
+        status_code=401,
+        detail="metrics need the scrape token (STONKS_METRICS_TOKEN) or a loopback peer",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 @dataclass(frozen=True)

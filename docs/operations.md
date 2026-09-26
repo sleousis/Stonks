@@ -87,7 +87,7 @@ DuckDB allows one writer per lake, so `[scheduler].backend` picks where jobs run
 | Backend | Jobs run | Use when |
 |---------|----------|----------|
 | `api` | Through the running API (`POST /api/ingest/runs`, `POST /api/ticks`, then polling `GET /api/jobs/{id}`). Never opens the lake. | `stonks serve` runs, as in the Compose stack. |
-| `in_process` | Inside the API process, on its job runner. | A single-process install. The API does not start it on its own yet. |
+| `in_process` | Inside the API process, on its job runner. | A single-process install. `stonks serve` starts and stops it with the app. |
 | `local` | In the scheduler process, opening the stores like the CLI. | Nothing else holds the lake. |
 
 `auto` (default) picks `api` when `STONKS_API_URL` or `[scheduler].api_url` is set, else `local`. The `api` backend sends `STONKS_API_TOKEN`, only over https, to loopback, or to hosts in `[scheduler].api_trusted_hosts` (for example `["api"]` in Compose).
@@ -116,9 +116,15 @@ A failed run is not retried. It alerts; rerun it with `run-now`. A run interrupt
 
 The API serves `GET /api/health` (liveness, used by Docker and Caddy) and `GET /api/health/report` (the full report).
 
-`python -m stonks.scheduling metrics` prints Prometheus text from the state DB: tick counts, duration and last success; orders by status and rejections; API jobs and queue depth; each scheduled job's last success, last status and next run; the scheduler heartbeat. `--data-age` adds universe data age buckets but opens the lake, so use it only when `stonks serve` is not running. There is no `/metrics` HTTP route yet.
+`python -m stonks.scheduling metrics` prints Prometheus text from the state DB: tick counts, duration and last success; orders by status and rejections; API jobs and queue depth; each scheduled job's last success, last status and next run; the scheduler heartbeat. `--data-age` adds universe data age buckets but opens the lake, so use it only when `stonks serve` is not running.
+
+`stonks serve` serves the same set, data age included, at `GET /metrics`. Scrapes from a loopback peer need no token. From anywhere else they need the scrape-only bearer token `STONKS_METRICS_TOKEN`. The API token is not accepted there, so Prometheus never holds an admin credential. `STONKS_METRICS_ALLOW_LOOPBACK=false` requires the token on loopback too.
 
 A useful alert: `time() - stonks_scheduled_job_last_success_timestamp_seconds{job="tick"} > 26 * 3600` on weekdays.
+
+Over HTTP, `GET /api/health/live` (the process, plus the scheduler when `stonks serve` hosts it) and `GET /api/health/ready` (state migrated, lake present) are open to everyone, like `GET /api/health`. They answer 200 with each check's name and `ok`, or 503 naming the failing checks; details go to the log, not the response.
+
+With `[scheduler] backend = "in_process"`, `stonks serve` starts the scheduler with the app and stops it (after the running job) on shutdown. `GET /api/schedule` lists the jobs, their next fire and recent runs; `POST /api/schedule/{job}/run-now` (token, audited as `schedule.run_now`) starts a `manual:` run in the background.
 
 ## Backups and restore
 

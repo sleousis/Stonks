@@ -83,7 +83,7 @@ web/src/
       theme/                  ThemeService
       format/                 money / percent / date formatting; FormatService (locale, time zone)
       pwa/                    ConnectivityService (offline, updates), NotificationPermissionService,
-                              PushSubscriptionApi (Web Push seam)
+                              PushSubscriptionApi (Web Push seam, HTTP implementation)
     shared/
       ui/                     page header, stat tile, status pill, data table,
                               loading/empty/error states, confirm dialog, toasts,
@@ -376,16 +376,18 @@ Tickers open `/data?instrument=<id>`.
   prompt appears only after the button is pressed. On iPhone and iPad the
   panel explains Add to Home Screen first (iOS delivers Web Push only to
   installed apps). `NotificationPermissionService` subscribes with `SwPush`
-  and the server's VAPID key through `PUSH_SUBSCRIPTION_API`; until the
-  backend has `GET /api/push/vapid-key` and `POST`/`DELETE
-  /api/push/subscriptions`, the pending implementation stops after
-  permission ("waiting for the server").
+  and the server's VAPID key through `PUSH_SUBSCRIPTION_API`, whose
+  `HttpPushSubscriptionApi` calls `GET /api/push/vapid-key` and `POST`/`DELETE
+  /api/push/subscriptions` (via `api/notifications.service.ts`). These routes
+  act for the signed-in user, so they need the API token; when the server has
+  no VAPID key the panel stops after permission ("waiting for the server").
 - Push payloads must use Angular's format so a tap opens the deep link:
   `{"notification": {"title": "...", "body": "...", "icon": "icons/icon-192.png",
   "data": {"onActionClick": {"default": {"operation": "navigateLastFocusedOrOpen",
   "url": "/strategies/momentum-v3"}}}}}`.
-- `stonks serve` should send `ngsw-worker.js` and `ngsw.json` with
-  `Cache-Control: no-cache` so updates are picked up.
+- `stonks serve` sends `ngsw-worker.js` and `ngsw.json` with
+  `Cache-Control: no-cache` so updates are picked up, and
+  `manifest.webmanifest` as `application/manifest+json`.
 
 ### Tests
 

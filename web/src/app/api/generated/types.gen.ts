@@ -40,7 +40,7 @@ export type AlertView = {
  * AlpacaStatus
  */
 export type AlpacaStatus = {
-    account?: BrokerAccountView | null;
+    account?: StonksAppBrokersBrokerAccountView | null;
     clock?: MarketClockView | null;
     /**
      * Connected
@@ -379,44 +379,6 @@ export type BenchmarkStatsView = {
 };
 
 /**
- * BrokerAccountView
- */
-export type BrokerAccountView = {
-    /**
-     * Buying Power
-     */
-    buying_power: number;
-    /**
-     * Can Trade
-     */
-    can_trade: boolean;
-    /**
-     * Cash
-     */
-    cash: number;
-    /**
-     * Currency
-     */
-    currency: string;
-    /**
-     * Equity
-     */
-    equity: number;
-    /**
-     * Pattern Day Trader
-     */
-    pattern_day_trader: boolean;
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Trading Blocked
-     */
-    trading_blocked: boolean;
-};
-
-/**
  * BrokerInfo
  */
 export type BrokerInfo = {
@@ -436,6 +398,74 @@ export type BrokerInfo = {
      * Paper
      */
     paper: boolean;
+};
+
+/**
+ * ConnectWithKeysRequest
+ *
+ * API-key connect. ``fields`` are the provider's ``credential_fields``
+ * (plus ``paper`` for brokers with a paper endpoint). They are write-only:
+ * never logged, stored only sealed, never returned.
+ */
+export type ConnectWithKeysRequest = {
+    /**
+     * Label
+     */
+    label?: string | null;
+    /**
+     * Provider
+     */
+    provider: string;
+};
+
+/**
+ * ConnectionView
+ */
+export type ConnectionView = {
+    /**
+     * Consecutive Failures
+     */
+    consecutive_failures: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Label
+     */
+    label: string | null;
+    /**
+     * Last Error
+     */
+    last_error: string | null;
+    /**
+     * Last Sync At
+     */
+    last_sync_at: string | null;
+    /**
+     * Last Sync Status
+     */
+    last_sync_status: 'ok' | 'partial' | 'error' | null;
+    /**
+     * Next Sync At
+     */
+    next_sync_at: string | null;
+    /**
+     * Provider
+     */
+    provider: string;
+    /**
+     * Status
+     */
+    status: 'pending' | 'active' | 'error';
+    /**
+     * Updated At
+     */
+    updated_at: string;
 };
 
 /**
@@ -552,6 +582,28 @@ export type DataSourceInfo = {
      * Id
      */
     id: 'eodhd' | 'yahoo' | 'defillama';
+};
+
+/**
+ * DisconnectView
+ */
+export type DisconnectView = {
+    /**
+     * Archived Portfolios
+     */
+    archived_portfolios: Array<string>;
+    /**
+     * Connection Id
+     */
+    connection_id: string;
+    /**
+     * Remote Error
+     */
+    remote_error: string | null;
+    /**
+     * Remote Removed
+     */
+    remote_removed: boolean | null;
 };
 
 /**
@@ -827,6 +879,58 @@ export type EquityPoint = {
 };
 
 /**
+ * FeedItemView
+ */
+export type FeedItemView = {
+    /**
+     * Category
+     */
+    category: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Deep Link
+     */
+    deep_link: string | null;
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Level
+     */
+    level: string;
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Read At
+     */
+    read_at: string | null;
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
+ * FeedView
+ */
+export type FeedView = {
+    /**
+     * Items
+     */
+    items: Array<FeedItemView>;
+    /**
+     * Unread Count
+     */
+    unread_count: number;
+};
+
+/**
  * FillView
  */
 export type FillView = {
@@ -1058,6 +1162,64 @@ export type HealthReportView = {
      */
     healthy: boolean;
     thresholds: HealthConfig;
+};
+
+/**
+ * HorizonICView
+ */
+export type HorizonIcView = {
+    /**
+     * Hac Lags
+     */
+    hac_lags: number;
+    /**
+     * Hit Rate
+     */
+    hit_rate: number | null;
+    /**
+     * Horizon
+     */
+    horizon: number;
+    /**
+     * Ic Std
+     */
+    ic_std: number | null;
+    /**
+     * Icir
+     */
+    icir: number | null;
+    /**
+     * Mean Ic
+     */
+    mean_ic: number | null;
+    /**
+     * N Dates
+     */
+    n_dates: number;
+    /**
+     * Quantile Means
+     */
+    quantile_means: Array<number | null>;
+    /**
+     * Se Hac
+     */
+    se_hac: number | null;
+    /**
+     * Se Iid
+     */
+    se_iid: number | null;
+    /**
+     * Spread Mean
+     */
+    spread_mean: number | null;
+    /**
+     * Spread T Hac
+     */
+    spread_t_hac: number | null;
+    /**
+     * T Stat Hac
+     */
+    t_stat_hac: number | null;
 };
 
 /**
@@ -1480,6 +1642,66 @@ export type LabRunView = {
      * Verdict
      */
     verdict: 'pass' | 'fail';
+};
+
+/**
+ * LinkAccountRequest
+ */
+export type LinkAccountRequest = {
+    /**
+     * External Account Id
+     */
+    external_account_id: string;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id?: string | null;
+};
+
+/**
+ * LinkResultView
+ */
+export type LinkResultView = {
+    /**
+     * Connection Id
+     */
+    connection_id: string;
+    /**
+     * External Account Id
+     */
+    external_account_id: string;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+};
+
+/**
+ * MarkReadRequest
+ */
+export type MarkReadRequest = {
+    /**
+     * Ids
+     */
+    ids?: Array<number> | null;
+};
+
+/**
+ * MarkReadView
+ */
+export type MarkReadView = {
+    /**
+     * Unread Count
+     */
+    unread_count: number;
+    /**
+     * Updated
+     */
+    updated: number;
 };
 
 /**
@@ -1958,6 +2180,62 @@ export type PnlSeries = {
 };
 
 /**
+ * PortalLinkView
+ */
+export type PortalLinkView = {
+    /**
+     * Connection Id
+     */
+    connection_id: string;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+    /**
+     * Url
+     */
+    url: string;
+};
+
+/**
+ * PortfolioSyncView
+ */
+export type PortfolioSyncView = {
+    /**
+     * Activities New
+     */
+    activities_new: number;
+    /**
+     * Activities Seen
+     */
+    activities_seen: number;
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * External Account Id
+     */
+    external_account_id: string;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Positions
+     */
+    positions: number;
+    /**
+     * Snapshot Id
+     */
+    snapshot_id: number | null;
+    /**
+     * Unmapped
+     */
+    unmapped: Array<string>;
+};
+
+/**
  * PortfolioView
  */
 export type PortfolioView = {
@@ -2070,6 +2348,84 @@ export type PositionView = {
 };
 
 /**
+ * PreferenceItem
+ */
+export type PreferenceItem = {
+    /**
+     * Category
+     */
+    category: 'signal' | 'order' | 'risk' | 'system';
+    /**
+     * Channel
+     */
+    channel: string;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Strategy Id
+     */
+    strategy_id?: string | null;
+};
+
+/**
+ * PreferencesUpdate
+ */
+export type PreferencesUpdate = {
+    /**
+     * Preferences
+     */
+    preferences: Array<PreferenceItem>;
+};
+
+/**
+ * PreferencesView
+ */
+export type PreferencesView = {
+    /**
+     * Channels
+     */
+    channels: Array<string>;
+    /**
+     * Preferences
+     */
+    preferences: Array<PreferenceItem>;
+    /**
+     * Quiet End
+     */
+    quiet_end: string | null;
+    /**
+     * Quiet Start
+     */
+    quiet_start: string | null;
+    /**
+     * Timezone
+     */
+    timezone: string;
+    /**
+     * Webhook
+     */
+    webhook: string | null;
+};
+
+/**
+ * ProbeView
+ */
+export type ProbeView = {
+    /**
+     * Checks
+     */
+    checks?: {
+        [key: string]: string;
+    };
+    /**
+     * Status
+     */
+    status: string;
+};
+
+/**
  * ProblemDetails
  */
 export type ProblemDetails = {
@@ -2132,6 +2488,127 @@ export type PromotionChecklistView = {
      * Premortem
      */
     premortem?: string | null;
+};
+
+/**
+ * ProviderView
+ */
+export type ProviderView = {
+    /**
+     * Auth Flow
+     */
+    auth_flow: string;
+    /**
+     * Can Trade
+     */
+    can_trade: boolean;
+    /**
+     * Capabilities
+     */
+    capabilities: Array<string>;
+    /**
+     * Credential Fields
+     */
+    credential_fields: Array<string>;
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
+ * PushDeviceView
+ *
+ * A registered browser or installed app: no endpoint, no keys.
+ */
+export type PushDeviceView = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Endpoint Host
+     */
+    endpoint_host: string;
+    /**
+     * Failure Count
+     */
+    failure_count: number;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Last Success At
+     */
+    last_success_at: string | null;
+    /**
+     * User Agent
+     */
+    user_agent: string | null;
+};
+
+/**
+ * PushKeys
+ */
+export type PushKeys = {
+    /**
+     * Auth
+     */
+    auth: string;
+    /**
+     * P256Dh
+     */
+    p256dh: string;
+};
+
+/**
+ * PushSubscriptionRequest
+ *
+ * The browser's ``PushSubscription.toJSON()`` plus its user agent.
+ */
+export type PushSubscriptionRequest = {
+    /**
+     * Endpoint
+     */
+    endpoint: string;
+    /**
+     * Expirationtime
+     */
+    expirationTime?: number | null;
+    keys: PushKeys;
+    /**
+     * User Agent
+     */
+    user_agent?: string | null;
+};
+
+/**
+ * PushUnsubscribeRequest
+ */
+export type PushUnsubscribeRequest = {
+    /**
+     * Endpoint
+     */
+    endpoint: string;
+};
+
+/**
+ * QuietHoursUpdate
+ */
+export type QuietHoursUpdate = {
+    /**
+     * End
+     */
+    end?: string | null;
+    /**
+     * Start
+     */
+    start?: string | null;
 };
 
 /**
@@ -2228,6 +2705,142 @@ export type RuleTemplateView = {
      * Title
      */
     title: string;
+};
+
+/**
+ * RunNowRequest
+ */
+export type RunNowRequest = {
+    /**
+     * As Of
+     */
+    as_of?: string | null;
+};
+
+/**
+ * RunNowView
+ */
+export type RunNowView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Job
+     */
+    job: string;
+    /**
+     * Run Key
+     */
+    run_key: string;
+    /**
+     * Status
+     */
+    status?: string;
+};
+
+/**
+ * ScheduleView
+ */
+export type ScheduleView = {
+    /**
+     * Backend
+     */
+    backend: string;
+    /**
+     * Hosted
+     */
+    hosted: boolean;
+    /**
+     * Jobs
+     */
+    jobs: Array<ScheduledJobView>;
+    /**
+     * Recent
+     */
+    recent: Array<ScheduledRunView>;
+};
+
+/**
+ * ScheduledJobView
+ */
+export type ScheduledJobView = {
+    /**
+     * Action
+     */
+    action: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Next As Of
+     */
+    next_as_of: string | null;
+    /**
+     * Next Run At
+     */
+    next_run_at: string | null;
+    /**
+     * Trigger
+     */
+    trigger: string;
+};
+
+/**
+ * ScheduledRunView
+ */
+export type ScheduledRunView = {
+    /**
+     * Action
+     */
+    action: string;
+    /**
+     * As Of
+     */
+    as_of: string | null;
+    /**
+     * Catch Up
+     */
+    catch_up: boolean;
+    /**
+     * Detail
+     */
+    detail: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Finished At
+     */
+    finished_at: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Job Name
+     */
+    job_name: string;
+    /**
+     * Run Key
+     */
+    run_key: string;
+    /**
+     * Scheduled For
+     */
+    scheduled_for: string;
+    /**
+     * Started At
+     */
+    started_at: string;
+    /**
+     * Status
+     */
+    status: string;
 };
 
 /**
@@ -2347,6 +2960,108 @@ export type ShadowPnlSummary = {
 };
 
 /**
+ * SignalICRequest
+ */
+export type SignalIcRequest = {
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Every Bars
+     */
+    every_bars?: number;
+    /**
+     * Horizons
+     */
+    horizons?: Array<number>;
+    /**
+     * Interval
+     */
+    interval?: string;
+    /**
+     * Min Names
+     */
+    min_names?: number;
+    /**
+     * N Quantiles
+     */
+    n_quantiles?: number;
+    /**
+     * Start
+     */
+    start: string;
+    strategy: StrategyRef;
+    /**
+     * Universe
+     */
+    universe: Array<string>;
+};
+
+/**
+ * SignalICView
+ *
+ * :class:`stonks.lab.signal_eval.SignalICResult`; NaN is null.
+ */
+export type SignalIcView = {
+    /**
+     * Every Bars
+     */
+    every_bars: number;
+    /**
+     * Horizons
+     */
+    horizons?: Array<HorizonIcView>;
+    /**
+     * Ic Estimate
+     */
+    ic_estimate?: number | null;
+    /**
+     * Ic Horizon
+     */
+    ic_horizon?: number | null;
+    /**
+     * N Dates
+     */
+    n_dates: number;
+    /**
+     * N Quantiles
+     */
+    n_quantiles: number;
+    /**
+     * N Tickers
+     */
+    n_tickers: number;
+    /**
+     * Note
+     */
+    note?: string;
+    /**
+     * Score Turnover
+     */
+    score_turnover?: number | null;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string;
+    /**
+     * Top Quantile Turnover
+     */
+    top_quantile_turnover?: number | null;
+    /**
+     * Window
+     */
+    window: [
+        string,
+        string
+    ];
+};
+
+/**
  * SmokeCheck
  */
 export type SmokeCheck = {
@@ -2418,6 +3133,28 @@ export type SpecValidateRequest = {
     spec: {
         [key: string]: unknown;
     };
+};
+
+/**
+ * StartPortalRequest
+ */
+export type StartPortalRequest = {
+    /**
+     * Connection Id
+     */
+    connection_id?: string | null;
+    /**
+     * Label
+     */
+    label?: string | null;
+    /**
+     * Provider
+     */
+    provider: string;
+    /**
+     * Redirect Uri
+     */
+    redirect_uri: string;
 };
 
 /**
@@ -2735,6 +3472,36 @@ export type SurvivalReportView = {
      * Test Id
      */
     test_id: string;
+};
+
+/**
+ * SyncResultView
+ */
+export type SyncResultView = {
+    /**
+     * Accounts Seen
+     */
+    accounts_seen: number;
+    /**
+     * Connection Id
+     */
+    connection_id: string;
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Next Sync At
+     */
+    next_sync_at: string | null;
+    /**
+     * Portfolios
+     */
+    portfolios: Array<PortfolioSyncView>;
+    /**
+     * Status
+     */
+    status: 'ok' | 'partial' | 'error';
 };
 
 /**
@@ -3056,6 +3823,16 @@ export type ValidationIssue = {
 };
 
 /**
+ * VapidKeyView
+ */
+export type VapidKeyView = {
+    /**
+     * Public Key
+     */
+    public_key: string | null;
+};
+
+/**
  * WalkForwardConfig
  *
  * Walk-forward settings. ``test_days=None`` splits the dataset's
@@ -3119,6 +3896,128 @@ export type WalkForwardConfig = {
      * Train Days
      */
     train_days?: number | null;
+};
+
+/**
+ * WebhookUpdate
+ *
+ * Your own webhook (a public ``https`` URL). Write-only: responses show
+ * its scheme and host only. Null removes it.
+ */
+export type WebhookUpdate = {
+    /**
+     * Url
+     */
+    url?: null;
+};
+
+/**
+ * BrokerAccountView
+ */
+export type StonksAppBrokersBrokerAccountView = {
+    /**
+     * Buying Power
+     */
+    buying_power: number;
+    /**
+     * Can Trade
+     */
+    can_trade: boolean;
+    /**
+     * Cash
+     */
+    cash: number;
+    /**
+     * Currency
+     */
+    currency: string;
+    /**
+     * Equity
+     */
+    equity: number;
+    /**
+     * Pattern Day Trader
+     */
+    pattern_day_trader: boolean;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Trading Blocked
+     */
+    trading_blocked: boolean;
+};
+
+/**
+ * BrokerAccountView
+ */
+export type StonksAppConnectionsBrokerAccountView = {
+    /**
+     * Connection Id
+     */
+    connection_id: string;
+    /**
+     * Currency
+     */
+    currency: string;
+    /**
+     * External Account Id
+     */
+    external_account_id: string;
+    /**
+     * Institution
+     */
+    institution: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Number Mask
+     */
+    number_mask: string | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string | null;
+};
+
+/**
+ * ConnectWithKeysRequest
+ *
+ * API-key connect. ``fields`` are the provider's ``credential_fields``
+ * (plus ``paper`` for brokers with a paper endpoint). They are write-only:
+ * never logged, stored only sealed, never returned.
+ */
+export type ConnectWithKeysRequestWritable = {
+    /**
+     * Fields
+     */
+    fields: {
+        [key: string]: string;
+    };
+    /**
+     * Label
+     */
+    label?: string | null;
+    /**
+     * Provider
+     */
+    provider: string;
+};
+
+/**
+ * WebhookUpdate
+ *
+ * Your own webhook (a public ``https`` URL). Write-only: responses show
+ * its scheme and host only. Null removes it.
+ */
+export type WebhookUpdateWritable = {
+    /**
+     * Url
+     */
+    url?: string | null;
 };
 
 export type ListAlertsData = {
@@ -3429,6 +4328,462 @@ export type ListStrategyClassesResponses = {
 
 export type ListStrategyClassesResponse = ListStrategyClassesResponses[keyof ListStrategyClassesResponses];
 
+export type ListConnectionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/connections';
+};
+
+export type ListConnectionsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListConnectionsError = ListConnectionsErrors[keyof ListConnectionsErrors];
+
+export type ListConnectionsResponses = {
+    /**
+     * Response Listconnections
+     *
+     * Successful Response
+     */
+    200: Array<ConnectionView>;
+};
+
+export type ListConnectionsResponse = ListConnectionsResponses[keyof ListConnectionsResponses];
+
+export type CompleteConnectionPortalData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Connection Id
+         */
+        connection_id: string;
+        /**
+         * State
+         */
+        state: string;
+        /**
+         * Status
+         *
+         * the provider's outcome, if it sends one
+         */
+        status?: string | null;
+    };
+    url: '/api/connections/callback';
+};
+
+export type CompleteConnectionPortalErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CompleteConnectionPortalError = CompleteConnectionPortalErrors[keyof CompleteConnectionPortalErrors];
+
+export type CompleteConnectionPortalResponses = {
+    /**
+     * Successful Response
+     */
+    200: ConnectionView;
+};
+
+export type CompleteConnectionPortalResponse = CompleteConnectionPortalResponses[keyof CompleteConnectionPortalResponses];
+
+export type ConnectWithKeysData = {
+    body: ConnectWithKeysRequestWritable;
+    path?: never;
+    query?: never;
+    url: '/api/connections/keys';
+};
+
+export type ConnectWithKeysErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ConnectWithKeysError = ConnectWithKeysErrors[keyof ConnectWithKeysErrors];
+
+export type ConnectWithKeysResponses = {
+    /**
+     * Successful Response
+     */
+    201: ConnectionView;
+};
+
+export type ConnectWithKeysResponse = ConnectWithKeysResponses[keyof ConnectWithKeysResponses];
+
+export type StartConnectionPortalData = {
+    body: StartPortalRequest;
+    path?: never;
+    query?: never;
+    url: '/api/connections/portal';
+};
+
+export type StartConnectionPortalErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type StartConnectionPortalError = StartConnectionPortalErrors[keyof StartConnectionPortalErrors];
+
+export type StartConnectionPortalResponses = {
+    /**
+     * Successful Response
+     */
+    201: PortalLinkView;
+};
+
+export type StartConnectionPortalResponse = StartConnectionPortalResponses[keyof StartConnectionPortalResponses];
+
+export type ListProvidersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/connections/providers';
+};
+
+export type ListProvidersErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListProvidersError = ListProvidersErrors[keyof ListProvidersErrors];
+
+export type ListProvidersResponses = {
+    /**
+     * Response Listproviders
+     *
+     * Successful Response
+     */
+    200: Array<ProviderView>;
+};
+
+export type ListProvidersResponse = ListProvidersResponses[keyof ListProvidersResponses];
+
+export type DeleteConnectionData = {
+    body?: never;
+    path: {
+        /**
+         * Connection Id
+         */
+        connection_id: string;
+    };
+    query?: never;
+    url: '/api/connections/{connection_id}';
+};
+
+export type DeleteConnectionErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type DeleteConnectionError = DeleteConnectionErrors[keyof DeleteConnectionErrors];
+
+export type DeleteConnectionResponses = {
+    /**
+     * Successful Response
+     */
+    200: DisconnectView;
+};
+
+export type DeleteConnectionResponse = DeleteConnectionResponses[keyof DeleteConnectionResponses];
+
+export type GetConnectionData = {
+    body?: never;
+    path: {
+        /**
+         * Connection Id
+         */
+        connection_id: string;
+    };
+    query?: never;
+    url: '/api/connections/{connection_id}';
+};
+
+export type GetConnectionErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetConnectionError = GetConnectionErrors[keyof GetConnectionErrors];
+
+export type GetConnectionResponses = {
+    /**
+     * Successful Response
+     */
+    200: ConnectionView;
+};
+
+export type GetConnectionResponse = GetConnectionResponses[keyof GetConnectionResponses];
+
+export type ListConnectionAccountsData = {
+    body?: never;
+    path: {
+        /**
+         * Connection Id
+         */
+        connection_id: string;
+    };
+    query?: never;
+    url: '/api/connections/{connection_id}/accounts';
+};
+
+export type ListConnectionAccountsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListConnectionAccountsError = ListConnectionAccountsErrors[keyof ListConnectionAccountsErrors];
+
+export type ListConnectionAccountsResponses = {
+    /**
+     * Response Listconnectionaccounts
+     *
+     * Successful Response
+     */
+    200: Array<StonksAppConnectionsBrokerAccountView>;
+};
+
+export type ListConnectionAccountsResponse = ListConnectionAccountsResponses[keyof ListConnectionAccountsResponses];
+
+export type LinkConnectionAccountData = {
+    body: LinkAccountRequest;
+    path: {
+        /**
+         * Connection Id
+         */
+        connection_id: string;
+    };
+    query?: never;
+    url: '/api/connections/{connection_id}/link';
+};
+
+export type LinkConnectionAccountErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type LinkConnectionAccountError = LinkConnectionAccountErrors[keyof LinkConnectionAccountErrors];
+
+export type LinkConnectionAccountResponses = {
+    /**
+     * Successful Response
+     */
+    200: LinkResultView;
+};
+
+export type LinkConnectionAccountResponse = LinkConnectionAccountResponses[keyof LinkConnectionAccountResponses];
+
+export type SyncConnectionData = {
+    body?: never;
+    path: {
+        /**
+         * Connection Id
+         */
+        connection_id: string;
+    };
+    query?: never;
+    url: '/api/connections/{connection_id}/sync';
+};
+
+export type SyncConnectionErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SyncConnectionError = SyncConnectionErrors[keyof SyncConnectionErrors];
+
+export type SyncConnectionResponses = {
+    /**
+     * Successful Response
+     */
+    200: SyncResultView;
+};
+
+export type SyncConnectionResponse = SyncConnectionResponses[keyof SyncConnectionResponses];
+
 export type GetHealthData = {
     body?: never;
     path?: never;
@@ -3444,6 +4799,56 @@ export type GetHealthResponses = {
 };
 
 export type GetHealthResponse = GetHealthResponses[keyof GetHealthResponses];
+
+export type GetLivenessData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/health/live';
+};
+
+export type GetLivenessErrors = {
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetLivenessError = GetLivenessErrors[keyof GetLivenessErrors];
+
+export type GetLivenessResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProbeView;
+};
+
+export type GetLivenessResponse = GetLivenessResponses[keyof GetLivenessResponses];
+
+export type GetReadinessData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/health/ready';
+};
+
+export type GetReadinessErrors = {
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetReadinessError = GetReadinessErrors[keyof GetReadinessErrors];
+
+export type GetReadinessResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProbeView;
+};
+
+export type GetReadinessResponse = GetReadinessResponses[keyof GetReadinessResponses];
 
 export type GetHealthReportData = {
     body?: never;
@@ -4106,6 +5511,93 @@ export type GetLabRunResultResponses = {
 
 export type GetLabRunResultResponse = GetLabRunResultResponses[keyof GetLabRunResultResponses];
 
+export type StartSignalIcData = {
+    body: SignalIcRequest;
+    path?: never;
+    query?: never;
+    url: '/api/lab/signal-ic';
+};
+
+export type StartSignalIcErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type StartSignalIcError = StartSignalIcErrors[keyof StartSignalIcErrors];
+
+export type StartSignalIcResponses = {
+    /**
+     * Successful Response
+     */
+    202: Job;
+};
+
+export type StartSignalIcResponse = StartSignalIcResponses[keyof StartSignalIcResponses];
+
+export type GetSignalIcResultData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/lab/signal-ic/{job_id}/result';
+};
+
+export type GetSignalIcResultErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetSignalIcResultError = GetSignalIcResultErrors[keyof GetSignalIcResultErrors];
+
+export type GetSignalIcResultResponses = {
+    /**
+     * Successful Response
+     */
+    200: SignalIcView;
+};
+
+export type GetSignalIcResultResponse = GetSignalIcResultResponses[keyof GetSignalIcResultResponses];
+
 export type GetBarsData = {
     body?: never;
     path?: never;
@@ -4289,6 +5781,267 @@ export type ListInstrumentsResponses = {
 };
 
 export type ListInstrumentsResponse = ListInstrumentsResponses[keyof ListInstrumentsResponses];
+
+export type ListNotificationsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Unread Only
+         */
+        unread_only?: boolean;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Before Id
+         *
+         * page: ids below this
+         */
+        before_id?: number | null;
+    };
+    url: '/api/notifications';
+};
+
+export type ListNotificationsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListNotificationsError = ListNotificationsErrors[keyof ListNotificationsErrors];
+
+export type ListNotificationsResponses = {
+    /**
+     * Successful Response
+     */
+    200: FeedView;
+};
+
+export type ListNotificationsResponse = ListNotificationsResponses[keyof ListNotificationsResponses];
+
+export type GetNotificationPreferencesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/notifications/preferences';
+};
+
+export type GetNotificationPreferencesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetNotificationPreferencesError = GetNotificationPreferencesErrors[keyof GetNotificationPreferencesErrors];
+
+export type GetNotificationPreferencesResponses = {
+    /**
+     * Successful Response
+     */
+    200: PreferencesView;
+};
+
+export type GetNotificationPreferencesResponse = GetNotificationPreferencesResponses[keyof GetNotificationPreferencesResponses];
+
+export type UpdateNotificationPreferencesData = {
+    body: PreferencesUpdate;
+    path?: never;
+    query?: never;
+    url: '/api/notifications/preferences';
+};
+
+export type UpdateNotificationPreferencesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type UpdateNotificationPreferencesError = UpdateNotificationPreferencesErrors[keyof UpdateNotificationPreferencesErrors];
+
+export type UpdateNotificationPreferencesResponses = {
+    /**
+     * Successful Response
+     */
+    200: PreferencesView;
+};
+
+export type UpdateNotificationPreferencesResponse = UpdateNotificationPreferencesResponses[keyof UpdateNotificationPreferencesResponses];
+
+export type SetQuietHoursData = {
+    body: QuietHoursUpdate;
+    path?: never;
+    query?: never;
+    url: '/api/notifications/quiet-hours';
+};
+
+export type SetQuietHoursErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SetQuietHoursError = SetQuietHoursErrors[keyof SetQuietHoursErrors];
+
+export type SetQuietHoursResponses = {
+    /**
+     * Successful Response
+     */
+    200: PreferencesView;
+};
+
+export type SetQuietHoursResponse = SetQuietHoursResponses[keyof SetQuietHoursResponses];
+
+export type MarkNotificationsReadData = {
+    body: MarkReadRequest;
+    path?: never;
+    query?: never;
+    url: '/api/notifications/read';
+};
+
+export type MarkNotificationsReadErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type MarkNotificationsReadError = MarkNotificationsReadErrors[keyof MarkNotificationsReadErrors];
+
+export type MarkNotificationsReadResponses = {
+    /**
+     * Successful Response
+     */
+    200: MarkReadView;
+};
+
+export type MarkNotificationsReadResponse = MarkNotificationsReadResponses[keyof MarkNotificationsReadResponses];
+
+export type SetNotificationWebhookData = {
+    body: WebhookUpdateWritable;
+    path?: never;
+    query?: never;
+    url: '/api/notifications/webhook';
+};
+
+export type SetNotificationWebhookErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SetNotificationWebhookError = SetNotificationWebhookErrors[keyof SetNotificationWebhookErrors];
+
+export type SetNotificationWebhookResponses = {
+    /**
+     * Successful Response
+     */
+    200: PreferencesView;
+};
+
+export type SetNotificationWebhookResponse = SetNotificationWebhookResponses[keyof SetNotificationWebhookResponses];
 
 export type ListOrdersData = {
     body?: never;
@@ -4561,6 +6314,172 @@ export type ListPortfolioSnapshotsResponses = {
 
 export type ListPortfolioSnapshotsResponse = ListPortfolioSnapshotsResponses[keyof ListPortfolioSnapshotsResponses];
 
+export type DeletePushSubscriptionData = {
+    body: PushUnsubscribeRequest;
+    path?: never;
+    query?: never;
+    url: '/api/push/subscriptions';
+};
+
+export type DeletePushSubscriptionErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type DeletePushSubscriptionError = DeletePushSubscriptionErrors[keyof DeletePushSubscriptionErrors];
+
+export type DeletePushSubscriptionResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeletePushSubscriptionResponse = DeletePushSubscriptionResponses[keyof DeletePushSubscriptionResponses];
+
+export type ListPushSubscriptionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/push/subscriptions';
+};
+
+export type ListPushSubscriptionsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListPushSubscriptionsError = ListPushSubscriptionsErrors[keyof ListPushSubscriptionsErrors];
+
+export type ListPushSubscriptionsResponses = {
+    /**
+     * Response Listpushsubscriptions
+     *
+     * Successful Response
+     */
+    200: Array<PushDeviceView>;
+};
+
+export type ListPushSubscriptionsResponse = ListPushSubscriptionsResponses[keyof ListPushSubscriptionsResponses];
+
+export type CreatePushSubscriptionData = {
+    body: PushSubscriptionRequest;
+    path?: never;
+    query?: never;
+    url: '/api/push/subscriptions';
+};
+
+export type CreatePushSubscriptionErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CreatePushSubscriptionError = CreatePushSubscriptionErrors[keyof CreatePushSubscriptionErrors];
+
+export type CreatePushSubscriptionResponses = {
+    /**
+     * Successful Response
+     */
+    201: PushDeviceView;
+};
+
+export type CreatePushSubscriptionResponse = CreatePushSubscriptionResponses[keyof CreatePushSubscriptionResponses];
+
+export type GetVapidKeyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/push/vapid-key';
+};
+
+export type GetVapidKeyErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetVapidKeyError = GetVapidKeyErrors[keyof GetVapidKeyErrors];
+
+export type GetVapidKeyResponses = {
+    /**
+     * Successful Response
+     */
+    200: VapidKeyView;
+};
+
+export type GetVapidKeyResponse = GetVapidKeyResponses[keyof GetVapidKeyResponses];
+
 export type GetRiskPolicyData = {
     body?: never;
     path?: never;
@@ -4601,6 +6520,100 @@ export type GetRiskPolicyResponses = {
 };
 
 export type GetRiskPolicyResponse = GetRiskPolicyResponses[keyof GetRiskPolicyResponses];
+
+export type GetScheduleData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * recent runs
+         */
+        limit?: number;
+    };
+    url: '/api/schedule';
+};
+
+export type GetScheduleErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetScheduleError = GetScheduleErrors[keyof GetScheduleErrors];
+
+export type GetScheduleResponses = {
+    /**
+     * Successful Response
+     */
+    200: ScheduleView;
+};
+
+export type GetScheduleResponse = GetScheduleResponses[keyof GetScheduleResponses];
+
+export type RunScheduledJobNowData = {
+    body: RunNowRequest;
+    path: {
+        /**
+         * Job
+         */
+        job: string;
+    };
+    query?: never;
+    url: '/api/schedule/{job}/run-now';
+};
+
+export type RunScheduledJobNowErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RunScheduledJobNowError = RunScheduledJobNowErrors[keyof RunScheduledJobNowErrors];
+
+export type RunScheduledJobNowResponses = {
+    /**
+     * Successful Response
+     */
+    202: RunNowView;
+};
+
+export type RunScheduledJobNowResponse = RunScheduledJobNowResponses[keyof RunScheduledJobNowResponses];
 
 export type ListShadowDecisionsData = {
     body?: never;

@@ -14,6 +14,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_bars`](#get_bars) | read | no |
 | [`get_broker`](#get_broker) | read | no |
 | [`get_catalog`](#get_catalog) | read | no |
+| [`get_connection_accounts`](#get_connection_accounts) | read | no |
 | [`get_coverage`](#get_coverage) | read | no |
 | [`get_draft`](#get_draft) | read | no |
 | [`get_health_report`](#get_health_report) | read | no |
@@ -28,6 +29,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_tick`](#get_tick) | read | no |
 | [`health`](#health) | read | no |
 | [`lab_run_draft`](#lab_run_draft) | guarded | yes |
+| [`list_connections`](#list_connections) | read | no |
 | [`list_cost_models`](#list_cost_models) | read | no |
 | [`list_drafts`](#list_drafts) | read | no |
 | [`list_fills`](#list_fills) | read | no |
@@ -47,9 +49,11 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`run_backtest`](#run_backtest) | job | no |
 | [`run_ingest`](#run_ingest) | job | no |
 | [`run_lab`](#run_lab) | guarded | yes |
+| [`run_signal_ic`](#run_signal_ic) | job | no |
 | [`run_tick`](#run_tick) | guarded | yes |
 | [`search_instruments`](#search_instruments) | read | no |
 | [`shadow_strategy`](#shadow_strategy) | guarded | yes |
+| [`sync_connection`](#sync_connection) | guarded | yes |
 | [`update_draft`](#update_draft) | job | no |
 | [`validate_draft`](#validate_draft) | job | no |
 | [`validate_rule_spec`](#validate_rule_spec) | read | no |
@@ -89,6 +93,17 @@ specs, plus the valid bar intervals and asset classes.
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
+
+### `get_connection_accounts`
+
+External accounts on one of your connections, each with the
+portfolio that mirrors it (null when not linked).
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `connection_id` | string | yes |  |  |
 
 ### `get_coverage`
 
@@ -214,6 +229,15 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 ### `health`
 
 Check that the Stonks API is up and report its version.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
+### `list_connections`
+
+Your broker connections: provider, status, last sync and error.
+Never includes credentials.
 
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
@@ -401,7 +425,7 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 Poll a job until it finishes or the timeout passes. Returns
 {"timed_out": bool, "job": {...}, "result": {...} | null}: once the job
 succeeded, "result" is its typed result (BacktestResult, LabRunView,
-ingest or tick result); otherwise null and the job carries its error.
+SignalICView, ingest or tick result); otherwise null and the job carries its error.
 
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
@@ -492,6 +516,29 @@ Safety: writes, non-destructive, not idempotent, open world. Needs confirm: no.
 | `since` | date \| null | no | `null` | YYYY-MM-DD |
 | `until` | date \| null | no | `null` | YYYY-MM-DD |
 | `interval` | string \| null | no | `null` | for intraday, e.g. 5m |
+
+### `run_signal_ic`
+
+Queue a signal IC analysis: does the strategy's estimate_return rank
+future returns across the universe? Reports mean IC, ICIR, HAC t-stat
+and quantile spread per horizon, plus turnover and the IC estimate.
+Needs at least 10 tickers (else n/a). Returns the job; use wait_for_job
+for the result. Research only: writes nothing.
+
+Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `universe` | list[string] | yes |  | instrument ids |
+| `start` | date | yes |  | YYYY-MM-DD |
+| `end` | date | yes |  | YYYY-MM-DD |
+| `strategy_id` | string \| null | no | `null` | registered strategy id (or use class_path) |
+| `class_path` | string \| null | no | `null` | catalog class path, e.g. pkg.mod:Class |
+| `params` | object \| null | no | `null` | strategy params (with class_path) |
+| `interval` | string | no | `"1d"` |  |
+| `horizons` | list[integer] \| null | no | `null` | forward-return horizons in bars; default [1, 5, 21] |
+| `every_bars` | integer | no | `5` | score every N bars |
+| `n_quantiles` | integer | no | `5` |  |
 
 ### `update_draft`
 
@@ -695,6 +742,19 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 | `strategy_id` | string | yes |  |  |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 | `reason` | string \| null | no | `null` | why (logged in the audit trail); required for demotions and overrides |
+
+### `sync_connection`
+
+Sync one of your connections now: read balances, positions and
+activity from the provider (read-only there) into the linked broker
+portfolios. Without confirm=true returns a preview and syncs nothing.
+
+Safety: writes, destructive, idempotent, open world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `connection_id` | string | yes |  |  |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
 ## Resources
 
