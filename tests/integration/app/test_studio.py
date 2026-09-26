@@ -122,6 +122,12 @@ def _lab(**kw) -> DraftLabRunRequest:
     return DraftLabRunRequest(**base | kw)
 
 
+def test_draft_lab_run_checks_the_embargo_against_its_window():
+    assert _lab(embargo_bars=5).embargo_bars == 5
+    with pytest.raises(ValueError, match="embargo"):
+        _lab(embargo_bars=500)
+
+
 # ---- catalog-ish reads ------------------------------------------------------
 
 

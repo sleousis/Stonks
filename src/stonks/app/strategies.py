@@ -18,7 +18,7 @@ from stonks.app.catalog import CatalogService, class_path_of
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
 from stonks.app.pagination import Page
-from stonks.app.serialize import finite, to_jsonable
+from stonks.app.serialize import FiniteFloat, finite, to_jsonable
 from stonks.core.protocols import Strategy
 from stonks.logging import get_logger
 from stonks.production.golive import evaluate_golive
@@ -68,7 +68,7 @@ class StrategyRef(BaseModel):
 class SurvivalReportView(BaseModel):
     test_id: str
     passed: bool
-    metrics: dict[str, float | None]
+    metrics: dict[str, FiniteFloat]
     notes: str
 
 

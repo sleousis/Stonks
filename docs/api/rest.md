@@ -213,6 +213,7 @@ Fee and spread for one asset class.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `benchmark` | string \| null | no |  |
 | `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `end` | date | yes |  |
 | `fee_per_trade` | number | no |  |
@@ -229,6 +230,8 @@ Fee and spread for one asset class.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `benchmark` | [BenchmarkStatsView](#benchmarkstatsview) \| null | no |  |
+| `benchmark_equity` | list[[EquityPoint](#equitypoint)] | no |  |
 | `cagr` | number \| null | yes |  |
 | `calmar` | number \| null | no |  |
 | `drawdown` | list[[EquityPoint](#equitypoint)] | no |  |
@@ -273,6 +276,32 @@ Fee and spread for one asset class.
 | `open` | number \| null | yes |  |
 | `timestamp` | date-time | yes |  |
 | `volume` | number \| null | yes |  |
+
+### BenchmarkStatsView
+
+A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios are ``None`` when not finite.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `alpha_annual` | number \| null | yes |  |
+| `alpha_tstat` | number \| null | yes |  |
+| `benchmark_cagr` | number \| null | yes |  |
+| `benchmark_max_dd` | number \| null | yes |  |
+| `benchmark_sharpe` | number \| null | yes |  |
+| `beta` | number \| null | yes |  |
+| `correlation` | number \| null | yes |  |
+| `down_capture` | number \| null | yes |  |
+| `excess_cagr` | number \| null | yes |  |
+| `excluded` | list[string] | no |  |
+| `information_ratio` | number \| null | yes |  |
+| `members` | list[string] | no |  |
+| `n_obs` | integer | yes |  |
+| `name` | string | yes |  |
+| `r2` | number \| null | yes |  |
+| `residual_sharpe` | number \| null | yes |  |
+| `spec` | string | yes |  |
+| `tracking_error` | number \| null | yes |  |
+| `up_capture` | number \| null | yes |  |
 
 ### BrokerAccountView
 
@@ -363,6 +392,7 @@ A :class:`~stonks.app.lab.BacktestRequest` without the strategy (the draft is th
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `benchmark` | string \| null | no |  |
 | `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `end` | date | yes |  |
 | `fee_per_trade` | number | no |  |
@@ -389,8 +419,10 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `benchmark` | string \| null | no |  |
 | `budget` | integer | no |  |
 | `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
+| `embargo_bars` | integer \| null | no |  |
 | `end` | date | yes |  |
 | `grid_size` | integer | no |  |
 | `hypothesis` | string \| null | no |  |
@@ -404,6 +436,7 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
 | `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
+| `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" | no |  |
 | `universe` | list[string] | yes |  |
@@ -451,7 +484,7 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 |-------|------|----------|-------------|
 | `detail` | string | yes |  |
 | `limit` | number \| null | yes |  |
-| `name` | "status" \| "min_days" \| "max_drawdown" \| "max_drift" \| "min_trades" \| "survival" | yes |  |
+| `name` | "status" \| "min_days" \| "max_drawdown" \| "max_drift" \| "min_trades" \| "survival" \| "within_mc_band" \| "quit_rule" \| "promotion_preset" \| "nonzero_costs" \| "hypothesis_recorded" \| "backtest_min_trades" | yes |  |
 | `passed` | boolean | yes |  |
 | `value` | number \| null | yes |  |
 
@@ -461,16 +494,26 @@ Limits a paper-trading period must meet before ``stonks golive check`` passes (`
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `incubation` | boolean | no |  |
 | `max_drawdown` | number | no |  |
 | `max_drift` | number | no |  |
+| `min_backtest_trades` | integer | no |  |
 | `min_days` | integer | no |  |
+| `min_hypothesis_chars` | integer | no |  |
 | `min_trades` | integer | no |  |
+| `min_trl_alpha` | number | no |  |
+| `min_trl_cap_days` | integer | no |  |
+| `periods_per_year` | number | no |  |
+| `promotion_preset` | string | no |  |
+| `quit_drawdown_multiple` | number | no |  |
 | `require_all_survival_passed` | boolean | no |  |
+| `use_min_trl` | boolean | no |  |
 
 ### GoLiveReport
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `checklist` | [PromotionChecklistView](#promotionchecklistview) | no |  |
 | `checks` | list[[GoLiveCheckView](#golivecheckview)] | yes |  |
 | `passed` | boolean | yes |  |
 | `policy` | [GoLivePolicy](#golivepolicy) | yes |  |
@@ -619,8 +662,10 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `benchmark` | string \| null | no |  |
 | `budget` | integer | no |  |
 | `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
+| `embargo_bars` | integer \| null | no |  |
 | `end` | date | yes |  |
 | `grid_size` | integer | no |  |
 | `hypothesis` | string \| null | no |  |
@@ -635,6 +680,7 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `start` | date | yes |  |
 | `strategy` | [StrategyRef](#strategyref) | yes |  |
 | `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
+| `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" | no |  |
 | `universe` | list[string] | yes |  |
@@ -644,6 +690,7 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `benchmark` | [BenchmarkStatsView](#benchmarkstatsview) \| null | no |  |
 | `best_params` | object | yes |  |
 | `best_score` | number \| null | yes |  |
 | `class_path` | string | yes |  |
@@ -672,7 +719,7 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `max_p_value` | number | no |  |
 | `metric` | "profit_factor" \| "sharpe" \| "final_return" \| "cagr" | no |  |
 | `n_permutations` | integer | no |  |
-| `retune` | boolean | no |  |
+| `retune` | boolean \| "auto" | no |  |
 | `seed` | integer \| null | no |  |
 
 ### OrderView
@@ -883,6 +930,19 @@ One row per day. ``strategy_id`` is ``None`` for the real portfolio and a shadow
 | `status` | integer | yes |  |
 | `title` | string | yes |  |
 | `type` | string | no |  |
+
+### PromotionChecklistView
+
+What a reviewer reads before promoting; it doesn't change the verdict. ``None`` for anything not recorded.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `dsr` | number \| null | no |  |
+| `excess_cagr` | number \| null | no |  |
+| `hypothesis` | string \| null | no |  |
+| `n_trials_class` | integer \| null | no |  |
+| `pbo` | number \| null | no |  |
+| `premortem` | string \| null | no |  |
 
 ### RiskAdjustmentView
 
@@ -1178,19 +1238,19 @@ Trade-level statistics of a backtest (``backtest.trades.TradeStats``). Win/loss 
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `avg_bars_held` | number | yes |  |
-| `avg_loss` | number | yes |  |
-| `avg_win` | number | yes |  |
-| `cost_drag_annual` | number | yes |  |
-| `costs_paid` | number | yes |  |
-| `expectancy` | number | yes |  |
-| `exposure` | number | yes |  |
+| `avg_bars_held` | number \| null | yes |  |
+| `avg_loss` | number \| null | yes |  |
+| `avg_win` | number \| null | yes |  |
+| `cost_drag_annual` | number \| null | yes |  |
+| `costs_paid` | number \| null | yes |  |
+| `expectancy` | number \| null | yes |  |
+| `exposure` | number \| null | yes |  |
 | `n_open` | integer | yes |  |
 | `n_trades` | integer | yes |  |
 | `payoff_ratio` | number \| null | yes |  |
 | `trade_profit_factor` | number \| null | yes |  |
-| `turnover_annual` | number | yes |  |
-| `win_rate` | number | yes |  |
+| `turnover_annual` | number \| null | yes |  |
+| `win_rate` | number \| null | yes |  |
 
 ### TradeView
 
@@ -1207,7 +1267,7 @@ One round trip (a lot, or part of one, from buy to sell or to the end).
 | `is_open` | boolean | yes |  |
 | `pnl` | number | yes |  |
 | `qty` | number | yes |  |
-| `return_pct` | number | yes |  |
+| `return_pct` | number \| null | yes |  |
 | `ticker` | string | yes |  |
 
 ### ValidateRequest
@@ -1234,9 +1294,16 @@ Walk-forward settings. ``test_days=None`` splits the dataset's validation window
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `anchored` | boolean | no |  |
+| `matrix` | boolean | no |  |
+| `matrix_min_pass_share` | number | no |  |
+| `matrix_test_bars` | list[integer] | no |  |
+| `matrix_train_bars` | list[integer] | no |  |
+| `max_workers` | integer \| null | no |  |
 | `metric` | "sharpe" \| "cagr" \| "final_return" | no |  |
 | `min_mean_score` | number | no |  |
 | `min_positive_share` | number | no |  |
+| `min_wfe` | number \| null | no |  |
 | `n_splits` | integer | no |  |
+| `seed` | integer \| null | no |  |
 | `test_days` | integer \| null | no |  |
 | `train_days` | integer \| null | no |  |

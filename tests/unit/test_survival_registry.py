@@ -84,6 +84,36 @@ def test_promotion_contains_walk_forward_and_permutation_test():
     assert "oos" in names and "walk_forward" in names and "mcpt" in names
 
 
+def test_integration_2_preset_contents():
+    assert registry.resolve_preset("quick") == ["oos", "period_stability"]
+    assert registry.resolve_preset("standard") == [
+        "oos",
+        "period_stability",
+        "perturbation",
+        "walk_forward",
+        "deflated_sharpe",
+        "cost_stress",
+    ]
+    promotion = registry.resolve_preset("promotion")
+    assert "cross_instrument" in promotion
+    for test_id in (
+        "oos",
+        "walk_forward",
+        "deflated_sharpe",
+        "pbo",
+        "mc_trades",
+        "cost_stress",
+        "plateau",
+        "benchmark_relative",
+        "mcpt",
+    ):
+        assert test_id in promotion
+    # every preset id is registered: none is silently skipped
+    known = set(registry.survival_test_names())
+    for name, ids in registry.SUITE_PRESETS.items():
+        assert set(ids) <= known, name
+
+
 def test_preset_with_missing_id_warns_and_skips(monkeypatch):
     rec = _Recorder()
     monkeypatch.setattr(registry, "_log", rec)
@@ -155,3 +185,17 @@ def test_resolve_suite_prefers_explicit_tests_over_preset():
     assert registry.resolve_suite(["drift"], preset="promotion") == ["drift"]
     assert registry.resolve_suite(None, preset="quick") == ["oos", "period_stability"]
     assert registry.resolve_suite(None, preset=None, default="quick") == ["oos", "period_stability"]
+
+
+def test_preset_options_are_valid_for_their_tests():
+    assert registry.preset_options("promotion") == {
+        "mcpt": {"n_permutations": 200, "retune": "auto"}
+    }
+    assert registry.preset_options("quick") == {}
+    for name in registry.preset_names():
+        for test_id, options in registry.preset_options(name).items():
+            assert test_id in registry.SUITE_PRESETS[name]
+            registry.build_survival_test(test_id, options)
+    # callers get a copy, never the table itself
+    registry.preset_options("promotion")["mcpt"]["retune"] = False
+    assert registry.preset_options("promotion")["mcpt"]["retune"] == "auto"

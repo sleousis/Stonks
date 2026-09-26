@@ -114,6 +114,16 @@ def _no_looser(merged: RiskPolicy, other: RiskPolicy, explicit: set[str]) -> Non
     assert merged.min_order_notional >= other.min_order_notional
 
 
+def test_risk_policy_exposes_tighter_of():
+    base = RiskPolicy(max_weight_per_ticker=0.5, min_order_notional=10.0)
+    override = {"max_weight_per_ticker": 0.2, "min_order_notional": 5.0}
+    expected = tighter_of(base, override)
+    assert base.tighter_of(override) == expected
+    assert RiskPolicy.tighter_of(base, override) == expected
+    assert expected.max_weight_per_ticker == 0.2 and expected.min_order_notional == 10.0
+    assert base.tighter_of() is base
+
+
 def test_property_merged_is_never_looser_than_any_input():
     rng = random.Random(15_2)
     for _ in range(500):

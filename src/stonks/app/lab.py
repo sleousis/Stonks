@@ -21,9 +21,10 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, WithJsonSchem
 from stonks.app.context import AppContext
 from stonks.app.errors import ValidationError
 from stonks.app.jobs import Job, JobContext, JobRunner
-from stonks.app.serialize import finite, to_jsonable
+from stonks.app.serialize import FiniteFloat, finite, to_jsonable
 from stonks.app.strategies import StrategyRef, StrategyService, SurvivalReportView
 from stonks.backtest import metrics as bt_metrics
+from stonks.backtest.benchmark import BenchmarkResult, benchmark_curve, with_benchmark
 from stonks.backtest.costs import CostModel, CostModelSettings
 from stonks.backtest.engine import BacktestConfig, Backtester
 from stonks.backtest.report import BacktestReport
@@ -32,10 +33,12 @@ from stonks.backtest.trades import with_trades
 from stonks.core.interval import Interval
 from stonks.core.protocols import Objective, Strategy, SurvivalReport, SurvivalTest, Tuner
 from stonks.core.types import Portfolio
-from stonks.lab.dataset import LabDataset
+from stonks.lab.backtesting import run_backtest
+from stonks.lab.dataset import LabDataset, scoring_window
 from stonks.lab.objectives import CAGRObjective, FinalReturnObjective, SharpeObjective
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.runner import LabRunner, LabRunResult, costs_are_zero
+from stonks.lab.survival import registry as survival_registry
 from stonks.lab.survival.base import SurvivalSuite
 from stonks.lab.survival.registry import (
     build_survival_test,
@@ -60,6 +63,9 @@ CostModelName = Literal["zero", "realistic"]
 
 #: API names kept from before the survival-test registry (BL-10).
 _LEGACY_TEST_NAMES: dict[str, str] = {"permutation": "mcpt"}
+#: Constructor arguments that take objects the lab builds (a tuning setup,
+#: a settings model), not JSON options.
+_NOT_OPTIONS = frozenset({"config", "tuning"})
 
 
 def _accepted_test_names() -> list[str]:
@@ -93,6 +99,19 @@ SurvivalPresetName = Annotated[
 ]
 #: A cost preset name (``GET /api/lab/cost-models``) or explicit settings.
 CostModelOption = CostModelName | CostModelSettings
+#: A benchmark spec (``stonks.backtest.benchmark.normalize_spec``): ``auto``
+#: (SPY.US when priced, else the equal-weight universe), ``EW``, a ticker
+#: such as ``QQQ.US``, or ``none``. Omitted: ``[lab] benchmark``.
+BenchmarkSpec = Annotated[
+    str,
+    Field(
+        max_length=32,
+        description="auto (SPY.US when priced, else EW), EW (equal-weight universe), "
+        "a ticker such as QQQ.US, or none; default [lab] benchmark",
+    ),
+]
+#: Options per survival test id, e.g. ``{"oos": {"mode": "sharpe"}}``.
+SurvivalTestOptions = dict[SurvivalTestName, dict[str, Any]]
 
 _OBJECTIVES: dict[str, Callable[[], Objective]] = {
     "sharpe": SharpeObjective,
@@ -140,6 +159,8 @@ class BacktestOptions(BaseModel):
     #: settings; replaces the flat ``slippage_bps`` / ``fee_per_trade`` (set
     #: one or the other). With neither, the configured ``[backtest.costs]`` apply.
     cost_model: CostModelOption | None = None
+    #: What the result is compared against (``BacktestResult.benchmark``).
+    benchmark: BenchmarkSpec | None = None
 
     @model_validator(mode="after")
     def _one_cost_source(self) -> Self:
@@ -163,17 +184,63 @@ class McptOptions(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    n_permutations: int = Field(default=50, ge=1, le=1_000)
+    n_permutations: int = Field(default=200, ge=1, le=1_000)
     max_p_value: float = Field(default=0.05, gt=0, le=1)
     metric: Literal["profit_factor", "sharpe", "final_return", "cagr"] = "profit_factor"
-    #: Re-tune on every permutation (Masters); costs ``(n + 1) * budget`` backtests.
-    retune: bool = False
+    #: Re-tune on every permutation (Masters); costs ``(n + 1) * budget``
+    #: backtests. ``"auto"`` re-tunes only a strategy with a non-trivial
+    #: ``fit`` (the promotion preset's choice).
+    retune: bool | Literal["auto"] = False
     seed: int | None = 17
 
 
 class EquityPoint(BaseModel):
     timestamp: datetime
     value: float
+
+
+class BenchmarkStatsView(BaseModel):
+    """A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``).
+    Ratios are ``None`` when not finite."""
+
+    #: Display name (a ticker or ``EW``).
+    name: str
+    #: The spec it was resolved from (``auto``, ``EW``, a ticker).
+    spec: str
+    #: Paired return observations the stats use.
+    n_obs: int
+    benchmark_cagr: FiniteFloat
+    #: Strategy CAGR minus benchmark CAGR.
+    excess_cagr: FiniteFloat
+    benchmark_sharpe: FiniteFloat
+    benchmark_max_dd: FiniteFloat
+    beta: FiniteFloat
+    alpha_annual: FiniteFloat
+    #: HAC (Newey-West) t-statistic of the alpha.
+    alpha_tstat: FiniteFloat
+    r2: FiniteFloat
+    residual_sharpe: FiniteFloat
+    tracking_error: FiniteFloat
+    information_ratio: FiniteFloat
+    up_capture: FiniteFloat
+    down_capture: FiniteFloat
+    correlation: FiniteFloat
+    #: Names held by an equal-weight benchmark.
+    members: list[str] = Field(default_factory=list)
+    #: Universe names left out (not priced at the first date).
+    excluded: list[str] = Field(default_factory=list)
+
+    @classmethod
+    def of(cls, result: BenchmarkResult) -> BenchmarkStatsView:
+        stats = {k: v for k, v in result.metrics().items() if k != "n_obs"}
+        return cls(
+            name=result.curve.name,
+            spec=result.curve.spec,
+            n_obs=int(result.stats.n_obs),
+            members=list(result.curve.members),
+            excluded=list(result.curve.excluded),
+            **stats,
+        )
 
 
 class TradeStatsView(BaseModel):
@@ -183,19 +250,19 @@ class TradeStatsView(BaseModel):
 
     n_trades: int
     n_open: int
-    win_rate: float
-    avg_win: float
-    avg_loss: float
-    payoff_ratio: float | None
+    win_rate: FiniteFloat
+    avg_win: FiniteFloat
+    avg_loss: FiniteFloat
+    payoff_ratio: FiniteFloat
     #: Mean P&L per closed trade, in cash.
-    expectancy: float
-    trade_profit_factor: float | None
-    avg_bars_held: float
+    expectancy: FiniteFloat
+    trade_profit_factor: FiniteFloat
+    avg_bars_held: FiniteFloat
     #: Share of bars that closed with a position held.
-    exposure: float
-    turnover_annual: float
-    costs_paid: float
-    cost_drag_annual: float
+    exposure: FiniteFloat
+    turnover_annual: FiniteFloat
+    costs_paid: FiniteFloat
+    cost_drag_annual: FiniteFloat
 
 
 class TradeView(BaseModel):
@@ -208,7 +275,7 @@ class TradeView(BaseModel):
     entry_px: float
     exit_px: float
     pnl: float
-    return_pct: float
+    return_pct: FiniteFloat
     bars_held: int
     fees: float
     is_open: bool
@@ -219,13 +286,13 @@ class BacktestResult(BaseModel):
     interval: str
     start: date
     end: date
-    final_return: float | None
-    sharpe: float | None
-    max_drawdown: float | None
-    cagr: float | None
+    final_return: FiniteFloat
+    sharpe: FiniteFloat
+    max_drawdown: FiniteFloat
+    cagr: FiniteFloat
     #: Per-bar profit factor; ``None`` when unbounded (gains but no losing
     #: bars). The trade-level figure is ``trade_stats.trade_profit_factor``.
-    profit_factor: float | None
+    profit_factor: FiniteFloat
     equity: list[EquityPoint]
     #: Drawdown from the running peak at each equity point (fraction <= 0).
     drawdown: list[EquityPoint] = Field(default_factory=list)
@@ -233,16 +300,22 @@ class BacktestResult(BaseModel):
     trade_count: int = 0
     trade_stats: TradeStatsView | None = None
     trades: list[TradeView] = Field(default_factory=list)
-    sortino: float | None = None
-    calmar: float | None = None
-    ulcer_index: float | None = None
+    sortino: FiniteFloat = None
+    calmar: FiniteFloat = None
+    ulcer_index: FiniteFloat = None
     max_dd_duration_bars: int = 0
-    var_95: float | None = None
-    es_95: float | None = None
-    skew: float | None = None
-    kurtosis: float | None = None
+    var_95: FiniteFloat = None
+    es_95: FiniteFloat = None
+    skew: FiniteFloat = None
+    kurtosis: FiniteFloat = None
     #: Tulchinsky fitness (Sharpe x sqrt(|return| / turnover)).
-    fitness: float | None = None
+    fitness: FiniteFloat = None
+    #: The strategy against its benchmark (``benchmark`` request option,
+    #: default ``[lab] benchmark``); ``None`` when off or unpriced.
+    benchmark: BenchmarkStatsView | None = None
+    #: The benchmark's buy-and-hold value on the strategy's equity
+    #: timestamps, starting at the same capital.
+    benchmark_equity: list[EquityPoint] = Field(default_factory=list)
 
 
 class LabRunOptions(BaseModel):
@@ -265,6 +338,18 @@ class LabRunOptions(BaseModel):
     walk_forward: WalkForwardConfig | None = None
     #: Settings for the ``mcpt`` (alias ``permutation``) survival test.
     mcpt: McptOptions | None = None
+    #: Options per survival test id, validated by the test's ``Options``
+    #: model (or its constructor), e.g. ``{"oos": {"mode": "sharpe",
+    #: "min_trades": 0}, "pbo": {"max_pbo": 0.3}}``. Each test must be in
+    #: the resolved suite. Applied over ``walk_forward`` / ``mcpt``.
+    test_options: SurvivalTestOptions | None = None
+    #: Benchmark for the run's backtests (``benchmark_relative``, the
+    #: result's ``benchmark``); default ``[lab] benchmark``.
+    benchmark: BenchmarkSpec | None = None
+    #: Trading bars skipped between the train and validation windows
+    #: (BL-20); a strategy's ``label_horizon_bars`` raises it. Default
+    #: ``[lab] embargo_bars``.
+    embargo_bars: int | None = Field(default=None, ge=0, le=10_000)
     #: Always register the fitted strategy (status ``shadow``) with its
     #: reports, whatever the verdict.
     register_strategy: bool = False
@@ -290,17 +375,59 @@ class LabRunOptions(BaseModel):
         default = "promotion" if self.registers else "quick"
         return resolve_suite(tests, preset=self.preset, default=default)
 
+    def options_preset(self) -> str | None:
+        """The preset whose test options apply: ``preset`` when named, else
+        the default suite's (``promotion`` when registering, else
+        ``quick``) unless explicit ``survival_tests`` replaced it."""
+        if self.preset:
+            return self.preset
+        if self.survival_tests:
+            return None
+        return "promotion" if self.registers else "quick"
+
+    def survival_options(self, name: str) -> dict[str, Any] | None:
+        """Registry options for survival test ``name``: the preset's
+        options (``PRESET_OPTIONS``, see :meth:`options_preset`), then the
+        ``walk_forward`` / ``mcpt`` fields (the values they set), then
+        ``test_options`` (legacy names mapped). ``None`` when nothing sets
+        any."""
+        preset = self.options_preset()
+        options = survival_registry.preset_options(preset).get(name, {}) if preset else {}
+        if name == "walk_forward" and self.walk_forward is not None:
+            options["config"] = self.walk_forward
+        if name == "mcpt" and self.mcpt is not None:
+            options.update(self.mcpt.model_dump(exclude_unset=True))
+        for key, value in (self.test_options or {}).items():
+            if _LEGACY_TEST_NAMES.get(key, key) == name:
+                options.update(value)
+        return options or None
+
     @model_validator(mode="after")
     def _check_options(self) -> Self:
         if self.register_strategy and self.register_if_passes:
             raise ValueError("set register_strategy (always) or register_if_passes, not both")
-        if self.walk_forward is None and self.mcpt is None:
+        if self.walk_forward is None and self.mcpt is None and not self.test_options:
             return self
         suite = self.suite()
         if self.walk_forward is not None and "walk_forward" not in suite:
             raise ValueError("walk_forward options given: add 'walk_forward' to survival_tests")
         if self.mcpt is not None and "mcpt" not in suite:
             raise ValueError("mcpt options given: add 'permutation' to survival_tests")
+        for key, given in (self.test_options or {}).items():
+            name = _LEGACY_TEST_NAMES.get(key, key)
+            reserved = sorted(set(given) & _NOT_OPTIONS)
+            if reserved:
+                raise ValueError(
+                    f"test_options for {key!r} can't set {reserved}: those are objects the "
+                    "lab builds (use the walk_forward field for walk-forward settings)"
+                )
+            if name not in suite:
+                raise ValueError(
+                    f"test_options given for {key!r}, which is not in the suite {suite}: "
+                    "add it to survival_tests or pick a preset that runs it"
+                )
+            # Build once to validate: unknown option names and bad values fail here.
+            survival_registry.build_survival_test(name, self.survival_options(name))
         return self
 
 
@@ -308,11 +435,35 @@ class LabRunRequest(_WindowRequest, LabRunOptions):
     """Tunes the class the ``strategy`` ref points at (its ``params`` are
     ignored: the tuner searches the class's parameter space)."""
 
+    @model_validator(mode="after")
+    def _embargo_fits_the_window(self) -> Self:
+        check_embargo(self, self.embargo_bars)
+        return self
+
+
+def check_embargo(window: Any, embargo_bars: int | None) -> None:
+    """Raise ``ValueError`` when ``embargo_bars`` leaves ``window`` (start,
+    end, train_ratio, interval) no validation window."""
+    if not embargo_bars:
+        return
+    try:
+        interval = Interval.parse(window.interval)
+    except (ValueError, TypeError):
+        return  # reported by the interval check
+    LabDataset(
+        lake=None,  # type: ignore[arg-type]
+        start=window.start,
+        end=window.end,
+        train_ratio=window.train_ratio,
+        interval=interval,
+        embargo_bars=embargo_bars,
+    )
+
 
 class LabRunView(BaseModel):
     class_path: str
     best_params: dict[str, Any]
-    best_score: float | None
+    best_score: FiniteFloat
     verdict: Literal["pass", "fail"]
     survival_reports: list[SurvivalReportView]
     registered_strategy_id: str | None
@@ -322,6 +473,9 @@ class LabRunView(BaseModel):
     n_trials_run: int = 0
     #: Trials of this strategy class across every ledgered run (P2).
     n_trials_class: int = 0
+    #: The fitted strategy against its benchmark over the validation
+    #: window; ``None`` when off or unpriced.
+    benchmark: BenchmarkStatsView | None = None
 
 
 @dataclass(frozen=True)
@@ -330,6 +484,8 @@ class LabExecution:
 
     result: LabRunResult
     registered_id: str | None
+    #: The fitted strategy's validation-window benchmark comparison.
+    benchmark: BenchmarkResult | None = None
 
     def view(self) -> LabRunView:
         result = self.result
@@ -352,6 +508,7 @@ class LabExecution:
             run_id=result.run_id,
             n_trials_run=result.n_trials_run,
             n_trials_class=result.n_trials_class,
+            benchmark=BenchmarkStatsView.of(self.benchmark) if self.benchmark else None,
         )
 
 
@@ -410,15 +567,21 @@ def execute_lab_run(
     )
     if progress is not None:
         progress.progress(0.05, "tuning")
-    dataset = LabDataset(
-        lake=lake,
-        universe=list(request.universe),
-        start=request.start,
-        end=request.end,
-        train_ratio=request.train_ratio,
-        interval=interval,
-        costs=lab_costs(settings, request.cost_model),
-    )
+    embargo = request.embargo_bars
+    try:
+        dataset = LabDataset(
+            lake=lake,
+            universe=list(request.universe),
+            start=request.start,
+            end=request.end,
+            train_ratio=request.train_ratio,
+            interval=interval,
+            costs=lab_costs(settings, request.cost_model),
+            benchmark=lab_benchmark(settings, request.benchmark),
+            embargo_bars=settings.lab.embargo_bars if embargo is None else embargo,
+        )
+    except ValueError as exc:  # e.g. [lab] embargo_bars leaves no validation window
+        raise ValidationError(str(exc)) from None
     result = runner.run(
         cls,
         dataset,
@@ -426,6 +589,7 @@ def execute_lab_run(
         hypothesis=request.hypothesis,
         premortem=request.premortem,
     )
+    benchmark = _validation_benchmark(result, dataset)
 
     registered: str | None = None
     if request.register_if_passes and result.verdict != "pass":
@@ -446,7 +610,20 @@ def execute_lab_run(
         _log.info(
             "lab.registered", run_id=result.run_id, strategy_id=registered, verdict=result.verdict
         )
-    return LabExecution(result=result, registered_id=registered)
+    return LabExecution(result=result, registered_id=registered, benchmark=benchmark)
+
+
+def lab_benchmark(settings: Any, option: str | None) -> str:
+    """The request's benchmark spec, else ``[lab] benchmark``."""
+    return option if option is not None else settings.lab.benchmark
+
+
+def _validation_benchmark(result: LabRunResult, dataset: LabDataset) -> BenchmarkResult | None:
+    """The fitted strategy against the dataset's benchmark over the
+    validation window, embargoed for it (one more backtest; ``None`` when
+    off or unpriced)."""
+    report = run_backtest(result.strategy, dataset, scoring_window(dataset, result.strategy))
+    return getattr(report, "benchmark", None)
 
 
 def _attach_lab_meta(state: Any, strategy_id: str, result: LabRunResult) -> None:
@@ -488,13 +665,22 @@ def backtest_report(
     )
     report = Backtester(strategies=[strategy], broker=broker, lake=lake, config=config).run()
     report = with_trades(report, broker.fills, reference_price=broker.reference_price)
-    return report, interval
+    curve = benchmark_curve(
+        lake,
+        lab_benchmark(settings, getattr(request, "benchmark", None)),
+        report.equity_dates,
+        universe=config.universe,
+        interval=interval,
+        initial_value=report.equity_curve[0] if report.equity_curve else 1.0,
+    )
+    return with_benchmark(report, curve), interval
 
 
 def backtest_result(report: BacktestReport, interval: Interval, request: Any) -> BacktestResult:
     """The API view of a backtest report (equity, drawdown, trades, stats)."""
     stamps = [_as_datetime(ts) for ts in report.equity_dates]
     stats = report.trade_stats
+    bench: BenchmarkResult | None = getattr(report, "benchmark", None)
     return BacktestResult(
         strategy_id=report.strategy_id,
         interval=interval.code,
@@ -554,6 +740,15 @@ def backtest_result(report: BacktestReport, interval: Interval, request: Any) ->
         skew=finite(report.skew),
         kurtosis=finite(report.kurtosis),
         fitness=finite(report.fitness),
+        benchmark=BenchmarkStatsView.of(bench) if bench is not None else None,
+        benchmark_equity=(
+            [
+                EquityPoint(timestamp=ts, value=float(v))
+                for ts, v in zip(stamps, bench.curve.values, strict=True)
+            ]
+            if bench is not None
+            else []
+        ),
     )
 
 
@@ -686,11 +881,10 @@ def _test_options(
 ) -> dict[str, Any] | None:
     """Registry options for test ``name``: request options win; walk-forward
     otherwise uses ``[lab.walk_forward]``; other tests use their defaults."""
+    options = request.survival_options(name)
     if name == "walk_forward":
-        return {"config": request.walk_forward or walk_forward_default}
-    if name == "mcpt" and request.mcpt is not None:
-        return request.mcpt.model_dump()
-    return None
+        return {"config": walk_forward_default, **(options or {})}
+    return options
 
 
 def _backtest_cost_model(settings: Any, request: Any) -> CostModel | None:

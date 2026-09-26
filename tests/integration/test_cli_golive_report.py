@@ -24,6 +24,7 @@ max_drawdown = 0.2
 max_drift = 0.05
 min_trades = 2
 require_all_survival_passed = true
+incubation = false
 """.strip()
 
 
@@ -51,6 +52,8 @@ def test_golive_check_passing_strategy_exits_zero(runner, seeded):
     assert result.exit_code == 0, result.output
     assert "PASS" in result.output
     assert "min_days" in result.output
+    # the reviewer's promotion checklist follows the table
+    assert "checklist" in result.output and "n_trials_class" in result.output
 
 
 def test_golive_check_failing_strategy_exits_one(runner, seeded):
