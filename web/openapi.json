@@ -2611,7 +2611,7 @@
     },
     "/api/jobs/{job_id}/cancel": {
       "post": {
-        "description": "Cancel a queued job. Running jobs cannot be interrupted (409).",
+        "description": "Cancel a queued job, or ask a running lab run to stop at its next\ntrial (it ends ``cancelled``). Other running jobs cannot be interrupted\n(409).",
         "operationId": "cancelJob",
         "parameters": [
           {

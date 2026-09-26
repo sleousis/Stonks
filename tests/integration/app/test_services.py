@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import time
 from datetime import date
 from pathlib import Path
 
@@ -404,3 +405,45 @@ def test_services_scrub_configured_secrets_from_job_errors(settings, seeded):
     from tests.integration.app.conftest import API_TOKEN
 
     assert API_TOKEN in list(svc.runner.secrets())
+
+
+def _momentum_lab_request(**overrides) -> LabRunRequest:
+    base = {
+        "strategy": StrategyRef(class_path="stonks.strategies.examples.momentum:Momentum"),
+        "universe": ["UP.US", "DOWN.US"],
+        "start": date(2025, 10, 1),
+        "end": date(2026, 4, 1),
+        "tuner": "random",
+        "budget": 2,
+        "survival_tests": ["oos"],
+    }
+    base.update(overrides)
+    return LabRunRequest(**base)
+
+
+def test_lab_run_stops_at_first_trial_once_cancelled(services):
+    from stonks.app.jobs import JobCancelled, JobContext
+
+    ctx = JobContext(job_id="job_none", _store=services.runner.store)
+    ctx.request_cancel()
+    with pytest.raises(JobCancelled):
+        services.lab.run_lab(_momentum_lab_request(budget=500), progress=ctx)
+
+
+def test_running_lab_run_job_can_be_cancelled(services):
+    job = services.lab.submit_lab_run(_momentum_lab_request(budget=1000))
+    deadline = time.monotonic() + 30
+    while services.jobs.get(job.id).status == "queued" and time.monotonic() < deadline:
+        time.sleep(0.01)
+    services.jobs.cancel(job.id)
+    done = services.jobs.wait(job.id, timeout=30)
+    assert done.status == "cancelled"
+
+
+def test_finished_tick_job_cannot_be_cancelled(services):
+    from stonks.app.errors import ConflictError
+
+    job = services.ticks.submit(TickRequest(dry_run=True, tickers=["UP.US"]))
+    services.jobs.wait(job.id, timeout=30)
+    with pytest.raises(ConflictError):
+        services.jobs.cancel(job.id)

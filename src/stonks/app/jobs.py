@@ -232,6 +232,9 @@ class JobContext:
         except Exception as exc:
             _log.warning("job.progress_write_failed", job_id=self.job_id, error=str(exc))
 
+    def request_cancel(self) -> None:
+        self._cancel.set()
+
     @property
     def cancel_requested(self) -> bool:
         return self._cancel.is_set()
@@ -351,7 +354,7 @@ class JobRunner:
             with self._guard:
                 ctx = self._contexts.get(job_id)
             if reg is not None and reg.cancellable and ctx is not None:
-                ctx._cancel.set()
+                ctx.request_cancel()
                 ctx.progress(job.progress, "cancellation requested")
                 _log.info("job.cancel_requested", job_id=job_id, kind=job.kind)
                 return self._store.get(job_id)
@@ -412,7 +415,7 @@ class JobRunner:
             elif job_id in contexts:
                 reg = self._registration_for(job_id)
                 if reg is not None and reg.cancellable:
-                    contexts[job_id]._cancel.set()
+                    contexts[job_id].request_cancel()
         executors = [self._executor, *self._lanes.values()]
         for executor in executors:
             executor.shutdown(wait=False, cancel_futures=True)

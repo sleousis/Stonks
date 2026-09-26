@@ -131,7 +131,8 @@ class LabService:
         self._strategies = strategies
         self._runner = runner
         runner.register(BACKTEST_JOB, self._handle_backtest)
-        runner.register(LAB_RUN_JOB, self._handle_lab_run)
+        # Cooperative: stops between tuning trials and survival tests.
+        runner.register(LAB_RUN_JOB, self._handle_lab_run, cancellable=True)
 
     # ---- backtests ---------------------------------------------------------
 
@@ -189,10 +190,15 @@ class LabService:
         tuner: Tuner = (
             GridTuner(seed=request.seed) if request.tuner == "grid" else RandomTuner(request.seed)
         )
+        objective: Objective = _OBJECTIVES[request.objective]()
+        tests: list[SurvivalTest] = [_SURVIVAL_TESTS[t]() for t in request.survival_tests]
+        if progress is not None:
+            objective = _CancellableObjective(objective, progress)
+            tests = [_CancellableTest(t, progress) for t in tests]
         runner = LabRunner(
             tuner=tuner,
-            objective=_OBJECTIVES[request.objective](),
-            suite=SurvivalSuite([_SURVIVAL_TESTS[t]() for t in request.survival_tests]),
+            objective=objective,
+            suite=SurvivalSuite(tests),
             budget=request.budget,
         )
         if progress is not None:
@@ -240,6 +246,38 @@ class LabService:
 
     def _handle_lab_run(self, params: dict[str, Any], ctx: JobContext) -> LabRunView:
         return self.run_lab(LabRunRequest.model_validate(params), progress=ctx)
+
+
+class _CancellableObjective:
+    """Objective wrapper that honours job cancellation before every trial
+    (including the re-tuning trials of walk-forward / MCPT)."""
+
+    def __init__(self, inner: Objective, ctx: JobContext) -> None:
+        self._inner = inner
+        self._ctx = ctx
+        self.name = inner.name
+        self.direction = inner.direction
+
+    def score(self, strategy: Any, dataset: Any) -> float:
+        self._ctx.check_cancelled()
+        return self._inner.score(strategy, dataset)
+
+
+class _CancellableTest:
+    """Survival-test wrapper that honours job cancellation before the test
+    starts; forwards everything else (``id``, ``bind_tuning``)."""
+
+    def __init__(self, inner: SurvivalTest, ctx: JobContext) -> None:
+        self._inner = inner
+        self._ctx = ctx
+        self.id = inner.id
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+    def run(self, strategy: Any, context: Any) -> Any:
+        self._ctx.check_cancelled()
+        return self._inner.run(strategy, context)
 
 
 def _parse_interval(code: str) -> Interval:

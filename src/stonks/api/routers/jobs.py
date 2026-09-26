@@ -44,7 +44,9 @@ def get_job(job_id: str, services: ServicesDep) -> Job:
 
 @router.post("/{job_id}/cancel", response_model=Job, operation_id="cancelJob")
 def cancel_job(job_id: str, services: ServicesDep) -> Job:
-    """Cancel a queued job. Running jobs cannot be interrupted (409)."""
+    """Cancel a queued job, or ask a running lab run to stop at its next
+    trial (it ends ``cancelled``). Other running jobs cannot be interrupted
+    (409)."""
     return services.jobs.cancel(job_id)
 
 

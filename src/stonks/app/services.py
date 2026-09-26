@@ -53,8 +53,10 @@ class JobService:
         return self._store.get(job_id)
 
     def cancel(self, job_id: str) -> Job:
-        job = self._store.cancel(job_id)
-        _log.info("job.cancelled", job_id=job_id)
+        """Cancel a queued job, or ask a running cancellable one (lab run)
+        to stop at its next checkpoint; otherwise ``ConflictError``."""
+        job = self._runner.cancel(job_id)
+        _log.info("job.cancel", job_id=job_id, status=job.status)
         return job
 
     def submit(self, kind: str, params: dict[str, Any]) -> Job:
