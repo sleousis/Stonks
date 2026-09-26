@@ -18,6 +18,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from stonks.backtest.costs import CostModelSettings
 from stonks.core.types import AssetClass
 from stonks.lab.survival.walk_forward import WalkForwardConfig
+from stonks.store.bars import BarBackend
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
 
@@ -102,8 +103,22 @@ class BrokersConfig(BaseModel):
     alpaca: AlpacaBrokerConfig = Field(default_factory=AlpacaBrokerConfig)
 
 
+class LakeBarsConfig(BaseModel):
+    """Where the lake keeps its OHLCV bars (``[lake.bars]``, roadmap 10.4).
+
+    ``duckdb``: the ``bars`` table in the lake file. ``parquet``:
+    hive-partitioned files under ``<lake dir>/bars``, readable by other
+    processes while ``stonks serve`` holds the lake. The lake records the
+    store it uses, so changing this value alone switches nothing: run
+    ``uv run python -m stonks.store.bars_migrate`` to move the bars and
+    switch."""
+
+    backend: BarBackend = "duckdb"
+
+
 class LakeConfig(BaseModel):
     path: Path = Path("data/lake.duckdb")
+    bars: LakeBarsConfig = LakeBarsConfig()
 
 
 class StateConfig(BaseModel):

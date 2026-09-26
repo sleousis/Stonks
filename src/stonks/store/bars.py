@@ -46,6 +46,7 @@ Parquet layout and write protocol:
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import time
@@ -363,11 +364,19 @@ class ParquetBarStore(BarStore):
         if not files:
             return 0
         before = self.count(ticker, target.code)
-        agg = _aggregate_sql(f"read_parquet({_list(files)})", ticker, target)
-        typed = f"SELECT ticker, interval, {_TYPED_FILE_COLS}, 0 AS _ord FROM ({agg})"
+        self.upsert_query(_aggregate_sql(f"read_parquet({_list(files)})", ticker, target))
+        return self.count(ticker, target.code) - before
+
+    def upsert_query(self, sql: str) -> None:
+        """Upsert the rows of ``sql`` (a SELECT with the bar columns, key
+        unique within it) — e.g. a copy from another bar relation."""
+        self._check_writable()
+        typed = (
+            f"SELECT CAST(ticker AS VARCHAR) AS ticker, CAST(interval AS VARCHAR) AS interval, "
+            f"{_TYPED_FILE_COLS}, 0 AS _ord FROM ({sql})"
+        )
         with self._stage(typed) as stage:
             self._write_stage(stage)
-        return self.count(ticker, target.code) - before
 
     def export_partitions(
         self,
@@ -611,7 +620,5 @@ def _link_or_copy(src: Path, dst: Path) -> None:
 
 
 def _unlink_quietly(path: Path) -> None:
-    try:
+    with contextlib.suppress(OSError):
         path.unlink()
-    except OSError:
-        pass
