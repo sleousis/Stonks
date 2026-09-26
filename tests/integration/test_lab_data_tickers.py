@@ -168,3 +168,15 @@ def test_runner_adds_the_strategy_references_before_tuning(lake):
     ds = with_strategy_references(_dataset(lake), IntramarketDifferenceStrategy, PARAMS)
     assert ds.reference_tickers == (REF,)
     assert ds.universe == [T]
+
+
+def test_backtest_is_the_same_with_the_reference_inside_or_outside_the_universe(lake):
+    import dataclasses
+
+    strategy = IntramarketDifferenceStrategy(PARAMS)
+    outside = _dataset(lake).for_strategy(strategy)
+    inside = dataclasses.replace(outside, universe=[T, REF], reference_tickers=())
+    a = run_backtest(IntramarketDifferenceStrategy(PARAMS), outside, outside.full_window)
+    b = run_backtest(IntramarketDifferenceStrategy(PARAMS), inside, inside.full_window)
+    assert a.trade_stats.n_trades > 0
+    assert a.equity_curve == b.equity_curve
