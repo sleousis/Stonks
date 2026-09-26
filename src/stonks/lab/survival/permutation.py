@@ -37,8 +37,8 @@ import pandas as pd
 
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy, SurvivalReport
-from stonks.lab.backtesting import run_backtest
 from stonks.features.price_adjustment import SeriesAdjustment
+from stonks.lab.backtesting import run_backtest
 from stonks.lab.lake_copy import CORPORATE_ACTION_TABLES, copy_universe_lake
 from stonks.lab.parallel import PortableLake, PortableStrategy, run_tasks
 from stonks.lab.survival.base import TuningSetup
