@@ -106,9 +106,7 @@ def test_sweep_runs_as_a_job_with_typed_results(client):
 
 def test_sweep_rejects_registration_and_unknown_strategies(client):
     base = {"universe": ["UP.US"], "start": "2025-10-01", "end": "2026-04-01"}
-    bad = client.post(
-        "/api/lab/sweeps", json={**base, "register_if_passes": True}, headers=AUTH
-    )
+    bad = client.post("/api/lab/sweeps", json={**base, "register_if_passes": True}, headers=AUTH)
     assert bad.status_code == 422
     unknown = client.post("/api/lab/sweeps", json={**base, "strategies": ["nope"]}, headers=AUTH)
     assert unknown.status_code == 422
