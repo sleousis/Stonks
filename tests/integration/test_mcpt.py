@@ -555,3 +555,63 @@ def test_parallel_scores_a_fitted_strategy_like_serial(lake_gbm):
 def test_max_workers_must_be_positive():
     with pytest.raises(ValueError):
         MonteCarloPermutationTest(max_workers=0)
+
+
+# ---- edge cases ------------------------------------------------------------------------
+
+
+class _MinimizeSharpe(SharpeObjective):
+    direction = "minimize"
+    name = "neg_sharpe"
+
+
+def _fixed_scores(monkeypatch, real: float, perms: list[float]):
+    from stonks.lab.survival import permutation as perm
+
+    monkeypatch.setattr(perm.PermutationScorer, "score_real", lambda self: real)
+    monkeypatch.setattr(perm, "permuted_scores", lambda *a, **k: list(perms))
+
+
+def test_minimize_in_retune_mode_counts_lower_scores(lake_gbm, monkeypatch):
+    lake, dates = lake_gbm
+    _fixed_scores(monkeypatch, 1.0, [2.0, 3.0, 0.5])
+    test = MonteCarloPermutationTest(n_permutations=3, max_p_value=1.0, retune=True)
+    test.bind_tuning(TuningSetup(tuner=_WindowTuner(), objective=_MinimizeSharpe(), budget=1))
+    report = test.run(BuyAndHold({"ticker": "RND.US"}), _gbm_dataset(lake, dates))
+    # only 0.5 is at least as good as 1.0 when lower is better
+    assert report.metrics["p_value"] == pytest.approx(2 / 4)
+
+
+def test_real_and_permuted_scores_all_inf_fail(lake_gbm, monkeypatch):
+    lake, dates = lake_gbm
+    inf = float("inf")
+    _fixed_scores(monkeypatch, inf, [inf, inf, inf])
+    report = MonteCarloPermutationTest(n_permutations=3).run(
+        BuyAndHold({"ticker": "RND.US"}), _gbm_dataset(lake, dates)
+    )
+    assert report.metrics["p_value"] == pytest.approx(1.0)
+    assert report.passed is False
+
+
+def test_a_nan_real_score_fails(lake_gbm, monkeypatch):
+    lake, dates = lake_gbm
+    _fixed_scores(monkeypatch, float("nan"), [0.1, 0.2, 0.3])
+    report = MonteCarloPermutationTest(n_permutations=3).run(
+        BuyAndHold({"ticker": "RND.US"}), _gbm_dataset(lake, dates)
+    )
+    assert report.passed is False
+    assert "insufficient data" in report.notes
+
+
+def test_profit_factor_metric_reads_the_bar_profit_factor(monkeypatch):
+    # RS-35: the MCPT reads bar_profit_factor, never the deprecated alias
+    from types import SimpleNamespace
+
+    from stonks.lab.survival import permutation as perm
+
+    monkeypatch.setattr(
+        perm, "run_backtest", lambda *a, **k: SimpleNamespace(bar_profit_factor=2.5)
+    )
+    score = perm.BacktestScore("profit_factor", (date(2025, 1, 1), date(2025, 2, 1)))
+    assert score(None, None) == 2.5
+    assert perm.BacktestScore("bar_profit_factor", score.window)(None, None) == 2.5
