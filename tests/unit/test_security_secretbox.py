@@ -15,8 +15,9 @@ from stonks.security import (
     generate_key,
 )
 
-K1 = generate_key()
-K2 = generate_key()
+# Fixed keys: parametrize ids must be identical in every xdist worker.
+K1 = base64.urlsafe_b64encode(bytes(range(32))).decode()
+K2 = base64.urlsafe_b64encode(bytes(range(32, 64))).decode()
 
 
 def _box(*pairs: tuple[str, str]) -> SecretBox:

@@ -396,7 +396,52 @@ def test_disconnect_survives_a_remote_failure(service, alice, state, monkeypatch
     assert service.list(alice) == []
 
 
+def test_disconnect_survives_an_unexpected_remote_bug(service, alice, monkeypatch):
+    link = service.start_portal(alice, "fake_portal", "https://stonks.example/cb")
+    rec = service.complete_portal(alice, link.connection_id, _state_from(link.url))
+    secret = f"portal-stonks-{rec.id}"
+
+    def boom(*a, **k):
+        raise RuntimeError(f"vendor bug with {secret}")
+
+    monkeypatch.setattr(fake.FakePortalConnection, "unregister_user", classmethod(boom))
+    result = service.disconnect(alice, rec.id)
+    assert result.remote_removed is False
+    assert secret not in (result.remote_error or "")
+    assert "RuntimeError" in (result.remote_error or "")
+
+
 # ---- secrets hygiene ---------------------------------------------------------------
+
+
+def test_unexpected_provider_errors_fail_one_sync_without_leaking(service, alice, bob):
+    a = _connect(service, alice)
+    b = _connect(service, bob, token="bob-token-987654")
+    book_for(TOKEN).fail = RuntimeError(f"KeyError near {TOKEN}")  # type: ignore[assignment]
+    results = {r.connection_id: r for r in service.sync_due(ADMIN)}
+    assert results[a.id].status == "error"
+    assert TOKEN not in (results[a.id].error or "")
+    assert "RuntimeError" in (results[a.id].error or "")
+    assert results[b.id].status == "ok"  # one broken connection doesn't stop the pass
+
+
+def test_unexpected_errors_while_connecting_do_not_leak(service, alice, monkeypatch):
+    def boom(self):
+        raise RuntimeError(f"bad parse of {TOKEN}")
+
+    monkeypatch.setattr(fake.FakeConnection, "accounts", boom)
+    with pytest.raises(ConnectionsError) as info:
+        _connect(service, alice)
+    assert TOKEN not in str(info.value)
+    assert info.value.__cause__ is None
+
+
+def test_sync_due_skips_disabled_users(service, alice, state):
+    from stonks.accounts import UserRepository
+
+    _connect(service, alice)
+    UserRepository(state).set_status(alice.user_id, "disabled", actor="t")
+    assert service.sync_due(ADMIN) == []
 
 
 def test_no_secret_reaches_the_database_in_clear(service, alice, state):

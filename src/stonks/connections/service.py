@@ -498,6 +498,10 @@ class ConnectionService:
             except (ConnectionsError, SecretBoxError) as exc:
                 remote_removed = False
                 remote_error = _short(str(exc))
+            except Exception as exc:  # a provider bug must not block removal
+                remote_removed = False
+                remote_error = _unexpected(record.provider, "remove the provider-side user", exc)
+            if remote_error:
                 _log.warning("connections.remote_remove_failed", connection_id=connection_id,
                              provider=record.provider, error=remote_error)  # fmt: skip
         now = self._clock()
@@ -553,8 +557,9 @@ class ConnectionService:
             raise ConnectionsError("scheduled syncs run as a service principal")
         now = _iso(self._clock())
         rows = self._state.sql(
-            "SELECT * FROM broker_connections WHERE status = 'active'"
-            " AND (next_sync_at IS NULL OR next_sync_at <= ?) ORDER BY next_sync_at, id",
+            "SELECT c.* FROM broker_connections c JOIN users u ON u.id = c.user_id"
+            " WHERE c.status = 'active' AND u.status = 'active'"
+            " AND (c.next_sync_at IS NULL OR c.next_sync_at <= ?) ORDER BY c.next_sync_at, c.id",
             [now],
         )
         jobs: list[tuple[_Job, ProviderContext]] = []
@@ -562,7 +567,9 @@ class ConnectionService:
             record = ConnectionRecord.from_row(row)
             try:
                 cls = enabled_provider(self.config, record.provider)
-            except ConnectionsError:
+            except ConnectionsError as exc:
+                _log.warning("connections.sync_skipped", connection_id=record.id,
+                             provider=record.provider, reason=str(exc))  # fmt: skip
                 continue
             jobs.append((self._job(record, cls), self._context(cls, record.id)))
         if not jobs:
@@ -943,6 +950,10 @@ class ConnectionService:
                 conn.close()
         except ProviderError as exc:
             raise _redacted(exc, credentials) from None
+        except ConnectionsError as exc:
+            raise ConnectionsError(credentials.redact(str(exc))) from None
+        except Exception as exc:
+            raise ConnectionsError(_unexpected(cls.provider, "connect", exc)) from None
 
     def _insert_connection(
         self,
@@ -1053,6 +1064,8 @@ def _fetch(job: _Job, context: ProviderContext) -> _Fetch:
         out.error = _redacted(exc, credentials)
     except ConnectionsError as exc:
         out.error = ConnectionsError(credentials.redact(str(exc)))
+    except Exception as exc:  # a provider bug fails this connection, not the pass
+        out.error = ConnectionsError(_unexpected(job.record.provider, "sync", exc))
     return out
 
 
@@ -1064,6 +1077,14 @@ def _redacted(exc: ProviderError, credentials: Credentials) -> ProviderError:
     clean.__cause__ = clean.__context__ = None
     clean.__traceback__ = None
     return clean
+
+
+def _unexpected(provider: str, what: str, exc: BaseException) -> str:
+    """A safe message for an exception we didn't anticipate: its type only,
+    since its text may carry vendor payloads or credentials."""
+    _log.error("connections.unexpected_error", provider=provider, action=what,
+               error_type=type(exc).__name__)  # fmt: skip
+    return f"{provider}: could not {what} (unexpected {type(exc).__name__})"
 
 
 def _require_person(scope: Scope) -> None:
