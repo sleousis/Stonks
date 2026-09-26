@@ -1,110 +1,324 @@
 <app-page-header
   title="Settings"
-  description="API access and display preferences for this browser."
-/>
+  description="API access and display preferences for this browser, and the server's configuration."
+>
+  <button actions type="button" class="btn" (click)="reloadConfig()">Reload configuration</button>
+</app-page-header>
 
-<div class="stack">
-  <section class="panel" aria-labelledby="token-title">
-    <div class="panel-head">
-      <h2 id="token-title">API token</h2>
-      <span class="state" [class.set]="hasToken()">
-        {{ hasToken() ? 'Set for this tab' : 'Not set' }}
-      </span>
-    </div>
-    <div class="panel-body">
-      <p class="lead">
-        Actions that change something (promote, retire, run a tick, start a backtest) need the token
-        from <code>STONKS_API_TOKEN</code>. It stays in this tab only and is cleared when the tab
-        closes.
-      </p>
+<div class="page-grid">
+  <div class="column span-6">
+    <!-- Token ----------------------------------------------------------------->
+    <section class="panel" aria-labelledby="token-title">
+      <div class="panel-head">
+        <h2 id="token-title">API token</h2>
+        <app-status-pill
+          [status]="hasToken() ? 'ok' : 'disabled'"
+          [label]="hasToken() ? 'Set for this tab' : 'Not set'"
+        />
+      </div>
+      <div class="panel-body">
+        <p class="lead">
+          Actions that change something (promote, retire, run a tick, start a backtest or ingest)
+          need the token from <code>STONKS_API_TOKEN</code>. It stays in this tab only and is
+          cleared when the tab closes.
+        </p>
 
-      <form class="form-grid" [formGroup]="tokenForm" (ngSubmit)="saveToken()">
-        <div class="field">
-          <label for="api-token">{{ hasToken() ? 'Replace token' : 'Token' }}</label>
-          <div class="with-button">
-            <input
-              id="api-token"
-              class="input"
-              formControlName="token"
-              autocomplete="off"
-              autocapitalize="off"
-              spellcheck="false"
-              [type]="showToken() ? 'text' : 'password'"
-              [attr.aria-invalid]="
-                tokenForm.controls.token.touched && tokenForm.controls.token.invalid
-              "
-              aria-describedby="api-token-hint api-token-error"
-            />
+        <form class="form-grid" [formGroup]="tokenForm" (ngSubmit)="saveToken()">
+          <div class="field">
+            <label for="api-token">{{ hasToken() ? 'Replace token' : 'Token' }}</label>
+            <div class="with-button">
+              <input
+                id="api-token"
+                class="input"
+                formControlName="token"
+                autocomplete="off"
+                autocapitalize="off"
+                spellcheck="false"
+                [type]="showToken() ? 'text' : 'password'"
+                [attr.aria-invalid]="
+                  tokenForm.controls.token.touched && tokenForm.controls.token.invalid
+                "
+                aria-describedby="api-token-hint api-token-error"
+              />
+              <button
+                type="button"
+                class="btn"
+                [attr.aria-pressed]="showToken()"
+                [attr.aria-label]="showToken() ? 'Hide token' : 'Show token'"
+                (click)="showToken.set(!showToken())"
+              >
+                {{ showToken() ? 'Hide' : 'Show' }}
+              </button>
+            </div>
+            @if (
+              tokenForm.controls.token.touched && tokenForm.controls.token.hasError('required')
+            ) {
+              <span id="api-token-error" class="error">Enter the token to save it.</span>
+            } @else {
+              <span id="api-token-hint" class="hint">Paste the value of STONKS_API_TOKEN.</span>
+            }
+          </div>
+          <div class="actions">
+            <button type="submit" class="btn btn-primary">Save token</button>
             <button
               type="button"
               class="btn"
-              aria-label="Show token"
-              [attr.aria-pressed]="showToken()"
-              (click)="showToken.set(!showToken())"
+              [disabled]="testing()"
+              [attr.aria-busy]="testing()"
+              (click)="testToken()"
             >
-              Show
+              {{ testing() ? 'Testing…' : 'Test token' }}
             </button>
+            @if (hasToken()) {
+              <button type="button" class="btn" (click)="clearToken()">Remove token</button>
+            }
           </div>
-          @if (tokenForm.controls.token.touched && tokenForm.controls.token.hasError('required')) {
-            <span id="api-token-error" class="error">Enter the token to save it.</span>
-          } @else {
-            <span id="api-token-hint" class="hint">Paste the value of STONKS_API_TOKEN.</span>
+        </form>
+
+        <div class="token-result" role="status" aria-live="polite">
+          @if (tokenCheck(); as check) {
+            <p class="check-result" [attr.data-state]="check.state">
+              <app-status-pill
+                [status]="check.state"
+                [tone]="
+                  check.state === 'valid'
+                    ? 'positive'
+                    : check.state === 'invalid'
+                      ? 'negative'
+                      : 'warn'
+                "
+                [label]="
+                  check.state === 'valid'
+                    ? 'Accepted'
+                    : check.state === 'invalid'
+                      ? 'Rejected'
+                      : 'Not verified'
+                "
+              />
+              <span>{{ check.message }}</span>
+            </p>
           }
         </div>
-        <div class="actions">
-          <button type="submit" class="btn btn-primary">Save token</button>
-          @if (hasToken()) {
-            <button type="button" class="btn" (click)="clearToken()">Remove token</button>
-          }
-        </div>
-      </form>
 
-      <form [formGroup]="readsForm" class="reads">
-        <label class="check">
-          <input type="checkbox" formControlName="sendOnReads" (change)="toggleReads()" />
-          Send the token when reading data too
-        </label>
-        <p class="hint">
-          Needed only when the API is not on this machine; reads are open on localhost.
-        </p>
-      </form>
-    </div>
-  </section>
-
-  <section class="panel" aria-labelledby="theme-title">
-    <div class="panel-head">
-      <h2 id="theme-title">Theme</h2>
-    </div>
-    <div class="panel-body">
-      <fieldset class="themes">
-        <legend class="visually-hidden">Theme</legend>
-        @for (option of themes; track option.value) {
+        <form [formGroup]="readsForm" class="reads">
           <label class="check">
-            <input
-              type="radio"
-              name="theme"
-              [value]="option.value"
-              [checked]="theme.mode() === option.value"
-              (change)="setTheme(option.value)"
-            />
-            {{ option.label }}
+            <input type="checkbox" formControlName="sendOnReads" (change)="toggleReads()" />
+            Send the token when reading data too
           </label>
-        }
-      </fieldset>
-    </div>
-  </section>
+          <p class="hint">
+            Needed only when the API is not on this machine; reads are open on localhost.
+          </p>
+        </form>
+      </div>
+    </section>
 
-  <section class="panel" aria-labelledby="keys-title">
-    <div class="panel-head">
-      <h2 id="keys-title">Keyboard</h2>
-    </div>
-    <div class="panel-body">
-      <p class="lead">
-        Press <kbd>g</kbd> then a letter to jump to a page: <kbd>d</kbd> dashboard,
-        <kbd>s</kbd> strategies, <kbd>w</kbd> shadow, <kbd>o</kbd> orders, <kbd>u</kbd> studio,
-        <kbd>l</kbd> lab, <kbd>a</kbd> data, <kbd>g</kbd> go-live, <kbd>h</kbd> health,
-        <kbd>,</kbd> settings.
-      </p>
-    </div>
-  </section>
+    <!-- Theme ----------------------------------------------------------------->
+    <section class="panel" aria-labelledby="theme-title">
+      <div class="panel-head">
+        <h2 id="theme-title">Theme</h2>
+        <span class="muted">Now {{ theme.resolved() }}</span>
+      </div>
+      <div class="panel-body">
+        <fieldset class="themes">
+          <legend class="visually-hidden">Theme</legend>
+          @for (option of themes; track option.value) {
+            <label class="check">
+              <input
+                type="radio"
+                name="theme"
+                [value]="option.value"
+                [checked]="theme.mode() === option.value"
+                (change)="setTheme(option.value)"
+              />
+              {{ option.label }}
+            </label>
+          }
+        </fieldset>
+      </div>
+    </section>
+
+    <!-- Keyboard -------------------------------------------------------------->
+    <section class="panel" aria-labelledby="keys-title">
+      <div class="panel-head">
+        <h2 id="keys-title">Keyboard</h2>
+      </div>
+      <div class="panel-body">
+        <p class="lead">
+          Press <kbd>g</kbd> then a letter to jump to a page: <kbd>d</kbd> dashboard,
+          <kbd>s</kbd> strategies, <kbd>w</kbd> shadow, <kbd>o</kbd> orders, <kbd>u</kbd> studio,
+          <kbd>l</kbd> lab, <kbd>a</kbd> data, <kbd>g</kbd> go-live, <kbd>h</kbd> health,
+          <kbd>,</kbd> settings.
+        </p>
+      </div>
+    </section>
+  </div>
+
+  <div class="column span-6">
+    <!-- Broker ---------------------------------------------------------------->
+    <section class="panel" aria-labelledby="broker-title">
+      <div class="panel-head">
+        <h2 id="broker-title">Broker</h2>
+        @if (broker.hasValue()) {
+          <app-status-pill
+            [status]="broker.value().paper ? 'paper' : 'live'"
+            [tone]="broker.value().paper ? 'info' : 'warn'"
+            [label]="broker.value().paper ? 'Paper' : 'Live'"
+          />
+        }
+      </div>
+      @if (broker.error(); as err) {
+        <app-error-state title="Could not load the broker" [error]="err" (retry)="broker.reload()" />
+      } @else if (!broker.hasValue()) {
+        <app-loading-state label="Loading broker" [rows]="4" />
+      } @else {
+        <dl class="facts">
+          @for (f of brokerFacts(); track f.label) {
+            <div>
+              <dt>{{ f.label }}</dt>
+              <dd>{{ f.value }}</dd>
+            </div>
+          }
+        </dl>
+        @if (broker.value().kind === 'alpaca') {
+          <div class="sub">
+            <h3>Alpaca connection</h3>
+            @if (alpaca.error(); as err) {
+              <app-error-state
+                title="Could not check Alpaca"
+                [error]="err"
+                (retry)="alpaca.reload()"
+              />
+            } @else if (!alpaca.hasValue()) {
+              <app-loading-state label="Checking Alpaca" [rows]="3" />
+            } @else {
+              <p class="connection">
+                <app-status-pill
+                  [status]="alpaca.value().connected ? 'ok' : 'error'"
+                  [label]="alpaca.value().connected ? 'Connected' : 'Not connected'"
+                />
+                @if (alpaca.value().error; as reason) {
+                  <span class="reason">{{ reason }}</span>
+                }
+              </p>
+              @if (alpacaFacts().length) {
+                <dl class="facts">
+                  @for (f of alpacaFacts(); track f.label) {
+                    <div>
+                      <dt>{{ f.label }}</dt>
+                      <dd class="num">{{ f.value }}</dd>
+                    </div>
+                  }
+                </dl>
+              }
+            }
+          </div>
+        }
+      }
+    </section>
+
+    <!-- Risk ------------------------------------------------------------------>
+    <section class="panel" aria-labelledby="risk-title">
+      <div class="panel-head">
+        <h2 id="risk-title">Risk policy</h2>
+        <span class="muted">[production.risk]</span>
+      </div>
+      @if (risk.error(); as err) {
+        <app-error-state title="Could not load the risk policy" [error]="err" (retry)="risk.reload()" />
+      } @else if (!risk.hasValue()) {
+        <app-loading-state label="Loading risk policy" [rows]="5" />
+      } @else {
+        <dl class="facts">
+          @for (f of riskFacts(); track f.label) {
+            <div>
+              <dt>{{ f.label }}</dt>
+              <dd class="num">{{ f.value }}</dd>
+            </div>
+          }
+        </dl>
+      }
+    </section>
+
+    <!-- Sources --------------------------------------------------------------->
+    <section class="panel" aria-labelledby="sources-title">
+      <div class="panel-head">
+        <h2 id="sources-title">Data sources</h2>
+      </div>
+      @if (sources.error(); as err) {
+        <app-error-state title="Could not load data sources" [error]="err" (retry)="sources.reload()" />
+      } @else if (!sources.hasValue()) {
+        <app-loading-state label="Loading data sources" [rows]="3" />
+      } @else if (sources.value().length === 0) {
+        <app-empty-state title="No data sources" message="The API lists no ingest sources." />
+      } @else {
+        <ul class="list">
+          @for (s of sources.value(); track s.id) {
+            <li>
+              <div class="list-main">
+                <span class="list-title">{{ s.id }}</span>
+                @if (s.default) {
+                  <span class="tag">Default</span>
+                }
+              </div>
+              <app-status-pill
+                [status]="s.configured ? 'ok' : 'disabled'"
+                [label]="s.configured ? 'Configured' : 'Not configured'"
+              />
+              @if (s.detail) {
+                <p class="list-detail">{{ s.detail }}</p>
+              }
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <!-- Cost models ----------------------------------------------------------->
+    <section class="panel" aria-labelledby="costs-title">
+      <div class="panel-head">
+        <h2 id="costs-title">Cost-model presets</h2>
+      </div>
+      @if (costModels.error(); as err) {
+        <app-error-state
+          title="Could not load cost models"
+          [error]="err"
+          (retry)="costModels.reload()"
+        />
+      } @else if (!costModels.hasValue()) {
+        <app-loading-state label="Loading cost models" [rows]="4" />
+      } @else if (costModels.value().length === 0) {
+        <app-empty-state title="No presets" message="The API lists no cost-model presets." />
+      } @else {
+        @for (preset of costModels.value(); track preset.name) {
+          <div class="preset">
+            <h3>{{ preset.name }}</h3>
+            <p class="list-detail">{{ preset.description }}</p>
+            <table class="mini">
+              <caption class="visually-hidden">
+                {{ preset.name }} costs by asset class
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Scope</th>
+                  <th scope="col" class="num">Fee</th>
+                  <th scope="col" class="num">Half spread</th>
+                  <th scope="col" class="num">Flat fee</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of costRows(preset); track row.scope) {
+                  <tr>
+                    <th scope="row">{{ row.scope }}</th>
+                    <td class="num">{{ row.fee }}</td>
+                    <td class="num">{{ row.spread }}</td>
+                    <td class="num">{{ row.flat }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+            <p class="hint">Market impact {{ impact(preset) }}.</p>
+          </div>
+        }
+      }
+    </section>
+  </div>
 </div>
