@@ -1,0 +1,438 @@
+@let s = spec();
+
+<!-- Basics ------------------------------------------------------------------>
+<section class="block" aria-labelledby="rb-basics">
+  <h3 id="rb-basics">Basics</h3>
+  <div class="form-grid form-grid-2 wide">
+    <div class="field">
+      <label for="rb-name">Strategy name</label>
+      <input
+        id="rb-name"
+        class="input"
+        maxlength="100"
+        data-path="name"
+        [attr.aria-invalid]="invalid('name')"
+        [value]="s.name"
+        (input)="setText('name', $any($event.target).value)"
+      />
+      @for (m of err('name'); track $index) {
+        <p class="error">{{ m }}</p>
+      }
+    </div>
+    <div class="field">
+      <label for="rb-interval">Bar interval</label>
+      <select
+        id="rb-interval"
+        class="input"
+        data-path="interval"
+        [attr.aria-invalid]="invalid('interval')"
+        [value]="s.interval"
+        (change)="setText('interval', $any($event.target).value)"
+      >
+        @for (iv of intervals; track iv) {
+          <option [value]="iv">{{ iv }}</option>
+        }
+        @if (!intervals.includes($any(s.interval))) {
+          <option [value]="s.interval">{{ s.interval }}</option>
+        }
+      </select>
+      <p class="hint">Periods below count bars of this size.</p>
+      @for (m of err('interval'); track $index) {
+        <p class="error">{{ m }}</p>
+      }
+    </div>
+    <div class="field span-all">
+      <label for="rb-description">Description <span class="muted">(optional)</span></label>
+      <textarea
+        id="rb-description"
+        class="input textarea"
+        rows="2"
+        maxlength="2000"
+        data-path="description"
+        [value]="s.description"
+        (input)="setText('description', $any($event.target).value)"
+      ></textarea>
+    </div>
+  </div>
+</section>
+
+<!-- Universe ---------------------------------------------------------------->
+<section class="block" aria-labelledby="rb-universe">
+  <h3 id="rb-universe">Universe</h3>
+  <fieldset class="field plain" data-path="universe.asset_classes">
+    <legend>Asset classes</legend>
+    <div class="chips">
+      @for (ac of assetClasses(); track ac) {
+        <label class="chip check">
+          <input
+            type="checkbox"
+            [checked]="s.universe.asset_classes.includes(ac)"
+            (change)="toggleAssetClass(ac, $any($event.target).checked)"
+          />
+          {{ ac }}
+        </label>
+      }
+    </div>
+    @for (m of err('universe.asset_classes'); track $index) {
+      <p class="error">{{ m }}</p>
+    }
+  </fieldset>
+  <div class="field">
+    <label for="rb-tickers">Only these tickers <span class="muted">(optional)</span></label>
+    <input
+      id="rb-tickers"
+      class="input"
+      placeholder="AAPL.US, MSFT.US"
+      autocapitalize="characters"
+      spellcheck="false"
+      data-path="universe.tickers"
+      [attr.aria-invalid]="invalid('universe.tickers')"
+      [value]="tickersText()"
+      (change)="setTickers($any($event.target).value)"
+    />
+    <p class="hint">Leave empty to trade every ticker of the chosen classes.</p>
+    @for (m of err('universe.tickers'); track $index) {
+      <p class="error">{{ m }}</p>
+    }
+  </div>
+</section>
+
+<!-- Indicators -------------------------------------------------------------->
+<section class="block" aria-labelledby="rb-indicators">
+  <div class="block-head">
+    <h3 id="rb-indicators">Indicators</h3>
+    <span class="muted num">{{ s.indicators.length }} of 32</span>
+  </div>
+  <p class="hint">Name each series once, then use it in the rules below.</p>
+  @for (m of err('indicators'); track $index) {
+    <p class="error" data-path="indicators">{{ m }}</p>
+  }
+  <ul class="indicators">
+    @for (ind of s.indicators; track $index; let i = $index) {
+      @let k = kindOf(ind);
+      @let at = 'indicators[' + i + ']';
+      <li class="indicator">
+        <div class="field">
+          <label [for]="'rb-ind-id-' + i">Name</label>
+          <input
+            class="input mono"
+            spellcheck="false"
+            autocapitalize="off"
+            [id]="'rb-ind-id-' + i"
+            [attr.data-path]="at + '.id'"
+            [attr.aria-invalid]="invalid(at + '.id')"
+            [value]="ind.id"
+            (input)="renameIndicator(i, $any($event.target).value)"
+          />
+        </div>
+        <div class="field">
+          <label [for]="'rb-ind-kind-' + i">Kind</label>
+          <select
+            class="input"
+            [id]="'rb-ind-kind-' + i"
+            [attr.data-path]="at + '.kind'"
+            [attr.aria-invalid]="invalid(at + '.kind')"
+            [value]="ind.kind"
+            (change)="setKind(i, $any($event.target).value)"
+          >
+            @for (opt of kinds(); track opt.kind) {
+              <option [value]="opt.kind">{{ opt.label }}</option>
+            }
+            @if (!k) {
+              <option [value]="ind.kind">{{ ind.kind }} (unknown)</option>
+            }
+          </select>
+        </div>
+        @if (k?.period; as bounds) {
+          <div class="field">
+            <label [for]="'rb-ind-period-' + i">Period</label>
+            <input
+              class="input"
+              type="number"
+              inputmode="numeric"
+              step="1"
+              [id]="'rb-ind-period-' + i"
+              [min]="bounds.min"
+              [max]="bounds.max"
+              [attr.data-path]="at + '.period'"
+              [attr.aria-invalid]="invalid(at + '.period')"
+              [value]="ind.period ?? ''"
+              (change)="setPeriod(i, $any($event.target).value)"
+            />
+          </div>
+        }
+        @if (k?.sources; as sources) {
+          <div class="field">
+            <label [for]="'rb-ind-source-' + i">Of</label>
+            <select
+              class="input"
+              [id]="'rb-ind-source-' + i"
+              [attr.data-path]="at + '.source'"
+              [value]="ind.source ?? 'close'"
+              (change)="setSource(i, $any($event.target).value)"
+            >
+              @for (src of sources; track src) {
+                <option [value]="src">{{ src }}</option>
+              }
+            </select>
+          </div>
+        }
+        <button
+          type="button"
+          class="btn btn-ghost btn-icon remove"
+          [attr.aria-label]="'Remove indicator ' + (ind.id || i + 1)"
+          [title]="'Remove ' + (ind.id || 'indicator')"
+          [disabled]="s.indicators.length <= 1"
+          (click)="removeIndicator(i)"
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+        @if (k) {
+          <p class="hint describe">{{ k.description }}</p>
+        }
+        @for (field of ['', '.id', '.kind', '.period', '.source']; track field) {
+          @for (m of err(at + field); track $index) {
+            <p class="error describe">{{ m }}</p>
+          }
+        }
+      </li>
+    }
+  </ul>
+  <div class="add-row">
+    <label class="visually-hidden" for="rb-new-kind">Indicator kind to add</label>
+    <select
+      id="rb-new-kind"
+      class="input"
+      [value]="newKind()"
+      (change)="newKind.set($any($event.target).value)"
+    >
+      @for (opt of kinds(); track opt.kind) {
+        <option [value]="opt.kind">{{ opt.label }}</option>
+      }
+    </select>
+    <button type="button" class="btn" [disabled]="!canAddIndicator()" (click)="addIndicator()">
+      Add indicator
+    </button>
+  </div>
+</section>
+
+<!-- Entry ------------------------------------------------------------------->
+<section class="block" aria-labelledby="rb-entry">
+  <h3 id="rb-entry">Buy when</h3>
+  <p class="hint">Checked on every bar for each ticker in the universe.</p>
+  <app-condition-editor
+    class="tree"
+    path="entry"
+    [node]="s.entry"
+    [indicatorIds]="indicatorIds()"
+    [issues]="issues()"
+    [removable]="false"
+    (nodeChange)="setEntry($event)"
+  />
+</section>
+
+<!-- Exit -------------------------------------------------------------------->
+<section class="block" aria-labelledby="rb-exit">
+  <h3 id="rb-exit">Sell when</h3>
+  <label class="check">
+    <input
+      type="checkbox"
+      [checked]="s.exit !== null"
+      (change)="toggleExit($any($event.target).checked)"
+    />
+    Use an exit rule
+  </label>
+  @if (s.exit; as exitNode) {
+    <app-condition-editor
+      class="tree"
+      path="exit"
+      [node]="exitNode"
+      [indicatorIds]="indicatorIds()"
+      [issues]="issues()"
+      [removable]="false"
+      (nodeChange)="setExit($event)"
+    />
+  }
+  <label class="check">
+    <input
+      type="checkbox"
+      [checked]="s.exit_when_entry_false"
+      (change)="setExitWhenEntryFalse($any($event.target).checked)"
+    />
+    Also sell as soon as the buy rule stops being true
+  </label>
+</section>
+
+<!-- Rank + sizing ----------------------------------------------------------->
+<section class="block" aria-labelledby="rb-sizing">
+  <h3 id="rb-sizing">Ranking and sizing</h3>
+  <div class="form-grid form-grid-2 wide">
+    <div class="field">
+      <label for="rb-rank-by">Rank candidates by</label>
+      <select
+        id="rb-rank-by"
+        class="input"
+        data-path="rank.by"
+        aria-describedby="rb-rank-by-err"
+        [attr.aria-invalid]="invalid('rank.by')"
+        [value]="s.rank.by"
+        (change)="setRank('by', $any($event.target).value)"
+      >
+        @for (id of indicatorIds(); track $index) {
+          <option [value]="id">{{ id }}</option>
+        }
+        @if (!indicatorIds().includes(s.rank.by)) {
+          <option [value]="s.rank.by">{{ s.rank.by || 'Choose an indicator' }}</option>
+        }
+      </select>
+      <div id="rb-rank-by-err">
+        @for (m of err('rank.by'); track $index) {
+          <p class="error">{{ m }}</p>
+        }
+      </div>
+    </div>
+    <div class="field">
+      <label for="rb-rank-order">Order</label>
+      <select
+        id="rb-rank-order"
+        class="input"
+        data-path="rank.order"
+        [value]="s.rank.order"
+        (change)="setRank('order', $any($event.target).value)"
+      >
+        <option value="desc">Highest first</option>
+        <option value="asc">Lowest first</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="rb-max-pos">Max positions</label>
+      <input
+        id="rb-max-pos"
+        class="input"
+        type="number"
+        inputmode="numeric"
+        min="1"
+        max="100"
+        step="1"
+        data-path="sizing.max_positions"
+        [attr.aria-invalid]="invalid('sizing.max_positions')"
+        [value]="s.sizing.max_positions"
+        (change)="setSizing('max_positions', $any($event.target).value)"
+      />
+      @for (m of err('sizing.max_positions'); track $index) {
+        <p class="error">{{ m }}</p>
+      }
+    </div>
+    <div class="field">
+      <label for="rb-alloc">Capital to deploy (%)</label>
+      <input
+        id="rb-alloc"
+        class="input"
+        type="number"
+        inputmode="decimal"
+        min="1"
+        max="100"
+        step="any"
+        data-path="sizing.allocation"
+        [attr.aria-invalid]="invalid('sizing.allocation')"
+        [value]="pct(s.sizing.allocation)"
+        (change)="setAllocation($any($event.target).value)"
+      />
+      <p class="hint">Split equally across the positions.</p>
+      @for (m of err('sizing.allocation'); track $index) {
+        <p class="error">{{ m }}</p>
+      }
+    </div>
+    <div class="field">
+      <label for="rb-topk">New entries per bar <span class="muted">(optional)</span></label>
+      <input
+        id="rb-topk"
+        class="input"
+        type="number"
+        inputmode="numeric"
+        min="1"
+        max="100"
+        step="1"
+        placeholder="As many as free slots"
+        data-path="sizing.top_k"
+        [attr.aria-invalid]="invalid('sizing.top_k')"
+        [value]="s.sizing.top_k ?? ''"
+        (change)="setSizing('top_k', $any($event.target).value)"
+      />
+      @for (m of err('sizing.top_k'); track $index) {
+        <p class="error">{{ m }}</p>
+      }
+    </div>
+  </div>
+</section>
+
+<!-- Risk -------------------------------------------------------------------->
+<section class="block" aria-labelledby="rb-risk">
+  <h3 id="rb-risk">Risk exits</h3>
+  <div class="form-grid form-grid-2 wide">
+    <div class="field">
+      <label class="check">
+        <input
+          type="checkbox"
+          [checked]="s.risk.stop_loss_pct !== null"
+          (change)="toggleRisk('stop_loss_pct', $any($event.target).checked)"
+        />
+        Stop-loss
+      </label>
+      @if (s.risk.stop_loss_pct !== null) {
+        <label class="visually-hidden" for="rb-sl">Stop-loss, percent below entry</label>
+        <div class="suffixed">
+          <input
+            id="rb-sl"
+            class="input"
+            type="number"
+            inputmode="decimal"
+            min="0.1"
+            max="99.9"
+            step="any"
+            data-path="risk.stop_loss_pct"
+            [attr.aria-invalid]="invalid('risk.stop_loss_pct')"
+            [value]="pct(s.risk.stop_loss_pct)"
+            (change)="setRisk('stop_loss_pct', $any($event.target).value)"
+          />
+          <span aria-hidden="true">% below entry</span>
+        </div>
+      }
+      @for (m of err('risk.stop_loss_pct'); track $index) {
+        <p class="error">{{ m }}</p>
+      }
+    </div>
+    <div class="field">
+      <label class="check">
+        <input
+          type="checkbox"
+          [checked]="s.risk.take_profit_pct !== null"
+          (change)="toggleRisk('take_profit_pct', $any($event.target).checked)"
+        />
+        Take-profit
+      </label>
+      @if (s.risk.take_profit_pct !== null) {
+        <label class="visually-hidden" for="rb-tp">Take-profit, percent above entry</label>
+        <div class="suffixed">
+          <input
+            id="rb-tp"
+            class="input"
+            type="number"
+            inputmode="decimal"
+            min="0.1"
+            max="10000"
+            step="any"
+            data-path="risk.take_profit_pct"
+            [attr.aria-invalid]="invalid('risk.take_profit_pct')"
+            [value]="pct(s.risk.take_profit_pct)"
+            (change)="setRisk('take_profit_pct', $any($event.target).value)"
+          />
+          <span aria-hidden="true">% above entry</span>
+        </div>
+      }
+      @for (m of err('risk.take_profit_pct'); track $index) {
+        <p class="error">{{ m }}</p>
+      }
+    </div>
+  </div>
+</section>
