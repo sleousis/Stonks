@@ -1,0 +1,234 @@
+"""The ``api`` backend: start jobs through the running REST API.
+
+``stonks serve`` holds the DuckDB lake read-write and DuckDB allows one
+writing process per file, so a separate scheduler process must not open
+it. This backend starts each job on the API's own job routes and waits on
+``GET /api/jobs/{id}``, exactly as the MCP server does:
+
+- ``ingest_prices``: ``POST /api/ingest/runs`` (kind ``prices``) for the
+  universe over the last ``lookback_days`` up to the fire's date;
+- ``tick``: ``POST /api/ticks`` for the fire's date;
+- ``health``: ``GET /api/health/report``, alerting here when unhealthy;
+- ``report``: reads only the state DB, so it runs in this process.
+
+The closed-day check uses ticker suffixes for calendars (``.CC`` is
+crypto, 24/7), since the lake's asset classes are out of reach here.
+
+:class:`~stonks.scheduling.in_process.InProcessExecutor` runs the same
+jobs on the JobRunner inside ``stonks serve``; both share the job-result
+interpretation in :func:`tick_job_outcome` and :func:`health_view_outcome`.
+"""
+
+from __future__ import annotations
+
+import threading
+import time
+from collections.abc import Callable, Mapping
+from datetime import datetime, timedelta
+from typing import Any
+
+from stonks.scheduling.api_client import SchedulerApiClient
+from stonks.scheduling.jobs import (
+    ActionRegistry,
+    JobExecutor,
+    JobOutcome,
+    RunContext,
+    closed_day_outcome,
+    job_universe,
+)
+
+API_ACTIONS = ActionRegistry("api")
+
+TERMINAL_JOB_STATUSES = frozenset({"succeeded", "failed", "cancelled"})
+
+#: Substring of the tick's refusal to trade a date older than its latest
+#: snapshot (``BackdatedTickError``): a late catch-up, not a failure.
+_BACKDATED = "refusing to trade as_of"
+
+
+class JobWaitTimeoutError(TimeoutError):
+    pass
+
+
+def tick_job_outcome(
+    job_status: str, job_error: str | None, result: Mapping[str, Any] | None, job_id: str
+) -> JobOutcome:
+    """Interpret a finished tick job (API or JobRunner).
+
+    A failed tick raised inside ``run_tick``, which already alerted;
+    requests rejected before the tick started (backdated, bad universe)
+    did not."""
+    if job_status == "succeeded" and result is not None:
+        detail = {
+            "job_id": job_id,
+            "tick_id": result.get("tick_id"),
+            "tick_status": result.get("status"),
+            "orders_placed": result.get("orders_placed"),
+            "fills": result.get("fills"),
+        }
+        return JobOutcome("failed" if result.get("status") == "error" else "succeeded", detail)
+    error = job_error or f"tick job {job_status}"
+    if _BACKDATED in error:
+        return JobOutcome("skipped", {"reason": "backdated", "job_id": job_id, "error": error})
+    pre_tick = error.startswith(("ValidationError", "ConflictError", "NotFoundError"))
+    return JobOutcome("failed", {"job_id": job_id, "error": error}, alerted=not pre_tick)
+
+
+def ingest_job_outcome(
+    job_status: str, job_error: str | None, result: Mapping[str, Any] | None, job_id: str
+) -> JobOutcome:
+    if job_status == "succeeded" and result is not None:
+        detail = {
+            "job_id": job_id,
+            "ingest_run_id": result.get("run_id"),
+            "ingest_status": result.get("status"),
+            "tickers_ok": result.get("tickers_ok"),
+            "tickers_failed": result.get("tickers_failed"),
+        }
+        return JobOutcome("failed" if result.get("status") == "error" else "succeeded", detail)
+    return JobOutcome(
+        "failed", {"job_id": job_id, "error": job_error or f"ingest job {job_status}"}
+    )
+
+
+def health_view_outcome(ctx: RunContext, view: Mapping[str, Any]) -> JobOutcome:
+    """A ``HealthReportView`` (as JSON) through the usual health alert."""
+    from stonks.production.health import HealthCheck, HealthReport
+    from stonks.scheduling.local import health_outcome
+
+    checked_at = view.get("checked_at")
+    report = HealthReport(
+        checks=[HealthCheck(c["name"], bool(c["ok"]), c.get("detail", "")) for c in view["checks"]],
+        checked_at=datetime.fromisoformat(checked_at)
+        if isinstance(checked_at, str)
+        else (checked_at or ctx.now),
+    )
+    return health_outcome(ctx, report)
+
+
+def ingest_window(ctx: RunContext) -> tuple[str, str]:
+    lookback = int(ctx.params.get("lookback_days", 7))
+    return (ctx.fire.as_of - timedelta(days=lookback)).isoformat(), ctx.fire.as_of.isoformat()
+
+
+class ApiExecutor(JobExecutor):
+    backend = "api"
+
+    def __init__(
+        self,
+        client: SchedulerApiClient,
+        *,
+        poll_seconds: float = 2.0,
+        timeout_seconds: float = 3 * 3600,
+        sleep: Callable[[float], object] = time.sleep,
+        monotonic: Callable[[], float] = time.monotonic,
+        stop: threading.Event | None = None,
+    ) -> None:
+        self.client = client
+        self._poll = poll_seconds
+        self._timeout = timeout_seconds
+        self._sleep = sleep
+        self._monotonic = monotonic
+        self._stop = stop
+
+    def actions(self) -> set[str]:
+        return set(API_ACTIONS.names())
+
+    def execute(self, ctx: RunContext) -> JobOutcome:
+        return API_ACTIONS.get(ctx.spec.action)(ctx)
+
+    def close(self) -> None:
+        self.client.close()
+
+    def bind_stop(self, stop: threading.Event) -> None:
+        self._stop = stop
+
+    def wait_for_job(self, job_id: str) -> dict[str, Any]:
+        """Poll ``GET /api/jobs/{id}`` until the job is terminal."""
+        deadline = self._monotonic() + self._timeout
+        while True:
+            job = self.client.get(f"/api/jobs/{job_id}")
+            if job["status"] in TERMINAL_JOB_STATUSES:
+                return job
+            if self._stop is not None and self._stop.is_set():
+                raise JobWaitTimeoutError(
+                    f"scheduler stopping; job {job_id} keeps running in the API"
+                )
+            if self._monotonic() >= deadline:
+                raise JobWaitTimeoutError(f"job {job_id} still {job['status']} after timeout")
+            self._sleep(self._poll)
+
+
+def _executor(ctx: RunContext) -> ApiExecutor:
+    executor = ctx.executor
+    if not isinstance(executor, ApiExecutor):  # pragma: no cover - wiring error
+        raise TypeError("api actions need an ApiExecutor")
+    return executor
+
+
+def _run_job(
+    ex: ApiExecutor, start_path: str, body: dict[str, Any], result_path: str
+) -> tuple[str, str, str | None, dict[str, Any] | None]:
+    job = ex.client.post(start_path, body)
+    job_id = job["id"]
+    final = ex.wait_for_job(job_id)
+    result = None
+    if final["status"] == "succeeded":
+        result = ex.client.get(result_path.format(job_id=job_id))
+    return job_id, final["status"], final.get("error"), result
+
+
+@API_ACTIONS.register("ingest_prices")
+def api_ingest_prices(ctx: RunContext) -> JobOutcome:
+    ex = _executor(ctx)
+    universe = job_universe(ctx)
+    if not universe:
+        return JobOutcome("skipped", {"reason": "empty_universe"})
+    closed = closed_day_outcome(ctx, universe, {})
+    if closed is not None:
+        return closed
+    since, until = ingest_window(ctx)
+    body = {
+        "kind": "prices",
+        "source": str(ctx.params.get("source", "eodhd")),
+        "tickers": universe,
+        "since": since,
+        "until": until,
+    }
+    job_id, status, error, result = _run_job(
+        ex, "/api/ingest/runs", body, "/api/ingest/jobs/{job_id}/result"
+    )
+    return ingest_job_outcome(status, error, result, job_id)
+
+
+@API_ACTIONS.register("tick")
+def api_tick(ctx: RunContext) -> JobOutcome:
+    ex = _executor(ctx)
+    universe = job_universe(ctx)
+    if not universe:
+        return JobOutcome("skipped", {"reason": "empty_universe"})
+    closed = closed_day_outcome(ctx, universe, {})
+    if closed is not None:
+        return closed
+    body = {
+        "as_of": ctx.fire.as_of.isoformat(),
+        "tickers": universe,
+        "dry_run": bool(ctx.params.get("dry_run", False)),
+    }
+    job_id, status, error, result = _run_job(
+        ex, "/api/ticks", body, "/api/ticks/jobs/{job_id}/result"
+    )
+    return tick_job_outcome(status, error, result, job_id)
+
+
+@API_ACTIONS.register("health")
+def api_health(ctx: RunContext) -> JobOutcome:
+    view = _executor(ctx).client.get("/api/health/report", {"tickers": job_universe(ctx)})
+    return health_view_outcome(ctx, view)
+
+
+@API_ACTIONS.register("report")
+def api_report(ctx: RunContext) -> JobOutcome:
+    from stonks.scheduling.local import report_action
+
+    return report_action(ctx)

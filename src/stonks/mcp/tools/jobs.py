@@ -14,7 +14,9 @@ from stonks.mcp.tools.common import (
     JOB,
     JOB_OPEN_WORLD,
     READ,
+    Benchmark,
     CostModelName,
+    EmbargoBars,
     Hypothesis,
     IsoDate,
     LabCostModel,
@@ -25,6 +27,7 @@ from stonks.mcp.tools.common import (
     RegisterStrategy,
     SurvivalPreset,
     SurvivalTestName,
+    TestOptions,
     Tickers,
     ToolContext,
     TunerName,
@@ -75,16 +78,24 @@ class WalkForwardOptions(_Options):
         default=None, description="share of folds that must score above 0 (0..1)"
     )
     min_mean_score: float | None = Field(default=None, description="mean fold score floor")
+    min_wfe: float | None = Field(
+        default=None, description="walk-forward efficiency gate, OOS / IS return (default 0.5)"
+    )
+    matrix: bool | None = Field(
+        default=None, description="also run the train x test matrix (default false)"
+    )
 
 
 class McptOptions(_Options):
     """Settings of the ``permutation`` (Monte-Carlo permutation) survival test."""
 
-    n_permutations: int | None = Field(default=None, description="1..1000 (default 50)")
+    n_permutations: int | None = Field(default=None, description="1..1000 (default 200)")
     max_p_value: float | None = Field(default=None, description="pass threshold (default 0.05)")
     metric: Literal["profit_factor", "sharpe", "final_return", "cagr"] | None = None
-    retune: bool | None = Field(
-        default=None, description="re-tune on every permutation: (n + 1) x budget backtests"
+    retune: bool | Literal["auto"] | None = Field(
+        default=None,
+        description="re-tune on every permutation: (n + 1) x budget backtests; 'auto' re-tunes "
+        "only strategies with a non-trivial fit (the promotion preset's default)",
     )
     seed: int | None = None
 
@@ -128,6 +139,7 @@ def register(t: ToolContext) -> None:
                 "slippage_bps/fee_per_trade. Neither: the configured [backtest.costs]"
             ),
         ] = None,
+        benchmark: Benchmark = None,
     ) -> dict[str, Any]:
         """Queue a backtest of one strategy over a universe and date window.
         Returns the job; use wait_for_job to get the metrics and equity curve.
@@ -145,6 +157,7 @@ def register(t: ToolContext) -> None:
                 "slippage_bps": slippage_bps,
                 "fee_per_trade": fee_per_trade,
                 "cost_model": cost_model,
+                "benchmark": benchmark,
             }
         )
         return await t.post("/api/lab/backtests", body)
@@ -180,6 +193,9 @@ def register(t: ToolContext) -> None:
             McptOptions | None,
             Field(description="permutation (MCPT) settings; add 'permutation' to survival_tests"),
         ] = None,
+        test_options: TestOptions = None,
+        benchmark: Benchmark = None,
+        embargo_bars: EmbargoBars = None,
     ) -> dict[str, Any]:
         """Queue a lab run: tune a strategy class, fit, run the survival suite and
         give a pass/fail verdict. Returns the job; use wait_for_job for the result.
@@ -207,6 +223,9 @@ def register(t: ToolContext) -> None:
                 "premortem": premortem,
                 "walk_forward": walk_forward.body() if walk_forward else None,
                 "mcpt": mcpt.body() if mcpt else None,
+                "test_options": test_options,
+                "benchmark": benchmark,
+                "embargo_bars": embargo_bars,
             }
         )
         return await queue_lab_run(t, "/api/lab/runs", body, confirm)

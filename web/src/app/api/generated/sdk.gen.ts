@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CancelJobData, CancelJobErrors, CancelJobResponses, CheckAuthData, CheckAuthErrors, CheckAuthResponses, CreateDraftData, CreateDraftErrors, CreateDraftResponses, CreateStreamTokenData, CreateStreamTokenErrors, CreateStreamTokenResponses, DeleteDraftData, DeleteDraftErrors, DeleteDraftResponses, DisableDraftData, DisableDraftErrors, DisableDraftResponses, EnableDraftData, EnableDraftErrors, EnableDraftResponses, GetAlpacaStatusData, GetAlpacaStatusErrors, GetAlpacaStatusResponses, GetBacktestResultData, GetBacktestResultErrors, GetBacktestResultResponses, GetBarsData, GetBarsErrors, GetBarsResponses, GetBrokerInfoData, GetBrokerInfoErrors, GetBrokerInfoResponses, GetDraftData, GetDraftErrors, GetDraftResponses, GetGoLiveReportData, GetGoLiveReportErrors, GetGoLiveReportResponses, GetHealthData, GetHealthReportData, GetHealthReportErrors, GetHealthReportResponses, GetHealthResponses, GetIngestResultData, GetIngestResultErrors, GetIngestResultResponses, GetJobData, GetJobErrors, GetJobResponses, GetLabRunResultData, GetLabRunResultErrors, GetLabRunResultResponses, GetPnlData, GetPnlErrors, GetPnlResponses, GetPortfolioData, GetPortfolioErrors, GetPortfolioResponses, GetRiskPolicyData, GetRiskPolicyErrors, GetRiskPolicyResponses, GetRuleSpecSchemaData, GetRuleSpecSchemaErrors, GetRuleSpecSchemaResponses, GetShadowPnlData, GetShadowPnlErrors, GetShadowPnlResponses, GetStrategyData, GetStrategyErrors, GetStrategyResponses, GetStrategySummaryData, GetStrategySummaryErrors, GetStrategySummaryResponses, GetStudioCapabilitiesData, GetStudioCapabilitiesErrors, GetStudioCapabilitiesResponses, GetTickData, GetTickErrors, GetTickResponses, GetTickResultData, GetTickResultErrors, GetTickResultResponses, ListAlertsData, ListAlertsErrors, ListAlertsResponses, ListAssetClassesData, ListAssetClassesErrors, ListAssetClassesResponses, ListCostModelsData, ListCostModelsErrors, ListCostModelsResponses, ListCoverageData, ListCoverageErrors, ListCoverageResponses, ListDataSourcesData, ListDataSourcesErrors, ListDataSourcesResponses, ListDraftsData, ListDraftsErrors, ListDraftsResponses, ListFillsData, ListFillsErrors, ListFillsResponses, ListIngestRunsData, ListIngestRunsErrors, ListIngestRunsResponses, ListInstrumentsData, ListInstrumentsErrors, ListInstrumentsResponses, ListIntervalsData, ListIntervalsErrors, ListIntervalsResponses, ListJobsData, ListJobsErrors, ListJobsResponses, ListOrdersData, ListOrdersErrors, ListOrdersResponses, ListPortfolioSnapshotsData, ListPortfolioSnapshotsErrors, ListPortfolioSnapshotsResponses, ListShadowDecisionsData, ListShadowDecisionsErrors, ListShadowDecisionsResponses, ListShadowPnlData, ListShadowPnlErrors, ListShadowPnlResponses, ListStrategiesData, ListStrategiesErrors, ListStrategiesResponses, ListStrategyClassesData, ListStrategyClassesErrors, ListStrategyClassesResponses, ListStudioTemplatesData, ListStudioTemplatesErrors, ListStudioTemplatesResponses, ListTicksData, ListTicksErrors, ListTicksResponses, PromoteStrategyData, PromoteStrategyErrors, PromoteStrategyResponses, RegisterDraftData, RegisterDraftErrors, RegisterDraftResponses, RetireStrategyData, RetireStrategyErrors, RetireStrategyResponses, ShadowStrategyData, ShadowStrategyErrors, ShadowStrategyResponses, StartBacktestData, StartBacktestErrors, StartBacktestResponses, StartDraftBacktestData, StartDraftBacktestErrors, StartDraftBacktestResponses, StartDraftLabRunData, StartDraftLabRunErrors, StartDraftLabRunResponses, StartIngestData, StartIngestErrors, StartIngestResponses, StartLabRunData, StartLabRunErrors, StartLabRunResponses, StartTickData, StartTickErrors, StartTickResponses, StreamJobEventsData, StreamJobEventsErrors, StreamJobEventsResponses, UpdateDraftData, UpdateDraftErrors, UpdateDraftResponses, ValidateDraftData, ValidateDraftErrors, ValidateDraftResponses, ValidateRuleSpecData, ValidateRuleSpecErrors, ValidateRuleSpecResponses } from './types.gen';
+import type { CancelJobData, CancelJobErrors, CancelJobResponses, CheckAuthData, CheckAuthErrors, CheckAuthResponses, CreateDraftData, CreateDraftErrors, CreateDraftResponses, CreateStreamTokenData, CreateStreamTokenErrors, CreateStreamTokenResponses, DeleteDraftData, DeleteDraftErrors, DeleteDraftResponses, DisableDraftData, DisableDraftErrors, DisableDraftResponses, EnableDraftData, EnableDraftErrors, EnableDraftResponses, GetAlpacaStatusData, GetAlpacaStatusErrors, GetAlpacaStatusResponses, GetBacktestResultData, GetBacktestResultErrors, GetBacktestResultResponses, GetBarsData, GetBarsErrors, GetBarsResponses, GetBrokerInfoData, GetBrokerInfoErrors, GetBrokerInfoResponses, GetDraftData, GetDraftErrors, GetDraftResponses, GetGoLiveReportData, GetGoLiveReportErrors, GetGoLiveReportResponses, GetHealthData, GetHealthReportData, GetHealthReportErrors, GetHealthReportResponses, GetHealthResponses, GetIngestResultData, GetIngestResultErrors, GetIngestResultResponses, GetJobData, GetJobErrors, GetJobResponses, GetLabRunResultData, GetLabRunResultErrors, GetLabRunResultResponses, GetPnlData, GetPnlErrors, GetPnlResponses, GetPortfolioData, GetPortfolioErrors, GetPortfolioResponses, GetRiskPolicyData, GetRiskPolicyErrors, GetRiskPolicyResponses, GetRuleSpecSchemaData, GetRuleSpecSchemaErrors, GetRuleSpecSchemaResponses, GetShadowPnlData, GetShadowPnlErrors, GetShadowPnlResponses, GetStrategyData, GetStrategyErrors, GetStrategyHistoryData, GetStrategyHistoryErrors, GetStrategyHistoryResponses, GetStrategyResponses, GetStrategySummaryData, GetStrategySummaryErrors, GetStrategySummaryResponses, GetStudioCapabilitiesData, GetStudioCapabilitiesErrors, GetStudioCapabilitiesResponses, GetTickData, GetTickErrors, GetTickResponses, GetTickResultData, GetTickResultErrors, GetTickResultResponses, ListAlertsData, ListAlertsErrors, ListAlertsResponses, ListAssetClassesData, ListAssetClassesErrors, ListAssetClassesResponses, ListCostModelsData, ListCostModelsErrors, ListCostModelsResponses, ListCoverageData, ListCoverageErrors, ListCoverageResponses, ListDataSourcesData, ListDataSourcesErrors, ListDataSourcesResponses, ListDraftsData, ListDraftsErrors, ListDraftsResponses, ListFillsData, ListFillsErrors, ListFillsResponses, ListIngestRunsData, ListIngestRunsErrors, ListIngestRunsResponses, ListInstrumentsData, ListInstrumentsErrors, ListInstrumentsResponses, ListIntervalsData, ListIntervalsErrors, ListIntervalsResponses, ListJobsData, ListJobsErrors, ListJobsResponses, ListOrdersData, ListOrdersErrors, ListOrdersResponses, ListPortfolioSnapshotsData, ListPortfolioSnapshotsErrors, ListPortfolioSnapshotsResponses, ListShadowDecisionsData, ListShadowDecisionsErrors, ListShadowDecisionsResponses, ListShadowPnlData, ListShadowPnlErrors, ListShadowPnlResponses, ListStrategiesData, ListStrategiesErrors, ListStrategiesResponses, ListStrategyClassesData, ListStrategyClassesErrors, ListStrategyClassesResponses, ListStudioTemplatesData, ListStudioTemplatesErrors, ListStudioTemplatesResponses, ListTicksData, ListTicksErrors, ListTicksResponses, PromoteStrategyData, PromoteStrategyErrors, PromoteStrategyResponses, RegisterDraftData, RegisterDraftErrors, RegisterDraftResponses, RetireStrategyData, RetireStrategyErrors, RetireStrategyResponses, ShadowStrategyData, ShadowStrategyErrors, ShadowStrategyResponses, StartBacktestData, StartBacktestErrors, StartBacktestResponses, StartDraftBacktestData, StartDraftBacktestErrors, StartDraftBacktestResponses, StartDraftLabRunData, StartDraftLabRunErrors, StartDraftLabRunResponses, StartIngestData, StartIngestErrors, StartIngestResponses, StartLabRunData, StartLabRunErrors, StartLabRunResponses, StartTickData, StartTickErrors, StartTickResponses, StreamJobEventsData, StreamJobEventsErrors, StreamJobEventsResponses, UpdateDraftData, UpdateDraftErrors, UpdateDraftResponses, ValidateDraftData, ValidateDraftErrors, ValidateDraftResponses, ValidateRuleSpecData, ValidateRuleSpecErrors, ValidateRuleSpecResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -450,30 +450,61 @@ export const getGoLiveReport = <ThrowOnError extends boolean = false>(options: O
 });
 
 /**
+ * Get Strategy History
+ *
+ * The strategy's audited status changes and interventions, oldest first.
+ */
+export const getStrategyHistory = <ThrowOnError extends boolean = false>(options: Options<GetStrategyHistoryData, ThrowOnError>): RequestResult<GetStrategyHistoryResponses, GetStrategyHistoryErrors, ThrowOnError> => (options.client ?? client).get<GetStrategyHistoryResponses, GetStrategyHistoryErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/strategies/{strategy_id}/history',
+    ...options
+});
+
+/**
  * Promote
+ *
+ * Move to ``active``. Needs a passing go-live check (409 with the
+ * failing checks otherwise), or ``override`` with a ``reason`` of at
+ * least 20 characters (422 when shorter).
  */
 export const promoteStrategy = <ThrowOnError extends boolean = false>(options: Options<PromoteStrategyData, ThrowOnError>): RequestResult<PromoteStrategyResponses, PromoteStrategyErrors, ThrowOnError> => (options.client ?? client).post<PromoteStrategyResponses, PromoteStrategyErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/strategies/{strategy_id}/promote',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Retire
+ *
+ * Move to ``retired``; needs a ``reason`` (422 without one).
  */
 export const retireStrategy = <ThrowOnError extends boolean = false>(options: Options<RetireStrategyData, ThrowOnError>): RequestResult<RetireStrategyResponses, RetireStrategyErrors, ThrowOnError> => (options.client ?? client).post<RetireStrategyResponses, RetireStrategyErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/strategies/{strategy_id}/retire',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Shadow
+ *
+ * Move to ``shadow``; needs a ``reason`` (422 without one).
  */
 export const shadowStrategy = <ThrowOnError extends boolean = false>(options: Options<ShadowStrategyData, ThrowOnError>): RequestResult<ShadowStrategyResponses, ShadowStrategyErrors, ThrowOnError> => (options.client ?? client).post<ShadowStrategyResponses, ShadowStrategyErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/strategies/{strategy_id}/shadow',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -561,23 +592,34 @@ export const startDraftBacktest = <ThrowOnError extends boolean = false>(options
 /**
  * Disable Draft
  *
- * Move the registered strategy back to ``shadow``.
+ * Move the registered strategy back to ``shadow``; needs a ``reason``
+ * (422 without one).
  */
 export const disableDraft = <ThrowOnError extends boolean = false>(options: Options<DisableDraftData, ThrowOnError>): RequestResult<DisableDraftResponses, DisableDraftErrors, ThrowOnError> => (options.client ?? client).post<DisableDraftResponses, DisableDraftErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/studio/drafts/{draft_id}/disable',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
  * Enable Draft
  *
- * Promote the registered strategy to ``active``.
+ * Promote the registered strategy to ``active``: the same go-live gate
+ * as ``POST /api/strategies/{id}/promote`` (409 when refused; ``override``
+ * needs a ``reason`` of at least 20 characters).
  */
 export const enableDraft = <ThrowOnError extends boolean = false>(options: Options<EnableDraftData, ThrowOnError>): RequestResult<EnableDraftResponses, EnableDraftErrors, ThrowOnError> => (options.client ?? client).post<EnableDraftResponses, EnableDraftErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/studio/drafts/{draft_id}/enable',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**

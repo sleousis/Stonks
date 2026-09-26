@@ -1,0 +1,86 @@
+<!-- Backdrop click closes; Escape (native dialog) covers keyboards. -->
+<!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events, @angular-eslint/template/interactive-supports-focus -->
+<dialog
+  #dialog
+  data-palette
+  class="palette"
+  aria-label="Search and commands"
+  (close)="onClosed()"
+  (click)="onDialogClick($event)"
+>
+  <div class="search">
+    <svg class="glass" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+      <circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.7" />
+      <path d="M13 13l4.5 4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+    </svg>
+    <input
+      #input
+      type="text"
+      class="query"
+      role="combobox"
+      aria-label="Search pages, strategies, tickers and jobs"
+      aria-autocomplete="list"
+      aria-expanded="true"
+      aria-controls="palette-listbox"
+      [attr.aria-activedescendant]="activeId()"
+      aria-describedby="palette-help"
+      placeholder="Search or run a command"
+      autocomplete="off"
+      autocapitalize="off"
+      spellcheck="false"
+      enterkeyhint="go"
+      [value]="query()"
+      (input)="onInput($any($event.target).value)"
+      (keydown)="onKeydown($event)"
+    />
+    <button type="button" class="btn btn-ghost close" (click)="close()">
+      Close<span class="visually-hidden"> search</span>
+    </button>
+  </div>
+
+  <div id="palette-listbox" class="results" role="listbox" aria-label="Results">
+    @for (section of sections(); track section.group) {
+      <div class="section" role="group" [attr.aria-labelledby]="'palette-group-' + $index">
+        <div class="section-title" role="presentation" [id]="'palette-group-' + $index">
+          {{ section.group }}
+        </div>
+        @for (item of section.items; track item.id) {
+          <!-- Options are chosen with the keyboard from the input (aria-activedescendant). -->
+          <!-- eslint-disable-next-line @angular-eslint/template/click-events-have-key-events, @angular-eslint/template/interactive-supports-focus -->
+          <div
+            class="option"
+            role="option"
+            [id]="optionId(item.index)"
+            [attr.aria-selected]="item.index === active()"
+            [class.active]="item.index === active()"
+            (click)="choose(item)"
+            (mousemove)="active.set(item.index)"
+          >
+            <span class="option-main">
+              <span class="option-label">{{ item.label }}</span>
+              @if (item.detail) {
+                <span class="option-detail">{{ item.detail }}</span>
+              }
+            </span>
+            @if (item.hint) {
+              <kbd class="option-hint" aria-hidden="true">{{ item.hint }}</kbd>
+            }
+          </div>
+        }
+      </div>
+    }
+    @if (query().trim() && flat().length === 0 && !status()) {
+      <p class="empty" role="presentation">
+        Nothing matches “{{ query().trim() }}”. Try a ticker like AAPL.US or a strategy id.
+      </p>
+    }
+  </div>
+
+  <div class="foot">
+    <p class="status" [class.visible]="!!status()">{{ status() }}</p>
+    <p id="palette-help" class="keys">
+      <kbd>↑</kbd><kbd>↓</kbd> to move, <kbd>Enter</kbd> to open, <kbd>Esc</kbd> to close
+    </p>
+  </div>
+  <span class="visually-hidden" role="status" aria-live="polite">{{ announcement() }}</span>
+</dialog>

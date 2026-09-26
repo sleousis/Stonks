@@ -9,7 +9,8 @@ A test class may declare an ``Options`` pydantic model and a
 ``build(options) -> SurvivalTest`` classmethod. Without them the registry
 calls the constructor with the options as keyword arguments.
 
-``SUITE_PRESETS`` names suites by id. Ids that haven't landed yet are
+``SUITE_PRESETS`` names suites by id; ``PRESET_OPTIONS`` gives a preset's
+tests their options. Ids that haven't landed yet are
 skipped with a logged warning, so a preset can list tests ahead of them.
 """
 
@@ -30,10 +31,12 @@ from stonks.core.protocols import SurvivalTest
 from stonks.logging import get_logger
 
 __all__ = [
+    "PRESET_OPTIONS",
     "SUITE_PRESETS",
     "build_survival_test",
     "discover_survival_tests",
     "preset_names",
+    "preset_options",
     "resolve_preset",
     "resolve_suite",
     "survival_test_classes",
@@ -44,12 +47,20 @@ _log = get_logger("stonks.lab.survival.registry")
 
 _SKIPPED_MODULES = frozenset({"base", "registry"})
 
-#: Named suites. ``quick`` is the everyday check; ``promotion`` is what a
-#: strategy should survive before it is registered. Later waves add ids
-#: (deflated Sharpe, PBO, ...) here as they land.
+#: Named suites. ``quick`` is the everyday check; ``standard`` adds
+#: robustness, the deflated Sharpe and cost stress; ``promotion`` is what a
+#: strategy should survive before it is registered (the default suite of
+#: registering lab runs).
 SUITE_PRESETS: dict[str, tuple[str, ...]] = {
     "quick": ("oos", "period_stability"),
-    "standard": ("oos", "period_stability", "perturbation", "walk_forward"),
+    "standard": (
+        "oos",
+        "period_stability",
+        "perturbation",
+        "walk_forward",
+        "deflated_sharpe",
+        "cost_stress",
+    ),
     "promotion": (
         "oos",
         "walk_forward",
@@ -58,9 +69,17 @@ SUITE_PRESETS: dict[str, tuple[str, ...]] = {
         "mc_trades",
         "cost_stress",
         "plateau",
+        "cross_instrument",
         "benchmark_relative",
         "mcpt",
     ),
+}
+
+#: Options a preset gives its tests (``test id -> options``); a request's
+#: own options for a test are applied over them. The promotion MCPT runs
+#: 200 permutations and re-tunes only strategies with a non-trivial fit.
+PRESET_OPTIONS: dict[str, dict[str, dict[str, Any]]] = {
+    "promotion": {"mcpt": {"n_permutations": 200, "retune": "auto"}},
 }
 
 
@@ -137,6 +156,14 @@ def build_survival_test(
 
 def preset_names() -> list[str]:
     return sorted(SUITE_PRESETS)
+
+
+def preset_options(name: str) -> dict[str, dict[str, Any]]:
+    """A copy of the options preset ``name`` gives its tests (``{}`` when
+    none). Raises on an unknown preset like :func:`resolve_preset`."""
+    if name not in SUITE_PRESETS:
+        raise ValueError(f"unknown survival preset {name!r}; choose from {preset_names()}")
+    return {test: dict(opts) for test, opts in PRESET_OPTIONS.get(name, {}).items()}
 
 
 def resolve_preset(name: str, *, available: Sequence[str] | None = None) -> list[str]:

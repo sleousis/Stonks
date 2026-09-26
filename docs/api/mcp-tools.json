@@ -21,6 +21,20 @@
       "description": "Queue a backtest of a draft. Returns the job; wait_for_job gives the\nBacktestResult. Simulated only: never places real orders.",
       "input_schema": {
         "properties": {
+          "benchmark": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "benchmark to compare against: auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark",
+            "title": "Benchmark"
+          },
           "cost_model": {
             "anyOf": [
               {
@@ -724,6 +738,20 @@
       "description": "Queue tune -> fit -> survival suite for a draft (a rule draft's spec\nis fixed; a code draft is tuned). Returns the job; wait_for_job gives\nthe verdict and survival reports. Registering (register_strategy, or\nregister_if_passes for a passing run only) needs confirm=true\n(preview otherwise), like register_draft.",
       "input_schema": {
         "properties": {
+          "benchmark": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "benchmark to compare against: auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark",
+            "title": "Benchmark"
+          },
           "budget": {
             "default": 20,
             "description": "tuner trials",
@@ -758,6 +786,21 @@
           "draft_id": {
             "title": "Draft Id",
             "type": "string"
+          },
+          "embargo_bars": {
+            "anyOf": [
+              {
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "trading bars skipped between the train and validation windows (a strategy's label horizon raises it); default [lab] embargo_bars",
+            "title": "Embargo Bars"
           },
           "end": {
             "description": "YYYY-MM-DD",
@@ -873,6 +916,23 @@
             "default": null,
             "description": "survival suite; server default when omitted",
             "title": "Survival Tests"
+          },
+          "test_options": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "options per survival test id, validated by each test (422 on an unknown test or option), e.g. {\"oos\": {\"mode\": \"sharpe\", \"min_trades\": 0}, \"deflated_sharpe\": {\"min_dsr\": 0.9}, \"pbo\": {\"max_pbo\": 0.3}, \"mc_trades\": {\"n_paths\": 2000}, \"cost_stress\": {\"stress_multiplier\": 3}}; each test must be in the suite",
+            "title": "Test Options"
           },
           "train_ratio": {
             "default": 0.7,
@@ -1648,6 +1708,20 @@
       "description": "Queue a backtest of one strategy over a universe and date window.\nReturns the job; use wait_for_job to get the metrics and equity curve.\nSimulated only: never places real orders.",
       "input_schema": {
         "properties": {
+          "benchmark": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "benchmark to compare against: auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark",
+            "title": "Benchmark"
+          },
           "class_path": {
             "anyOf": [
               {
@@ -1927,7 +2001,7 @@
                   }
                 ],
                 "default": null,
-                "description": "1..1000 (default 50)",
+                "description": "1..1000 (default 200)",
                 "title": "N Permutations"
               },
               "retune": {
@@ -1936,11 +2010,15 @@
                     "type": "boolean"
                   },
                   {
+                    "const": "auto",
+                    "type": "string"
+                  },
+                  {
                     "type": "null"
                   }
                 ],
                 "default": null,
-                "description": "re-tune on every permutation: (n + 1) x budget backtests",
+                "description": "re-tune on every permutation: (n + 1) x budget backtests; 'auto' re-tunes only strategies with a non-trivial fit (the promotion preset's default)",
                 "title": "Retune"
               },
               "seed": {
@@ -1975,6 +2053,19 @@
                 "default": null,
                 "description": "expanding (true) or rolling window",
                 "title": "Anchored"
+              },
+              "matrix": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "also run the train x test matrix (default false)",
+                "title": "Matrix"
               },
               "metric": {
                 "anyOf": [
@@ -2019,6 +2110,19 @@
                 "default": null,
                 "description": "share of folds that must score above 0 (0..1)",
                 "title": "Min Positive Share"
+              },
+              "min_wfe": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "walk-forward efficiency gate, OOS / IS return (default 0.5)",
+                "title": "Min Wfe"
               },
               "n_splits": {
                 "anyOf": [
@@ -2065,6 +2169,20 @@
           }
         },
         "properties": {
+          "benchmark": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "benchmark to compare against: auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark",
+            "title": "Benchmark"
+          },
           "budget": {
             "default": 20,
             "description": "tuner trials",
@@ -2100,6 +2218,21 @@
             "default": null,
             "description": "transaction-cost preset (see list_cost_models); default [backtest.costs]",
             "title": "Cost Model"
+          },
+          "embargo_bars": {
+            "anyOf": [
+              {
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "trading bars skipped between the train and validation windows (a strategy's label horizon raises it); default [lab] embargo_bars",
+            "title": "Embargo Bars"
           },
           "end": {
             "description": "YYYY-MM-DD",
@@ -2227,6 +2360,23 @@
             "default": null,
             "description": "survival suite; server default when omitted",
             "title": "Survival Tests"
+          },
+          "test_options": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "options per survival test id, validated by each test (422 on an unknown test or option), e.g. {\"oos\": {\"mode\": \"sharpe\", \"min_trades\": 0}, \"deflated_sharpe\": {\"min_dsr\": 0.9}, \"pbo\": {\"max_pbo\": 0.3}, \"mc_trades\": {\"n_paths\": 2000}, \"cost_stress\": {\"stress_multiplier\": 3}}; each test must be in the suite",
+            "title": "Test Options"
           },
           "train_ratio": {
             "default": 0.7,

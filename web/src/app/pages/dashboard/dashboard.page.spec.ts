@@ -97,6 +97,7 @@ const TICKS: Page<TickRun> = {
 const HEALTH: HealthReportView = {
   healthy: false,
   checked_at: '2026-09-26T08:00:00Z',
+  thresholds: {},
   checks: [
     { name: 'price_freshness', ok: false, detail: 'AAPL.US last bar 3 days old' },
     { name: 'last_tick', ok: true, detail: 'succeeded 11h ago' },

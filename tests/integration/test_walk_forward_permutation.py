@@ -187,3 +187,27 @@ def test_runner_binding_is_used_when_no_tuning_is_given(ds):
 def test_config_rejects_bad_values(kwargs):
     with pytest.raises(pydantic.ValidationError):
         WalkForwardPermutationConfig(**kwargs)
+
+
+class _LabelledMomentum(Momentum):
+    """Labels ten bars ahead: the folds need a ten-bar embargo (BL-20)."""
+
+    label_horizon_bars = 10
+
+
+def test_folds_honour_the_strategys_label_horizon(ds, monkeypatch):
+    import stonks.lab.survival.walk_forward_permutation as wfp
+
+    windows = []
+
+    def build(strategy, context, window, evaluate):
+        windows.append(window)
+        return  # skip the permutations; only the window matters here
+
+    monkeypatch.setattr(wfp.PermutationScorer, "build", staticmethod(build))
+    strategy = _LabelledMomentum({})
+    cfg = WalkForwardPermutationConfig(walk_forward=WF, n_permutations=1, max_p_value=1.0)
+    WalkForwardPermutationTest(cfg, _setup(budget=1)).run(strategy, ds)
+    embargoed = WF.folds_for(ds, strategy)[0].test_start
+    assert embargoed != WF.folds_for(ds)[0].test_start
+    assert windows == [(embargoed, ds.end)]

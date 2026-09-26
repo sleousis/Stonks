@@ -95,7 +95,7 @@ class WalkForwardPermutationTest:
                 "pass tuning=... or run it under LabRunner"
             )
         cfg = self._cfg
-        folds = cfg.walk_forward.folds_for(context)
+        folds = cfg.walk_forward.folds_for(context, strategy)
         # permutable = everything after the first fold's training window
         window = (folds[0].test_start, context.end)
         _log.info(

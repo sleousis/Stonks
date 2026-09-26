@@ -26,6 +26,12 @@ export const CHECK_MEASURES: Record<GoLiveCheckView['name'], string> = {
   max_drift: 'Gap between the paper return and the return its out-of-sample backtest expects.',
   min_trades: 'Filled trades during the paper period.',
   survival: 'Every stored survival report passed.',
+  within_mc_band: 'Paper drawdown stays inside the Monte Carlo band from the backtest.',
+  quit_rule: 'Drawdown stays below 1.5x the backtest worst or the Monte Carlo limit.',
+  promotion_preset: 'The full promotion survival suite has run.',
+  nonzero_costs: 'The backtest used realistic, non-zero trading costs.',
+  hypothesis_recorded: 'A written hypothesis explains why the strategy should work.',
+  backtest_min_trades: 'The backtest closed enough trades to trust its statistics.',
 };
 
 export interface CheckRow {

@@ -6,9 +6,9 @@ import dataclasses
 import math
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, BeforeValidator
 
 
 def finite(value: float | None) -> float | None:
@@ -17,6 +17,17 @@ def finite(value: float | None) -> float | None:
         return None
     value = float(value)
     return value if math.isfinite(value) else None
+
+
+def _finite_or_passthrough(value: Any) -> Any:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return value  # let the field's own validation judge it
+    return finite(value)
+
+
+#: A response-model float that is ``null`` when non-finite (NaN, +-inf), so
+#: strict JSON (``allow_nan=False``) never fails and the schema says so.
+FiniteFloat = Annotated[float | None, BeforeValidator(_finite_or_passthrough)]
 
 
 def to_jsonable(value: Any) -> Any:

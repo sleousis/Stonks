@@ -21,6 +21,7 @@ import {
   formatPercent,
   toneClass,
 } from '../../../core/format/format';
+import { HelpTip } from '../help-tip';
 
 export type CellFormat =
   'text' | 'number' | 'money' | 'signedMoney' | 'percent' | 'signedPercent' | 'date' | 'datetime';
@@ -46,6 +47,11 @@ export interface TableColumn<T> {
    * default shows a label/value line.
    */
   mobile?: 'title' | 'show' | 'hide';
+  /**
+   * Glossary key for the header's help tip. Defaults to the label, so metric
+   * columns ("Sharpe", "Drawdown") get one automatically; `false` hides it.
+   */
+  help?: string | false;
 }
 
 export interface SortState {
@@ -104,7 +110,7 @@ const NUMERIC: readonly CellFormat[] = [
 @Component({
   selector: 'app-data-table',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [NgTemplateOutlet],
+  imports: [NgTemplateOutlet, HelpTip],
   templateUrl: './data-table.html',
   styleUrl: './data-table.scss',
 })
@@ -177,6 +183,10 @@ export class DataTable<T extends object> {
 
   protected alignEnd(col: TableColumn<T>): boolean {
     return (col.align ?? (this.isNumeric(col) ? 'end' : 'start')) === 'end';
+  }
+
+  protected helpTerm(col: TableColumn<T>): string | null {
+    return col.help === false ? null : (col.help ?? col.label);
   }
 
   protected sortable(col: TableColumn<T>): boolean {

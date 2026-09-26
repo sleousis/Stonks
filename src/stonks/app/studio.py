@@ -73,6 +73,7 @@ from stonks.app.lab import (
     LabRunRequest,
     LabRunView,
     LabService,
+    check_embargo,
 )
 from stonks.app.pagination import Page
 from stonks.app.serialize import to_jsonable
@@ -249,6 +250,11 @@ class DraftLabRunRequest(_Window, LabRunOptions):
     draft's class is tuned over its parameter space. Registering
     (``register_strategy`` always, ``register_if_passes`` only on a pass)
     links the new strategy to the draft."""
+
+    @model_validator(mode="after")
+    def _embargo_fits_the_window(self) -> Self:
+        check_embargo(self, self.embargo_bars)
+        return self
 
 
 # ---- service ----------------------------------------------------------------
