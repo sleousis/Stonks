@@ -435,6 +435,7 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 | `slippage_bps` | number | no | `0.0` |  |
 | `fee_per_trade` | number | no | `0.0` |  |
 | `cost_model` | "zero" \| "realistic" \| null | no | `null` | transaction-cost preset (see list_cost_models); default [backtest.costs] |
+| `benchmark` | string \| null | no | `null` | benchmark to compare against: auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark |
 
 ### `create_draft`
 
@@ -474,6 +475,7 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 | `slippage_bps` | number | no | `0.0` |  |
 | `fee_per_trade` | number | no | `0.0` |  |
 | `cost_model` | "zero" \| "realistic" \| null | no | `null` | transaction-cost preset (see list_cost_models); replaces slippage_bps/fee_per_trade. Neither: the configured [backtest.costs] |
+| `benchmark` | string \| null | no | `null` | benchmark to compare against: auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark |
 
 ### `run_ingest`
 
@@ -582,6 +584,9 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 | `cost_model` | "zero" \| "realistic" \| null | no | `null` | transaction-cost preset (see list_cost_models); default [backtest.costs] |
 | `hypothesis` | string \| null | no | `null` | the edge and who pays for it; recorded before tuning (trial ledger) |
 | `premortem` | string \| null | no | `null` | how the strategy is expected to fail; recorded |
+| `test_options` | object \| null | no | `null` | options per survival test id, validated by each test (422 on an unknown test or option), e.g. {"oos": {"mode": "sharpe", "min_trades": 0}, "deflated_sharpe": {"min_dsr": 0.9}, "pbo": {"max_pbo": 0.3}, "mc_trades": {"n_paths": 2000}, "cost_stress": {"stress_multiplier": 3}}; each test must be in the suite |
+| `benchmark` | string \| null | no | `null` | benchmark to compare against: auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark |
+| `embargo_bars` | integer \| null | no | `null` | trading bars skipped between the train and validation windows (a strategy's label horizon raises it); default [lab] embargo_bars |
 
 ### `promote_strategy`
 
@@ -657,6 +662,9 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 | `premortem` | string \| null | no | `null` | how the strategy is expected to fail; recorded |
 | `walk_forward` | any \| null | no | `null` | walk_forward test settings; add 'walk_forward' to survival_tests |
 | `mcpt` | any \| null | no | `null` | permutation (MCPT) settings; add 'permutation' to survival_tests |
+| `test_options` | object \| null | no | `null` | options per survival test id, validated by each test (422 on an unknown test or option), e.g. {"oos": {"mode": "sharpe", "min_trades": 0}, "deflated_sharpe": {"min_dsr": 0.9}, "pbo": {"max_pbo": 0.3}, "mc_trades": {"n_paths": 2000}, "cost_stress": {"stress_multiplier": 3}}; each test must be in the suite |
+| `benchmark` | string \| null | no | `null` | benchmark to compare against: auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark |
+| `embargo_bars` | integer \| null | no | `null` | trading bars skipped between the train and validation windows (a strategy's label horizon raises it); default [lab] embargo_bars |
 
 ### `run_tick`
 

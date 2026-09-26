@@ -103,8 +103,28 @@ def test_incubation_policy_defaults():
 
 def test_legacy_policy_keeps_the_legacy_report_shape(env):
     sid = _seed(env)
-    report = _evaluate(env, sid, GoLivePolicy())
+    report = _evaluate(env, sid, GoLivePolicy(incubation=False, min_days=63, min_trades=20))
     assert [c.name for c in report.checks] == LEGACY_NAMES
+
+
+def test_default_golive_policy_is_incubation_grade(env):
+    """Integration 2: the incubation fields live on ``GoLivePolicy``."""
+    p = GoLivePolicy()
+    assert p.incubation is True
+    assert (p.min_days, p.min_trades) == (63, 20)
+    for name in IncubationPolicy.model_fields:
+        assert getattr(p, name) == getattr(POLICY, name), name
+    sid = _seed(env)
+    report = _evaluate(env, sid, p)
+    assert [c.name for c in report.checks] == INCUBATION_NAMES
+    assert report.passed, report.failures
+
+
+def test_mc_band_reads_the_stored_p05_return_of_mc_trades(env):
+    mc = mc_report(0.50, p05_return=-0.05)
+    sid = _seed(env, reports=promotion_reports(mc=mc))
+    check = _check(_evaluate(env, sid), "within_mc_band")
+    assert "Monte Carlo p5 floor" in check.detail
 
 
 def test_policy_with_incubation_field_turns_on_new_checks(env):
@@ -242,7 +262,7 @@ def test_no_paper_snapshots_fails_the_band(env):
 
 
 def test_return_below_the_monte_carlo_floor_fails(env):
-    mc = mc_report(0.50, p5_return=0.10)  # worst 5% of years still make +10%
+    mc = mc_report(0.50, p05_return=0.10)  # worst 5% of years still make +10%
     pts = [(d, 10_000.0 * (1 - 0.001 * i)) for i, d in enumerate(days(80))]
     sid = _seed(env, reports=promotion_reports(mc=mc), points=pts)
     check = _check(_evaluate(env, sid), "within_mc_band")

@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from stonks.api import create_app
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
 from stonks.app.strategies import change_status
+from stonks.config import GoLivePolicy
 from stonks.core.protocols import SurvivalReport
 from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
@@ -30,7 +31,9 @@ def client(settings, seeded, fake_source):
 
 @pytest.fixture
 def ready_id(settings, seeded) -> str:
-    """A shadow strategy whose paper period passes the default go-live gate."""
+    """A shadow strategy whose paper period passes the legacy go-live gate
+    (the incubation checks have their own tests)."""
+    settings.golive = GoLivePolicy(incubation=False, min_days=20, min_trades=5)
     with SqliteState(settings.state.path) as state:
         state.execute(
             "INSERT INTO tick_runs (id, started_at, finished_at, status) VALUES (?, ?, ?, 'ok')",

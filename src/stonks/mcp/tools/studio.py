@@ -21,7 +21,9 @@ from stonks.mcp.tools.common import (
     READ,
     STATUS_CHANGE,
     STATUS_HINTS,
+    Benchmark,
     Confirm,
+    EmbargoBars,
     Hypothesis,
     IsoDate,
     LabCostModel,
@@ -37,6 +39,7 @@ from stonks.mcp.tools.common import (
     RouteRead,
     SurvivalPreset,
     SurvivalTestName,
+    TestOptions,
     Tickers,
     ToolContext,
     TunerName,
@@ -157,6 +160,7 @@ def register(t: ToolContext) -> None:
         slippage_bps: Annotated[float, Field(ge=0)] = 0.0,
         fee_per_trade: Annotated[float, Field(ge=0)] = 0.0,
         cost_model: LabCostModel = None,
+        benchmark: Benchmark = None,
     ) -> dict[str, Any]:
         """Queue a backtest of a draft. Returns the job; wait_for_job gives the
         BacktestResult. Simulated only: never places real orders."""
@@ -172,6 +176,7 @@ def register(t: ToolContext) -> None:
                 "slippage_bps": slippage_bps,
                 "fee_per_trade": fee_per_trade,
                 "cost_model": cost_model,
+                "benchmark": benchmark,
             }
         )
         return await t.post(draft_path(draft_id, "backtests"), body, hints=HINTS)
@@ -199,6 +204,9 @@ def register(t: ToolContext) -> None:
         cost_model: LabCostModel = None,
         hypothesis: Hypothesis = None,
         premortem: Premortem = None,
+        test_options: TestOptions = None,
+        benchmark: Benchmark = None,
+        embargo_bars: EmbargoBars = None,
     ) -> dict[str, Any]:
         """Queue tune -> fit -> survival suite for a draft (a rule draft's spec
         is fixed; a code draft is tuned). Returns the job; wait_for_job gives
@@ -223,6 +231,9 @@ def register(t: ToolContext) -> None:
                 "cost_model": cost_model,
                 "hypothesis": hypothesis,
                 "premortem": premortem,
+                "test_options": test_options,
+                "benchmark": benchmark,
+                "embargo_bars": embargo_bars,
             }
         )
         return await queue_lab_run(t, draft_path(draft_id, "lab-runs"), body, confirm, HINTS)
