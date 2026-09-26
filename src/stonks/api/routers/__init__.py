@@ -29,6 +29,7 @@ from stonks.api.routers import (
     strategies,
     studio,
     ticks,
+    universes,
 )
 
 #: Routers mounted behind the auth dependency.
@@ -56,6 +57,7 @@ API_ROUTERS: list[APIRouter] = [
     notifications.router,
     schedule.router,
     signals.router,
+    universes.router,
 ]
 
 #: Routers that always need the bearer token, even for reads on loopback.

@@ -31,6 +31,7 @@ from stonks.app.strategies import StrategyService
 from stonks.app.stream_tokens import IssuedStreamToken, StreamTokenSigner
 from stonks.app.studio import RuleStrategySource, StudioService, user_strategies_dir
 from stonks.app.ticks import TickService
+from stonks.app.universes import UniverseService
 from stonks.app.user_strategies import UserStrategyFinder, install, uninstall
 from stonks.config import configured_secrets
 from stonks.logging import get_logger
@@ -133,6 +134,7 @@ class Services:
     notifications: NotificationsAppService
     schedule: ScheduleService
     signals: SignalService
+    universes: UniverseService
     _user_finder: UserStrategyFinder | None = field(default=None, repr=False)
 
     @classmethod
@@ -183,6 +185,7 @@ class Services:
             notifications=NotificationsAppService(context),
             schedule=ScheduleService(context),
             signals=SignalService(context, strategies, runner),
+            universes=UniverseService(context, runner),
         )
         services.schedule.bind(services)
         return services
