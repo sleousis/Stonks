@@ -33,19 +33,20 @@
               [attr.aria-invalid]="
                 tokenForm.controls.token.touched && tokenForm.controls.token.invalid
               "
-              aria-describedby="api-token-hint"
+              aria-describedby="api-token-hint api-token-error"
             />
             <button
               type="button"
               class="btn"
+              aria-label="Show token"
               [attr.aria-pressed]="showToken()"
               (click)="showToken.set(!showToken())"
             >
-              {{ showToken() ? 'Hide' : 'Show' }}
+              Show
             </button>
           </div>
           @if (tokenForm.controls.token.touched && tokenForm.controls.token.hasError('required')) {
-            <span class="error">Enter the token to save it.</span>
+            <span id="api-token-error" class="error">Enter the token to save it.</span>
           } @else {
             <span id="api-token-hint" class="hint">Paste the value of STONKS_API_TOKEN.</span>
           }
