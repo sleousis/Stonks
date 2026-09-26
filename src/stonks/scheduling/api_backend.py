@@ -8,7 +8,8 @@ it. This backend starts each job on the API's own job routes and waits on
 - ``ingest_prices``: ``POST /api/ingest/runs`` (kind ``prices``) for the
   universe over the last ``lookback_days`` up to the fire's date;
 - ``tick``: ``POST /api/ticks`` for the fire's date;
-- ``health``: ``GET /api/health/report``, alerting here when unhealthy;
+- ``health``: ``POST /api/health/run`` (checks plus the operational
+  halt), alerting here when unhealthy;
 - ``report``: reads only the state DB, so it runs in this process.
 
 The closed-day check uses ticker suffixes for calendars (``.CC`` is
@@ -254,7 +255,7 @@ def api_tick(ctx: RunContext) -> JobOutcome:
 @API_ACTIONS.register("health")
 def api_health(ctx: RunContext) -> JobOutcome:
     ex = _executor(ctx)
-    view = ex.client.get("/api/health/report", {"tickers": job_universe(ctx, _members(ex))})
+    view = ex.client.post("/api/health/run", {"tickers": job_universe(ctx, _members(ex))})
     return health_view_outcome(ctx, view)
 
 

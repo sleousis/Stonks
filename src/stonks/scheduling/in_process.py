@@ -136,7 +136,9 @@ def in_process_tick(ctx: RunContext) -> JobOutcome:
 @IN_PROCESS_ACTIONS.register("health")
 def in_process_health(ctx: RunContext) -> JobOutcome:
     ex = _executor(ctx)
-    view = ex.services.operations.health_report(job_universe(ctx, ex.members))
+    view = ex.services.operations.run_health(
+        job_universe(ctx, ex.members), actor="service:scheduler"
+    )
     return health_view_outcome(ctx, view.model_dump(mode="json"))
 
 

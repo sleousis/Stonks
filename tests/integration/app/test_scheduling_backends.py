@@ -109,6 +109,10 @@ def test_api_health_reads_the_report(settings, api_executor):
     # seeded bars end 2026-04-01: stale by September
     assert out.status == "failed" and "freshness:UP.US" in out.detail["failed_checks"]
     assert len(notifier.sent) == 1
+    # the scheduled job (not a report read) opens the operational halt
+    with SqliteState(settings.state.path) as s:
+        kinds = [r["kind"] for r in s.sql("SELECT kind FROM risk_halts WHERE cleared_at IS NULL")]
+    assert kinds == ["operational"]
 
 
 def test_scheduler_loop_on_the_api_backend(settings, api_executor, tmp_path):

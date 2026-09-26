@@ -2823,6 +2823,26 @@
         "title": "HealthReportView",
         "type": "object"
       },
+      "HealthRunRequest": {
+        "properties": {
+          "tickers": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tickers"
+          }
+        },
+        "title": "HealthRunRequest",
+        "type": "object"
+      },
       "HorizonICView": {
         "properties": {
           "hac_lags": {
@@ -14331,7 +14351,7 @@
     },
     "/api/health/report": {
       "get": {
-        "description": "Every ``stonks health`` check: bar freshness, stuck ticks and ingest\nruns, recent ingest failures. Always 200; see ``healthy``.",
+        "description": "Every ``stonks health`` check: bar freshness, stuck ticks and ingest\nruns, recent ingest failures, open halts. Always 200; see ``healthy``.\nRead-only: it never opens or clears the operational halt.",
         "operationId": "getHealthReport",
         "parameters": [
           {
@@ -14427,6 +14447,94 @@
         "tags": [
           "health"
         ]
+      }
+    },
+    "/api/health/run": {
+      "post": {
+        "description": "The scheduled health job: every check, then the global operational\nhalt is opened on stale data or a stuck run and cleared when the checks\npass again. The caller is recorded as the actor.",
+        "operationId": "runHealthChecks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HealthRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthReportView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run Health Checks",
+        "tags": [
+          "health"
+        ],
+        "x-permission": "operations.run"
       }
     },
     "/api/ingest/jobs/{job_id}/result": {

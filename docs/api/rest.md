@@ -102,6 +102,7 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | GET | `/api/health/live` | Liveness probe (process and hosted scheduler) | none |  | [ProbeView](#probeview) |
 | GET | `/api/health/ready` | Readiness probe (state migrated, lake present) | none |  | [ProbeView](#probeview) |
 | GET | `/api/health/report` | Health Report | sign-in |  | [HealthReportView](#healthreportview) |
+| POST | `/api/health/run` | Run Health Checks | `operations.run` | [HealthRunRequest](#healthrunrequest) | [HealthReportView](#healthreportview) |
 
 ## ingest endpoints
 
@@ -833,6 +834,12 @@ Thresholds for ``stonks health`` (``[production.health]``).
 | `checks` | list[[HealthCheckView](#healthcheckview)] | yes |  |
 | `healthy` | boolean | yes |  |
 | `thresholds` | [HealthConfig](#healthconfig) | yes |  |
+
+### HealthRunRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `tickers` | list[string] \| null | no |  |
 
 ### HorizonICView
 

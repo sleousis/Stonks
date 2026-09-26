@@ -13,8 +13,9 @@ new orders at global, user or portfolio scope.
   ``operational`` halt (opened on stale data or a stuck run, cleared by the
   next healthy report);
 - :func:`halt_health_check` is the health check for open halts;
-- :func:`run_health` is ``check_health`` plus both of the above, what every
-  health entrypoint (CLI, API, scheduler) runs;
+- :func:`run_health` is ``check_health`` plus both of the above, what the
+  trusted health entry points (scheduled job, CLI, admin route) run;
+- :func:`read_health` is the read-only report (``GET /api/health/report``);
 - :func:`notify_trip` sends the ``risk`` notification of a trip.
 
 Who may trip or clear what (owners, admins, typed confirmation for the
@@ -53,6 +54,7 @@ __all__ = [
     "halts_enabled",
     "list_halts",
     "notify_trip",
+    "read_health",
     "run_health",
     "sync_operational_halt",
     "trip_halt",
@@ -381,14 +383,34 @@ def run_health(
     universe: Sequence[str],
     config: HealthConfig,
     now: datetime | None = None,
+    *,
+    actor: str = HEALTH_ACTOR,
 ) -> HealthReport:
     """:func:`check_health`, then :func:`sync_operational_halt` on its
-    report, with :func:`halt_health_check` appended. Without the halt
-    table this is ``check_health`` alone."""
+    report (as ``actor``), with :func:`halt_health_check` appended. Only
+    trusted entry points run it: the scheduled health job, ``stonks
+    health`` and the admin route. Reads use :func:`read_health`. Without
+    the halt table this is ``check_health`` alone."""
     report = check_health(state, lake, universe, config, now=now)
     if not halts_enabled(state):
         return report
-    sync_operational_halt(state, report)
+    sync_operational_halt(state, report, actor=actor)
+    halt_check = halt_health_check(state, report.checked_at.date())
+    return HealthReport(checks=[*report.checks, halt_check], checked_at=report.checked_at)
+
+
+def read_health(
+    state: SqliteState,
+    lake: DuckDBLake,
+    universe: Sequence[str],
+    config: HealthConfig,
+    now: datetime | None = None,
+) -> HealthReport:
+    """:func:`check_health` plus :func:`halt_health_check`, read-only: it
+    never opens or clears a halt, whatever tickers it is asked about."""
+    report = check_health(state, lake, universe, config, now=now)
+    if not halts_enabled(state):
+        return report
     halt_check = halt_health_check(state, report.checked_at.date())
     return HealthReport(checks=[*report.checks, halt_check], checked_at=report.checked_at)
 

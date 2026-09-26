@@ -57,7 +57,7 @@ class FakeApi:
             )
         if path.endswith("/jobs/job_1/result"):
             return httpx2.Response(200, json=self._result)
-        if path == "/api/health/report":
+        if request.method == "POST" and path == "/api/health/run":
             return httpx2.Response(200, json=self.health)
         return httpx2.Response(404, json={"title": "Not Found", "detail": path})
 
@@ -242,7 +242,8 @@ def test_health_unhealthy_alerts_here():
     assert out.status == "failed" and out.alerted
     assert out.detail["failed_checks"] == ["freshness:AAPL.US"]
     assert len(notifier.sent) == 1
-    assert api.requests[0][1] == "/api/health/report"
+    # the scheduled job syncs the operational halt: the POST route, never the GET
+    assert api.requests[0][:2] == ("POST", "/api/health/run")
 
 
 def test_wait_times_out():
