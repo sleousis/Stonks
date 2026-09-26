@@ -17,6 +17,8 @@ dependencies = [
     "alpaca-py>=0.44.0",
     "fastapi>=0.141.1",
     "uvicorn[standard]>=0.54.0",
+    "mcp>=2.2.0",
+    "httpx2>=2.13.1",
 ]
 
 [project.scripts]
