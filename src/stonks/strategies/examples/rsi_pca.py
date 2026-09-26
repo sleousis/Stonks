@@ -217,7 +217,9 @@ class RSIPCAStrategy(BaseStrategy):
         if n_c > evecs.shape[1]:
             n_c = evecs.shape[1]
         top = evecs[:, :n_c]
-        self._evecs = top
+        # contiguous, like the array load() rebuilds from JSON, so a saved and
+        # reloaded instance multiplies in the same order (bit-identical output)
+        self._evecs = np.ascontiguousarray(top)
 
         projected = x_c @ top
         coefs, *_ = np.linalg.lstsq(projected, y, rcond=None)
