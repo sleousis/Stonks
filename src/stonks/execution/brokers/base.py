@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol, runtime_checkable
 
-from stonks.core.types import OrderSide, OrderStatus
+from stonks.core.types import Fill, OrderSide, OrderStatus
 
 
 class BrokerError(RuntimeError):
@@ -43,6 +43,41 @@ class BrokerOrderState:
     filled_quantity: float
     avg_fill_price: float | None
     updated_at: datetime | None = None
+
+
+QTY_EPSILON = 1e-9
+
+
+def delta_fill(
+    state: BrokerOrderState,
+    *,
+    recorded_quantity: float,
+    recorded_notional: float,
+    filled_at: datetime,
+    fee: float = 0.0,
+) -> Fill | None:
+    """The part of ``state``'s cumulative fill not yet recorded, as a Fill.
+
+    ``recorded_quantity`` / ``recorded_notional`` (sum of qty*price) describe
+    what has already been booked for this order. The delta's price is backed
+    out of the cumulative average so booked + delta reproduces the broker's
+    ``filled_quantity * avg_fill_price`` exactly. Returns ``None`` when there
+    is nothing new (or the broker reports less than was booked).
+    """
+    delta_qty = state.filled_quantity - recorded_quantity
+    if delta_qty <= QTY_EPSILON or state.avg_fill_price is None:
+        return None
+    total_notional = state.filled_quantity * state.avg_fill_price
+    price = (total_notional - recorded_notional) / delta_qty
+    return Fill(
+        order_client_id=state.client_id,
+        ticker=state.ticker,
+        quantity=delta_qty,
+        price=price,
+        fee=fee,
+        filled_at=filled_at,
+        side=state.side,
+    )
 
 
 @runtime_checkable
