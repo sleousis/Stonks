@@ -380,3 +380,20 @@ def test_split_and_dividend_on_one_bar_with_two_strategy_keys():
     assert sum(t.qty for t in trades) == pytest.approx(30.0)
     # 1500 cost, 30 * 55 proceeds, 30 dividend
     assert sum(t.pnl for t in trades) == pytest.approx(30 * 55.0 - 1500.0 + 30.0)
+
+
+def test_fitness_turnover_uses_the_calendar_sessions_per_year():
+    """RS-32: a 24/7 (crypto) curve has 365 trading days a year, not 252."""
+    dates = [T0 + timedelta(days=i) for i in range(6)]
+    curve = [100.0, 101.0, 100.5, 102.0, 101.0, 103.0]
+    fills = [
+        Fill("0:a", "X.US", 10.0, 100.0, 0.0, dates[0], "buy"),
+        Fill("0:b", "X.US", 10.0, 101.0, 0.0, dates[2], "sell"),
+    ]
+    for sessions in (252.0, 365.0):
+        base = compute_report("s", dates, curve, periods_per_year=365, sessions_per_year=sessions)
+        report = with_trades(base, fills)
+        turnover_daily = report.trade_stats.turnover_annual / sessions
+        assert turnover_daily > 0.125  # above the floor, so the divisor matters
+        expected = base.sharpe * math.sqrt(abs(base.cagr) / turnover_daily)
+        assert report.fitness == pytest.approx(expected)

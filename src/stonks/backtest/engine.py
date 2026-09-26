@@ -114,6 +114,7 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
+from stonks.backtest.calendar import calendar_for_universe
 from stonks.backtest.corporate_actions import (
     CorporateActionRecord,
     CorporateActionSchedule,
@@ -302,6 +303,7 @@ class Backtester:
             equity_curve,
             periods_per_year=periods_per_year(self._config.interval, set(asset_classes.values())),
             corporate_actions=applied,
+            sessions_per_year=calendar_for_universe(set(asset_classes.values())).sessions_per_year,
         )
 
     # ---- internals ----------------------------------------------------------

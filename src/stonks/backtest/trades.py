@@ -70,10 +70,6 @@ _log = get_logger("stonks.backtest.trades")
 
 #: Relative size below which a lot remainder is float dust, not a position.
 _DUST = 1e-9
-#: Trading days per year, to turn annual turnover into Tulchinsky's daily
-#: turnover for ``fitness``.
-_TRADING_DAYS_PER_YEAR = 252
-
 ReferencePrice = Callable[[str], float | None]
 
 
@@ -498,7 +494,8 @@ def with_trades(
         equity_curve=report.equity_curve,
         reference_price=reference_price,
     )
-    turnover_daily = stats.turnover_annual / _TRADING_DAYS_PER_YEAR
+    # Tulchinsky's daily turnover, on the curve's own calendar (RS-32).
+    turnover_daily = stats.turnover_annual / report.sessions_per_year
     return replace(
         report,
         trades=tuple(trades),
