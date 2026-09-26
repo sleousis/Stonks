@@ -41,7 +41,7 @@ from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
 from stonks.features.library import rsi
-from stonks.strategies._common import as_datetime, iso
+from stonks.strategies._common import as_datetime, get_last_n_bars, iso
 from stonks.strategies.base import BaseStrategy
 
 
@@ -298,14 +298,12 @@ class RSIPCAStrategy(BaseStrategy):
 
         interval = Interval.parse(self.params["interval"])
         rsi_max = int(self.params["rsi_period_max"])
-        span_bars = rsi_max * 4 + 20
-        span_td = interval.to_timedelta() * span_bars
-        start = as_datetime(as_of) - span_td
-
-        bars = lake.get_bars(ticker, interval, start=start, end=as_of)
+        # RSI is recursive (Wilder smoothing), so give it a warm-up tail of
+        # several periods beyond the longest one.
+        bars = get_last_n_bars(lake, ticker, interval, as_of, rsi_max * 4 + 20)
         if bars.empty:
             return None
-        closes = bars["close"].astype(float).reset_index(drop=True)
+        closes = bars["close"].astype(float)
 
         periods = list(
             range(int(self.params["rsi_period_min"]), int(self.params["rsi_period_max"]))
