@@ -107,6 +107,7 @@ type SeverityFilter = '' | StatementFlagView['severity'];
           [columns]="columns"
           [rowKey]="flagKey"
           [total]="page.total"
+          [offset]="page.offset"
           [pageSize]="pageSize"
           (pageChange)="offset.set($event.offset)"
         >
