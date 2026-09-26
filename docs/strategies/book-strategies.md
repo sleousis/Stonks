@@ -1,9 +1,10 @@
-# Book strategies: Quantitative Momentum and Stocks on the Move
+# Book strategies: Quantitative Momentum, Stocks on the Move and Quantitative Value
 
-Two cross-sectional equity strategies from the book backlog
-(`docs/research/book-lessons.md`, BL-38 and BL-39). Both rank a whole
-universe, read split- and dividend-adjusted daily bars, are long-only, and
-leave sizing to a `PortfolioConstructor`.
+Three cross-sectional equity strategies from the book backlog
+(`docs/research/book-lessons.md`, BL-38, BL-39 and BL-41). All rank a whole
+universe, are long-only, and leave sizing to a `PortfolioConstructor`; the
+two momentum strategies read split- and dividend-adjusted daily bars, and
+`quant_value` reads point-in-time financial statements.
 
 ## Shared mechanics
 
@@ -109,6 +110,84 @@ more than the tolerance off); new names follow in score order while the
 book has room. A name too big for the room left is skipped and listed in
 `meta["unfunded"]`. Held names without a signal get no target and are sold.
 
+## `quant_value` (Gray & Carlisle, *Quantitative Value*)
+
+`strategies/examples/quant_value.py`, formulas in `features/fundamentals.py`
+(each function documents its formula and source). Unlike the two momentum
+strategies it reads the three statement tables, point in time: a row is
+visible from its `filing_date` (or `period_end + missing_filing_lag_days`
+when the vendor gave none; mid-session only from the next day), through the
+same readers as `quality_value`.
+
+Default mode, `mode = "quant_value"`:
+
+1. Universe minus `excluded_sectors` (`Financial Services`, `Financials`,
+   `Utilities`, `Real Estate`; matched against `sector` and `gic_sector`,
+   case-insensitive; unknown sector stays).
+2. Eligible: `EBIT/TEV > 0`, a financial-strength score, and at least
+   `min_years` consecutive annual reports whose latest period ended no more
+   than `max_statement_age_days` ago.
+3. Forensic screens, each over the eligible names that have the metric;
+   drop the worst `floor(forensic_drop_pct * k)`:
+   - STA `= (dCA - dCash - (dCL - dSTD - dTP) - Dep) / TA` (Sloan);
+   - SNOA `= (OA - OL) / TA`, `OA = TA - cash & STI`,
+     `OL = TA - STD - LTD - NCI - preferred - common equity`;
+   - PMAN `= Phi(M)`, Beneish `M = -4.84 + 0.920 DSRI + 0.528 GMI + 0.404 AQI
+     + 0.892 SGI + 0.115 DEPI - 0.172 SGAI + 4.679 TATA - 0.327 LVGI`;
+   - distress: drop Altman `Z = 1.2 WC/TA + 1.4 RE/TA + 3.3 EBIT/TA
+     + 0.6 MVE/TL + 1.0 Sales/TA` below `altman_z_min`.
+4. Value: keep the cheapest `value_pct` (rounded up) by
+   `EBIT / TEV`, `TEV = market cap + debt + preferred + NCI - cash & STI`.
+   EBIT is trailing twelve months (or the latest annual report); balance
+   items are the latest visible report; market cap is the last close times
+   the latest share count.
+5. Quality `= 0.5 pct(FP) + 0.5 pct(FS)` within that slice; hold the top `n`
+   equally weighted (`equal_weight_top_n`).
+   - Franchise power: percentile of the mean of `pct(geo-mean ROA)`,
+     `pct(geo-mean ROC)`, `pct(sum FCF / TA)` and
+     `max(pct(margin growth), pct(margin stability))` over the years
+     available (up to `max_years`).
+   - Financial strength (10 points): ROA > 0, FCF/TA > 0, FCF/TA > ROA,
+     leverage fell, current ratio rose, share count fell, and ROA, FCF/TA,
+     gross margin and asset turnover each rose.
+
+`mode = "piotroski"`: the top `bm_pct` by book-to-market (positive book
+only), holding F-score `>= f_min` (nine signals: ROA > 0, CFO > 0, ROA up,
+CFO > NI, leverage down, current ratio up, no share issuance, gross margin
+up, turnover up). `mode = "magic_formula"`: the `n` lowest rank sums of
+EBIT/TEV and ROC `= EBIT / (net PP&E + CA - CL)`.
+
+Every mode trades on the last session of `rebalance_months` (annual; a pair
+such as `6,12` is semi-annual) and holds in between.
+
+| param | default | notes |
+|---|---|---|
+| `mode` | `quant_value` | or `piotroski`, `magic_formula` |
+| `n` | 30 | most names held |
+| `value_pct` | 0.10 | cheapest slice, rounded up |
+| `forensic_drop_pct` | 0.05 | per screen, rounded down |
+| `altman_z_min` | 1.81 | distress cut-off |
+| `min_years` / `max_years` | 3 / 8 | annual reports for franchise power |
+| `bm_pct` / `f_min` | 0.2 / 7 | piotroski mode |
+| `rebalance_months` | `6` | `1`..`12`, or `1,7`..`6,12` |
+| `excluded_sectors` | see above | `""` disables |
+| `universe` | `""` | the lake's equities |
+| `missing_filing_lag_days` | 90 | lag for rows without a filing date |
+| `max_statement_age_days` | 550 | older statements are ignored |
+
+Metadata: `alpha_family = "value"`, `premise = "mean_reversion"`,
+`label_horizon_bars = 252`, `required_history_bars = 1`. Features include
+`ebit_tev`, `tev`, `roc`, `bm`, `sta`, `snoa`, `beneish_m`, `pman`,
+`altman_z`, `fs`, `f_score`, the `fp_*` inputs and `years_used`.
+
+**Data requirements.** Annual income statement and balance sheet (cash-flow
+statement for CFO/FCF) with filing dates, for at least `min_years`
+consecutive fiscal years, plus daily closes and a share count. The free
+EODHD tier returns no fundamentals, so on it the strategy holds nothing;
+real use needs paid fundamentals. A name with only two years still gets
+STA, PMAN, FS and F (Piotroski mode works), but not franchise power, so it
+is skipped in `quant_value` mode unless `min_years = 2`.
+
 ## Deviations from the books
 
 - **Quantitative Momentum.** The book's universe screen (liquidity and size
@@ -124,5 +203,20 @@ book has room. A name too big for the room left is skipped and listed in
   parity. He buys down the list until cash runs out; we skip a name too big
   for the remaining room and keep going. The ATR is a simple 20-day mean of
   true range on adjusted bars.
-- Neither strategy models the book's index membership history. Use a
+- **Quantitative Value.** The book's distress screen is Campbell, Hilscher
+  and Szilagyi's probability of financial distress, which needs market
+  volatility and excess returns; we use Altman's Z below 1.81 as the backlog
+  specifies. STA has no taxes-payable term (the lake has no such line).
+  Piotroski ratios use year-end rather than beginning-of-year assets, so two
+  years of statements suffice. Net equity issuance is read from the change in
+  share count, not buyback cash flows (vendors sign those differently). A
+  signal whose inputs are missing earns no point; a forensic metric that
+  can't be computed doesn't drop the name; a Beneish index with missing
+  inputs is set to its neutral value (Beneish, Lee and Nichols 2013).
+  Quality percentiles are taken within the cheap slice. The magic formula
+  holds for the rebalance interval, not exactly 252 bars. Sectors come from
+  the current instrument profile, not their history. The backlog's
+  `store/lake.py` panel helper was not added: the per-ticker readers from
+  `quality_value` are reused and memoised per filing state instead.
+- None of the strategies models the book's index membership history. Use a
   point-in-time `universe` to avoid survivorship bias in the ticker list.
