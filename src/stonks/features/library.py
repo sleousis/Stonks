@@ -14,6 +14,8 @@ score — that higher-level strategies and survival tests compose.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
+from datetime import date
 
 import numpy as np
 import pandas as pd
@@ -22,6 +24,28 @@ import pandas as pd
 def ttm(series: pd.Series) -> pd.Series:
     """Trailing twelve months — 4-period rolling sum (assumes quarterly data)."""
     return series.rolling(window=4, min_periods=4).sum()
+
+
+# Four consecutive quarter ends sit ~273 days apart first-to-last; the band
+# allows for 52/53-week fiscal calendars and rejects a skipped quarter.
+_TTM_MIN_SPAN_DAYS = 240
+_TTM_MAX_SPAN_DAYS = 300
+
+
+def ttm_from_quarters(period_ends: Sequence[date], values: Sequence[float | None]) -> float | None:
+    """Trailing-twelve-month total from quarterly values ordered oldest
+    first: the :func:`ttm` sum of the last four, or ``None`` when fewer than
+    four exist, one is missing, or they aren't four consecutive quarters
+    (judged by the span of their period ends)."""
+    if len(period_ends) < 4 or len(values) < 4:
+        return None
+    last = list(period_ends)[-4:]
+    span = (last[-1] - last[0]).days
+    if not (_TTM_MIN_SPAN_DAYS <= span <= _TTM_MAX_SPAN_DAYS):
+        return None
+    tail = pd.Series([np.nan if v is None else float(v) for v in list(values)[-4:]])
+    total = ttm(tail).iloc[-1]
+    return None if pd.isna(total) else float(total)
 
 
 def pct_change_n_days(series: pd.Series, n: int) -> pd.Series:
