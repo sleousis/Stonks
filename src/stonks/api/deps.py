@@ -177,6 +177,25 @@ def current_scope(principal: PrincipalDep) -> Scope:
 ScopeDep = Annotated[Scope, Depends(current_scope)]
 
 
+def owned_portfolio_id(
+    services: ServicesDep,
+    principal: PrincipalDep,
+    portfolio_id: Annotated[
+        str | None,
+        Query(
+            max_length=64,
+            description="One of your portfolios (404 otherwise). Default: your own book.",
+        ),
+    ] = None,
+) -> str:
+    """The portfolio a read is about, checked against the caller: another
+    user's id is a 404 (admins included; they get totals instead)."""
+    return services.portfolio.resolve(principal, portfolio_id)
+
+
+PortfolioIdDep = Annotated[str, Depends(owned_portfolio_id)]
+
+
 _PERMISSION_ATTR = "__stonks_permission__"
 
 

@@ -126,13 +126,13 @@ def test_orders_carry_status_reason(client, settings, seeded):
         state.execute(
             "UPDATE orders SET status = 'rejected', status_reason = 'insufficient buying power'"
         )
-    items = client.get("/api/orders").json()["items"]
+    items = client.get("/api/orders", headers=AUTH).json()["items"]
     assert items
     assert all(o["status_reason"] == "insufficient buying power" for o in items)
 
 
 def test_orders_status_reason_defaults_to_null(client):
-    items = client.get("/api/orders").json()["items"]
+    items = client.get("/api/orders", headers=AUTH).json()["items"]
     assert items and all(o["status_reason"] is None for o in items)
 
 

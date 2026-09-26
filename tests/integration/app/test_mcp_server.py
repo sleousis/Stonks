@@ -82,6 +82,7 @@ async def call_error(client: Client, name: str, args: dict[str, Any] | None = No
 READ_TOOLS = {
     "health",
     "get_portfolio",
+    "get_portfolio_totals",
     "list_portfolio_snapshots",
     "list_strategies",
     "get_strategy",
@@ -185,6 +186,17 @@ async def test_health_and_portfolio(mcp):
     assert [p["ticker"] for p in portfolio["positions"]] == ["UP.US"]
     snaps = await call(mcp, "list_portfolio_snapshots", {"limit": 5})
     assert snaps["total"] == 1
+
+
+@pytest.mark.anyio
+async def test_portfolio_tools_take_a_portfolio_id_that_must_be_yours(mcp):
+    mine = await call(mcp, "get_portfolio", {"portfolio_id": "pf_default"})
+    assert [p["ticker"] for p in mine["positions"]] == ["UP.US"]
+    for tool in ("get_portfolio", "list_orders", "list_fills", "get_pnl"):
+        text = await call_error(mcp, tool, {"portfolio_id": "pf_someone_else"})
+        assert "not found" in text.lower(), (tool, text)
+    totals = await call(mcp, "get_portfolio_totals")
+    assert totals["portfolios"] >= 1 and "positions" not in totals
 
 
 @pytest.mark.anyio

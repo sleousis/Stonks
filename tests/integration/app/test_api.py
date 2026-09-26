@@ -149,9 +149,9 @@ def test_unknown_api_route_is_problem_404(client):
 
 
 def test_portfolio_routes(client):
-    body = client.get("/api/portfolio").json()
+    body = client.get("/api/portfolio", headers=AUTH).json()
     assert body["positions"][0]["ticker"] == "UP.US"
-    snaps = client.get("/api/portfolio/snapshots").json()
+    snaps = client.get("/api/portfolio/snapshots", headers=AUTH).json()
     assert snaps["total"] == 1
 
 
@@ -195,9 +195,11 @@ def test_market_routes(client):
 
 
 def test_orders_ticks_routes(client, seeded):
-    orders = client.get("/api/orders", params={"tick_id": seeded["tick_id"]}).json()
+    orders = client.get("/api/orders", params={"tick_id": seeded["tick_id"]}, headers=AUTH).json()
     assert orders["total"] == 1
-    fills = client.get("/api/orders/fills", params={"tick_id": seeded["tick_id"]}).json()
+    fills = client.get(
+        "/api/orders/fills", params={"tick_id": seeded["tick_id"]}, headers=AUTH
+    ).json()
     assert fills["total"] == 1
     ticks = client.get("/api/ticks").json()
     assert ticks["total"] == 1

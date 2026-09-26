@@ -51,6 +51,13 @@ TICK = ToolAnnotations(
 
 Limit = Annotated[int, Field(ge=1, le=500, description="page size")]
 Offset = Annotated[int, Field(ge=0, description="rows to skip")]
+PortfolioId = Annotated[
+    str | None,
+    Field(
+        max_length=64,
+        description="one of your portfolios (not found otherwise); default: your own book",
+    ),
+]
 Ticker = Annotated[str, Field(description="instrument id, e.g. AAPL.US or BTC-USD.CC")]
 Tickers = Annotated[list[str], Field(min_length=1, description="instrument ids")]
 IsoDate = Annotated[date, Field(description="YYYY-MM-DD")]

@@ -1,5 +1,10 @@
 """PortfolioService — the book as of the latest tick, valued at the latest
-stored closes, plus snapshot history."""
+stored closes, plus snapshot history.
+
+Every read is of one portfolio the caller owns: :meth:`PortfolioService.resolve`
+turns a principal and an optional ``portfolio_id`` into that id (404 for a
+portfolio that isn't yours, admins included). Admins get
+:meth:`PortfolioService.totals`, sums across every book, never holdings."""
 
 from __future__ import annotations
 
@@ -8,10 +13,14 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
+from stonks.accounts import NotFound, owned_portfolio
 from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
 from stonks.app.context import AppContext
 from stonks.app.cost_basis import FillLot, average_costs
+from stonks.app.errors import NotFoundError
 from stonks.app.pagination import Page
+from stonks.auth.policy import Permission, require
+from stonks.auth.principal import Principal
 from stonks.production.ledger import ledger_filter
 
 #: Reporting currency when the held instruments don't agree on one (or the
@@ -77,9 +86,66 @@ class SnapshotView(BaseModel):
     total_value: float
 
 
+class PortfolioTotalsView(BaseModel):
+    """Sums over every active portfolio's latest snapshot, for admins. No
+    tickers and no per-person numbers (decision 2026-09-26)."""
+
+    portfolios: int = Field(description="Active portfolios with at least one snapshot.")
+    owners: int = Field(description="People who own those portfolios.")
+    cash: float
+    total_value: float = Field(description="Sum of each book's value at its latest snapshot.")
+
+
 class PortfolioService:
     def __init__(self, context: AppContext) -> None:
         self._ctx = context
+
+    def resolve(self, principal: Principal, portfolio_id: str | None = None) -> str:
+        """The portfolio a read is about. ``portfolio_id`` must be the
+        caller's (``NotFoundError`` otherwise, so ids don't leak). Without
+        one: the default portfolio when the caller owns it, else their
+        oldest open one. A service principal reads any book."""
+        require(principal, Permission.READ)
+        scope = principal.scope
+        with self._ctx.state() as state:
+            if portfolio_id is not None:
+                try:
+                    return owned_portfolio(state, scope, portfolio_id).id
+                except NotFound as exc:
+                    raise NotFoundError(str(exc)) from None
+            if scope.is_service:
+                return DEFAULT_PORTFOLIO_ID
+            rows = state.sql(
+                "SELECT p.id FROM portfolios p JOIN users u ON u.id = p.owner_id"
+                " WHERE p.owner_id = ? AND u.status = 'active' AND p.status != 'archived'"
+                " ORDER BY p.id != ?, p.created_at, p.id LIMIT 1",
+                [scope.user_id, DEFAULT_PORTFOLIO_ID],
+            )
+        if not rows:
+            raise NotFoundError("you have no portfolio yet")
+        return rows[0]["id"]
+
+    def totals(self, principal: Principal) -> PortfolioTotalsView:
+        """Cash and value summed across every active portfolio (admins)."""
+        require(principal, Permission.PORTFOLIO_TOTALS)
+        with self._ctx.state() as state:
+            row = state.sql(
+                """
+                SELECT COUNT(*) AS n, COUNT(DISTINCT p.owner_id) AS owners,
+                       COALESCE(SUM(s.cash), 0) AS cash,
+                       COALESCE(SUM(s.total_value), 0) AS total
+                  FROM portfolios p
+                  JOIN portfolio_snapshots s ON s.id = (
+                        SELECT MAX(id) FROM portfolio_snapshots WHERE portfolio_id = p.id)
+                 WHERE p.status = 'active'
+                """
+            )[0]
+        return PortfolioTotalsView(
+            portfolios=int(row["n"]),
+            owners=int(row["owners"]),
+            cash=float(row["cash"]),
+            total_value=float(row["total"]),
+        )
 
     def current(self, portfolio_id: str = DEFAULT_PORTFOLIO_ID) -> PortfolioView:
         """One portfolio's book (default: the default portfolio). Callers

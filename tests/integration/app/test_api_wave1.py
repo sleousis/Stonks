@@ -237,7 +237,7 @@ def test_get_risk_policy(settings, seeded, fake_source):
 
 
 def test_real_pnl_series(client):
-    body = client.get("/api/pnl").json()
+    body = client.get("/api/pnl", headers=AUTH).json()
     assert body["strategy_id"] is None
     rows = body["rows"]
     assert len(rows) == 1  # the seeded tick wrote one snapshot
@@ -245,7 +245,7 @@ def test_real_pnl_series(client):
     assert rows[0]["daily_return"] is None
     assert rows[0]["days_elapsed"] is None  # first row: nothing before it
     assert rows[0]["drawdown"] == 0.0
-    assert client.get("/api/pnl", params={"since": "2999-01-01"}).json()["rows"] == []
+    assert client.get("/api/pnl", params={"since": "2999-01-01"}, headers=AUTH).json()["rows"] == []
 
 
 # ---- shadow -------------------------------------------------------------------

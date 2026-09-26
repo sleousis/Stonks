@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from stonks.api.deps import PageDep, ServicesDep
+from stonks.api.deps import PageDep, PortfolioIdDep, ServicesDep
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.app.orders import FillView, OrderView
 from stonks.app.pagination import Page
@@ -14,6 +14,7 @@ router = APIRouter(prefix="/api/orders", tags=["orders"], responses=PROBLEM_RESP
 def list_orders(
     services: ServicesDep,
     page: PageDep,
+    portfolio_id: PortfolioIdDep,
     tick_id: str | None = None,
     strategy_id: str | None = None,
     ticker: str | None = None,
@@ -26,6 +27,7 @@ def list_orders(
         status=status,
         limit=page.limit,
         offset=page.offset,
+        portfolio_id=portfolio_id,
     )
 
 
@@ -33,6 +35,7 @@ def list_orders(
 def list_fills(
     services: ServicesDep,
     page: PageDep,
+    portfolio_id: PortfolioIdDep,
     tick_id: str | None = None,
     ticker: str | None = None,
     order_client_id: str | None = None,
@@ -43,4 +46,5 @@ def list_fills(
         order_client_id=order_client_id,
         limit=page.limit,
         offset=page.offset,
+        portfolio_id=portfolio_id,
     )

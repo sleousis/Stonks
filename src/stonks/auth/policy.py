@@ -39,6 +39,7 @@ class Permission(StrEnum):
     CODE_STRATEGIES = "strategy.code"
     OPERATIONS_RUN = "operations.run"
     RISK_GLOBAL = "risk.global"
+    PORTFOLIO_TOTALS = "portfolio.totals"
     USERS_READ = "users.read"
     USERS_MANAGE = "users.manage"
     TOKENS_MANAGE = "tokens.manage"
@@ -71,6 +72,8 @@ POLICY: dict[Permission, Rule] = {
     Permission.CODE_STRATEGIES: Rule(_ADMINS, frozenset({ApiScope.ADMIN})),
     Permission.OPERATIONS_RUN: Rule(_ADMINS, frozenset({ApiScope.ADMIN})),
     Permission.RISK_GLOBAL: Rule(_ADMINS, frozenset({ApiScope.ADMIN})),
+    # Sums across every trader, never anyone's holdings.
+    Permission.PORTFOLIO_TOTALS: Rule(_ADMINS, frozenset({ApiScope.ADMIN})),
     Permission.USERS_READ: Rule(_ADMINS, frozenset({ApiScope.ADMIN})),
     Permission.USERS_MANAGE: Rule(_ADMINS, frozenset({ApiScope.ADMIN}), step_up=True),
     Permission.TOKENS_MANAGE: Rule(_ALL, frozenset({ApiScope.READ}), session_only=True),
