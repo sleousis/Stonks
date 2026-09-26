@@ -345,6 +345,50 @@ def test_a_stored_spike_is_removed_when_the_next_day_reverts_it(tmp_path, backen
         lake.close()
 
 
+# ---- a bad vendor row costs only that row (DS-10) -----------------------------------------
+
+
+class _EodhdPayloadSource(_Source):
+    def __init__(self, payload):
+        super().__init__("eodhd")
+        self._payload = payload
+
+    def fetch_prices(self, ticker, since=None, until=None):
+        from stonks.ingest.sources.eodhd import parse_prices_response
+
+        return list(parse_prices_response(ticker, self._payload))
+
+
+def test_a_null_or_missing_price_quarantines_only_that_row(lake):
+    def row(day, **kw):
+        base = {
+            "date": day,
+            "open": 10.0,
+            "high": 11.0,
+            "low": 9.0,
+            "close": 10.5,
+            "adjusted_close": 10.5,
+            "volume": 100,
+        }
+        base.update(kw)
+        return base
+
+    payload = [
+        row("2025-01-02"),
+        row("2025-01-03", open=None),
+        {k: v for k, v in row("2025-01-06").items() if k != "open"},
+        row("2025-01-07", adjusted_close=None),
+    ]
+    result = IngestPipeline(_EodhdPayloadSource(payload), lake).run_prices(["AAA.US"])
+    assert (result.status, result.tickers_ok) == ("ok", 1)
+    stored = lake.get_prices("AAA.US", date(2025, 1, 1), date(2025, 1, 31))
+    assert list(stored["date"]) == [date(2025, 1, 2), date(2025, 1, 7)]
+    # a missing adjusted close falls back to the close
+    assert stored["adj_close"].iloc[-1] == 10.5
+    q = quarantined_bars(lake, ticker="AAA.US")
+    assert list(q["reasons"]) == ["missing_price", "missing_price"]
+
+
 # ---- edge cases -------------------------------------------------------------------------
 
 
