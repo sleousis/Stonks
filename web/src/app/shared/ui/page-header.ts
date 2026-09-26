@@ -39,11 +39,13 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
       font-size: var(--text-xl);
       letter-spacing: -0.01em;
       outline: none;
+      overflow-wrap: anywhere;
     }
     .description {
       margin-top: var(--space-1);
       color: var(--color-ink-2);
       max-width: 70ch;
+      overflow-wrap: anywhere;
     }
     .actions {
       display: flex;

@@ -63,11 +63,11 @@
   }
 
   @include bp.phone {
-    min-height: calc(var(--touch-min) - 4px);
+    min-height: var(--touch-min);
   }
 
   @include bp.coarse {
-    min-height: calc(var(--touch-min) - 4px);
+    min-height: var(--touch-min);
   }
 }
 
