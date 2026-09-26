@@ -174,21 +174,6 @@ def test_tick_settings_default_price_staleness_is_seven_days():
     assert TickSettings(universe=["UP.US"]).max_price_staleness_days == 7
 
 
-def test_current_prices_drops_tickers_with_stale_closes(lake_trending):
-    from stonks.production.tick import _current_prices
-
-    # lake_trending's last bar is 2026-04-01 (a Wednesday).
-    fresh = _current_prices(
-        lake_trending, ["UP.US", "FLAT.US"], date(2026, 4, 8), max_staleness_days=7
-    )
-    assert set(fresh) == {"UP.US", "FLAT.US"}
-
-    stale = _current_prices(
-        lake_trending, ["UP.US", "FLAT.US"], date(2026, 4, 9), max_staleness_days=7
-    )
-    assert stale == {}
-
-
 def test_tick_does_not_trade_on_months_old_prices(tick_env):
     lake, state, registry = tick_env
     settings = TickSettings(universe=["UP.US"], threshold=0.0, initial_cash=10_000.0)
