@@ -1,15 +1,17 @@
 import { Injectable } from '@angular/core';
 
+import { SILENT_HEADERS } from '../core/http/interceptors';
 import { unwrap } from './api-call';
 import {
   getGoLiveReport,
   getStrategy,
+  getStrategyHistory,
   listStrategies,
   promoteStrategy,
   retireStrategy,
   shadowStrategy,
 } from './generated/sdk.gen';
-import type { ListStrategiesData, StrategyStatus } from './models';
+import type { ListStrategiesData, StatusChangeRequest, StrategyStatus } from './models';
 
 /** Registered strategies, their survival reports, and status changes. */
 @Injectable({ providedIn: 'root' })
@@ -35,15 +37,33 @@ export class StrategiesService {
     );
   }
 
-  promote(strategyId: string) {
-    return unwrap(promoteStrategy({ path: { strategy_id: strategyId } }));
+  /** Audited status changes and interventions, oldest first. */
+  history(strategyId: string) {
+    return unwrap(getStrategyHistory({ path: { strategy_id: strategyId } }));
   }
 
-  shadow(strategyId: string) {
-    return unwrap(shadowStrategy({ path: { strategy_id: strategyId } }));
+  /**
+   * Move to active. The API answers 409 when the go-live gate refuses; send
+   * `override` with a reason of at least 20 characters to promote anyway.
+   * `silent` skips the error toast (the caller handles the 409 itself).
+   */
+  promote(strategyId: string, body: StatusChangeRequest, silent = false) {
+    return unwrap(
+      promoteStrategy({
+        path: { strategy_id: strategyId },
+        body,
+        headers: silent ? SILENT_HEADERS : undefined,
+      }),
+    );
   }
 
-  retire(strategyId: string) {
-    return unwrap(retireStrategy({ path: { strategy_id: strategyId } }));
+  /** Move to shadow; `reason` is required. */
+  shadow(strategyId: string, body: StatusChangeRequest) {
+    return unwrap(shadowStrategy({ path: { strategy_id: strategyId }, body }));
+  }
+
+  /** Move to retired; `reason` is required. */
+  retire(strategyId: string, body: StatusChangeRequest) {
+    return unwrap(retireStrategy({ path: { strategy_id: strategyId }, body }));
   }
 }
