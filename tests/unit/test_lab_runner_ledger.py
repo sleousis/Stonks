@@ -219,3 +219,12 @@ def test_plain_tuner_result_still_works(ledger):
     result = _runner(_Plain(), ledger=ledger).run(BuyAndHold, _ds())
     assert result.n_trials_run == 1
     assert result.manifest["seeds"]["tuner"] is None
+
+
+def test_a_ledger_failure_while_recording_an_error_keeps_the_original_exception(ledger):
+    def _broken(run_id, verdict):
+        raise OSError("disk full")
+
+    ledger.finish_run = _broken
+    with pytest.raises(RuntimeError, match="exploded"):
+        _runner(_Boom(), ledger=ledger).run(BuyAndHold, _ds())

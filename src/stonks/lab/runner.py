@@ -130,7 +130,10 @@ class LabRunner:
             result = self._run(strategy_cls, dataset, fixed_params, run_id, class_path, manifest)
         except BaseException:
             if self._ledger is not None:
-                self._ledger.finish_run(run_id, "error")
+                try:
+                    self._ledger.finish_run(run_id, "error")
+                except Exception as exc:  # keep the run's own exception
+                    _log.warning("lab.ledger.finish_failed", run_id=run_id, error=str(exc))
             raise
         result.hypothesis, result.premortem = hypothesis, premortem
         if self._ledger is not None:
