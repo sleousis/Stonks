@@ -9,7 +9,10 @@ is recorded after it, and the verdict at the end (``error`` when it
 crashes). Before any of that the BL-37 preflight
 (:func:`~stonks.lab.preflight.run_preflight`) checks data coverage, audit
 flags and universe membership: its errors stop the run, its warnings are
-logged and stored in the manifest. Survival tests with a ``bind_run(ctx)`` hook receive a
+logged and stored in the manifest. A dataset with a ``universe_id`` and no
+tickers first gets that universe's members over the window, and with a
+``data_ensurer`` their missing bars are fetched before the preflight
+(:func:`~stonks.lab.universe_data.prepare_dataset`). Survival tests with a ``bind_run(ctx)`` hook receive a
 :class:`~stonks.lab.trials.LabRunContext` before the suite runs.
 """
 
@@ -40,6 +43,7 @@ from stonks.lab.trials import (
     trials_from_tuning,
 )
 from stonks.lab.tuning.base import tune_and_fit
+from stonks.lab.universe_data import prepare_dataset
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.lab.runner")
@@ -116,12 +120,15 @@ class LabRunner:
         *,
         preflight: bool = True,
         strict_preflight: bool = False,
+        data_ensurer: Any = None,
     ) -> None:
         """``ledger`` persists runs and trials (``None``: in-memory only);
         ``settings`` feeds the manifest's config hash and default costs.
         ``preflight`` runs the BL-37 data checks first (errors stop the
         run, warnings are logged); ``strict_preflight`` makes every
-        warning an error."""
+        warning an error. ``data_ensurer`` (a
+        :class:`~stonks.ingest.ensure.DataEnsurer`, opt in) fetches the
+        universe's missing bars before the preflight."""
         self._tuner = tuner
         self._objective = objective
         self._suite = suite
@@ -130,6 +137,7 @@ class LabRunner:
         self._settings = settings
         self._preflight = preflight
         self._strict_preflight = strict_preflight
+        self._data_ensurer = data_ensurer
 
     def run(
         self,
@@ -145,9 +153,14 @@ class LabRunner:
         that re-tune keep them pinned, plus the strategy's non-tunable params.
         ``hypothesis`` / ``premortem`` are recorded before tuning starts."""
         class_path = f"{strategy_cls.__module__}:{strategy_cls.__name__}"
+        dataset, ensured = prepare_dataset(
+            dataset, ensurer=self._data_ensurer, strategy=strategy_cls
+        )
         preflight, preflight_record = self._run_preflight(strategy_cls, dataset, class_path)
         seeds = collect_seeds(self._tuner, self._suite.tests)
         manifest = self._manifest(dataset, seeds)
+        if ensured is not None:
+            manifest["ensure"] = ensured.model_dump(mode="json")
         if preflight_record is not None:
             manifest["preflight"] = preflight_record
         run_id = new_run_id()
