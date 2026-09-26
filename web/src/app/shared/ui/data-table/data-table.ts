@@ -106,8 +106,10 @@ const NUMERIC: readonly CellFormat[] = [
  * Sortable, paginated table that turns into stacked cards on phones.
  *
  * Client mode (default): pass all rows; sorting and paging happen here.
- * Server mode: pass `total` (the API page's `total`) and handle `pageChange`
- * by refetching with `{ offset, limit }`; sorting then applies within the page.
+ * Server mode: pass `total` (the API page's `total`) and `offset`, and handle
+ * `pageChange` by refetching with `{ offset, limit }`. Rows stay in the API's
+ * order and the headers are not sort buttons: sorting one page of 50 rows
+ * would claim an order the other pages do not follow.
  */
 @Component({
   selector: 'app-data-table',
@@ -134,6 +136,11 @@ export class DataTable<T extends object> {
    */
   readonly offset = input<number | null>(null);
   readonly emptyMessage = input('No rows to show.');
+  /**
+   * The next page is loading while these rows stay on screen: dims them and
+   * shows a thin progress bar (see `keepLatest()`).
+   */
+  readonly busy = input(false);
   readonly pageChange = output<PageRequest>();
 
   protected readonly cells = contentChildren(TableCell);
@@ -160,13 +167,14 @@ export class DataTable<T extends object> {
   protected readonly sortedRows = computed(() => {
     const rows = this.rows();
     const sort = this.sort();
-    if (!sort) return rows;
+    if (!sort || this.serverMode()) return rows;
     const col = this.columns().find((c) => c.key === sort.key);
     if (!col) return rows;
     const factor = sort.dir === 'asc' ? 1 : -1;
     return [...rows].sort((a, b) => factor * compare(this.raw(a, col), this.raw(b, col)));
   });
 
+  protected readonly serverMode = computed(() => this.total() !== null);
   protected readonly totalRows = computed(() => this.total() ?? this.rows().length);
   protected readonly pageCount = computed(() => {
     const size = this.pageSize();
@@ -204,10 +212,11 @@ export class DataTable<T extends object> {
   }
 
   protected sortable(col: TableColumn<T>): boolean {
-    return col.sortable !== false;
+    return !this.serverMode() && col.sortable !== false;
   }
 
   protected ariaSort(col: TableColumn<T>): 'ascending' | 'descending' | null {
+    if (this.serverMode()) return null;
     const sort = this.sort();
     if (!sort || sort.key !== col.key) return null;
     return sort.dir === 'asc' ? 'ascending' : 'descending';
