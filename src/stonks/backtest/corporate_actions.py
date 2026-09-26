@@ -8,7 +8,9 @@ does on each ex-date:
   orders still queued for that ticker have their quantity multiplied by
   ``r`` (limit price divided by ``r``), as brokers adjust open orders;
 - **cash dividend** ``D``: ``quantity x D x (1 - withholding_rate)`` is
-  credited to cash (debited for a short position).
+  credited to cash. A short position pays ``|quantity| x D`` in full (a
+  manufactured dividend: withholding never reduces what a short owes).
+- a split multiplies a short position the same way (-10 at 2:1 is -20).
 
 An event takes effect on the first bar of its ticker dated on or after the
 ex-date, before that bar's fills, which is also where the signal-side
@@ -91,7 +93,7 @@ def apply_to_portfolio(
             quantity_after=after,
             cash_delta=0.0,
         )
-    cash = held * action.amount * (1.0 - withholding_rate)
+    cash = dividend_cash(held, action.amount, withholding_rate)
     portfolio.cash += cash
     return CorporateActionRecord(
         timestamp=as_of,
@@ -102,6 +104,14 @@ def apply_to_portfolio(
         quantity_after=held,
         cash_delta=cash,
     )
+
+
+def dividend_cash(quantity: float, amount: float, withholding_rate: float = 0.0) -> float:
+    """Cash a dividend of ``amount`` per share moves for a signed position:
+    a long is credited net of withholding, a short pays it in full."""
+    if quantity < 0:
+        return quantity * amount
+    return quantity * amount * (1.0 - withholding_rate)
 
 
 def adjust_orders_for_split(orders: Sequence[Order], split: Split) -> list[Order]:

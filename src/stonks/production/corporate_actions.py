@@ -49,7 +49,11 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from typing import Any
 
-from stonks.backtest.corporate_actions import CorporateActionRecord, apply_to_portfolio
+from stonks.backtest.corporate_actions import (
+    CorporateActionRecord,
+    apply_to_portfolio,
+    dividend_cash,
+)
 from stonks.core.corporate_actions import CorporateAction, CorporateActions, Dividend, Split
 from stonks.core.types import Portfolio
 from stonks.execution.reconcile import NON_TERMINAL_STATUSES
@@ -250,19 +254,22 @@ def apply_plan(
     portfolio: Portfolio, plan: CorporateActionPlan, *, withholding_rate: float = 0.0
 ) -> list[CorporateActionRecord]:
     """Apply the due events to ``portfolio`` in place. A split adds
-    ``(ratio - 1) x base_quantity`` shares (never below zero); a dividend
-    credits ``base_quantity x amount x (1 - withholding_rate)``. Returns
-    one record per event that changed the portfolio."""
+    ``(ratio - 1) x base_quantity`` shares (never crossing zero); a dividend
+    credits ``base_quantity x amount x (1 - withholding_rate)``. The base is
+    signed: a short grows short on a split and pays the dividend in full
+    (roadmap 16.1). Returns one record per event that changed the
+    portfolio."""
     records: list[CorporateActionRecord] = []
     for planned in plan.due:
         event, base = planned.event, planned.base_quantity
-        if base <= 0:
+        if base == 0:
             continue
         held = portfolio.positions.get(event.ticker, 0.0)
         stamp = datetime.combine(event.ex_date, time())
         if isinstance(event, Split):
-            after = max(held + (event.ratio - 1.0) * base, 0.0)
-            if after > 0:
+            after = held + (event.ratio - 1.0) * base
+            after = max(after, 0.0) if base > 0 else min(after, 0.0)
+            if after != 0:
                 portfolio.positions[event.ticker] = after
             else:
                 portfolio.positions.pop(event.ticker, None)
@@ -270,7 +277,7 @@ def apply_plan(
                 CorporateActionRecord(stamp, event.ticker, "split", event.ratio, held, after, 0.0)
             )
         else:
-            cash = base * event.amount * (1.0 - withholding_rate)
+            cash = dividend_cash(base, event.amount, withholding_rate)
             portfolio.cash += cash
             records.append(
                 CorporateActionRecord(
@@ -431,16 +438,17 @@ def _base_quantity(
     the ex-date's basis: the latest snapshot dated before the ex-date,
     scaled by the splits in between. Zero when there is none, or when the
     position was closed at any snapshot since (bought back later means
-    bought at post-event quotes)."""
+    bought at post-event quotes). Signed: a short's base is negative, and
+    a flip from short to long (or back) in between counts as closed."""
     before = [(day, pos) for day, pos in history if day < event.ex_date]
     if not before:
         return 0.0
     day0, positions0 = before[-1]
     quantity = float(positions0.get(event.ticker, 0.0))
-    if quantity <= 0:
+    if quantity == 0:
         return 0.0
     for day, positions in history:
-        if day > day0 and float(positions.get(event.ticker, 0.0)) <= 0:
+        if day > day0 and float(positions.get(event.ticker, 0.0)) * quantity <= 0:
             return 0.0
     for other in actions.by_ticker.get(event.ticker, ()):
         if not isinstance(other, Split) or other is event:
