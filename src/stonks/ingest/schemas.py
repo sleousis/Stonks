@@ -357,6 +357,9 @@ class FinancialStatementsBundle(FrozenRow):
 class DividendRow(FrozenRow):
     ticker: str
     ex_date: date
+    #: Cash paid per share as the share existed on ``ex_date`` — never
+    #: restated for later splits (adapters map the vendor's unadjusted
+    #: figure here).
     amount: float = Field(ge=0.0)
     currency: str | None = None
     pay_date: date | None = None
