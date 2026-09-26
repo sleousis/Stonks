@@ -1,4 +1,4 @@
-import type { HealthCheckView } from '../../api/models';
+import type { HealthCheckView, HealthConfig } from '../../api/models';
 import type { PillTone } from '../../shared/ui/status-pill';
 
 /**
@@ -82,6 +82,35 @@ export function splitChecks(checks: readonly HealthCheckView[]): {
   freshness.sort((a, b) => RANK[b.level] - RANK[a.level] || a.ticker.localeCompare(b.ticker));
   other.sort((a, b) => a.name.localeCompare(b.name));
   return { freshness, other };
+}
+
+/**
+ * The limit a check compares against, in words, from the report's
+ * `[production.health]` thresholds; `null` when the API did not send it.
+ */
+export function checkThreshold(name: string, t: HealthConfig | null | undefined): string | null {
+  if (!t) return null;
+  const n = (v: number | undefined, unit: string) => (v == null ? null : `${v} ${unit}`);
+  switch (name) {
+    case 'stuck_ticks': {
+      const v = n(t.stuck_tick_minutes, 'min');
+      return v && `Stuck when running over ${v}`;
+    }
+    case 'stuck_ingest_runs': {
+      const v = n(t.stuck_ingest_minutes, 'min');
+      return v && `Stuck when running over ${v}`;
+    }
+    case 'ingest_failures': {
+      const v = n(t.ingest_failure_lookback_hours, 'h');
+      return v && `Failures in the last ${v}`;
+    }
+    case 'freshness': {
+      const days = t.max_bar_age_days;
+      return days == null ? null : `Latest bar at most ${days} day${days === 1 ? '' : 's'} old`;
+    }
+    default:
+      return name.startsWith(FRESHNESS_PREFIX) ? checkThreshold('freshness', t) : null;
+  }
 }
 
 /** Human names for the run checks. */
