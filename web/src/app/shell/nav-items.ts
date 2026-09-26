@@ -17,6 +17,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { path: '/data', label: 'Data', key: 'a', group: 'Operate' },
   { path: '/go-live', label: 'Go-live', key: 'g', group: 'Operate' },
   // ops
+  { path: '/universes', label: 'Universes', key: 'v', group: 'Operate' },
   { path: '/ops/halts', label: 'Halts', key: 'k', group: 'Operate' },
   { path: '/ops/schedule', label: 'Schedule', key: 'j', group: 'System' },
   { path: '/ops/data-quality', label: 'Data quality', key: 'q', group: 'System' },
