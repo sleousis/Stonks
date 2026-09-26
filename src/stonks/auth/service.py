@@ -252,19 +252,38 @@ class AuthService:
                 reset = oldest + timedelta(minutes=self.settings.failure_window_minutes)
                 raise TooManyAttempts(int((reset - now).total_seconds()) + 1)
 
-    def _attempt(
-        self,
-        state: SqliteState,
-        email: str,
-        ip: str | None,
-        stage: Literal["password", "mfa"],
-        success: bool,
-    ) -> None:
-        state.execute(
-            "INSERT INTO login_attempts (email, ip, stage, success, created_at)"
-            " VALUES (?, ?, ?, ?, ?)",
-            [email, ip, stage, int(success), _iso(self._now())],
-        )
+    def _reserve(
+        self, state: SqliteState, email: str, ip: str | None, stage: Literal["password", "mfa"]
+    ) -> int:
+        """Check the limits and record this attempt as a failure in one
+        ``BEGIN IMMEDIATE`` transaction, before the slow check runs. Parallel
+        requests are serialized here and each counts the others, so a burst
+        never gets more than ``max_failures`` guesses (review finding AS-11).
+        A success later flips the row with :meth:`_succeeded`."""
+        state.con.execute("BEGIN IMMEDIATE")
+        try:
+            self._check_limit(state, email, ip)
+            cur = state.execute(
+                "INSERT INTO login_attempts (email, ip, stage, success, created_at)"
+                " VALUES (?, ?, ?, 0, ?)",
+                [email, ip, stage, _iso(self._now())],
+            )
+            attempt_id = int(cur.lastrowid)
+        except BaseException:
+            state.con.execute("ROLLBACK")
+            raise
+        state.con.execute("COMMIT")
+        return attempt_id
+
+    @staticmethod
+    def _succeeded(state: SqliteState, attempt_id: int) -> None:
+        state.execute("UPDATE login_attempts SET success = 1 WHERE id = ?", [attempt_id])
+
+    @staticmethod
+    def _release(state: SqliteState, attempt_id: int) -> None:
+        """Forget a reserved attempt that never checked a secret (a refused
+        request, not a guess)."""
+        state.execute("DELETE FROM login_attempts WHERE id = ?", [attempt_id])
 
     # ---- sessions --------------------------------------------------------------
 
@@ -435,7 +454,7 @@ class AuthService:
     ) -> LoginResult:
         key = normalize_email(email or "")
         with self._state() as state:
-            self._check_limit(state, key, ip)
+            attempt = self._reserve(state, key, ip, "password")
             try:
                 user = UserRepository(state).get_by_email(key) if key else None
             except NotFound:
@@ -443,16 +462,14 @@ class AuthService:
             stored = self._auth_row(state, user.id)["password_hash"] if user else None
             ok = self._hasher.verify(stored, password or "")
             if not ok or user is None or user.status != "active" or user.kind != "human":
-                with state.transaction():
-                    self._attempt(state, key, ip, "password", False)
-                    if user is not None:
-                        AuditLog(state).record(
-                            f"user:{user.id}", "auth.login_failed", "user", user.id, ip=ip
-                        )
+                if user is not None:
+                    AuditLog(state).record(
+                        f"user:{user.id}", "auth.login_failed", "user", user.id, ip=ip
+                    )
                 raise InvalidCredentials("wrong email or password")
             enrolled = self._auth_row(state, user.id)["mfa_enrolled_at"] is not None
             with state.transaction():
-                self._attempt(state, key, ip, "password", True)
+                self._succeeded(state, attempt)
                 if stored and self._hasher.needs_rehash(stored):
                     state.execute(
                         "UPDATE users SET password_hash = ? WHERE id = ?",
@@ -518,21 +535,22 @@ class AuthService:
         box = self._secret_box()
         key = (info.user.email or info.user.id).lower()
         with self._state() as state:
-            self._check_limit(state, key, ip)
+            attempt = self._reserve(state, key, ip, "mfa")
             row = self._auth_row(state, info.user.id)
             if row["mfa_enrolled_at"] is not None:
+                self._release(state, attempt)
                 raise ConflictError("a second factor is already set up")
             if row["totp_secret_enc"] is None:
+                self._release(state, attempt)
                 raise ConflictError("start the set-up first")
             secret = self._open_secret(box, row["totp_secret_enc"], info.user.id)
             step = self._totp.verify(secret, code, last_step=None, at=self._now())
             if step is None:
-                self._attempt(state, key, ip, "mfa", False)
                 raise InvalidCredentials("wrong code")
             codes = generate_codes()
             now = _iso(self._now())
             with state.transaction():
-                self._attempt(state, key, ip, "mfa", True)
+                self._succeeded(state, attempt)
                 state.execute(
                     "UPDATE users SET mfa_enrolled_at = ?, totp_last_step = ? WHERE id = ?",
                     [now, step, info.user.id],
@@ -568,9 +586,10 @@ class AuthService:
             raise ValidationError("send exactly one of code or recovery_code")
         key = (info.user.email or info.user.id).lower()
         with self._state() as state:
-            self._check_limit(state, key, ip)
+            attempt = self._reserve(state, key, ip, "mfa")
             row = self._auth_row(state, info.user.id)
             if row["mfa_enrolled_at"] is None:
+                self._release(state, attempt)
                 raise ConflictError("no second factor is set up yet; enrol first")
             method: Literal["totp", "recovery_code"]
             if code:
@@ -579,6 +598,16 @@ class AuthService:
                 step = self._totp.verify(
                     secret, code, last_step=row["totp_last_step"], at=self._now()
                 )
+                # Claim the step atomically: of two parallel checks of one
+                # code, only the one whose update lands is accepted.
+                if step is not None:
+                    claimed = state.execute(
+                        "UPDATE users SET totp_last_step = ? WHERE id = ?"
+                        " AND (totp_last_step IS NULL OR totp_last_step < ?)",
+                        [step, info.user.id, step],
+                    )
+                    if claimed.rowcount != 1:
+                        step = None
                 ok, method = step is not None, "totp"
             else:
                 code_hash = hash_code(recovery_code or "")
@@ -589,7 +618,6 @@ class AuthService:
                 )
                 ok, method, step = used.rowcount == 1, "recovery_code", None
             if not ok:
-                self._attempt(state, key, ip, "mfa", False)
                 AuditLog(state).record(
                     f"user:{info.user.id}",
                     "auth.mfa.failed",
@@ -600,11 +628,7 @@ class AuthService:
                 )
                 raise InvalidCredentials("wrong code")
             with state.transaction():
-                self._attempt(state, key, ip, "mfa", True)
-                if step is not None:
-                    state.execute(
-                        "UPDATE users SET totp_last_step = ? WHERE id = ?", [step, info.user.id]
-                    )
+                self._succeeded(state, attempt)
                 session = self._complete(state, info, ip=ip, user_agent=user_agent)
                 left = self._codes_left(state, info.user.id)
                 AuditLog(state).record(
@@ -902,17 +926,19 @@ class AuthService:
     def reset_password(
         self, principal: Principal, user_id: str, new_password: str, *, ip: str | None = None
     ) -> None:
-        """Admin sets a new password; the user's sessions are signed out."""
+        """Admin sets a new password. The user's sessions are signed out and
+        their API tokens revoked (a reset usually means a suspected leak)."""
         require(principal, Permission.USERS_MANAGE)
         new_hash = self._hash(new_password)
         with self._state() as state, state.transaction():
             self._human(UserRepository(state), user_id)
             self._set_password(state, user_id, new_hash)
+            self._revoke_tokens(state, user_id)
             AuditLog(state).record(principal.actor, "auth.password.reset", "user", user_id, ip=ip)
 
     def reset_mfa(self, principal: Principal, user_id: str, *, ip: str | None = None) -> None:
         """Clear a user's second factor (lost phone and codes). They enrol
-        again at the next login."""
+        again at the next login. Sessions and API tokens are revoked."""
         require(principal, Permission.USERS_MANAGE)
         with self._state() as state, state.transaction():
             self._human(UserRepository(state), user_id)
@@ -923,6 +949,7 @@ class AuthService:
             )
             state.execute("DELETE FROM recovery_codes WHERE user_id = ?", [user_id])
             self._revoke_all(state, user_id)
+            self._revoke_tokens(state, user_id)
             AuditLog(state).record(principal.actor, "auth.mfa.reset", "user", user_id, ip=ip)
 
     @staticmethod
@@ -934,6 +961,12 @@ class AuthService:
         if user.kind != "human":
             raise NotFoundError(f"user {user_id!r} not found")
         return user
+
+    def _revoke_tokens(self, state: SqliteState, user_id: str) -> None:
+        state.execute(
+            "UPDATE api_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL",
+            [_iso(self._now()), user_id],
+        )
 
     def _set_password(self, state: SqliteState, user_id: str, password_hash: str) -> None:
         state.execute(
