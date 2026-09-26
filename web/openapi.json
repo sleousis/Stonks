@@ -1123,14 +1123,18 @@
                 "items": {
                   "enum": [
                     "benchmark_relative",
+                    "cost_stress",
+                    "cross_instrument",
                     "deflated_sharpe",
                     "drift",
+                    "mc_trades",
                     "mcpt",
                     "oos",
                     "pbo",
                     "period_stability",
                     "permutation",
                     "perturbation",
+                    "plateau",
                     "runs_test",
                     "walk_forward",
                     "walk_forward_mcpt"
@@ -2206,14 +2210,18 @@
                 "items": {
                   "enum": [
                     "benchmark_relative",
+                    "cost_stress",
+                    "cross_instrument",
                     "deflated_sharpe",
                     "drift",
+                    "mc_trades",
                     "mcpt",
                     "oos",
                     "pbo",
                     "period_stability",
                     "permutation",
                     "perturbation",
+                    "plateau",
                     "runs_test",
                     "walk_forward",
                     "walk_forward_mcpt"
