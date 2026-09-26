@@ -82,8 +82,9 @@ SUITE_PRESETS: dict[str, tuple[str, ...]] = {
         "mcpt",
         "event_study",
         "vs_random",
-        # 9.5.2: combinatorial purged CV
+        # 9.5.2 and 9.5.5: combinatorial purged CV, named crisis windows
         "cpcv",
+        "crisis",
     ),
 }
 
