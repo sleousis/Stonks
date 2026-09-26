@@ -46,13 +46,32 @@ import {
         }
         @for (item of legend(); track item.id) {
           <span class="item">
-            <span class="swatch" [attr.data-color]="item.color" aria-hidden="true"></span>
+            <span
+              class="swatch"
+              [attr.data-color]="item.color"
+              [class.dashed]="item.dashed"
+              aria-hidden="true"
+            ></span>
             {{ item.label }} <strong class="num">{{ item.value }}</strong>
           </span>
         }
       </figcaption>
-      <div #plot class="plot" role="img" [attr.aria-label]="ariaLabel()"></div>
-      @if (summary()) {
+      @if (failed()) {
+        <div class="failed" role="alert">
+          @if (summary()) {
+            <p class="failed-summary">{{ summary() }}</p>
+          }
+          <p class="failed-hint">The chart could not load. Reload the page.</p>
+        </div>
+      }
+      <div
+        #plot
+        class="plot"
+        role="img"
+        [class.gone]="failed()"
+        [attr.aria-label]="ariaLabel()"
+      ></div>
+      @if (summary() && !failed()) {
         <p class="visually-hidden">{{ summary() }}</p>
       }
     </figure>
@@ -107,6 +126,56 @@ import {
     .swatch[data-color='loss'] {
       background: var(--color-loss);
     }
+    .swatch[data-color='info'] {
+      background: var(--color-info);
+    }
+    .swatch[data-color='warn'] {
+      background: var(--color-warn);
+    }
+    .swatch[data-color='ink'] {
+      background: var(--color-ink-2);
+    }
+    .swatch.dashed {
+      width: 14px;
+      background: repeating-linear-gradient(
+        90deg,
+        var(--swatch, currentColor) 0 4px,
+        transparent 4px 7px
+      );
+    }
+    .swatch.dashed[data-color='primary'] {
+      --swatch: var(--color-primary);
+    }
+    .swatch.dashed[data-color='info'] {
+      --swatch: var(--color-info);
+    }
+    .swatch.dashed[data-color='warn'] {
+      --swatch: var(--color-warn);
+    }
+    .swatch.dashed[data-color='ink'] {
+      --swatch: var(--color-ink-2);
+    }
+    .swatch.dashed[data-color='muted'] {
+      --swatch: var(--color-ink-3);
+    }
+    .failed {
+      display: grid;
+      gap: var(--space-2);
+      padding: var(--space-4);
+      border: 1px dashed var(--color-border-strong);
+      border-radius: var(--radius-md);
+      background: var(--color-surface-2);
+      font-size: var(--text-sm);
+    }
+    .failed-summary {
+      color: var(--color-ink);
+    }
+    .failed-hint {
+      color: var(--color-ink-2);
+    }
+    .plot.gone {
+      display: none;
+    }
     .plot {
       position: relative;
       height: var(--chart-h, 280px);
@@ -133,6 +202,8 @@ export class TimeSeriesChart {
   private readonly doc = inject(DOCUMENT);
   private readonly handle = signal<ChartHandle | null>(null);
   private readonly readout = signal<CrosshairReadout>({ time: null, values: null });
+  /** The engine chunk failed to load (often right after a deploy). */
+  protected readonly failed = signal(false);
 
   protected readonly readoutTime = computed(() => this.readout().time?.slice(0, 16) ?? null);
   protected readonly legend = computed(() => {
@@ -140,7 +211,13 @@ export class TimeSeriesChart {
     return this.series().map((s) => {
       const last = s.points.at(-1)?.value;
       const value = values ? values.get(s.id) : last;
-      return { id: s.id, label: s.label, color: s.color, value: fmt(value, s.format) };
+      return {
+        id: s.id,
+        label: s.label,
+        color: s.color,
+        dashed: !!s.dashed,
+        value: fmt(value, s.format),
+      };
     });
   });
 
@@ -159,7 +236,10 @@ export class TimeSeriesChart {
         created.onCrosshair((r) => this.readout.set(r));
         this.handle.set(created);
       })
-      .catch((err: unknown) => console.error('chart engine failed to load', err));
+      .catch((err: unknown) => {
+        console.error('chart engine failed to load', err);
+        if (!destroyed) this.failed.set(true);
+      });
 
     afterRenderEffect(() => {
       this.handle()?.setSeries(this.series());
@@ -185,6 +265,9 @@ export class TimeSeriesChart {
         gain: v('--color-gain', '#17784a'),
         loss: v('--color-loss', '#b8342a'),
         muted: v('--color-ink-3', '#5f6b78'),
+        info: v('--color-info', '#2a5db0'),
+        warn: v('--color-warn', '#8f5d00'),
+        ink: v('--color-ink-2', '#45515e'),
       },
     };
   }

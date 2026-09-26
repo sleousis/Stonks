@@ -1,4 +1,5 @@
 <app-page-header title="Dashboard" [description]="asOf()">
+  <app-updated-ago [at]="auto.updatedAt()" />
   <button
     actions
     type="button"
@@ -74,7 +75,7 @@
       } @else if (rows().length === 0) {
         <app-empty-state
           title="No P&L yet"
-          message="The series starts after the first tick saves a portfolio snapshot."
+          message="The series starts after the first trading run saves a portfolio snapshot."
         />
       } @else {
         <app-time-series-chart
@@ -116,7 +117,7 @@
           <li>
             <app-status-pill [status]="check.ok ? 'pass' : 'fail'" />
             <div class="check-text">
-              <p class="check-name">{{ check.name }}</p>
+              <p class="check-name">{{ checkTitle(check.name) }}</p>
               <p class="check-detail">{{ check.detail }}</p>
             </div>
           </li>
@@ -139,7 +140,7 @@
     } @else if (portfolio.value().positions.length === 0) {
       <app-empty-state
         title="No open positions"
-        message="The portfolio is all cash. Positions appear after a tick fills orders."
+        message="The portfolio is all cash. Positions appear after a trading run fills orders."
       />
     } @else {
       <app-data-table
@@ -156,30 +157,35 @@
   <!-- Ticks ---------------------------------------------------------------->
   <section class="panel span-5" aria-labelledby="ticks-title">
     <div class="panel-head">
-      <h2 id="ticks-title">Recent ticks</h2>
+      <h2 id="ticks-title">Recent trading runs</h2>
       @if (ticks.hasValue()) {
         <span class="muted num">{{ ticks.value().total }} total</span>
       }
     </div>
     @if (ticks.error(); as err) {
-      <app-error-state title="Could not load ticks" [error]="err" (retry)="ticks.reload()" />
+      <app-error-state title="Could not load trading runs" [error]="err" (retry)="ticks.reload()" />
     } @else if (!ticks.hasValue()) {
-      <app-loading-state label="Loading ticks" [rows]="5" />
+      <app-loading-state label="Loading trading runs" [rows]="5" />
     } @else if (ticks.value().items.length === 0) {
       <app-empty-state
-        title="No ticks yet"
-        message="Nothing has run yet. Try a dry run first: it shows what the strategies would trade without sending orders."
+        title="No trading runs yet"
+        message="Nothing has run yet. Try a dry run first. It shows what the strategies would trade without sending orders."
       >
-        <a class="btn" routerLink="/orders/ticks">Go to ticks</a>
+        <a class="btn" routerLink="/orders/ticks">Go to trading runs</a>
       </app-empty-state>
     } @else {
       <app-data-table
-        caption="Most recent production ticks"
+        caption="Most recent trading runs"
         [rows]="ticks.value().items"
         [columns]="tickColumns"
         [rowKey]="tickKey"
         [pageSize]="0"
       >
+        <ng-template appCell="started_at" [appCellOf]="ticks.value().items" let-tick>
+          <a class="cell-link" [routerLink]="['/orders/ticks', tick.id]">{{
+            tick.started_at | dateTime
+          }}</a>
+        </ng-template>
         <ng-template appCell="status" [appCellOf]="ticks.value().items" let-tick>
           <app-status-pill [status]="tick.status" />
         </ng-template>

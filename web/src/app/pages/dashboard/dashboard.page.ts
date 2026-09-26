@@ -15,7 +15,10 @@ import {
 } from '../../core/format/format';
 import type { ChartSeries } from '../../shared/chart/chart-engine';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
+import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
+import { CHECK_TITLES } from '../health/health-state';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
+import { DateTimePipe } from '../../shared/format.pipes';
 import { PageHeader } from '../../shared/ui/page-header';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -23,11 +26,23 @@ import { StatusPill } from '../../shared/ui/status-pill';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 
 const RECENT_TICKS = 8;
+const FRESHNESS_PREFIX = 'freshness:';
+
+/** A health check's name for people: "Stuck ticks", "Freshness of AAPL.US". */
+export function checkTitle(name: string): string {
+  if (CHECK_TITLES[name]) return CHECK_TITLES[name];
+  if (name.startsWith(FRESHNESS_PREFIX))
+    return `Freshness of ${name.slice(FRESHNESS_PREFIX.length)}`;
+  const words = name.replace(/[_:]+/g, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
 
 /**
  * Reference page: read-only overview built from GET routes. Each panel owns
  * one `resource()` and renders loading / error / empty / data on its own, so
- * one failing route never blanks the whole page.
+ * one failing route never blanks the whole page. Everything reloads every
+ * minute while the tab is visible, and right after a trading run this tab
+ * followed ends.
  */
 @Component({
   selector: 'app-dashboard-page',
@@ -40,6 +55,8 @@ const RECENT_TICKS = 8;
     DataTable,
     TableCell,
     TimeSeriesChart,
+    UpdatedAgo,
+    DateTimePipe,
     LoadingState,
     EmptyState,
     ErrorState,
@@ -69,15 +86,12 @@ export class DashboardPage {
   });
   protected readonly health = resource({ loader: () => this.healthApi.report() });
   protected readonly version = resource({ loader: () => this.healthApi.ping() });
-  protected readonly strategyCounts = resource({
-    loader: async () => {
-      const [active, shadow] = await Promise.all([
-        this.strategiesApi.count('active'),
-        this.strategiesApi.count('shadow'),
-      ]);
-      return { active, shadow };
-    },
-  });
+  protected readonly strategyCounts = resource({ loader: () => this.strategiesApi.summary() });
+
+  protected readonly auto = autoRefresh(
+    () => [this.portfolio, this.pnl, this.ticks, this.health, this.version, this.strategyCounts],
+    { triggers: [this.ticksApi.finished] },
+  );
 
   protected readonly refreshing = computed(
     () =>
@@ -94,7 +108,7 @@ export class DashboardPage {
     const takenAt = this.portfolio.value().taken_at;
     return takenAt
       ? `Positions from the snapshot of ${formatDateTime(takenAt)}, valued at the latest prices.`
-      : 'No snapshot yet: the first tick seeds the portfolio.';
+      : 'No snapshot yet. The first trading run seeds the portfolio.';
   });
 
   protected readonly rows = computed(() => (this.pnl.hasValue() ? this.pnl.value().rows : []));
@@ -236,6 +250,7 @@ export class DashboardPage {
     },
   ];
   protected readonly tickKey = (t: TickRun) => t.id;
+  protected readonly checkTitle = checkTitle;
 
   // Health ------------------------------------------------------------------
   protected readonly failingChecks = computed(() =>
@@ -243,11 +258,6 @@ export class DashboardPage {
   );
 
   protected refresh(): void {
-    this.portfolio.reload();
-    this.pnl.reload();
-    this.ticks.reload();
-    this.health.reload();
-    this.version.reload();
-    this.strategyCounts.reload();
+    this.auto.refresh();
   }
 }

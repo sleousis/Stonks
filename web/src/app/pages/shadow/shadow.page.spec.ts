@@ -163,6 +163,78 @@ describe('ShadowPage', () => {
     expect(decisions?.querySelector('a[href="/orders/ticks/t3"]')).not.toBeNull();
   });
 
+  function summary(id: string, cumulative_return: number | null): ShadowPnlSummary {
+    return { ...SUMMARIES.items[0], strategy_id: id, cumulative_return };
+  }
+
+  /** Serve summaries for `ids`; each series answers with VALUE unless it is in `failing`. */
+  async function flushWith(items: ShadowPnlSummary[], failing: string[] = []): Promise<string[]> {
+    const seriesAsked: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      controller
+        .match(() => true)
+        .forEach((req) => {
+          const path = new URL(req.request.urlWithParams, 'http://localhost').pathname;
+          const m = /^\/api\/shadow\/strategies\/(.+)\/pnl$/.exec(path);
+          if (path === '/api/shadow/pnl') {
+            req.flush({ items, total: items.length, limit: 100, offset: 0 });
+          } else if (m) {
+            seriesAsked.push(m[1]);
+            if (failing.includes(m[1])) {
+              req.flush(
+                { title: 'x', status: 500, detail: 'boom' },
+                { status: 500, statusText: 'Server Error' },
+              );
+            } else {
+              req.flush({ ...VALUE, strategy_id: m[1] });
+            }
+          } else {
+            respond(req);
+          }
+        });
+      await tick(5);
+      fixture.detectChanges();
+    }
+    return seriesAsked;
+  }
+
+  it('one failing series still draws the others', async () => {
+    await flushWith([summary('value-v1', 0.1), summary('broken-v0', 0.05)], ['broken-v0']);
+    expect(chart.last?.map((s) => s.id)).toEqual(['real', 'shadow:value-v1']);
+    const note = el.querySelector('.chart-note.warn');
+    expect(note?.textContent).toContain('Could not load broken-v0');
+  });
+
+  it('charts only the top strategies by return and says so', async () => {
+    const items = Array.from({ length: 9 }, (_, i) => summary(`s${i}`, i / 100));
+    const asked = await flushWith(items);
+    expect(asked.sort()).toEqual(['s3', 's4', 's5', 's6', 's7', 's8']);
+    expect(el.querySelector('.chart-note')?.textContent).toContain('the 6 with the best return');
+    // The table still lists all of them.
+    const rows = el.querySelectorAll('section[aria-labelledby="summary-title"] tbody tr');
+    expect(rows.length).toBe(9);
+  });
+
+  it('gives each line a categorical colour and a name, never gain or loss', async () => {
+    await flushWith([summary('value-v1', 0.1), summary('quality-v2', 0.05)]);
+    const lines = (chart.last ?? []).filter((s) => s.id.startsWith('shadow:'));
+    expect(lines.map((s) => s.label)).toEqual(['value-v1', 'quality-v2']);
+    for (const s of lines) expect(['gain', 'loss', 'brass']).not.toContain(s.color);
+    expect(new Set(lines.map((s) => `${s.color}${s.dashed}`)).size).toBe(2);
+    const legend = [...el.querySelectorAll('.legend .item')].map((i) => i.textContent ?? '');
+    expect(legend.some((t) => t.includes('quality-v2'))).toBe(true);
+  });
+
+  it('shows decision sides as tags and when the page last updated', async () => {
+    await flushAll();
+    const decisions = el.querySelector('section[aria-labelledby="decisions-title"]')!;
+    expect(decisions.querySelector('app-side-tag')?.textContent).toContain('Buy');
+    expect(decisions.querySelector('a[href="/orders/ticks/t3"]')?.textContent).toContain(
+      'View run',
+    );
+    expect(el.querySelector('app-updated-ago')?.textContent).toContain('Updated');
+  });
+
   it('explains the empty state when nothing is in shadow', async () => {
     for (let i = 0; i < 6; i++) {
       controller

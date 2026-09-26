@@ -106,6 +106,27 @@ describe('DataTable', () => {
     expect(button('Next').disabled).toBe(true);
   });
 
+  it('server mode headers are not sort buttons and rows keep the API order', async () => {
+    const { el, firstCells } = await render({
+      pageSize: 2,
+      total: 7,
+      initialSort: { key: 'ticker', dir: 'asc' },
+    });
+    expect(el.querySelectorAll('th button.sort').length).toBe(0);
+    expect(el.querySelector('th')?.getAttribute('aria-sort')).toBeNull();
+    expect(firstCells()).toEqual(['b', 'a', 'c']);
+  });
+
+  it('keeps rows on screen and shows a progress bar while busy', async () => {
+    const { fixture, el } = await render({ busy: true });
+    expect(el.querySelector('.busy-bar')).not.toBeNull();
+    expect(el.querySelector('.table-wrap')?.getAttribute('aria-busy')).toBe('true');
+    expect(el.querySelectorAll('tbody tr').length).toBe(3);
+    fixture.componentRef.setInput('busy', false);
+    await fixture.whenStable();
+    expect(el.querySelector('.busy-bar')).toBeNull();
+  });
+
   it('shows the empty message', async () => {
     const { el } = await render({ rows: [], emptyMessage: 'Nothing here.' });
     expect(el.querySelector('tbody')?.textContent).toContain('Nothing here.');

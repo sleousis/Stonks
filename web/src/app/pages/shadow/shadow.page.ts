@@ -9,13 +9,16 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
-import type { ShadowDecisionView, ShadowPnlSummary } from '../../api/models';
+import type { PnlRowView, ShadowDecisionView, ShadowPnlSummary } from '../../api/models';
 import { PortfolioService } from '../../api/portfolio.service';
 import { ShadowService } from '../../api/shadow.service';
 import { formatPercent, toneClass } from '../../core/format/format';
-import type { ChartColor, ChartSeries } from '../../shared/chart/chart-engine';
+import { CATEGORICAL_LINES, type ChartSeries } from '../../shared/chart/chart-engine';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
+import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
+import { keepLatest } from '../../shared/ui/data-table/keep-latest';
+import { SideTag } from '../../shared/ui/side-tag';
 import { PageHeader } from '../../shared/ui/page-header';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -24,9 +27,26 @@ import { type ShadowComparison, compareToReal, comparisonSeries } from './shadow
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 
 const DECISIONS_PAGE = 50;
-/** Shadow lines cycle through these; brass is kept for the real portfolio. */
-const SHADOW_COLORS: ChartColor[] = ['primary', 'muted', 'gain', 'loss'];
+/**
+ * The chart draws at most this many shadow strategies, the ones with the best
+ * return, each in its own categorical line style (brass stays the real
+ * portfolio). The table still lists every one.
+ */
+export const SHADOW_CHART_MAX = CATEGORICAL_LINES.length;
 const ALL = '';
+
+/** The strategies worth a line on the chart: best return first, missing returns last. */
+export function chartedIds(items: readonly ShadowPnlSummary[], max = SHADOW_CHART_MAX): string[] {
+  return [...items]
+    .sort((a, b) => (b.cumulative_return ?? -Infinity) - (a.cumulative_return ?? -Infinity))
+    .slice(0, max)
+    .map((s) => s.strategy_id);
+}
+
+function sameIds(a: readonly string[] | undefined, b: readonly string[] | undefined): boolean {
+  if (!a || !b) return a === b;
+  return a.length === b.length && a.every((id, i) => id === b[i]);
+}
 
 /** A summary row joined with its comparison against the real portfolio. */
 export interface ShadowRow extends ShadowPnlSummary {
@@ -49,6 +69,8 @@ export interface ShadowRow extends ShadowPnlSummary {
     DataTable,
     TableCell,
     TimeSeriesChart,
+    UpdatedAgo,
+    SideTag,
     LoadingState,
     EmptyState,
     ErrorState,
@@ -70,26 +92,46 @@ export class ShadowPage {
     loader: () => this.portfolioApi.pnl(),
   });
 
-  private readonly strategyIds = computed(() =>
-    this.summaries.hasValue() ? this.summaries.value().items.map((s) => s.strategy_id) : undefined,
+  /** The charted strategies (top by return). Equal lists keep the series from refetching. */
+  protected readonly strategyIds = computed(
+    () => (this.summaries.hasValue() ? chartedIds(this.summaries.value().items) : undefined),
+    { equal: sameIds },
   );
-  /** Each shadow strategy's daily series; waits for the summaries. */
+  /**
+   * The charted strategies' daily series; waits for the summaries. One
+   * request per line, settled independently: a failing series is named in a
+   * note and the others still draw.
+   */
   protected readonly series = resource({
     params: () => (this.strategyIds() ? { ids: this.strategyIds()! } : undefined),
     loader: async ({ params }) => {
-      const all = await Promise.all(params.ids.map((id) => this.shadowApi.pnl(id)));
-      return params.ids.map((id, i) => ({ id, rows: all[i].rows }));
+      const settled = await Promise.allSettled(params.ids.map((id) => this.shadowApi.pnl(id)));
+      const loaded: { id: string; rows: PnlRowView[] }[] = [];
+      const failed: string[] = [];
+      settled.forEach((r, i) => {
+        if (r.status === 'fulfilled') loaded.push({ id: params.ids[i], rows: r.value.rows });
+        else failed.push(params.ids[i]);
+      });
+      if (!loaded.length && failed.length) throw (settled[0] as PromiseRejectedResult).reason;
+      return { loaded, failed };
     },
   });
+  /** The last loaded series stay on the chart while a refresh loads. */
+  private readonly seriesShown = keepLatest(this.series);
+  protected readonly failedSeries = computed(() => this.seriesShown()?.failed ?? []);
+  protected readonly hiddenCount = computed(() =>
+    this.summaries.hasValue()
+      ? Math.max(0, this.summaries.value().items.length - (this.strategyIds()?.length ?? 0))
+      : 0,
+  );
 
   protected readonly refreshing = computed(
     () => this.summaries.isLoading() || this.real.isLoading() || this.series.isLoading(),
   );
 
   private readonly realRows = computed(() => (this.real.hasValue() ? this.real.value().rows : []));
-  private readonly shadowSeries = computed(() =>
-    this.series.hasValue() ? this.series.value() : [],
-  );
+  private readonly shadowSeries = computed(() => this.seriesShown()?.loaded ?? []);
+  protected readonly seriesReady = computed(() => this.seriesShown() !== undefined);
 
   protected readonly rows = computed<ShadowRow[]>(() => {
     if (!this.summaries.hasValue()) return [];
@@ -134,6 +176,8 @@ export class ShadowPage {
     const input = this.chartInput();
     if (!input.baseDay) return [];
     const ids = this.strategyIds() ?? [];
+    const style = (id: string) =>
+      CATEGORICAL_LINES[Math.max(0, ids.indexOf(id)) % CATEGORICAL_LINES.length];
     const series: ChartSeries[] = [
       {
         id: 'real',
@@ -147,7 +191,8 @@ export class ShadowPage {
         id: `shadow:${s.id}`,
         label: s.id,
         kind: 'line',
-        color: SHADOW_COLORS[Math.max(0, ids.indexOf(s.id)) % SHADOW_COLORS.length],
+        color: style(s.id).color,
+        dashed: style(s.id).dashed,
         format: 'number',
         points: s.points,
       })),
@@ -254,6 +299,8 @@ export class ShadowPage {
     }),
     loader: ({ params }) => this.shadowApi.decisions(params),
   });
+  /** The last loaded page stays on screen while the next one loads. */
+  protected readonly decisionsPageShown = keepLatest(this.decisions);
   protected readonly decisionsPage = DECISIONS_PAGE;
 
   protected readonly decisionColumns: TableColumn<ShadowDecisionView>[] = [
@@ -264,7 +311,7 @@ export class ShadowPage {
     { key: 'price', label: 'Price', format: 'money' },
     { key: 'status', label: 'Status' },
     { key: 'as_of', label: 'As of', format: 'date' },
-    { key: 'tick_id', label: 'Tick', mobile: 'hide' },
+    { key: 'tick_id', label: 'Run', sortable: false, mobile: 'hide' },
   ];
   protected readonly decisionRowKey = (d: ShadowDecisionView) => String(d.id);
 
@@ -272,10 +319,14 @@ export class ShadowPage {
     this.decisionTicker.set(raw.trim().toUpperCase());
   }
 
+  protected readonly auto = autoRefresh(() => [
+    this.summaries,
+    this.real,
+    this.series,
+    this.decisions,
+  ]);
+
   protected refresh(): void {
-    // Reloading the summaries refetches every series (their params follow the ids).
-    this.summaries.reload();
-    this.real.reload();
-    this.decisions.reload();
+    this.auto.refresh();
   }
 }
