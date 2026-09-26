@@ -48,17 +48,17 @@
     label="Stuck runs"
     [loading]="!report.hasValue() && !report.error()"
     [value]="report.hasValue() ? '' + stuckCount() : '–'"
-    [detail]="stuckCount() ? 'Ticks or ingest runs hung' : 'None running too long'"
+    [detail]="stuckCount() ? 'Trading runs or data updates hung' : 'None running too long'"
     [detailTone]="stuckCount() ? 'loss' : ''"
   />
   <app-stat-tile
-    label="Failed ingest runs"
+    label="Failed data updates"
     [loading]="!failedIngest.hasValue() && !failedIngest.error()"
     [value]="failedIngest.hasValue() ? '' + failedIngest.value().total : '–'"
     detail="All time; latest below"
   />
   <app-stat-tile
-    label="Failed ticks"
+    label="Failed trading runs"
     [loading]="!failedTicks.hasValue() && !failedTicks.error()"
     [value]="failedTicks.hasValue() ? '' + failedTicks.value().total : '–'"
     detail="All time; latest below"
@@ -66,12 +66,18 @@
 </section>
 
 <div class="page-grid">
+  <!--
+    SYSTEM ALERTS PANEL (reserved): the coordinator inserts the recent system
+    alerts here, full width, as <app-alerts-panel class="span-12" />.
+    Keep this spot above Data freshness.
+  -->
+
   <!-- Freshness ------------------------------------------------------------>
   <section class="panel span-7" aria-labelledby="fresh-title">
     <div class="panel-head">
       <h2 id="fresh-title">Data freshness</h2>
       <span class="muted">
-        {{ tickers().length ? tickers().length + ' chosen tickers' : 'Production universe' }}
+        {{ tickers().length ? tickers().length + ' chosen tickers' : 'Tickers we trade' }}
       </span>
     </div>
     <form class="ticker-form" (submit)="$event.preventDefault(); applyTickers(tickerInput.value)">
@@ -87,7 +93,7 @@
           spellcheck="false"
         />
         <span id="health-tickers-hint" class="hint"
-          >Leave blank to check the production universe.
+          >Leave blank to check the tickers we trade.
           @if (threshold('freshness'); as limit) {
             <span class="fresh-limit">{{ limit }} is fresh.</span>
           }
@@ -97,7 +103,7 @@
         <button type="submit" class="btn">Check</button>
         @if (tickers().length) {
           <button type="button" class="btn btn-ghost" (click)="resetTickers(tickerInput)">
-            Use universe
+            Check the tickers we trade
           </button>
         }
       </div>
@@ -109,7 +115,7 @@
     } @else if (freshness().length === 0) {
       <app-empty-state
         title="No tickers checked"
-        message="Set [production].universe in the config, or enter tickers above to check them."
+        message="No universe is set for trading yet. Ask your admin, or enter tickers above to check them."
       />
     } @else {
       <app-data-table
@@ -167,7 +173,7 @@
   <!-- Failures ------------------------------------------------------------->
   <section class="panel span-7" aria-labelledby="ingest-fail-title">
     <div class="panel-head">
-      <h2 id="ingest-fail-title">Recent ingest failures</h2>
+      <h2 id="ingest-fail-title">Recent data update failures</h2>
       @if (
         failedIngest.hasValue() && failedIngest.value().total > failedIngest.value().items.length
       ) {
@@ -178,20 +184,20 @@
     </div>
     @if (failedIngest.error(); as err) {
       <app-error-state
-        title="Could not load ingest runs"
+        title="Could not load data updates"
         [error]="err"
         (retry)="failedIngest.reload()"
       />
     } @else if (!failedIngest.hasValue()) {
-      <app-loading-state label="Loading ingest failures" [rows]="4" />
+      <app-loading-state label="Loading data update failures" [rows]="4" />
     } @else if (failedIngest.value().items.length === 0) {
       <app-empty-state
-        title="No failed ingest runs"
-        message="Runs that end in error show here with the vendor's message."
+        title="No failed data updates"
+        message="Updates that end in error show here with the data provider's message."
       />
     } @else {
       <app-data-table
-        caption="Most recent failed ingest runs"
+        caption="Most recent failed data updates"
         [rows]="failedIngest.value().items"
         [columns]="ingestColumns"
         [rowKey]="ingestKey"
@@ -210,20 +216,24 @@
 
   <section class="panel span-5" aria-labelledby="tick-fail-title">
     <div class="panel-head">
-      <h2 id="tick-fail-title">Recent tick failures</h2>
+      <h2 id="tick-fail-title">Recent trading run failures</h2>
     </div>
     @if (failedTicks.error(); as err) {
-      <app-error-state title="Could not load ticks" [error]="err" (retry)="failedTicks.reload()" />
+      <app-error-state
+        title="Could not load trading runs"
+        [error]="err"
+        (retry)="failedTicks.reload()"
+      />
     } @else if (!failedTicks.hasValue()) {
-      <app-loading-state label="Loading tick failures" [rows]="4" />
+      <app-loading-state label="Loading trading run failures" [rows]="4" />
     } @else if (failedTicks.value().items.length === 0) {
       <app-empty-state
-        title="No failed ticks"
-        message="Ticks that fail show here with the reason from their summary."
+        title="No failed trading runs"
+        message="Trading runs that fail show here with the reason."
       />
     } @else {
       <app-data-table
-        caption="Most recent failed ticks"
+        caption="Most recent failed trading runs"
         [rows]="failedTicks.value().items"
         [columns]="tickColumns"
         [rowKey]="tickKey"
