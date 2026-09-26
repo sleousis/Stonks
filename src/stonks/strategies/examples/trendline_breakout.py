@@ -16,16 +16,19 @@ line — not just a flat rolling max.
 
 from __future__ import annotations
 
-import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
-from stonks.features.library import trendline_breakout_signal
+from stonks.features.library import trendline_breakout_latest
 from stonks.strategies._common import get_last_n_bars, iso
 from stonks.strategies.base import BaseStrategy
+
+# Bound on memoized window fits per strategy instance (~0.6 KB each at the
+# default lookback); the cache is simply reset when it grows past this.
+_FIT_CACHE_MAX = 20_000
 
 
 class TrendlineBreakoutStrategy(BaseStrategy):
@@ -66,6 +69,13 @@ class TrendlineBreakoutStrategy(BaseStrategy):
                 description="Fraction of cash deployed on a fresh long entry.",
             ),
         ]
+
+    def __init__(self, params):
+        BaseStrategy.__init__(self, params)
+        # Projected (support, resistance) per fitted window, keyed by the
+        # window's raw bytes. Stepping bar by bar through a backtest reuses
+        # every earlier window, so each one is fitted once per instance.
+        self._fit_cache: dict[bytes, tuple[float, float] | None] = {}
 
     # ---- Strategy Protocol -------------------------------------------------
 
@@ -151,9 +161,9 @@ class TrendlineBreakoutStrategy(BaseStrategy):
             return None
 
         closes = df["close"].astype(float).to_numpy()
-        s_tl, r_tl, sig = trendline_breakout_signal(closes, lookback=lookback)
-
-        last = len(closes) - 1
-        support = float(s_tl[last]) if not math.isnan(s_tl[last]) else float("nan")
-        resistance = float(r_tl[last]) if not math.isnan(r_tl[last]) else float("nan")
-        return support, resistance, float(closes[last]), int(sig[last])
+        if len(self._fit_cache) > _FIT_CACHE_MAX:
+            self._fit_cache.clear()
+        support, resistance, sig = trendline_breakout_latest(
+            closes, lookback=lookback, cache=self._fit_cache
+        )
+        return float(support), float(resistance), float(closes[-1]), int(sig)
