@@ -12,9 +12,12 @@ from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.types import Portfolio
 from stonks.execution.brokers.alpaca import AlpacaBroker
 from stonks.execution.brokers.base import (
+    BrokerAccount,
     BrokerError,
     BrokerOrderState,
     LiveTradingRefusedError,
+    MarketClock,
+    OrderRejectedError,
     OrderStateSource,
     UnsupportedTickerError,
 )
@@ -26,10 +29,13 @@ BrokerKind = Literal["simulated", "alpaca"]
 
 __all__ = [
     "AlpacaBroker",
+    "BrokerAccount",
     "BrokerError",
     "BrokerKind",
     "BrokerOrderState",
     "LiveTradingRefusedError",
+    "MarketClock",
+    "OrderRejectedError",
     "OrderStateSource",
     "SimulatedBroker",
     "UnsupportedTickerError",

@@ -25,6 +25,38 @@ class LiveTradingRefusedError(RuntimeError):
     """A live (real-money) endpoint was requested without ``allow_live=True``."""
 
 
+class OrderRejectedError(BrokerError):
+    """A pre-trade check refused the order before it was sent (blocked
+    account, untradable asset, quantity below the broker minimum, ...)."""
+
+
+@dataclass(frozen=True)
+class BrokerAccount:
+    """Account-level balances and trading flags, broker-agnostic."""
+
+    cash: float
+    equity: float
+    buying_power: float
+    currency: str
+    status: str
+    trading_blocked: bool = False
+    pattern_day_trader: bool = False
+
+    @property
+    def can_trade(self) -> bool:
+        return self.status.upper() == "ACTIVE" and not self.trading_blocked
+
+
+@dataclass(frozen=True)
+class MarketClock:
+    """Exchange session state; all timestamps are timezone-aware UTC."""
+
+    timestamp: datetime
+    is_open: bool
+    next_open: datetime
+    next_close: datetime
+
+
 @dataclass(frozen=True)
 class BrokerOrderState:
     """The broker's current view of one order, keyed by our ``client_id``.

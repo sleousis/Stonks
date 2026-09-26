@@ -18,9 +18,12 @@ from alpaca.common.exceptions import APIError
 from stonks.core.types import Fill, Order, Portfolio
 from stonks.execution.brokers.alpaca import AlpacaBroker
 from stonks.execution.brokers.base import (
+    BrokerAccount,
     BrokerError,
     BrokerOrderState,
     LiveTradingRefusedError,
+    MarketClock,
+    OrderRejectedError,
     UnsupportedTickerError,
 )
 
@@ -60,7 +63,7 @@ def raw_order(
 
 class FakeClient:
     def __init__(self) -> None:
-        self.account = {"cash": "1000.50", "currency": "USD"}
+        self.account = {"cash": "1000.50", "currency": "USD", "status": "ACTIVE"}
         self.positions: list[dict] = []
         self.orders: dict[str, dict] = {}
         self.submitted: list = []
@@ -68,8 +71,66 @@ class FakeClient:
         self.get_errors: list[Exception] = []
         self.next_status = "new"
         self.next_fill_price: str | None = None
+        self.assets: dict[str, dict] = {}
+        self.clock = {
+            "timestamp": "2026-01-05T10:00:00-05:00",
+            "is_open": True,
+            "next_open": "2026-01-06T09:30:00-05:00",
+            "next_close": "2026-01-05T16:00:00-05:00",
+        }
+        self.cancelled: list[str] = []
+        self.asset_calls: list[str] = []
+        self.account_calls = 0
+
+    def get_asset(self, symbol):
+        self.asset_calls.append(symbol)
+        if symbol in self.assets:
+            return self.assets[symbol]
+        if symbol.startswith("NOPE"):
+            raise api_error(404, 40410000, "asset not found")
+        crypto = "/" in symbol
+        return {
+            "symbol": symbol,
+            "class": "crypto" if crypto else "us_equity",
+            "status": "active",
+            "tradable": True,
+            "fractionable": True,
+            "min_order_size": "0.0001" if crypto else None,
+            "min_trade_increment": "0.0001" if crypto else None,
+            "price_increment": "1" if crypto else None,
+        }
+
+    def get_clock(self):
+        return self.clock
+
+    def cancel_order_by_id(self, order_id):
+        for o in self.orders.values():
+            if o["id"] == order_id:
+                if o["status"] in ("filled", "canceled", "expired", "rejected"):
+                    raise api_error(422, 42210000, "order is not cancelable")
+                o["status"] = "canceled"
+                self.cancelled.append(order_id)
+                return
+        raise api_error(404, 40410000, "order not found")
+
+    def cancel_orders(self):
+        out = []
+        for o in self.orders.values():
+            if o["status"] in ("new", "accepted", "partially_filled"):
+                o["status"] = "canceled"
+                out.append({"id": o["id"], "status": 200, "body": None})
+        return out
+
+    def get_orders(self, filter=None):
+        self.last_orders_filter = filter
+        return [
+            o
+            for o in self.orders.values()
+            if o["status"] in ("new", "accepted", "partially_filled")
+        ]
 
     def get_account(self):
+        self.account_calls += 1
         return self.account
 
     def get_all_positions(self):
@@ -181,8 +242,15 @@ def test_fetch_portfolio_short_positions_are_negative(broker, client):
     assert broker.fetch_portfolio().positions == {"TSLA.US": -4.0}
 
 
+def test_fetch_portfolio_maps_crypto_positions(broker, client):
+    client.positions = [{"symbol": "BTCUSD", "qty": "0.5", "side": "long", "asset_class": "crypto"}]
+    assert broker.fetch_portfolio().positions == {"BTC-USD.CC": 0.5}
+
+
 def test_fetch_portfolio_rejects_unmappable_positions(broker, client):
-    client.positions = [{"symbol": "BTC/USD", "qty": "1", "side": "long"}]
+    client.positions = [
+        {"symbol": "AAPL240119C00100000", "qty": "1", "side": "long", "asset_class": "us_option"}
+    ]
     with pytest.raises(UnsupportedTickerError):
         broker.fetch_portfolio()
 
@@ -354,3 +422,165 @@ def test_reconcile_soft_fails_per_order(broker, client):
     broker.place_order(order())
     client.get_errors = [api_error(500)] * 10
     assert broker.reconcile() == []
+
+
+# ---- crypto ---------------------------------------------------------------------
+
+
+def test_crypto_orders_use_gtc_and_slash_symbol(broker, client):
+    broker.place_order(order(cid="c-btc", ticker="BTC-USD.CC", quantity=0.01234))
+    req = client.submitted[0]
+    assert req.symbol == "BTC/USD"
+    assert req.time_in_force.value == "gtc"
+    assert req.qty == pytest.approx(0.0123)  # floored to min_trade_increment
+
+
+def test_crypto_below_min_order_size_is_rejected(broker, client):
+    with pytest.raises(OrderRejectedError, match="minimum"):
+        broker.place_order(order(cid="c-btc", ticker="BTC-USD.CC", quantity=0.00005))
+    assert client.submitted == []
+
+
+def test_crypto_limit_price_rounded_to_price_increment(broker, client):
+    broker.place_order(
+        order(cid="c", ticker="BTC-USD.CC", quantity=0.01, order_type="limit", limit_price=65000.7)
+    )
+    assert client.submitted[0].limit_price == pytest.approx(65000)
+
+
+# ---- pre-trade checks --------------------------------------------------------------
+
+GME_NON_FRACTIONABLE = {
+    "symbol": "GME",
+    "class": "us_equity",
+    "status": "active",
+    "tradable": True,
+    "fractionable": False,
+}
+
+
+def test_untradable_asset_is_rejected_before_submission(broker, client):
+    client.assets["XYZ"] = {
+        "symbol": "XYZ",
+        "class": "us_equity",
+        "status": "inactive",
+        "tradable": False,
+        "fractionable": False,
+    }
+    with pytest.raises(OrderRejectedError, match="not tradable"):
+        broker.place_order(order(ticker="XYZ.US"))
+    assert client.submitted == []
+
+
+def test_asset_unknown_to_alpaca_is_unsupported(broker, client):
+    with pytest.raises(UnsupportedTickerError, match="unknown"):
+        broker.place_order(order(ticker="NOPE.US"))
+
+
+def test_non_fractionable_asset_quantity_is_floored(broker, client):
+    client.assets["GME"] = GME_NON_FRACTIONABLE
+    broker.place_order(order(ticker="GME.US", quantity=3.7))
+    assert client.submitted[0].qty == 3
+
+
+def test_non_fractionable_asset_below_one_share_is_rejected(broker, client):
+    client.assets["GME"] = GME_NON_FRACTIONABLE
+    with pytest.raises(OrderRejectedError):
+        broker.place_order(order(ticker="GME.US", quantity=0.4))
+    assert client.submitted == []
+
+
+def test_asset_lookups_are_cached(broker, client):
+    broker.place_order(order(cid="a"))
+    broker.place_order(order(cid="b"))
+    assert client.asset_calls == ["AAPL"]
+
+
+@pytest.mark.parametrize(("price", "expected"), [(101.23456, 101.23), (0.123456, 0.1234)])
+def test_equity_limit_price_rounded_to_tick(broker, client, price, expected):
+    broker.place_order(order(order_type="limit", limit_price=price))
+    assert client.submitted[0].limit_price == pytest.approx(expected)
+
+
+def test_sell_limit_price_rounds_up_never_below_requested(broker, client):
+    broker.place_order(order(cid="s", side="sell", order_type="limit", limit_price=101.23001))
+    assert client.submitted[0].limit_price == pytest.approx(101.24)
+
+
+def test_blocked_account_refuses_orders(broker, client):
+    client.account = {"cash": "1", "status": "ACTIVE", "trading_blocked": True}
+    with pytest.raises(OrderRejectedError, match="blocked"):
+        broker.place_order(order())
+    assert client.submitted == []
+
+
+def test_inactive_account_refuses_orders(broker, client):
+    client.account = {"cash": "1", "status": "ACCOUNT_UPDATED", "trading_blocked": False}
+    with pytest.raises(OrderRejectedError, match="ACCOUNT_UPDATED"):
+        broker.place_order(order())
+
+
+def test_account_checked_once_per_instance(broker, client):
+    client.account = {"cash": "1", "status": "ACTIVE"}
+    broker.place_order(order(cid="a"))
+    broker.place_order(order(cid="b"))
+    assert client.account_calls == 1
+
+
+# ---- account, clock, order management ------------------------------------------------
+
+
+def test_fetch_account(broker, client):
+    client.account = {
+        "cash": "1000.5",
+        "equity": "2500",
+        "buying_power": "4000",
+        "currency": "USD",
+        "status": "ACTIVE",
+        "trading_blocked": False,
+        "pattern_day_trader": True,
+    }
+    acct = broker.fetch_account()
+    assert isinstance(acct, BrokerAccount)
+    assert acct.cash == pytest.approx(1000.5)
+    assert acct.equity == pytest.approx(2500)
+    assert acct.buying_power == pytest.approx(4000)
+    assert acct.currency == "USD"
+    assert acct.can_trade is True
+    assert acct.pattern_day_trader is True
+
+
+def test_market_clock(broker):
+    clock = broker.get_market_clock()
+    assert isinstance(clock, MarketClock)
+    assert clock.is_open is True
+    assert clock.next_close == datetime(2026, 1, 5, 21, 0, tzinfo=UTC)
+
+
+def test_list_open_orders_returns_our_types(broker, client):
+    broker.place_order(order(cid="a"))
+    broker.place_order(order(cid="b", ticker="BTC-USD.CC", quantity=0.01))
+    open_orders = broker.list_open_orders()
+    assert {o.client_id for o in open_orders} == {"a", "b"}
+    assert all(isinstance(o, BrokerOrderState) for o in open_orders)
+    assert client.last_orders_filter.status.value == "open"
+
+
+def test_cancel_order_by_client_id(broker, client):
+    broker.place_order(order(cid="a"))
+    assert broker.cancel_order("a") is True
+    assert broker.get_order_state("a").status == "cancelled"
+
+
+def test_cancel_unknown_or_terminal_order_returns_false(broker, client):
+    assert broker.cancel_order("nope") is False
+    client.next_status = "filled"
+    client.next_fill_price = "1"
+    broker.place_order(order(cid="f"))
+    assert broker.cancel_order("f") is False
+
+
+def test_cancel_all_orders(broker, client):
+    broker.place_order(order(cid="a"))
+    broker.place_order(order(cid="b"))
+    assert broker.cancel_all_orders() == 2
