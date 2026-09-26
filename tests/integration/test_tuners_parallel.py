@@ -9,9 +9,10 @@ import os
 from datetime import timedelta
 from typing import Literal
 
+import numpy as np
 import pytest
 
-from stonks.core.protocols import TrialOutcome
+from stonks.core.protocols import TrialOutcome, TunerResult
 from stonks.lab import parallel
 from stonks.lab.dataset import LabDataset
 from stonks.lab.objectives import SharpeObjective
@@ -194,6 +195,32 @@ def test_tune_and_fit_keeps_the_trials(dataset):
     _, tuned = tune_and_fit(Momentum, dataset, setup, {"allocation": 0.5})
     assert tuned.best_params["allocation"] == 0.5
     assert tuned.trials is not None and len(tuned.trials) == len(tuned.history)
+
+
+class _StubTuner:
+    """Returns trials but leaves the fixed param out of best_params, so
+    tune_and_fit has to rebuild the result."""
+
+    def tune(self, strategy_cls, param_space, objective, dataset, budget):
+        trial = TrialOutcome(params={"a": 1}, score=2.0, returns=np.array([0.1]))
+        return TunerResult(
+            best_params={"a": 1}, best_score=2.0, history=[({"a": 1}, 2.0)], trials=[trial]
+        )
+
+
+def test_tune_and_fit_rebuild_for_fixed_params_keeps_the_trials():
+    setup = TuningSetup(tuner=_StubTuner(), objective=GlobalRngObjective(), budget=1)
+    _, tuned = tune_and_fit(NoisyParamStrategy, "ds", setup, {"fail_on": 5})
+    assert tuned.best_params == {"a": 1, "fail_on": 5}
+    assert tuned.trials is not None and tuned.trials[0].returns[0] == 0.1
+
+
+def test_trial_ledger_reads_the_trials_as_a_bars_by_trials_matrix(dataset):
+    trials_from_tuning = pytest.importorskip("stonks.lab.trials").trials_from_tuning
+    result = _tune(RandomTuner(seed=5, parallel=ParallelSettings(max_workers=2)), dataset, budget=4)
+    records, matrix = trials_from_tuning(result)
+    assert [r.n_bars for r in records] == [t.n_bars for t in result.trials]
+    assert matrix is not None and matrix.values.shape == (result.trials[0].n_bars, 4)
 
 
 def test_workers_see_only_bars_up_to_the_dataset_end(dataset):
