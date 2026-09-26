@@ -37,7 +37,7 @@ from stonks.backtest.trades import RoundTrip
 from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.features.library import count_runs, runs_test_z_score
 from stonks.lab.backtesting import run_backtest
-from stonks.lab.dataset import LabDataset
+from stonks.lab.dataset import LabDataset, ScoringWindow, scoring_window
 
 
 def round_trip_trades(report: BacktestReport) -> list[RoundTrip]:
@@ -50,27 +50,38 @@ def round_trip_trades(report: BacktestReport) -> list[RoundTrip]:
 class RunsTestSurvivalTest:
     id = "runs_test"
 
-    def __init__(self, max_abs_z_score: float = 3.0, trade_level: bool = False) -> None:
+    def __init__(
+        self,
+        max_abs_z_score: float = 3.0,
+        trade_level: bool = False,
+        window: ScoringWindow = "val",
+    ) -> None:
         if max_abs_z_score < 0.0:
             raise ValueError("max_abs_z_score must be >= 0")
+        if window not in ("val", "full"):
+            raise ValueError(f"window must be 'val' or 'full', got {window!r}")
         self._max_abs_z = max_abs_z_score
         self._trade_level = trade_level
+        self._window: ScoringWindow = window
 
     def run(self, strategy: Strategy, context: LabDataset) -> SurvivalReport:
-        report = run_backtest(strategy, context, context.full_window)
+        report = run_backtest(strategy, context, scoring_window(context, strategy, self._window))
         if self._trade_level:
             returns = np.array([t.return_pct for t in round_trip_trades(report)], dtype=float)
             return self._score(returns[returns != 0], level="trade")
 
         curve = np.asarray(report.equity_curve, dtype=float)
         if curve.size < 3:
-            return self._skip("bar_level; insufficient equity-curve length for a runs test", "bar")
+            return self._skip(
+                f"bar_level; window={self._window}; insufficient equity-curve length for a runs test",
+                "bar",
+            )
         diffs = np.diff(curve)
         return self._score(diffs[diffs != 0], level="bar")
 
     def _score(self, outcomes: np.ndarray, level: str) -> SurvivalReport:
         """Runs test on the signs of the non-zero ``outcomes``."""
-        tag = "trade_level" if level == "trade" else "bar_level"
+        tag = ("trade_level" if level == "trade" else "bar_level") + f"; window={self._window}"
         if outcomes.size < 2:
             return self._skip(f"{tag}; insufficient variance in per-{level} returns", level)
 
