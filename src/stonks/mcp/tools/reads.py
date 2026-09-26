@@ -33,6 +33,12 @@ from stonks.mcp.tools.common import (
 ROUTE_READS: tuple[RouteRead, ...] = (
     RouteRead("health", "/api/health", "Check that the Stonks API is up and report its version."),
     RouteRead(
+        "whoami",
+        "/api/auth/me",
+        "Who this MCP server acts as: the token's user, role and scopes. Every tool does "
+        "only what that user may do.",
+    ),
+    RouteRead(
         "get_portfolio_totals",
         "/api/portfolio/totals",
         "Admins only: cash and value summed across every active portfolio (no holdings).",
