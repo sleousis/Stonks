@@ -29,19 +29,18 @@ export function tokenCheckFromError(err: unknown): TokenCheck {
       return {
         state: 'invalid',
         message:
-          'The API rejected this token. Check that it matches STONKS_API_TOKEN where `stonks serve` runs.',
+          'The API rejected this token. It may be revoked or mistyped. Create a new one on your Profile page.',
       };
     case 503:
       return {
         state: 'unverified',
-        message:
-          "The API has no token configured yet (STONKS_API_TOKEN is unset), so this token can't be verified. Set it and restart `stonks serve`.",
+        message: "The server can't check tokens right now. Ask your admin, or sign in instead.",
       };
     case 0:
       return {
         state: 'unverified',
         message:
-          "Cannot reach the API, so the token can't be verified yet. Is `stonks serve` running?",
+          "Cannot reach the server, so the token can't be checked yet. Try again in a moment.",
       };
     default:
       return {

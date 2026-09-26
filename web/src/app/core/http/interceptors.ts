@@ -27,22 +27,26 @@ export function isApiRequest(req: HttpRequest<unknown>): boolean {
   }
 }
 
-function isStreamToken(req: HttpRequest<unknown>): boolean {
-  return /\/api\/jobs\/[^/]+\/stream-token$/.test(req.url.split('?')[0]);
-}
-
 /**
- * Attaches `Authorization: Bearer <token>` to mutating API requests and to
- * stream-token calls; to reads too when the trader turned on "send token on
- * reads" in Settings.
+ * Every same-origin `/api/` request carries a credential, reads included
+ * (the API only leaves health, the probes and sign-in open):
+ *
+ * - `withCredentials` so the browser sends the session cookie, also when the
+ *   console is served from another origin in development;
+ * - `Authorization: Bearer <token>` when the tab has an API token (the
+ *   server prefers it over the cookie).
+ *
+ * Other origins get neither.
  */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  const auth = inject(AuthTokenService);
-  const token = auth.token();
-  if (!token || !isApiRequest(req)) return next(req);
-  const needsToken = !SAFE_METHODS.has(req.method) || isStreamToken(req) || auth.sendOnReads();
-  if (!needsToken) return next(req);
-  return next(req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }));
+  if (!isApiRequest(req)) return next(req);
+  const token = inject(AuthTokenService).token();
+  return next(
+    req.clone({
+      withCredentials: true,
+      ...(token ? { setHeaders: { Authorization: `Bearer ${token}` } } : {}),
+    }),
+  );
 };
 
 /**

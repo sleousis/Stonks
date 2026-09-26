@@ -93,7 +93,27 @@ describe('toApiError', () => {
   it('explains a network failure (status 0)', () => {
     const err = toApiError(new ProgressEvent('error'), new HttpErrorResponse({ status: 0 }));
     expect(err.isNetwork).toBe(true);
-    expect(err.message).toContain('stonks serve');
+    expect(err.message).toContain('Cannot reach the Stonks server');
+    expect(err.message).not.toMatch(/stonks serve|`/);
+  });
+
+  it('reads a separate problem code field', () => {
+    const body = {
+      title: 'Forbidden',
+      status: 403,
+      detail: 'fresh code needed',
+      code: 'step_up_required',
+    };
+    const err = toApiError(body);
+    expect(err.code).toBe('step_up_required');
+    expect(err.message).toContain('authenticator');
+  });
+
+  it('keeps an unknown code but the API message', () => {
+    const body = { title: 'Conflict', status: 409, detail: 'gate refused', code: 'gate_failed' };
+    const err = toApiError(body);
+    expect(err.code).toBe('gate_failed');
+    expect(err.message).toBe('gate refused');
   });
 
   it('uses a plain-text error body', () => {

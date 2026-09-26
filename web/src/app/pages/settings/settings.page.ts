@@ -74,10 +74,6 @@ export class SettingsPage {
     token: ['', [Validators.required, Validators.maxLength(512)]],
   });
 
-  protected readonly readsForm = this.fb.group({
-    sendOnReads: [this.auth.sendOnReads()],
-  });
-
   protected readonly themes: readonly { value: ThemeMode; label: string }[] = [
     { value: 'system', label: 'Match the system' },
     { value: 'light', label: 'Light' },
@@ -192,10 +188,6 @@ export class SettingsPage {
     } finally {
       this.testing.set(false);
     }
-  }
-
-  protected toggleReads(): void {
-    this.auth.setSendOnReads(this.readsForm.controls.sendOnReads.value);
   }
 
   protected setTheme(mode: ThemeMode): void {
