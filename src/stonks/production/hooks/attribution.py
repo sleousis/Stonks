@@ -1,7 +1,7 @@
 """Position attribution (BL-12, W2.1): after each portfolio trades, record
 which strategy (and subscription) each held position belongs to, as shares
 summing to 1 per ticker, so P&L can be attributed per strategy per
-portfolio (``position_attribution``, migration ``012``).
+portfolio (``position_attribution``, migration ``013``).
 
 A ticker the pipeline decided on this tick takes its fresh shares (the
 target book's split for a constructor, the deciding strategy for
