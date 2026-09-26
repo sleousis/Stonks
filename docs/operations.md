@@ -177,11 +177,15 @@ Two checks make sure the jobs actually ran:
 | `stonks_scheduled_job_next_run_timestamp_seconds{job}` | gauge | Each job's next fire. |
 | `stonks_scheduler_heartbeat_timestamp_seconds` | gauge | The running scheduler's latest heartbeat. |
 
-`--data-age` opens the lake, so use it only while no `stonks serve` holds it. The API can serve the full set, data age included, from its own process with `metrics_text(state_path, specs=..., latest_bars=latest_daily_bars(lake, universe))`.
+`--data-age` opens the lake, so use it only while no `stonks serve` holds it. `stonks serve` serves the full set, data age included, at `GET /metrics`. Scrapes from a loopback peer need no token; from anywhere else they need the scrape-only bearer token `STONKS_METRICS_TOKEN` (the API token is not accepted, so Prometheus never holds an admin credential). `STONKS_METRICS_ALLOW_LOOPBACK=false` requires the token on loopback too.
 
 A useful alert rule: `time() - stonks_scheduled_job_last_success_timestamp_seconds{job="tick"} > 26 * 3600` on weekdays.
 
 The probes are `liveness()` (the process answers), `readiness(state_path, lake_path)` (the state DB opens with every migration applied, and the lake file exists) and `scheduler_liveness(store, now=...)` (the scheduler hasn't stopped and has heartbeated recently). The watchdog thread writes the heartbeat, so it keeps beating while a long job runs.
+
+Over HTTP, `GET /api/health/live` (the process, plus the scheduler when `stonks serve` hosts it) and `GET /api/health/ready` (state migrated, lake present) are open to everyone, like `GET /api/health`. They answer 200 with each check's name and `ok`, or 503 naming the failing checks; details go to the log, not the response.
+
+With `[scheduler] backend = "in_process"`, `stonks serve` starts the scheduler with the app and stops it (after the running job) on shutdown. `GET /api/schedule` lists the jobs, their next fire and recent runs; `POST /api/schedule/{job}/run-now` (token, audited as `schedule.run_now`) starts a `manual:` run in the background.
 
 ### Without the scheduler
 
