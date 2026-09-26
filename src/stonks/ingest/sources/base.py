@@ -23,6 +23,7 @@ from stonks.ingest.schemas import (
     IntradayBar,
     MacroIndicatorRow,
     RawPriceBar,
+    SymbolListing,
 )
 
 
@@ -81,6 +82,27 @@ class DataSource(ABC):
         that don't support intraday data can leave the default empty
         implementation."""
         return ()
+
+    def list_symbols(self, exchange: str) -> list[SymbolListing]:
+        """Every symbol on ``exchange``, active and delisted, with what the
+        source knows about it (security type, delisted flag, currency).
+
+        Optional capability: the default wraps :meth:`list_tickers`, so
+        every listing is marked active with no security type. Sources whose
+        discovery endpoint says more override it."""
+        return [SymbolListing(ticker=t) for t in self.list_tickers(exchange)]
+
+    def fetch_bulk_eod(self, exchange: str, day: date) -> list[RawPriceBar]:
+        """Daily bars of every symbol on ``exchange`` for one ``day`` in a
+        single call. Refreshing a whole exchange this way costs one request
+        a day instead of one per ticker.
+
+        Optional capability: the default raises
+        :class:`UnsupportedCapabilityError`, and callers fall back to
+        :meth:`fetch_prices` per ticker (see ``stonks.ingest.ensure``)."""
+        raise UnsupportedCapabilityError(
+            f"{self.source_id} does not serve bulk daily bars ({exchange} {day})"
+        )
 
     def list_exchanges(self) -> Iterable[ExchangeInfo]:
         """Return the exchanges this source can serve. Sources without a

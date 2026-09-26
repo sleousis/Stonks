@@ -150,13 +150,17 @@ def _costs(settings: Any, dataset: Any) -> Any:
 def dataset_summary(dataset: Any) -> dict[str, Any] | None:
     """Universe, windows and interval of a ``LabDataset`` (``None`` otherwise)."""
     try:
-        return {
+        summary = {
             "universe": list(dataset.universe),
             "full_window": [str(d) for d in dataset.full_window],
             "train_window": [str(d) for d in dataset.train_window],
             "val_window": [str(d) for d in dataset.val_window],
             "interval": _interval_code(dataset),
         }
+        universe_id = getattr(dataset, "universe_id", None)
+        if isinstance(universe_id, str):
+            summary["universe_id"] = universe_id
+        return summary
     except Exception:
         return None
 

@@ -69,7 +69,8 @@ The CLI opens the stores itself and reuses the services for lab and registry wor
 | Package | Job |
 |---|---|
 | `core` | Types (`Bar`, `Order`, `Fill`, `Portfolio`), intervals, parameter specs, protocols. No dependencies. |
-| `ingest` | `DataSource` adapters (`eodhd`, `yahoo`, `defillama`), bar quality checks and quarantine, idempotent upserts. |
+| `ingest` | `DataSource` adapters (`eodhd`, `yahoo`, `defillama`), bar quality checks and quarantine, idempotent upserts, on-demand fetching of missing bars (`ensure.py`). |
+| `universes` | Stored universe definitions (list, exchange, rule, index) refreshed into point-in-time membership. See [universes](universes.md). |
 | `store` | `DuckDBLake` (market data) and `SqliteState` (everything that changes), migrations, the `BarStore` seam. |
 | `features` | Optional indicator and scoring helpers that strategies call. |
 | `strategies` | `BaseStrategy`, 25 example strategies, wrappers, the rule-based Studio strategy. |
@@ -94,6 +95,8 @@ New behaviour plugs in behind a seam. Most are registries, so a new one is one n
 |---|---|---|
 | `DataSource` | `ingest/sources/base.py` | eodhd, yahoo, defillama |
 | `BarStore` | `store/bars.py` | DuckDB table, Parquet files |
+| `UniverseProvider` | `universes/providers/` (registry) | list, exchange, rule, index |
+| `IndexSource` | `universes/index_sources/` (registry) | wikipedia_sp500 |
 | `Strategy` | `core/protocols.py`, `strategies/base.py` | 28 catalogued strategies |
 | `Tuner`, `Objective` | `lab/tuning/`, `lab/objectives.py` | grid, random; Sharpe, CAGR, final return |
 | `SurvivalTest` | `lab/survival/` (registry) | 18 tests, presets `quick`, `standard`, `promotion` |
@@ -212,5 +215,5 @@ Switch: set `[lake.bars] backend = "parquet"`, stop `stonks serve`, run `uv run 
 ## More
 
 - [Operations](operations.md), [deploy](deploy.md), [runbooks](runbooks/)
-- [Principles](principles.md), [strategies](strategies/README.md), [web console](ui.md)
+- [Principles](principles.md), [strategies](strategies/README.md), [web console](ui.md), [universes and on-demand data](universes.md)
 - Block notes (history and details): [ingestion](blocks/01_ingestion.md), [storage](blocks/02_storage.md), [lab](blocks/03_strategy_lab.md), [registry](blocks/04_strategy_store.md), [tick](blocks/05_production_tick.md)

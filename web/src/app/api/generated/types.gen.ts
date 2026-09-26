@@ -935,6 +935,100 @@ export type EnrolStartView = {
 };
 
 /**
+ * EnsureDataRequest
+ *
+ * Fetch the missing bars of the universe's members over a window
+ * (every name that was a member on any day of it, delisted ones too).
+ */
+export type EnsureDataRequest = {
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Interval
+     */
+    interval?: string;
+    /**
+     * Source
+     */
+    source?: 'eodhd' | 'yahoo' | 'defillama' | null;
+    /**
+     * Start
+     */
+    start: string;
+};
+
+/**
+ * EnsureReport
+ *
+ * What an ensure did. ``run_id`` is the ``ingest_runs`` row (``None``
+ * when nothing was missing).
+ */
+export type EnsureReport = {
+    /**
+     * Bulk Days
+     */
+    bulk_days?: number;
+    /**
+     * Clipped Start
+     */
+    clipped_start?: string | null;
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Failed
+     */
+    failed?: Array<string>;
+    /**
+     * Gaps
+     */
+    gaps?: number;
+    /**
+     * Interval
+     */
+    interval: string;
+    /**
+     * Run Id
+     */
+    run_id?: number | null;
+    /**
+     * Source
+     */
+    source: string;
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * Status
+     */
+    status?: string;
+    /**
+     * Tickers Failed
+     */
+    tickers_failed?: number;
+    /**
+     * Tickers Fetched
+     */
+    tickers_fetched?: number;
+    /**
+     * Tickers Requested
+     */
+    tickers_requested?: number;
+    /**
+     * Tickers Up To Date
+     */
+    tickers_up_to_date?: number;
+    /**
+     * Warnings
+     */
+    warnings?: Array<string>;
+};
+
+/**
  * EquityPoint
  */
 export type EquityPoint = {
@@ -1391,6 +1485,50 @@ export type IStarSettings = {
      * Pov
      */
     pov?: number;
+};
+
+/**
+ * IndexHistoryImport
+ *
+ * An index constituent history as CSV (``date,ticker,action`` with
+ * ``add``, ``remove`` or ``member``) or JSON (``as_of``,
+ * ``constituents``, ``changes``).
+ */
+export type IndexHistoryImport = {
+    /**
+     * Content
+     */
+    content: string;
+    /**
+     * Format
+     */
+    format?: 'csv' | 'json';
+    /**
+     * Index Id
+     */
+    index_id: string;
+};
+
+/**
+ * IndexHistoryView
+ */
+export type IndexHistoryView = {
+    /**
+     * As Of
+     */
+    as_of: string | null;
+    /**
+     * Changes
+     */
+    changes: number;
+    /**
+     * Constituents
+     */
+    constituents: number;
+    /**
+     * Index Id
+     */
+    index_id: string;
 };
 
 /**
@@ -4257,6 +4395,138 @@ export type TradeView = {
      * Ticker
      */
     ticker: string;
+};
+
+/**
+ * UniverseCreate
+ */
+export type UniverseCreate = {
+    /**
+     * Csv
+     */
+    csv?: string | null;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Kind
+     */
+    kind: 'list' | 'exchange' | 'rule' | 'index';
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Spec
+     */
+    spec?: {
+        [key: string]: unknown;
+    };
+};
+
+/**
+ * UniverseMembers
+ */
+export type UniverseMembers = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Count
+     */
+    count: number;
+    /**
+     * Tickers
+     */
+    tickers: Array<string>;
+    /**
+     * Universe Id
+     */
+    universe_id: string;
+};
+
+/**
+ * UniverseRefreshView
+ */
+export type UniverseRefreshView = {
+    /**
+     * Current Members
+     */
+    current_members: number;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Members
+     */
+    members: number;
+    /**
+     * Refreshed At
+     */
+    refreshed_at?: string | null;
+    /**
+     * Spans
+     */
+    spans: number;
+    /**
+     * Universe Id
+     */
+    universe_id: string;
+    /**
+     * Warnings
+     */
+    warnings?: Array<string>;
+};
+
+/**
+ * UniverseView
+ */
+export type UniverseView = {
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Kind
+     */
+    kind: 'list' | 'exchange' | 'rule' | 'index';
+    /**
+     * Member Count
+     */
+    member_count?: number | null;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Refreshed At
+     */
+    refreshed_at?: string | null;
+    /**
+     * Spec
+     */
+    spec: {
+        [key: string]: unknown;
+    };
+    /**
+     * Updated At
+     */
+    updated_at?: string | null;
 };
 
 /**
@@ -9742,3 +10012,455 @@ export type GetTickResponses = {
 };
 
 export type GetTickResponse = GetTickResponses[keyof GetTickResponses];
+
+export type ListUniversesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/universes';
+};
+
+export type ListUniversesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListUniversesError = ListUniversesErrors[keyof ListUniversesErrors];
+
+export type ListUniversesResponses = {
+    /**
+     * Response Listuniverses
+     *
+     * Successful Response
+     */
+    200: Array<UniverseView>;
+};
+
+export type ListUniversesResponse = ListUniversesResponses[keyof ListUniversesResponses];
+
+export type CreateUniverseData = {
+    body: UniverseCreate;
+    path?: never;
+    query?: never;
+    url: '/api/universes';
+};
+
+export type CreateUniverseErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CreateUniverseError = CreateUniverseErrors[keyof CreateUniverseErrors];
+
+export type CreateUniverseResponses = {
+    /**
+     * Successful Response
+     */
+    201: UniverseView;
+};
+
+export type CreateUniverseResponse = CreateUniverseResponses[keyof CreateUniverseResponses];
+
+export type GetUniverseEnsureResultData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/universes/ensure/{job_id}/result';
+};
+
+export type GetUniverseEnsureResultErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetUniverseEnsureResultError = GetUniverseEnsureResultErrors[keyof GetUniverseEnsureResultErrors];
+
+export type GetUniverseEnsureResultResponses = {
+    /**
+     * Successful Response
+     */
+    200: EnsureReport;
+};
+
+export type GetUniverseEnsureResultResponse = GetUniverseEnsureResultResponses[keyof GetUniverseEnsureResultResponses];
+
+export type ImportIndexHistoryData = {
+    body: IndexHistoryImport;
+    path?: never;
+    query?: never;
+    url: '/api/universes/index-history';
+};
+
+export type ImportIndexHistoryErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ImportIndexHistoryError = ImportIndexHistoryErrors[keyof ImportIndexHistoryErrors];
+
+export type ImportIndexHistoryResponses = {
+    /**
+     * Successful Response
+     */
+    200: IndexHistoryView;
+};
+
+export type ImportIndexHistoryResponse = ImportIndexHistoryResponses[keyof ImportIndexHistoryResponses];
+
+export type GetUniverseRefreshResultData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/universes/refresh/{job_id}/result';
+};
+
+export type GetUniverseRefreshResultErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetUniverseRefreshResultError = GetUniverseRefreshResultErrors[keyof GetUniverseRefreshResultErrors];
+
+export type GetUniverseRefreshResultResponses = {
+    /**
+     * Successful Response
+     */
+    200: UniverseRefreshView;
+};
+
+export type GetUniverseRefreshResultResponse = GetUniverseRefreshResultResponses[keyof GetUniverseRefreshResultResponses];
+
+export type DeleteUniverseData = {
+    body?: never;
+    path: {
+        /**
+         * Universe Id
+         */
+        universe_id: string;
+    };
+    query?: never;
+    url: '/api/universes/{universe_id}';
+};
+
+export type DeleteUniverseErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type DeleteUniverseError = DeleteUniverseErrors[keyof DeleteUniverseErrors];
+
+export type DeleteUniverseResponses = {
+    /**
+     * Successful Response
+     */
+    200: UniverseView;
+};
+
+export type DeleteUniverseResponse = DeleteUniverseResponses[keyof DeleteUniverseResponses];
+
+export type GetUniverseData = {
+    body?: never;
+    path: {
+        /**
+         * Universe Id
+         */
+        universe_id: string;
+    };
+    query?: never;
+    url: '/api/universes/{universe_id}';
+};
+
+export type GetUniverseErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetUniverseError = GetUniverseErrors[keyof GetUniverseErrors];
+
+export type GetUniverseResponses = {
+    /**
+     * Successful Response
+     */
+    200: UniverseView;
+};
+
+export type GetUniverseResponse = GetUniverseResponses[keyof GetUniverseResponses];
+
+export type EnsureUniverseDataData = {
+    body: EnsureDataRequest;
+    path: {
+        /**
+         * Universe Id
+         */
+        universe_id: string;
+    };
+    query?: never;
+    url: '/api/universes/{universe_id}/ensure';
+};
+
+export type EnsureUniverseDataErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type EnsureUniverseDataError = EnsureUniverseDataErrors[keyof EnsureUniverseDataErrors];
+
+export type EnsureUniverseDataResponses = {
+    /**
+     * Successful Response
+     */
+    202: Job;
+};
+
+export type EnsureUniverseDataResponse = EnsureUniverseDataResponses[keyof EnsureUniverseDataResponses];
+
+export type GetUniverseMembersData = {
+    body?: never;
+    path: {
+        /**
+         * Universe Id
+         */
+        universe_id: string;
+    };
+    query?: {
+        /**
+         * As Of
+         */
+        as_of?: string | null;
+    };
+    url: '/api/universes/{universe_id}/members';
+};
+
+export type GetUniverseMembersErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetUniverseMembersError = GetUniverseMembersErrors[keyof GetUniverseMembersErrors];
+
+export type GetUniverseMembersResponses = {
+    /**
+     * Successful Response
+     */
+    200: UniverseMembers;
+};
+
+export type GetUniverseMembersResponse = GetUniverseMembersResponses[keyof GetUniverseMembersResponses];
+
+export type RefreshUniverseData = {
+    body?: never;
+    path: {
+        /**
+         * Universe Id
+         */
+        universe_id: string;
+    };
+    query?: never;
+    url: '/api/universes/{universe_id}/refresh';
+};
+
+export type RefreshUniverseErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RefreshUniverseError = RefreshUniverseErrors[keyof RefreshUniverseErrors];
+
+export type RefreshUniverseResponses = {
+    /**
+     * Successful Response
+     */
+    202: Job;
+};
+
+export type RefreshUniverseResponse = RefreshUniverseResponses[keyof RefreshUniverseResponses];

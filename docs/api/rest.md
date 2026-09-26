@@ -16,7 +16,7 @@ Auth: reads (`GET`) are open to loopback clients by default
 (`[api].open_reads_on_loopback`). Every other method needs
 `Authorization: Bearer $STONKS_API_TOKEN`.
 
-Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [connections](#connections-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [ticks](#ticks-endpoints)
+Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [connections](#connections-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints)
 
 ## alerts endpoints
 
@@ -241,6 +241,21 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#broke
 | POST | `/api/ticks` | Start Tick | bearer token | [TickRequest](#tickrequest) | [Job](#job) |
 | GET | `/api/ticks/jobs/{job_id}/result` | Get Tick Result | token, or open on loopback |  | [TickResultView](#tickresultview) |
 | GET | `/api/ticks/{tick_id}` | Get Tick | token, or open on loopback |  | [TickRunWithOrders](#tickrunwithorders) |
+
+## universes endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/universes` | List Universes | token, or open on loopback |  | list[[UniverseView](#universeview)] |
+| POST | `/api/universes` | Create Universe | bearer token | [UniverseCreate](#universecreate) | [UniverseView](#universeview) |
+| GET | `/api/universes/ensure/{job_id}/result` | Get Ensure Result | token, or open on loopback |  | [EnsureReport](#ensurereport) |
+| POST | `/api/universes/index-history` | Import Index History | bearer token | [IndexHistoryImport](#indexhistoryimport) | [IndexHistoryView](#indexhistoryview) |
+| GET | `/api/universes/refresh/{job_id}/result` | Get Refresh Result | token, or open on loopback |  | [UniverseRefreshView](#universerefreshview) |
+| GET | `/api/universes/{universe_id}` | Get Universe | token, or open on loopback |  | [UniverseView](#universeview) |
+| DELETE | `/api/universes/{universe_id}` | Delete Universe | bearer token |  | [UniverseView](#universeview) |
+| POST | `/api/universes/{universe_id}/ensure` | Ensure Data | bearer token | [EnsureDataRequest](#ensuredatarequest) | [Job](#job) |
+| GET | `/api/universes/{universe_id}/members` | Get Members | token, or open on loopback |  | [UniverseMembers](#universemembers) |
+| POST | `/api/universes/{universe_id}/refresh` | Refresh Universe | bearer token |  | [Job](#job) |
 
 ## Schemas
 
@@ -587,6 +602,39 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `otpauth_uri` | string | yes |  |
 | `secret` | string | yes |  |
 
+### EnsureDataRequest
+
+Fetch the missing bars of the universe's members over a window (every name that was a member on any day of it, delisted ones too).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `end` | date | yes |  |
+| `interval` | string | no |  |
+| `source` | "eodhd" \| "yahoo" \| "defillama" \| null | no |  |
+| `start` | date | yes |  |
+
+### EnsureReport
+
+What an ensure did. ``run_id`` is the ``ingest_runs`` row (``None`` when nothing was missing).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `bulk_days` | integer | no |  |
+| `clipped_start` | date \| null | no |  |
+| `end` | date | yes |  |
+| `failed` | list[string] | no |  |
+| `gaps` | integer | no |  |
+| `interval` | string | yes |  |
+| `run_id` | integer \| null | no |  |
+| `source` | string | yes |  |
+| `start` | date | yes |  |
+| `status` | string | no |  |
+| `tickers_failed` | integer | no |  |
+| `tickers_fetched` | integer | no |  |
+| `tickers_requested` | integer | no |  |
+| `tickers_up_to_date` | integer | no |  |
+| `warnings` | list[string] | no |  |
+
 ### EquityPoint
 
 | Field | Type | Required | Description |
@@ -755,6 +803,25 @@ Kissell's I-Star parameters: ``I = a1 (Q/ADV)^a2 sigma^a3`` bps, with a temporar
 | `b1` | number | no |  |
 | `periods_per_year` | number | no |  |
 | `pov` | number | no |  |
+
+### IndexHistoryImport
+
+An index constituent history as CSV (``date,ticker,action`` with ``add``, ``remove`` or ``member``) or JSON (``as_of``, ``constituents``, ``changes``).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `content` | string | yes |  |
+| `format` | "csv" \| "json" | no |  |
+| `index_id` | string | yes |  |
+
+### IndexHistoryView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date \| null | yes |  |
+| `changes` | integer | yes |  |
+| `constituents` | integer | yes |  |
+| `index_id` | string | yes |  |
 
 ### IngestRequest
 
@@ -1864,6 +1931,52 @@ One round trip (a lot, or part of one, from buy to sell or to the end).
 | `qty` | number | yes |  |
 | `return_pct` | number \| null | yes |  |
 | `ticker` | string | yes |  |
+
+### UniverseCreate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `csv` | string \| null | no |  |
+| `description` | string \| null | no |  |
+| `id` | string | yes |  |
+| `kind` | "list" \| "exchange" \| "rule" \| "index" | yes |  |
+| `name` | string \| null | no |  |
+| `spec` | object | no |  |
+
+### UniverseMembers
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `count` | integer | yes |  |
+| `tickers` | list[string] | yes |  |
+| `universe_id` | string | yes |  |
+
+### UniverseRefreshView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `current_members` | integer | yes |  |
+| `kind` | string | yes |  |
+| `members` | integer | yes |  |
+| `refreshed_at` | date-time \| null | no |  |
+| `spans` | integer | yes |  |
+| `universe_id` | string | yes |  |
+| `warnings` | list[string] | no |  |
+
+### UniverseView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `created_at` | date-time \| null | no |  |
+| `description` | string \| null | no |  |
+| `id` | string | yes |  |
+| `kind` | "list" \| "exchange" \| "rule" \| "index" | yes |  |
+| `member_count` | integer \| null | no |  |
+| `name` | string \| null | no |  |
+| `refreshed_at` | date-time \| null | no |  |
+| `spec` | object | yes |  |
+| `updated_at` | date-time \| null | no |  |
 
 ### UserCreateRequest
 

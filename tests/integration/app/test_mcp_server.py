@@ -80,6 +80,9 @@ async def call_error(client: Client, name: str, args: dict[str, Any] | None = No
 # ---- tool catalogue -------------------------------------------------------------
 
 READ_TOOLS = {
+    "list_universes",
+    "get_universe",
+    "get_universe_members",
     "health",
     "get_portfolio",
     "list_portfolio_snapshots",
@@ -130,6 +133,10 @@ JOB_TOOLS = {
 # Overwrite a draft's fields; no confirm (a draft is never traded).
 EDIT_TOOLS = {"update_draft"}
 GUARDED_TOOLS = {
+    "create_universe",
+    "refresh_universe",
+    "ensure_universe_data",
+    "import_index_history",
     "promote_strategy",
     "retire_strategy",
     "shadow_strategy",

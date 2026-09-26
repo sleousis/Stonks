@@ -96,6 +96,10 @@ class LabDataset:
     #: The production construction pipeline for every backtest
     #: (``[backtest.construction]``). ``None``: each strategy decides alone.
     construction: ConstructionSettings | None = None
+    #: The stored universe this dataset was built from (roadmap 10.5). With
+    #: an empty ``universe`` the lab resolves its members over the window
+    #: (``lab.universe_data``); the preflight checks membership against it.
+    universe_id: str | None = None
     #: Stitched walk-forward OOS backtest, set by the walk-forward test for
     #: the tests after it (``mc_trades``). Never copied by ``replace``.
     stitched_oos_report: BacktestReport | None = field(
