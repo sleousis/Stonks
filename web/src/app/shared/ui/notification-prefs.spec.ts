@@ -4,6 +4,8 @@ import { provideRouter } from '@angular/router';
 
 import type { PreferencesView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
+import { SessionService } from '../../core/auth/session.service';
+import { ConfirmService } from '../../core/confirm/confirm.service';
 import { nextRequest, tick } from '../../../testing/http';
 import { NotificationPrefs } from './notification-prefs';
 
@@ -19,13 +21,30 @@ const VIEW: PreferencesView = {
 describe('NotificationPrefs', () => {
   let fixture: ComponentFixture<NotificationPrefs>;
   let controller: HttpTestingController;
+  let allowed: boolean;
 
   beforeEach(() => {
+    allowed = true;
     TestBed.configureTestingModule({
       providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting()],
     });
     controller = TestBed.inject(HttpTestingController);
+    const session = TestBed.inject(SessionService);
+    vi.spyOn(session, 'can').mockImplementation(() => allowed);
+    vi.spyOn(session, 'whyNot').mockImplementation(() =>
+      allowed ? null : 'Traders and admins only.',
+    );
   });
+
+  function button(el: HTMLElement, text: string) {
+    return [...el.querySelectorAll('button')].find((b) => b.textContent?.includes(text));
+  }
+
+  function type(el: HTMLElement, id: string, value: string) {
+    const input = el.querySelector<HTMLInputElement>(id)!;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+  }
 
   afterEach(() => controller.verify());
 
@@ -108,5 +127,54 @@ describe('NotificationPrefs', () => {
   it('says when the server has no delivery channels', async () => {
     const el = await render({ ...VIEW, channels: ['inapp'] });
     expect(el.textContent).toContain('no push, email or webhook delivery');
+  });
+
+  it('saves the webhook write-only and shows only its host afterwards', async () => {
+    const el = await render();
+    expect(el.textContent).toContain('No webhook set');
+    type(el, '#webhook-url', 'https://hooks.example.com/secret-path');
+    button(el, 'Save webhook')!.click();
+    const req = await nextRequest(controller, '/api/notifications/webhook', 'PUT');
+    expect(req.request.body).toEqual({ url: 'https://hooks.example.com/secret-path' });
+    req.flush({ ...VIEW, webhook: 'https://hooks.example.com/***' });
+    await tick();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Sending to https://hooks.example.com/***');
+    expect(el.querySelector<HTMLInputElement>('#webhook-url')!.value).toBe('');
+    expect(el.textContent).not.toContain('secret-path');
+  });
+
+  it('asks for an https address', async () => {
+    const el = await render();
+    type(el, '#webhook-url', 'http://hooks.example.com');
+    button(el, 'Save webhook')!.click();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('starts with https://');
+  });
+
+  it('asks before removing the webhook', async () => {
+    const confirm = vi.spyOn(TestBed.inject(ConfirmService), 'confirm').mockResolvedValue(true);
+    const el = await render({ ...VIEW, webhook: 'https://hooks.example.com/***' });
+    button(el, 'Remove webhook')!.click();
+    const req = await nextRequest(controller, '/api/notifications/webhook', 'PUT');
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ tone: 'danger' }));
+    expect(req.request.body).toEqual({ url: null });
+    req.flush(VIEW);
+    await tick();
+  });
+
+  it('hides the webhook when the server cannot send to one', async () => {
+    const el = await render({ ...VIEW, channels: ['inapp', 'webpush'] });
+    expect(el.querySelector('#webhook-url')).toBeNull();
+  });
+
+  it('locks every setting for a user who may not change them', async () => {
+    allowed = false;
+    const el = await render();
+    expect(el.textContent).toContain('Traders and admins only.');
+    expect(box(el, 'Signals by Push').disabled).toBe(true);
+    expect(button(el, 'Save quiet hours')!.disabled).toBe(true);
+    expect(button(el, 'Save webhook')!.disabled).toBe(true);
+    expect(el.querySelector<HTMLInputElement>('#webhook-url')!.disabled).toBe(true);
   });
 });
