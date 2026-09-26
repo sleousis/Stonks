@@ -54,6 +54,7 @@ def build_tick_settings(settings: Settings, universe: Sequence[str]) -> TickSett
         dividend_withholding_rate=p.dividend_withholding_rate,
         construction=p.construction,
         model_books=p.model_books,
+        quit_rule=p.quit_rule,
     )
 
 

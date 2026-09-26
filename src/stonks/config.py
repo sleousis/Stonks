@@ -24,6 +24,7 @@ from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
 from stonks.ops.config import BackupConfig
 from stonks.portfolio.settings import ConstructionSettings
+from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.rules.settings import RuleSettings
 from stonks.scheduling.config import SchedulerConfig
 from stonks.store.bars import BarBackend
@@ -166,7 +167,8 @@ class RiskPolicy(BaseModel):
     min_order_notional: float = Field(default=0.0, ge=0.0)
     # ``[production.risk.rules.<rule>]``: the W3.1 rules (max_holding,
     # drawdown_scaling, portfolio_vol, risk_per_position, sector_cap,
-    # liquidity), every one off by default.
+    # liquidity) and the W3.2 halts (circuit_breaker, operational_halt),
+    # every one off by default.
     rules: RuleSettings = RuleSettings()
 
     def tighter_of(self, *overrides: RiskPolicy | Mapping[str, Any] | None) -> RiskPolicy:
@@ -219,6 +221,10 @@ class ProductionConfig(BaseModel):
     # active strategy. Off by default. When on, a newly promoted strategy
     # trades only once a subscription (e.g. on pf_default) includes it.
     books_from_subscriptions: bool = False
+    # ``[production.quit_rule]`` (BL-29): alert (and with auto_demote, move
+    # to shadow) an active strategy whose attributed drawdown passes
+    # quit_multiple x its backtest drawdown.
+    quit_rule: QuitRuleSettings = QuitRuleSettings()
 
 
 class GoLivePolicy(BaseModel):

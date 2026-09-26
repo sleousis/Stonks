@@ -76,6 +76,29 @@ min_order_notional = 0.0
 # [production.risk.rules.drawdown_scaling]
 # schedule = [[0.10, 0.5], [0.20, 0.0]]   # size by drawdown from peak
 
+# Circuit breaker (BL-28): halts new buys after a loss. Off until a limit is
+# set. Recommended values below. A trip opens a risk_halts row the owner
+# sees and clears (`stonks halts list`, `stonks halts clear ID --reason ...`).
+[production.risk.rules.circuit_breaker]
+# max_month_loss = 0.06            # loss from the month's first snapshot
+# max_week_loss = 0.04             # loss over week_sessions snapshots
+# max_drawdown_halt = 0.20         # drawdown from the peak, held until cleared
+week_sessions = 5
+cooldown = "rest_of_month"         # or "none": lift once the loss is made back
+
+# Operational halt (BL-28): halts new buys when the newest bar is too old.
+# `stonks health` also opens a global halt on stale data or a stuck run.
+[production.risk.rules.operational_halt]
+# max_bar_age_days = 5
+
+[production.quit_rule]
+# Quit rule (BL-29): after each tick, alert the admins when an active
+# strategy's drawdown since promotion passes quit_multiple x its backtest
+# drawdown (or the Monte Carlo p95 when tighter).
+quit_multiple = 1.5
+auto_demote = false                # true: also move it to shadow
+min_eval_days = 126                # evaluation horizon before a retire needs no override
+
 [production.health]
 # `stonks health` thresholds.
 max_bar_age_days = 4
