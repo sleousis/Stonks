@@ -1,0 +1,1265 @@
+{
+  "instructions": "Stonks research + trading system. Tools talk to the local REST API started\nwith `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs\nand ingests; follow up with wait_for_job. Status changes and production ticks\nneed confirm=true; call them first without it to get a preview and show it to\nthe user before confirming. run_tick is a dry run unless dry_run=false, and a\nreal tick is refused unless the API reports a paper/simulated broker. No tool\ncan change broker settings or enable live trading.",
+  "resource_templates": [],
+  "resources": [
+    {
+      "description": "Cash, total value and positions of the current portfolio",
+      "mime_type": "application/json",
+      "name": "portfolio_summary",
+      "uri": "stonks://portfolio/summary"
+    }
+  ],
+  "server": "stonks",
+  "tools": [
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "OHLCV bars for one instrument at one interval.",
+      "input_schema": {
+        "properties": {
+          "end": {
+            "anyOf": [
+              {
+                "description": "YYYY-MM-DD",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "End"
+          },
+          "interval": {
+            "default": "1d",
+            "description": "bar interval, e.g. 1d, 1h, 5m",
+            "title": "Interval",
+            "type": "string"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "max bars",
+            "title": "Limit"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "description": "YYYY-MM-DD",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Start"
+          },
+          "ticker": {
+            "description": "instrument id, e.g. AAPL.US or BTC-USD.CC",
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "title": "get_barsArguments",
+        "type": "object"
+      },
+      "name": "get_bars",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Strategy classes that can be backtested or tuned, with their parameter\nspecs, plus the valid bar intervals and asset classes.",
+      "input_schema": {
+        "properties": {},
+        "title": "get_catalogArguments",
+        "type": "object"
+      },
+      "name": "get_catalog",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Data coverage: first/last bar and bar count per instrument and interval.",
+      "input_schema": {
+        "properties": {
+          "interval": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Interval"
+          },
+          "limit": {
+            "default": 50,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ticker"
+          }
+        },
+        "title": "get_coverageArguments",
+        "type": "object"
+      },
+      "name": "get_coverage",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "One background job: status, progress, and its result once finished.",
+      "input_schema": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "get_jobArguments",
+        "type": "object"
+      },
+      "name": "get_job",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Current portfolio: cash, positions valued at the latest stored closes,\nweights and total value, from the latest snapshot.",
+      "input_schema": {
+        "properties": {},
+        "title": "get_portfolioArguments",
+        "type": "object"
+      },
+      "name": "get_portfolio",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "One registered strategy with its survival-test reports (pass/fail and metrics).",
+      "input_schema": {
+        "properties": {
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_id"
+        ],
+        "title": "get_strategyArguments",
+        "type": "object"
+      },
+      "name": "get_strategy",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "One production tick run with the orders it placed.",
+      "input_schema": {
+        "properties": {
+          "tick_id": {
+            "title": "Tick Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tick_id"
+        ],
+        "title": "get_tickArguments",
+        "type": "object"
+      },
+      "name": "get_tick",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Check that the Stonks API is up and report its version.",
+      "input_schema": {
+        "properties": {},
+        "title": "healthArguments",
+        "type": "object"
+      },
+      "name": "health",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Fills (executions) of orders, with optional filters.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "order_client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Order Client Id"
+          },
+          "tick_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tick Id"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ticker"
+          }
+        },
+        "title": "list_fillsArguments",
+        "type": "object"
+      },
+      "name": "list_fills",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Market-data ingest runs (source, kind, tickers ok/failed, status).",
+      "input_schema": {
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Kind"
+          },
+          "limit": {
+            "default": 50,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          }
+        },
+        "title": "list_ingest_runsArguments",
+        "type": "object"
+      },
+      "name": "list_ingest_runs",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Background jobs (backtests, lab runs, ingests, ticks), newest first.",
+      "input_schema": {
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "backtest, lab_run, ingest or tick",
+            "title": "Kind"
+          },
+          "limit": {
+            "default": 50,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "queued",
+                  "running",
+                  "succeeded",
+                  "failed",
+                  "cancelled"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          }
+        },
+        "title": "list_jobsArguments",
+        "type": "object"
+      },
+      "name": "list_jobs",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Orders placed by production ticks, newest first, with optional filters.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Strategy Id"
+          },
+          "tick_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tick Id"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ticker"
+          }
+        },
+        "title": "list_ordersArguments",
+        "type": "object"
+      },
+      "name": "list_orders",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Portfolio history: one snapshot per production tick, newest first.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          }
+        },
+        "title": "list_portfolio_snapshotsArguments",
+        "type": "object"
+      },
+      "name": "list_portfolio_snapshots",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Registered strategies (id, class, params, status), optionally by status.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "active",
+                  "shadow",
+                  "retired"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          }
+        },
+        "title": "list_strategiesArguments",
+        "type": "object"
+      },
+      "name": "list_strategies",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Production tick runs, newest first, with their summaries.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          }
+        },
+        "title": "list_ticksArguments",
+        "type": "object"
+      },
+      "name": "list_ticks",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Promote a strategy to active so production ticks rank and trade it.\nWithout confirm=true returns a preview (current status, survival\nresults, warnings) and changes nothing.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_id"
+        ],
+        "title": "promote_strategyArguments",
+        "type": "object"
+      },
+      "name": "promote_strategy",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Retire a strategy: it stops being ranked or evaluated.\nWithout confirm=true returns a preview and changes nothing.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_id"
+        ],
+        "title": "retire_strategyArguments",
+        "type": "object"
+      },
+      "name": "retire_strategy",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Queue a backtest of one strategy over a universe and date window.\nReturns the job; use wait_for_job to get the metrics and equity curve.\nSimulated only: never places real orders.",
+      "input_schema": {
+        "properties": {
+          "class_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "catalog class path, e.g. pkg.mod:Class",
+            "title": "Class Path"
+          },
+          "end": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "fee_per_trade": {
+            "default": 0.0,
+            "minimum": 0,
+            "title": "Fee Per Trade",
+            "type": "number"
+          },
+          "initial_cash": {
+            "default": 10000.0,
+            "exclusiveMinimum": 0,
+            "title": "Initial Cash",
+            "type": "number"
+          },
+          "interval": {
+            "default": "1d",
+            "title": "Interval",
+            "type": "string"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "strategy params (with class_path)",
+            "title": "Params"
+          },
+          "rebalance_every_bars": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Rebalance Every Bars",
+            "type": "integer"
+          },
+          "slippage_bps": {
+            "default": 0.0,
+            "minimum": 0,
+            "title": "Slippage Bps",
+            "type": "number"
+          },
+          "start": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "registered strategy id (or use class_path)",
+            "title": "Strategy Id"
+          },
+          "threshold": {
+            "default": 0.0,
+            "title": "Threshold",
+            "type": "number"
+          },
+          "universe": {
+            "description": "instrument ids",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Universe",
+            "type": "array"
+          }
+        },
+        "required": [
+          "universe",
+          "start",
+          "end"
+        ],
+        "title": "run_backtestArguments",
+        "type": "object"
+      },
+      "name": "run_backtest",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": false,
+        "open_world": true,
+        "read_only": false
+      },
+      "description": "Queue a market-data ingest into the lake from the configured vendor.\nReturns the job; use wait_for_job for the outcome.",
+      "input_schema": {
+        "properties": {
+          "exchange": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "ingest a whole exchange",
+            "title": "Exchange"
+          },
+          "interval": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "for intraday, e.g. 5m",
+            "title": "Interval"
+          },
+          "kind": {
+            "enum": [
+              "prices",
+              "intraday",
+              "fundamentals",
+              "metadata"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "description": "YYYY-MM-DD",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Since"
+          },
+          "tickers": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "instrument ids; or use exchange",
+            "title": "Tickers"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "description": "YYYY-MM-DD",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Until"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "run_ingestArguments",
+        "type": "object"
+      },
+      "name": "run_ingest",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Queue a lab run: tune a strategy class, fit, run the survival suite and\ngive a pass/fail verdict. Returns the job; use wait_for_job for the result.",
+      "input_schema": {
+        "properties": {
+          "budget": {
+            "default": 20,
+            "description": "tuner trials",
+            "maximum": 1000,
+            "minimum": 1,
+            "title": "Budget",
+            "type": "integer"
+          },
+          "class_path": {
+            "description": "catalog class path to tune",
+            "title": "Class Path",
+            "type": "string"
+          },
+          "end": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "interval": {
+            "default": "1d",
+            "title": "Interval",
+            "type": "string"
+          },
+          "objective": {
+            "default": "sharpe",
+            "enum": [
+              "sharpe",
+              "cagr",
+              "final_return"
+            ],
+            "title": "Objective",
+            "type": "string"
+          },
+          "register_strategy": {
+            "default": false,
+            "description": "register the tuned strategy (lands in shadow status)",
+            "title": "Register Strategy",
+            "type": "boolean"
+          },
+          "seed": {
+            "default": 0,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "start": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "survival_tests": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "oos",
+                    "period_stability",
+                    "perturbation",
+                    "drift",
+                    "runs_test",
+                    "permutation"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "survival suite; server default when omitted",
+            "title": "Survival Tests"
+          },
+          "train_ratio": {
+            "default": 0.7,
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Train Ratio",
+            "type": "number"
+          },
+          "tuner": {
+            "default": "random",
+            "enum": [
+              "grid",
+              "random"
+            ],
+            "title": "Tuner",
+            "type": "string"
+          },
+          "universe": {
+            "description": "instrument ids",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Universe",
+            "type": "array"
+          }
+        },
+        "required": [
+          "class_path",
+          "universe",
+          "start",
+          "end"
+        ],
+        "title": "run_labArguments",
+        "type": "object"
+      },
+      "name": "run_lab",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Queue one production tick (rank active strategies, then trade the winner).\nDry run by default. Without confirm=true returns a preview and queues\nnothing. A real tick (dry_run=false) is refused unless the API reports\nthe broker is paper/simulated.",
+      "input_schema": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD; default today",
+            "title": "As Of"
+          },
+          "asset_class": {
+            "anyOf": [
+              {
+                "enum": [
+                  "equity",
+                  "crypto",
+                  "commodity",
+                  "bond"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Asset Class"
+          },
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "dry_run": {
+            "default": true,
+            "description": "true (default): rank and log only, place no orders",
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "tickers": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "override [production].universe",
+            "title": "Tickers"
+          }
+        },
+        "title": "run_tickArguments",
+        "type": "object"
+      },
+      "name": "run_tick",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Search instruments in the lake by id/name and asset class.",
+      "input_schema": {
+        "properties": {
+          "asset_class": {
+            "anyOf": [
+              {
+                "enum": [
+                  "equity",
+                  "crypto",
+                  "commodity",
+                  "bond"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Asset Class"
+          },
+          "limit": {
+            "default": 50,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "q": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "substring of id or name",
+            "title": "Q"
+          }
+        },
+        "title": "search_instrumentsArguments",
+        "type": "object"
+      },
+      "name": "search_instruments",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Move a strategy to shadow: evaluated on a virtual portfolio, never traded.\nWithout confirm=true returns a preview and changes nothing.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_id"
+        ],
+        "title": "shadow_strategyArguments",
+        "type": "object"
+      },
+      "name": "shadow_strategy",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Poll a job until it finishes or the timeout passes. Returns\n{\"timed_out\": bool, \"job\": {...}}; the job carries its result or error.",
+      "input_schema": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "poll_seconds": {
+            "default": 1.0,
+            "maximum": 30,
+            "minimum": 0.05,
+            "title": "Poll Seconds",
+            "type": "number"
+          },
+          "timeout_seconds": {
+            "default": 120.0,
+            "description": "give up after this long (max 600)",
+            "exclusiveMinimum": 0,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "wait_for_jobArguments",
+        "type": "object"
+      },
+      "name": "wait_for_job",
+      "needs_confirm": false
+    }
+  ]
+}
