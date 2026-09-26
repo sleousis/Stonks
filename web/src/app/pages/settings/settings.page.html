@@ -1,12 +1,42 @@
 <app-page-header
   title="Settings"
-  description="API access and display preferences for this browser, and the server's configuration."
+  [description]="
+    showSystem()
+      ? 'Your account and display settings, and how the system is set up.'
+      : 'Your account and display settings.'
+  "
 >
-  <button actions type="button" class="btn" (click)="reloadConfig()">Reload configuration</button>
+  @if (showSystem()) {
+    <button actions type="button" class="btn" (click)="reloadConfig()">
+      Reload system settings
+    </button>
+  }
 </app-page-header>
 
 <div class="page-grid">
-  <div class="column span-6">
+  <section
+    class="column group"
+    [class.span-6]="showSystem()"
+    [class.span-12]="!showSystem()"
+    [class.wide]="!showSystem()"
+    aria-labelledby="account-group"
+  >
+    <h2 id="account-group" class="group-title">Your account</h2>
+
+    <!-- Profile -------------------------------------------------------------->
+    <section class="panel" aria-labelledby="profile-title">
+      <div class="panel-head">
+        <h2 id="profile-title">Sign-in and security</h2>
+      </div>
+      <div class="panel-body">
+        <p class="lead">
+          Change your password, get new recovery codes and manage your API tokens on your Profile
+          page.
+        </p>
+        <a class="btn" routerLink="/profile">Open profile</a>
+      </div>
+    </section>
+
     <!-- Token ----------------------------------------------------------------->
     <section class="panel" aria-labelledby="token-title">
       <div class="panel-head">
@@ -145,9 +175,13 @@
         </p>
       </div>
     </section>
-  </div>
+  </section>
 
-  <div class="column span-6">
+  @if (showSystem()) {
+  <section class="column group span-6" aria-labelledby="system-group">
+    <h2 id="system-group" class="group-title">System</h2>
+    <p class="group-note">Only admins see this. Changes are made on the server.</p>
+
     <!-- Broker ---------------------------------------------------------------->
     <section class="panel" aria-labelledby="broker-title">
       <div class="panel-head">
@@ -218,7 +252,6 @@
     <section class="panel" aria-labelledby="risk-title">
       <div class="panel-head">
         <h2 id="risk-title">Risk policy</h2>
-        <span class="muted">[production.risk]</span>
       </div>
       @if (risk.error(); as err) {
         <app-error-state
@@ -254,13 +287,13 @@
       } @else if (!sources.hasValue()) {
         <app-loading-state label="Loading data sources" [rows]="3" />
       } @else if (sources.value().length === 0) {
-        <app-empty-state title="No data sources" message="The API lists no ingest sources." />
+        <app-empty-state title="No data sources" message="The server has no data sources set up." />
       } @else {
         <ul class="list">
           @for (s of sources.value(); track s.id) {
             <li>
               <div class="list-main">
-                <span class="list-title">{{ s.id }}</span>
+                <span class="list-title">{{ sourceName(s.id) }}</span>
                 @if (s.default) {
                   <span class="tag">Default</span>
                 }
@@ -292,7 +325,7 @@
       } @else if (!costModels.hasValue()) {
         <app-loading-state label="Loading cost models" [rows]="4" />
       } @else if (costModels.value().length === 0) {
-        <app-empty-state title="No presets" message="The API lists no cost-model presets." />
+        <app-empty-state title="No presets" message="The server has no cost-model presets." />
       } @else {
         @for (preset of costModels.value(); track preset.name) {
           <div class="preset">
@@ -329,5 +362,6 @@
         }
       }
     </section>
-  </div>
+  </section>
+  }
 </div>
