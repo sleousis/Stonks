@@ -12,6 +12,8 @@ new orders at global, user or portfolio scope.
   ``operational`` halt (opened on stale data or a stuck run, cleared by the
   next healthy report);
 - :func:`halt_health_check` is the health check for open halts;
+- :func:`run_health` is ``check_health`` plus both of the above, what every
+  health entrypoint (CLI, API, scheduler) runs;
 - :func:`notify_trip` sends the ``risk`` notification of a trip.
 
 Who may trip or clear what (owners, admins, typed confirmation for the
@@ -21,14 +23,18 @@ only keeps the rows consistent.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from typing import Any, Literal, get_args
+from typing import TYPE_CHECKING, Any, Literal, get_args
 
 from stonks.logging import get_logger
-from stonks.production.health import HealthCheck, HealthReport
+from stonks.production.health import HealthCheck, HealthReport, check_health
 from stonks.store.state import SqliteState
+
+if TYPE_CHECKING:
+    from stonks.config import HealthConfig
+    from stonks.store.lake import DuckDBLake
 
 __all__ = [
     "HALT_KINDS",
@@ -45,6 +51,7 @@ __all__ = [
     "halts_enabled",
     "list_halts",
     "notify_trip",
+    "run_health",
     "sync_operational_halt",
     "trip_halt",
 ]
@@ -330,6 +337,24 @@ def halt_health_check(state: SqliteState, on: date | None = None) -> HealthCheck
         return HealthCheck(name="risk_halts", ok=True, detail="no halt in force")
     detail = "; ".join(f"#{h.id} {h.kind} ({h.target}, {h.halt})" for h in halts)
     return HealthCheck(name="risk_halts", ok=False, detail=detail)
+
+
+def run_health(
+    state: SqliteState,
+    lake: DuckDBLake,
+    universe: Sequence[str],
+    config: HealthConfig,
+    now: datetime | None = None,
+) -> HealthReport:
+    """:func:`check_health`, then :func:`sync_operational_halt` on its
+    report, with :func:`halt_health_check` appended. Without the halt
+    table this is ``check_health`` alone."""
+    report = check_health(state, lake, universe, config, now=now)
+    if not halts_enabled(state):
+        return report
+    sync_operational_halt(state, report)
+    halt_check = halt_health_check(state, report.checked_at.date())
+    return HealthReport(checks=[*report.checks, halt_check], checked_at=report.checked_at)
 
 
 Publish = Callable[[Any], Any]

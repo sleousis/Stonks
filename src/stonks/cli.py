@@ -975,16 +975,18 @@ def health(
         False, "--notify/--no-notify", help="send an alert through [notify] when unhealthy"
     ),
 ) -> None:
-    """Check data freshness and stuck/failed runs. Exit code 1 when unhealthy,
-    so a scheduler can alert on it."""
-    from stonks.production.health import check_health, notify_unhealthy
+    """Check data freshness, stuck/failed runs and open risk halts. Stale data
+    or a stuck run opens the global operational halt (cleared by the next
+    healthy check). Exit code 1 when unhealthy, so a scheduler can alert."""
+    from stonks.production.halts import run_health
+    from stonks.production.health import notify_unhealthy
 
     settings = _settings()
     universe = _parse_tickers(tickers) or list(settings.production.universe)
     state = SqliteState(settings.state.path)
     try:
         with _open_lake(settings.lake.path) as lake:
-            report = check_health(state, lake, universe, settings.production.health)
+            report = run_health(state, lake, universe, settings.production.health)
     finally:
         state.close()
 

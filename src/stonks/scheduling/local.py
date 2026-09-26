@@ -10,7 +10,8 @@ The actions call the same services as the CLI:
 - ``ingest_prices``: ``IngestPipeline.run_prices`` for the universe over
   the last ``lookback_days`` up to the fire's date;
 - ``tick``: ``run_tick`` through ``build_tick_runtime`` for the fire's date;
-- ``health``: ``check_health``, alerting when unhealthy;
+- ``health``: ``run_health`` (checks plus the operational halt), alerting
+  when unhealthy;
 - ``report``: the static HTML report written to ``out``;
 - ``backup``: ``run_configured_backup`` (``[backup]`` target and retention);
 - ``connections_sync``: every due broker connection synced as
@@ -138,7 +139,7 @@ def tick_action(ctx: RunContext) -> JobOutcome:
 
 @register_action("health")
 def health_action(ctx: RunContext) -> JobOutcome:
-    from stonks.production.health import check_health
+    from stonks.production.halts import run_health
     from stonks.store.lake import DuckDBLake
     from stonks.store.state import SqliteState
 
@@ -146,7 +147,7 @@ def health_action(ctx: RunContext) -> JobOutcome:
     state = SqliteState(settings.state.path)
     try:
         with DuckDBLake(settings.lake.path) as lake:
-            report = check_health(
+            report = run_health(
                 state, lake, job_universe(ctx), settings.production.health, now=ctx.now
             )
     finally:
