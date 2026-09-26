@@ -1,0 +1,22 @@
+// Tailscale access policy for Stonks. Paste into the admin console
+// (Access controls) and replace the example emails.
+{
+	"groups": {
+		"group:stonks-admins":  ["owner@example.com"],
+		"group:stonks-traders": ["trader1@example.com", "trader2@example.com"],
+	},
+
+	"tagOwners": {
+		"tag:stonks": ["group:stonks-admins"],
+		"tag:ci":     ["group:stonks-admins"],
+	},
+
+	"acls": [
+		// Traders: the console and API over HTTPS only.
+		{"action": "accept", "src": ["group:stonks-traders"], "dst": ["tag:stonks:443"]},
+		// Admins: HTTPS and SSH.
+		{"action": "accept", "src": ["group:stonks-admins"], "dst": ["tag:stonks:22,443"]},
+		// GitHub Actions deploy job: SSH (deploy user) and the health check.
+		{"action": "accept", "src": ["tag:ci"], "dst": ["tag:stonks:22,443"]},
+	],
+}
