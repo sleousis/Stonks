@@ -24,7 +24,16 @@ after the last bar are never filled. Per bar the engine:
 4. marks equity at those (carried-forward) closes.
 
 All bar prices for the universe / interval / window are loaded with one
-query up front.
+query up front, joined to ``instruments`` for each ticker's asset class
+(missing row or NULL -> ``equity``).
+
+Annualization
+-------------
+Sharpe uses ``periods_per_year(interval, asset_classes)`` over the asset
+classes of the tickers that actually have bars in the window (a universe
+ticker with no bars adds no equity-curve points). A mixed universe uses the
+densest calendar present, since equity is marked on the union of bar
+timestamps; see ``stonks.backtest.calendar``.
 """
 
 from __future__ import annotations
@@ -40,7 +49,7 @@ from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy
 from stonks.core.timeutil import as_datetime, day_end, day_start
-from stonks.core.types import Order
+from stonks.core.types import AssetClass, Order
 from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
 
@@ -78,7 +87,7 @@ class Backtester:
         self._config = config
 
     def run(self) -> BacktestReport:
-        bars_by_ts = self._load_bars()
+        bars_by_ts, asset_classes = self._load_bars()
         equity_dates: list[datetime] = []
         equity_curve: list[float] = []
         last_close: dict[str, float] = {}
@@ -119,21 +128,28 @@ class Backtester:
             strategy_id,
             equity_dates,
             equity_curve,
-            periods_per_year=periods_per_year(self._config.interval),
+            periods_per_year=periods_per_year(self._config.interval, set(asset_classes.values())),
         )
 
     # ---- internals ----------------------------------------------------------
 
-    def _load_bars(self) -> dict[datetime, dict[str, _Bar]]:
+    def _load_bars(
+        self,
+    ) -> tuple[dict[datetime, dict[str, _Bar]], dict[str, AssetClass]]:
         """All bars for the universe / interval / window, keyed by timestamp
-        (ascending) then ticker. One query for the whole run."""
+        (ascending) then ticker, plus the asset class of every ticker that
+        has bars (from ``instruments``; no row or NULL means equity). One
+        query for the whole run."""
         start_ts, end_ts = _to_window_bounds(self._config.start, self._config.end)
         df = self._lake.sql(
             """
-            SELECT timestamp, ticker, open, close FROM bars
-             WHERE ticker = ANY(?) AND interval = ?
-               AND timestamp BETWEEN ? AND ?
-             ORDER BY timestamp, ticker
+            SELECT b.timestamp, b.ticker, b.open, b.close,
+                   COALESCE(i.asset_class, 'equity') AS asset_class
+              FROM bars b
+              LEFT JOIN instruments i ON i.id = b.ticker
+             WHERE b.ticker = ANY(?) AND b.interval = ?
+               AND b.timestamp BETWEEN ? AND ?
+             ORDER BY b.timestamp, b.ticker
             """,
             [
                 list(self._config.universe),
@@ -143,12 +159,14 @@ class Backtester:
             ],
         )
         out: dict[datetime, dict[str, _Bar]] = {}
+        asset_classes: dict[str, AssetClass] = {}
         for row in df.itertuples(index=False):
+            asset_classes[row.ticker] = row.asset_class
             open_ = None if pd.isna(row.open) else float(row.open)
             out.setdefault(as_datetime(row.timestamp), {})[row.ticker] = _Bar(
                 open=open_, close=float(row.close)
             )
-        return out
+        return out, asset_classes
 
     def _fill_pending(
         self, pending: list[Order], bars: dict[str, _Bar], as_of: datetime

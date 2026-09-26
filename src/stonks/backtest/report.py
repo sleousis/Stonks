@@ -3,9 +3,10 @@
 Annualization conventions
 -------------------------
 - Sharpe is annualized with ``sqrt(periods_per_year)``. The default is 252
-  (daily bars). ``periods_per_year(interval)`` derives the factor from a bar
-  ``Interval`` using a US-equity trading calendar: 252 trading days per
-  year and a 6.5-hour regular session for intraday bars.
+  (daily bars). ``periods_per_year(interval, asset_classes)`` derives the
+  factor from a bar ``Interval`` and the universe's trading calendar: 252
+  sessions of 6.5 hours for exchange-traded classes, 365 days of 24 hours
+  for crypto (``stonks.backtest.calendar``).
 - CAGR is ``(end / start) ** (1 / years) - 1`` with ``years`` measured in
   wall-clock seconds, so it works for intraday windows. A total wipeout
   (``end <= 0``) reports ``-1.0``. When the annualized figure is too large
@@ -16,39 +17,27 @@ Annualization conventions
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
 
+from stonks.backtest.calendar import calendar_for_universe
 from stonks.core.interval import Interval
+from stonks.core.types import AssetClass
 
 _TRADING_DAYS_PER_YEAR = 252
-_SESSION_SECONDS = int(6.5 * 3600)  # US regular session
-_SECONDS_PER_DAY = 24 * 3600
-_SECONDS_PER_WEEK = 7 * _SECONDS_PER_DAY
 # ``math.exp`` overflows just above 709.78.
 _MAX_EXP = 709.0
 
 
-def periods_per_year(interval: Interval) -> float:
-    """Number of bars of ``interval`` in one year, for Sharpe annualization.
-
-    - intraday: ``252 * max(1, 6.5h / interval)`` — bars longer than the
-      equity session still count as one bar per trading day
-    - day multiples below a week: ``252 / days``
-    - weeks: ``52 / weeks``; months: ``12 / months``; years: ``1 / years``
-    """
-    unit = interval.code.lstrip("0123456789")
-    amount = int(interval.code[: -len(unit)])
-    if interval.is_intraday:
-        return _TRADING_DAYS_PER_YEAR * max(1.0, _SESSION_SECONDS / interval.seconds)
-    if unit == "d":
-        return _TRADING_DAYS_PER_YEAR / amount
-    if unit == "w":
-        return 52 / amount
-    if unit == "mo":
-        return 12 / amount
-    return 1 / amount
+def periods_per_year(
+    interval: Interval, asset_classes: Iterable[AssetClass] = ("equity",)
+) -> float:
+    """Number of bars of ``interval`` in one year, for Sharpe annualization,
+    on the trading calendar of ``asset_classes`` (see
+    ``stonks.backtest.calendar``: crypto trades 24/7/365, every other class
+    252 sessions of 6.5h; a mixed universe uses the densest calendar)."""
+    return calendar_for_universe(asset_classes).periods_per_year(interval)
 
 
 @dataclass(frozen=True)

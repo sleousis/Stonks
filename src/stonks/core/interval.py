@@ -135,6 +135,16 @@ class Interval:
         return timedelta(seconds=self.seconds)
 
     @property
+    def unit(self) -> str:
+        """Canonical unit suffix: ``m``, ``h``, ``d``, ``w``, ``mo`` or ``y``."""
+        return self.code.lstrip("0123456789")
+
+    @property
+    def amount(self) -> int:
+        """Number of units in one bar (``5`` for ``5m``)."""
+        return int(self.code[: -len(self.unit)])
+
+    @property
     def is_intraday(self) -> bool:
         return self.seconds < _SECONDS_PER_DAY
 
