@@ -165,11 +165,17 @@ class ExchangeCalendar(MarketCalendar):
     rather than guessing.
     """
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, start: date | None = None, end: date | None = None) -> None:
+        """``start`` / ``end`` widen (or narrow) the library's default window."""
         import exchange_calendars as xc
 
+        kwargs = {}
+        if start is not None:
+            kwargs["start"] = start.isoformat()
+        if end is not None:
+            kwargs["end"] = end.isoformat()
         try:
-            self._cal = xc.get_calendar(code)
+            self._cal = xc.get_calendar(code, **kwargs)
         except xc.errors.InvalidCalendarName as exc:
             raise UnknownCalendarError(code) from exc
         self.name = code
@@ -209,12 +215,29 @@ class ExchangeCalendar(MarketCalendar):
     def is_regular_weekday(self, day: date) -> bool:
         return self._weekmask[day.weekday()] == "1"
 
+    @property
+    def first_session(self) -> date:
+        return self._first
+
+    @property
+    def last_session(self) -> date:
+        return self._last
+
 
 # ---- registry ------------------------------------------------------------------
 
 CalendarFactory = Callable[[], MarketCalendar]
 
-_FACTORIES: dict[str, CalendarFactory] = {"24/7": AlwaysOpenCalendar}
+#: The US exchange calendar covers backtest history too (the library's
+#: default window is only 20 years back): it is the one calendar both the
+#: scheduler and calendar-timed strategies (``features.sessions``) read.
+US_CALENDAR = "XNYS"
+US_CALENDAR_WINDOW = (date(1970, 1, 1), date(2040, 12, 31))
+
+_FACTORIES: dict[str, CalendarFactory] = {
+    "24/7": AlwaysOpenCalendar,
+    US_CALENDAR: lambda: ExchangeCalendar(US_CALENDAR, *US_CALENDAR_WINDOW),
+}
 _INSTANCES: dict[str, MarketCalendar] = {}
 _LOCK = threading.Lock()
 
