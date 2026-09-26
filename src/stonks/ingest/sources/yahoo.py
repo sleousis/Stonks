@@ -383,7 +383,10 @@ class YahooDataSource(DataSource):
             )
         symbol = to_yahoo_symbol(ticker)
         today = self._now().astimezone(UTC).date()
-        earliest = today - timedelta(days=spec.lookback_days - 1)
+        # Yahoo counts the lookback in wall time from now, and yfinance turns
+        # ``start`` into exchange-local midnight, which for exchanges east of
+        # UTC is up to a day earlier than the UTC date. Keep a 2-day margin.
+        earliest = today - timedelta(days=spec.lookback_days - 2)
         if since is None:
             since = earliest
         elif since < earliest:

@@ -388,6 +388,18 @@ def test_intraday_default_since_is_the_lookback_window():
     assert (NOW.date() - start).days > 700
 
 
+def test_intraday_earliest_start_leaves_a_timezone_margin():
+    # Yahoo measures its window in wall time from "now"; a start at local
+    # midnight in an east-of-UTC exchange is up to ~a day further back than
+    # the UTC date suggests, so the earliest accepted date keeps a margin.
+    source = make_source(FakeYF(frames=[intraday_frame()] * 5))
+    with pytest.raises(YahooDataSourceError, match="30 days"):
+        source.fetch_intraday_bars("0700.HK", Interval.MIN_1, since=NOW.date() - timedelta(days=29))
+    fake = FakeYF(frames=[intraday_frame()] * 5)
+    make_source(fake).fetch_intraday_bars("0700.HK", Interval.MIN_1)
+    assert fake.calls[0][1]["start"] == (NOW.date() - timedelta(days=28)).isoformat()
+
+
 def test_intraday_1m_is_chunked_into_windows_yahoo_accepts():
     fake = FakeYF(frames=[intraday_frame(), pd.DataFrame(), pd.DataFrame()])
     make_source(fake).fetch_intraday_bars(
