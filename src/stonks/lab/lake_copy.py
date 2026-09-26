@@ -11,7 +11,8 @@ Filtering: tables with a ``ticker`` column keep only universe rows;
 ``instruments`` is filtered on ``id``; tables with neither (macro
 series) are copied whole. ``bars`` is left empty for the caller to fill
 with its modified prices. Operational tables (``ingest_runs``,
-``schema_migrations``) are never copied.
+``schema_migrations``) are never copied. Callers that fill ``bars`` with
+adjusted prices also skip :data:`CORPORATE_ACTION_TABLES`.
 
 Transport goes through the source connection's DataFrame fetch rather
 than ``ATTACH``: DuckDB refuses to attach a database file that another
@@ -31,6 +32,11 @@ _log = get_logger("stonks.lab.lake_copy")
 
 #: Never copied: pure bookkeeping, no strategy reads them.
 _OPERATIONAL_TABLES = frozenset({"ingest_runs", "schema_migrations"})
+
+#: Corporate-action tables. A copy whose bars are *adjusted* (every
+#: split and dividend already folded into the prices) must skip them, or
+#: the backtest engine would apply the events a second time.
+CORPORATE_ACTION_TABLES = ("stock_splits", "dividends")
 
 #: Tables keyed on the instrument id under a name other than ``ticker``.
 _ID_KEYED_TABLES = {"instruments": "id"}

@@ -27,7 +27,7 @@ correlation and only destroys time structure.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Protocol
@@ -38,11 +38,13 @@ import pandas as pd
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.lab.backtesting import run_backtest
-from stonks.lab.lake_copy import copy_universe_lake
+from stonks.features.price_adjustment import SeriesAdjustment
+from stonks.lab.lake_copy import CORPORATE_ACTION_TABLES, copy_universe_lake
 from stonks.lab.parallel import PortableLake, PortableStrategy, run_tasks
 from stonks.lab.survival.base import TuningSetup
 from stonks.lab.tuning.base import tune_and_fit
 from stonks.logging import get_logger
+from stonks.store.corporate_actions import LakeCorporateActions
 from stonks.store.lake import DuckDBLake
 
 _log = get_logger("stonks.lab.survival.permutation")
@@ -202,6 +204,13 @@ class MonteCarloPermutationTest:
     to the window end, and any coarser interval present in the source
     re-derived from those bars so no real coarse prices leak into a
     permuted run. Finer intervals are not carried over.
+
+    Corporate actions: the bars scored (real and permuted) are
+    back-adjusted as of the window end (splits and dividends folded into
+    the prices, see ``features.price_adjustment``) and the lakes carry no
+    ``stock_splits`` / ``dividends`` rows. Shuffling raw bars would move a
+    split's price drop to a random bar while the engine still multiplied
+    the position on the real ex-date, so equity would jump by the ratio.
 
     The p-value is the +1-smoothed fraction of permuted scores at least as
     good as the real one; the test passes when ``p_value <= max_p_value``.
@@ -425,8 +434,8 @@ def _history_bars(
     context: Any, interval: Interval, window: tuple[date, date]
 ) -> dict[str, tuple[pd.DataFrame, int]]:
     """Per ticker: every dataset-interval bar up to the window end (all
-    earlier history included, for look-backs) and how many of them fall
-    before the window start."""
+    earlier history included, for look-backs), back-adjusted as of its
+    last bar, and how many of them fall before the window start."""
     start, end = window
     frame = context.lake.sql(
         """
@@ -437,11 +446,23 @@ def _history_bars(
         """,
         [list(context.universe), interval.code, end],
     )
+    actions = LakeCorporateActions(context.lake).load(list(context.universe))
     out: dict[str, tuple[pd.DataFrame, int]] = {}
     for ticker, bars in frame.groupby("ticker", sort=False):
-        bars = bars.reset_index(drop=True)
+        bars = _adjusted(bars.reset_index(drop=True), actions.for_ticker(str(ticker)))
         n_before = int((pd.to_datetime(bars["timestamp"]).dt.date < start).sum())
         out[str(ticker)] = (bars, n_before)
+    return out
+
+
+def _adjusted(bars: pd.DataFrame, events: Sequence[Any]) -> pd.DataFrame:
+    """``bars`` back-adjusted as of the last bar, with ``adj_close`` equal
+    to the adjusted close (nothing left to adjust). Identity for a ticker
+    with no events and a constant ``adj_close / close``."""
+    adjustment = SeriesAdjustment.build(bars, events)
+    out = adjustment.apply(bars, 0, len(bars))
+    if not adjustment.is_identity and "adj_close" in out.columns:
+        out["adj_close"] = out["close"]
     return out
 
 
@@ -460,7 +481,8 @@ def _modified_lake(
     interval: Interval,
     coarser: list[Interval],
 ) -> DuckDBLake:
-    lake = copy_universe_lake(source, universe)
+    # bars are adjusted: carrying the events would apply them twice
+    lake = copy_universe_lake(source, universe, skip_tables=("bars", *CORPORATE_ACTION_TABLES))
     try:
         for ticker, bars in bars_by_ticker.items():
             if bars.empty:
