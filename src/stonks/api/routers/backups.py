@@ -15,8 +15,8 @@ from stonks.auth import Permission
 
 router = APIRouter(prefix="/api/backups", tags=["backups"], responses=PROBLEM_RESPONSES)
 
-#: Global operations are the admin's (``risk.global``: admins with the admin scope).
-ADMIN_ONLY = [Depends(require_permission(Permission.RISK_GLOBAL))]
+#: A backup is an operation (``operations.run``: admins with the admin scope).
+ADMIN_ONLY = [Depends(require_permission(Permission.OPERATIONS_RUN))]
 
 
 @router.post("", **JOB_CREATED, operation_id="startBackup", dependencies=ADMIN_ONLY)
