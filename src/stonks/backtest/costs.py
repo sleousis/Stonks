@@ -16,12 +16,36 @@ Implementations
   * per asset class (falling back to ``default``): a fee of
     ``fee_flat + fee_bps * fill notional`` and a ``half_spread_bps`` paid
     in the adverse direction;
-  * volume-aware market impact, the square-root law
-    ``impact_bps * sqrt(quantity / bar_volume)`` — ``impact_bps`` is the
-    impact of trading the whole bar's volume — capped at
-    ``max_impact_bps``. A zero-volume bar pays the cap (nothing traded, so
-    any fill is maximally illiquid). Unknown volume (``None``, e.g. a
-    production tick that has no bar volume) adds no impact.
+  * volume-aware market impact (``impact_model``), capped at
+    ``max_impact_bps``:
+
+    - ``"sqrt"`` (default, legacy) — ``impact_bps * sqrt(quantity /
+      bar_volume)``; ``impact_bps`` is the impact of trading the whole
+      bar's volume. A zero-volume bar pays the cap (nothing traded, so any
+      fill is maximally illiquid). Unknown volume (``None``, e.g. a
+      production tick that has no bar volume) adds no impact.
+    - ``"sqrt_vol"`` — volatility-scaled square root (Bacidore; Almgren et
+      al.): ``impact_gamma * sigma_daily_bps * sqrt(quantity / adv)``.
+    - ``"istar"`` — Kissell's I-Star: ``I = a1 (Q/ADV)^a2 sigma^a3`` bps
+      with ``sigma`` the **annualised** volatility (decimal), split into a
+      temporary part ``b1 I pov^a4`` and a permanent part ``(1 - b1) I``;
+      a fill pays both. The defaults are Kissell's published US-equity
+      estimates and **need calibration** (against paper fills, BL-32)
+      before they are trusted.
+
+    ``sqrt_vol`` and ``istar`` read the trade's **lagged** ``adv`` and
+    ``sigma_daily`` (``stonks.backtest.fills.MarketStats``; the fill bar's
+    own volume is not used). When either is unknown they fall back to the
+    ``sqrt`` formula; a zero ADV pays the cap.
+  * per-ticker half-spread (``half_spread_model``): ``"class"`` (default)
+    uses the asset class's ``half_spread_bps``; ``"corwin_schultz"`` /
+    ``"abdi_ranaldo"`` use the trade's lagged OHLC estimate
+    (``stonks.features.spread``) clipped to ``[class half_spread_bps,
+    max_half_spread_bps]``, and the class value when there is none.
+
+  The engine computes the lagged statistics only when a model asks for
+  them (``market_stats_spec``), so the default settings behave exactly as
+  before.
 
 Contract: a model's fill price and fee must be non-decreasing in
 ``quantity`` on the adverse side. The broker relies on this to scale
@@ -32,13 +56,17 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from stonks.backtest.fills import MarketStatsSpec
 from stonks.core.types import AssetClass, OrderSide
 
 _BPS = 10_000.0
+
+ImpactModel = Literal["sqrt", "sqrt_vol", "istar"]
+HalfSpreadModel = Literal["class", "corwin_schultz", "abdi_ranaldo"]
 
 
 @dataclass(frozen=True)
@@ -51,6 +79,12 @@ class Trade:
     asset_class: AssetClass = "equity"
     #: Units traded in the bar the order fills in; ``None`` when unknown.
     bar_volume: float | None = None
+    #: Median volume of the prior bars (lagged); ``None`` when unknown.
+    adv: float | None = None
+    #: Per-bar std of log returns over the prior bars (lagged, decimal).
+    sigma_daily: float | None = None
+    #: Per-ticker half-spread estimate in bps (lagged); ``None`` = unknown.
+    half_spread_bps: float | None = None
 
 
 @dataclass(frozen=True)
@@ -93,6 +127,25 @@ class AssetClassCosts(BaseModel):
     half_spread_bps: float = Field(0.0, ge=0.0)
 
 
+class IStarSettings(BaseModel):
+    """Kissell's I-Star parameters: ``I = a1 (Q/ADV)^a2 sigma^a3`` bps, with
+    a temporary part ``b1 I pov^a4`` and a permanent part ``(1 - b1) I``.
+    The defaults are Kissell's published US-equity estimates, **not
+    calibrated** for this system; treat them as a starting point."""
+
+    model_config = ConfigDict(frozen=True)
+
+    a1: float = Field(708.0, ge=0.0)
+    a2: float = Field(0.55, gt=0.0)
+    a3: float = Field(0.71, ge=0.0)
+    a4: float = Field(0.5, ge=0.0)
+    b1: float = Field(0.98, ge=0.0, le=1.0)
+    #: Assumed participation rate of the execution (percent of volume).
+    pov: float = Field(0.10, gt=0.0, le=1.0)
+    #: Bars per year, to annualise ``sigma_daily`` (252 for daily bars).
+    periods_per_year: float = Field(252.0, gt=0.0)
+
+
 class CostModelSettings(BaseModel):
     """Settings for ``AssetClassCostModel``. Zero costs by default;
     ``CostModelSettings.realistic()`` is a sensible starting point."""
@@ -105,19 +158,45 @@ class CostModelSettings(BaseModel):
     impact_bps: float = Field(0.0, ge=0.0)
     #: Cap on the impact term, in bps.
     max_impact_bps: float = Field(500.0, ge=0.0)
+    impact_model: ImpactModel = "sqrt"
+    #: ``sqrt_vol``: impact of trading one ADV, in daily sigmas.
+    impact_gamma: float = Field(1.0, ge=0.0)
+    istar: IStarSettings = IStarSettings()
+    half_spread_model: HalfSpreadModel = "class"
+    #: Cap on a per-ticker half-spread estimate, in bps.
+    max_half_spread_bps: float = Field(200.0, ge=0.0)
+    #: Lagged-statistics windows, in bars (see ``MarketStatsSpec``).
+    adv_window: int = Field(20, ge=1)
+    vol_window: int = Field(20, ge=2)
+    spread_window: int = Field(20, ge=1)
 
     @model_validator(mode="after")
     def _sell_prices_stay_positive(self) -> CostModelSettings:
         for costs in (self.default, *self.asset_classes.values()):
-            if costs.half_spread_bps + self.max_impact_bps >= _BPS:
+            half_spread = costs.half_spread_bps
+            if self.half_spread_model != "class":
+                half_spread = max(half_spread, self.max_half_spread_bps)
+            if half_spread + self.max_impact_bps >= _BPS:
                 raise ValueError(
-                    "half_spread_bps + max_impact_bps must be below 10000 "
-                    "or sell fills would be at a non-positive price"
+                    "half_spread_bps (or max_half_spread_bps) + max_impact_bps must be "
+                    "below 10000 or sell fills would be at a non-positive price"
                 )
         return self
 
     def for_asset_class(self, asset_class: AssetClass) -> AssetClassCosts:
         return self.asset_classes.get(asset_class, self.default)
+
+    def market_stats_spec(self) -> MarketStatsSpec | None:
+        """The lagged statistics these settings read; ``None`` for the
+        legacy ``sqrt`` + ``class`` combination, which reads none."""
+        if self.impact_model == "sqrt" and self.half_spread_model == "class":
+            return None
+        return MarketStatsSpec(
+            adv_window=self.adv_window,
+            vol_window=self.vol_window,
+            spread_window=self.spread_window,
+            spread_estimator=None if self.half_spread_model == "class" else self.half_spread_model,
+        )
 
     def build(self) -> AssetClassCostModel:
         return AssetClassCostModel(self)
@@ -142,19 +221,49 @@ class CostModelSettings(BaseModel):
 
 
 class AssetClassCostModel:
-    """Per-asset-class fee and half-spread plus square-root market impact."""
+    """Per-asset-class fee and half-spread (or a per-ticker estimate) plus
+    market impact (square root, volatility-scaled square root or I-Star)."""
 
     def __init__(self, settings: CostModelSettings) -> None:
         self._settings = settings
+        self._spec = settings.market_stats_spec()
+
+    @property
+    def market_stats_spec(self) -> MarketStatsSpec | None:
+        return self._spec
 
     def cost(self, trade: Trade) -> TradeCost:
         costs = self._settings.for_asset_class(trade.asset_class)
-        adverse_bps = costs.half_spread_bps + self._impact_bps(trade)
+        temporary, permanent = self.impact_components(trade)
+        adverse_bps = self._half_spread_bps(trade, costs) + temporary + permanent
         fill_price = _adverse(trade.price, trade.side, adverse_bps)
         fee = costs.fee_flat + costs.fee_bps / _BPS * fill_price * trade.quantity
         return TradeCost(fill_price=fill_price, fee=fee)
 
-    def _impact_bps(self, trade: Trade) -> float:
+    def impact_components(self, trade: Trade) -> tuple[float, float]:
+        """``(temporary, permanent)`` impact in bps, capped together at
+        ``max_impact_bps``. The square-root models are all temporary."""
+        s = self._settings
+        adv, sigma = _known(trade.adv), _known(trade.sigma_daily)
+        if s.impact_model == "sqrt" or adv is None or sigma is None:
+            return self._sqrt_bps(trade), 0.0
+        if adv <= 0:
+            return s.max_impact_bps, 0.0
+        size = trade.quantity / adv
+        if s.impact_model == "sqrt_vol":
+            return min(s.impact_gamma * sigma * _BPS * math.sqrt(size), s.max_impact_bps), 0.0
+        p = s.istar
+        sigma_annual = sigma * math.sqrt(p.periods_per_year)
+        i_star = p.a1 * size**p.a2 * sigma_annual**p.a3
+        temporary = p.b1 * i_star * p.pov**p.a4
+        permanent = (1.0 - p.b1) * i_star
+        total = temporary + permanent
+        if total > s.max_impact_bps:
+            scale = s.max_impact_bps / total
+            return temporary * scale, permanent * scale
+        return temporary, permanent
+
+    def _sqrt_bps(self, trade: Trade) -> float:
         s = self._settings
         volume = trade.bar_volume
         if s.impact_bps == 0.0 or volume is None or math.isnan(volume):
@@ -162,3 +271,14 @@ class AssetClassCostModel:
         if volume <= 0:
             return s.max_impact_bps
         return min(s.impact_bps * math.sqrt(trade.quantity / volume), s.max_impact_bps)
+
+    def _half_spread_bps(self, trade: Trade, costs: AssetClassCosts) -> float:
+        floor = costs.half_spread_bps
+        estimate = _known(trade.half_spread_bps)
+        if self._settings.half_spread_model == "class" or estimate is None:
+            return floor
+        return max(floor, min(estimate, self._settings.max_half_spread_bps))
+
+
+def _known(value: float | None) -> float | None:
+    return None if value is None or math.isnan(value) else value
