@@ -117,7 +117,6 @@ def test_as03_alpaca_status_is_cached_between_calls(alpaca_client):
 
 
 def _global_breaker(path) -> int:
-    from datetime import date
 
     from stonks.production.halts import trip_halt
 
