@@ -11,7 +11,11 @@ import { EmptyState, ErrorState, LoadingState } from './states';
     <app-empty-state title="No orders yet" [message]="message()">
       <a href="/orders/ticks">Try a dry run</a>
     </app-empty-state>
-    <app-error-state title="Could not load orders" [error]="error" (retry)="retries = retries + 1" />
+    <app-error-state
+      title="Could not load orders"
+      [error]="error"
+      (retry)="retries = retries + 1"
+    />
   `,
 })
 class Host {
