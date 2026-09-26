@@ -304,6 +304,14 @@ def _membership(
         )
     else:
         members = lake.members_between(universe_id, start, end)
+        never = [t for t in universe if t not in set(members)]
+        if never:
+            add(
+                "not_members",
+                f"{len(never)} tickers are never members of {universe_id!r} during the window, "
+                f"so the backtest never trades them (point-in-time membership): {_names(never)}",
+                tickers=never,
+            )
         gap = [t for t in members if t not in set(universe)]
         if gap:
             add(

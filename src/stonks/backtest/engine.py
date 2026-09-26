@@ -82,6 +82,16 @@ carries a date-keyed client id, so the engine adds the bar time to it: two
 forced exits on one intraday day stay two orders. Strategies are keyed ``"0"``, ``"1"``, ... by
 position; each decision's target book is kept in ``target_books``.
 
+Point-in-time membership (RS-05, P14)
+-------------------------------------
+With ``BacktestConfig.universe_id`` set, the engine reads that universe's
+``universe_membership`` spans once and, on every decision bar, asks the
+strategies (or the pipeline) only about the tickers that are members on
+that day. Buys of any other ticker are dropped, and a holding that is no
+longer a member is sold in full (client id ``universe:<bar>:<ticker>:sell``).
+A universe ticker with no span in that universe never trades. Without a
+``universe_id`` every universe ticker trades on every bar, as before.
+
 Annualization
 -------------
 Sharpe uses ``periods_per_year(interval, asset_classes)`` over the asset
@@ -153,6 +163,9 @@ class BacktestConfig:
     risk: RiskPolicy | None = None
     #: Daily bars of history a pipeline decision may read.
     history_bars: int = 260
+    #: Stored universe whose membership spans gate trading (see the module
+    #: doc); ``None`` trades every universe ticker on every bar.
+    universe_id: str | None = None
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.dividend_withholding_rate <= 1.0:
@@ -208,6 +221,7 @@ class Backtester:
         self._attribution: dict[str, dict[str, float]] = {}
         self._fill_owner: dict[str, tuple[int, str]] = {}
         self._fill_seq = 0
+        self._membership: dict[str, list[tuple[date, date | None]]] | None = None
         #: The target book of every pipeline decision, by bar.
         self.target_books: dict[datetime, TargetBook] = {}
         #: The close each order was decided at, by client id (TCA, BL-32:
@@ -225,6 +239,7 @@ class Backtester:
         self._asset_classes = asset_classes
         self._history = self._load_history(bars_by_ts)
         self._broker.set_asset_classes(asset_classes)
+        self._membership = self._load_membership()
         set_bar_days = getattr(self._broker, "set_bar_days", None)
         if callable(set_bar_days):
             set_bar_days(self._config.interval.seconds / 86_400.0)
@@ -430,11 +445,75 @@ class Backtester:
         return child
 
     def _decide(self, as_of: datetime, prices: dict[str, float]) -> list[Order]:
+        members = self._members_on(as_of)
+        tradable = [t for t in self._config.universe if members is None or t in members]
         if self._config.construction_settings is not None:
-            return self._decide_with_pipeline(as_of, prices)
-        return self._decide_per_strategy(as_of, prices)
+            orders = self._decide_with_pipeline(as_of, prices, tradable)
+        else:
+            orders = self._decide_per_strategy(as_of, prices, tradable)
+        return orders if members is None else self._enforce_membership(orders, members, as_of)
 
-    def _decide_per_strategy(self, as_of: datetime, prices: dict[str, float]) -> list[Order]:
+    # ---- point-in-time membership (RS-05) -------------------------------------
+
+    def _load_membership(self) -> dict[str, list[tuple[date, date | None]]] | None:
+        """``ticker -> [(start, end)]`` spans of ``config.universe_id`` for
+        the universe tickers (``end`` is the first day out, ``None`` open);
+        ``None`` when no universe id is set."""
+        universe_id = self._config.universe_id
+        if universe_id is None:
+            return None
+        spans: dict[str, list[tuple[date, date | None]]] = {}
+        reader = getattr(self._lake, "get_universe_membership", None)
+        if not callable(reader):
+            _log.warning("universe_membership_unavailable", universe_id=universe_id)
+            return spans
+        frame = reader(universe_id, list(self._config.universe))
+        for row in frame.itertuples(index=False):
+            end = None if pd.isna(row.end_date) else _as_date(row.end_date)
+            spans.setdefault(str(row.ticker), []).append((_as_date(row.start_date), end))
+        if not spans:
+            _log.warning("universe_membership_empty", universe_id=universe_id)
+        return spans
+
+    def _members_on(self, as_of: datetime) -> set[str] | None:
+        if self._membership is None:
+            return None
+        day = as_of.date() if isinstance(as_of, datetime) else as_of
+        return {
+            ticker
+            for ticker, spans in self._membership.items()
+            if any(start <= day and (end is None or day < end) for start, end in spans)
+        }
+
+    def _enforce_membership(
+        self, orders: list[Order], members: set[str], as_of: datetime
+    ) -> list[Order]:
+        """Drop buys of non-members and sell every holding that left."""
+        kept = [o for o in orders if o.side != "buy" or o.ticker in members]
+        selling: dict[str, float] = {}
+        for o in kept:
+            if o.side == "sell":
+                selling[o.ticker] = selling.get(o.ticker, 0.0) + o.quantity
+        portfolio = self._broker.fetch_portfolio()
+        for ticker, qty in sorted(portfolio.positions.items()):
+            rest = qty - selling.get(ticker, 0.0)
+            if ticker in members or rest <= 1e-12:
+                continue
+            kept.append(
+                Order(
+                    client_id=f"universe:{as_of.isoformat()}:{ticker}:sell",
+                    ticker=ticker,
+                    side="sell",
+                    quantity=rest,
+                    order_type="market",
+                    strategy_id="universe",
+                )
+            )
+        return kept
+
+    def _decide_per_strategy(
+        self, as_of: datetime, prices: dict[str, float], tradable: Sequence[str]
+    ) -> list[Order]:
         """Picks and orders are keyed by the strategy's *position* in the
         engine, not its class-level ``id``, so two instances of one class
         (different params) keep separate picks; each order's ``client_id``
@@ -442,7 +521,7 @@ class Backtester:
         can't drop one instance's order as a duplicate of the other's."""
         picks_by_strategy: list[list[tuple[float, str]]] = [[] for _ in self._strategies]
         for index, strategy in enumerate(self._strategies):
-            for ticker in self._config.universe:
+            for ticker in tradable:
                 r = strategy.estimate_return(ticker, as_of, self._lake)
                 if r is not None and r > self._config.threshold:
                     picks_by_strategy[index].append((r, ticker))
@@ -460,7 +539,9 @@ class Backtester:
 
     # ---- construction pipeline (BL-12) --------------------------------------
 
-    def _decide_with_pipeline(self, as_of: datetime, prices: dict[str, float]) -> list[Order]:
+    def _decide_with_pipeline(
+        self, as_of: datetime, prices: dict[str, float], tradable: Sequence[str]
+    ) -> list[Order]:
         """The production pipeline over this bar's signals; see the module doc."""
         from stonks.portfolio.pipeline import (
             PORTFOLIO_STRATEGY,
@@ -478,7 +559,7 @@ class Backtester:
         signals: dict[str, dict[str, float]] = {}
         for key, strategy in zip(keys, self._strategies, strict=True):
             scores: dict[str, float] = {}
-            for ticker in self._config.universe:
+            for ticker in tradable:
                 r = strategy.estimate_return(ticker, as_of, self._lake)
                 if r is not None and r > self._config.threshold:
                     scores[ticker] = r
@@ -584,3 +665,12 @@ def _float(value) -> float | None:
 
 def _to_window_bounds(start, end) -> tuple[datetime, datetime]:
     return day_start(start), day_end(end)
+
+
+def _as_date(value) -> date:
+    """A membership date from DuckDB / pandas as a plain ``date``."""
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return pd.Timestamp(value).date()
