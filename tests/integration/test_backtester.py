@@ -59,9 +59,9 @@ def test_buy_and_hold_captures_the_uptrend(lake_with_trend):
     bt = Backtester(strategies=[strategy], broker=broker, lake=lake, config=config)
     report = bt.run()
 
-    # Bought ~100 shares near day 0 price (~100), rode to 200 → ~2x
+    # Decided on day 0, filled at day 1's open (105), rode to 200 → ~1.9x
     final_value = report.equity_curve[-1]
-    assert final_value == pytest.approx(20_000.0, rel=0.02)
+    assert final_value == pytest.approx(10_000.0 / 105.0 * 200.0)
     assert report.final_return > 0.9  # roughly doubled
 
 
