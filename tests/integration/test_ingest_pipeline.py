@@ -262,3 +262,106 @@ def test_run_fundamentals_closes_run_row_when_unhandled_exception_escapes(lake):
     assert runs.iloc[0]["status"] == "error"
     assert runs.iloc[0]["finished_at"] is not None
     assert "synthetic programmer bug" in runs.iloc[0]["error"]
+
+
+class _AlwaysRaisingSource(FakeDataSource):
+    """Every fetch raises ``self.exc`` — used to drive each run type into
+    its unhandled-exception (or soft-fail) path."""
+
+    def __init__(self, exc: BaseException):
+        super().__init__()
+        self.exc = exc
+
+    def fetch_prices(self, ticker, since=None, until=None):
+        raise self.exc
+
+    def fetch_fundamentals(self, ticker):
+        raise self.exc
+
+    def fetch_metadata(self, ticker):
+        raise self.exc
+
+    def fetch_intraday_bars(self, ticker, interval, since=None, until=None):
+        raise self.exc
+
+    def fetch_macro_indicator(self, country_iso, indicator):
+        raise self.exc
+
+
+def _invoke(pipe: IngestPipeline, kind: str):
+    from stonks.core.interval import Interval
+
+    if kind == "prices":
+        return pipe.run_prices(["AAPL.US"])
+    if kind == "fundamentals":
+        return pipe.run_fundamentals(["AAPL.US"])
+    if kind == "metadata":
+        return pipe.run_metadata(["AAPL.US"])
+    if kind == "intraday":
+        return pipe.run_intraday_bars(["AAPL.US"], interval=Interval.HOUR_1)
+    if kind == "macro":
+        return pipe.run_macro_indicators(["USA"], ["real_gdp_total"])
+    raise AssertionError(kind)
+
+
+_RUN_KINDS = ["prices", "fundamentals", "metadata", "intraday", "macro"]
+
+
+@pytest.mark.parametrize("kind", _RUN_KINDS)
+@pytest.mark.parametrize(
+    "exc",
+    [KeyError("malformed row"), KeyboardInterrupt()],
+    ids=["keyerror", "ctrl-c"],
+)
+def test_every_run_type_closes_run_row_on_unhandled_exception(lake, kind, exc):
+    pipe = IngestPipeline(source=_AlwaysRaisingSource(exc), lake=lake)
+    with pytest.raises(type(exc)):
+        _invoke(pipe, kind)
+    runs = lake.sql("SELECT status, finished_at, error FROM ingest_runs ORDER BY id DESC LIMIT 1")
+    assert runs.iloc[0]["status"] == "error"
+    assert runs.iloc[0]["finished_at"] is not None
+    assert type(exc).__name__ in runs.iloc[0]["error"]
+
+
+@pytest.mark.parametrize("kind", _RUN_KINDS)
+def test_every_run_type_redacts_credentials_from_stored_and_logged_errors(lake, kind, capsys):
+    secret = "LeakyToken987"
+    exc = DataSourceError(f"404 for url: https://vendor/api/x?fmt=json&api_token={secret}")
+    pipe = IngestPipeline(source=_AlwaysRaisingSource(exc), lake=lake)
+    result = _invoke(pipe, kind)
+    assert result.status == "error"
+    runs = lake.sql("SELECT error FROM ingest_runs ORDER BY id DESC LIMIT 1")
+    assert "api_token=***" in runs.iloc[0]["error"]
+    assert secret not in runs.iloc[0]["error"]
+    assert secret not in capsys.readouterr().out
+
+
+def test_eodhd_http_error_never_reaches_ingest_runs_with_api_key(lake, monkeypatch):
+    import requests
+
+    from stonks.ingest.sources import eodhd
+
+    secret = "RealEodhdKey555"
+
+    class _Resp:
+        status_code = 404
+        text = "not found"
+
+        def __init__(self, url):
+            self.url = url
+
+        def raise_for_status(self):
+            raise requests.HTTPError(f"404 Client Error for url: {self.url}", response=self)
+
+    class _Session:
+        def get(self, url, params=None, timeout=None):
+            query = "&".join(f"{k}={v}" for k, v in (params or {}).items())
+            return _Resp(f"{url}?{query}")
+
+    monkeypatch.setattr(eodhd.time, "sleep", lambda s: None)
+    source = eodhd.EodhdDataSource(api_key=secret, session=_Session())  # type: ignore[arg-type]
+    result = IngestPipeline(source=source, lake=lake).run_prices(["AAPL.US"])
+    assert result.status == "error"
+    error = lake.sql("SELECT error FROM ingest_runs ORDER BY id DESC LIMIT 1").iloc[0]["error"]
+    assert "HTTPError" in error
+    assert secret not in error

@@ -57,6 +57,7 @@ Things to keep in mind
 from __future__ import annotations
 
 import json
+import threading
 import time
 from collections.abc import Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -69,6 +70,7 @@ from pydantic import ValidationError
 from stonks.core.interval import Interval
 from stonks.core.types import AssetClass
 from stonks.ingest.metadata_bundle import MetadataBundle
+from stonks.ingest.redact import format_exception, redact_exception, redact_secrets
 from stonks.ingest.schemas import (
     AnalystForecastRow,
     AnalystRatingsRow,
@@ -1086,9 +1088,11 @@ def parse_shares_outstanding_history(ticker: str, payload: Any) -> Iterator[Shar
     """Fundamentals has an ``outstandingShares`` section with both
     ``annual`` and ``quarterly`` dicts — each period dict carries
     ``dateFormatted`` (ISO date) and ``shares`` (integer count). We pull
-    the full history from both, merged. Duplicate ``(ticker, date)`` rows
-    (same period appearing in annual + quarterly) are idempotent in the
-    lake via ON CONFLICT, so we emit them all and let the DB dedupe.
+    the full history from both, merged, and emit at most one row per
+    ``(ticker, date)``. A fiscal-year-end date usually appears in both
+    series; when it does the quarterly value wins. Deduping here matters:
+    an upsert batch holding the same key twice fails as a whole in DuckDB
+    (ON CONFLICT cannot resolve a key twice in one statement).
     """
     if not isinstance(payload, dict):
         return iter(())
@@ -1099,6 +1103,9 @@ def parse_shares_outstanding_history(ticker: str, payload: Any) -> Iterator[Shar
 
 
 def _iter_shares_outstanding(ticker: str, shares_blob: dict) -> Iterator[SharesOutstandingRow]:
+    # Keyed by date: annual is read first so a quarterly entry for the same
+    # date overwrites it (quarterly is the finer-grained, fresher series).
+    by_date: dict[date, SharesOutstandingRow] = {}
     for frequency_key in ("annual", "quarterly"):
         periods = shares_blob.get(frequency_key) or {}
         if not isinstance(periods, dict):
@@ -1110,7 +1117,8 @@ def _iter_shares_outstanding(ticker: str, shares_blob: dict) -> Iterator[SharesO
             shares = _coerce_optional_float(period_entry.get("shares"))
             if d is None or shares is None or shares < 0:
                 continue
-            yield SharesOutstandingRow(ticker=ticker, date=d, shares=shares)
+            by_date[d] = SharesOutstandingRow(ticker=ticker, date=d, shares=shares)
+    return iter(by_date.values())
 
 
 def parse_employee_count_snapshot(
@@ -1740,6 +1748,10 @@ def parse_macro_indicators_response(
 # ---- HTTP client ------------------------------------------------------------
 
 
+# Equity ``fetch_metadata`` fans out to seven endpoints concurrently.
+_METADATA_WORKERS = 7
+
+
 class EodhdDataSource(DataSource):
     source_id = "eodhd"
 
@@ -1761,6 +1773,35 @@ class EodhdDataSource(DataSource):
         self._backoff = retry_backoff_seconds
         self._session = session or requests.Session()
         self._log = get_logger("stonks.ingest.sources.eodhd")
+        # One worker pool per source instance, created on first use and
+        # shared by every ``fetch_metadata`` call (a pool per ticker spawned
+        # and tore down up to seven threads each time). Jobs never wait on
+        # each other, so concurrent callers only queue — no deadlock risk.
+        self._executor: ThreadPoolExecutor | None = None
+        self._executor_lock = threading.Lock()
+
+    def close(self) -> None:
+        """Shut down the metadata worker pool (idempotent). Optional: idle
+        workers also exit when the source is garbage-collected or at
+        interpreter shutdown."""
+        with self._executor_lock:
+            executor, self._executor = self._executor, None
+        if executor is not None:
+            executor.shutdown(wait=True)
+
+    def __enter__(self) -> EodhdDataSource:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.close()
+
+    def _metadata_executor(self) -> ThreadPoolExecutor:
+        with self._executor_lock:
+            if self._executor is None:
+                self._executor = ThreadPoolExecutor(
+                    max_workers=_METADATA_WORKERS, thread_name_prefix="eodhd-metadata"
+                )
+            return self._executor
 
     def list_exchanges(self) -> list[ExchangeInfo]:
         url = f"{self._base_url}/exchanges-list"
@@ -1964,12 +2005,12 @@ class EodhdDataSource(DataSource):
         # ``dict[str] = str`` atomic, and each worker writes a unique key,
         # so no extra synchronization is needed.
         errors: dict[str, str] = {}
-        with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
-            futures = {
-                name: pool.submit(self._try, fn, endpoint=name, ticker=ticker, errors=errors)
-                for name, fn in jobs.items()
-            }
-            results = {name: fut.result() for name, fut in futures.items()}
+        pool = self._metadata_executor()
+        futures = {
+            name: pool.submit(self._try, fn, endpoint=name, ticker=ticker, errors=errors)
+            for name, fn in jobs.items()
+        }
+        results = {name: fut.result() for name, fut in futures.items()}
 
         transport_failures = sum(1 for kind in errors.values() if kind == "transport")
         if transport_failures == len(jobs):
@@ -2139,7 +2180,7 @@ class EodhdDataSource(DataSource):
                 "eodhd.metadata.skipped_free_tier",
                 ticker=ticker,
                 endpoint=endpoint,
-                reason=str(exc),
+                reason=redact_secrets(str(exc), (self._api_key,)),
             )
             return None
         except (requests.RequestException, json.JSONDecodeError) as exc:
@@ -2148,42 +2189,75 @@ class EodhdDataSource(DataSource):
                 "eodhd.metadata.skipped_error",
                 ticker=ticker,
                 endpoint=endpoint,
-                error=f"{type(exc).__name__}: {exc}",
+                error=format_exception(exc, (self._api_key,)),
             )
             return None
 
     def _get(self, url: str, params: dict[str, str]) -> Any:
+        """GET ``url`` and decode JSON, retrying only transient failures.
+
+        Retried (with exponential backoff): connection errors, timeouts,
+        HTTP 429 and 5xx. Everything else — other 4xx, undecodable bodies,
+        programming errors — raises on the first attempt. 403 maps to
+        :class:`EodhdFreeTierError` without retry.
+
+        The API key rides in the query string, and ``requests`` embeds the
+        full URL in its exception messages, so every exception leaving this
+        method (and every log line it writes) is scrubbed of the key.
+        """
         params = {**params, "api_token": self._api_key}
-        last_exc: Exception | None = None
+        secrets = (self._api_key,)
         for attempt in range(1, self._max_retries + 1):
             try:
-                response = self._session.get(url, params=params, timeout=self._timeout)
-                # EODHD signals paid-only endpoints on the free tier with a 403 or a
-                # plain-text error body — surface that as a domain error so the
-                # pipeline can record it cleanly without retry churn.
-                if response.status_code == 403:
-                    raise EodhdFreeTierError(response.text.strip() or "HTTP 403 Forbidden")
-                response.raise_for_status()
-                text = response.text
-                try:
-                    return response.json()
-                except ValueError:
-                    lowered = text.lower()
-                    if any(marker in lowered for marker in _FREE_TIER_MARKERS):
-                        raise EodhdFreeTierError(text.strip()) from None
-                    raise
-            except EodhdFreeTierError:
-                raise
+                return self._get_once(url, params)
+            except EodhdFreeTierError as exc:
+                raise redact_exception(exc, secrets) from None
             except Exception as exc:
-                last_exc = exc
+                redact_exception(exc, secrets)
+                retry = _is_retryable(exc) and attempt < self._max_retries
                 self._log.warning(
                     "eodhd.request.failed",
                     url=url,
                     attempt=attempt,
                     max_retries=self._max_retries,
-                    error=f"{type(exc).__name__}: {exc}",
+                    retrying=retry,
+                    error=format_exception(exc, secrets),
                 )
-                if attempt < self._max_retries:
-                    time.sleep(self._backoff * (2 ** (attempt - 1)))
-        assert last_exc is not None
-        raise last_exc
+                if not retry:
+                    raise
+                time.sleep(self._backoff * (2 ** (attempt - 1)))
+        raise AssertionError("unreachable: max_retries must be >= 1")
+
+    def _get_once(self, url: str, params: dict[str, str]) -> Any:
+        response = self._session.get(url, params=params, timeout=self._timeout)
+        # EODHD signals paid-only endpoints on the free tier with a 403 or a
+        # plain-text error body — surface that as a domain error so the
+        # pipeline can record it cleanly without retry churn.
+        if response.status_code == 403:
+            raise EodhdFreeTierError(response.text.strip() or "HTTP 403 Forbidden")
+        response.raise_for_status()
+        text = response.text
+        try:
+            return response.json()
+        except ValueError:
+            lowered = text.lower()
+            if any(marker in lowered for marker in _FREE_TIER_MARKERS):
+                raise EodhdFreeTierError(text.strip()) from None
+            raise
+
+
+_RETRYABLE_TRANSPORT_ERRORS = (
+    requests.ConnectionError,
+    requests.Timeout,
+    requests.exceptions.ChunkedEncodingError,
+)
+
+
+def _is_retryable(exc: BaseException) -> bool:
+    """Transient failures only: transport errors, HTTP 429 and 5xx."""
+    if isinstance(exc, _RETRYABLE_TRANSPORT_ERRORS):
+        return True
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        status = exc.response.status_code
+        return status == 429 or status >= 500
+    return False
