@@ -65,6 +65,7 @@ SIZING_VOL_SPAN = 35
 #: diversification multiplier.
 IDM_RETURNS_BARS = 250
 _HISTORY_START = pd.Timestamp("1900-01-01").to_pydatetime()
+_EPOCH_ORDINAL = date(1970, 1, 1).toordinal()
 
 
 def forecast_specs(*, fdm_default: float = 1.1) -> list[ParameterSpec]:
@@ -165,22 +166,25 @@ def _last_bar_of_open_period(day: date, asset_class: str, period: str) -> bool:
     return True
 
 
-def period_end_mask(days: Sequence[date], asset_class: str, period: str) -> np.ndarray:
-    """``True`` for each bar that closes its week (``period="week"``,
-    Monday-anchored) or month. A bar followed by one in a later period is
-    the period's last; the latest bar is judged from the calendar."""
+def period_end_mask(days: Any, asset_class: str, period: str) -> np.ndarray:
+    """``True`` for each bar (``days``: dates or timestamps, oldest first)
+    that closes its week (``period="week"``, Monday-anchored as
+    :func:`~stonks.features.sessions.week_index`) or month. A bar followed by
+    one in a later period is the period's last; the latest bar is judged
+    from the calendar."""
     if period not in ("week", "month"):
         raise ValueError(f"period must be 'week' or 'month', got {period!r}")
-    if not days:
+    index = pd.DatetimeIndex(days)
+    if index.empty:
         return np.zeros(0, dtype=bool)
-
-    def key(d: date) -> int:
-        return week_index(d) if period == "week" else d.year * 12 + d.month
-
-    keys = np.array([key(d) for d in days])
-    mask = np.zeros(len(days), dtype=bool)
+    if period == "week":
+        epoch_days = index.to_numpy(dtype="datetime64[D]").astype(np.int64)
+        keys = (epoch_days + _EPOCH_ORDINAL - 1) // 7  # == week_index(day)
+    else:
+        keys = index.to_numpy(dtype="datetime64[M]").astype(np.int64)
+    mask = np.zeros(len(index), dtype=bool)
     mask[:-1] = keys[1:] != keys[:-1]
-    mask[-1] = _last_bar_of_open_period(days[-1], asset_class, period)
+    mask[-1] = _last_bar_of_open_period(index[-1].date(), asset_class, period)
     return mask
 
 

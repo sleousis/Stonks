@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from stonks.features.sessions import week_index
 from stonks.strategies.examples._forecast_trend import (
     MIN_ESTIMATION_BARS,
     forecast_diversification_multiplier,
@@ -137,6 +138,18 @@ def test_month_end_mask():
     days = _days("2024-05-27", "2024-06-05")
     mask = period_end_mask(days, "equity", "month")
     assert [d for d, m in zip(days, mask, strict=True) if m] == [date(2024, 5, 31)]
+
+
+def test_week_keys_match_the_session_week_index():
+    days = _days("1999-12-20", "2031-01-10")
+    mask = period_end_mask(days, "equity", "week")
+    expected = [week_index(a) != week_index(b) for a, b in zip(days, days[1:], strict=False)]
+    assert mask[:-1].tolist() == expected
+
+
+def test_period_end_mask_accepts_timestamps():
+    ts = pd.to_datetime(pd.Series(pd.bdate_range("2024-05-27", "2024-06-05")))
+    assert period_end_mask(ts, "equity", "month").sum() == 1
 
 
 def test_period_end_mask_rejects_unknown_period():

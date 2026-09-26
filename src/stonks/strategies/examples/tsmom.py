@@ -119,7 +119,7 @@ class TimeSeriesMomentum(ForecastTrendStrategy):
         if self.params["rebalance"] == "monthly":
             # the forecast as it stood at the latest month end: bars after it
             # are not read at all
-            days = [ts.date() for ts in pd.to_datetime(bars["timestamp"])]
+            days = pd.to_datetime(bars["timestamp"])
             ends = np.flatnonzero(period_end_mask(days, asset_class, "month"))
             if not ends.size:
                 return None
