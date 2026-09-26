@@ -12,7 +12,8 @@ from stonks.core.protocols import Broker
 from stonks.core.types import Portfolio
 from stonks.execution.brokers import SimulatedCosts, make_broker
 from stonks.notify import Notifier, notifier_from_settings
-from stonks.production.tick import BrokerFactory, TickSettings
+from stonks.production.tick import BrokerFactory, TickPlan, TickSettings, load_tick_plan
+from stonks.store.state import SqliteState
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,16 @@ class TickRuntime:
     notifier: Notifier
     #: None for the default simulated broker (the tick builds it itself).
     broker_factory: BrokerFactory | None = None
+    #: ``[production].books_from_subscriptions``.
+    books_from_subscriptions: bool = False
+
+    def plan_for(self, state: SqliteState) -> TickPlan | None:
+        """The books to trade: one per portfolio from its subscriptions when
+        ``books_from_subscriptions`` is on, else ``None`` (the tick's
+        default single book over every active strategy)."""
+        if not self.books_from_subscriptions:
+            return None
+        return load_tick_plan(state, self.settings)
 
 
 def build_tick_settings(settings: Settings, universe: Sequence[str]) -> TickSettings:
@@ -41,6 +52,8 @@ def build_tick_settings(settings: Settings, universe: Sequence[str]) -> TickSett
         shadow_enabled=p.shadow_enabled,
         broker_kind=settings.brokers.kind,
         dividend_withholding_rate=p.dividend_withholding_rate,
+        construction=p.construction,
+        model_books=p.model_books,
     )
 
 
@@ -59,4 +72,5 @@ def build_tick_runtime(settings: Settings, universe: Sequence[str]) -> TickRunti
         settings=build_tick_settings(settings, universe),
         notifier=notifier_from_settings(settings),
         broker_factory=factory,
+        books_from_subscriptions=settings.production.books_from_subscriptions,
     )

@@ -20,6 +20,7 @@ from stonks.backtest.costs import CostModelSettings
 from stonks.core.types import AssetClass
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
+from stonks.portfolio.settings import ConstructionSettings
 from stonks.store.bars import BarBackend
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
@@ -197,6 +198,18 @@ class ProductionConfig(BaseModel):
     dividend_withholding_rate: float = Field(default=0.0, ge=0.0, le=1.0)
     risk: RiskPolicy = RiskPolicy()
     health: HealthConfig = HealthConfig()
+    # ``[production.construction]``: the global constructor and no-trade
+    # buffer (default ``single_winner``, today's behaviour); a portfolio's
+    # ``construction_json`` is merged on top.
+    construction: ConstructionSettings = ConstructionSettings()
+    # Which strategies keep a model book: "shadow" (only shadow strategies)
+    # or "all" non-retired ones (design section 5).
+    model_books: Literal["shadow", "all"] = "shadow"
+    # Trade one book per portfolio from its paper/auto subscriptions (and
+    # record notify signals) instead of the single legacy book over every
+    # active strategy. Off by default. When on, a newly promoted strategy
+    # trades only once a subscription (e.g. on pf_default) includes it.
+    books_from_subscriptions: bool = False
 
 
 class GoLivePolicy(BaseModel):

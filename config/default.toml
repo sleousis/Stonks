@@ -31,6 +31,23 @@ shadow_enabled = true
 # Fraction of each cash dividend withheld as tax in the tick and shadow
 # books (0 = credited in full; e.g. 0.15 for a treaty withholding rate).
 dividend_withholding_rate = 0.0
+# Which strategies keep a model book each tick: "shadow" (shadow strategies
+# only) or "all" non-retired strategies.
+model_books = "shadow"
+# true: trade one book per portfolio from its paper/auto subscriptions (and
+# record notify-mode signals) instead of one book over every active strategy.
+# When on, a newly promoted strategy trades only once a subscription includes
+# it (e.g. subscribe pf_default to it).
+books_from_subscriptions = false
+
+[production.construction]
+# Portfolio constructor for every book (a portfolio's construction_json is
+# merged on top): single_winner (default: the best-ranked strategy decides),
+# equal_weight_top_n, inverse_vol, vol_target, atr_parity. The buffer applies
+# to the target-weight constructors only.
+method = "single_winner"
+buffer_fraction = 0.10
+min_trade_weight = 0.005
 
 [production.risk]
 # Risk layer between strategy.decide and the broker. Sells are never blocked.

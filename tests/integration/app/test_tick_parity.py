@@ -13,7 +13,7 @@ from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError
 from stonks.app.services import Services
 from stonks.app.ticks import TickRequest
-from stonks.production.tick import BackdatedTickError, TickResult
+from stonks.production.tick import BackdatedTickError, TickPlan, TickResult
 
 
 @pytest.fixture
@@ -86,6 +86,34 @@ def test_api_and_cli_build_identical_tick_settings_and_notifier(
     assert type(a["notifier"]) is type(c["notifier"])
     assert a.get("broker_factory") is None
     assert c.get("broker_factory") is None
+
+
+@pytest.mark.parametrize("from_subscriptions", [False, True])
+def test_api_and_cli_trade_the_same_books(
+    configured, services_for, monkeypatch, from_subscriptions
+):
+    configured = configured.model_copy(
+        update={
+            "production": configured.production.model_copy(
+                update={"books_from_subscriptions": from_subscriptions}
+            )
+        }
+    )
+    cli_calls: list[dict] = []
+    api_calls: list[dict] = []
+    _spy(monkeypatch, cli, cli_calls)
+    _spy(monkeypatch, app_ticks, api_calls)
+    monkeypatch.setattr(cli, "_settings", lambda: configured)
+
+    result = CliRunner().invoke(cli.app, ["tick", "--as-of", "2026-03-25"])
+    assert result.exit_code == 0, result.output
+    services_for(configured).ticks.run(TickRequest(as_of=date(2026, 3, 25)))
+
+    [c], [a] = cli_calls, api_calls
+    if from_subscriptions:
+        assert isinstance(c["plan"], TickPlan) and c["plan"] == a["plan"]
+    else:
+        assert c["plan"] is None and a["plan"] is None
 
 
 def test_api_backdated_tick_is_a_conflict(configured, services_for, monkeypatch):

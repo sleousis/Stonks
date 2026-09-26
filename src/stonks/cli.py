@@ -921,6 +921,7 @@ def tick(
                     dry_run=dry_run,
                     notifier=runtime.notifier,
                     broker_factory=runtime.broker_factory,
+                    plan=runtime.plan_for(state),
                 )
             except BackdatedTickError as exc:
                 console.print(f"[red]{exc}[/red]")
