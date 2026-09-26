@@ -57,14 +57,15 @@ class MACrossoverStrategy(SingleTickerLongFlat):
                 name="fast",
                 kind="int",
                 default=10,
-                bounds=(2, 50),
+                # below slow's range, so every tuner corner is valid (RS-29)
+                bounds=(2, 25),
                 description="Fast SMA length in bars; must be smaller than slow.",
             ),
             ParameterSpec(
                 name="slow",
                 kind="int",
                 default=30,
-                bounds=(10, 200),
+                bounds=(26, 200),
                 description="Slow SMA length in bars.",
             ),
             *common_specs("BTC-USD.CC"),

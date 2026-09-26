@@ -144,9 +144,9 @@ class RegimeFilter(InnerStrategyWrapper):
         self.conditions: list[RegimeCondition] = [
             build_condition(spec, self.params) for spec in self.params["conditions"]
         ]
-        k = int(self.params["k"])
-        if k > len(self.conditions):
-            raise ValueError(f"k={k} is more than the {len(self.conditions)} conditions")
+        # RS-29: k is tunable up to 10 whatever the conditions, so clamp it
+        # rather than fail the trial (k = n means "all conditions agree").
+        self.params["k"] = min(int(self.params["k"]), len(self.conditions))
         self._bar_caches = LakeBarCaches()
         self._lakes: weakref.WeakKeyDictionary[Any, _LakeState] = weakref.WeakKeyDictionary()
 
