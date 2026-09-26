@@ -30,17 +30,14 @@ Deliberate deviations from the original research code:
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
 from typing import Any
 
 import numpy as np
 
-from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
-from stonks.core.types import Features, Order, Portfolio
 from stonks.features.extremes import hierarchical_level_prices
-from stonks.strategies._common import LakeBarCaches, iso
-from stonks.strategies.base import BaseStrategy
+from stonks.strategies._common import BarCache
+from stonks.strategies.examples._nt888_base import SingleTickerLongFlat, common_specs
 
 LEVELS = 5
 
@@ -66,13 +63,8 @@ def market_structure_positions(
     return _positions_from_levels(close, hi, lo)
 
 
-class MarketStructureBreakStrategy(BaseStrategy):
+class MarketStructureBreakStrategy(SingleTickerLongFlat):
     id = "market_structure_break"
-    applicable_asset_classes = ("crypto", "equity")
-
-    def __init__(self, params: Any) -> None:
-        super().__init__(params)
-        self._bar_caches = LakeBarCaches()
 
     @classmethod
     def parameter_spec(cls):
@@ -92,112 +84,16 @@ class MarketStructureBreakStrategy(BaseStrategy):
                 bounds=(0, LEVELS - 1),
                 description="Structure level traded (0 = base swings; higher = larger swings).",
             ),
-            ParameterSpec(
-                name="interval",
-                kind="categorical",
-                default="1d",
-                bounds=["1m", "5m", "15m", "30m", "1h", "4h", "12h", "1d", "1w"],
-                tunable=False,
-                description="Bar interval to read from the lake.",
-            ),
-            ParameterSpec(
-                name="ticker",
-                kind="categorical",
-                default="AAPL.US",
-                bounds=None,
-                tunable=False,
-                description="Ticker the strategy trades.",
-            ),
-            ParameterSpec(
-                name="allocation",
-                kind="float",
-                default=1.0,
-                bounds=(0.0, 1.0),
-                tunable=False,
-                description="Fraction of cash deployed on a fresh long entry.",
-            ),
+            *common_specs("BTC-USD.CC"),
         ]
-
-    # ---- Strategy Protocol -------------------------------------------------
-
-    def extract_features(self, ticker: str, as_of, lake: Any) -> Features:
-        state = self._state(ticker, as_of, lake)
-        if state is None:
-            return Features(values={})
-        close, level_high, level_low, position = state
-        return Features(
-            values={
-                "close": close,
-                "level_high": level_high,
-                "level_low": level_low,
-                "position": position,
-            }
-        )
-
-    def estimate_return(self, ticker: str, as_of, lake: Any) -> float | None:
-        if ticker != self.params["ticker"]:
-            return None
-        state = self._state(ticker, as_of, lake)
-        if state is None:
-            return None
-        close, level_high, _level_low, position = state
-        if position <= 0:
-            return None
-        if not np.isfinite(level_high) or level_high <= 0:
-            return 1e-6
-        return max(close / level_high - 1.0, 1e-6)
-
-    def decide(
-        self,
-        my_picks: Sequence[tuple[float, str]],
-        portfolio: Portfolio,
-        prices: Mapping[str, float],
-        as_of,
-    ) -> list[Order]:
-        target = self.params["ticker"]
-        price = prices.get(target)
-        holding = portfolio.positions.get(target, 0.0)
-        if my_picks and price and price > 0 and holding <= 0 and portfolio.cash > 0:
-            qty = (portfolio.cash * float(self.params["allocation"])) / price
-            if qty <= 0:
-                return []
-            return [
-                Order(
-                    client_id=f"{self.id}:buy:{target}:{iso(as_of)}",
-                    ticker=target,
-                    side="buy",
-                    quantity=qty,
-                    order_type="market",
-                    strategy_id=self.id,
-                )
-            ]
-        if not my_picks and holding > 0:
-            return [
-                Order(
-                    client_id=f"{self.id}:sell:{target}:{iso(as_of)}",
-                    ticker=target,
-                    side="sell",
-                    quantity=holding,
-                    order_type="market",
-                    strategy_id=self.id,
-                )
-            ]
-        return []
-
-    # ---- internals ---------------------------------------------------------
 
     def history_bars(self) -> int:
         """Bars replayed per evaluation."""
         return max(3000, 20 * int(self.params["atr_lookback"]))
 
-    def _state(self, ticker: str, as_of, lake: Any) -> tuple[float, float, float, float] | None:
-        if lake is None:
-            return None
+    def _evaluate(self, cache: BarCache, ticker: str, as_of: Any) -> dict[str, float] | None:
         atr_lookback = int(self.params["atr_lookback"])
-        interval = Interval.parse(self.params["interval"])
-        bars = self._bar_caches.for_lake(lake).last_n_bars(
-            ticker, interval, as_of, self.history_bars()
-        )
+        bars = cache.last_n_bars(ticker, self.interval, as_of, self.history_bars())
         if len(bars) <= atr_lookback:
             return None
         high, low, close = (bars[c].to_numpy(dtype=float) for c in ("high", "low", "close"))
@@ -205,4 +101,15 @@ class MarketStructureBreakStrategy(BaseStrategy):
             high, low, close, atr_lookback, int(self.params["level"]), LEVELS
         )
         pos = _positions_from_levels(close, hi, lo)
-        return float(close[-1]), float(hi[-1]), float(lo[-1]), float(pos[-1])
+        level_high = float(hi[-1])
+        long = pos[-1] > 0
+        # how far the close has broken above the level high
+        score = close[-1] / level_high - 1.0 if long and level_high > 0 else 0.0
+        return {
+            "close": float(close[-1]),
+            "level_high": level_high,
+            "level_low": float(lo[-1]),
+            "position": float(pos[-1]),
+            "signal": 1.0 if long else 0.0,
+            "score": float(score),
+        }

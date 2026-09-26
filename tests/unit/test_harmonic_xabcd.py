@@ -119,7 +119,9 @@ def gartley_lake(tmp_path):
 def test_estimate_return_and_features(gartley_lake):
     live = _live(GARTLEY_KNOTS)
     entry = next(i for i, t in enumerate(live) if t is not None)
-    s = HarmonicXABCDStrategy({"sigma": SIGMA, "err_thresh": 0.2, "ticker": "X.US"})
+    s = HarmonicXABCDStrategy(
+        {"sigma": SIGMA, "err_thresh": 0.2, "ticker": "X.US", "interval": "1d"}
+    )
     assert s.estimate_return("X.US", as_of(entry - 1), gartley_lake) is None
     r = s.estimate_return("X.US", as_of(entry), gartley_lake)
     assert r is not None and r > 0
@@ -130,7 +132,7 @@ def test_estimate_return_and_features(gartley_lake):
 
 
 def test_fresh_instance_matches_a_warm_one(gartley_lake):
-    params = {"sigma": SIGMA, "ticker": "X.US"}
+    params = {"sigma": SIGMA, "ticker": "X.US", "interval": "1d"}
     warm = HarmonicXABCDStrategy(params)
     walked = [warm.estimate_return("X.US", as_of(i), gartley_lake) for i in range(101)]
     fresh = [

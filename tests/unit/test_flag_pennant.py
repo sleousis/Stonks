@@ -94,7 +94,7 @@ def test_estimate_return_and_features(flag_lake):
     closes = knots_path(FLAG_KNOTS)
     live = _live(closes, "pips")
     e = next(i for i, t in enumerate(live) if t is not None)
-    s = FlagPennantStrategy({"order": ORDER, "ticker": "X.US", "variant": "pips"})
+    s = FlagPennantStrategy({"order": ORDER, "ticker": "X.US", "interval": "1d", "variant": "pips"})
     assert s.estimate_return("X.US", as_of(e - 1), flag_lake) is None
     r = s.estimate_return("X.US", as_of(e), flag_lake)
     assert r is not None and r > 0
@@ -104,7 +104,7 @@ def test_estimate_return_and_features(flag_lake):
 
 
 def test_fresh_instance_matches_a_warm_one(flag_lake):
-    params = {"order": ORDER, "ticker": "X.US", "variant": "trendline"}
+    params = {"order": ORDER, "ticker": "X.US", "interval": "1d", "variant": "trendline"}
     warm = FlagPennantStrategy(params)
     walked = [warm.estimate_return("X.US", as_of(i), flag_lake) for i in range(141)]
     fresh = [

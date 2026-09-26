@@ -56,19 +56,16 @@ Deliberate deviations from the original:
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 
-from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
-from stonks.core.types import Features, Order, Portfolio
 from stonks.features.extremes import find_pips, rw_extremes
 from stonks.features.library import fit_trendlines_high_low
-from stonks.strategies._common import LakeBarCaches, iso
-from stonks.strategies.base import BaseStrategy
+from stonks.strategies._common import BarCache
+from stonks.strategies.examples._nt888_base import SingleTickerLongFlat, common_specs
 
 VARIANTS = ["pips", "trendline"]
 
@@ -235,13 +232,8 @@ def replay_bull_flag(
     return trade
 
 
-class FlagPennantStrategy(BaseStrategy):
+class FlagPennantStrategy(SingleTickerLongFlat):
     id = "flag_pennant"
-    applicable_asset_classes = ("crypto", "equity")
-
-    def __init__(self, params: Any) -> None:
-        super().__init__(params)
-        self._bar_caches = LakeBarCaches()
 
     @classmethod
     def parameter_spec(cls):
@@ -268,119 +260,20 @@ class FlagPennantStrategy(BaseStrategy):
                 bounds=(0.5, 3.0),
                 description="Hold period as a multiple of the flag width (in bars).",
             ),
-            ParameterSpec(
-                name="interval",
-                kind="categorical",
-                default="1d",
-                bounds=["1m", "5m", "15m", "30m", "1h", "4h", "12h", "1d", "1w"],
-                tunable=False,
-                description="Bar interval to read from the lake.",
-            ),
-            ParameterSpec(
-                name="ticker",
-                kind="categorical",
-                default="AAPL.US",
-                bounds=None,
-                tunable=False,
-                description="Ticker the strategy trades.",
-            ),
-            ParameterSpec(
-                name="allocation",
-                kind="float",
-                default=1.0,
-                bounds=(0.0, 1.0),
-                tunable=False,
-                description="Fraction of cash deployed on a fresh long entry.",
-            ),
+            *common_specs("BTC-USD.CC"),
         ]
-
-    # ---- Strategy Protocol -------------------------------------------------
-
-    def extract_features(self, ticker: str, as_of, lake: Any) -> Features:
-        state = self._state(ticker, as_of, lake)
-        if state is None:
-            return Features(values={})
-        trade, logc = state
-        close = float(np.exp(logc[-1]))
-        if trade is None:
-            return Features(values={"close": close, "in_trade": 0.0})
-        return Features(
-            values={
-                "close": close,
-                "in_trade": 1.0,
-                "bars_in_trade": float(len(logc) - 1 - trade.entry_index),
-                "flag_width": float(trade.flag_width),
-                "pole_width": float(trade.pole_width),
-                "pole_height": trade.pole_height,
-                "pennant": float(trade.pennant),
-            }
-        )
-
-    def estimate_return(self, ticker: str, as_of, lake: Any) -> float | None:
-        if ticker != self.params["ticker"]:
-            return None
-        state = self._state(ticker, as_of, lake)
-        if state is None or state[0] is None:
-            return None
-        trade, logc = state
-        target = logc[trade.entry_index] + trade.pole_height
-        return max(float(np.exp(target - logc[-1]) - 1.0), 1e-6)
-
-    def decide(
-        self,
-        my_picks: Sequence[tuple[float, str]],
-        portfolio: Portfolio,
-        prices: Mapping[str, float],
-        as_of,
-    ) -> list[Order]:
-        target = self.params["ticker"]
-        price = prices.get(target)
-        holding = portfolio.positions.get(target, 0.0)
-        if my_picks and price and price > 0 and holding <= 0 and portfolio.cash > 0:
-            qty = (portfolio.cash * float(self.params["allocation"])) / price
-            if qty <= 0:
-                return []
-            return [
-                Order(
-                    client_id=f"{self.id}:buy:{target}:{iso(as_of)}",
-                    ticker=target,
-                    side="buy",
-                    quantity=qty,
-                    order_type="market",
-                    strategy_id=self.id,
-                )
-            ]
-        if not my_picks and holding > 0:
-            return [
-                Order(
-                    client_id=f"{self.id}:sell:{target}:{iso(as_of)}",
-                    ticker=target,
-                    side="sell",
-                    quantity=holding,
-                    order_type="market",
-                    strategy_id=self.id,
-                )
-            ]
-        return []
-
-    # ---- internals ---------------------------------------------------------
 
     def history_bars(self) -> int:
         """Bars replayed per evaluation."""
         return 60 * int(self.params["order"]) + 200
 
-    def _state(self, ticker: str, as_of, lake: Any) -> tuple[FlagTrade | None, np.ndarray] | None:
-        if lake is None:
-            return None
+    def _evaluate(self, cache: BarCache, ticker: str, as_of: Any) -> dict[str, float] | None:
         order = int(self.params["order"])
-        interval = Interval.parse(self.params["interval"])
-        bars = self._bar_caches.for_lake(lake).last_n_bars(
-            ticker, interval, as_of, self.history_bars()
-        )
+        bars = cache.last_n_bars(ticker, self.interval, as_of, self.history_bars())
         if len(bars) < 2 * order + 6:
             return None
         cols = [bars[c].to_numpy(dtype=float) for c in ("high", "low", "close")]
-        if any(np.any(~(c > 0)) for c in cols):
+        if not all(np.all(c > 0) for c in cols):
             return None
         log_high, log_low, logc = (np.log(c) for c in cols)
         trade = replay_bull_flag(
@@ -392,4 +285,19 @@ class FlagPennantStrategy(BaseStrategy):
             float(self.params["hold_mult"]),
             window_bars=self.history_bars(),
         )
-        return trade, logc
+        close = float(cols[2][-1])
+        if trade is None:
+            return {"close": close, "in_trade": 0.0, "signal": 0.0, "score": 0.0}
+        # measured move: breakout close plus the pole height
+        target = logc[trade.entry_index] + trade.pole_height
+        return {
+            "close": close,
+            "in_trade": 1.0,
+            "bars_in_trade": float(len(logc) - 1 - trade.entry_index),
+            "flag_width": float(trade.flag_width),
+            "pole_width": float(trade.pole_width),
+            "pole_height": trade.pole_height,
+            "pennant": float(trade.pennant),
+            "signal": 1.0,
+            "score": float(np.exp(target - logc[-1]) - 1.0),
+        }

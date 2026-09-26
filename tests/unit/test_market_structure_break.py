@@ -92,7 +92,9 @@ def stairs_lake(tmp_path):
 
 def _strategy(**kw):
     # lowest allowed ATR lookback, so the short series has enough swings
-    return MarketStructureBreakStrategy({"atr_lookback": 14, "level": 0, "ticker": "X.US", **kw})
+    return MarketStructureBreakStrategy(
+        {"atr_lookback": 14, "level": 0, "ticker": "X.US", "interval": "1d", **kw}
+    )
 
 
 def test_estimate_return_tracks_the_position(stairs_lake):

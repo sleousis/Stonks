@@ -18,8 +18,12 @@ harmonic ratio templates, come from:
 - **Asset classes:** `("crypto", "equity")`. The originals were researched on
   hourly BTC, so every length parameter is a number of **bars** at the
   configured `interval`, whatever that interval is.
-- **Common params:** `ticker`, `interval` (default `1d`) and `allocation`
+- **Common params:** `ticker`, `interval` (default `1h`) and `allocation`
   (share of cash spent on an entry), none of them tunable.
+- **Base class:** all four subclass `SingleTickerLongFlat` from
+  `strategies/examples/_nt888_base.py`, shared with the nt888 indicator ports.
+  Each one only implements `_evaluate`, which returns the state (with `signal`
+  and `score`) at `as_of`.
 - **Orders:** `decide` buys with `allocation` of cash when the ticker is picked
   and the strategy is flat, and sells the whole position when it is not picked.
   The Stonks broker is long-only, so every short leg of the originals is simply
