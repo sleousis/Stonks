@@ -1,0 +1,4 @@
+{
+  "$comment": "Accepted npm audit findings for the console's production dependencies (Phase 12.8). Each entry: the advisory id (GHSA-...), the package, why it is accepted, and a review date. Remove entries once fixed.",
+  "allow": []
+}

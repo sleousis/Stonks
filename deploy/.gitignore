@@ -1,0 +1,5 @@
+# Real secrets and server-local state never land in git.
+.env
+.deployed-tag
+.previous-tag
+snapshots/

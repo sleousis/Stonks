@@ -1,0 +1,10 @@
+# Private access over Tailscale (Phase 14.3). Add it with
+#   COMPOSE_FILE=compose.yaml:compose.tailscale.yaml   (in .env)
+#
+# Tailscale runs on the host (installed by cloud-init). Caddy asks the host's
+# tailscaled for the certificate of STONKS_DOMAIN (<machine>.<tailnet>.ts.net),
+# so the console gets real HTTPS with no public port open.
+services:
+  caddy:
+    volumes:
+      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock

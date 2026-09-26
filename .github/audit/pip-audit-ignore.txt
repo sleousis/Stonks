@@ -1,0 +1,11 @@
+# Accepted pip-audit findings (Phase 12.8). One vulnerability id per line,
+# then "#" and why it is accepted and until when. CI passes each id as
+# --ignore-vuln. Remove a line as soon as the fix is in uv.lock.
+#
+# Found when the audit job was added (2026-09-26). Fixed versions exist; the
+# lock needs `uv lock --upgrade-package click --upgrade-package pydantic-settings
+# --upgrade-package urllib3` (Dependabot will propose it). Review by 2026-10-31.
+PYSEC-2026-2132  # click 8.3.2 -> 8.3.3
+CVE-2026-58203   # pydantic-settings 2.13.1 -> 2.14.2
+PYSEC-2026-141   # urllib3 2.6.3 -> 2.7.0
+PYSEC-2026-142   # urllib3 2.6.3 -> 2.7.0

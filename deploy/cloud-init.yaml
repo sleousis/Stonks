@@ -1,0 +1,137 @@
+#cloud-config
+# Stonks server bootstrap (Phase 14.1). Ubuntu 24.04, any provider.
+#
+# This is a Terraform template: infra/terraform/hetzner fills the five
+# placeholders (admin_ssh_public_key, deploy_ssh_public_key, volume_device,
+# tailscale_auth_key, tailscale_hostname) with templatefile().
+# By hand: replace those placeholders, turn each "$$" into "$", then paste
+# the file as "user data" when you create the VM. Leave volume_device or
+# tailscale_auth_key empty to skip those steps.
+#
+# Result:
+#   users   admin (sudo, SSH key)  deploy (docker group, CI SSH key)
+#   docker  Engine + compose plugin, log rotation
+#   network ufw: deny incoming, SSH only (and only over Tailscale when used)
+#   updates unattended-upgrades with automatic reboot at 04:30 UTC
+#   data    /srv/stonks/data on the attached volume, owned by uid 10001
+#   app     /opt/stonks/deploy (filled by the first deploy)
+
+timezone: Etc/UTC
+package_update: true
+package_upgrade: true
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - cron
+  - rsync
+  - jq
+
+users:
+  - name: admin
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true
+    ssh_authorized_keys:
+      - "${admin_ssh_public_key}"
+  - name: deploy
+    shell: /bin/bash
+    lock_passwd: true
+    ssh_authorized_keys:
+      - "${deploy_ssh_public_key}"
+
+ssh_pwauth: false
+disable_root: true
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-stonks.conf
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+      AllowUsers admin deploy
+  - path: /etc/docker/daemon.json
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": { "max-size": "10m", "max-file": "5" },
+        "live-restore": true
+      }
+  - path: /etc/apt/apt.conf.d/52stonks-unattended
+    content: |
+      Unattended-Upgrade::Allowed-Origins {
+        "$${distro_id}:$${distro_codename}";
+        "$${distro_id}:$${distro_codename}-security";
+        "$${distro_id}ESMApps:$${distro_codename}-apps-security";
+        "$${distro_id}ESM:$${distro_codename}-infra-security";
+        "Docker:$${distro_codename}";
+      };
+      Unattended-Upgrade::Automatic-Reboot "true";
+      Unattended-Upgrade::Automatic-Reboot-Time "04:30";
+      Unattended-Upgrade::Remove-Unused-Dependencies "true";
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+  - path: /usr/local/sbin/stonks-bootstrap
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -euxo pipefail
+      VOLUME_DEVICE="${volume_device}"
+      TAILSCALE_AUTH_KEY="${tailscale_auth_key}"
+      TAILSCALE_HOSTNAME="${tailscale_hostname}"
+
+      # Docker Engine from Docker's apt repository.
+      install -m 0755 -d /etc/apt/keyrings
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+      chmod a+r /etc/apt/keyrings/docker.asc
+      . /etc/os-release
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $VERSION_CODENAME stable" \
+        > /etc/apt/sources.list.d/docker.list
+      apt-get update
+      apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+      usermod -aG docker deploy
+      systemctl enable --now docker
+
+      # Data volume (ext4, mounted by label so device names do not matter).
+      mkdir -p /srv/stonks
+      if [ -n "$VOLUME_DEVICE" ]; then
+        for i in $(seq 1 60); do [ -e "$VOLUME_DEVICE" ] && break; sleep 2; done
+        blkid "$VOLUME_DEVICE" || mkfs.ext4 -L stonks-data "$VOLUME_DEVICE"
+        e2label "$VOLUME_DEVICE" stonks-data
+        grep -q 'LABEL=stonks-data' /etc/fstab ||
+          echo 'LABEL=stonks-data /srv/stonks ext4 defaults,nofail,discard 0 2' >> /etc/fstab
+        mount -a
+      fi
+      mkdir -p /srv/stonks/data /srv/stonks/snapshots
+      chown 10001:10001 /srv/stonks/data
+      chown deploy:deploy /srv/stonks/snapshots
+
+      # App folder, filled by the deploy workflow.
+      mkdir -p /opt/stonks/deploy
+      chown -R deploy:deploy /opt/stonks
+
+      # Firewall: nothing in except SSH. With Tailscale, SSH only on tailscale0.
+      ufw default deny incoming
+      ufw default allow outgoing
+      if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+        curl -fsSL https://tailscale.com/install.sh | sh
+        tailscale up --auth-key="$TAILSCALE_AUTH_KEY" --hostname="$TAILSCALE_HOSTNAME"
+        ufw allow in on tailscale0
+      else
+        ufw allow OpenSSH
+      fi
+      ufw --force enable
+
+      systemctl enable --now fail2ban unattended-upgrades cron
+      systemctl restart ssh
+
+runcmd:
+  - [/usr/local/sbin/stonks-bootstrap]
+
+final_message: "stonks bootstrap finished after $UPTIME seconds"
