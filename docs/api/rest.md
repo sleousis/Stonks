@@ -16,7 +16,7 @@ Auth: reads (`GET`) are open to loopback clients by default
 (`[api].open_reads_on_loopback`). Every other method needs
 `Authorization: Bearer $STONKS_API_TOKEN`.
 
-Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [connections](#connections-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [ticks](#ticks-endpoints)
+Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [connections](#connections-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [ticks](#ticks-endpoints)
 
 ## alerts endpoints
 
@@ -45,6 +45,13 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#broke
 | PATCH | `/api/auth/users/{user_id}` | Update User | bearer token | [UserUpdateRequest](#userupdaterequest) | [UserView](#userview) |
 | DELETE | `/api/auth/users/{user_id}/mfa` | Reset User Mfa | bearer token |  |  |
 | POST | `/api/auth/users/{user_id}/password` | Reset User Password | bearer token | [PasswordResetRequest](#passwordresetrequest) |  |
+
+## backups endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| POST | `/api/backups` | Start Backup | bearer token |  | [Job](#job) |
+| GET | `/api/backups/jobs/{job_id}/result` | Get Backup Result | token, or open on loopback |  | [BackupResultView](#backupresultview) |
 
 ## brokers endpoints
 
@@ -200,6 +207,12 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#broke
 |--------|------|---------|------|---------|----------|
 | GET | `/api/sources` | List Sources | token, or open on loopback |  | list[[DataSourceInfo](#datasourceinfo)] |
 
+## statements endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/statements/flags` | List Statement Flags | token, or open on loopback |  | [Page_StatementFlagView_](#page_statementflagview_) |
+
 ## strategies endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
@@ -333,6 +346,13 @@ Fee and spread for one asset class.
 | `trades` | list[[TradeView](#tradeview)] | no |  |
 | `ulcer_index` | number \| null | no |  |
 | `var_95` | number \| null | no |  |
+
+### BackupResultView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `backup_id` | string | yes |  |
+| `pruned` | list[string] | yes |  |
 
 ### BarSeries
 
@@ -545,12 +565,14 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `interval` | string | no |  |
 | `mcpt` | [McptOptions](#mcptoptions) \| null | no |  |
 | `objective` | "sharpe" \| "cagr" \| "final_return" | no |  |
+| `preflight` | boolean \| null | no |  |
 | `premortem` | string \| null | no |  |
 | `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |
 | `register_if_passes` | boolean | no |  |
 | `register_strategy` | boolean | no |  |
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
+| `strict_preflight` | boolean \| null | no |  |
 | `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "signal_ic" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
@@ -867,6 +889,7 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `interval` | string | no |  |
 | `mcpt` | [McptOptions](#mcptoptions) \| null | no |  |
 | `objective` | "sharpe" \| "cagr" \| "final_return" | no |  |
+| `preflight` | boolean \| null | no |  |
 | `premortem` | string \| null | no |  |
 | `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |
 | `register_if_passes` | boolean | no |  |
@@ -874,6 +897,7 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
 | `strategy` | [StrategyRef](#strategyref) | yes |  |
+| `strict_preflight` | boolean \| null | no |  |
 | `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "signal_ic" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
@@ -891,6 +915,7 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `class_path` | string | yes |  |
 | `n_trials_class` | integer | no |  |
 | `n_trials_run` | integer | no |  |
+| `preflight` | [PreflightView](#preflightview) \| null | no |  |
 | `registered_strategy_id` | string \| null | yes |  |
 | `run_id` | string | no |  |
 | `survival_reports` | list[[SurvivalReportView](#survivalreportview)] | yes |  |
@@ -1128,6 +1153,15 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
 
+### Page_StatementFlagView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[StatementFlagView](#statementflagview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
 ### Page_StrategySummary_
 
 | Field | Type | Required | Description |
@@ -1275,6 +1309,25 @@ One row per day. ``strategy_id`` is ``None`` for the real portfolio and a shadow
 | `quiet_start` | string \| null | yes |  |
 | `timezone` | string | yes |  |
 | `webhook` | string \| null | yes |  |
+
+### PreflightIssueView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `code` | string | yes |  |
+| `details` | object | no |  |
+| `message` | string | yes |  |
+| `severity` | "error" \| "warning" | yes |  |
+
+### PreflightView
+
+The BL-37 data preflight of a lab run. A run only starts with no errors, so a result carries warnings (and ``ok`` true).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `issues` | list[[PreflightIssueView](#preflightissueview)] | yes |  |
+| `ok` | boolean | yes |  |
+| `skipped` | boolean | yes |  |
 
 ### ProbeView
 
@@ -1604,6 +1657,18 @@ How one shadow strategy was evaluated during the tick.
 | `label` | string \| null | no |  |
 | `provider` | string | yes |  |
 | `redirect_uri` | string | yes |  |
+
+### StatementFlagView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `check_id` | string | yes |  |
+| `detail` | string | yes |  |
+| `flagged_at` | date-time | yes |  |
+| `frequency` | string | yes |  |
+| `period_end` | date | yes |  |
+| `severity` | "error" \| "warning" | yes |  |
+| `ticker` | string | yes |  |
 
 ### StatusChangeRequest
 

@@ -1583,6 +1583,68 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Statement periods the accounting audit flagged (BL-36): balance\nidentity, net income and cash mismatches, quarters vs annual, filings\ndated before period end, negative shares. Error flags make lab\npreflight warn.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "enum": [
+                  "error",
+                  "warning"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "only this severity",
+            "title": "Severity"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "description": "instrument id, e.g. AAPL.US or BTC-USD.CC",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ticker"
+          }
+        },
+        "title": "list_statement_flagsArguments",
+        "type": "object"
+      },
+      "name": "list_statement_flags",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Registered strategies (id, class, params, status), optionally by status\nor a search term.",
       "input_schema": {
         "properties": {
