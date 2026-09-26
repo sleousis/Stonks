@@ -9,27 +9,71 @@ import {
 } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
-import type { StrategySummary } from '../../api/models';
+import type { GoLiveCheckView, StrategySummary } from '../../api/models';
 import { StrategiesService } from '../../api/strategies.service';
 import { SystemService } from '../../api/system.service';
-import { formatMoney, formatPercent } from '../../core/format/format';
+import { formatMoney, formatNumber, formatPercent, MISSING } from '../../core/format/format';
 import { CliCommand } from '../../shared/ui/cli-command';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 
-/** What `stonks golive check` evaluates (src/stonks/production/golive.py). */
-export const GATE_CHECKS: readonly { name: string; measures: string }[] = [
-  { name: 'status', measures: 'The strategy is in shadow or active, so it has a paper period.' },
-  { name: 'min_days', measures: 'Distinct days with a paper snapshot.' },
-  { name: 'max_drawdown', measures: 'Deepest peak-to-trough fall during the paper period.' },
-  {
-    name: 'max_drift',
-    measures: 'Gap between the paper return and the return its out-of-sample backtest expects.',
-  },
-  { name: 'min_trades', measures: 'Filled trades during the paper period.' },
-  { name: 'survival', measures: 'Every stored survival report passed.' },
-];
+/** What each `stonks golive check` check measures (src/stonks/production/golive.py). */
+export const CHECK_MEASURES: Record<GoLiveCheckView['name'], string> = {
+  status: 'The strategy is in shadow or active, so it has a paper period.',
+  min_days: 'Distinct days with a paper snapshot.',
+  max_drawdown: 'Deepest peak-to-trough fall during the paper period.',
+  max_drift: 'Gap between the paper return and the return its out-of-sample backtest expects.',
+  min_trades: 'Filled trades during the paper period.',
+  survival: 'Every stored survival report passed.',
+};
+
+export interface CheckRow {
+  name: GoLiveCheckView['name'];
+  passed: boolean;
+  measures: string;
+  value: string;
+  limit: string;
+  detail: string;
+}
+
+/** A check's value and limit as the gate compares them. */
+export function checkRow(c: GoLiveCheckView): CheckRow {
+  let value = MISSING;
+  let limit = MISSING;
+  switch (c.name) {
+    case 'min_days':
+    case 'min_trades':
+      value = formatNumber(c.value, { digits: 0 });
+      limit = c.limit == null ? MISSING : `≥ ${formatNumber(c.limit, { digits: 0 })}`;
+      break;
+    case 'max_drawdown':
+      value = formatPercent(c.value);
+      limit = c.limit == null ? MISSING : `≤ ${formatPercent(c.limit)}`;
+      break;
+    case 'max_drift':
+      value = formatPercent(c.value, { signed: true });
+      limit = c.limit == null ? MISSING : `± ${formatPercent(c.limit)}`;
+      break;
+    case 'survival':
+      value =
+        c.value == null || c.limit == null
+          ? MISSING
+          : `${formatNumber(c.value, { digits: 0 })} of ${formatNumber(c.limit, { digits: 0 })}`;
+      limit = 'all passed';
+      break;
+    case 'status':
+      break;
+  }
+  return {
+    name: c.name,
+    passed: c.passed,
+    measures: CHECK_MEASURES[c.name],
+    value,
+    limit,
+    detail: c.detail,
+  };
+}
 
 const STATUS_ORDER: Record<StrategySummary['status'], number> = {
   shadow: 0,
@@ -60,7 +104,20 @@ export class GoLivePage {
   protected readonly broker = resource({ loader: () => this.systemApi.broker() });
   protected readonly risk = resource({ loader: () => this.systemApi.riskPolicy() });
 
-  protected readonly checks = GATE_CHECKS;
+  /** The gate's report for the selected (registered) strategy. */
+  protected readonly report = resource({
+    params: () => {
+      const s = this.selected();
+      return s ? { id: s.id } : undefined;
+    },
+    loader: ({ params }) => this.strategiesApi.golive(params.id),
+  });
+
+  protected readonly rows = computed<CheckRow[]>(() =>
+    this.report.hasValue() ? this.report.value().checks.map(checkRow) : [],
+  );
+
+  protected readonly failedCount = computed(() => this.rows().filter((r) => !r.passed).length);
 
   /** Shadow first (the usual candidates), then active, then retired. */
   protected readonly groups = computed(() => {
