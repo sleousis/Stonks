@@ -34,6 +34,7 @@ uv run stonks tick [--dry-run] [--as-of YYYY-MM-DD] [--tickers AAPL.US,MSFT.US]
 
 ## Working rules (enforced)
 
+- **Principles.** `docs/principles.md` lists the research, validation, risk and engineering rules every change must respect. Its backlog is `docs/research/book-lessons.md`.
 - **TDD.** Write a failing unit test first, then the implementation. Every new component ships with unit tests. Integration tests live under `tests/integration/`; any test that hits a real network goes under `tests/integration/live/` and is gated by `@pytest.mark.live` + `STONKS_RUN_LIVE_TESTS=1`.
 - **No live-API calls in default test runs.** Default `pytest` must be hermetic. Use `FakeDataSource` (canned data) for pipeline tests.
 - **Secrets never land in git.** `.env` is gitignored; `.env.example` is the only checked-in template.
