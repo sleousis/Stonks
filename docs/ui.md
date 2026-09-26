@@ -339,9 +339,10 @@ command instead of showing results.
 
 ### Metric help
 
-Every metric shows a "?" tip with one plain sentence and a link to the wiki
-[Glossary](https://github.com/sleousis/Stonks/wiki/Glossary). The text lives
-in one file, `core/help/glossary.ts`.
+Every metric shows a "?" tip with one plain sentence and a link to the
+in-app glossary (`/help/glossary#<key>`, nav: System, Glossary). The text
+lives in one file, `core/help/glossary.ts`, and the glossary page is built
+from it. Tips close when the page scrolls.
 
 - `app-stat-tile` and `app-data-table` headers add the tip on their own when
   the label is in the glossary ("Sharpe", "Max drawdown", "CAGR"...). Pass
@@ -398,6 +399,40 @@ Tickers open `/data?instrument=<id>`.
 - Run now on a tick job needs the job name typed, like a tick.
 - The backup list shows backup jobs the server ran (`GET /api/jobs?kind=backup`).
   The API has no route for backups made from the command line.
+
+## Permissions
+
+The console hides or disables what the signed-in user may not do, so nobody
+fills in a form that ends in a 403. The server still decides.
+
+- `scripts/gen-permissions.mjs` writes `core/auth/route-permissions.gen.ts`
+  from each route's `x-permission` in `openapi.json` (run by
+  `npm run api:generate`, checked by `npm run api:check`).
+- `core/auth/permissions.ts` mirrors the server policy (roles, token scopes,
+  browser-session-only). Step-up is not checked: the interceptor asks for a
+  code when the API wants one.
+- `SessionService.can('strategy.promote')`, `whyNot(...)` and
+  `canCall('POST', '/api/ticks')`. Put `<app-permission-note
+  permission="...">` after a disabled action: it prints "Admins only." and
+  renders nothing when allowed.
+- The sidebar shows the user's name and role.
+
+## Portfolio picker
+
+`core/portfolio/portfolio-context.service.ts` holds which portfolio the
+money pages show. It reads `GET /api/portfolios` (planned: a 404 keeps the
+picker hidden and nothing changes), remembers the pick per browser, and
+never sends an id that is no longer listed. `PortfolioService`,
+`OrdersService` and `TcaService` add `portfolio_id` from it. Pages put
+`portfolioCtx.selectedId()` in their resource params so a new pick reloads
+them. `<app-portfolio-picker>` sits in the session strip with a PAPER or
+LIVE stamp, and shows only with two or more portfolios.
+
+## Copy rule
+
+No CLI commands, config keys, environment variables or raw ids in trader
+copy. `npm run lint` runs `scripts/check-copy.mjs`, which fails on
+`stonks <command>`, `STONKS_*`, `[section]` config keys and "command line".
 
 ## Install and notifications (PWA)
 
@@ -627,9 +662,11 @@ set-up, home (trader and admin), profile, settings and users.
 
 ## Security
 
-- The bearer token lives in memory and `sessionStorage` only. It is attached
-  only to same-origin `/api/` requests: every non-GET request, stream-token
-  calls, and GETs when "send the token when reading data" is on. It is never
+- Every same-origin `/api/` request carries a credential, reads included:
+  the auth interceptor sets `withCredentials` (session cookie) and adds
+  `Authorization: Bearer` when the tab has an API token. Other origins get
+  neither.
+- The bearer token lives in memory and `sessionStorage` only. It is never
   logged, never put in a URL, never written to `localStorage`.
 - Job event streams use the short-lived, job-scoped stream token in `?token=`.
 - The console never talks to a broker directly; everything goes through the API.
