@@ -98,3 +98,39 @@ def test_perturbation_default_seed_is_reproducible(lake_trending):
         )
 
     assert run().metrics == run().metrics
+
+
+class _StatementSpy(BaseStrategy):
+    """Records, per lake object, whether it could read non-bar tables."""
+
+    id = "statement_spy_fake"
+    seen: dict[int, tuple[int, int, int]] = {}
+
+    def estimate_return(self, ticker, as_of, lake):
+        _StatementSpy.seen[id(lake)] = (
+            len(lake.get_income_statement(ticker)),
+            len(lake.get_dividends(ticker)),
+            int(lake.sql("SELECT COUNT(*) AS n FROM instruments")["n"].iloc[0]),
+        )
+        return
+
+    def decide(self, my_picks, portfolio, prices, as_of):
+        return []
+
+
+def test_perturbed_lake_carries_statements_dividends_and_instruments(lake_trending):
+    lake_trending.con.execute(
+        "INSERT INTO income_statement (ticker, period_end, frequency, revenue)"
+        " VALUES ('UP.US', DATE '2025-06-30', 'Q', 10.0)"
+    )
+    lake_trending.con.execute(
+        "INSERT INTO dividends (ticker, ex_date, amount) VALUES ('UP.US', DATE '2025-11-03', 1.0)"
+    )
+    _StatementSpy.seen = {}
+    PerturbationTest(noise_sigmas=[0.01], min_correlation=-1.0, seed=5).run(
+        _StatementSpy({}), _dataset(lake_trending)
+    )
+    noisy = {k: v for k, v in _StatementSpy.seen.items() if k != id(lake_trending)}
+    assert noisy
+    # universe is only UP.US: one instrument row, its statement and dividend
+    assert set(noisy.values()) == {(1, 1, 1)}
