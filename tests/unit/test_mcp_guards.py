@@ -18,21 +18,32 @@ STRATEGY = {
 }
 
 
+def _broker(kind="simulated", paper=True, allow_live=False, creds=False):
+    """The GET /api/brokers payload (``BrokerInfo``)."""
+    return {
+        "kind": kind,
+        "paper": paper,
+        "allow_live": allow_live,
+        "credentials_configured": creds,
+    }
+
+
 @pytest.mark.parametrize(
     ("info", "expected"),
     [
-        ({"live": False}, "off"),
-        ({"live": True}, "on"),
-        ({"live_trading": False}, "off"),
-        ({"kind": "simulated"}, "off"),
-        ({"kind": "alpaca", "paper": True}, "off"),
-        ({"kind": "alpaca", "paper": False, "allow_live": True}, "on"),
-        ({"kind": "alpaca", "paper": False, "allow_live": False}, "off"),
+        (_broker("simulated"), "off"),
+        # the simulated broker ignores paper, so it is never real money
+        (_broker("simulated", paper=False, allow_live=True), "off"),
+        (_broker("alpaca", paper=True), "off"),
+        (_broker("alpaca", paper=True, allow_live=True, creds=True), "off"),
+        # a non-paper Alpaca endpoint is refused whatever allow_live says
+        (_broker("alpaca", paper=False, allow_live=True, creds=True), "on"),
+        (_broker("alpaca", paper=False, allow_live=False), "on"),
         ({"kind": "alpaca"}, "unknown"),
-        ({"kind": "somethingelse"}, "unknown"),
-        # "live" wins over contradicting fields
-        ({"live": True, "kind": "simulated"}, "on"),
-        ({"live": "no"}, "unknown"),
+        ({"kind": "alpaca", "paper": "yes"}, "unknown"),
+        ({"kind": "somethingelse", "paper": True}, "unknown"),
+        # speculative keys the real route does not send are not trusted
+        ({"live": False}, "unknown"),
         (None, "unknown"),
         ([], "unknown"),
         ({}, "unknown"),

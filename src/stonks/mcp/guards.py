@@ -13,29 +13,22 @@ CONFIRM_HINT = "Nothing was changed. Call again with confirm=true to apply."
 def live_trading_state(info: Any) -> LiveState:
     """Whether the server's broker would place real-money orders.
 
-    Reads a broker-status payload from the API. Anything that doesn't
-    state the answer unambiguously is ``"unknown"``, and callers treat
-    unknown as unsafe (fail closed).
+    Reads the ``GET /api/brokers`` payload (``BrokerInfo``: ``kind``,
+    ``paper``, ``allow_live``, ``credentials_configured``). Only the
+    simulated broker and Alpaca's paper endpoint count as ``"off"``; a
+    non-paper Alpaca broker is ``"on"`` whatever ``allow_live`` says.
+    Anything else is ``"unknown"``, and callers treat unknown as unsafe
+    (fail closed).
     """
     if not isinstance(info, dict):
         return "unknown"
-    for key in ("live", "live_trading"):
-        if key in info:
-            value = info[key]
-            if isinstance(value, bool):
-                return "on" if value else "off"
-            return "unknown"
     kind = info.get("kind")
     if kind == "simulated":
         return "off"
     if kind == "alpaca":
         paper = info.get("paper")
-        if paper is True:
-            return "off"
-        if paper is False:
-            allow_live = info.get("allow_live")
-            if isinstance(allow_live, bool):
-                return "on" if allow_live else "off"
+        if isinstance(paper, bool):
+            return "off" if paper else "on"
     return "unknown"
 
 

@@ -54,8 +54,8 @@ TICK = ToolAnnotations(
     read_only_hint=False, destructive_hint=True, idempotent_hint=False, open_world_hint=False
 )
 
-#: Planned broker-status route (API work in progress). Until it exists a
-#: non-dry-run tick is refused.
+#: Broker the production tick trades through (``BrokerInfo``). A
+#: non-dry-run tick needs it to report a simulated or paper broker.
 BROKER_STATUS_PATH = "/api/brokers"
 
 TERMINAL_JOB_STATUSES = frozenset({"succeeded", "failed", "cancelled"})
@@ -545,11 +545,12 @@ async def _broker_live_state(api: ApiClient) -> str:
 def _live_refusal(state: str) -> str:
     if state == "on":
         return (
-            "refusing a non-dry-run tick: the API's broker trades real money. "
+            "refusing a non-dry-run tick: the API's broker is not simulated or paper, "
+            "so it trades real money. "
             "Run live ticks from the CLI or UI, not through MCP."
         )
     return (
-        "refusing a non-dry-run tick: the API does not report its broker mode, so "
+        "refusing a non-dry-run tick: the API did not report a simulated or paper broker, so "
         "MCP cannot rule out live trading. Use dry_run=true, or the CLI/UI."
     )
 

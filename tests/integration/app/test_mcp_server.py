@@ -346,7 +346,15 @@ def _broker_route_transport(tc: TestClient, broker_info: dict) -> httpx2.MockTra
 
 @pytest.mark.anyio
 async def test_real_tick_allowed_only_with_paper_broker(test_client):
-    for info, allowed in (({"kind": "simulated"}, True), ({"live": True}, False)):
+    def broker(kind: str, paper: bool) -> dict:
+        return {"kind": kind, "paper": paper, "allow_live": True, "credentials_configured": True}
+
+    cases = (
+        (broker("simulated", paper=True), True),
+        (broker("alpaca", paper=True), True),
+        (broker("alpaca", paper=False), False),
+    )
+    for info, allowed in cases:
         api = ApiClient(BASE, token=API_TOKEN, transport=_broker_route_transport(test_client, info))
         async with Client(build_server(api)) as c:
             args = {"tickers": ["UP.US"], "dry_run": False, "confirm": True}
