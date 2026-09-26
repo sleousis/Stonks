@@ -1839,6 +1839,22 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Your portfolios, oldest first, each marked paper or live.",
+      "input_schema": {
+        "properties": {},
+        "title": "list_portfoliosArguments",
+        "type": "object"
+      },
+      "name": "list_portfolios",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Virtual orders shadow strategies placed (never sent to a broker), newest first.",
       "input_schema": {
         "properties": {
@@ -2111,6 +2127,22 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Your subscriptions: strategy, portfolio, mode (notify, paper,\nauto), whether it is on, the paper-day count and what still blocks\nauto.",
+      "input_schema": {
+        "properties": {},
+        "title": "list_subscriptionsArguments",
+        "type": "object"
+      },
+      "name": "list_subscriptions",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Production tick runs, newest first, with their summaries.",
       "input_schema": {
         "properties": {
@@ -2146,6 +2178,22 @@
         "type": "object"
       },
       "name": "list_ticks",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "For each of your portfolios: paper or live money, and the broker\n(simulated ledger, the configured Alpaca account, or a linked\nconnection).",
+      "input_schema": {
+        "properties": {},
+        "title": "list_trading_modesArguments",
+        "type": "object"
+      },
+      "name": "list_trading_modes",
       "needs_confirm": false
     },
     {
@@ -3378,6 +3426,59 @@
     {
       "annotations": {
         "destructive": true,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Follow a strategy in notify or paper mode. Without confirm=true\nreturns a preview and changes nothing.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "mode": {
+            "default": "notify",
+            "description": "notify: signals only; paper: simulated orders on one of your portfolios",
+            "enum": [
+              "notify",
+              "paper"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (needed for paper)",
+            "title": "Portfolio Id"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_id"
+        ],
+        "title": "subscribeArguments",
+        "type": "object"
+      },
+      "name": "subscribe",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
         "idempotent": true,
         "open_world": true,
         "read_only": false
@@ -3642,6 +3743,80 @@
       },
       "name": "update_draft",
       "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Turn one of your subscriptions on or off, or move it between\nnotify and paper. Auto is refused here (it needs the web app).\nWithout confirm=true returns a preview and changes nothing.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Enabled"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "notify",
+                  "paper",
+                  "auto"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "notify or paper; auto is switched on in the web app (second factor)",
+            "title": "Mode"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "audited",
+            "title": "Reason"
+          },
+          "subscription_id": {
+            "title": "Subscription Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subscription_id"
+        ],
+        "title": "update_subscriptionArguments",
+        "type": "object"
+      },
+      "name": "update_subscription",
+      "needs_confirm": true
     },
     {
       "annotations": {
