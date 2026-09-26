@@ -25,10 +25,12 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from typing import Any, Literal
 
+from stonks.backtest.costs import CostModelSettings
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.protocols import Broker
 from stonks.core.types import Fill, Order, OrderStatus, Portfolio
 from stonks.execution.brokers.base import BrokerKind, OrderRejectedError
+from stonks.execution.brokers.simulated import SimulatedCosts
 from stonks.execution.orders import make_client_id
 from stonks.execution.reconcile import NON_TERMINAL_STATUSES, reconcile_orders
 from stonks.logging import get_logger
@@ -62,8 +64,14 @@ class TickSettings:
     universe: Sequence[str]
     threshold: float = 0.0
     initial_cash: float = 10_000.0
+    #: Legacy flat costs of the simulated broker (and the risk layer's cash
+    #: estimate). Only used when ``costs`` is None.
     slippage_bps: float = 0.0
     fee_per_trade: float = 0.0
+    #: The simulated broker's cost model (``[backtest.costs]``, the one
+    #: backtests use). Exclusive with ``slippage_bps`` / ``fee_per_trade``:
+    #: ``build_tick_settings`` resolves the precedence.
+    costs: CostModelSettings | None = None
     # Closes older than this many calendar days before ``as_of`` are ignored,
     # so delisted / failed-ingest tickers never fill at months-old prices.
     max_price_staleness_days: int = 7
@@ -74,6 +82,15 @@ class TickSettings:
     # "alpaca" trades through ``run_tick``'s ``broker_factory``; the broker
     # account is then the source of truth for the portfolio.
     broker_kind: BrokerKind = "simulated"
+
+    def __post_init__(self) -> None:
+        self.simulated_costs  # noqa: B018 - validates costs vs legacy (not both)
+
+    @property
+    def simulated_costs(self) -> SimulatedCosts:
+        return SimulatedCosts(
+            model=self.costs, slippage_bps=self.slippage_bps, fee_per_trade=self.fee_per_trade
+        )
 
 
 @dataclass(frozen=True)
@@ -273,7 +290,9 @@ def _run_tick_body(
     risk_adjustments = list(risk_result.adjustments)
 
     if broker is None:
-        broker = _build_broker(portfolio, settings, prices, as_of, broker_factory)
+        broker = _build_broker(
+            portfolio, settings, prices, as_of, broker_factory, book.volumes, asset_classes
+        )
     orders_with_tick = [
         replace(
             o,
@@ -442,18 +461,21 @@ def _build_broker(
     prices: dict[str, float],
     as_of: date,
     factory: BrokerFactory | None = None,
+    volumes: dict[str, float] | None = None,
+    asset_classes: dict[str, str] | None = None,
 ) -> Broker:
-    """The one place the tick constructs its broker around ``portfolio``."""
+    """The one place the tick constructs its broker around ``portfolio``.
+
+    A simulated broker fills at the latest close through
+    ``settings.simulated_costs`` and gets what that cost model reads, as in
+    backtests: each ticker's asset class and the volume of the priced bar."""
     if factory is not None:
         broker = factory(portfolio)
     else:
-        broker = SimulatedBroker(
-            portfolio=portfolio,
-            slippage_bps=settings.slippage_bps,
-            fee_per_trade=settings.fee_per_trade,
-        )
+        broker = settings.simulated_costs.build_broker(portfolio)
     if isinstance(broker, SimulatedBroker):
-        broker.set_prices(prices, as_of=as_of)
+        broker.set_asset_classes(asset_classes or {})  # type: ignore[arg-type]
+        broker.set_prices(prices, as_of=as_of, volumes=volumes)
     return broker
 
 
@@ -498,6 +520,7 @@ def _shadow_phase(
             tick_id,
             settings,
             buyable=book.fresh,
+            volumes=book.volumes,
         )
     except Exception as exc:
         log.error("tick.shadow_failed", error=str(exc), error_type=type(exc).__name__)

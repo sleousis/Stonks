@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from stonks.config import Settings
 from stonks.core.protocols import Broker
 from stonks.core.types import Portfolio
-from stonks.execution.brokers import make_broker
+from stonks.execution.brokers import SimulatedCosts, make_broker
 from stonks.notify import Notifier, build_notifier
 from stonks.production.tick import BrokerFactory, TickSettings
 
@@ -24,13 +24,18 @@ class TickRuntime:
 
 
 def build_tick_settings(settings: Settings, universe: Sequence[str]) -> TickSettings:
+    """Simulated fill costs follow ``SimulatedCosts.from_settings``:
+    ``[backtest.costs]`` when configured (legacy ``[production]``
+    ``slippage_bps`` / ``fee_per_trade`` then ignored), else the legacy pair."""
     p = settings.production
+    costs = SimulatedCosts.from_settings(settings)
     return TickSettings(
         universe=list(universe),
         threshold=p.threshold,
         initial_cash=p.initial_cash,
-        slippage_bps=p.slippage_bps,
-        fee_per_trade=p.fee_per_trade,
+        slippage_bps=costs.slippage_bps,
+        fee_per_trade=costs.fee_per_trade,
+        costs=costs.model,
         max_price_staleness_days=p.max_price_staleness_days,
         risk=p.risk,
         shadow_enabled=p.shadow_enabled,

@@ -22,6 +22,7 @@ from stonks.execution.brokers.base import (
     OrderStateSource,
     UnsupportedTickerError,
 )
+from stonks.execution.brokers.simulated import SimulatedCosts
 
 if TYPE_CHECKING:  # pragma: no cover
     from stonks.config import Settings
@@ -37,6 +38,7 @@ __all__ = [
     "OrderRejectedError",
     "OrderStateSource",
     "SimulatedBroker",
+    "SimulatedCosts",
     "UnsupportedTickerError",
     "make_broker",
 ]
@@ -50,18 +52,16 @@ def make_broker(
 ) -> SimulatedBroker | AlpacaBroker:
     """Build the broker named by ``kind`` (default ``settings.brokers.kind``).
 
-    ``simulated`` trades against ``portfolio`` in memory with the production
-    slippage/fee settings (the caller must still ``set_prices``). ``alpaca``
+    ``simulated`` trades against ``portfolio`` in memory with the costs
+    ``SimulatedCosts.from_settings`` resolves (``[backtest.costs]`` when
+    configured, else the legacy ``[production]`` slippage/fee); the caller
+    must still ``set_prices``. ``alpaca``
     ignores ``portfolio``: the broker account is the source of truth, read
     it with ``fetch_portfolio()``.
     """
     kind = kind or settings.brokers.kind
     if kind == "simulated":
-        return SimulatedBroker(
-            portfolio=portfolio,
-            slippage_bps=settings.production.slippage_bps,
-            fee_per_trade=settings.production.fee_per_trade,
-        )
+        return SimulatedCosts.from_settings(settings).build_broker(portfolio)
     if kind == "alpaca":
         cfg = settings.brokers.alpaca
         return AlpacaBroker.connect(
