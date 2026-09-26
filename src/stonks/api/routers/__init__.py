@@ -6,6 +6,8 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from stonks.api.routers import (
+    alerts,
+    auth,
     brokers,
     catalog,
     health,
@@ -42,7 +44,11 @@ API_ROUTERS: list[APIRouter] = [
     pnl.router,
     health.report_router,
     brokers.router,
+    alerts.router,
 ]
+
+#: Routers that always need the bearer token, even for reads on loopback.
+TOKEN_ROUTERS: list[APIRouter] = [auth.router]
 
 #: Routers that run their own auth dependency instead of :func:`authorize`
 #: (the job event stream also accepts a job-scoped ``?token=``).

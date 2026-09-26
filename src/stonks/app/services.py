@@ -9,6 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from stonks.app.alerts import AlertService
 from stonks.app.brokers import BrokerConnector, BrokerService
 from stonks.app.catalog import CatalogService, LabCatalogSource, StrategySource
 from stonks.app.context import AppContext
@@ -26,6 +27,7 @@ from stonks.app.stream_tokens import IssuedStreamToken, StreamTokenSigner
 from stonks.app.studio import RuleStrategySource, StudioService, user_strategies_dir
 from stonks.app.ticks import TickService
 from stonks.app.user_strategies import UserStrategyFinder, install, uninstall
+from stonks.config import configured_secrets
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.app.services")
@@ -38,16 +40,7 @@ def default_strategy_sources() -> list[StrategySource]:
 
 
 def _configured_secrets(context: AppContext) -> list[str]:
-    s = context.settings
-    alpaca = s.brokers.alpaca
-    values = [
-        s.sources.eodhd.api_key,
-        s.api.token.get_secret_value() if s.api.token else None,
-        alpaca.api_key.get_secret_value() if alpaca.api_key else None,
-        alpaca.secret_key.get_secret_value() if alpaca.secret_key else None,
-        s.notify.webhook.url,
-    ]
-    return [v for v in values if v]
+    return configured_secrets(context.settings)
 
 
 class JobService:
@@ -130,6 +123,7 @@ class Services:
     operations: OperationsService
     brokers: BrokerService
     studio: StudioService
+    alerts: AlertService
     _user_finder: UserStrategyFinder | None = field(default=None, repr=False)
 
     @classmethod
@@ -175,6 +169,7 @@ class Services:
             # Wired here (not lazily) so the studio job kinds are registered
             # before recover_interrupted() and the first request.
             studio=StudioService(context, lab, runner),
+            alerts=AlertService(context),
         )
 
     def start(self) -> None:
