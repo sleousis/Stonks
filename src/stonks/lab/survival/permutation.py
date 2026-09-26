@@ -30,7 +30,7 @@ import dataclasses
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 import numpy as np
 import pandas as pd
@@ -39,6 +39,7 @@ from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.features.price_adjustment import SeriesAdjustment
 from stonks.lab.backtesting import run_backtest
+from stonks.lab.dataset import scoring_window
 from stonks.lab.lake_copy import CORPORATE_ACTION_TABLES, copy_universe_lake
 from stonks.lab.parallel import PortableLake, PortableStrategy, run_tasks
 from stonks.lab.survival.base import TuningSetup
@@ -50,6 +51,20 @@ from stonks.store.lake import DuckDBLake
 _log = get_logger("stonks.lab.survival.permutation")
 
 _OHLC_COLS = ("open", "high", "low", "close")
+
+#: Default MCPT permutation count (BL-21): the smallest p-value it can
+#: reach is 1 / 201.
+DEFAULT_N_PERMUTATIONS = 200
+
+
+def has_nontrivial_fit(strategy: Any) -> bool:
+    """True when ``strategy``'s class overrides ``BaseStrategy.fit`` (it
+    learns state from the train window, as ML strategies do). Wrappers
+    that delegate ``fit`` count as fitted."""
+    from stonks.strategies.base import BaseStrategy
+
+    fit = getattr(type(strategy), "fit", None)
+    return callable(fit) and fit is not BaseStrategy.fit
 
 
 def permute_bars(bars: pd.DataFrame, start_index: int = 0, seed: int | None = None) -> pd.DataFrame:
@@ -212,8 +227,18 @@ class MonteCarloPermutationTest:
     split's price drop to a random bar while the engine still multiplied
     the position on the real ex-date, so equity would jump by the ratio.
 
+    ``retune="auto"`` picks the mode per strategy: re-tuning for a
+    strategy with a non-trivial ``fit`` (an ML strategy, see
+    :func:`has_nontrivial_fit`), out-of-sample otherwise. The promotion
+    preset uses it.
+
+    The OOS window is the dataset's validation window embargoed for the
+    strategy (``lab.dataset.scoring_window``).
+
     The p-value is the +1-smoothed fraction of permuted scores at least as
     good as the real one; the test passes when ``p_value <= max_p_value``.
+    ``n_permutations`` defaults to 200 (BL-21; it was 50), so the smallest
+    reachable p-value is 1/201 (about 0.005), well under the 0.05 gate.
 
     Permutations run on a process pool of ``max_workers`` (default
     ``lab.parallel.default_max_workers()``; 1 runs them in-process). Every
@@ -230,10 +255,10 @@ class MonteCarloPermutationTest:
 
     def __init__(
         self,
-        n_permutations: int = 50,
+        n_permutations: int = DEFAULT_N_PERMUTATIONS,
         max_p_value: float = 0.05,
         metric: str = "profit_factor",
-        retune: bool = False,
+        retune: bool | Literal["auto"] = False,
         seed: int | None = 17,
         tuning: TuningSetup | None = None,
         max_workers: int | None = None,
@@ -246,6 +271,8 @@ class MonteCarloPermutationTest:
             raise ValueError(f"unsupported metric {metric!r}")
         if max_workers is not None and max_workers < 1:
             raise ValueError("max_workers must be >= 1")
+        if retune not in (True, False, "auto"):
+            raise ValueError(f"retune must be True, False or 'auto', got {retune!r}")
         self._n = n_permutations
         self._max_p = max_p_value
         self._metric = metric
@@ -261,16 +288,17 @@ class MonteCarloPermutationTest:
 
     def run(self, strategy: Strategy, context: Any) -> SurvivalReport:
         setup = self._tuning or self._bound
-        if self._retune and setup is None:
+        retune = has_nontrivial_fit(strategy) if self._retune == "auto" else bool(self._retune)
+        if retune and setup is None:
             raise ValueError(
-                "MCPT retune=True needs a tuning setup: pass tuning=... or run it under LabRunner"
+                "MCPT re-tuning needs a tuning setup: pass tuning=... or run it under LabRunner"
             )
-        window = context.train_window if self._retune else context.val_window
-        mode = "retune" if self._retune else "oos"
+        window = context.train_window if retune else scoring_window(context, strategy)
+        mode = "retune" if retune else "oos"
         _log.info(
             "mcpt.start", mode=mode, seed=self._seed, n=self._n, window=[str(w) for w in window]
         )
-        if self._retune:
+        if retune:
             # re-tunes keep e.g. a wrapper's inner strategy and any pinned params
             evaluate: Evaluator = RetuneScore(setup, setup.retune_fixed_params(strategy))
         else:
@@ -286,10 +314,10 @@ class MonteCarloPermutationTest:
 
         real_score = scorer.score_real()
         perm_scores = permuted_scores(scorer, self._n, self._seed, self._max_workers)
-        minimize = self._retune and setup.objective.direction == "minimize"
+        minimize = retune and setup.objective.direction == "minimize"
         p_value = permutation_p_value(real_score, perm_scores, minimize=minimize)
         arr = np.asarray(perm_scores, dtype=float)
-        metric = setup.objective.name if self._retune else self._metric
+        metric = setup.objective.name if retune else self._metric
         return SurvivalReport(
             test_id=self.id,
             passed=p_value <= self._max_p,
