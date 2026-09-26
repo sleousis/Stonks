@@ -48,7 +48,8 @@ export function checkRow(c: GoLiveCheckView): CheckRow {
       limit = c.limit == null ? MISSING : `≥ ${formatNumber(c.limit, { digits: 0 })}`;
       break;
     case 'max_drawdown':
-      value = formatPercent(c.value);
+      // A flat period's drawdown is -0; show it as 0.00%.
+      value = formatPercent(c.value === 0 ? 0 : c.value);
       limit = c.limit == null ? MISSING : `≤ ${formatPercent(c.limit)}`;
       break;
     case 'max_drift':

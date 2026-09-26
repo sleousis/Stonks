@@ -5,7 +5,7 @@ import { provideRouter } from '@angular/router';
 import type { BrokerInfo, GoLiveReport, Page, RiskPolicy, StrategySummary } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { tick } from '../../../testing/http';
-import { GoLivePage } from './go-live.page';
+import { GoLivePage, checkRow } from './go-live.page';
 
 function strategy(id: string, status: StrategySummary['status']): StrategySummary {
   return {
@@ -165,6 +165,7 @@ describe('GoLivePage', () => {
     expect(minDays.querySelector('.check-limit')?.textContent).toContain('20');
     expect(rows[2].querySelector('.check-value')?.textContent).toContain('4.20%');
     expect(rows[3].querySelector('.check-value')?.textContent).toContain('-1.30%');
+    expect(checkRow({ ...report('x', true).checks[2], value: -0 }).value).toBe('0.00%');
     expect(rows[5].querySelector('.check-value')?.textContent).toContain('4 of 4');
     expect(check.querySelector('app-cli-command code')?.textContent).toContain(
       'stonks golive check buyhold-spy',
