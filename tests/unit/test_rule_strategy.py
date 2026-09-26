@@ -282,3 +282,16 @@ def test_templates_run_on_sample_data(name):
         for ticker in ("S1", "S2"):
             r = s.estimate_return(ticker, ts.to_pydatetime(), lake)
             assert r is None or r > 0
+
+
+def test_stale_exit_evaluation_never_leaks_into_decide():
+    # H's exit is true on this bar with one lake...
+    frame = _frame([11, 30])
+    as_of = _ts(frame, 1)
+    s = RuleStrategy({"spec": _spec(exit=_cmp("close", ">", 25))})
+    assert s.estimate_return("H", as_of, SampleLake({"H": frame})) is None
+    # ...then the same instance re-evaluates the same bar on a lake with no
+    # data for H (the lab re-running it on another lake): no exit signal
+    assert s.estimate_return("H", as_of, SampleLake({})) is None
+    port = Portfolio(cash=0.0, positions={"H": 1.0})
+    assert s.decide([], port, _prices(H=30), as_of) == []

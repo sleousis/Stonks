@@ -127,6 +127,9 @@ class RuleStrategy(BaseStrategy):
     # ---- Strategy Protocol -------------------------------------------------
 
     def estimate_return(self, ticker: str, as_of: Any, lake: Any) -> float | None:
+        # Forget any earlier evaluation of this ticker first, so decide()
+        # never acts on one from another lake or run.
+        self._remember(as_of, ticker, None)
         if lake is None or not self._in_universe(ticker, lake):
             return None
         bars = self._bar_caches.for_lake(lake).last_n_bars(
@@ -193,11 +196,14 @@ class RuleStrategy(BaseStrategy):
     def _key(as_of: Any) -> str:
         return iso(as_datetime(as_of))
 
-    def _remember(self, as_of: Any, ticker: str, ev: _Evaluation) -> None:
+    def _remember(self, as_of: Any, ticker: str, ev: _Evaluation | None) -> None:
         key = self._key(as_of)
         if key != self._evals_as_of:
             self._evals_as_of, self._evals = key, {}
-        self._evals[ticker] = ev
+        if ev is None:
+            self._evals.pop(ticker, None)
+        else:
+            self._evals[ticker] = ev
 
     def _should_exit(
         self,
