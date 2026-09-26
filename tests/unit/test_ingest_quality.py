@@ -239,6 +239,38 @@ def test_intraday_timestamps():
     assert _reasons(result) == {30: "price_spike"}
 
 
+def test_squeeze_that_only_partly_reverts_is_kept():
+    # GME-like: +135% then -44% next day. Real, so only a warning.
+    closes = _walk(60)
+    closes[40] = closes[39] * 2.35
+    closes[41] = closes[40] * 0.56
+    closes[42:] = [c * closes[41] / closes[42] for c in closes[42:]]
+    result = _checker().check(_frame(closes), interval=D1)
+    assert _reasons(result) == {}
+    assert "extreme_move" in _codes(result)
+
+
+@pytest.mark.parametrize("asset_class", ["bond", "commodity"])
+def test_non_positive_values_allowed_where_they_are_real(asset_class):
+    # Negative bond yields (2019 Bunds), negative oil futures (April 2020).
+    closes = [0.5, 0.2, -0.1, -0.3, 0.1] * 6
+    frame = _frame(closes)
+    frame["high"] = frame[["close"]].max(axis=1) + 0.05
+    frame["low"] = frame[["close"]].min(axis=1) - 0.05
+    frame["open"] = frame["close"]
+    result = _checker().check(frame, interval=D1, asset_class=asset_class)
+    assert _reasons(result) == {}
+    equity = _checker().check(frame, interval=D1, asset_class="equity")
+    assert "non_positive_price" in set(_reasons(equity).values())
+
+
+def test_spike_rule_is_skipped_for_bonds():
+    closes = _walk(60, start=2.0)
+    closes[40] = closes[39] * 3
+    result = _checker().check(_frame(closes), interval=D1, asset_class="bond")
+    assert _reasons(result) == {}
+
+
 def test_run_quality_breaches_respect_thresholds():
     from stonks.ingest.quality import RunQuality, SeriesWarning
 

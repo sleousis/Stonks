@@ -379,6 +379,7 @@ class IngestPipeline:
             history=history,
             splits=splits_frame(self._lake, [ticker]),
             as_of=as_of,
+            asset_class=self._lake.get_asset_classes([ticker]).get(ticker),
         )
         quality.add(len(frame), batch)
         rejected = batch.rejected_mask.to_numpy(dtype=bool)

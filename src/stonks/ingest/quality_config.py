@@ -29,6 +29,17 @@ class DataQualityConfig(BaseModel):
     # ``spike_min_move``, and the next bar takes most of it back.
     spike_sigmas: float = Field(default=10.0, gt=0)
     spike_min_move: float = Field(default=0.25, gt=0)
+    # "Takes most of it back": the two log returns cancel to within this
+    # fraction of the first. Bad ticks revert fully; a real squeeze (GME
+    # +135% then -44%) does not, and stays.
+    spike_reversal_tolerance: float = Field(default=0.1, gt=0, lt=1)
+    # Asset classes the spike rule runs on. Bond "prices" are often yields
+    # near zero, where relative moves are meaningless. A ticker without a
+    # known class counts as equity (the instruments default).
+    spike_asset_classes: list[str] = Field(default_factory=lambda: ["equity", "crypto"])
+    # Asset classes whose values may be zero or negative: bond yields
+    # (Bunds 2019-21) and futures (WTI, April 2020).
+    allow_non_positive: list[str] = Field(default_factory=lambda: ["bond", "commodity"])
     # Floor for the robust sigma, so a nearly flat series does not turn
     # every tick into a spike.
     min_sigma: float = Field(default=0.005, gt=0)

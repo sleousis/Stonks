@@ -189,6 +189,33 @@ def test_unrecorded_split_only_warns(lake):
     assert len(_stored(lake, "AAA.US")) == 60
 
 
+def test_negative_bond_yields_are_kept(lake):
+    from stonks.ingest.pipeline import _rows_to_df
+    from stonks.ingest.schemas import TickerProfile
+
+    lake.upsert_instrument_profile(
+        _rows_to_df([TickerProfile(id="DE10Y.GBOND", asset_class="bond")])
+    )
+    bars = [
+        RawPriceBar(
+            ticker="DE10Y.GBOND",
+            date=START + timedelta(days=i),
+            open=y,
+            high=y + 0.02,
+            low=y - 0.02,
+            close=y,
+            adj_close=y,
+            volume=0,
+        )
+        for i, y in enumerate([-0.2, -0.25, -0.1, 0.01, -0.05])
+    ]
+    result = IngestPipeline(_Source("fake", prices={"DE10Y.GBOND": bars}), lake).run_prices(
+        ["DE10Y.GBOND"]
+    )
+    assert run_quality(lake, result.run_id)["bars_quarantined"] == 0
+    assert len(_stored(lake, "DE10Y.GBOND")) == 5
+
+
 def test_disabled_quality_keeps_every_row(lake):
     bars = _bars("AAA.US", [100.0] * 5)
     bars[1] = bars[1].model_copy(update={"high": 50.0})

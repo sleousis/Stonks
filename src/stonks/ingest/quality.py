@@ -120,12 +120,14 @@ class BarQualityChecker:
         history: pd.DataFrame | None = None,
         splits: pd.DataFrame | None = None,
         as_of: date | None = None,
+        asset_class: str | None = None,
     ) -> BatchQuality:
         """Check ``frame`` (columns ``ticker, timestamp, open, high, low,
         close, adj_close, volume``). ``history`` holds already stored bars
         of the same series (context for the spike rule), ``splits`` the
         series' splits (``ex_date``, ``ratio``; a ``ticker`` column is
-        honoured), ``as_of`` the date the batch should reach (stale rule)."""
+        honoured), ``as_of`` the date the batch should reach (stale rule),
+        ``asset_class`` the instrument's class (None counts as equity)."""
         reasons = pd.Series("", index=frame.index, dtype=object)
         result = BatchQuality(reasons=reasons)
         if frame.empty or not self.config.enabled:
@@ -135,7 +137,15 @@ class BarQualityChecker:
             hist = _for_ticker(history, ticker)
             spl = _for_ticker(splits, ticker)
             self._check_series(
-                str(ticker), group, interval, hist, spl, as_of, codes, result.warnings
+                str(ticker),
+                group,
+                interval,
+                hist,
+                spl,
+                as_of,
+                asset_class or "equity",
+                codes,
+                result.warnings,
             )
         result.reasons = pd.Series(
             {i: ",".join(c) for i, c in codes.items()}, dtype=object
@@ -152,6 +162,7 @@ class BarQualityChecker:
         history: pd.DataFrame | None,
         splits: pd.DataFrame | None,
         as_of: date | None,
+        asset_class: str,
         codes: dict[Any, list[str]],
         warnings: list[SeriesWarning],
     ) -> None:
@@ -159,6 +170,8 @@ class BarQualityChecker:
         prices = group[list(_PRICE_COLS)].astype(float)
         missing = prices.isna().any(axis=1)
         non_positive = (prices <= 0).any(axis=1) & ~missing
+        if asset_class in cfg.allow_non_positive:
+            non_positive &= False
         high, low, close = prices["high"], prices["low"], prices["close"]
         high_below_low = ~missing & (high < low)
         tol = cfg.range_tolerance
@@ -178,7 +191,10 @@ class BarQualityChecker:
                 codes[idx].append(reason)
 
         valid = group[[not codes[i] for i in group.index]]
-        spikes, moves = self._spikes(valid, history, splits)
+        spikes: list[Any] = []
+        moves: list[Any] = []
+        if asset_class in cfg.spike_asset_classes:
+            spikes, moves = self._spikes(valid, history, splits)
         for idx in spikes:
             codes[idx].append("price_spike")
         if moves:
@@ -233,7 +249,7 @@ class BarQualityChecker:
             if pd.isna(idx) or not np.isfinite(r) or abs(r) <= threshold:
                 continue
             nxt = returns[i + 1] if i + 1 < len(series) else math.nan
-            reverts = np.isfinite(nxt) and abs(nxt) > threshold / 2 and abs(r + nxt) < abs(r) / 2
+            reverts = np.isfinite(nxt) and abs(r + nxt) < cfg.spike_reversal_tolerance * abs(r)
             if reverts:
                 spikes.append(idx)
                 skip_next = True
