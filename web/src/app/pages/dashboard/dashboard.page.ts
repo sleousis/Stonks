@@ -20,6 +20,7 @@ import { PageHeader } from '../../shared/ui/page-header';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 
 const RECENT_TICKS = 8;
 
@@ -52,8 +53,17 @@ export class DashboardPage {
   private readonly healthApi = inject(HealthService);
   private readonly strategiesApi = inject(StrategiesService);
 
-  protected readonly portfolio = resource({ loader: () => this.portfolioApi.get() });
-  protected readonly pnl = resource({ loader: () => this.portfolioApi.pnl() });
+  private readonly portfolioCtx = inject(PortfolioContextService);
+
+  // The picked portfolio is in the params so a new pick reloads these.
+  protected readonly portfolio = resource({
+    params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
+    loader: () => this.portfolioApi.get(),
+  });
+  protected readonly pnl = resource({
+    params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
+    loader: () => this.portfolioApi.pnl(),
+  });
   protected readonly ticks = resource({
     loader: () => this.ticksApi.list({ limit: RECENT_TICKS }),
   });

@@ -13,6 +13,7 @@ import { OrdersService } from '../../api/orders.service';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { ORDER_STATUS_OPTIONS } from './order-status';
 import { OrdersTable } from './orders-table';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 
 const PAGE_SIZE = 50;
 
@@ -144,12 +145,20 @@ export class OrdersListPage {
     tick_id: this.tick() || null,
     status: this.status() || null,
   }));
-  protected readonly filterKey = computed(() => JSON.stringify(this.filters()));
+  private readonly portfolioCtx = inject(PortfolioContextService);
+  protected readonly filterKey = computed(() =>
+    JSON.stringify({ ...this.filters(), portfolio: this.portfolioCtx.selectedId() }),
+  );
   protected readonly hasFilters = computed(() => Object.values(this.filters()).some(Boolean));
   protected readonly offset = linkedSignal({ source: this.filterKey, computation: () => 0 });
 
   protected readonly orders = resource({
-    params: () => ({ ...this.filters(), limit: PAGE_SIZE, offset: this.offset() }),
+    params: () => ({
+      ...this.filters(),
+      ...this.portfolioCtx.query(),
+      limit: PAGE_SIZE,
+      offset: this.offset(),
+    }),
     loader: ({ params }) => this.ordersApi.list(params),
   });
 

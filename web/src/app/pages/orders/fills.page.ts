@@ -13,6 +13,7 @@ import type { FillView } from '../../api/models';
 import { OrdersService } from '../../api/orders.service';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 
 const PAGE_SIZE = 50;
 
@@ -149,12 +150,20 @@ export class FillsPage {
     tick_id: this.tick() || null,
     order_client_id: this.order() || null,
   }));
-  protected readonly filterKey = computed(() => JSON.stringify(this.filters()));
+  private readonly portfolioCtx = inject(PortfolioContextService);
+  protected readonly filterKey = computed(() =>
+    JSON.stringify({ ...this.filters(), portfolio: this.portfolioCtx.selectedId() }),
+  );
   protected readonly hasFilters = computed(() => Object.values(this.filters()).some(Boolean));
   protected readonly offset = linkedSignal({ source: this.filterKey, computation: () => 0 });
 
   protected readonly fills = resource({
-    params: () => ({ ...this.filters(), limit: PAGE_SIZE, offset: this.offset() }),
+    params: () => ({
+      ...this.filters(),
+      ...this.portfolioCtx.query(),
+      limit: PAGE_SIZE,
+      offset: this.offset(),
+    }),
     loader: ({ params }) => this.ordersApi.fills(params),
   });
 

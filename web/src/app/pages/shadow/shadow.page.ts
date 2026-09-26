@@ -21,6 +21,7 @@ import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { type ShadowComparison, compareToReal, comparisonSeries } from './shadow-compare';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 
 const DECISIONS_PAGE = 50;
 /** Shadow lines cycle through these; brass is kept for the real portfolio. */
@@ -63,7 +64,11 @@ export class ShadowPage {
   protected readonly summaries = resource({
     loader: () => this.shadowApi.pnlSummaries({ limit: 100 }),
   });
-  protected readonly real = resource({ loader: () => this.portfolioApi.pnl() });
+  private readonly portfolioCtx = inject(PortfolioContextService);
+  protected readonly real = resource({
+    params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
+    loader: () => this.portfolioApi.pnl(),
+  });
 
   private readonly strategyIds = computed(() =>
     this.summaries.hasValue() ? this.summaries.value().items.map((s) => s.strategy_id) : undefined,

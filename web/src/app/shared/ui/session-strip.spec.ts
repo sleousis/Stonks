@@ -4,7 +4,9 @@ import { provideRouter } from '@angular/router';
 
 import type { HaltView, ScheduleView } from '../../api/models';
 import { ScheduleService } from '../../api/schedule.service';
+import type { PortfolioRef } from '../../api/portfolios.service';
 import { HaltStateService } from '../../core/halts/halt-state.service';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { tick } from '../../../testing/http';
 import { SCHEDULE_POLL_MS, SessionStrip, countdown, nextJob } from './session-strip';
 
@@ -52,6 +54,15 @@ describe('session strip helpers', () => {
 
 describe('SessionStrip', () => {
   const active = signal<HaltView[]>([]);
+  const options = signal<PortfolioRef[]>([]);
+  const portfolios = {
+    options,
+    hasChoice: () => options().length > 1,
+    selectedId: () => null,
+    current: () => options()[0] ?? null,
+    load: vi.fn().mockResolvedValue(undefined),
+    select: vi.fn(),
+  };
   let overview: ReturnType<typeof vi.fn>;
 
   async function render() {
@@ -61,6 +72,7 @@ describe('SessionStrip', () => {
         { provide: HaltStateService, useValue: { active } },
         { provide: ScheduleService, useValue: { overview } },
         { provide: SCHEDULE_POLL_MS, useValue: 0 },
+        { provide: PortfolioContextService, useValue: portfolios },
       ],
     });
     const fixture = TestBed.createComponent(SessionStrip);
@@ -74,6 +86,7 @@ describe('SessionStrip', () => {
     vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
     overview = vi.fn().mockResolvedValue(schedule());
     active.set([]);
+    options.set([]);
   });
 
   afterEach(() => vi.useRealTimers());
@@ -110,5 +123,26 @@ describe('SessionStrip', () => {
     active.set([]);
     const empty = await render();
     expect(empty.querySelector('.strip')).toBeNull();
+  });
+
+  it('holds the portfolio picker when there is more than one portfolio', async () => {
+    overview.mockRejectedValue(new Error('no scheduler'));
+    options.set([
+      { id: 'pf_default', name: 'Main', mode: 'paper', is_default: true },
+      { id: 'pf_live', name: 'Real money', mode: 'live' },
+    ]);
+    const el = await render();
+    expect(portfolios.load).toHaveBeenCalled();
+    const select = el.querySelector<HTMLSelectElement>('#portfolio-picker')!;
+    expect(select).not.toBeNull();
+    expect([...select.options].map((o) => o.textContent?.trim())).toEqual([
+      'My default portfolio',
+      'Main',
+      'Real money (live)',
+    ]);
+    expect(el.querySelector('.stamp')!.textContent).toBe('PAPER');
+    select.value = 'pf_live';
+    select.dispatchEvent(new Event('change'));
+    expect(portfolios.select).toHaveBeenCalledWith('pf_live');
   });
 });
