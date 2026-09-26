@@ -9,7 +9,7 @@ export function isGoLiveRefusal(err: unknown): err is ApiError {
 }
 
 export interface PromotionSteps<T> {
-  /** Strategy id: typed to confirm, and named in messages. */
+  /** Strategy id, named in messages. */
   id: string;
   dialog: StatusChangeDialog;
   toasts: ToastService;
@@ -27,7 +27,8 @@ export interface PromotionSteps<T> {
 
 /**
  * Promote with the go-live gate in front:
- * 1. load the go-live report and show it with a reason field;
+ * 1. load the go-live report and show it with a reason field and a
+ *    hold-to-confirm button (no typing for a promotion the gate allows);
  * 2. promote; on a 409 (gate refused) show the failing checks and offer an
  *    override that needs a reason of at least 20 characters and the typed
  *    word "override";
@@ -54,7 +55,7 @@ export async function promoteThroughGate<T>(steps: PromotionSteps<T>): Promise<T
     confirmLabel: steps.confirmLabel,
     minReason: 1,
     reasonHint: 'Why now? Kept in the status history.',
-    typedConfirmation: id,
+    hold: true,
     golive: report,
     goliveNote: note,
   });
@@ -77,9 +78,9 @@ export async function promoteThroughGate<T>(steps: PromotionSteps<T>): Promise<T
   const override = await dialog.open({
     title: `The go-live gate refused ${id}`,
     message:
-      `${refusal.message} Promoting anyway puts it on live orders without the evidence the gate ` +
-      'asks for. The override and your reason are recorded.',
-    confirmLabel: 'Override and promote',
+      `${refusal.message} Going live anyway puts it on real orders without the evidence the ` +
+      'gate asks for. The override and your reason are recorded.',
+    confirmLabel: 'Override and go live',
     tone: 'danger',
     minReason: OVERRIDE_MIN_REASON,
     typedConfirmation: 'override',
