@@ -174,8 +174,11 @@ class NotificationRouter:
                     iso(now),
                 ],
             ).lastrowid
-        except sqlite3.IntegrityError:
-            # Another process enqueued the same key between our check and insert.
+        except sqlite3.IntegrityError as exc:
+            # Another process enqueued the same key between our check and
+            # insert. Any other integrity failure is a bug: let it raise.
+            if key is None or "UNIQUE" not in str(exc):
+                raise
             return None
         assert nid is not None
         context = json.dumps({"deep_link": event.deep_link, "notification_id": nid}, sort_keys=True)

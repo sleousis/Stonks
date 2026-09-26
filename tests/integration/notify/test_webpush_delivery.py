@@ -125,6 +125,20 @@ def test_consecutive_failures_disable_the_device_and_tell_the_user(
     assert worker.run_once().skipped == 1
 
 
+def test_a_queued_delivery_never_follows_a_device_to_another_user(
+    state, setup, session, users, bob_scope, alice_scope
+):
+    router, worker, _ = setup
+    _publish(router, users["alice"].id)  # queued for Alice's device
+    # Bob signs in on the same browser: the subscription moves to him.
+    [row] = state.sql("SELECT p256dh, auth FROM push_subscriptions")
+    service.register_push_subscription(
+        state, bob_scope, endpoint=ENDPOINT, p256dh=row["p256dh"], auth=row["auth"]
+    )
+    assert worker.run_once().skipped == 1
+    assert session.posts == []
+
+
 def test_a_success_resets_the_failure_count(state, setup, session, users, clock):
     router, worker, _ = setup
     session.statuses = [500, 500, 201]
