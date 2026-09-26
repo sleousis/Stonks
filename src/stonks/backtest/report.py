@@ -1,4 +1,17 @@
-"""Backtest performance report + metric computation."""
+"""Backtest performance report + metric computation.
+
+Annualization conventions
+-------------------------
+- Sharpe is annualized with ``sqrt(periods_per_year)``. The default is 252
+  (daily bars). ``periods_per_year(interval)`` derives the factor from a bar
+  ``Interval`` using a US-equity trading calendar: 252 trading days per
+  year and a 6.5-hour regular session for intraday bars.
+- CAGR is ``(end / start) ** (1 / years) - 1`` with ``years`` measured in
+  wall-clock seconds, so it works for intraday windows. A total wipeout
+  (``end <= 0``) reports ``-1.0``. When the annualized figure is too large
+  to represent as a float (tiny intraday spans with any gain) it reports
+  ``math.inf`` instead of raising ``OverflowError``.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +19,36 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
+
+from stonks.core.interval import Interval
+
+_TRADING_DAYS_PER_YEAR = 252
+_SESSION_SECONDS = int(6.5 * 3600)  # US regular session
+_SECONDS_PER_DAY = 24 * 3600
+_SECONDS_PER_WEEK = 7 * _SECONDS_PER_DAY
+# ``math.exp`` overflows just above 709.78.
+_MAX_EXP = 709.0
+
+
+def periods_per_year(interval: Interval) -> float:
+    """Number of bars of ``interval`` in one year, for Sharpe annualization.
+
+    - intraday: ``252 * max(1, 6.5h / interval)`` — bars longer than the
+      equity session still count as one bar per trading day
+    - day multiples below a week: ``252 / days``
+    - weeks: ``52 / weeks``; months: ``12 / months``; years: ``1 / years``
+    """
+    unit = interval.code.lstrip("0123456789")
+    amount = int(interval.code[: -len(unit)])
+    if interval.is_intraday:
+        return _TRADING_DAYS_PER_YEAR * max(1.0, _SESSION_SECONDS / interval.seconds)
+    if unit == "d":
+        return _TRADING_DAYS_PER_YEAR / amount
+    if unit == "w":
+        return 52 / amount
+    if unit == "mo":
+        return 12 / amount
+    return 1 / amount
 
 
 @dataclass(frozen=True)
@@ -28,6 +71,7 @@ def compute_report(
     strategy_id: str,
     equity_dates: Sequence[date],
     equity_curve: Sequence[float],
+    periods_per_year: float = _TRADING_DAYS_PER_YEAR,
 ) -> BacktestReport:
     dates = list(equity_dates)
     curve = list(equity_curve)
@@ -50,7 +94,7 @@ def compute_report(
     mean = sum(returns) / len(returns) if returns else 0.0
     var = sum((r - mean) ** 2 for r in returns) / len(returns) if returns else 0.0
     std = math.sqrt(var)
-    sharpe = (mean / std) * math.sqrt(252) if std > 0 else 0.0
+    sharpe = (mean / std) * math.sqrt(periods_per_year) if std > 0 else 0.0
 
     peak = curve[0]
     max_dd = 0.0
@@ -69,7 +113,7 @@ def compute_report(
         years = max(seconds / _SECONDS_PER_YEAR, 1 / _SECONDS_PER_YEAR)
     else:
         years = 1 / _SECONDS_PER_YEAR
-    cagr = (end / start) ** (1 / years) - 1.0 if start > 0 and end > 0 else 0.0
+    cagr = _cagr(start, end, years)
 
     pos = sum(r for r in returns if r > 0)
     neg = abs(sum(r for r in returns if r < 0))
@@ -90,3 +134,14 @@ def compute_report(
         cagr=cagr,
         profit_factor=profit_factor,
     )
+
+
+def _cagr(start: float, end: float, years: float) -> float:
+    if start <= 0:
+        return 0.0
+    if end <= 0:
+        return -1.0  # total wipeout
+    exponent = math.log(end / start) / years
+    if exponent > _MAX_EXP:
+        return math.inf
+    return math.exp(exponent) - 1.0

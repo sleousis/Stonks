@@ -66,11 +66,11 @@ def test_backtester_steps_through_5m_bars(lake_intraday):
     # one equity point per bar
     assert len(report.equity_curve) == 12
     assert len(report.equity_dates) == 12
-    # the very first point is computed AFTER the buy fills at the first bar,
-    # so equity ≈ starting cash (10 000) since shares × close matches notional.
-    assert report.equity_curve[0] == pytest.approx(10_000.0, rel=0.001)
-    # price rose from 100 to 105.5 across 12 bars → portfolio gains ~5.5%
-    assert report.final_return == pytest.approx(0.055, rel=0.02)
+    # the buy decided on the first bar only fills at the second bar's open,
+    # so the first point is still all cash.
+    assert report.equity_curve[0] == pytest.approx(10_000.0)
+    # filled at bar-1 open (100.4), marked at the last close (105.5)
+    assert report.final_return == pytest.approx(105.5 / 100.4 - 1.0)
 
 
 def test_intraday_engine_rebalance_every_bars(lake_intraday):
