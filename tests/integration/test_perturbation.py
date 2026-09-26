@@ -104,10 +104,10 @@ class _StatementSpy(BaseStrategy):
     """Records, per lake object, whether it could read non-bar tables."""
 
     id = "statement_spy_fake"
-    seen: dict[int, tuple[int, int, int]] = {}
+    seen: dict[object, tuple[int, int, int]] = {}
 
     def estimate_return(self, ticker, as_of, lake):
-        _StatementSpy.seen[id(lake)] = (
+        _StatementSpy.seen[lake] = (
             len(lake.get_income_statement(ticker)),
             len(lake.get_dividends(ticker)),
             int(lake.sql("SELECT COUNT(*) AS n FROM instruments")["n"].iloc[0]),
@@ -130,7 +130,7 @@ def test_perturbed_lake_carries_statements_dividends_and_instruments(lake_trendi
     PerturbationTest(noise_sigmas=[0.01], min_correlation=-1.0, seed=5).run(
         _StatementSpy({}), _dataset(lake_trending)
     )
-    noisy = {k: v for k, v in _StatementSpy.seen.items() if k != id(lake_trending)}
+    noisy = {k: v for k, v in _StatementSpy.seen.items() if k is not lake_trending}
     assert noisy
     # universe is only UP.US: one instrument row, its statement and dividend
     assert set(noisy.values()) == {(1, 1, 1)}
