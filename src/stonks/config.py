@@ -180,6 +180,9 @@ class ApiConfig(BaseModel):
     max_page_size: int = Field(default=500, ge=1)
     ui_dist: Path = Path("web/dist")
     token: SecretStr | None = Field(default_factory=_api_token_from_env)
+    # Strategy Studio: allow saving and running user Python strategies
+    # (arbitrary code with the server's privileges). Off by default.
+    allow_code_strategies: bool = False
 
     @model_validator(mode="before")
     @classmethod
