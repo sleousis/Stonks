@@ -177,8 +177,9 @@ def checksums(
 
 def _aggregate_sql(source_relation: str, ticker: str, target: Interval) -> str:
     """OHLCV time-bucket aggregation of one ticker's source bars:
-    open = first, close = last, high = max, low = min, volume = sum;
-    ``adj_close`` tracks ``close`` (no per-bucket corporate actions)."""
+    open = first, close = last, high = max, low = min, volume = sum,
+    ``adj_close`` = last ``adj_close`` (the vendor's adjusted close of the
+    bucket's last bar, so weekly and monthly bars keep the adjustment)."""
     return f"""
         SELECT {_lit(ticker)} AS ticker, bucket AS timestamp, {_lit(target.code)} AS interval,
                open, high, low, close, adj_close, volume
@@ -188,7 +189,7 @@ def _aggregate_sql(source_relation: str, ticker: str, target: Interval) -> str:
                    max(high) AS high,
                    min(low) AS low,
                    arg_max(close, timestamp) AS close,
-                   arg_max(close, timestamp) AS adj_close,
+                   arg_max(adj_close, timestamp) AS adj_close,
                    sum(volume) AS volume
               FROM {source_relation}
              GROUP BY bucket
@@ -290,6 +291,9 @@ class ParquetBarStore(BarStore):
     def ensure_layout(self) -> None:
         """Create ``root`` and the empty sentinel partition (idempotent)."""
         self._check_writable()
+        self._write_sentinel()
+
+    def _write_sentinel(self) -> None:
         sentinel = self.partition_dir(*_SENTINEL) / PART_FILE
         if sentinel.exists():
             return
@@ -324,9 +328,18 @@ class ParquetBarStore(BarStore):
 
     def view_sql(self) -> str:
         """A SELECT over every stored bar with the ``bars`` table's columns;
-        the lake exposes it as the ``bars`` view."""
+        the lake exposes it as the ``bars`` view.
+
+        A view over a glob that matches nothing cannot be created, and a
+        view fixed to "empty" would never see later writes. So when the
+        store has no file yet, the empty sentinel partition is written
+        first, even by a read-only store (it holds no bars). Only when that
+        fails (a read-only file system) is the view fixed to empty."""
         if not any(self.root.glob("interval=*/ticker=*/year=*/*.parquet")):
-            return _EMPTY_BARS_SQL
+            try:
+                self._write_sentinel()
+            except (OSError, duckdb.Error):
+                return _EMPTY_BARS_SQL
         return (
             f"SELECT ticker, timestamp, interval, open, high, low, close, adj_close, volume "
             f"FROM read_parquet({_lit(self.glob)}, hive_partitioning = true, "

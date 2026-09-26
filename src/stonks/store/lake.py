@@ -795,8 +795,8 @@ class DuckDBLake:
     ) -> int:
         """Derive ``target``-interval bars for ``ticker`` by time-bucketing
         the already-stored ``source`` bars (open = first, close = last,
-        high = max, low = min, volume = sum; ``adj_close`` tracks close,
-        as there is no per-bucket corporate-actions adjustment). Idempotent:
+        high = max, low = min, volume = sum, ``adj_close`` = the last
+        source bar's ``adj_close``, so the adjustment carries over). Idempotent:
         re-running overwrites the target bars with the current aggregation
         of source bars. Returns the net number of new target rows.
 
