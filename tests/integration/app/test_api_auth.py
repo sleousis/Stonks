@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 from stonks.accounts import DEFAULT_OWNER_ID, Role
 from stonks.api import create_app
-from stonks.app.connections import ConnectionsAppService
+from stonks.app.connections import ConnectionsAppService, ConnectWithKeysRequest
 from stonks.app.context import AppContext
 from stonks.app.services import Services
 from stonks.auth import AuthService
@@ -23,6 +23,7 @@ from stonks.connections.ratelimit import reset_limiters
 from stonks.connections.settings import ConnectionsConfig
 from stonks.security import KeyRing, SecretBox, generate_key
 from stonks.store.state import SqliteState
+from tests.integration.app.stepup import allow_step_up
 from tests.integration.app.test_api import AUTH, LOOPBACK, REMOTE
 from tests.integration.auth.helpers import PASSWORD, add_user, make_service, session_principal
 
@@ -157,6 +158,61 @@ def test_login_is_rate_limited(remote, settings):
 def test_login_errors_never_echo_the_password(remote):
     r = remote.post("/api/auth/login", json={"email": "a@b.c", "password": 12345678901234})
     assert r.status_code == 422 and "12345678901234" not in r.text
+
+
+PROXY = ("172.31.250.5", 40000)
+
+
+def _login_ips(settings) -> list[str]:
+    with SqliteState(settings.state.path) as state:
+        return [r["ip"] for r in state.sql("SELECT ip FROM login_attempts ORDER BY id")]
+
+
+def test_forwarded_client_ip_is_used_only_behind_a_trusted_proxy(app, settings):
+    """``stonks serve`` runs uvicorn with ``forwarded_allow_ips`` =
+    ``[api].trusted_proxies``: behind Caddy the real client IP is limited
+    and audited, and a spoofed X-Forwarded-For from anyone else is ignored."""
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+    served = ProxyHeadersMiddleware(app, trusted_hosts=["172.31.250.0/24"])
+    body = {"email": "nobody@example.com", "password": "wrong password"}
+    with TestClient(served, client=PROXY, base_url=BASE) as via_proxy:
+        for client_ip in ("198.51.100.1", "198.51.100.2"):
+            resp = via_proxy.post(
+                "/api/auth/login", json=body, headers={"X-Forwarded-For": client_ip}
+            )
+            assert resp.status_code == 401
+    with TestClient(served, client=REMOTE, base_url=BASE) as direct:
+        resp = direct.post("/api/auth/login", json=body, headers={"X-Forwarded-For": "1.2.3.4"})
+        assert resp.status_code == 401
+    assert _login_ips(settings) == ["198.51.100.1", "198.51.100.2", REMOTE[0]]
+
+
+def test_one_client_behind_the_proxy_cannot_lock_out_others(app, settings):
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+    add_user(settings.state.path, "alice@example.com")
+    served = ProxyHeadersMiddleware(app, trusted_hosts=["172.31.250.0/24"])
+    attacker = {"X-Forwarded-For": "203.0.113.66"}
+    with TestClient(served, client=PROXY, base_url=BASE) as c:
+        for i in range(5):
+            c.post(
+                "/api/auth/login",
+                json={"email": f"victim{i}@example.com", "password": "guess guess"},
+                headers=attacker,
+            )
+        blocked = c.post(
+            "/api/auth/login",
+            json={"email": "alice@example.com", "password": PASSWORD},
+            headers=attacker,
+        )
+        assert blocked.status_code == 429
+        ok = c.post(
+            "/api/auth/login",
+            json={"email": "alice@example.com", "password": PASSWORD},
+            headers={"X-Forwarded-For": "198.51.100.7"},
+        )
+        assert ok.status_code == 200, ok.text
 
 
 # ---- tokens and scopes ------------------------------------------------------------
@@ -313,15 +369,18 @@ def test_user_a_cannot_reach_user_b_resources_through_any_scoped_route(app, sett
     alice = {"Authorization": f"Bearer {alice_token}"}
     bob = {"Authorization": f"Bearer {bob_token}"}
 
+    # Step-up routes reach the ownership check (404), not the step-up refusal.
+    allow_step_up(app)
     with _client(app) as c:
         # Bob's private things: a connection, a push device, a notification, a token.
-        conn = c.post(
-            "/api/connections/keys",
-            json={"provider": "fake", "fields": {"token": "bob-secret-xyz"}, "label": "Bob"},
-            headers=bob,
+        # Connecting needs a step-up (a session), so Bob's link is made in-process.
+        conn = app.state.services.connections.connect_with_keys(
+            session_principal(bob_id, Role.TRADER).scope,
+            ConnectWithKeysRequest(
+                provider="fake", fields={"token": "bob-secret-xyz"}, label="Bob"
+            ),
         )
-        assert conn.status_code == 201, conn.text
-        bob_conn = conn.json()["id"]
+        bob_conn = conn.id
         with SqliteState(path) as state:
             state.execute(
                 "INSERT INTO alerts (level, title, message, created_at, user_id, category)"

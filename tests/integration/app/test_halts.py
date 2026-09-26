@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from stonks.accounts import DEFAULT_OWNER_ID, PortfolioRepository, Role, Scope, UserRepository
 from stonks.api import create_app
+from stonks.api.deps import current_principal
 from stonks.app.errors import NotFoundError, ValidationError
 from stonks.app.halts import (
     RESUME_PHRASE,
@@ -19,6 +20,8 @@ from stonks.app.halts import (
     KillSwitchRequest,
     ResumeRequest,
 )
+from stonks.auth import Principal, StepUpRequired
+from stonks.auth.principal import ROLE_SCOPES
 from stonks.production.halts import trip_halt
 from stonks.store.state import SqliteState
 from tests.integration.app.test_api import AUTH, LOOPBACK
@@ -154,12 +157,26 @@ def test_the_rest_routes_engage_list_and_resume(client):
         json={"confirmation": "resume", "reason": "ok"},
         headers=AUTH,
     )
-    assert bad.status_code == 422
-    ok = client.post(
-        f"/api/halts/{halt_id}/resume",
-        json={"confirmation": RESUME_PHRASE, "reason": "ok"},
-        headers=AUTH,
+    # The legacy token can't resume: resuming needs a fresh second factor.
+    assert bad.status_code == 403 and "step_up_required" in bad.json()["detail"]
+    owner = Scope(user_id=DEFAULT_OWNER_ID, role=Role.ADMIN)
+    client.app.dependency_overrides[current_principal] = lambda: _principal(
+        owner, via="session", fresh=True
     )
+    try:
+        bad = client.post(
+            f"/api/halts/{halt_id}/resume",
+            json={"confirmation": "resume", "reason": "ok"},
+            headers=AUTH,
+        )
+        assert bad.status_code == 422
+        ok = client.post(
+            f"/api/halts/{halt_id}/resume",
+            json={"confirmation": RESUME_PHRASE, "reason": "ok"},
+            headers=AUTH,
+        )
+    finally:
+        client.app.dependency_overrides.clear()
     assert ok.status_code == 200 and ok.json()["active"] is False
     assert client.get("/api/halts", headers=AUTH).json() == []
     assert len(client.get("/api/halts?include_cleared=true", headers=AUTH).json()) == 1
@@ -168,3 +185,44 @@ def test_the_rest_routes_engage_list_and_resume(client):
 def test_the_rest_routes_need_the_token(client):
     assert client.get("/api/halts").status_code == 401
     assert client.post("/api/halts/kill", json={"scope": "user", "reason": "r"}).status_code == 401
+
+
+# ---- step-up to resume (design section 2) -----------------------------------------
+
+
+def _principal(scope: Scope, *, via: str, fresh: bool) -> Principal:
+    return Principal.create(
+        user_id=scope.user_id,
+        kind=scope.kind,
+        role=scope.role,
+        scopes=ROLE_SCOPES[scope.role],
+        mfa_fresh=fresh,
+        via=via,
+    )
+
+
+def test_resume_needs_a_fresh_second_factor_for_sessions(halts, people):
+    trader = people["trader"]
+    halt = halts.engage_kill(trader, KillSwitchRequest(scope="user", reason="away"))
+    body = ResumeRequest(confirmation=RESUME_PHRASE, reason="back")
+    with pytest.raises(StepUpRequired):
+        halts.resume_kill(_principal(trader, via="session", fresh=False), halt.id, body)
+    with pytest.raises(StepUpRequired):
+        halts.resume_kill(_principal(trader, via="token", fresh=False), halt.id, body)
+    view = halts.resume_kill(_principal(trader, via="session", fresh=True), halt.id, body)
+    assert view.active is False
+
+
+def test_the_cli_scope_resumes_without_step_up(halts, people):
+    # Shell access to the server implies admin (design section 2).
+    halt = halts.engage_kill(people["owner"], KillSwitchRequest(scope="global", reason="x"))
+    body = ResumeRequest(confirmation=RESUME_PHRASE, reason="back")
+    assert halts.resume_kill(people["owner"], halt.id, body).active is False
+
+
+def test_engage_and_list_accept_a_principal(halts, people):
+    trader = people["trader"]
+    p = _principal(trader, via="token", fresh=False)
+    view = halts.engage_kill(p, KillSwitchRequest(scope="user", reason="away"))
+    assert view.user_id == trader.user_id
+    assert [h.id for h in halts.list(p)] == [view.id]

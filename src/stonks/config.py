@@ -7,13 +7,14 @@ so the config surface stays small and discoverable.
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import tomllib
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from stonks.backtest.costs import CostModelSettings
@@ -299,8 +300,16 @@ class ApiConfig(BaseModel):
     port: int = 8000
     # The only browser origin CORS lets through (the Angular dev server).
     ui_origin: str = "http://localhost:4200"
-    # GET routes skip the token when the peer is a loopback address.
-    open_reads_on_loopback: bool = True
+    # GET routes skip the credential when the peer is a loopback address.
+    # Off by default; the dev profile (STONKS_PROFILE=dev) turns it on.
+    open_reads_on_loopback: bool = False
+    # Peers whose X-Forwarded-For / X-Forwarded-Proto uvicorn believes
+    # (`stonks serve` passes them as forwarded_allow_ips). IPs or CIDR
+    # networks. Behind Caddy in Compose this is the Docker network, so the
+    # login limit and the audit log see the real client IP. A forwarded
+    # header from any other peer is ignored. Env: STONKS_API_TRUSTED_PROXIES
+    # (comma-separated).
+    trusted_proxies: list[str] = Field(default_factory=lambda: ["127.0.0.1"])
     # Extra Host header values accepted besides localhost / 127.0.0.1 / ::1.
     allowed_hosts: list[str] = []
     # Size of the general job pool (backtests, lab runs); ticks and ingests
@@ -325,6 +334,40 @@ class ApiConfig(BaseModel):
         if isinstance(data, dict) and "token" in data:
             raise ValueError("api.token must not be set in config; use STONKS_API_TOKEN")
         return data
+
+    @field_validator("trusted_proxies")
+    @classmethod
+    def _proxies_are_networks(cls, value: list[str]) -> list[str]:
+        for item in value:
+            try:
+                ipaddress.ip_network(item, strict=False)
+            except ValueError:
+                raise ValueError(f"api.trusted_proxies: {item!r} is not an IP or network") from None
+        return value
+
+
+class AuthConfig(BaseModel):
+    """``[auth]``: sign-in, sessions and the login limit (docs/security.md).
+
+    Every field can be overridden by ``STONKS_AUTH_<FIELD>`` in the
+    environment (e.g. ``STONKS_AUTH_COOKIE_SECURE=false``). Secrets never
+    live here: ``STONKS_SECRET_KEYS`` and ``STONKS_API_TOKEN`` are env only."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Send cookies with ``Secure``. Browsers accept it on http://localhost too.
+    cookie_secure: bool = True
+    session_idle_hours: float = Field(default=12.0, gt=0)
+    session_absolute_days: float = Field(default=7.0, gt=0)
+    #: How long a password-only session may wait for its second factor.
+    pending_login_minutes: float = Field(default=10.0, gt=0)
+    #: Sensitive actions need a second factor verified this recently.
+    step_up_minutes: float = Field(default=10.0, gt=0)
+    #: Failed attempts allowed in the window: per account for passwords,
+    #: per account for second-factor codes, and per client IP.
+    max_failures: int = Field(default=5, ge=1)
+    failure_window_minutes: float = Field(default=15.0, gt=0)
+    totp_issuer: str = "Stonks"
 
 
 class McpConfig(BaseModel):
@@ -400,6 +443,7 @@ class Settings(BaseSettings):
     production: ProductionConfig = ProductionConfig()
     notify: NotifyConfig = NotifyConfig()
     api: ApiConfig = Field(default_factory=ApiConfig)
+    auth: AuthConfig = AuthConfig()
     backtest: BacktestSettings = BacktestSettings()
     lab: LabSettings = LabSettings()
     golive: GoLivePolicy = GoLivePolicy()
@@ -451,6 +495,22 @@ def _overlay_env(data: dict) -> None:
     webhook_url = os.environ.get("STONKS_NOTIFY_WEBHOOK_URL")
     if webhook_url:
         data.setdefault("notify", {}).setdefault("webhook", {})["url"] = webhook_url
+
+    # The dev profile: reads from a loopback peer need no credential (the
+    # Angular dev server proxies from 127.0.0.1). Never set it on a server.
+    if os.environ.get("STONKS_PROFILE", "").strip().lower() == "dev":
+        data.setdefault("api", {})["open_reads_on_loopback"] = True
+
+    for name in AuthConfig.model_fields:
+        value = os.environ.get(f"STONKS_AUTH_{name.upper()}")
+        if value is not None and value.strip():
+            data.setdefault("auth", {})[name] = value.strip()
+
+    proxies = os.environ.get("STONKS_API_TRUSTED_PROXIES")
+    if proxies is not None and proxies.strip():
+        data.setdefault("api", {})["trusted_proxies"] = [
+            p.strip() for p in proxies.split(",") if p.strip()
+        ]
 
     log_level = os.environ.get("STONKS_LOG_LEVEL")
     if log_level:

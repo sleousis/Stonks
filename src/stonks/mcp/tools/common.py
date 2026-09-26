@@ -83,8 +83,6 @@ Override = Annotated[
         "20 characters"
     ),
 ]
-#: Actor logged for status changes made through MCP.
-MCP_ACTOR = "mcp"
 #: Explanations for the governed status routes' refusals.
 STATUS_HINTS: dict[int, str] = {
     409: "Promotion refused by the go-live gate; wait for a passing paper period, or pass "
@@ -95,7 +93,8 @@ STATUS_HINTS: dict[int, str] = {
 
 def status_body(reason: str | None, override: bool = False) -> dict[str, Any]:
     """Body of a governed status-change route (``StatusChangeRequest``)."""
-    return drop_none({"reason": reason, "override": override or None, "actor": MCP_ACTOR})
+    # No actor: the API audits the owner of the MCP server's token.
+    return drop_none({"reason": reason, "override": override or None})
 
 
 RegisterStrategy = Annotated[

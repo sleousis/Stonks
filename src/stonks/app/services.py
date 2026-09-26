@@ -33,6 +33,9 @@ from stonks.app.stream_tokens import IssuedStreamToken, StreamTokenSigner
 from stonks.app.studio import RuleStrategySource, StudioService, user_strategies_dir
 from stonks.app.ticks import TickService
 from stonks.app.user_strategies import UserStrategyFinder, install, uninstall
+from stonks.auth.policy import Permission, require
+from stonks.auth.principal import Principal
+from stonks.auth.service import AuthService
 from stonks.config import configured_secrets
 from stonks.logging import get_logger
 
@@ -43,6 +46,17 @@ def default_strategy_sources() -> list[StrategySource]:
     """The lab's catalog (examples + ``MacroRegimeFilter``, the same list
     ``stonks lab run`` resolves from) plus the Studio's ``RuleStrategy``."""
     return [LabCatalogSource(), RuleStrategySource()]
+
+
+def _auth_service(context: AppContext) -> AuthService:
+    """Sign-in for every transport, from ``[auth]``. The legacy
+    ``STONKS_API_TOKEN`` is read on each call so tests can swap it."""
+
+    def legacy() -> str | None:
+        token = context.settings.api.token
+        return token.get_secret_value() if token is not None else None
+
+    return AuthService(context.state, settings=context.settings.auth, legacy_token=legacy)
 
 
 def _configured_secrets(context: AppContext) -> list[str]:
@@ -69,9 +83,19 @@ class JobService:
     def get(self, job_id: str) -> Job:
         return self._store.get(job_id)
 
-    def cancel(self, job_id: str) -> Job:
+    def cancel(self, job_id: str, principal: Principal | None = None) -> Job:
         """Cancel a queued job, or ask a running cancellable one (lab run)
-        to stop at its next checkpoint; otherwise ``ConflictError``."""
+        to stop at its next checkpoint; otherwise ``ConflictError``.
+        Operator jobs (ticks, ingests, backups) need
+        ``Permission.OPERATIONS_RUN``; ``principal=None`` is in-process."""
+        if principal is not None:
+            kind = self._store.get(job_id).kind
+            require(
+                principal,
+                Permission.OPERATIONS_RUN
+                if self._runner.is_operation(kind)
+                else Permission.LAB_RUN,
+            )
         job = self._runner.cancel(job_id)
         _log.info("job.cancel", job_id=job_id, status=job.status)
         return job
@@ -135,6 +159,7 @@ class Services:
     notifications: NotificationsAppService
     schedule: ScheduleService
     signals: SignalService
+    auth: AuthService
     _user_finder: UserStrategyFinder | None = field(default=None, repr=False)
 
     @classmethod
@@ -186,6 +211,7 @@ class Services:
             notifications=NotificationsAppService(context),
             schedule=ScheduleService(context),
             signals=SignalService(context, strategies, runner),
+            auth=_auth_service(context),
         )
         services.schedule.bind(services)
         return services

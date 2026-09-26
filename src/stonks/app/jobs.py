@@ -344,6 +344,12 @@ class JobRunner:
         _log.info("job.submitted", job_id=job.id, kind=kind, lane=reg.lock or "general")
         return job
 
+    def is_operation(self, kind: str) -> bool:
+        """True for operator jobs (ticks, ingests, backups): the kinds that
+        hold a lock lane. Lab kinds share the general pool."""
+        reg = self._handlers.get(kind)
+        return reg is not None and reg.lock is not None
+
     def cancel(self, job_id: str) -> Job:
         """Cancel a queued job, or request cancellation of a running job whose
         kind is ``cancellable`` (it stops at its next checkpoint and ends

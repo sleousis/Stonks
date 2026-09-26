@@ -448,13 +448,20 @@ class StudioService:
         self._register(draft.id, draft.name, strategy, [])
         return self.get_draft(draft_id)
 
-    def enable(self, draft_id: str, *, reason: str | None = None, override: bool = False) -> Draft:
+    def enable(
+        self,
+        draft_id: str,
+        *,
+        reason: str | None = None,
+        override: bool = False,
+        actor: str = "studio",
+    ) -> Draft:
         """Promote the registered strategy: same go-live rules as
-        ``StrategyService.promote``."""
-        return self._set_status(draft_id, "active", reason=reason, override=override)
+        ``StrategyService.promote``. ``actor`` is audited (the caller)."""
+        return self._set_status(draft_id, "active", reason=reason, override=override, actor=actor)
 
-    def disable(self, draft_id: str, *, reason: str | None = None) -> Draft:
-        return self._set_status(draft_id, "shadow", reason=reason)
+    def disable(self, draft_id: str, *, reason: str | None = None, actor: str = "studio") -> Draft:
+        return self._set_status(draft_id, "shadow", reason=reason, actor=actor)
 
     def user_strategy_class(self, class_path: str) -> type:
         """Resolve a registered code strategy's ``stonks_user_strategies.<stem>:Class``
@@ -573,6 +580,7 @@ class StudioService:
         *,
         reason: str | None = None,
         override: bool = False,
+        actor: str = "studio",
     ) -> Draft:
         draft = self.get_draft(draft_id)
         if draft.registered_strategy_id is None:
@@ -582,7 +590,7 @@ class StudioService:
                 self._ctx,
                 draft.registered_strategy_id,
                 status,
-                actor="studio",
+                actor=actor,
                 reason=reason,
                 override=override,
             )

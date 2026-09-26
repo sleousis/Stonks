@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Response
 
-from stonks.api.deps import ServicesDep
+from stonks.api.deps import PrincipalDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.api.routers._jobs_common import JOB_CREATED, accepted
 from stonks.app.jobs import Job
@@ -15,21 +15,35 @@ from stonks.app.lab import (
     LabRunRequest,
     LabRunView,
 )
+from stonks.auth import Permission, require
 
 router = APIRouter(prefix="/api/lab", tags=["lab"], responses=PROBLEM_RESPONSES)
 
 
-@router.post("/backtests", **JOB_CREATED, operation_id="startBacktest")
+@router.post(
+    "/backtests",
+    **JOB_CREATED,
+    operation_id="startBacktest",
+    dependencies=needs(Permission.LAB_RUN),
+)
 def start_backtest(body: BacktestRequest, services: ServicesDep, response: Response) -> Job:
     """Queue a backtest; fetch the typed result from
     ``GET /api/lab/backtests/{job_id}/result`` once it succeeds."""
     return accepted(services.lab.submit_backtest(body), response)
 
 
-@router.post("/runs", **JOB_CREATED, operation_id="startLabRun")
-def start_lab_run(body: LabRunRequest, services: ServicesDep, response: Response) -> Job:
+@router.post(
+    "/runs", **JOB_CREATED, operation_id="startLabRun", dependencies=needs(Permission.LAB_RUN)
+)
+def start_lab_run(
+    body: LabRunRequest, services: ServicesDep, principal: PrincipalDep, response: Response
+) -> Job:
     """Queue tune → fit → survival suite; fetch the typed result from
-    ``GET /api/lab/runs/{job_id}/result`` once it succeeds."""
+    ``GET /api/lab/runs/{job_id}/result`` once it succeeds. Registering the
+    result in the catalog (``register_strategy``, ``register_if_passes``)
+    needs an admin."""
+    if body.registers:
+        require(principal, Permission.STRATEGY_PROMOTE)
     return accepted(services.lab.submit_lab_run(body), response)
 
 

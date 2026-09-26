@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from stonks.api.deps import ScopeDep, ServicesDep
+from stonks.api.deps import ScopeDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES, problem
 from stonks.app.schedule import (
     RECENT_RUNS_MAX,
@@ -18,6 +18,7 @@ from stonks.app.schedule import (
     RunNowView,
     ScheduleView,
 )
+from stonks.auth import Permission
 from stonks.scheduling.metrics import CONTENT_TYPE
 
 router = APIRouter(prefix="/api/schedule", tags=["schedule"], responses=PROBLEM_RESPONSES)
@@ -39,7 +40,11 @@ def get_schedule(
 
 
 @router.post(
-    "/{job}/run-now", status_code=202, response_model=RunNowView, operation_id="runScheduledJobNow"
+    "/{job}/run-now",
+    status_code=202,
+    response_model=RunNowView,
+    operation_id="runScheduledJobNow",
+    dependencies=needs(Permission.OPERATIONS_RUN),
 )
 def run_now(job: str, body: RunNowRequest, services: ServicesDep, scope: ScopeDep) -> RunNowView:
     """Run a scheduled job now (a ``manual:`` run, audited). It runs in the

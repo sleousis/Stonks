@@ -13,7 +13,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from stonks.api.deps import ScopeDep, ServicesDep
+from stonks.api.deps import ScopeDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.app.connections import (
     BrokerAccountView,
@@ -27,6 +27,7 @@ from stonks.app.connections import (
     StartPortalRequest,
     SyncResultView,
 )
+from stonks.auth import Permission
 
 router = APIRouter(prefix="/api/connections", tags=["connections"], responses=PROBLEM_RESPONSES)
 
@@ -45,7 +46,11 @@ def list_connections(services: ServicesDep, scope: ScopeDep) -> list[ConnectionV
 
 
 @router.post(
-    "/keys", status_code=201, response_model=ConnectionView, operation_id="connectWithKeys"
+    "/keys",
+    status_code=201,
+    response_model=ConnectionView,
+    operation_id="connectWithKeys",
+    dependencies=needs(Permission.CONNECTION_MANAGE),
 )
 def connect_with_keys(
     body: ConnectWithKeysRequest, services: ServicesDep, scope: ScopeDep
@@ -57,7 +62,11 @@ def connect_with_keys(
 
 
 @router.post(
-    "/portal", status_code=201, response_model=PortalLinkView, operation_id="startConnectionPortal"
+    "/portal",
+    status_code=201,
+    response_model=PortalLinkView,
+    operation_id="startConnectionPortal",
+    dependencies=needs(Permission.CONNECTION_MANAGE),
 )
 def start_portal(
     body: StartPortalRequest, services: ServicesDep, scope: ScopeDep
@@ -88,7 +97,12 @@ def get_connection(connection_id: str, services: ServicesDep, scope: ScopeDep) -
     return services.connections.get(scope, connection_id)
 
 
-@router.delete("/{connection_id}", response_model=DisconnectView, operation_id="deleteConnection")
+@router.delete(
+    "/{connection_id}",
+    response_model=DisconnectView,
+    operation_id="deleteConnection",
+    dependencies=needs(Permission.CONNECTION_MANAGE),
+)
 def delete_connection(connection_id: str, services: ServicesDep, scope: ScopeDep) -> DisconnectView:
     """Remove the connection, its credentials, accounts and activities.
     Linked portfolios are archived (their snapshots stay)."""
@@ -108,7 +122,10 @@ def list_accounts(
 
 
 @router.post(
-    "/{connection_id}/link", response_model=LinkResultView, operation_id="linkConnectionAccount"
+    "/{connection_id}/link",
+    response_model=LinkResultView,
+    operation_id="linkConnectionAccount",
+    dependencies=needs(Permission.PORTFOLIO_MANAGE),
 )
 def link_account(
     connection_id: str, body: LinkAccountRequest, services: ServicesDep, scope: ScopeDep
@@ -118,7 +135,12 @@ def link_account(
     return services.connections.link_account(scope, connection_id, body)
 
 
-@router.post("/{connection_id}/sync", response_model=SyncResultView, operation_id="syncConnection")
+@router.post(
+    "/{connection_id}/sync",
+    response_model=SyncResultView,
+    operation_id="syncConnection",
+    dependencies=needs(Permission.PORTFOLIO_MANAGE),
+)
 def sync_connection(connection_id: str, services: ServicesDep, scope: ScopeDep) -> SyncResultView:
     """Sync now (read-only at the provider). A provider failure is a 200
     with ``status = "error"``; the connection records it and backs off."""

@@ -10,7 +10,7 @@ import hmac
 import ipaddress
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -64,19 +64,10 @@ CSRF_HEADER = "X-CSRF-Token"
 
 
 def get_auth(request: Request) -> AuthService:
-    """The app's :class:`AuthService`, built on first use (tests may set
-    ``app.state.auth`` beforehand)."""
-    auth = getattr(request.app.state, "auth", None)
-    if auth is None:
-        services = get_services(request)
-
-        def legacy() -> str | None:
-            token = services.context.settings.api.token
-            return token.get_secret_value() if token is not None else None
-
-        auth = AuthService(services.context.state, legacy_token=legacy)
-        request.app.state.auth = auth
-    return auth
+    """The app's :class:`AuthService` (``Services.auth``). Tests may set
+    ``app.state.auth`` to use another one."""
+    override = getattr(request.app.state, "auth", None)
+    return override if override is not None else get_services(request).auth
 
 
 AuthDep = Annotated[AuthService, Depends(get_auth)]
@@ -184,14 +175,31 @@ def current_scope(principal: PrincipalDep) -> Scope:
 ScopeDep = Annotated[Scope, Depends(current_scope)]
 
 
+_PERMISSION_ATTR = "__stonks_permission__"
+
+
 def require_permission(permission: Permission) -> Callable[[Principal], None]:
-    """Route dependency: ``Depends(require_permission(Permission.X))``."""
+    """Route dependency: ``Depends(require_permission(Permission.X))``.
+
+    Every unsafe route declares one (a test walks the route table). The
+    OpenAPI spec lists it per operation as ``x-permission``."""
 
     def dependency(principal: PrincipalDep) -> None:
         require(principal, permission)
 
     dependency.__name__ = f"require_{permission.name.lower()}"
+    setattr(dependency, _PERMISSION_ATTR, permission)
     return dependency
+
+
+def needs(permission: Permission) -> list[Any]:
+    """``dependencies=needs(Permission.X)`` on a route decorator."""
+    return [Depends(require_permission(permission))]
+
+
+def permission_of(call: object) -> Permission | None:
+    """The permission a :func:`require_permission` dependency checks."""
+    return getattr(call, _PERMISSION_ATTR, None)
 
 
 def current_session(request: Request) -> SessionInfo:
