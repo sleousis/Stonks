@@ -32,7 +32,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from stonks.mcp.client import ApiClient, ApiError
+from stonks.mcp.client import ApiClient, ApiError, segment
 from stonks.mcp.guards import CONFIRM_HINT, live_trading_state, status_change_preview
 
 # --- annotations --------------------------------------------------------------
@@ -83,6 +83,14 @@ Confirm = Annotated[
 StrategyStatus = Literal["active", "shadow", "retired"]
 JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 AssetClass = Literal["equity", "crypto", "commodity", "bond"]
+
+
+def _seg(value: str) -> str:
+    """Path-safe id (see :func:`segment`), as a tool error when invalid."""
+    try:
+        return segment(value)
+    except ApiError as exc:
+        raise ToolError(str(exc)) from None
 
 
 def _iso(d: date | None) -> str | None:
@@ -151,7 +159,7 @@ def _register_read_tools(server: MCPServer, api: ApiClient, call) -> None:
     @server.tool(annotations=READ)
     async def get_strategy(strategy_id: str) -> dict[str, Any]:
         """One registered strategy with its survival-test reports (pass/fail and metrics)."""
-        return await call(api.get(f"/api/strategies/{strategy_id}"))
+        return await call(api.get(f"/api/strategies/{_seg(strategy_id)}"))
 
     @server.tool(annotations=READ)
     async def search_instruments(
@@ -263,7 +271,7 @@ def _register_read_tools(server: MCPServer, api: ApiClient, call) -> None:
     @server.tool(annotations=READ)
     async def get_tick(tick_id: str) -> dict[str, Any]:
         """One production tick run with the orders it placed."""
-        return await call(api.get(f"/api/ticks/{tick_id}"))
+        return await call(api.get(f"/api/ticks/{_seg(tick_id)}"))
 
     @server.tool(annotations=READ)
     async def list_ingest_runs(
@@ -293,23 +301,19 @@ def _register_read_tools(server: MCPServer, api: ApiClient, call) -> None:
     @server.tool(annotations=READ)
     async def list_jobs(
         status: JobStatus | None = None,
-        kind: Annotated[
-            str | None, Field(description="backtest, lab_run, ingest or tick")
-        ] = None,
+        kind: Annotated[str | None, Field(description="backtest, lab_run, ingest or tick")] = None,
         limit: Limit = 50,
         offset: Offset = 0,
     ) -> dict[str, Any]:
         """Background jobs (backtests, lab runs, ingests, ticks), newest first."""
         return await call(
-            api.get(
-                "/api/jobs", {"status": status, "kind": kind, "limit": limit, "offset": offset}
-            )
+            api.get("/api/jobs", {"status": status, "kind": kind, "limit": limit, "offset": offset})
         )
 
     @server.tool(annotations=READ)
     async def get_job(job_id: str) -> dict[str, Any]:
         """One background job: status, progress, and its result once finished."""
-        return await call(api.get(f"/api/jobs/{job_id}"))
+        return await call(api.get(f"/api/jobs/{_seg(job_id)}"))
 
 
 # --- job tools --------------------------------------------------------------------
@@ -436,7 +440,7 @@ def _register_job_tools(server: MCPServer, api: ApiClient, call, max_wait: float
         {"timed_out": bool, "job": {...}}; the job carries its result or error."""
         deadline = time.monotonic() + min(timeout_seconds, max_wait)
         while True:
-            job = await call(api.get(f"/api/jobs/{job_id}"))
+            job = await call(api.get(f"/api/jobs/{_seg(job_id)}"))
             if job.get("status") in TERMINAL_JOB_STATUSES:
                 return {"timed_out": False, "job": job}
             remaining = deadline - time.monotonic()
@@ -450,10 +454,10 @@ def _register_job_tools(server: MCPServer, api: ApiClient, call, max_wait: float
 
 def _register_guarded_tools(server: MCPServer, api: ApiClient, call) -> None:
     async def change_status(strategy_id: str, action: str, target: str, confirm: bool):
-        current = await call(api.get(f"/api/strategies/{strategy_id}"))
+        current = await call(api.get(f"/api/strategies/{_seg(strategy_id)}"))
         if not confirm:
             return status_change_preview(current, target)
-        updated = await call(api.post(f"/api/strategies/{strategy_id}/{action}"))
+        updated = await call(api.post(f"/api/strategies/{_seg(strategy_id)}/{action}"))
         return {
             "preview": False,
             "applied": True,

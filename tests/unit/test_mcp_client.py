@@ -7,7 +7,7 @@ import json
 import httpx2
 import pytest
 
-from stonks.mcp.client import ApiClient, ApiError, ApiUnavailableError
+from stonks.mcp.client import ApiClient, ApiError, ApiUnavailableError, segment
 
 TOKEN = "s3cret-token-value"
 BASE = "http://127.0.0.1:8000"
@@ -163,3 +163,16 @@ def test_repr_hides_token():
     assert TOKEN not in repr(api)
     assert api.has_token
     assert api.redact(f"oops {TOKEN} leaked") == "oops *** leaked"
+
+
+@pytest.mark.parametrize(
+    "bad", ["..", ".", "../ticks", "a/b", "x#frag", "x?y=1", "a b", "", "x%2Fy", "..\\ticks"]
+)
+def test_segment_rejects_path_tricks(bad):
+    with pytest.raises(ApiError, match="invalid id"):
+        segment(bad)
+
+
+@pytest.mark.parametrize("ok", ["bah_active", "tick_2026-03-20_33ef4fad", "a1b2c3", "m.v2:x"])
+def test_segment_accepts_ids(ok):
+    assert segment(ok) == ok

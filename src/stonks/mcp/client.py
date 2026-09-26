@@ -9,6 +9,7 @@ server layer turns into tool errors.
 from __future__ import annotations
 
 import ipaddress
+import re
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -28,6 +29,20 @@ class ApiError(Exception):
 
 class ApiUnavailableError(ApiError):
     """The API could not be reached at all."""
+
+
+_SEGMENT = re.compile(r"[A-Za-z0-9_.:@+-]{1,200}")
+
+
+def segment(value: str) -> str:
+    """Validate an id interpolated into a URL path.
+
+    Without this a crafted id such as ``../ticks#`` would turn
+    ``POST /api/strategies/{id}/promote`` into ``POST /api/ticks``.
+    """
+    if not _SEGMENT.fullmatch(value) or value in (".", ".."):
+        raise ApiError(f"invalid id {value[:60]!r}: letters, digits and _ . : @ + - only")
+    return value
 
 
 def _is_loopback(host: str | None) -> bool:
@@ -131,7 +146,5 @@ class ApiClient:
             )
             msg += f" [{listed}]"
         if status == 401:
-            msg += (
-                " - set STONKS_API_TOKEN for `stonks mcp` to the token `stonks serve` uses"
-            )
+            msg += " - set STONKS_API_TOKEN for `stonks mcp` to the token `stonks serve` uses"
         return self.redact(msg)

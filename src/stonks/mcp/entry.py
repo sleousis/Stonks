@@ -28,16 +28,15 @@ def api_client(settings: Settings) -> ApiClient:
     """Raises :class:`McpConfigError` for an unsafe api_url/token combination."""
     token = settings.api.token.get_secret_value() if settings.api.token else None
     try:
-        return ApiClient(
-            settings.mcp.api_url, token=token, timeout=settings.mcp.timeout_seconds
-        )
+        return ApiClient(settings.mcp.api_url, token=token, timeout=settings.mcp.timeout_seconds)
     except ValueError as exc:
         raise McpConfigError(str(exc)) from None
 
 
 def run(settings: Settings) -> None:
-    logs_to_stderr(settings.logging.level)
+    # Validate first: a bad config exits without reconfiguring logging.
     api = api_client(settings)
+    logs_to_stderr(settings.logging.level)
     get_logger("stonks.mcp").info(
         "mcp.started", api_url=api.base_url, write_tools_enabled=api.has_token
     )

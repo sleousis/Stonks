@@ -344,7 +344,9 @@ async def test_real_tick_allowed_only_with_paper_broker(test_client):
 async def test_guarded_write_without_token_explains(test_client, seeded):
     async with Client(build_server(_api(test_client, token=None))) as c:
         # previews still work (reads are open on loopback)...
-        assert not (await c.call_tool("promote_strategy", {"strategy_id": seeded["shadow_id"]})).is_error
+        assert not (
+            await c.call_tool("promote_strategy", {"strategy_id": seeded["shadow_id"]})
+        ).is_error
         # ...but applying needs the token
         result = await c.call_tool(
             "promote_strategy", {"strategy_id": seeded["shadow_id"], "confirm": True}
@@ -419,3 +421,13 @@ async def test_token_never_in_tool_output_or_logs(test_client, seeded, caplog, c
     assert "401" in haystack  # the wrong token was rejected...
     assert API_TOKEN not in haystack  # ...and neither token leaked
     assert wrong not in haystack
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("sid", ["../ticks#", "..%2Fticks", "x/../../ticks"])
+async def test_ids_cannot_redirect_a_confirmed_write(mcp, sid):
+    """A crafted id must not turn promote into e.g. POST /api/ticks."""
+    err = await call_error(mcp, "promote_strategy", {"strategy_id": sid, "confirm": True})
+    assert "invalid id" in err
+    assert (await call(mcp, "list_jobs"))["total"] == 0
+    assert (await call(mcp, "list_ticks"))["total"] == 1
