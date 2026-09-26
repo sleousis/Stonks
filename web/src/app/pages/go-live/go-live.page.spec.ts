@@ -171,12 +171,13 @@ describe('GoLivePage', () => {
 
     expect(el.querySelector('h1')?.textContent).toContain('Go-live');
     expect(el.textContent).toContain('Pick a strategy');
+    expect(el.textContent).not.toContain('[golive]');
     const options = Array.from(el.querySelectorAll('option')).map((o) => o.value);
     expect(options).toEqual(['', 'buyhold-spy', 'momentum-v3']);
 
     const broker = el.querySelector('section[aria-labelledby="broker-title"]');
     expect(broker?.textContent).toContain('Alpaca');
-    expect(broker?.textContent).toContain('Paper');
+    expect(broker?.querySelector('app-mode-stamp')?.textContent).toContain('PAPER');
     expect(broker?.textContent).toContain('Not allowed');
 
     const risk = el.querySelector('section[aria-labelledby="risk-title"]');
@@ -197,7 +198,8 @@ describe('GoLivePage', () => {
     expect(rows.length).toBe(12);
     const minDays = rows[1];
     expect(minDays.textContent).toContain('Paper days');
-    expect(minDays.textContent).toContain('min_days');
+    // No raw check ids on the page.
+    expect(check.textContent).not.toContain('min_days');
     expect(minDays.querySelector('app-status-pill')?.textContent).toContain('fail');
     expect(minDays.querySelector('.check-value')?.textContent).toContain('3');
     expect(minDays.querySelector('.check-limit')?.textContent).toContain('20');
@@ -211,9 +213,11 @@ describe('GoLivePage', () => {
     expect(rows[10].querySelector('.check-limit')?.textContent).toContain('≥ 40 chars');
     expect(rows[11].querySelector('.check-limit')?.textContent).toContain('≥ 30');
     expect(check.querySelector('.ready')).toBeNull();
-    expect(check.querySelector('app-cli-command code')?.textContent).toContain(
-      'stonks golive check buyhold-spy',
-    );
+    // The API check is on the page: no command line, no config sections.
+    expect(el.querySelector('app-cli-command')).toBeNull();
+    expect(el.textContent).not.toContain('stonks');
+    expect(el.textContent).not.toContain('exits with code');
+    expect(el.textContent).not.toContain('[golive]');
     expect(el.querySelector<HTMLSelectElement>('select')?.value).toBe('buyhold-spy');
     expect(el.querySelector('a[href="/strategies/buyhold-spy"]')).not.toBeNull();
   });
@@ -230,13 +234,10 @@ describe('GoLivePage', () => {
 
     expect(goliveRequests).toEqual(['momentum-v3']);
     const check = el.querySelector('section[aria-labelledby="check-title"]')!;
-    expect(check.querySelector('.verdict')?.textContent).toContain('Ready for promotion');
+    expect(check.querySelector('.verdict')?.textContent).toContain('Ready to go live');
     // Shadow strategies that pass are handed to a human; active ones already trade.
     expect(check.querySelector('.ready')).toBeNull();
     expect(check.textContent).toContain('It is already active');
-    expect(check.querySelector('app-cli-command code')?.textContent).toContain(
-      'stonks golive check momentum-v3',
-    );
   });
 
   it('shows the ready state and the promotion checklist, nulls as n/a', async () => {
@@ -247,7 +248,8 @@ describe('GoLivePage', () => {
 
     const check = el.querySelector('section[aria-labelledby="check-title"]')!;
     const ready = check.querySelector('.ready')!;
-    expect(ready.textContent).toContain('Ready for a human to promote');
+    expect(ready.textContent).toContain('Ready for someone to take it live');
+    expect(ready.textContent).toContain('Go live');
     expect(ready.querySelector('a')?.getAttribute('href')).toBe('/strategies/momentum-v3');
 
     const items = Array.from(check.querySelectorAll('.checklist-grid > div')).map((d) =>

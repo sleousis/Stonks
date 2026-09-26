@@ -156,13 +156,16 @@
     <button
       type="button"
       class="btn btn-primary"
-      [disabled]="btBusy()"
+      [disabled]="btBusy() || !canLab()"
       [attr.aria-busy]="btBusy()"
       (click)="runBacktest()"
     >
       {{ btBusy() ? 'Running…' : 'Run backtest' }}
     </button>
   </div>
+  @if (!canLab()) {
+    <div class="lock-note"><app-permission-note permission="lab.run" /></div>
+  }
   @let bt = btRun();
   @if (bt) {
     <div class="job" aria-live="polite">
@@ -203,13 +206,16 @@
     <button
       type="button"
       class="btn btn-primary"
-      [disabled]="labBusy() || !tests().length"
+      [disabled]="labBusy() || !tests().length || !canLab()"
       [attr.aria-busy]="labBusy()"
       (click)="runLab()"
     >
       {{ labBusy() ? 'Running…' : 'Run lab' }}
     </button>
   </div>
+  @if (!canLab()) {
+    <div class="lock-note"><app-permission-note permission="lab.run" /></div>
+  }
   <div class="panel-body lab-options">
     <fieldset class="plain">
       <legend>Survival tests</legend>

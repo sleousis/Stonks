@@ -8,7 +8,7 @@
     class="btn"
     [disabled]="strategies.isLoading()"
     [attr.aria-busy]="strategies.isLoading()"
-    (click)="strategies.reload()"
+    (click)="strategies.reload(); paper.reload()"
   >
     {{ strategies.isLoading() ? 'Refreshing…' : 'Refresh' }}
   </button>
@@ -45,7 +45,7 @@
         id="strategy-search"
         type="search"
         class="input"
-        placeholder="Search id, class or asset class"
+        placeholder="Search name, kind or asset class"
         autocomplete="off"
         spellcheck="false"
         [value]="search()"
@@ -65,7 +65,7 @@
   } @else if (strategies.value().items.length === 0) {
     <app-empty-state
       [title]="statusFilter() ? 'No ' + statusFilter() + ' strategies' : 'No strategies registered'"
-      message="A strategy appears here once a lab run passes its survival tests and is registered (Lab, or stonks lab run on the command line)."
+      message="A strategy appears here once a lab run passes its survival tests and is registered, or when you start paper trading a draft in Studio."
     >
       @if (statusFilter()) {
         <button type="button" class="btn" (click)="setStatus(null)">Show all statuses</button>
@@ -79,12 +79,15 @@
       [message]="
         'Nothing matches “' +
         search().trim() +
-        '”. Search looks at the id, class and asset classes.'
+        '”. Search looks at the name, kind and asset classes.'
       "
     >
       <button type="button" class="btn" (click)="setSearch('')">Clear search</button>
     </app-empty-state>
   } @else {
+    @if (paper.error()) {
+      <p class="hint paper-note">Paper results could not be loaded, so those columns are empty.</p>
+    }
     <app-data-table
       caption="Registered strategies"
       [rows]="visible()"

@@ -57,10 +57,66 @@ describe('ConfirmDialog', () => {
     await expect(answer).resolves.toBe(true);
   });
 
+  it('shows a money action as an order ticket', async () => {
+    const { fixture, confirm, el, button } = await setup();
+    const answer = confirm.confirm({
+      title: 'Place this order?',
+      message: 'It goes to the broker now.',
+      confirmLabel: 'Place order',
+      ticket: {
+        side: 'buy',
+        live: true,
+        lines: [
+          { label: 'Ticker', value: 'AAPL.US' },
+          { label: 'Quantity', value: '10' },
+        ],
+      },
+    });
+    await fixture.whenStable();
+
+    const ticket = el.querySelector('[aria-label="Order ticket"]')!;
+    expect(ticket.querySelector('app-side-tag')?.textContent).toContain('Buy');
+    expect(ticket.querySelector('app-mode-stamp')?.textContent).toContain('LIVE');
+    const values = [...ticket.querySelectorAll('dd')].map((d) => d.textContent?.trim());
+    expect(values).toEqual(['AAPL.US', '10']);
+    expect(ticket.querySelector('dd')?.classList).toContain('num');
+
+    button('Place order').click();
+    await expect(answer).resolves.toBe(true);
+  });
+
+  it('shows a paper ticket without a side', async () => {
+    const { fixture, confirm, el } = await setup();
+    void confirm.confirm({
+      title: 't',
+      message: 'm',
+      confirmLabel: 'Go',
+      ticket: { live: false, lines: [{ label: 'Portfolio', value: 'pf_default' }] },
+    });
+    await fixture.whenStable();
+    expect(el.querySelector('app-mode-stamp')?.textContent).toContain('PAPER');
+    expect(el.querySelector('app-side-tag')).toBeNull();
+  });
+
+  it('has no ticket for plain confirmations', async () => {
+    const { fixture, confirm, el } = await setup();
+    void confirm.confirm({ title: 't', message: 'm', confirmLabel: 'Go' });
+    await fixture.whenStable();
+    expect(el.querySelector('[aria-label="Order ticket"]')).toBeNull();
+  });
+
   it('cancels a pending request when a new one arrives', async () => {
     const { confirm } = await setup();
     const first = confirm.confirm({ title: 'a', message: 'a', confirmLabel: 'A' });
     void confirm.confirm({ title: 'b', message: 'b', confirmLabel: 'B' });
     await expect(first).resolves.toBe(false);
+  });
+
+  it('treats Escape as cancel', async () => {
+    const { fixture, confirm, el } = await setup();
+    const answer = confirm.confirm({ title: 'a', message: 'a', confirmLabel: 'A' });
+    await fixture.whenStable();
+    el.querySelector('dialog')!.dispatchEvent(new Event('cancel', { cancelable: true }));
+    await expect(answer).resolves.toBe(false);
   });
 });

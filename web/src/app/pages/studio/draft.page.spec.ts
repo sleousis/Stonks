@@ -1,9 +1,11 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { ApplicationRef, signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
 import type { DraftValidation } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
+import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { provideFakeChart } from '../../../testing/fake-chart';
 import { nextRequest, tick } from '../../../testing/http';
@@ -11,6 +13,7 @@ import { RSI_TEMPLATE_SPEC, SCHEMA, makeDraft } from '../../../testing/studio-fi
 import { DraftPage } from './draft.page';
 
 const VALID: DraftValidation = { valid: true, issues: [] };
+const allowed = signal(true);
 
 describe('DraftPage', () => {
   let fixture: ComponentFixture<DraftPage>;
@@ -31,6 +34,11 @@ describe('DraftPage', () => {
       ],
     });
     controller = TestBed.inject(HttpTestingController);
+    const session = TestBed.inject(SessionService);
+    vi.spyOn(session, 'can').mockImplementation(() => allowed());
+    vi.spyOn(session, 'whyNot').mockImplementation(() =>
+      allowed() ? null : 'Traders and admins only.',
+    );
     fixture = TestBed.createComponent(DraftPage);
     fixture.componentRef.setInput('id', 'draft_abc123');
     fixture.detectChanges();
@@ -41,6 +49,7 @@ describe('DraftPage', () => {
   });
 
   afterEach(() => {
+    allowed.set(true);
     // The test and ship tabs load reference data in the background.
     controller.match('/api/lab/cost-models').forEach((r) => r.flush([]));
     controller
@@ -48,6 +57,11 @@ describe('DraftPage', () => {
       .forEach((r) => r.flush({ items: [], total: 0, limit: 500, offset: 0 }));
     controller.verify();
   });
+
+  /** Run change detection and after-render hooks (whenStable would wait for background reads). */
+  function render(): void {
+    TestBed.inject(ApplicationRef).tick();
+  }
 
   async function settle(): Promise<void> {
     for (let i = 0; i < 4; i++) {
@@ -129,5 +143,76 @@ describe('DraftPage', () => {
     confirm.mockResolvedValueOnce(false);
     expect(await fixture.componentInstance.canLeave()).toBe(false);
     await answerValidation(VALID);
+  });
+
+  describe('rename focus (UI-21)', () => {
+    const renameButton = () => el.querySelector<HTMLButtonElement>('#draft-rename-button')!;
+
+    it('focuses the name field after render and Cancel returns focus to Rename', async () => {
+      await answerValidation(VALID);
+      renameButton().click();
+      render();
+      expect(document.activeElement?.id).toBe('draft-rename');
+
+      const cancel = [...el.querySelectorAll<HTMLButtonElement>('.rename button')].find(
+        (b) => b.textContent?.trim() === 'Cancel',
+      )!;
+      cancel.click();
+      render();
+      expect(el.querySelector('form.rename')).toBeNull();
+      expect(document.activeElement).toBe(renameButton());
+    });
+
+    it('returns focus to Rename after saving the new name', async () => {
+      await answerValidation(VALID);
+      renameButton().click();
+      render();
+      const input = el.querySelector<HTMLInputElement>('#draft-rename')!;
+      input.value = 'Dip buyer v2';
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      (el.querySelector('form.rename') as HTMLFormElement).dispatchEvent(new Event('submit'));
+      const req = await nextRequest(controller, '/api/studio/drafts/draft_abc123', 'PATCH');
+      req.flush(makeDraft({ name: 'Dip buyer v2' }));
+      await settle();
+      render();
+      expect(el.querySelector('h1')?.textContent).toContain('Dip buyer v2');
+      expect(document.activeElement).toBe(renameButton());
+    });
+  });
+
+  it('says plainly that code strategies are off, with no server settings', async () => {
+    await answerValidation(VALID);
+    fixture.componentRef.setInput('id', 'draft_code');
+    fixture.detectChanges();
+    (await nextRequest(controller, '/api/studio/drafts/draft_code')).flush(
+      makeDraft({ id: 'draft_code', kind: 'code', source_code: null, spec: {} }),
+    );
+    await settle();
+    const text = el.textContent ?? '';
+    expect(text).toContain('Code strategies are turned off on this server. Ask your admin.');
+    expect(text).not.toContain('allow_code_strategies');
+    expect(text).not.toContain('stonks serve');
+    expect(text).not.toContain('[api]');
+  });
+
+  it('disables save, rename and checks without lab.run, and skips background validation', async () => {
+    await answerValidation(VALID);
+    allowed.set(false);
+    fixture.detectChanges();
+    expect(el.querySelector<HTMLButtonElement>('#draft-rename-button')!.disabled).toBe(true);
+    const check = [...el.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
+      b.textContent?.includes('Check on sample data'),
+    )!;
+    expect(check.disabled).toBe(true);
+    expect(el.querySelector('app-page-header')?.textContent).toContain('Traders and admins only.');
+
+    const name = el.querySelector('#rb-name') as HTMLInputElement;
+    name.value = 'Changed';
+    name.dispatchEvent(new Event('input'));
+    await settle();
+    await tick(500);
+    expect(controller.match('/api/studio/spec/validate')).toEqual([]);
+    expect((el.querySelector('.save-bar .btn-primary') as HTMLButtonElement).disabled).toBe(true);
   });
 });
