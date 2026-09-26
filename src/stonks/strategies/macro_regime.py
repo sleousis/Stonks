@@ -17,7 +17,7 @@ strategy's own no-picks exit logic sells (``"inner"``). In risk on the
 wrapper is transparent.
 
 When the regime can't be judged (no data, too little history, or the
-latest observation older than ``max_staleness_days``) ``when_unknown``
+latest observation published more than ``max_staleness_days`` ago) ``when_unknown``
 decides.
 
 Persistence: the wrapper's params carry the inner strategy's class path
@@ -150,7 +150,7 @@ class MacroRegimeFilter(BaseStrategy):
                 default=730,
                 bounds=(1, 3650),
                 tunable=False,
-                description="Latest observation older than this means regime unknown.",
+                description="Latest observation published longer ago than this means regime unknown.",
             ),
             ParameterSpec(
                 name="when_unknown",
@@ -224,11 +224,13 @@ class MacroRegimeFilter(BaseStrategy):
         return signal < threshold, signal
 
     def _signal(self, day: date, observations: list[tuple[date, date, float]]) -> float | None:
-        visible = [(obs, v) for obs, avail, v in observations if avail <= day]
+        visible = [(avail, v) for _obs, avail, v in observations if avail <= day]
         if not visible:
             return None
-        latest_obs, latest = visible[-1]
-        if (day - latest_obs).days > int(self.params["max_staleness_days"]):
+        # Staleness counts from publication, not from the (period-start)
+        # stamp: an annual value stamped Jan 1 is only public ~18 months on.
+        latest_avail, latest = visible[-1]
+        if (day - latest_avail).days > int(self.params["max_staleness_days"]):
             return None
         if self.params["transform"] == "level":
             return latest
