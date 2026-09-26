@@ -46,6 +46,9 @@ services:
       STONKS_API_TRUSTED_PROXIES: ${STONKS_DOCKER_SUBNET:-172.31.250.0/24}
     expose:
       - "8000"
+    # A running tick or ingest is never cut off mid-way. Give it time to
+    # finish on shutdown instead of Docker's default 10 s.
+    stop_grace_period: 5m
     healthcheck:
       test:
         - CMD
