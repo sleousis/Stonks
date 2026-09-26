@@ -659,7 +659,7 @@ def execute_lab_run(
         else:
             registry = StrategyRegistry(state=state, artifacts_dir=settings.registry.artifacts_dir)
             registered = registry.register(result.strategy, result.survival_reports)
-        _attach_lab_meta(state, registered, result)
+        _attach_lab_meta(state, registered, result, settings.registry.artifacts_dir)
         _log.info(
             "lab.registered", run_id=result.run_id, strategy_id=registered, verdict=result.verdict
         )
@@ -679,14 +679,17 @@ def _validation_benchmark(result: LabRunResult, dataset: LabDataset) -> Benchmar
     return getattr(report, "benchmark", None)
 
 
-def _attach_lab_meta(state: Any, strategy_id: str, result: LabRunResult) -> None:
+def _attach_lab_meta(
+    state: Any, strategy_id: str, result: LabRunResult, artifacts_dir: Any
+) -> None:
     """Merge the run's provenance (run id, trial count, hypothesis,
     manifest) into the registered artifact's ``meta.json``."""
     rows = state.sql("SELECT artifact_path FROM strategies WHERE id = ?", [strategy_id])
     if not rows:  # a custom register hook that registered elsewhere
         _log.warning("lab.meta.no_artifact", strategy_id=strategy_id)
         return
-    update_meta(rows[0]["artifact_path"], result.artifact_meta)
+    registry = StrategyRegistry(state=state, artifacts_dir=artifacts_dir)
+    update_meta(registry.resolve_artifact_path(rows[0]["artifact_path"]), result.artifact_meta)
 
 
 def backtest_report(

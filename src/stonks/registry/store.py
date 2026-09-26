@@ -124,7 +124,9 @@ class StrategyRegistry:
                     (id, class_path, params_json, artifact_path, status, created_at, updated_at)
                 VALUES (?, ?, ?, ?, 'shadow', ?, ?)
                 """,
-                [sid, class_path, json.dumps(params, sort_keys=True), str(artifact_path), now, now],
+                # Relative to the artifacts folder (TO-09), so a restore
+                # into another data folder still finds the bundle.
+                [sid, class_path, json.dumps(params, sort_keys=True), sid, now, now],
             )
             for r in reports:
                 self._state.execute(
@@ -312,13 +314,28 @@ class StrategyRegistry:
                 id=row["id"],
                 class_path=row["class_path"],
                 params=json.loads(row["params_json"]),
-                artifact_path=Path(row["artifact_path"]),
+                artifact_path=self.resolve_artifact_path(row["artifact_path"]),
                 status=row["status"],
                 created_at=row["created_at"],
                 updated_at=row["updated_at"],
             )
             for row in self._state.sql(query, params or [])
         ]
+
+    def resolve_artifact_path(self, stored: str) -> Path:
+        """The bundle folder for a stored ``artifact_path`` (TO-09).
+
+        New rows hold a path relative to the artifacts folder. Rows written
+        before that hold an absolute path under the data folder of the
+        time; those resolve to the same bundle name under the current
+        artifacts folder when it exists there (after a restore into a new
+        data folder), and to the stored path otherwise.
+        """
+        path = Path(stored)
+        if not path.is_absolute():
+            return self._artifacts_dir / path
+        moved = self._artifacts_dir / path.name
+        return moved if moved.is_dir() else path
 
     def _generate_id(self, strategy: Strategy) -> str:
         suffix = uuid.uuid4().hex[:8]
