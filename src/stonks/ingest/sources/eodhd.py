@@ -105,6 +105,7 @@ from stonks.ingest.schemas import (
     SharesOutstandingRow,
     StatementFrequency,
     StockSplitRow,
+    SymbolListing,
     TickerProfile,
     TickerSnapshotRow,
 )
@@ -479,6 +480,59 @@ def parse_prices_response(ticker: str, payload: Any) -> Iterator[RawPriceBar]:
             adj_close=row.get("adjusted_close", row["close"]),
             volume=row.get("volume"),
         )
+
+
+def parse_bulk_eod_response(exchange: str, payload: Any) -> list[RawPriceBar]:
+    """Parse ``/api/eod-bulk-last-day/{exchange}`` (one row per symbol for
+    one day) into :class:`RawPriceBar` rows keyed ``CODE.EXCHANGE``.
+    Malformed rows are dropped and counted."""
+    _check_free_tier(payload)
+    if not isinstance(payload, list):
+        return []
+    out: list[RawPriceBar] = []
+    dropped = 0
+    for row in payload:
+        if not isinstance(row, dict) or "code" not in row:
+            dropped += 1
+            continue
+        try:
+            out.append(
+                RawPriceBar(
+                    ticker=f"{row['code']}.{exchange}",
+                    date=row["date"],
+                    open=row["open"],
+                    high=row["high"],
+                    low=row["low"],
+                    close=row["close"],
+                    adj_close=row.get("adjusted_close", row["close"]),
+                    volume=row.get("volume"),
+                )
+            )
+        except (KeyError, TypeError, ValidationError):
+            dropped += 1
+    _log_parse_drops("bulk_eod", exchange, len(out), dropped)
+    return out
+
+
+def _parse_symbol_row(row: dict, exchange: str, delisted: bool) -> SymbolListing | None:
+    ticker = f"{row['Code']}.{exchange}"
+    asset_class = classify_asset_class(ticker)
+    try:
+        return SymbolListing(
+            ticker=ticker,
+            exchange=row.get("Exchange") or None,
+            name=row.get("Name") or None,
+            currency=row.get("Currency") or None,
+            country=row.get("Country") or None,
+            asset_class=asset_class,
+            security_type=(
+                _normalize_security_type(row.get("Type")) if asset_class == "equity" else None
+            ),
+            isin=row.get("Isin") or None,
+            is_delisted=delisted,
+        )
+    except ValidationError:
+        return None
 
 
 def parse_intraday_response(ticker: str, payload: Any) -> Iterator[IntradayBar]:
@@ -1814,6 +1868,9 @@ class EodhdDataSource(DataSource):
         return list(parse_exchanges_response(data))
 
     def list_tickers(self, exchange: str) -> list[str]:
+        return [s.ticker for s in self.list_symbols(exchange)]
+
+    def list_symbols(self, exchange: str) -> list[SymbolListing]:
         # EODHD's `delisted=1` returns *only* delisted entries (verified
         # empirically: the active-only and delisted=1 sets are disjoint), so
         # to surface the full survivorship-bias-free universe we issue both
@@ -1842,20 +1899,27 @@ class EodhdDataSource(DataSource):
                         )
                     ),
                 )
-        out: list[str] = []
+        out: list[SymbolListing] = []
         seen: set[str] = set()
-        for data in (active, delisted):
+        for data, is_delisted in ((active, False), (delisted, True)):
             if not isinstance(data, list):
                 continue
             for row in data:
                 if not isinstance(row, dict) or "Code" not in row:
                     continue
-                ticker = f"{row['Code']}.{exchange}"
-                if ticker in seen:
+                listing = _parse_symbol_row(row, exchange, is_delisted)
+                if listing is None or listing.ticker in seen:
                     continue
-                seen.add(ticker)
-                out.append(ticker)
+                seen.add(listing.ticker)
+                out.append(listing)
         return out
+
+    def fetch_bulk_eod(self, exchange: str, day: date) -> list[RawPriceBar]:
+        """One call for every symbol's bar on ``day`` (paid plans; the free
+        tier answers with an error, raised as :class:`EodhdFreeTierError`)."""
+        url = f"{self._base_url}/eod-bulk-last-day/{exchange}"
+        data = self._get(url, params={"fmt": "json", "date": day.isoformat()})
+        return parse_bulk_eod_response(exchange, data)
 
     def fetch_prices(
         self, ticker: str, since: date | None = None, until: date | None = None
