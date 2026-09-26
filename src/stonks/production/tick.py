@@ -756,16 +756,37 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             summary=summary,
         )
 
+    def gate() -> Any:
+        return run_gates(
+            GateContext(
+                state=state,
+                as_of=as_of,
+                portfolio_id=portfolio_id,
+                owner_id=book.owner_id,
+                dry_run=dry_run,
+                policy=book.spec.risk,
+            ),
+            log,
+        )
+
+    def halted(verdict: Any) -> dict[str, Any]:
+        if verdict is None:
+            return {}
+        return {"halted": {"halt": verdict.halt, "gate": verdict.gate, "reason": verdict.reason}}
+
     def noop(reason: str) -> BookResult:
+        halt_summary: dict[str, Any] = {}
         if not dry_run:
-            # nothing trades, but applied events must still be persisted
+            # nothing trades, but the gates still record a breaker trip the
+            # day it happens, and applied events must still be persisted
+            halt_summary = halted(gate())
             with state.transaction():
                 if persist_corporate_actions() or applied:
                     _snapshot_portfolio(
                         state, tick_id, portfolio, prices, as_of, portfolio_id=scope
                     )
         log.info("tick.portfolio_noop", reason=reason)
-        return result("noop", None, 0, 0, {"reason": reason, **corporate_summary})
+        return result("noop", None, 0, 0, {"reason": reason, **halt_summary, **corporate_summary})
 
     # 3. construct: the pipeline turns this book's signals into orders
     #    (decide or targets, stale buys dropped, then the risk layer).
@@ -855,17 +876,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             log.info("tick.outside_universe_skipped", tickers=outside)
         proposed = [o for o in proposed if o.ticker in allowed]
 
-    halt = run_gates(
-        GateContext(
-            state=state,
-            as_of=as_of,
-            portfolio_id=portfolio_id,
-            owner_id=book.owner_id,
-            dry_run=dry_run,
-            policy=book.spec.risk,
-        ),
-        log,
-    )
+    halt = gate()
     if halt is not None:
         log.warning("tick.portfolio_halted", halt=halt.halt, gate=halt.gate, reason=halt.reason)
         proposed = [] if halt.halt == "all" else [o for o in proposed if o.side == "sell"]
@@ -1085,11 +1096,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             "stale_buys_dropped": pipeline.stale_buys,
             **({"outside_universe_skipped": outside} if outside else {}),
             **({"open_order_conflicts": open_conflicts} if open_conflicts else {}),
-            **(
-                {"halted": {"halt": halt.halt, "gate": halt.gate, "reason": halt.reason}}
-                if halt is not None
-                else {}
-            ),
+            **halted(halt),
             **({"constructor": construction.method} if not book.legacy else {}),
             "orders_placed": placed,
             "fills": fills_count,

@@ -145,3 +145,31 @@ def test_a_broker_that_cannot_cancel_is_reported(state):
     summary = cancel_working_orders(FakeStateBroker(), state, portfolio_id="pf_default")
     assert summary.unsupported and summary.cancelled == ()
     assert order_row(state, "a")["status"] == "pending"
+
+
+def test_a_split_adjusted_partial_fill_gets_no_fake_delta_at_reconcile(state):
+    """A working order 4/10 filled before a 2:1 split: the ledger is moved
+    to post-split shares (order 20, booked fill 8 at half the price), as the
+    broker does, so the next reconcile books no phantom 4 shares."""
+    from datetime import date
+
+    from stonks.core.corporate_actions import Split
+    from stonks.execution.reconcile import reconcile_orders
+    from stonks.production.corporate_actions import adjust_orders_for_splits
+
+    broker = CancellingBroker()
+    insert_order(state, "2026-03-17:x:AAPL.US:buy", qty=10.0)
+    _pf_default(state)
+    broker.set("2026-03-17:x:AAPL.US:buy", "partially_filled", 4.0, 100.0)
+    reconcile_orders(broker, state)
+    assert [f["quantity"] for f in fills_for(state, "2026-03-17:x:AAPL.US:buy")] == [4.0]
+
+    split = Split("AAPL.US", date(2026, 3, 18), 2.0)
+    adjust_orders_for_splits(state, ["2026-03-17:x:AAPL.US:buy"], [split], now="now")
+    broker.set("2026-03-17:x:AAPL.US:buy", "partially_filled", 8.0, 50.0, qty=20.0)
+    summary = reconcile_orders(broker, state)
+
+    assert summary.fills_inserted == 0
+    [fill] = fills_for(state, "2026-03-17:x:AAPL.US:buy")
+    assert (fill["quantity"], fill["price"]) == (8.0, 50.0)
+    assert order_row(state, "2026-03-17:x:AAPL.US:buy")["quantity"] == 20.0

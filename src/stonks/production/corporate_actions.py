@@ -136,6 +136,7 @@ def adjust_working_orders(
     ids_ph = ",".join("?" for _ in client_ids)
     touched = 0
     for split in splits:
+        _rescale_fills(state, client_ids, split, status_ph)
         cursor = state.execute(
             "UPDATE orders SET quantity = quantity * ?,"
             " limit_price = limit_price / ?, updated_at = ?"
@@ -328,6 +329,7 @@ def adjust_orders_for_splits(
         if not earlier:
             continue
         ids_ph = ",".join("?" for _ in earlier)
+        _rescale_fills(state, earlier, split, status_ph)
         cursor = state.execute(
             "UPDATE orders SET quantity = quantity * ?,"
             " limit_price = limit_price / ?, updated_at = ?"
@@ -336,6 +338,35 @@ def adjust_orders_for_splits(
         )
         touched += cursor.rowcount
     return touched
+
+
+def _rescale_fills(
+    state: SqliteState, client_ids: Sequence[str], split: Split, status_ph: str
+) -> None:
+    """Move the fills already booked for the working orders to post-split
+    shares (quantity x ratio, prices / ratio, notional unchanged). The
+    broker reports its cumulative fill in post-split shares, so without
+    this the next reconcile would book the difference as a new fill."""
+    ids_ph = ",".join("?" for _ in client_ids)
+    arrival = ", arrival_price = arrival_price / ?" if _has_arrival(state) else ""
+    state.execute(
+        f"UPDATE fills SET quantity = quantity * ?, price = price / ?{arrival}"
+        f" WHERE ticker = ? AND order_client_id IN ({ids_ph}) AND order_client_id IN"
+        f" (SELECT client_id FROM orders WHERE status IN ({status_ph}))",
+        [
+            split.ratio,
+            split.ratio,
+            *([split.ratio] if arrival else []),
+            split.ticker,
+            *client_ids,
+            *NON_TERMINAL_STATUSES,
+        ],
+    )
+
+
+def _has_arrival(state: SqliteState) -> bool:
+    cols = {r["name"] for r in state.sql("SELECT name FROM pragma_table_info('fills')")}
+    return "arrival_price" in cols
 
 
 def _decided_before(client_id: str, ex_date: date) -> bool:

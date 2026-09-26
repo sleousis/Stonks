@@ -263,6 +263,7 @@ flowchart LR
 
 - The breaker limits live in `[production.risk.rules.circuit_breaker]` (`max_month_loss`, `max_week_loss`, `max_drawdown_halt`, `cooldown`). They are off until set. The same rule runs in backtests.
 - Breaker halts block buys. Sells and exits still go through.
+- The gate also runs on a tick that trades nothing, so a breaker trip is recorded and notified the day it happens.
 - The kill switch has three scopes: `global` (admins), `user` (all your portfolios) and `portfolio` (one of yours). It stops every order, or only buys with `flatten`.
 - A `user` kill switch covers every portfolio you own, `pf_default` included when you are its owner.
 - Engaging stop-all while a `flatten` kill switch is on escalates it to stop everything. The old row closes with "escalated to all" and a new one opens. Engaging `flatten` never weakens a stop-all.
@@ -283,7 +284,7 @@ Before a real book decides, the tick applies the splits and cash dividends of it
 - An event applies once its ex-date is on or before the tick's date, even when its row reached the lake after the ex-date tick.
 - It acts on the shares held at the close before the ex-date. Shares bought later were bought at post-split prices and are not scaled. A position closed in between is skipped.
 - It waits, and alerts, until the lake has a bar for the ticker on or after the ex-date. Before that the price is still the old one.
-- Working orders decided before a split's ex-date are resized. An external broker's account already shows the event, so only the ledger row is written.
+- Working orders decided before a split's ex-date are resized. Fills already booked for them move to post-split shares too, as the broker reports them. An external broker's account already shows the event, so only the ledger row is written.
 - Events on or before a portfolio's last snapshot at the upgrade count as done.
 
 Model books still apply the events between their last snapshot and the tick.
