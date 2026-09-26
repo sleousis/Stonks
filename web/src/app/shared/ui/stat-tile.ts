@@ -54,11 +54,11 @@ export type StatTone = 'gain' | 'loss' | '';
       border-left: 3px solid var(--color-brass);
     }
     .label {
-      display: flex;
-      align-items: center;
-      gap: var(--space-1);
       font-size: var(--text-sm);
       color: var(--color-ink-2);
+    }
+    .label app-help-tip {
+      margin-left: 2px;
     }
     .value {
       margin-top: var(--space-1);

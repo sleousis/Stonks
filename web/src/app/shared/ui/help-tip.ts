@@ -84,8 +84,10 @@ let nextId = 0;
       position: relative;
       display: inline-grid;
       place-items: center;
-      width: 18px;
-      height: 18px;
+      /* 24px: the WCAG 2.2 minimum target on fine pointers. */
+      width: 24px;
+      height: 24px;
+      margin: -3px 0;
       padding: 0;
       border: 0;
       border-radius: 50%;
@@ -98,7 +100,7 @@ let nextId = 0;
       .trigger::after {
         content: '';
         position: absolute;
-        inset: -13px;
+        inset: -10px;
       }
     }
     .trigger:hover,

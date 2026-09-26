@@ -21,6 +21,9 @@ describe('matchScore', () => {
     expect(inner).toBeGreaterThan(letters);
     expect(letters).toBeGreaterThan(0);
     expect(matchScore('xyz', 'momentum-v3')).toBe(0);
+    // Scattered letters must start at a word start.
+    expect(matchScore('sha', 'Dashboard')).toBe(0);
+    expect(matchScore('sha', 'Shadow')).toBeGreaterThan(0);
     expect(matchScore('', 'anything')).toBeGreaterThan(0);
   });
 

@@ -61,8 +61,13 @@ export function matchScore(query: string, text: string): number {
   const index = t.indexOf(q);
   if (index > 0 && /[\s\-_./:]/.test(t[index - 1])) return 60;
   if (index > 0) return 40;
-  // Letters in order ("mv3" finds "momentum-v3").
-  let at = 0;
+  // Letters in order, starting at a word start ("mv3" finds "momentum-v3",
+  // but "sha" does not find "Dashboard").
+  const starts = [...t].flatMap((ch, i) =>
+    ch === q[0] && (i === 0 || /[\s\-_./:]/.test(t[i - 1])) ? [i] : [],
+  );
+  if (!starts.length) return 0;
+  let at = starts[0];
   for (const ch of q) {
     if (ch === ' ') continue;
     at = t.indexOf(ch, at);
