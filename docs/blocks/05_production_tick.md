@@ -69,8 +69,8 @@ class Broker(Protocol):
 ## Idempotency + recovery
 
 - Each tick gets a `tick_id` (ulid).
-- `order.client_id = f"{tick_id}:{strategy_id}:{ticker}:{side}"`.
-- If a tick crashes mid-way, the next tick re-derives the same client_ids; the broker short-circuits duplicates.
+- `order.client_id = f"{as_of}:{strategy_id}:{ticker}:{side}"`. It is keyed by the trading date, not the tick, because `tick_id` is unique per run.
+- If a tick crashes mid-way, a rerun for the same `as_of` re-derives the same client_ids. Orders already stored as `filled` are skipped, and the broker short-circuits any other duplicate.
 - `reconcile()` at end-of-tick checks broker truth vs `state.orders` / `state.fills`; mismatches flip `tick_runs.status = 'partial'` and emit an alert.
 
 ## CLI
