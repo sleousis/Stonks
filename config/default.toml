@@ -22,6 +22,9 @@ max_price_staleness_days = 7
 # Evaluate shadow strategies each tick against their own virtual portfolios
 # (written to shadow_decisions / shadow_portfolio_snapshots; never traded).
 shadow_enabled = true
+# Fraction of each cash dividend withheld as tax in the tick and shadow
+# books (0 = credited in full; e.g. 0.15 for a treaty withholding rate).
+dividend_withholding_rate = 0.0
 
 [production.risk]
 # Risk layer between strategy.decide and the broker. Sells are never blocked.
@@ -43,21 +46,35 @@ stuck_ingest_minutes = 180
 ingest_failure_lookback_hours = 24
 
 [backtest.costs]
-# Transaction costs for lab backtests (`stonks lab run`). All zero = no costs.
-# Production can build the same model via settings.backtest.costs.build().
+# Transaction costs for lab runs, backtests and simulated tick fills
+# (BL-13: realistic by default, the values of CostModelSettings.realistic()).
+# A run with all-zero costs logs a `zero_costs` warning; ask for it explicitly
+# (`stonks lab run --cost-model zero`, API `cost_model: "zero"`).
 # Square-root-law impact in bps of an order the size of the whole bar, capped.
-impact_bps = 0.0
+impact_bps = 100.0
 max_impact_bps = 500.0
 
 [backtest.costs.default]
 # Fallback for asset classes not listed under [backtest.costs.asset_classes.*].
 fee_flat = 0.0
-half_spread_bps = 0.0
-fee_bps = 0.0
+half_spread_bps = 2.0
+fee_bps = 0.5
 
-# [backtest.costs.asset_classes.crypto]
-# half_spread_bps = 5.0
-# fee_bps = 10.0
+[backtest.costs.asset_classes.equity]
+half_spread_bps = 2.0
+fee_bps = 0.5
+
+[backtest.costs.asset_classes.crypto]
+half_spread_bps = 5.0
+fee_bps = 10.0
+
+[backtest.costs.asset_classes.commodity]
+half_spread_bps = 3.0
+fee_flat = 1.0
+
+[backtest.costs.asset_classes.bond]
+half_spread_bps = 5.0
+fee_bps = 1.0
 
 [lab.walk_forward]
 # Defaults for `stonks lab run --walk-forward` (CLI flags override).
@@ -68,6 +85,14 @@ anchored = false
 metric = "sharpe"
 min_positive_share = 0.5
 min_mean_score = 0.0
+
+[lab.parallel]
+# Worker processes for tuning trials and `stonks lab sweep` (one spawn pool,
+# lab/parallel.py). 0 = every core (capped at 32), 1 = in-process. Results do
+# not depend on the worker count. `stonks lab run --workers N` overrides.
+max_workers = 0
+# BLAS/OpenMP threads per worker (the pool is the parallelism).
+blas_threads = 1
 
 [notify]
 # Backends: "log" (structlog), "webhook" (JSON POST) and/or "store" (the

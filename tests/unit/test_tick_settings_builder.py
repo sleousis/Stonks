@@ -43,6 +43,18 @@ def test_build_tick_settings_maps_every_production_field():
     )
 
 
+def test_dividend_withholding_rate_reaches_the_tick_settings():
+    settings = _settings()
+    assert build_tick_settings(settings, ["A.US"]).dividend_withholding_rate == 0.0
+    settings.production.dividend_withholding_rate = 0.15
+    assert build_tick_settings(settings, ["A.US"]).dividend_withholding_rate == 0.15
+
+
+def test_dividend_withholding_rate_is_bounded():
+    with pytest.raises(ValueError):
+        Settings(production={"dividend_withholding_rate": 1.5})
+
+
 def test_configured_backtest_costs_replace_the_legacy_production_costs():
     settings = _settings()
     settings.backtest.costs = CostModelSettings.realistic()

@@ -232,7 +232,7 @@ class PIPMinerStrategy(BaseStrategy):
 
     def fit(self, dataset: Any) -> None:
         interval = Interval.parse(self.params["interval"])
-        bars = train_bars(dataset, self.params["ticker"], interval)
+        bars = train_bars(dataset, self.params["ticker"], interval, caches=self._bar_caches)
         log_close = np.log(bars["close"].astype(float).to_numpy())
         n_pips = int(self.params["n_pips"])
         lookback = int(self.params["lookback"])

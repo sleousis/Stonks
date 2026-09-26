@@ -136,6 +136,8 @@ def test_lab_backtests_honour_configured_costs(svc, settings):
         start=date(2025, 10, 1),
         end=date(2026, 4, 1),
     )
+    # BL-13: the default is realistic; zero costs must be configured explicitly
+    settings.backtest.costs = CostModelSettings()
     free = svc.lab.run_backtest(request).final_return
     settings.backtest.costs = CostModelSettings.realistic()
     costly = svc.lab.run_backtest(request).final_return

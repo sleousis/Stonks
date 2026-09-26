@@ -38,6 +38,17 @@ from stonks.logging import get_logger
 _log = get_logger("stonks.lab.runner")
 
 
+def costs_are_zero(costs: Any) -> bool:
+    """True when a ``CostModelSettings`` (or ``None``) charges nothing: no
+    impact and no fee or spread for any asset class (BL-13)."""
+    if costs is None:
+        return True
+    if getattr(costs, "impact_bps", 0.0):
+        return False
+    classes = [costs.default, *getattr(costs, "asset_classes", {}).values()]
+    return not any(c.fee_flat or c.half_spread_bps or c.fee_bps for c in classes)
+
+
 @dataclass
 class LabRunResult:
     strategy_cls: type[Strategy]
@@ -126,6 +137,15 @@ class LabRunner:
                 run_id=run_id,
             )
         _log.info("lab.run.start", run_id=run_id, strategy=class_path, hypothesis=hypothesis)
+        if costs_are_zero(getattr(dataset, "costs", None)):
+            # BL-13: a cost-free backtest overstates every edge.
+            _log.warning(
+                "lab.zero_costs",
+                run_id=run_id,
+                strategy=class_path,
+                hint="every backtest of this run ignores fees, spread and impact; "
+                "configure [backtest.costs] or pass a cost model",
+            )
         try:
             result = self._run(strategy_cls, dataset, fixed_params, run_id, class_path, manifest)
         except BaseException:

@@ -17,6 +17,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from stonks.backtest.costs import CostModelSettings
 from stonks.core.types import AssetClass
+from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
@@ -166,6 +167,9 @@ class ProductionConfig(BaseModel):
     max_price_staleness_days: int = 7
     # Evaluate shadow strategies each tick against virtual portfolios.
     shadow_enabled: bool = True
+    # Fraction of each cash dividend withheld as tax in the tick and shadow
+    # books (0 = credited in full).
+    dividend_withholding_rate: float = Field(default=0.0, ge=0.0, le=1.0)
     risk: RiskPolicy = RiskPolicy()
     health: HealthConfig = HealthConfig()
 
@@ -267,12 +271,15 @@ class McpConfig(BaseModel):
 
 class BacktestSettings(BaseModel):
     """``[backtest]``. ``costs`` (``[backtest.costs]``) is the transaction
-    cost model for lab backtests; zero costs unless configured. Production
-    can build the same model with ``settings.backtest.costs.build()``."""
+    cost model for lab backtests. It defaults to
+    ``CostModelSettings.realistic()`` (BL-13): a backtest without costs
+    overstates every edge, so zero costs must be asked for explicitly (and
+    are logged as a warning). Production can build the same model with
+    ``settings.backtest.costs.build()``."""
 
     model_config = ConfigDict(extra="forbid")
 
-    costs: CostModelSettings = CostModelSettings()
+    costs: CostModelSettings = Field(default_factory=CostModelSettings.realistic)
 
 
 class LabSettings(BaseModel):
@@ -281,6 +288,9 @@ class LabSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     walk_forward: WalkForwardConfig = WalkForwardConfig()
+    #: ``[lab.parallel]``: worker processes for tuning trials and sweeps
+    #: (``max_workers = 0``: every core; 1: in-process) and BLAS threads each.
+    parallel: ParallelSettings = ParallelSettings()
 
 
 class Settings(BaseSettings):
