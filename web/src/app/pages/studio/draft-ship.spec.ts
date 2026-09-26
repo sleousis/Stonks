@@ -4,9 +4,16 @@ import { provideRouter } from '@angular/router';
 
 import type { Draft } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
+import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
+import { LIFECYCLE } from '../../shared/governance-labels';
 import { nextRequest, tick } from '../../../testing/http';
-import { answerDialog, dialogForm, goLiveReport } from '../../../testing/status-dialog';
+import {
+  answerDialog,
+  dialogForm,
+  goLiveReport,
+  isHoldDialog,
+} from '../../../testing/status-dialog';
 import { makeDraft } from '../../../testing/studio-fixtures';
 import { DraftShip } from './draft-ship';
 
@@ -17,7 +24,7 @@ describe('DraftShip', () => {
   let confirm: ReturnType<typeof vi.fn>;
   let emitted: Draft[];
 
-  function setup(draft: Draft, answer = true): void {
+  function setup(draft: Draft, answer = true, allowed = true): void {
     confirm = vi.fn().mockResolvedValue(answer);
     TestBed.configureTestingModule({
       imports: [DraftShip],
@@ -29,6 +36,9 @@ describe('DraftShip', () => {
       ],
     });
     controller = TestBed.inject(HttpTestingController);
+    const session = TestBed.inject(SessionService);
+    vi.spyOn(session, 'can').mockReturnValue(allowed);
+    vi.spyOn(session, 'whyNot').mockReturnValue(allowed ? null : 'Admins only.');
     fixture = TestBed.createComponent(DraftShip);
     fixture.componentRef.setInput('draft', draft);
     emitted = [];
@@ -52,14 +62,17 @@ describe('DraftShip', () => {
     return b;
   }
 
-  it('registers in shadow only after the trader confirms', async () => {
+  it('starts paper trading only after the trader confirms', async () => {
     setup(makeDraft());
-    expect(el.textContent).toContain('Not registered');
+    expect(el.textContent).toContain('Not started');
 
-    buttonNamed('Register in shadow').click();
+    buttonNamed(LIFECYCLE.paper.label).click();
     await tick();
     expect(confirm).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Register RSI dip buyer?', confirmLabel: 'Register' }),
+      expect.objectContaining({
+        title: 'Start paper trading RSI dip buyer?',
+        confirmLabel: LIFECYCLE.paper.label,
+      }),
     );
 
     const req = await nextRequest(controller, '/api/studio/drafts/draft_abc123/register', 'POST');
@@ -70,7 +83,7 @@ describe('DraftShip', () => {
 
   it('does nothing when the register confirmation is cancelled', async () => {
     setup(makeDraft(), false);
-    buttonNamed('Register in shadow').click();
+    buttonNamed(LIFECYCLE.paper.label).click();
     await tick(10);
     expect(confirm).toHaveBeenCalled();
     expect(emitted).toEqual([]);
@@ -80,25 +93,25 @@ describe('DraftShip', () => {
     setup(makeDraft());
     const ensureSaved = vi.fn().mockResolvedValue(false);
     fixture.componentRef.setInput('ensureSaved', ensureSaved);
-    buttonNamed('Register in shadow').click();
+    buttonNamed(LIFECYCLE.paper.label).click();
     await tick(10);
     expect(ensureSaved).toHaveBeenCalled();
     // Saving failed, so no register request went out (verify() checks it).
   });
 
-  it('enables a shadow strategy with a reason after the go-live check', async () => {
+  it('goes live with a reason and a hold after the go-live check', async () => {
     setup(registered('shadow'));
-    const toggle = el.querySelector('[role="switch"]') as HTMLButtonElement;
-    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    expect(el.querySelector('[role="switch"]')).toBeNull();
 
-    toggle.click();
+    buttonNamed(LIFECYCLE.live.label).click();
     (await nextRequest(controller, '/api/strategies/studio_rsi_dip_buyer/golive')).flush(
       goLiveReport('studio_rsi_dip_buyer', true),
     );
     await tick(5);
     fixture.detectChanges();
     expect(dialogForm(el)?.textContent).toContain('Go-live check passed');
-    answerDialog(fixture, { reason: 'Shadow run looked right', typed: 'studio_rsi_dip_buyer' });
+    expect(isHoldDialog(el)).toBe(true);
+    answerDialog(fixture, { reason: 'Shadow run looked right' });
 
     const req = await nextRequest(controller, '/api/studio/drafts/draft_abc123/enable', 'POST');
     expect(req.request.body).toEqual({ reason: 'Shadow run looked right', override: false });
@@ -108,16 +121,18 @@ describe('DraftShip', () => {
 
     fixture.componentRef.setInput('draft', emitted.at(-1));
     fixture.detectChanges();
-    expect(toggle.getAttribute('aria-checked')).toBe('true');
-    expect(el.textContent).toContain('Enabled');
+    expect(buttonNamed(LIFECYCLE.pause.label)).toBeDefined();
+    expect(el.textContent).toContain('live');
   });
 
-  it('disables an active strategy back to shadow with a reason', async () => {
+  it('moves a live strategy back to paper trading with a reason', async () => {
     setup(registered('active'));
-    (el.querySelector('[role="switch"]') as HTMLButtonElement).click();
+    buttonNamed(LIFECYCLE.pause.label).click();
     await tick();
     fixture.detectChanges();
-    expect(dialogForm(el)?.querySelector('button.btn-danger')?.textContent).toContain('Disable');
+    expect(dialogForm(el)?.querySelector('button.btn-danger')?.textContent).toContain(
+      LIFECYCLE.pause.label,
+    );
     answerDialog(fixture, { reason: 'Spread widened' });
     const req = await nextRequest(controller, '/api/studio/drafts/draft_abc123/disable', 'POST');
     expect(req.request.body).toEqual({ reason: 'Spread widened', override: false });
@@ -126,7 +141,7 @@ describe('DraftShip', () => {
     expect(emitted.at(-1)?.strategy_status).toBe('shadow');
   });
 
-  it('does not offer a toggle for a retired strategy', () => {
+  it('does not offer to go live for a stopped strategy', () => {
     setup(
       makeDraft({
         status: 'registered',
@@ -134,7 +149,31 @@ describe('DraftShip', () => {
         strategy_status: 'retired',
       }),
     );
-    expect(el.querySelector('[role="switch"]')).toBeNull();
-    expect(el.textContent).toContain('retired');
+    expect(el.textContent).not.toContain(LIFECYCLE.live.label);
+    expect(el.textContent).toContain('stopped');
+  });
+
+  describe('permissions (UI-06)', () => {
+    it('disables Start paper trading with a reason without strategy.promote', async () => {
+      setup(makeDraft(), true, false);
+      const button = buttonNamed(LIFECYCLE.paper.label);
+      expect(button.disabled).toBe(true);
+      expect(el.querySelector('app-permission-note')?.textContent).toContain('Admins only.');
+      button.click();
+      await tick(5);
+      expect(confirm).not.toHaveBeenCalled();
+    });
+
+    it('disables Go live and Back to paper trading without strategy.promote', () => {
+      setup(registered('shadow'), true, false);
+      expect(buttonNamed(LIFECYCLE.live.label).disabled).toBe(true);
+      expect(el.textContent).toContain('Admins only.');
+    });
+
+    it('shows no note for admins', () => {
+      setup(registered('active'));
+      expect(buttonNamed(LIFECYCLE.pause.label).disabled).toBe(false);
+      expect(el.querySelector('app-permission-note')?.textContent ?? '').toBe('');
+    });
   });
 });

@@ -1,9 +1,20 @@
 <app-page-header
   title="Studio"
-  description="Define a strategy, test it, then register it in shadow and enable it when it earns it."
+  description="Build a strategy, test it, start paper trading it, then go live when it earns it."
 >
   @if (!creating()) {
-    <button actions type="button" class="btn btn-primary" (click)="openCreate()">New draft</button>
+    <button
+      actions
+      type="button"
+      class="btn btn-primary"
+      [disabled]="!canLab()"
+      (click)="openCreate()"
+    >
+      New draft
+    </button>
+  }
+  @if (!creating() && !canLab()) {
+    <span actions><app-permission-note permission="lab.run" /></span>
   }
 </app-page-header>
 
@@ -39,12 +50,7 @@
       @if (start() === 'code' && codeDisabled()) {
         <div class="callout" role="note">
           <p class="callout-title">Code strategies are turned off</p>
-          <p>
-            The operator must set <code>allow_code_strategies = true</code> under
-            <code>[api]</code> in the server config and restart <code>stonks serve</code>. Code
-            drafts run inside the server with its full privileges, so this is only for a single
-            trusted user.
-          </p>
+          <p>Code strategies are turned off on this server. Ask your admin.</p>
         </div>
       }
       <div class="field name-field">
@@ -68,7 +74,7 @@
         <button
           type="submit"
           class="btn btn-primary"
-          [disabled]="createBusy() || (start() === 'code' && codeDisabled())"
+          [disabled]="createBusy() || !canLab() || (start() === 'code' && codeDisabled())"
           [attr.aria-busy]="createBusy()"
         >
           {{ createBusy() ? 'Creating…' : 'Create draft' }}
@@ -86,6 +92,9 @@
       <span class="muted num">{{ drafts.value().total }} total</span>
     }
   </div>
+  @if (!canLab()) {
+    <div class="lock-note"><app-permission-note permission="lab.run" /></div>
+  }
   @if (drafts.error(); as err) {
     <app-error-state title="Could not load drafts" [error]="err" (retry)="drafts.reload()" />
   } @else if (!drafts.hasValue()) {
@@ -96,7 +105,9 @@
       message="A draft is a strategy you are building. Start from a template such as RSI mean reversion, test it, then register it."
     >
       @if (!creating()) {
-        <button type="button" class="btn btn-primary" (click)="openCreate()">New draft</button>
+        <button type="button" class="btn btn-primary" [disabled]="!canLab()" (click)="openCreate()">
+          New draft
+        </button>
       }
     </app-empty-state>
   } @else {
@@ -114,9 +125,9 @@
                 [id]="'rename-' + d.id"
                 [value]="renameText()"
                 (input)="renameText.set($any($event.target).value)"
-                (keydown.escape)="renamingId.set(null)"
+                (keydown.escape)="cancelRename()"
               />
-              <button type="button" class="btn" (click)="renamingId.set(null)">Cancel</button>
+              <button type="button" class="btn" (click)="cancelRename()">Cancel</button>
               <button type="submit" class="btn btn-primary" [disabled]="!renameText().trim()">
                 Rename
               </button>
@@ -146,11 +157,19 @@
             </div>
             <div class="draft-actions">
               <a class="btn" [routerLink]="['/studio', d.id]">Open</a>
-              <button type="button" class="btn btn-ghost" (click)="startRename(d)">Rename</button>
+              <button
+                type="button"
+                class="btn btn-ghost"
+                [attr.data-rename-for]="d.id"
+                [disabled]="!canLab()"
+                (click)="startRename(d)"
+              >
+                Rename
+              </button>
               <button
                 type="button"
                 class="btn btn-ghost danger"
-                [disabled]="deletingId() === d.id"
+                [disabled]="deletingId() === d.id || !canLab()"
                 (click)="remove(d)"
               >
                 Delete
