@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import functools
 import json
 
 import pytest
 from typer.testing import CliRunner
 
 from stonks.cli import app
+from stonks.lab.survival import oos
 from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
 
@@ -145,7 +147,15 @@ def test_mcpt_options(runner, lab_env, flag, mode):
     assert f"mode={mode}" in mcpt["notes"]
 
 
-def test_register_puts_a_passing_wrapped_strategy_in_shadow(runner, lab_env):
+def test_register_puts_a_passing_wrapped_strategy_in_shadow(runner, lab_env, monkeypatch):
+    # Buy-and-hold never closes a trade, so the default PSR gate (BL-16:
+    # >= 20 closed trades) fails it; this test is about registration, so
+    # the CLI's ``oos`` runs the legacy flat-Sharpe rule here.
+    monkeypatch.setattr(
+        oos,
+        "OutOfSampleTest",
+        functools.partial(oos.OutOfSampleTest, mode="sharpe", min_trades=0),
+    )
     params = {
         "inner_class_path": "stonks.strategies.examples.buy_and_hold:BuyAndHold",
         "inner_params": {"ticker": "UP.US"},

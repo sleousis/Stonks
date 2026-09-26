@@ -34,7 +34,9 @@ def _dataset(lake, universe=("UP.US", "DOWN.US", "FLAT.US")):
 
 
 def test_oos_test_passes_on_uptrend(lake_trending):
-    test = OutOfSampleTest(min_sharpe=-10.0, max_drawdown_limit=-0.99)
+    # Legacy flat-Sharpe rule; buy-and-hold closes no trades, so the trade
+    # minimum is off.
+    test = OutOfSampleTest(min_sharpe=-10.0, max_drawdown_limit=-0.99, mode="sharpe", min_trades=0)
     report = test.run(
         strategy=BuyAndHold({"ticker": "UP.US", "allocation": 1.0}),
         context=_dataset(lake_trending, universe=("UP.US",)),
@@ -43,6 +45,17 @@ def test_oos_test_passes_on_uptrend(lake_trending):
     assert report.test_id == "oos"
     assert report.passed is True
     assert "sharpe_oos" in report.metrics
+
+
+def test_default_oos_gate_fails_buy_and_hold_for_lack_of_trades(lake_trending):
+    report = OutOfSampleTest(max_drawdown_limit=-0.99).run(
+        strategy=BuyAndHold({"ticker": "UP.US", "allocation": 1.0}),
+        context=_dataset(lake_trending, universe=("UP.US",)),
+    )
+    assert report.passed is False
+    assert report.metrics["n_trades"] == 0
+    assert "insufficient trades: 0 < 20" in report.notes
+    assert 0.0 <= report.metrics["psr0"] <= 1.0
 
 
 def test_oos_test_fails_on_downtrend(lake_trending):
