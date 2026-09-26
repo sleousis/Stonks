@@ -38,11 +38,11 @@ Enforced: `oos`, `walk_forward` and OOS-mode MCPT score only data the tuner neve
 
 **P8. Pass/fail gates are statistical, not fixed thresholds.**
 Why: six months at Sharpe 0.5 can't be told apart from zero. A gate has to account for sample length, skew, fat tails and autocorrelation (Bailey and López de Prado, PSR and MinTRL; Lo 2002; Carver).
-Enforced: today `OutOfSampleTest` passes at a flat Sharpe of 0.5 (`lab/survival/oos.py:12,26`). BL-16 switches it to PSR ≥ 0.95 with a minimum trade count.
+Enforced: `OutOfSampleTest` gates on PSR ≥ 0.95 with a minimum trade count (BL-16). PSR, DSR and MinTRL take the Sharpe variance at the observed Sharpe with T - 1 bars (`stats/sharpe.py`), so negative skew and fat tails lower the PSR and lengthen the MinTRL (RS-08).
 
 **P9. Train and test windows are separated by an embargo at least as long as the label horizon.**
 Why: overlapping labels and serially correlated features leak across a boundary with no gap (López de Prado, *AFML* ch. 7; Chan, *Machine Trading*).
-Enforced: `LabDataset.embargo_bars` skips that many trading bars between the train and validation windows (`[lab] embargo_bars`, `stonks lab run --embargo-bars`, the API's `embargo_bars`), raised per strategy to its `label_horizon_bars` (`LabDataset.for_strategy`). Walk-forward folds and walk-forward MCPT use the same embargo (BL-20).
+Enforced: `LabDataset.embargo_bars` skips that many trading bars between the train and validation windows (`[lab] embargo_bars`, `stonks lab run --embargo-bars`, the API's `embargo_bars`), raised per strategy to its `label_horizon_bars` (`LabDataset.for_strategy`). A wrapper reports the larger of its own and its inner strategy's label horizon and required history (RS-02). Walk-forward folds and walk-forward MCPT use the same embargo (BL-20).
 
 **P10. Walk-forward is the default evidence for promotion.**
 Why: optimising over one split is close to worthless. Only the stitched out-of-sample segments count (Davey; Kaufman).
@@ -50,7 +50,7 @@ Enforced: the `promotion` preset, the default suite of every registering lab run
 
 **P11. Judge strategies on trades, not bars.**
 Why: trade-level win rate, payoff, expectancy and the order of trades decide survival. A profit factor computed from per-bar returns is a different number (Davey; Ehlers and Way).
-Enforced: today there is no trade list, and the profit factor is per-bar (`backtest/report.py:43-57,107-114`). BL-02 adds the trade ledger. BL-16 requires at least 20 trades. BL-17 adds Monte Carlo over the trade sequence.
+Enforced: `backtest/trades.py` keeps the trade ledger (BL-02). A backtest trades one portfolio, so lots pair per ticker: a sell closes its own strategy's lots first, then any other lot of the ticker (RS-04). The strategy key is only a label. BL-16 requires at least 20 trades. BL-17 adds Monte Carlo over the trade sequence.
 
 **P12. No look-ahead, ever.**
 Why: one leaked bar or one early statement invalidates the whole result (McKinney; Graham and Dodd, via Gray and Carlisle's point-in-time rules; Hamilton, who warns that smoothed regime probabilities use future data).
@@ -62,7 +62,7 @@ Enforced: today the engine and the bar cache read raw `close` (`backtest/engine.
 
 **P14. Universes are point in time, delisted names included.**
 Why: a universe of names that are alive today inflates every cross-sectional backtest (Malkiel; Clenow; Covel).
-Enforced: BL-37 (membership table and survivorship warning) and BL-49 (engine wiring).
+Enforced: BL-37 (membership table and survivorship warning). A backtest with a `universe_id` (`BacktestConfig.universe_id`, set from the lab dataset) trades a name only on days it is a member and sells a holding that leaves (RS-05). The preflight warns about tickers that are never members in the window.
 
 ## 3. Benchmarking
 
@@ -200,7 +200,7 @@ Enforced: BL-10.
 
 **P45. Parallelise at the coarsest independent grain, with deterministic seeds for each task and one DuckDB connection per worker process.**
 Why: tuning trials, permutations, walk-forward folds, noise lakes and per-ticker work are embarrassingly parallel. Results must not depend on the worker count (owner requirement; Slatkin).
-Enforced: today everything runs serially, apart from the API's thread pool (`app/jobs.py:285`). Roadmap 6.6 is adding the `lab/parallel.py` process-pool helper for MCPT now. BL-07 extends that same helper to tuners, folds and noise lakes. There is no second pool.
+Enforced: `lab/parallel.py` is the one process pool for tuners, folds, permutations and noise lakes (BL-07). Worker snapshots and modified lakes hold every ticker a run reads: the universe, each strategy's `data_tickers()` (a reference market, an index filter, a regime condition) and the benchmark (`lab.dataset.data_tickers`, RS-01). Tuning gives the same trials for one worker and many.
 
 **P46. Every lab result can be reproduced.**
 Why: a verdict you can't rerun can't be trusted or debugged (Slatkin; Strimpel; López de Prado).
