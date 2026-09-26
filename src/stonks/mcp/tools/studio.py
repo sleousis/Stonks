@@ -22,15 +22,20 @@ from stonks.mcp.tools.common import (
     STATUS_CHANGE,
     STATUS_HINTS,
     Confirm,
+    Hypothesis,
     IsoDate,
+    LabCostModel,
     Limit,
     ObjectiveName,
     Offset,
     Override,
+    Premortem,
     Reason,
     RegisterConfirm,
+    RegisterIfPasses,
     RegisterStrategy,
     RouteRead,
+    SurvivalPreset,
     SurvivalTestName,
     Tickers,
     ToolContext,
@@ -151,20 +156,24 @@ def register(t: ToolContext) -> None:
         rebalance_every_bars: Annotated[int, Field(ge=1)] = 1,
         slippage_bps: Annotated[float, Field(ge=0)] = 0.0,
         fee_per_trade: Annotated[float, Field(ge=0)] = 0.0,
+        cost_model: LabCostModel = None,
     ) -> dict[str, Any]:
         """Queue a backtest of a draft. Returns the job; wait_for_job gives the
         BacktestResult. Simulated only: never places real orders."""
-        body = {
-            "universe": universe,
-            "start": iso(start),
-            "end": iso(end),
-            "interval": interval,
-            "initial_cash": initial_cash,
-            "threshold": threshold,
-            "rebalance_every_bars": rebalance_every_bars,
-            "slippage_bps": slippage_bps,
-            "fee_per_trade": fee_per_trade,
-        }
+        body = drop_none(
+            {
+                "universe": universe,
+                "start": iso(start),
+                "end": iso(end),
+                "interval": interval,
+                "initial_cash": initial_cash,
+                "threshold": threshold,
+                "rebalance_every_bars": rebalance_every_bars,
+                "slippage_bps": slippage_bps,
+                "fee_per_trade": fee_per_trade,
+                "cost_model": cost_model,
+            }
+        )
         return await t.post(draft_path(draft_id, "backtests"), body, hints=HINTS)
 
     @server.tool(annotations=JOB)
@@ -184,12 +193,18 @@ def register(t: ToolContext) -> None:
         interval: str = "1d",
         seed: int = 0,
         register_strategy: RegisterStrategy = False,
+        register_if_passes: RegisterIfPasses = False,
         confirm: RegisterConfirm = False,
+        preset: SurvivalPreset = None,
+        cost_model: LabCostModel = None,
+        hypothesis: Hypothesis = None,
+        premortem: Premortem = None,
     ) -> dict[str, Any]:
         """Queue tune -> fit -> survival suite for a draft (a rule draft's spec
         is fixed; a code draft is tuned). Returns the job; wait_for_job gives
-        the verdict and survival reports. With register_strategy=true it needs
-        confirm=true (preview otherwise), like register_draft."""
+        the verdict and survival reports. Registering (register_strategy, or
+        register_if_passes for a passing run only) needs confirm=true
+        (preview otherwise), like register_draft."""
         body = drop_none(
             {
                 "universe": universe,
@@ -203,6 +218,11 @@ def register(t: ToolContext) -> None:
                 "interval": interval,
                 "seed": seed,
                 "register_strategy": register_strategy,
+                "register_if_passes": register_if_passes or None,
+                "preset": preset,
+                "cost_model": cost_model,
+                "hypothesis": hypothesis,
+                "premortem": premortem,
             }
         )
         return await queue_lab_run(t, draft_path(draft_id, "lab-runs"), body, confirm, HINTS)

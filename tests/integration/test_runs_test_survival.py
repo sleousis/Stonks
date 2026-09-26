@@ -130,8 +130,13 @@ def test_trade_level_runs_test_scores_signs_of_round_trip_returns(lake_random_wa
     lake, dates = lake_random_walk
     ds = _dataset(lake, dates)
     strategy = Momentum({"lookback_days": 5})
-    _, fills = run_backtest_with_fills(Momentum({"lookback_days": 5}), ds, ds.full_window)
-    returns = np.array([t.return_pct for t in round_trip_trades(fills)])
+    report, fills = run_backtest_with_fills(Momentum({"lookback_days": 5}), ds, ds.full_window)
+    trades = round_trip_trades(report)
+    # Momentum exits whole positions: one closed trade per buy that was sold,
+    # so the ledger's partial-exit semantics leave the sequence unchanged.
+    buys = sum(1 for f in fills if f.side == "buy")
+    assert len(trades) in (buys, buys - 1)  # the last lot may still be open
+    returns = np.array([t.return_pct for t in trades])
     signs = np.sign(returns[returns != 0]).astype(int)
     assert len(signs) >= 10  # enough round trips for the test to mean something
 

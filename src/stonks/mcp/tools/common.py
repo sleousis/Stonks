@@ -100,11 +100,45 @@ def status_body(reason: str | None, override: bool = False) -> dict[str, Any]:
 
 RegisterStrategy = Annotated[
     bool,
-    Field(description="register the result in shadow status (needs confirm=true)"),
+    Field(
+        description="register the result in shadow status whatever the verdict (needs confirm=true)"
+    ),
+]
+RegisterIfPasses = Annotated[
+    bool,
+    Field(
+        description="register the result in shadow only if every survival test passes "
+        "(needs confirm=true)"
+    ),
 ]
 RegisterConfirm = Annotated[
     bool,
-    Field(description="must be true with register_strategy=true; otherwise a preview"),
+    Field(
+        description="must be true with register_strategy / register_if_passes; otherwise a preview"
+    ),
+]
+CostModelName = Literal["zero", "realistic"]
+LabCostModel = Annotated[
+    CostModelName | None,
+    Field(description="transaction-cost preset (see list_cost_models); default [backtest.costs]"),
+]
+SurvivalPreset = Annotated[
+    Literal["quick", "standard", "promotion"] | None,
+    Field(
+        description="named survival suite when survival_tests is omitted (default: "
+        "promotion when registering, else quick)"
+    ),
+]
+Hypothesis = Annotated[
+    str | None,
+    Field(
+        max_length=4000,
+        description="the edge and who pays for it; recorded before tuning (trial ledger)",
+    ),
+]
+Premortem = Annotated[
+    str | None,
+    Field(max_length=4000, description="how the strategy is expected to fail; recorded"),
 ]
 
 #: HTTP status -> explanation prefixed to the API's error message.
@@ -172,9 +206,9 @@ async def queue_lab_run(
     t: ToolContext, path: str, body: dict[str, Any], confirm: bool, hints: Hints | None = None
 ) -> dict[str, Any]:
     """POST a lab run. Registering the result is a guarded write: with
-    ``register_strategy`` and no ``confirm`` it returns a preview and
+    ``register_strategy`` / ``register_if_passes`` and no ``confirm`` it returns a preview and
     queues nothing; confirmed, it returns ``{"applied": True, "job": ...}``."""
-    if not body.get("register_strategy"):
+    if not (body.get("register_strategy") or body.get("register_if_passes")):
         return await t.post(path, body, hints=hints)
     if not confirm:
         return lab_registration_preview(body)

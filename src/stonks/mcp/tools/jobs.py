@@ -14,10 +14,16 @@ from stonks.mcp.tools.common import (
     JOB,
     JOB_OPEN_WORLD,
     READ,
+    CostModelName,
+    Hypothesis,
     IsoDate,
+    LabCostModel,
     ObjectiveName,
+    Premortem,
     RegisterConfirm,
+    RegisterIfPasses,
     RegisterStrategy,
+    SurvivalPreset,
     SurvivalTestName,
     Tickers,
     ToolContext,
@@ -40,7 +46,6 @@ RESULT_ROUTES: dict[str, str] = {
 }
 
 
-CostModelName = Literal["zero", "realistic"]
 Metric = Literal["sharpe", "cagr", "final_return"]
 
 
@@ -161,7 +166,12 @@ def register(t: ToolContext) -> None:
         interval: str = "1d",
         seed: int = 0,
         register_strategy: RegisterStrategy = False,
+        register_if_passes: RegisterIfPasses = False,
         confirm: RegisterConfirm = False,
+        preset: SurvivalPreset = None,
+        cost_model: LabCostModel = None,
+        hypothesis: Hypothesis = None,
+        premortem: Premortem = None,
         walk_forward: Annotated[
             WalkForwardOptions | None,
             Field(description="walk_forward test settings; add 'walk_forward' to survival_tests"),
@@ -173,7 +183,9 @@ def register(t: ToolContext) -> None:
     ) -> dict[str, Any]:
         """Queue a lab run: tune a strategy class, fit, run the survival suite and
         give a pass/fail verdict. Returns the job; use wait_for_job for the result.
-        With register_strategy=true it needs confirm=true (preview otherwise)."""
+        Every run and trial is recorded in the trial ledger (with the hypothesis).
+        Registering (register_strategy, or register_if_passes to register only a
+        passing run) needs confirm=true (preview otherwise)."""
         body = drop_none(
             {
                 "strategy": {"class_path": class_path},
@@ -188,6 +200,11 @@ def register(t: ToolContext) -> None:
                 "interval": interval,
                 "seed": seed,
                 "register_strategy": register_strategy,
+                "register_if_passes": register_if_passes or None,
+                "preset": preset,
+                "cost_model": cost_model,
+                "hypothesis": hypothesis,
+                "premortem": premortem,
                 "walk_forward": walk_forward.body() if walk_forward else None,
                 "mcpt": mcpt.body() if mcpt else None,
             }
