@@ -175,6 +175,28 @@ Stonks/
 - **Testing.** No live API calls in default `pytest`. `STONKS_RUN_LIVE_TESTS=1` + a real API key enables a small contract-test suite.
 - **Idempotency.** Ingestion upserts are idempotent (PK + `ON CONFLICT`). Orders carry a `client_id`. Production ticks are safe to re-run for the same date.
 
+## Bar store (Parquet or DuckDB table)
+
+DuckDB lets one process at a time open a database file for writing, so while `stonks serve` holds `lake.duckdb`, the CLI, the MCP server and lab worker processes cannot read the `bars` table. The lake therefore reads and writes bars through a `BarStore` seam (`store/bars.py`) with two implementations:
+
+- `DuckDBTableBarStore`: the `bars` table in the lake file. It is the default and what every test lake uses.
+- `ParquetBarStore`: hive-partitioned files at `<lake dir>/bars/interval=<code>/ticker=<id>/year=<yyyy>/part-0.parquet`. Any number of processes can read them while one process writes. Path values are percent-encoded, so `ES=F` is stored as `ticker=ES%3DF`.
+
+The public `DuckDBLake` API is unchanged. `upsert_bars`, `upsert_prices`, `aggregate_bars` and `get_bars` go through the store. On a Parquet lake the connection gets a temporary `bars` view over `read_parquet(..., hive_partitioning = true)`, so existing SQL (the `prices` view, the engine, `lake.sql`) runs as before.
+
+How Parquet writes stay safe:
+
+- An upsert rewrites each partition it touches. It reads the existing file, merges in the new rows (the last write wins per timestamp), writes a `*.tmp` file in the same directory and `os.replace`s it over `part-0.parquet`. Readers therefore see the old file or the new one, never a half-written file. Stray part files are merged in and removed (compaction).
+- Each `(interval, ticker)` series has an OS lock file under `bars/_locks/`, which the operating system releases if the writer crashes. Two writers never interleave on a partition, and readers never take a lock.
+- On Windows `os.replace` fails while a reader has the file open, so the writer retries (for up to 60 s). Readers never wait.
+- A multi-year upsert is atomic per partition, not across partitions. Timestamps are stored as naive UTC, the same as in the table.
+
+The lake records its store in `lake_settings` (migration 012), so every process that opens the file agrees on it without extra configuration. Future migrations that alter `bars` must handle both stores.
+
+Switching: set `[lake.bars] backend = "parquet"` in the config, stop `stonks serve`, and run `uv run python -m stonks.store.bars_migrate`, or call `DuckDBLake.migrate_bars_to_parquet()`. The command copies every series, checks the row count and checksum of each `(ticker, interval)`, and only then drops the table and switches. On a mismatch nothing changes. `--to duckdb` (`migrate_bars_to_duckdb()`) switches back and leaves the Parquet files for you to delete. A new lake opened with `DuckDBLake(path, bar_backend="parquet")` starts in Parquet.
+
+Lab snapshots (`lab/parallel.py`) for a Parquet lake export every table except the bars. The universe's partitions are hard-linked next to the snapshot (copied if the snapshot is on another volume) and cut at the dataset's end date, so workers read the files directly. Because writers replace files and never edit them, the run's data cannot change underneath it. Results are bit-identical to the table store.
+
 ## Per-block documents
 
 - [Block 1 — Ingestion](blocks/01_ingestion.md) (implemented in MVP)
