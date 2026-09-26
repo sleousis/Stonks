@@ -9,8 +9,9 @@ export const NA = 'n/a';
 
 /** Keys shown as percentages (the API sends fractions). */
 const PERCENT_KEY =
-  /(return|returns|drawdown|_dd|share|cagr|cagr_oos|ruin|prob_profit|cost_drag_annual|turnover_annual|alpha_annual|tracking_error|var_95|es_95|exposure|win_rate|ratio_pct)$/;
-const MULTIPLE_KEY = /(break_even_multiple|stress_multiplier|capture|return_to_dd)$/;
+  /(return|returns|drawdown|_dd|share|cagr|cagr_oos|ruin|prob_profit|cost_drag_annual|alpha_annual|tracking_error|var_95|es_95|exposure|win_rate|ratio_pct)$/;
+const MULTIPLE_KEY =
+  /(break_even_multiple|stress_multiplier|capture|return_to_dd|turnover_annual)$/;
 const FLAG_KEY = /^(used_realistic_costs)$/;
 
 export function formatMetric(key: string, value: number | null | undefined): string {

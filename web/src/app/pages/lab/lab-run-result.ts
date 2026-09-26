@@ -2,33 +2,16 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import { RouterLink } from '@angular/router';
 
 import type { LabRunView } from '../../api/models';
-import { formatNumber, formatPercent } from '../../core/format/format';
+import { formatNumber } from '../../core/format/format';
 import { humanize } from '../../shared/ui/param-form/param-spec';
+import { splitMetrics } from '../../shared/metrics';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { SURVIVAL_TESTS } from './lab-requests';
+import { FigureGrid, benchmarkFigures, benchmarkName } from './result-figures';
 
-/** Metric keys shown as percentages (fractions from the API). */
-const PERCENT_METRIC = /(return|drawdown|share|cagr|ratio_pct)$/;
-
-export function formatMetric(key: string, value: number | null): string {
-  if (value === null) return '–';
-  if (PERCENT_METRIC.test(key)) return formatPercent(value);
-  if (/p_value$/.test(key)) return formatNumber(value, { digits: 3 });
-  return formatNumber(value, { digits: Number.isInteger(value) ? 0 : 3 });
-}
-
-const METRIC_LABELS: Record<string, string> = {
-  is_score: 'In-sample score',
-  oos_score: 'Out-of-sample score',
-  p_value: 'p-value',
-  n_splits: 'Folds',
-};
-
-export function metricLabel(key: string): string {
-  return METRIC_LABELS[key] ?? humanize(key);
-}
+export { formatMetric, metricLabel } from '../../shared/metrics';
 
 export function testLabel(id: string): string {
   return SURVIVAL_TESTS.find((t) => t.id === id)?.label ?? humanize(id);
@@ -40,15 +23,20 @@ function paramText(v: unknown): string {
   return JSON.stringify(v);
 }
 
-/** Verdict, best parameters and one pass/fail row per survival test. */
+/**
+ * Verdict, trial counts, best parameters, the benchmark comparison and one
+ * pass/fail card per survival test (its deciding figures first, the rest
+ * folded away).
+ */
 @Component({
   selector: 'app-lab-run-result',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [HelpTip, RouterLink, StatTile, StatusPill],
+  imports: [FigureGrid, HelpTip, RouterLink, StatTile, StatusPill],
   template: `
     @let r = result();
     <div class="summary">
       <app-stat-tile
+        class="verdict"
         label="Verdict"
         featured
         [value]="r.verdict === 'pass' ? 'Passed' : 'Failed'"
@@ -56,6 +44,18 @@ function paramText(v: unknown): string {
         [detailTone]="r.verdict === 'pass' ? 'gain' : 'loss'"
       />
       <app-stat-tile label="Best score" [value]="score()" [detail]="className()" />
+      <app-stat-tile
+        label="Trials this run"
+        help="trials"
+        [value]="count(r.n_trials_run)"
+        detail="Parameter sets the tuner tried"
+      />
+      <app-stat-tile
+        label="Trials of this class"
+        help="trials"
+        [value]="count(r.n_trials_class)"
+        detail="Every run so far; the deflated Sharpe counts them"
+      />
     </div>
 
     @if (r.registered_strategy_id; as id) {
@@ -82,6 +82,14 @@ function paramText(v: unknown): string {
       }
     </section>
 
+    @if (r.benchmark) {
+      <section aria-labelledby="lr-bench-title">
+        <h3 id="lr-bench-title">Against the benchmark</h3>
+        <p class="muted bench-name">{{ benchName() }}</p>
+        <app-figure-grid label="Benchmark figures" [figures]="bench()" />
+      </section>
+    }
+
     <section aria-labelledby="survival-title">
       <h3 id="survival-title">Survival tests</h3>
       <ul class="tests">
@@ -91,18 +99,31 @@ function paramText(v: unknown): string {
               <span class="test-name">{{ t.label }} <app-help-tip [term]="t.id" /></span>
               <app-status-pill [status]="t.passed ? 'pass' : 'fail'" />
             </div>
-            @if (t.metrics.length) {
+            @if (t.key.length) {
               <dl class="metrics">
-                @for (m of t.metrics; track m.key) {
+                @for (m of t.key; track m.key) {
                   <div>
                     <dt>{{ m.label }} <app-help-tip [term]="m.key" /></dt>
-                    <dd class="num">{{ m.value }}</dd>
+                    <dd class="num" [class.na]="m.value === 'n/a'">{{ m.value }}</dd>
                   </div>
                 }
               </dl>
             }
             @if (t.notes) {
               <p class="notes">{{ t.notes }}</p>
+            }
+            @if (t.rest.length) {
+              <details>
+                <summary>All figures ({{ t.rest.length }} more)</summary>
+                <dl class="metrics rest">
+                  @for (m of t.rest; track m.key) {
+                    <div>
+                      <dt>{{ m.label }} <app-help-tip [term]="m.key" /></dt>
+                      <dd class="num" [class.na]="m.value === 'n/a'">{{ m.value }}</dd>
+                    </div>
+                  }
+                </dl>
+              </details>
             }
           </li>
         } @empty {
@@ -121,13 +142,18 @@ function paramText(v: unknown): string {
     .summary {
       display: grid;
       gap: var(--space-3);
-      grid-template-columns: minmax(0, 1fr);
-      @include bp.from-tablet {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-    .registered {
+    .verdict {
+      grid-column: 1 / -1;
+    }
+    .registered,
+    .bench-name {
       font-size: var(--text-sm);
+      overflow-wrap: anywhere;
+    }
+    .bench-name {
+      margin-bottom: var(--space-2);
     }
     h3 {
       font-size: var(--text-md);
@@ -149,6 +175,10 @@ function paramText(v: unknown): string {
       overflow-wrap: anywhere;
       white-space: normal;
     }
+    dd.na {
+      color: var(--color-ink-3);
+      font-weight: var(--weight-regular);
+    }
     .tests {
       list-style: none;
       margin: 0;
@@ -164,6 +194,7 @@ function paramText(v: unknown): string {
       border-left: 3px solid var(--color-gain);
       border-radius: var(--radius-sm);
       background: var(--color-surface);
+      min-width: 0;
     }
     .test.failed {
       border-left-color: var(--color-loss);
@@ -183,13 +214,30 @@ function paramText(v: unknown): string {
       color: var(--color-ink-2);
       overflow-wrap: anywhere;
     }
+    details summary {
+      cursor: pointer;
+      font-size: var(--text-sm);
+      color: var(--color-ink-2);
+      min-height: 32px;
+      display: flex;
+      align-items: center;
+      @include bp.coarse {
+        min-height: var(--touch-min);
+      }
+    }
+    .rest {
+      margin-top: var(--space-2);
+    }
   `,
 })
 export class LabRunResultView {
   readonly result = input.required<LabRunView>();
 
   protected readonly className = computed(() => this.result().class_path.split(':').at(-1) ?? null);
-  protected readonly score = computed(() => formatNumber(this.result().best_score, { digits: 3 }));
+  protected readonly score = computed(() => {
+    const s = this.result().best_score;
+    return s === null ? 'n/a' : formatNumber(s, { digits: 3 });
+  });
 
   protected readonly passedText = computed(() => {
     const reports = this.result().survival_reports;
@@ -205,17 +253,26 @@ export class LabRunResultView {
     })),
   );
 
+  protected readonly bench = computed(() => {
+    const b = this.result().benchmark;
+    return b ? benchmarkFigures(b) : [];
+  });
+  protected readonly benchName = computed(() => {
+    const b = this.result().benchmark;
+    return b ? benchmarkName(b) : '';
+  });
+
   protected readonly tests = computed(() =>
     this.result().survival_reports.map((r) => ({
       id: r.test_id,
       label: testLabel(r.test_id),
       passed: r.passed,
       notes: r.notes,
-      metrics: Object.entries(r.metrics).map(([key, value]) => ({
-        key,
-        label: metricLabel(key),
-        value: formatMetric(key, value),
-      })),
+      ...splitMetrics(r.test_id, r.metrics),
     })),
   );
+
+  protected count(v: number | undefined): string {
+    return typeof v === 'number' ? formatNumber(v, { digits: 0 }) : 'n/a';
+  }
 }
