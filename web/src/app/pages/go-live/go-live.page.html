@@ -64,8 +64,12 @@
   <section class="panel span-8" aria-labelledby="check-title">
     <div class="panel-head">
       <h2 id="check-title">Go-live check</h2>
-      @if (selectedId()) {
-        <app-status-pill status="unavailable" label="Not available yet" tone="neutral" />
+      @if (selected() && report.hasValue()) {
+        <app-status-pill
+          class="verdict"
+          [status]="report.value().passed ? 'pass' : 'fail'"
+          [label]="report.value().passed ? 'Ready for promotion' : 'Not ready'"
+        />
       }
     </div>
 
@@ -81,25 +85,61 @@
           'No registered strategy has the id “' + missing + '”. Pick one from the list above.'
         "
       />
+    } @else if (report.error(); as err) {
+      <app-error-state
+        title="Could not run the go-live check"
+        [error]="err"
+        (retry)="report.reload()"
+      />
+    } @else if (!report.hasValue()) {
+      <app-loading-state label="Running the go-live check" [rows]="6" />
     } @else {
-      <div class="unavailable panel-body">
-        <p>
-          The API does not serve the go-live check yet, so the console cannot show its results. Run
-          it on the command line; it exits with code 1 when any check fails and never changes the
-          strategy's status.
-        </p>
-        <app-cli-command [command]="command()" />
-      </div>
-
-      <h3 class="checks-title" id="checks-title">What the check evaluates</h3>
-      <ul class="checks" aria-labelledby="checks-title">
-        @for (c of checks; track c.name) {
-          <li>
-            <p class="check-name">{{ c.name }}</p>
-            <p class="check-detail">{{ c.measures }}</p>
+      @let r = report.value();
+      <p class="summary panel-body">
+        @if (r.passed) {
+          All {{ rows().length }} checks passed. Promotion stays a human action.
+        } @else {
+          {{ failedCount() }} of {{ rows().length }} checks failed.
+        }
+        <span class="source"
+          >Paper P&amp;L from
+          {{
+            r.source === 'shadow'
+              ? 'the shadow book'
+              : r.source === 'portfolio'
+                ? 'the shared portfolio'
+                : 'nowhere (no paper period)'
+          }}.</span
+        >
+      </p>
+      <ul class="checks" aria-label="Go-live checks">
+        @for (c of rows(); track c.name) {
+          <li [class.failed]="!c.passed">
+            <div class="check-head">
+              <span class="check-name">{{ c.name }}</span>
+              <app-status-pill [status]="c.passed ? 'pass' : 'fail'" />
+            </div>
+            @if (c.name !== 'status') {
+              <dl class="check-figures">
+                <div>
+                  <dt>Value</dt>
+                  <dd class="num check-value">{{ c.value }}</dd>
+                </div>
+                <div>
+                  <dt>Limit</dt>
+                  <dd class="num check-limit">{{ c.limit }}</dd>
+                </div>
+              </dl>
+            }
+            <p class="check-detail">{{ c.detail }}</p>
+            <p class="check-measures">{{ c.measures }}</p>
           </li>
         }
       </ul>
+      <div class="cli panel-body">
+        <p>The same check on the command line exits with code 1 when any check fails.</p>
+        <app-cli-command [command]="command()" />
+      </div>
     }
   </section>
 

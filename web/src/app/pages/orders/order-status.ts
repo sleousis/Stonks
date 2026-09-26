@@ -48,13 +48,9 @@ export function orderStatusView(
   };
 }
 
-/**
- * The ledger stores why an order was rejected (`status_reason`); the API
- * contract does not expose it yet, so read it when a server sends it.
- */
+/** Why the ledger says the order ended in its status (`status_reason`). */
 export function orderReason(order: OrderView): string | null {
-  const extra = order as OrderView & { status_reason?: string | null; reason?: string | null };
-  return extra.status_reason ?? extra.reason ?? null;
+  return order.status_reason ?? null;
 }
 
 /**

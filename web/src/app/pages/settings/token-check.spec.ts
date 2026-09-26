@@ -2,10 +2,10 @@ import { ApiError } from '../../core/http/api-error';
 import { TOKEN_ACCEPTED, tokenCheckFromError } from './token-check';
 
 describe('tokenCheckFromError', () => {
-  it('reads 404 (no such job) as an accepted token', () => {
-    expect(tokenCheckFromError(new ApiError(404, 'Not found', 'job not found'))).toBe(
-      TOKEN_ACCEPTED,
-    );
+  it('never reads an error as an accepted token', () => {
+    for (const status of [0, 400, 404, 500, 503]) {
+      expect(tokenCheckFromError(new ApiError(status, 'x', 'y'))).not.toBe(TOKEN_ACCEPTED);
+    }
   });
 
   it('reads 401 as a rejected token', () => {

@@ -56,9 +56,12 @@ describe('StudioPage', () => {
     }
   }
 
-  async function load(drafts: Draft[]): Promise<void> {
+  async function load(drafts: Draft[], codeStrategies = true): Promise<void> {
     (await nextRequest(controller, '/api/studio/drafts')).flush(page(drafts));
     (await nextRequest(controller, '/api/studio/templates')).flush(TEMPLATES);
+    (await nextRequest(controller, '/api/studio/capabilities')).flush({
+      code_strategies: codeStrategies,
+    });
     await settle();
   }
 
@@ -145,6 +148,31 @@ describe('StudioPage', () => {
     expect(el.textContent).toContain('Code strategies are turned off');
     expect(el.textContent).toContain('allow_code_strategies');
     expect(buttonNamed('Create draft').disabled).toBe(true);
+  });
+
+  it('turns the code option off up front when the server says so', async () => {
+    await load([], false);
+    buttonNamed('New draft', el.querySelector('app-page-header') as HTMLElement).click();
+    fixture.detectChanges();
+    const code = [...el.querySelectorAll<HTMLInputElement>('input[type=radio]')].find(
+      (r) => r.value === 'code',
+    );
+    expect(code?.closest('label')?.textContent).toContain('Turned off on this server');
+    code?.click();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Code strategies are turned off');
+    expect(buttonNamed('Create draft').disabled).toBe(true);
+  });
+
+  it('keeps the code option on when the server allows it', async () => {
+    await load([], true);
+    buttonNamed('New draft', el.querySelector('app-page-header') as HTMLElement).click();
+    fixture.detectChanges();
+    [...el.querySelectorAll<HTMLInputElement>('input[type=radio]')]
+      .find((r) => r.value === 'code')
+      ?.click();
+    fixture.detectChanges();
+    expect(el.textContent).not.toContain('Code strategies are turned off');
   });
 
   it('deletes a draft only after confirming', async () => {

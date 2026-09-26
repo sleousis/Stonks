@@ -10,6 +10,7 @@ from stonks.api.routers import (
     auth,
     brokers,
     catalog,
+    golive,
     health,
     ingest,
     jobs,
@@ -30,6 +31,7 @@ from stonks.api.routers import (
 API_ROUTERS: list[APIRouter] = [
     portfolio.router,
     strategies.router,
+    golive.router,
     market.router,
     ingest.router,
     orders.router,
