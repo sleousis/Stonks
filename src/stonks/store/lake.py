@@ -46,6 +46,7 @@ _BAR_COLS = (
     "adj_close",
     "volume",
 )
+_BAR_PK: tuple[str, ...] = ("ticker", "timestamp", "interval")
 # Wide column lists for each financial-statement table (migration 008).
 # Source of truth is the SQL migration; if the two diverge an upsert will
 # raise on the missing/extra column at INSERT time, which is loud enough.
@@ -352,28 +353,7 @@ class DuckDBLake:
         required = ("ticker", "timestamp", "open", "high", "low", "close", "adj_close", "volume")
         frame = df[list(required)].copy()
         frame["interval"] = interval.code
-        self.con.register("_in", frame[list(_BAR_COLS)])
-        try:
-            self.con.execute(
-                """
-                INSERT INTO bars (
-                    ticker, timestamp, interval,
-                    open, high, low, close, adj_close, volume)
-                SELECT ticker, timestamp, interval,
-                       open, high, low, close, adj_close, volume
-                FROM _in
-                ON CONFLICT (ticker, timestamp, interval) DO UPDATE SET
-                    open = EXCLUDED.open,
-                    high = EXCLUDED.high,
-                    low = EXCLUDED.low,
-                    close = EXCLUDED.close,
-                    adj_close = EXCLUDED.adj_close,
-                    volume = EXCLUDED.volume
-                """
-            )
-        finally:
-            self.con.unregister("_in")
-        return len(df)
+        return self._upsert(frame, table="bars", cols=_BAR_COLS, pk=_BAR_PK)
 
     def get_bars(
         self,
@@ -542,20 +522,16 @@ class DuckDBLake:
         if df.empty:
             return 0
         col_types = self._column_types(table)
-        self.con.register("_in", df[list(cols)])
         non_pk = [c for c in cols if c not in pk]
         update_clause = ", ".join(
             f"{c} = COALESCE(CAST(EXCLUDED.{c} AS {col_types[c]}), {table}.{c})" for c in non_pk
         )
-        try:
-            sql = (
+        with self._registered(df[list(cols)]):
+            self.con.execute(
                 f"INSERT INTO {table} ({', '.join(cols)}) "
                 f"SELECT {', '.join(cols)} FROM _in "
                 f"ON CONFLICT ({', '.join(pk)}) DO UPDATE SET {update_clause}"
             )
-            self.con.execute(sql)
-        finally:
-            self.con.unregister("_in")
         return len(df)
 
     def _column_types(self, table: str) -> dict[str, str]:
@@ -567,21 +543,17 @@ class DuckDBLake:
         return {row[0]: row[1] for row in rows}
 
     def get_income_statement(self, ticker: str) -> pd.DataFrame:
-        return self.con.execute(
-            "SELECT * FROM income_statement WHERE ticker = ? ORDER BY period_end DESC, frequency",
-            [ticker],
-        ).fetchdf()
+        return self._get_statement("income_statement", ticker)
 
     def get_balance_sheet(self, ticker: str) -> pd.DataFrame:
-        return self.con.execute(
-            "SELECT * FROM balance_sheet WHERE ticker = ? ORDER BY period_end DESC, frequency",
-            [ticker],
-        ).fetchdf()
+        return self._get_statement("balance_sheet", ticker)
 
     def get_cash_flow_statement(self, ticker: str) -> pd.DataFrame:
+        return self._get_statement("cash_flow_statement", ticker)
+
+    def _get_statement(self, table: str, ticker: str) -> pd.DataFrame:
         return self.con.execute(
-            "SELECT * FROM cash_flow_statement "
-            "WHERE ticker = ? ORDER BY period_end DESC, frequency",
+            f"SELECT * FROM {table} WHERE ticker = ? ORDER BY period_end DESC, frequency",
             [ticker],
         ).fetchdf()
 
@@ -637,6 +609,14 @@ class DuckDBLake:
         "price",
         "value",
         "post_transaction_amount",
+        "sec_link",
+    )
+    _INSIDER_NATURAL_KEY = (
+        "ticker",
+        "transaction_date",
+        "owner_name",
+        "transaction_code",
+        "shares",
         "sec_link",
     )
     _NEWS_COLS = (
@@ -852,36 +832,14 @@ class DuckDBLake:
         ).fetchdf()
 
     def upsert_insider_transactions(self, df: pd.DataFrame) -> int:
-        # Deduplicates on (ticker, transaction_date, owner_name,
-        # transaction_code, shares, sec_link) via the unique index;
-        # the synthetic id column is excluded from insert.
-        if df.empty:
-            return 0
-        self.con.register("_in", df[list(self._INSIDER_COLS)])
-        try:
-            non_pk = (
-                "filing_date",
-                "owner_cik",
-                "owner_relation",
-                "owner_title",
-                "acquired_disposed",
-                "price",
-                "value",
-                "post_transaction_amount",
-            )
-            update_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in non_pk)
-            self.con.execute(
-                f"""
-                INSERT INTO insider_transactions ({", ".join(self._INSIDER_COLS)})
-                SELECT {", ".join(self._INSIDER_COLS)} FROM _in
-                ON CONFLICT (ticker, transaction_date, owner_name,
-                             transaction_code, shares, sec_link)
-                DO UPDATE SET {update_clause}
-                """
-            )
-        finally:
-            self.con.unregister("_in")
-        return len(df)
+        # Deduplicates on the natural key via the unique index; the
+        # synthetic id column is excluded from insert.
+        return self._upsert(
+            df,
+            table="insider_transactions",
+            cols=self._INSIDER_COLS,
+            pk=self._INSIDER_NATURAL_KEY,
+        )
 
     def upsert_news(self, df: pd.DataFrame) -> int:
         return self._upsert(
@@ -1057,26 +1015,22 @@ class DuckDBLake:
         tickers = frame["ticker"].unique().tolist()
         if not tickers:
             return 0
-        self.con.register("_in", frame)
-        try:
-            # Atomic delete-then-insert: if the INSERT fails (e.g. a NOT
-            # NULL violation on a column the vendor unexpectedly returned
-            # blank), we don't want the DELETE to have already wiped the
-            # roster — wrap both statements in one transaction so the
-            # caller either sees the new roster or the old one, never an
-            # empty one.
-            with self.transaction():
-                placeholders = ",".join(["?"] * len(tickers))
-                self.con.execute(
-                    f"DELETE FROM officers WHERE ticker IN ({placeholders})",
-                    tickers,
-                )
-                self.con.execute(
-                    f"INSERT INTO officers ({', '.join(self._OFFICERS_COLS)}) "
-                    f"SELECT {', '.join(self._OFFICERS_COLS)} FROM _in"
-                )
-        finally:
-            self.con.unregister("_in")
+        # Atomic delete-then-insert: if the INSERT fails (e.g. a NOT
+        # NULL violation on a column the vendor unexpectedly returned
+        # blank), we don't want the DELETE to have already wiped the
+        # roster — wrap both statements in one transaction so the
+        # caller either sees the new roster or the old one, never an
+        # empty one.
+        with self._registered(frame), self.transaction():
+            placeholders = ",".join(["?"] * len(tickers))
+            self.con.execute(
+                f"DELETE FROM officers WHERE ticker IN ({placeholders})",
+                tickers,
+            )
+            self.con.execute(
+                f"INSERT INTO officers ({', '.join(self._OFFICERS_COLS)}) "
+                f"SELECT {', '.join(self._OFFICERS_COLS)} FROM _in"
+            )
         return len(df)
 
     def upsert_ticker_snapshots(self, df: pd.DataFrame) -> int:
@@ -1101,26 +1055,28 @@ class DuckDBLake:
     ) -> int:
         if df.empty:
             return 0
-        self.con.register("_in", df[list(cols)])
         non_pk = [c for c in cols if c not in pk]
-        update_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in non_pk)
-        try:
-            if non_pk:
-                sql = (
-                    f"INSERT INTO {table} ({', '.join(cols)}) "
-                    f"SELECT {', '.join(cols)} FROM _in "
-                    f"ON CONFLICT ({', '.join(pk)}) DO UPDATE SET {update_clause}"
-                )
-            else:
-                sql = (
-                    f"INSERT INTO {table} ({', '.join(cols)}) "
-                    f"SELECT {', '.join(cols)} FROM _in "
-                    f"ON CONFLICT ({', '.join(pk)}) DO NOTHING"
-                )
-            self.con.execute(sql)
-        finally:
-            self.con.unregister("_in")
+        if non_pk:
+            action = "DO UPDATE SET " + ", ".join(f"{c} = EXCLUDED.{c}" for c in non_pk)
+        else:
+            action = "DO NOTHING"
+        with self._registered(df[list(cols)]):
+            self.con.execute(
+                f"INSERT INTO {table} ({', '.join(cols)}) "
+                f"SELECT {', '.join(cols)} FROM _in "
+                f"ON CONFLICT ({', '.join(pk)}) {action}"
+            )
         return len(df)
+
+    @contextmanager
+    def _registered(self, df: pd.DataFrame, name: str = "_in") -> Iterator[None]:
+        """Expose ``df`` to SQL as the view ``name`` for the duration of
+        the block, unregistering it even if the statement raises."""
+        self.con.register(name, df)
+        try:
+            yield
+        finally:
+            self.con.unregister(name)
 
     def _upsert_on_change(
         self,
@@ -1192,11 +1148,9 @@ class DuckDBLake:
         col_list = ", ".join(cols)
         pk_list = ", ".join((*identity_cols, snapshot_col))
 
-        self.con.register("_in", df[cols])
-        try:
-            with self.transaction():
-                before = int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
-                sql = f"""
+        with self._registered(df[cols]), self.transaction():
+            before = int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            sql = f"""
                     WITH ranked AS (
                         SELECT *,
                                ROW_NUMBER() OVER (
@@ -1221,11 +1175,9 @@ class DuckDBLake:
                     ON CONFLICT ({pk_list})
                     DO UPDATE SET {update_clause}
                 """
-                self.con.execute(sql)
-                after = int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
-                return after - before
-        finally:
-            self.con.unregister("_in")
+            self.con.execute(sql)
+            after = int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            return after - before
 
     # ---- multi-asset helpers ------------------------------------------------
 
