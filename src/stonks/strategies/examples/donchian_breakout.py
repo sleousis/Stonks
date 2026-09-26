@@ -180,21 +180,24 @@ class DonchianBreakout(BaseStrategy):
         interval = Interval.parse(self.params["interval"])
         lookback = int(self.params["lookback"])
 
-        # Extra bars beyond ``lookback`` let the forward-filled signal carry
-        # a breakout that happened a while ago.
-        closes = self._bar_caches.for_lake(lake).last_n_closes(
-            ticker, interval, as_of, lookback * 4 + 5
-        )
-        if len(closes) < lookback:
-            return None
-
-        s = pd.Series(closes)
-        upper = s.rolling(lookback - 1).max().shift(1)
-        lower = s.rolling(lookback - 1).min().shift(1)
-
-        sig_series = pd.Series(np.full(len(s), np.nan))
-        sig_series.loc[s > upper] = 1.0
-        sig_series.loc[s < lower] = -1.0
+        # The state only changes on a breakout, so the window grows until it
+        # holds the latest one (or the whole history): the answer is then the
+        # same as a replay from the first bar, whatever the window (RS-31).
+        cache = self._bar_caches.for_lake(lake)
+        n = lookback * 4 + 5
+        while True:
+            closes = cache.last_n_closes(ticker, interval, as_of, n)
+            if len(closes) < lookback:
+                return None
+            s = pd.Series(closes)
+            upper = s.rolling(lookback - 1).max().shift(1)
+            lower = s.rolling(lookback - 1).min().shift(1)
+            sig_series = pd.Series(np.full(len(s), np.nan))
+            sig_series.loc[s > upper] = 1.0
+            sig_series.loc[s < lower] = -1.0
+            if sig_series.notna().any() or len(closes) < n:
+                break
+            n *= 2
         sig_series = sig_series.ffill().fillna(0.0)
 
         last_upper = float(upper.iloc[-1]) if not pd.isna(upper.iloc[-1]) else float("nan")

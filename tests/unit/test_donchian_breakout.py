@@ -118,3 +118,31 @@ def test_extract_features_empty_when_lake_short(lake_with_breakout):
     strategy = DonchianBreakout({"lookback": 252, "ticker": "X.US"})
     out = strategy.extract_features("X.US", date(2026, 1, 3), lake)
     assert out.values == {}
+
+
+def test_long_state_survives_a_long_range_after_the_breakout(tmp_path):
+    """RS-31: the state must not depend on how many bars are replayed."""
+    lake = DuckDBLake(tmp_path / "range.duckdb")
+    lake.migrate()
+    dates = pd.bdate_range(start="2025-01-02", periods=260)
+    closes = [100.0] * 30 + [120.0] * 230  # one breakout, then 229 bars of range
+    lake.upsert_prices(
+        pd.DataFrame(
+            {
+                "ticker": "X.US",
+                "date": [d.date() for d in dates],
+                "open": closes,
+                "high": closes,
+                "low": closes,
+                "close": closes,
+                "adj_close": closes,
+                "volume": 1_000_000.0,
+            }
+        )
+    )
+    try:
+        strategy = DonchianBreakout({"lookback": 20, "ticker": "X.US"})
+        for i in (40, 120, 259):
+            assert strategy.estimate_return("X.US", dates[i].date(), lake) is not None, i
+    finally:
+        lake.close()
