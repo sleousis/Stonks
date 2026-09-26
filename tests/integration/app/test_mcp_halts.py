@@ -48,6 +48,20 @@ async def test_the_kill_switch_is_guarded_and_listed(mcp, test_client):
 
 
 @pytest.mark.anyio
+async def test_the_preview_says_what_the_kill_switch_really_does(mcp):
+    stop_all = await call(mcp, "engage_kill_switch", {"scope": "user", "reason": "r"})
+    flatten = await call(
+        mcp, "engage_kill_switch", {"scope": "user", "reason": "r", "flatten": True}
+    )
+    all_text = " ".join(stop_all["warnings"])
+    flat_text = " ".join(flatten["warnings"])
+    assert "every new order" in all_text and "cancels working orders" in all_text
+    assert "stops buys" in flat_text and "cancels working buy orders" in flat_text
+    assert "no position is closed" in flat_text
+    assert "fresh 2FA code" in all_text
+
+
+@pytest.mark.anyio
 async def test_a_portfolio_kill_switch_needs_its_id(mcp):
     err = await call_error(
         mcp, "engage_kill_switch", {"scope": "portfolio", "reason": "r", "confirm": True}
