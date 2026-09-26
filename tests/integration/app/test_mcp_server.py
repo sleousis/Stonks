@@ -97,15 +97,48 @@ READ_TOOLS = {
     "list_jobs",
     "get_job",
     "wait_for_job",
+    "get_risk_policy",
+    "get_pnl",
+    "list_shadow_decisions",
+    "list_shadow_pnl",
+    "get_shadow_pnl",
+    "get_health_report",
+    "get_broker",
+    "list_sources",
+    "list_cost_models",
+    "list_studio_templates",
+    "get_rule_schema",
+    "validate_rule_spec",
+    "list_drafts",
+    "get_draft",
 }
-JOB_TOOLS = {"run_backtest", "run_lab", "run_ingest"}
-GUARDED_TOOLS = {"promote_strategy", "retire_strategy", "shadow_strategy", "run_tick"}
+# Not destructive: queue research jobs, or create / smoke-check a draft.
+JOB_TOOLS = {
+    "run_backtest",
+    "run_lab",
+    "run_ingest",
+    "create_draft",
+    "validate_draft",
+    "backtest_draft",
+    "lab_run_draft",
+}
+# Overwrite a draft's fields; no confirm (a draft is never traded).
+EDIT_TOOLS = {"update_draft"}
+GUARDED_TOOLS = {
+    "promote_strategy",
+    "retire_strategy",
+    "shadow_strategy",
+    "run_tick",
+    "register_draft",
+    "enable_draft",
+    "disable_draft",
+}
 
 
 @pytest.mark.anyio
 async def test_tool_list_and_annotations(mcp):
     tools = {t.name: t for t in (await mcp.list_tools()).tools}
-    assert set(tools) == READ_TOOLS | JOB_TOOLS | GUARDED_TOOLS
+    assert set(tools) == READ_TOOLS | JOB_TOOLS | EDIT_TOOLS | GUARDED_TOOLS
     for name, tool in tools.items():
         assert tool.description, name
         ann = tool.annotations
@@ -116,6 +149,8 @@ async def test_tool_list_and_annotations(mcp):
             assert ann.read_only_hint is False, name
         if name in JOB_TOOLS:
             assert ann.destructive_hint is False, name
+        if name in EDIT_TOOLS:
+            assert ann.destructive_hint is True and ann.idempotent_hint is True, name
         if name in GUARDED_TOOLS:
             assert ann.destructive_hint is True, name
             props = tool.input_schema["properties"]
@@ -125,8 +160,11 @@ async def test_tool_list_and_annotations(mcp):
 
 @pytest.mark.anyio
 async def test_no_tool_touches_broker_settings(mcp):
-    names = {t.name for t in (await mcp.list_tools()).tools}
-    assert not any("broker" in n or "live" in n or "config" in n for n in names)
+    for tool in (await mcp.list_tools()).tools:
+        if any(word in tool.name for word in ("broker", "live", "config")):
+            # only reads may mention the broker (get_broker shows its mode)
+            assert tool.annotations.read_only_hint is True, tool.name
+            assert tool.name in READ_TOOLS, tool.name
 
 
 # ---- read tools -----------------------------------------------------------------
@@ -185,6 +223,56 @@ async def test_catalog_ingest_runs_and_jobs(mcp):
     assert (await call(mcp, "list_jobs"))["total"] == 0
 
 
+@pytest.mark.anyio
+async def test_risk_policy_broker_sources_cost_models(mcp, settings):
+    policy = await call(mcp, "get_risk_policy")
+    assert policy["enabled"] is True
+    broker = await call(mcp, "get_broker")
+    assert broker["kind"] == "simulated"
+    assert set(broker) == {"kind", "paper", "allow_live", "credentials_configured"}
+    sources = (await call(mcp, "list_sources"))["items"]
+    assert any(s["default"] for s in sources)
+    presets = (await call(mcp, "list_cost_models"))["items"]
+    assert {p["name"] for p in presets} == {"zero", "realistic"}
+
+
+@pytest.mark.anyio
+async def test_pnl_and_health_report(mcp):
+    pnl = await call(mcp, "get_pnl")
+    assert pnl["strategy_id"] is None and pnl["rows"]
+    later = await call(mcp, "get_pnl", {"since": "2999-01-01"})
+    assert later["rows"] == []
+    report = await call(mcp, "get_health_report", {"tickers": ["UP.US", "DOWN.US"]})
+    assert isinstance(report["healthy"], bool)
+    assert report["checks"]
+
+
+@pytest.mark.anyio
+async def test_shadow_reads(mcp, seeded):
+    decisions = await call(mcp, "list_shadow_decisions", {"strategy_id": seeded["shadow_id"]})
+    assert decisions["items"] == [] and decisions["total"] == 0
+    summaries = (await call(mcp, "list_shadow_pnl", {"limit": 5}))["items"]
+    assert all("cumulative_return" in row for row in summaries)
+    series = await call(mcp, "get_shadow_pnl", {"strategy_id": seeded["shadow_id"]})
+    assert series["strategy_id"] == seeded["shadow_id"]
+    assert "nope" in await call_error(mcp, "get_shadow_pnl", {"strategy_id": "nope"})
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("tool", "arg"),
+    [
+        ("get_strategy", "strategy_id"),
+        ("get_shadow_pnl", "strategy_id"),
+        ("get_tick", "tick_id"),
+        ("get_job", "job_id"),
+        ("wait_for_job", "job_id"),
+    ],
+)
+async def test_read_ids_are_validated(mcp, tool, arg):
+    assert "invalid id" in await call_error(mcp, tool, {arg: "../ticks#"})
+
+
 # ---- job tools ------------------------------------------------------------------
 
 
@@ -206,6 +294,9 @@ async def test_backtest_job_and_wait(mcp):
     assert done["timed_out"] is False
     assert done["job"]["status"] == "succeeded", done["job"]["error"]
     assert done["job"]["result"]["final_return"] > 0.5
+    # the typed BacktestResult from /api/lab/backtests/{id}/result
+    assert done["result"]["final_return"] == done["job"]["result"]["final_return"]
+    assert done["result"]["equity"] and "profit_factor" in done["result"]
     assert (await call(mcp, "get_job", {"job_id": job["id"]}))["status"] == "succeeded"
     assert (await call(mcp, "list_jobs", {"kind": "backtest"}))["total"] == 1
 
@@ -245,6 +336,90 @@ async def test_lab_job(mcp):
     done = await call(mcp, "wait_for_job", {"job_id": job["id"], "poll_seconds": 0.05})
     assert done["job"]["status"] == "succeeded", done["job"]["error"]
     assert done["job"]["result"]["verdict"] in ("pass", "fail")
+    assert done["result"]["verdict"] == done["job"]["result"]["verdict"]
+    assert done["result"]["class_path"].endswith(":Momentum")
+
+
+MOMENTUM = "stonks.strategies.examples.momentum:Momentum"
+LAB_ARGS = {
+    "class_path": MOMENTUM,
+    "universe": ["UP.US", "DOWN.US"],
+    "start": "2025-10-01",
+    "end": "2026-04-01",
+    "budget": 2,
+}
+
+
+@pytest.mark.anyio
+async def test_lab_options_in_schemas(mcp):
+    tools = {t.name: t for t in (await mcp.list_tools()).tools}
+    backtest = tools["run_backtest"].input_schema
+    assert "cost_model" in backtest["properties"]
+    assert '"realistic"' in json.dumps(backtest)
+    lab = tools["run_lab"].input_schema
+    assert {"walk_forward", "mcpt"} <= set(lab["properties"])
+    text = json.dumps(lab)
+    for field in ("n_splits", "anchored", "n_permutations", "max_p_value", "walk_forward"):
+        assert field in text, field
+
+
+@pytest.mark.anyio
+async def test_backtest_cost_model_preset(mcp):
+    args = {
+        "class_path": BAH,
+        "params": {"ticker": "UP.US"},
+        "universe": ["UP.US"],
+        "start": "2025-10-01",
+        "end": "2026-04-01",
+    }
+    job = await call(mcp, "run_backtest", {**args, "cost_model": "realistic"})
+    done = await call(mcp, "wait_for_job", {"job_id": job["id"], "poll_seconds": 0.05})
+    assert done["job"]["status"] == "succeeded", done["job"]["error"]
+    assert job["params"]["cost_model"] == "realistic"
+    err = await call_error(mcp, "run_backtest", {**args, "cost_model": "zero", "slippage_bps": 5})
+    assert "422" in err and "not both" in err
+
+
+@pytest.mark.anyio
+async def test_lab_walk_forward_and_mcpt_options(mcp):
+    job = await call(
+        mcp,
+        "run_lab",
+        {
+            **LAB_ARGS,
+            "survival_tests": ["walk_forward", "permutation"],
+            "walk_forward": {"n_splits": 2, "metric": "final_return"},
+            "mcpt": {"n_permutations": 2, "seed": 3},
+        },
+    )
+    assert job["params"]["walk_forward"]["n_splits"] == 2
+    assert job["params"]["mcpt"]["n_permutations"] == 2
+    done = await call(mcp, "wait_for_job", {"job_id": job["id"], "poll_seconds": 0.05})
+    assert done["job"]["status"] == "succeeded", done["job"]["error"]
+    tests = {r["test_id"] for r in done["result"]["survival_reports"]}
+    assert tests == {"walk_forward", "mcpt"}  # the permutation test reports as "mcpt"
+
+
+@pytest.mark.anyio
+async def test_lab_registering_needs_confirm(mcp):
+    args = {**LAB_ARGS, "survival_tests": ["oos"], "register_strategy": True}
+    preview = await call(mcp, "run_lab", args)
+    assert preview["preview"] is True and preview["applied"] is False
+    assert preview["request"]["register_strategy"] is True
+    assert (await call(mcp, "list_jobs"))["total"] == 0
+
+    out = await call(mcp, "run_lab", {**args, "confirm": True})
+    done = await call(mcp, "wait_for_job", {"job_id": out["job"]["id"], "poll_seconds": 0.05})
+    assert done["job"]["status"] == "succeeded", done["job"]["error"]
+    assert done["result"]["registered_strategy_id"]
+
+
+@pytest.mark.anyio
+async def test_lab_options_need_their_test(mcp):
+    err = await call_error(
+        mcp, "run_lab", {**LAB_ARGS, "survival_tests": ["oos"], "mcpt": {"n_permutations": 2}}
+    )
+    assert "422" in err and "permutation" in err
 
 
 @pytest.mark.anyio
@@ -252,6 +427,7 @@ async def test_ingest_job(mcp):
     job = await call(mcp, "run_ingest", {"kind": "prices", "tickers": ["NEW.US"]})
     done = await call(mcp, "wait_for_job", {"job_id": job["id"], "poll_seconds": 0.05})
     assert done["job"]["status"] == "succeeded", done["job"]["error"]
+    assert done["result"]["kind"] == "prices" and done["result"]["tickers_ok"] == 1
     assert (await call(mcp, "list_ingest_runs"))["total"] == 1
 
 
@@ -304,6 +480,7 @@ async def test_run_tick_confirmed_defaults_to_dry_run(mcp):
     assert job["params"]["dry_run"] is True
     done = await call(mcp, "wait_for_job", {"job_id": job["id"], "poll_seconds": 0.05})
     assert done["job"]["status"] == "succeeded", done["job"]["error"]
+    assert done["result"]["dry_run"] is True and done["result"]["tick_id"]
 
 
 @pytest.mark.anyio
@@ -346,7 +523,15 @@ def _broker_route_transport(tc: TestClient, broker_info: dict) -> httpx2.MockTra
 
 @pytest.mark.anyio
 async def test_real_tick_allowed_only_with_paper_broker(test_client):
-    for info, allowed in (({"kind": "simulated"}, True), ({"live": True}, False)):
+    def broker(kind: str, paper: bool) -> dict:
+        return {"kind": kind, "paper": paper, "allow_live": True, "credentials_configured": True}
+
+    cases = (
+        (broker("simulated", paper=True), True),
+        (broker("alpaca", paper=True), True),
+        (broker("alpaca", paper=False), False),
+    )
+    for info, allowed in cases:
         api = ApiClient(BASE, token=API_TOKEN, transport=_broker_route_transport(test_client, info))
         async with Client(build_server(api)) as c:
             args = {"tickers": ["UP.US"], "dry_run": False, "confirm": True}
@@ -406,6 +591,42 @@ async def test_wait_for_job_times_out_and_clamps():
     assert 2 <= len(polls) < 20
 
 
+def _job_transport(job: dict, seen: list[str]) -> httpx2.MockTransport:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append(request.url.path)
+        if request.url.path.endswith("/result"):
+            return httpx2.Response(200, json={"typed": True})
+        return httpx2.Response(200, json=job)
+
+    return httpx2.MockTransport(handler)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("kind", "status", "result_path", "expected"),
+    [
+        ("backtest", "succeeded", "/api/lab/backtests/j1/result", {"typed": True}),
+        ("lab_run", "succeeded", "/api/lab/runs/j1/result", {"typed": True}),
+        ("ingest", "succeeded", "/api/ingest/jobs/j1/result", {"typed": True}),
+        ("tick", "succeeded", "/api/ticks/jobs/j1/result", {"typed": True}),
+        # no typed route for studio jobs: the job's own result
+        ("studio_backtest", "succeeded", None, {"raw": 1}),
+        # only a succeeded job has a result to fetch
+        ("backtest", "failed", None, None),
+    ],
+)
+async def test_wait_for_job_fetches_typed_result(kind, status, result_path, expected):
+    seen: list[str] = []
+    job = {"id": "j1", "kind": kind, "status": status, "result": {"raw": 1}, "error": None}
+    if status != "succeeded":
+        job["result"] = None
+    api = ApiClient(BASE, token=API_TOKEN, transport=_job_transport(job, seen))
+    async with Client(build_server(api)) as c:
+        done = await call(c, "wait_for_job", {"job_id": "j1"})
+    assert done["result"] == expected
+    assert [p for p in seen if p.endswith("/result")] == ([result_path] if result_path else [])
+
+
 @pytest.mark.anyio
 async def test_portfolio_summary_resource(mcp):
     resources = (await mcp.list_resources()).resources
@@ -429,6 +650,11 @@ async def test_token_never_in_tool_output_or_logs(test_client, seeded, caplog, c
                 ("promote_strategy", {"strategy_id": seeded["shadow_id"], "confirm": True}),
                 ("run_tick", {"confirm": True, "tickers": ["UP.US"]}),
                 ("run_ingest", {"kind": "prices", "tickers": ["NEW.US"]}),
+                ("get_broker", {}),
+                ("list_sources", {}),
+                ("get_health_report", {}),
+                ("create_draft", {"name": "c", "kind": "code", "source_code": "x = 1"}),
+                ("update_draft", {"draft_id": "d1", "name": "x"}),
             ):
                 result = await c.call_tool(name, args)
                 outputs.append(json.dumps(result.model_dump(mode="json")))
