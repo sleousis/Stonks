@@ -156,9 +156,12 @@ def test_failing_shadow_strategy_does_not_fail_tick_or_other_shadows(env):
     assert {r["strategy_id"] for r in state.sql("SELECT strategy_id FROM shadow_decisions")} == {
         good
     }
-    assert state.sql(
-        "SELECT COUNT(*) AS n FROM shadow_portfolio_snapshots WHERE strategy_id = ?", [bad]
-    )[0]["n"] == 0
+    assert (
+        state.sql(
+            "SELECT COUNT(*) AS n FROM shadow_portfolio_snapshots WHERE strategy_id = ?", [bad]
+        )[0]["n"]
+        == 0
+    )
 
 
 def test_shadow_phase_crash_does_not_fail_real_tick(env, monkeypatch):

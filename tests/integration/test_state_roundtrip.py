@@ -49,7 +49,7 @@ def test_migrate_is_idempotent(tmp_path):
     with SqliteState(path) as s:
         s.migrate()  # must not raise on second run
         versions = s.applied_migrations()
-    assert versions == [1]
+    assert versions == [1, 2]
 
 
 def test_applied_migrations_starts_empty_before_migrate(tmp_path):

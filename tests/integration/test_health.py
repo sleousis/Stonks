@@ -63,9 +63,7 @@ def test_ticker_without_bars_is_unhealthy(state, lake_trending):
 
 
 def test_freshness_threshold_is_configurable(state, lake_trending):
-    report = check_health(
-        state, lake_trending, UNIVERSE, HealthConfig(max_bar_age_days=1), now=NOW
-    )
+    report = check_health(state, lake_trending, UNIVERSE, HealthConfig(max_bar_age_days=1), now=NOW)
     assert not _by_name(report)["freshness:UP.US"].ok
 
 
