@@ -296,10 +296,20 @@ def _dates_to_python(df: pd.DataFrame, cols: tuple[str, ...]) -> pd.DataFrame:
 
 
 class DuckDBLake:
-    def __init__(self, path: str | Path):
+    def __init__(self, path: str | Path, *, read_only: bool = False):
+        """Open (read-write by default) the lake at ``path``.
+
+        ``read_only=True`` opens an existing file without taking DuckDB's
+        exclusive write lock, so any number of processes can read it at
+        once (lab worker processes on a snapshot); every write raises. A
+        missing file then raises instead of being created."""
         self._path = Path(path)
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._con: duckdb.DuckDBPyConnection | None = duckdb.connect(str(self._path))
+        self.read_only = read_only
+        if not read_only:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._con: duckdb.DuckDBPyConnection | None = duckdb.connect(
+            str(self._path), read_only=read_only
+        )
         # Pin the session to UTC so tz-aware inputs (e.g. UTC intraday
         # timestamps from EODHD) aren't silently shifted into the host's
         # local time when they land in naive-TIMESTAMP columns.
@@ -322,6 +332,25 @@ class DuckDBLake:
         if self._con is None:
             raise RuntimeError("DuckDBLake connection is closed")
         return self._con
+
+    def export_database(self, target: str | Path) -> None:
+        """Write every table and view of this lake to a new standalone
+        DuckDB file at ``target`` (which must not exist), then release it.
+
+        Used to materialise a lab snapshot (typically from an in-memory,
+        universe-scoped copy) that worker processes open read-only."""
+        target = Path(target)
+        if target.exists():
+            raise FileExistsError(target)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        source = self.con.execute("SELECT current_database()").fetchone()[0]
+        alias = "_stonks_export"
+        path_sql = str(target).replace("'", "''")
+        self.con.execute(f"ATTACH '{path_sql}' AS {alias}")
+        try:
+            self.con.execute(f'COPY FROM DATABASE "{source}" TO {alias}')
+        finally:
+            self.con.execute(f"DETACH {alias}")
 
     # ---- schema / migrations ------------------------------------------------
 
