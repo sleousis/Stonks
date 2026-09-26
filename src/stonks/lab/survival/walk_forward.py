@@ -480,6 +480,9 @@ def _summarize(results: Sequence[FoldResult], cfg: WalkForwardConfig, strategy_i
 
 class WalkForwardTest:
     id = "walk_forward"
+    #: Leaves ``stitched_oos_report`` on the dataset (``SurvivalSuite`` runs
+    #: it before the tests that read it).
+    publishes_to_dataset = True
 
     def __init__(
         self, config: WalkForwardConfig | None = None, tuning: TuningSetup | None = None

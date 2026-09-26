@@ -32,11 +32,25 @@ class TuningSetup:
 
 
 class SurvivalSuite:
+    """Runs its tests and returns their reports in the order given.
+
+    A test that leaves a result on the dataset for later tests (it sets the
+    class attribute ``publishes_to_dataset = True``, as ``walk_forward``
+    does with its stitched OOS report) runs before the others, so a
+    consumer such as ``mc_trades`` sees it wherever it is listed."""
+
     def __init__(self, tests: Sequence[SurvivalTest]) -> None:
         self._tests = list(tests)
 
     def run(self, strategy: Strategy, context: Any) -> list[SurvivalReport]:
-        return [t.run(strategy, context) for t in self._tests]
+        order = sorted(
+            range(len(self._tests)),
+            key=lambda i: not getattr(self._tests[i], "publishes_to_dataset", False),
+        )
+        reports: dict[int, SurvivalReport] = {}
+        for i in order:
+            reports[i] = self._tests[i].run(strategy, context)
+        return [reports[i] for i in range(len(self._tests))]
 
     @property
     def tests(self) -> list[SurvivalTest]:

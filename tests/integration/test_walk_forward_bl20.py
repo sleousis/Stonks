@@ -303,6 +303,23 @@ def test_mc_trades_after_walk_forward_scores_the_stitched_trades(lake_trending):
     assert "stitched walk-forward OOS" in report.notes
 
 
+def test_mc_trades_listed_before_walk_forward_still_scores_the_stitched_trades(lake_trending):
+    from stonks.lab.survival.base import SurvivalSuite
+    from stonks.lab.survival.mc_trades import MonteCarloTradesTest
+
+    ds = _ds(lake_trending)
+    setup = TuningSetup(GridTuner(grid_size=2), SharpeObjective(), budget=4)
+    suite = SurvivalSuite(
+        [
+            MonteCarloTradesTest(min_trades=1),
+            WalkForwardTest(WalkForwardConfig(n_splits=2, test_days=30), setup),
+        ]
+    )
+    mc, walk = suite.run(Momentum({"lookback_days": 10}), ds)
+    assert (mc.test_id, walk.test_id) == ("mc_trades", "walk_forward")  # order kept
+    assert "stitched walk-forward OOS" in mc.notes
+
+
 # ---- edge cases (RS-26, RS-34) ------------------------------------------------------------
 
 
