@@ -307,14 +307,30 @@ async def test_run_tick_confirmed_defaults_to_dry_run(mcp):
 
 
 @pytest.mark.anyio
-async def test_real_tick_refused_when_broker_mode_unknown(mcp):
-    args = {"tickers": ["UP.US"], "dry_run": False}
-    preview = await call(mcp, "run_tick", args)
-    assert preview["live_trading"] == "unknown"
-    assert any("refusing" in w for w in preview["warnings"])
-    err = await call_error(mcp, "run_tick", {**args, "confirm": True})
-    assert "refusing" in err
-    assert (await call(mcp, "list_jobs"))["total"] == 0
+async def test_real_tick_preview_reads_the_api_broker_route(mcp):
+    # GET /api/brokers reports the default simulated broker.
+    preview = await call(mcp, "run_tick", {"tickers": ["UP.US"], "dry_run": False})
+    assert preview["live_trading"] == "off"
+
+
+@pytest.mark.anyio
+async def test_real_tick_refused_when_broker_mode_unknown(test_client):
+    inner = bridge(test_client)
+
+    async def no_broker_route(request: httpx2.Request) -> httpx2.Response:
+        if request.url.path == "/api/brokers":
+            return httpx2.Response(404, json={"title": "Not Found", "status": 404})
+        return await inner.handle_async_request(request)
+
+    api = ApiClient(BASE, token=API_TOKEN, transport=httpx2.MockTransport(no_broker_route))
+    async with Client(build_server(api)) as mcp:
+        args = {"tickers": ["UP.US"], "dry_run": False}
+        preview = await call(mcp, "run_tick", args)
+        assert preview["live_trading"] == "unknown"
+        assert any("refusing" in w for w in preview["warnings"])
+        err = await call_error(mcp, "run_tick", {**args, "confirm": True})
+        assert "refusing" in err
+        assert (await call(mcp, "list_jobs"))["total"] == 0
 
 
 def _broker_route_transport(tc: TestClient, broker_info: dict) -> httpx2.MockTransport:
