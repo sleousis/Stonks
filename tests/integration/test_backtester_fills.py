@@ -375,3 +375,45 @@ def test_warm_up_query_works_on_both_bar_backends(tmp_path, backend):
     (trade,) = spy.trades
     assert trade.adv is not None and trade.sigma_daily is not None  # warmed up
     lake.close()
+
+
+# ---- RS-14: the gap guard scales with the bar length -------------------------------
+
+
+@pytest.mark.parametrize(
+    ("interval", "step_days"), [(Interval.WEEK_1, 7), (Interval.MONTH_1, 31)], ids=["1w", "1mo"]
+)
+def test_weekly_and_monthly_backtests_still_fill(tmp_path, interval, step_days):
+    rows = [_row("X.US", i * step_days, 10.0 + i) for i in range(4)]
+    lake = DuckDBLake(tmp_path / "lake.duckdb")
+    lake.migrate()
+    lake.upsert_bars(pd.DataFrame(rows), interval=interval)
+    broker = _bar_broker()
+    config = BacktestConfig(
+        start=_day(0),
+        end=_day(3 * step_days),
+        universe=["X.US"],
+        interval=interval,
+        rebalance_every_bars=1_000,
+    )
+    Backtester([_Once([_buy(1.0)])], broker, lake, config).run()
+    assert len(broker.fills) == 1
+    lake.close()
+
+
+def test_a_missing_monthly_bar_beyond_two_bars_still_expires(tmp_path):
+    rows = [_row("X.US", 0, 10.0), _row("X.US", 95, 11.0)]
+    lake = DuckDBLake(tmp_path / "lake.duckdb")
+    lake.migrate()
+    lake.upsert_bars(pd.DataFrame(rows), interval=Interval.MONTH_1)
+    broker = _bar_broker()
+    config = BacktestConfig(
+        start=_day(0),
+        end=_day(95),
+        universe=["X.US"],
+        interval=Interval.MONTH_1,
+        rebalance_every_bars=1_000,
+    )
+    Backtester([_Once([_buy(1.0)])], broker, lake, config).run()
+    assert broker.fills == ()
+    lake.close()

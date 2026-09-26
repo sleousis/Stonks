@@ -293,3 +293,13 @@ def test_spec_lookback_and_merge():
 def test_empty_bars_give_empty_stats():
     empty = _bars().iloc[:0]
     assert lagged_market_stats(empty, MarketStatsSpec()).empty
+
+
+def test_gap_guard_allows_two_bars_of_the_bar_interval():
+    """RS-14: a monthly bar is ~31 days after its decision; that is no gap."""
+    assert _model().decide(_order(), _quote(gap_days=31.0, bar_days=30.0)).quantity == 100.0
+    assert _model().decide(_order(), _quote(gap_days=14.0, bar_days=7.0)).quantity == 100.0
+    assert _model().decide(_order(), _quote(gap_days=55.0, bar_days=30.0)).reason is None
+    assert _model().decide(_order(), _quote(gap_days=90.0, bar_days=30.0)).reason == "gap"
+    # daily bars keep the calendar limit
+    assert _model().decide(_order(), _quote(gap_days=8.0, bar_days=1.0)).reason == "gap"

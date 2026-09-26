@@ -96,6 +96,8 @@ class SimulatedBroker:
         self._unfilled: dict[str, float] = {}
         #: (settlement date, proceeds) of sales not yet settled.
         self._unsettled: list[tuple[np.datetime64, float]] = []
+        #: One bar's length in days (``set_bar_days``), for the gap guard.
+        self._bar_days: float | None = None
 
     @classmethod
     def from_execution(
@@ -134,6 +136,10 @@ class SimulatedBroker:
         self._stats = dict(stats or {})
         self._as_of = as_of
         self._settle(as_of)
+
+    def set_bar_days(self, days: float | None) -> None:
+        """Length of one bar in days, for the fill model's gap guard."""
+        self._bar_days = days
 
     def set_asset_classes(self, asset_classes: Mapping[str, AssetClass]) -> None:
         """Ticker -> asset class for the cost model; unmapped tickers are equity."""
@@ -282,6 +288,7 @@ class SimulatedBroker:
             volume=self._volumes.get(ticker),
             adv=self._stats.get(ticker, _NO_STATS).adv,
             gap_days=gap,
+            bar_days=self._bar_days,
         )
 
     def _cost(self, order: Order, price: float, quantity: float) -> TradeCost:

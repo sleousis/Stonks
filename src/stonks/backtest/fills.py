@@ -185,6 +185,8 @@ class BarQuote:
     adv: float | None = None
     #: Calendar days from the order's decision to this bar; ``None`` unknown.
     gap_days: float | None = None
+    #: Length of one bar of the backtest interval in days; ``None`` unknown.
+    bar_days: float | None = None
 
 
 @dataclass(frozen=True)
@@ -228,6 +230,8 @@ class FillModelSettings(BaseModel):
     allow_zero_volume: bool = False
     honour_limits: bool = True
     #: Longest decision-to-fill gap, in calendar days; ``None`` disables.
+    #: Never shorter than two bars of the backtest interval (RS-14), so
+    #: weekly, monthly and yearly bars still fill.
     max_gap_days: float | None = Field(7.0, gt=0.0)
     adv_window: int = Field(20, ge=1)
 
@@ -252,8 +256,10 @@ class BarFillModel:
     def decide(self, order: Order, quote: BarQuote) -> FillDecision:
         s = self._s
         gap = quote.gap_days
-        if s.max_gap_days is not None and gap is not None and gap > s.max_gap_days:
-            return FillDecision.none("gap")
+        if s.max_gap_days is not None and gap is not None:
+            limit = max(s.max_gap_days, 2.0 * (quote.bar_days or 0.0))
+            if gap > limit:
+                return FillDecision.none("gap")
         price, reason = self._price(order, quote) if s.honour_limits else (quote.open, None)
         if price is None:
             return FillDecision.none(reason or "not_triggered")  # DAY order expires

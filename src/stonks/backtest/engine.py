@@ -220,6 +220,9 @@ class Backtester:
         self._asset_classes = asset_classes
         self._history = self._load_history(bars_by_ts)
         self._broker.set_asset_classes(asset_classes)
+        set_bar_days = getattr(self._broker, "set_bar_days", None)
+        if callable(set_bar_days):
+            set_bar_days(self._config.interval.seconds / 86_400.0)
         schedule = CorporateActionSchedule(
             self._corporate_actions.load(list(self._config.universe))
         )
