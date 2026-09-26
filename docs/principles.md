@@ -34,7 +34,7 @@ Enforced: today the MCPT with re-tuning (`lab/survival/permutation.py`) is a par
 
 **P7. A test is out of sample only if the tuner never saw its data.**
 Why: tests that backtest the tuned window count the fit as evidence (López de Prado).
-Enforced: today `oos`, `walk_forward` and OOS-mode MCPT are clean. `perturbation`, `runs_test` and `period_stability` still backtest `full_window` (`lab/survival/perturbation.py:58`, `runs_test.py:34`). BL-21 moves them to the validation window.
+Enforced: `oos`, `walk_forward` and OOS-mode MCPT score only data the tuner never saw. `perturbation`, `runs_test` and `period_stability` score the validation window by default (BL-21, `lab.dataset.scoring_window`); `window = "full"` through a lab run's `test_options` is an explicit opt-out. The lab runner hands the suite the dataset embargoed for the fitted strategy (`lab/runner.py`, `suite_dataset`).
 
 **P8. Pass/fail gates are statistical, not fixed thresholds.**
 Why: six months at Sharpe 0.5 can't be told apart from zero. A gate has to account for sample length, skew, fat tails and autocorrelation (Bailey and López de Prado, PSR and MinTRL; Lo 2002; Carver).
@@ -42,11 +42,11 @@ Enforced: today `OutOfSampleTest` passes at a flat Sharpe of 0.5 (`lab/survival/
 
 **P9. Train and test windows are separated by an embargo at least as long as the label horizon.**
 Why: overlapping labels and serially correlated features leak across a boundary with no gap (López de Prado, *AFML* ch. 7; Chan, *Machine Trading*).
-Enforced: today the validation window starts the day after training ends (`lab/dataset.py:50-54`). BL-20 adds the embargo.
+Enforced: `LabDataset.embargo_bars` skips that many trading bars between the train and validation windows (`[lab] embargo_bars`, `stonks lab run --embargo-bars`, the API's `embargo_bars`), raised per strategy to its `label_horizon_bars` (`LabDataset.for_strategy`). Walk-forward folds and walk-forward MCPT use the same embargo (BL-20).
 
 **P10. Walk-forward is the default evidence for promotion.**
 Why: optimising over one split is close to worthless. Only the stitched out-of-sample segments count (Davey; Kaufman).
-Enforced: today walk-forward is opt-in, and the API default suite is `oos` plus `period_stability` (`app/lab.py:153-155`). BL-20 puts walk-forward into the promotion preset and requires walk-forward efficiency ≥ 0.5.
+Enforced: the `promotion` preset, the default suite of every registering lab run (API, MCP and CLI), runs `walk_forward`. It requires walk-forward efficiency ≥ 0.5 (`[lab.walk_forward] min_wfe`) and hands its stitched out-of-sample segments to `mc_trades` (BL-20). The go-live gate's `promotion_preset` check wants a stored report for every test of that preset.
 
 **P11. Judge strategies on trades, not bars.**
 Why: trade-level win rate, payoff, expectancy and the order of trades decide survival. A profit factor computed from per-bar returns is a different number (Davey; Ehlers and Way).
