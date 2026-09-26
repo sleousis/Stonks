@@ -25,13 +25,45 @@ from stonks.logging import get_logger
 MIGRATIONS_DIR = Path(__file__).parent / "migrations_duckdb"
 
 # Env var that lets an operator opt into a destructive migration
-# (``DROP TABLE``) against a table that currently holds rows. The default
-# is to refuse — losing committed data must be an explicit choice, not
-# something a routine ``stonks db init`` does silently.
+# (``DROP TABLE`` / ``ALTER TABLE ... DROP COLUMN``) against data that
+# currently exists. The default is to refuse — losing committed data must
+# be an explicit choice, not something a routine ``stonks db init`` does
+# silently.
 _DESTRUCTIVE_OPT_IN_ENV = "STONKS_ALLOW_DESTRUCTIVE_MIGRATIONS"
+_IDENT = r"[A-Za-z_][A-Za-z0-9_]*"
 _DROP_TABLE_RE = re.compile(
-    r"\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*;",
+    rf"\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?({_IDENT})\b",
     re.IGNORECASE,
+)
+_DROP_COLUMN_RE = re.compile(
+    rf"\bALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?({_IDENT})\s+"
+    rf"DROP\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?({_IDENT})\b",
+    re.IGNORECASE,
+)
+_SQL_LINE_COMMENT_RE = re.compile(r"--[^\n]*")
+# (migration file stem, target) pairs whose drop is known to be
+# data-preserving because the same migration copies the data elsewhere
+# first. ``target`` is a table name for DROP TABLE, ``table.column`` for
+# DROP COLUMN. Shipped migrations can't be edited, and the guard only sees
+# the pre-migration state, so it can't infer this from the SQL; it trusts
+# this list instead. Keyed by the full file stem (not just the version) so
+# a different file that happens to reuse a number isn't waved through.
+#
+# Shipped column drops that are deliberately NOT listed: 005 drops
+# tickers.{beta, short_percent, insider_ownership_percent,
+# institutional_ownership_percent, employee_count, esg_score} without
+# copying the values, so a lake holding them must opt in. A fresh
+# ``db init`` is unaffected because those tables are empty at that point.
+_DATA_PRESERVING_DROPS: frozenset[tuple[str, str]] = frozenset(
+    {
+        # 003 INSERTs every prices row into bars (interval='1d') and then
+        # recreates prices as a view over bars.
+        ("003_intraday_bars", "prices"),
+        # Rebuilds insider_transactions with a NULL-safe natural key; rows
+        # are staged in a temp table and copied back (only exact natural-key
+        # duplicates collapse, last-inserted wins).
+        ("010_insider_natural_key", "insider_transactions"),
+    }
 )
 
 _PRICE_COLS = ("ticker", "date", "open", "high", "low", "close", "adj_close", "volume")
@@ -46,6 +78,7 @@ _BAR_COLS = (
     "adj_close",
     "volume",
 )
+_BAR_PK: tuple[str, ...] = ("ticker", "timestamp", "interval")
 # Wide column lists for each financial-statement table (migration 008).
 # Source of truth is the SQL migration; if the two diverge an upsert will
 # raise on the missing/extra column at INSERT time, which is loud enough.
@@ -192,6 +225,34 @@ _CASH_FLOW_STATEMENT_COLS: tuple[str, ...] = (
 )
 _STATEMENT_PK: tuple[str, ...] = ("ticker", "period_end", "frequency")
 
+# NULL-safe natural key for insider_transactions. Each part renders as
+# 'v' || value (or 'n' for NULL) so NULL and '' differ, and DATE / DOUBLE
+# normalization makes 100 and 100.0 hash alike. MUST stay identical to the
+# expression in migrations_duckdb/010_insider_natural_key.sql, which
+# back-filled the key for rows that predate it.
+_INSIDER_NATURAL_KEY_SQL = """md5(concat_ws(chr(31),
+    COALESCE('v' || ticker, 'n'),
+    COALESCE('v' || CAST(CAST(transaction_date AS DATE) AS VARCHAR), 'n'),
+    COALESCE('v' || owner_name, 'n'),
+    COALESCE('v' || transaction_code, 'n'),
+    COALESCE('v' || CAST(CAST(shares AS DOUBLE) AS VARCHAR), 'n'),
+    COALESCE('v' || sec_link, 'n')
+))"""
+
+
+def _last_per_key(df: pd.DataFrame, keys: tuple[str, ...]) -> pd.DataFrame:
+    """Drop rows whose ``keys`` repeat within the batch, keeping the last.
+
+    ``INSERT ... ON CONFLICT DO UPDATE`` can't apply two input rows to the
+    same target row: depending on the DuckDB version it either raises
+    ("can not update the same row twice") or silently keeps the first.
+    Vendors do send such batches (EODHD's annual and quarterly
+    shares-outstanding lists both carry the fiscal-year-end date), so we
+    collapse them up front with last-write-wins semantics. pandas treats
+    NaN/None as equal here, which matches our "NULLs equal" natural keys.
+    """
+    return df.drop_duplicates(subset=list(keys), keep="last")
+
 
 class DuckDBLake:
     def __init__(self, path: str | Path):
@@ -202,6 +263,7 @@ class DuckDBLake:
         # timestamps from EODHD) aren't silently shifted into the host's
         # local time when they land in naive-TIMESTAMP columns.
         self._con.execute("SET TimeZone = 'UTC'")
+        self._column_type_cache: dict[str, dict[str, str]] = {}
 
     def __enter__(self) -> DuckDBLake:
         return self
@@ -236,7 +298,7 @@ class DuckDBLake:
             if version in applied:
                 continue
             sql = path.read_text()
-            self._guard_destructive_drops(sql, version=version, log=log)
+            self._guard_destructive_drops(sql, version=version, name=path.stem, log=log)
             self.con.execute("BEGIN")
             try:
                 self.con.execute(sql)
@@ -248,38 +310,59 @@ class DuckDBLake:
             except Exception:
                 self.con.execute("ROLLBACK")
                 raise
+            finally:
+                # The migration may have reshaped any table.
+                self._column_type_cache.clear()
 
-    def _guard_destructive_drops(self, sql: str, *, version: int, log: Any) -> None:
-        """Refuse to apply a migration whose ``DROP TABLE`` step would
-        delete a table that currently holds rows, unless the operator
-        explicitly opts in via ``STONKS_ALLOW_DESTRUCTIVE_MIGRATIONS=1``.
+    def _guard_destructive_drops(self, sql: str, *, version: int, name: str, log: Any) -> None:
+        """Refuse to apply a migration whose ``DROP TABLE`` (incl.
+        ``CASCADE``) or ``ALTER TABLE ... DROP COLUMN`` step would delete
+        existing data, unless the operator explicitly opts in via
+        ``STONKS_ALLOW_DESTRUCTIVE_MIGRATIONS=1``.
 
-        Empty / non-existent tables are dropped silently — this guard
-        only fires when real data would be lost. Each affected table
-        produces one structured WARNING log line so operators can see
-        exactly what they'd lose before opting in.
+        Empty / non-existent tables and all-NULL / non-existent columns
+        are dropped silently, as are the drops listed in
+        ``_DATA_PRESERVING_DROPS`` — this guard only fires when real data
+        would be lost. Each affected target produces one structured
+        WARNING log line so operators can see exactly what they'd lose
+        before opting in. ``--`` comments are ignored.
         """
+        sql = _SQL_LINE_COMMENT_RE.sub("", sql)
         existing = set(self.tables())
         opt_in = os.environ.get(_DESTRUCTIVE_OPT_IN_ENV, "").lower() in {"1", "true", "yes"}
-        for match in _DROP_TABLE_RE.finditer(sql):
-            target = match.group(1)
-            if target not in existing:
-                continue
-            row_count = int(self.con.execute(f"SELECT COUNT(*) FROM {target}").fetchone()[0])
-            if row_count == 0:
-                continue
+
+        def check(target: str, what: str, count_sql: str, unit: str) -> None:
+            if (name, target) in _DATA_PRESERVING_DROPS:
+                return
+            count = int(self.con.execute(count_sql).fetchone()[0])
+            if count == 0:
+                return
             log.warning(
                 "lake.migrate.destructive_drop",
                 migration_version=version,
                 table=target,
-                rows=row_count,
+                rows=count,
                 opt_in_env=_DESTRUCTIVE_OPT_IN_ENV,
             )
             if not opt_in:
                 raise RuntimeError(
-                    f"migration {version:03d} would DROP TABLE {target} which holds "
-                    f"{row_count} row(s); set {_DESTRUCTIVE_OPT_IN_ENV}=1 to confirm "
+                    f"migration {version:03d} would {what} {target} which holds "
+                    f"{count} {unit}; set {_DESTRUCTIVE_OPT_IN_ENV}=1 to confirm "
                     f"that the data is expendable, then re-run."
+                )
+
+        for match in _DROP_TABLE_RE.finditer(sql):
+            table = match.group(1)
+            if table in existing:
+                check(table, "DROP TABLE", f"SELECT COUNT(*) FROM {table}", "row(s)")
+        for match in _DROP_COLUMN_RE.finditer(sql):
+            table, column = match.group(1), match.group(2)
+            if table in existing and column in self._column_types(table):
+                check(
+                    f"{table}.{column}",
+                    "DROP COLUMN",
+                    f"SELECT COUNT({column}) FROM {table}",
+                    "non-NULL value(s)",
                 )
 
     def applied_migrations(self) -> list[int]:
@@ -352,28 +435,7 @@ class DuckDBLake:
         required = ("ticker", "timestamp", "open", "high", "low", "close", "adj_close", "volume")
         frame = df[list(required)].copy()
         frame["interval"] = interval.code
-        self.con.register("_in", frame[list(_BAR_COLS)])
-        try:
-            self.con.execute(
-                """
-                INSERT INTO bars (
-                    ticker, timestamp, interval,
-                    open, high, low, close, adj_close, volume)
-                SELECT ticker, timestamp, interval,
-                       open, high, low, close, adj_close, volume
-                FROM _in
-                ON CONFLICT (ticker, timestamp, interval) DO UPDATE SET
-                    open = EXCLUDED.open,
-                    high = EXCLUDED.high,
-                    low = EXCLUDED.low,
-                    close = EXCLUDED.close,
-                    adj_close = EXCLUDED.adj_close,
-                    volume = EXCLUDED.volume
-                """
-            )
-        finally:
-            self.con.unregister("_in")
-        return len(df)
+        return self._upsert(frame, table="bars", cols=_BAR_COLS, pk=_BAR_PK)
 
     def get_bars(
         self,
@@ -445,9 +507,15 @@ class DuckDBLake:
                 adj_close = EXCLUDED.adj_close,
                 volume = EXCLUDED.volume
         """
-        before = self.count_rows("bars")
-        self.con.execute(sql, [target.code, ticker, source.code])
-        return int(self.count_rows("bars") - before)
+        # Net new rows, counted over just this ticker's target slice rather
+        # than the whole bars table (the INSERT's own row count would also
+        # include ON CONFLICT updates).
+        count_sql = "SELECT COUNT(*) FROM bars WHERE ticker = ? AND interval = ?"
+        with self.transaction():
+            before = int(self.con.execute(count_sql, [ticker, target.code]).fetchone()[0])
+            self.con.execute(sql, [target.code, ticker, source.code])
+            after = int(self.con.execute(count_sql, [ticker, target.code]).fetchone()[0])
+        return after - before
 
     # ---- prices (back-compat shim over daily bars) -------------------------
 
@@ -542,46 +610,47 @@ class DuckDBLake:
         if df.empty:
             return 0
         col_types = self._column_types(table)
-        self.con.register("_in", df[list(cols)])
         non_pk = [c for c in cols if c not in pk]
         update_clause = ", ".join(
             f"{c} = COALESCE(CAST(EXCLUDED.{c} AS {col_types[c]}), {table}.{c})" for c in non_pk
         )
-        try:
-            sql = (
+        with self._registered(_last_per_key(df[list(cols)], pk)):
+            self.con.execute(
                 f"INSERT INTO {table} ({', '.join(cols)}) "
                 f"SELECT {', '.join(cols)} FROM _in "
                 f"ON CONFLICT ({', '.join(pk)}) DO UPDATE SET {update_clause}"
             )
-            self.con.execute(sql)
-        finally:
-            self.con.unregister("_in")
         return len(df)
 
     def _column_types(self, table: str) -> dict[str, str]:
-        rows = self.con.execute(
-            "SELECT column_name, data_type FROM information_schema.columns "
-            "WHERE table_schema='main' AND table_name = ?",
-            [table],
-        ).fetchall()
-        return {row[0]: row[1] for row in rows}
+        """``{column → declared type}`` for ``table``, cached per table.
+
+        The schema only changes through ``migrate()``, which clears the
+        cache after every migration it applies.
+        """
+        cached = self._column_type_cache.get(table)
+        if cached is None:
+            rows = self.con.execute(
+                "SELECT column_name, data_type FROM information_schema.columns "
+                "WHERE table_schema='main' AND table_name = ?",
+                [table],
+            ).fetchall()
+            cached = {row[0]: row[1] for row in rows}
+            self._column_type_cache[table] = cached
+        return cached
 
     def get_income_statement(self, ticker: str) -> pd.DataFrame:
-        return self.con.execute(
-            "SELECT * FROM income_statement WHERE ticker = ? ORDER BY period_end DESC, frequency",
-            [ticker],
-        ).fetchdf()
+        return self._get_statement("income_statement", ticker)
 
     def get_balance_sheet(self, ticker: str) -> pd.DataFrame:
-        return self.con.execute(
-            "SELECT * FROM balance_sheet WHERE ticker = ? ORDER BY period_end DESC, frequency",
-            [ticker],
-        ).fetchdf()
+        return self._get_statement("balance_sheet", ticker)
 
     def get_cash_flow_statement(self, ticker: str) -> pd.DataFrame:
+        return self._get_statement("cash_flow_statement", ticker)
+
+    def _get_statement(self, table: str, ticker: str) -> pd.DataFrame:
         return self.con.execute(
-            "SELECT * FROM cash_flow_statement "
-            "WHERE ticker = ? ORDER BY period_end DESC, frequency",
+            f"SELECT * FROM {table} WHERE ticker = ? ORDER BY period_end DESC, frequency",
             [ticker],
         ).fetchdf()
 
@@ -637,6 +706,14 @@ class DuckDBLake:
         "price",
         "value",
         "post_transaction_amount",
+        "sec_link",
+    )
+    _INSIDER_NATURAL_KEY = (
+        "ticker",
+        "transaction_date",
+        "owner_name",
+        "transaction_code",
+        "shares",
         "sec_link",
     )
     _NEWS_COLS = (
@@ -860,36 +937,16 @@ class DuckDBLake:
         ).fetchdf()
 
     def upsert_insider_transactions(self, df: pd.DataFrame) -> int:
-        # Deduplicates on (ticker, transaction_date, owner_name,
-        # transaction_code, shares, sec_link) via the unique index;
-        # the synthetic id column is excluded from insert.
-        if df.empty:
-            return 0
-        self.con.register("_in", df[list(self._INSIDER_COLS)])
-        try:
-            non_pk = (
-                "filing_date",
-                "owner_cik",
-                "owner_relation",
-                "owner_title",
-                "acquired_disposed",
-                "price",
-                "value",
-                "post_transaction_amount",
-            )
-            update_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in non_pk)
-            self.con.execute(
-                f"""
-                INSERT INTO insider_transactions ({", ".join(self._INSIDER_COLS)})
-                SELECT {", ".join(self._INSIDER_COLS)} FROM _in
-                ON CONFLICT (ticker, transaction_date, owner_name,
-                             transaction_code, shares, sec_link)
-                DO UPDATE SET {update_clause}
-                """
-            )
-        finally:
-            self.con.unregister("_in")
-        return len(df)
+        # Deduplicates on the NULL-safe ``natural_key`` column (migration
+        # 010) derived from _INSIDER_NATURAL_KEY; the synthetic id column
+        # is excluded from insert.
+        return self._upsert(
+            df,
+            table="insider_transactions",
+            cols=self._INSIDER_COLS,
+            pk=self._INSIDER_NATURAL_KEY,
+            natural_key_sql=_INSIDER_NATURAL_KEY_SQL,
+        )
 
     def upsert_news(self, df: pd.DataFrame) -> int:
         return self._upsert(
@@ -1084,26 +1141,22 @@ class DuckDBLake:
         tickers = frame["ticker"].unique().tolist()
         if not tickers:
             return 0
-        self.con.register("_in", frame)
-        try:
-            # Atomic delete-then-insert: if the INSERT fails (e.g. a NOT
-            # NULL violation on a column the vendor unexpectedly returned
-            # blank), we don't want the DELETE to have already wiped the
-            # roster — wrap both statements in one transaction so the
-            # caller either sees the new roster or the old one, never an
-            # empty one.
-            with self.transaction():
-                placeholders = ",".join(["?"] * len(tickers))
-                self.con.execute(
-                    f"DELETE FROM officers WHERE ticker IN ({placeholders})",
-                    tickers,
-                )
-                self.con.execute(
-                    f"INSERT INTO officers ({', '.join(self._OFFICERS_COLS)}) "
-                    f"SELECT {', '.join(self._OFFICERS_COLS)} FROM _in"
-                )
-        finally:
-            self.con.unregister("_in")
+        # Atomic delete-then-insert: if the INSERT fails (e.g. a NOT
+        # NULL violation on a column the vendor unexpectedly returned
+        # blank), we don't want the DELETE to have already wiped the
+        # roster — wrap both statements in one transaction so the
+        # caller either sees the new roster or the old one, never an
+        # empty one.
+        with self._registered(_last_per_key(frame, ("ticker", "name"))), self.transaction():
+            placeholders = ",".join(["?"] * len(tickers))
+            self.con.execute(
+                f"DELETE FROM officers WHERE ticker IN ({placeholders})",
+                tickers,
+            )
+            self.con.execute(
+                f"INSERT INTO officers ({', '.join(self._OFFICERS_COLS)}) "
+                f"SELECT {', '.join(self._OFFICERS_COLS)} FROM _in"
+            )
         return len(df)
 
     def upsert_ticker_snapshots(self, df: pd.DataFrame) -> int:
@@ -1125,29 +1178,47 @@ class DuckDBLake:
         table: str,
         cols: tuple[str, ...],
         pk: tuple[str, ...],
+        natural_key_sql: str | None = None,
     ) -> int:
+        """Last-write-wins upsert of ``cols`` keyed on ``pk``.
+
+        With ``natural_key_sql``, the table's conflict target is a
+        ``natural_key`` column computed from ``pk`` by that SQL expression
+        (used where ``pk`` columns are nullable and a plain unique index
+        would treat NULLs as distinct); ``pk`` still drives in-batch
+        dedup and which columns are left alone on UPDATE.
+        """
         if df.empty:
             return 0
-        self.con.register("_in", df[list(cols)])
         non_pk = [c for c in cols if c not in pk]
-        update_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in non_pk)
-        try:
-            if non_pk:
-                sql = (
-                    f"INSERT INTO {table} ({', '.join(cols)}) "
-                    f"SELECT {', '.join(cols)} FROM _in "
-                    f"ON CONFLICT ({', '.join(pk)}) DO UPDATE SET {update_clause}"
-                )
-            else:
-                sql = (
-                    f"INSERT INTO {table} ({', '.join(cols)}) "
-                    f"SELECT {', '.join(cols)} FROM _in "
-                    f"ON CONFLICT ({', '.join(pk)}) DO NOTHING"
-                )
-            self.con.execute(sql)
-        finally:
-            self.con.unregister("_in")
+        if non_pk:
+            action = "DO UPDATE SET " + ", ".join(f"{c} = EXCLUDED.{c}" for c in non_pk)
+        else:
+            action = "DO NOTHING"
+        insert_cols = ", ".join(cols)
+        select_cols = insert_cols
+        conflict = ", ".join(pk)
+        if natural_key_sql is not None:
+            insert_cols += ", natural_key"
+            select_cols += f", {natural_key_sql}"
+            conflict = "natural_key"
+        with self._registered(_last_per_key(df[list(cols)], pk)):
+            self.con.execute(
+                f"INSERT INTO {table} ({insert_cols}) "
+                f"SELECT {select_cols} FROM _in "
+                f"ON CONFLICT ({conflict}) {action}"
+            )
         return len(df)
+
+    @contextmanager
+    def _registered(self, df: pd.DataFrame, name: str = "_in") -> Iterator[None]:
+        """Expose ``df`` to SQL as the view ``name`` for the duration of
+        the block, unregistering it even if the statement raises."""
+        self.con.register(name, df)
+        try:
+            yield
+        finally:
+            self.con.unregister(name)
 
     def _upsert_on_change(
         self,
@@ -1197,6 +1268,9 @@ class DuckDBLake:
 
         cols = list(cols)
         identity_eq = " AND ".join(f"_in.{c} = latest.{c}" for c in identity_cols)
+        # Only rank history for identities present in the batch; the rest
+        # of the table can't match the LEFT JOIN below anyway.
+        in_batch = " AND ".join(f"_in.{c} = {table}.{c}" for c in identity_cols)
         # NULL-drift suppression (I10): a vendor briefly returning NULL for
         # a previously-known value is *not* a change worth recording — that
         # would bloat the time series with vendor flakiness, not real
@@ -1219,11 +1293,12 @@ class DuckDBLake:
         col_list = ", ".join(cols)
         pk_list = ", ".join((*identity_cols, snapshot_col))
 
-        self.con.register("_in", df[cols])
-        try:
-            with self.transaction():
-                before = int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
-                sql = f"""
+        with (
+            self._registered(_last_per_key(df[cols], (*identity_cols, snapshot_col))),
+            self.transaction(),
+        ):
+            before = int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            sql = f"""
                     WITH ranked AS (
                         SELECT *,
                                ROW_NUMBER() OVER (
@@ -1231,6 +1306,7 @@ class DuckDBLake:
                                    ORDER BY {snapshot_col} DESC
                                ) AS _rn
                           FROM {table}
+                         WHERE EXISTS (SELECT 1 FROM _in WHERE {in_batch})
                     ),
                     latest AS (
                         SELECT * FROM ranked WHERE _rn = 1
@@ -1248,11 +1324,9 @@ class DuckDBLake:
                     ON CONFLICT ({pk_list})
                     DO UPDATE SET {update_clause}
                 """
-                self.con.execute(sql)
-                after = int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
-                return after - before
-        finally:
-            self.con.unregister("_in")
+            self.con.execute(sql)
+            after = int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            return after - before
 
     # ---- multi-asset helpers ------------------------------------------------
 
