@@ -26,7 +26,8 @@ Factor sources, never mixed (mixing would double-adjust, since a vendor's
 1. **Corporate-action events** when the ticker has any: a split of ratio
    ``r`` scales earlier prices by ``1 / r`` (and volume by ``r``); a cash
    dividend ``D`` scales earlier prices by ``1 - D / close_prev``, with
-   ``close_prev`` the raw close of the last bar before the ex-date.
+   ``close_prev`` the raw close of the last bar before the ex-date (in
+   post-split shares when a split takes effect on the same bar).
 2. Otherwise the vendor's ``adj_close / close`` ratio (volume untouched,
    since the ratio can't separate splits from dividends). Missing ratios
    take the next known one. A ratio that never changes is the identity.
@@ -106,6 +107,10 @@ def _from_events(
     price_steps = np.ones(n + 1)
     volume_steps = np.ones(n + 1)
     touched_price = touched_volume = False
+    # splits already applied at each bar, so a dividend sharing that bar is
+    # measured against the prior close in the same (post-split) shares the
+    # engine credits it on
+    split_at: dict[int, float] = {}
     for event in events:
         # first bar dated on or after the ex-date
         idx = int(np.searchsorted(timestamps, np.datetime64(event.ex_date, "us"), side="left"))
@@ -114,9 +119,10 @@ def _from_events(
         if isinstance(event, Split):
             price_steps[idx] /= event.ratio
             volume_steps[idx] *= event.ratio
+            split_at[idx] = split_at.get(idx, 1.0) * event.ratio
             touched_price = touched_volume = True
         else:
-            prev_close = closes[idx - 1]
+            prev_close = closes[idx - 1] / split_at.get(idx, 1.0)
             if not prev_close > event.amount:
                 continue  # nonsensical (dividend >= price); ignore
             price_steps[idx] *= 1.0 - event.amount / prev_close

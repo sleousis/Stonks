@@ -133,3 +133,15 @@ def test_adj_close_missing_values_fall_back_to_neighbours():
 
 def test_empty_frame_is_identity():
     assert SeriesAdjustment.build(_frame([]), events=()).is_identity
+
+
+def test_same_day_split_then_dividend_uses_post_split_prior_close():
+    # 2:1 split and a 1.0 dividend on the post-split share, same ex-date:
+    # post-split equivalent prior close is 100, so the dividend factor is 0.99
+    frame = _frame([200, 200, 99, 99])
+    events = (
+        Split("X.US", date(2024, 6, 5), 2.0),
+        Dividend("X.US", date(2024, 6, 5), 1.0),
+    )
+    adj = SeriesAdjustment.build(frame, events=events)
+    assert adj.apply(frame, 0, 4)["close"].tolist() == pytest.approx([99, 99, 99, 99])
