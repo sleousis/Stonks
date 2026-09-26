@@ -290,6 +290,52 @@ def _last_per_key(df: pd.DataFrame, keys: tuple[str, ...]) -> pd.DataFrame:
     return df.drop_duplicates(subset=list(keys), keep="last")
 
 
+def _changed_snapshots(
+    batch: pd.DataFrame,
+    latest: pd.DataFrame,
+    identity_cols: list[str],
+    value_cols: list[str],
+    snapshot_col: str,
+) -> pd.DataFrame:
+    """Rows of ``batch`` that :meth:`DuckDBLake._upsert_on_change` writes.
+
+    A row is kept when its identity has no stored row, when it is not newer
+    than the stored latest (a correction or a backfill), or when one of
+    ``value_cols`` changed against the last row kept before it (the stored
+    latest, then earlier batch rows in date order).
+
+    NULL-drift suppression (I10): a vendor briefly returning NULL for a
+    known value is not a change worth recording, it would fill the series
+    with vendor flakiness. A column counts as changed only when the new
+    value is non-NULL and differs from the prior. NULL to a real value is a
+    change (we just learned it), the other way is not.
+    """
+
+    def changed(prev: Any, new: Any) -> bool:
+        if pd.isna(new):
+            return False
+        return bool(pd.isna(prev) or prev != new)
+
+    stored = {tuple(r[c] for c in identity_cols): r for r in latest.to_dict("records")}
+    batch = batch.reset_index(drop=True)
+    keep: list[Any] = []
+    ordered = batch.sort_values(snapshot_col, kind="stable")
+    for ident, group in ordered.groupby(identity_cols, sort=False, dropna=False):
+        ident = ident if isinstance(ident, tuple) else (ident,)
+        prev = stored.get(ident)
+        last_date = None if prev is None else pd.Timestamp(prev[snapshot_col])
+        for idx, row in group.iterrows():
+            if prev is None or pd.Timestamp(row[snapshot_col]) <= last_date:
+                keep.append(idx)
+                if prev is None:
+                    prev, last_date = row, pd.Timestamp(row[snapshot_col])
+                continue
+            if any(changed(prev[c], row[c]) for c in value_cols):
+                keep.append(idx)
+                prev, last_date = row, pd.Timestamp(row[snapshot_col])
+    return batch.loc[sorted(keep)]
+
+
 _STATEMENT_TABLES = frozenset({"income_statement", "balance_sheet", "cash_flow_statement"})
 
 
@@ -1957,71 +2003,60 @@ class DuckDBLake:
         Tables backed by this helper must declare a PRIMARY KEY of
         ``(identity_cols..., snapshot_col)`` so the ON CONFLICT clause
         has something to fire on.
+
+        A batch may hold several snapshots of one identity (a history
+        backfill). Rows newer than the stored latest are then judged in
+        date order, each against the last row kept, so one batch stores
+        exactly what the same rows sent one poll at a time would.
         """
         if df.empty:
             return 0
 
         cols = list(cols)
-        identity_eq = " AND ".join(f"_in.{c} = latest.{c}" for c in identity_cols)
-        # Only rank history for identities present in the batch; the rest
-        # of the table can't match the LEFT JOIN below anyway.
-        in_batch = " AND ".join(f"_in.{c} = {table}.{c}" for c in identity_cols)
-        # NULL-drift suppression (I10): a vendor briefly returning NULL for
-        # a previously-known value is *not* a change worth recording — that
-        # would bloat the time series with vendor flakiness, not real
-        # movement. So we count a column as "changed" only when the new
-        # value is non-NULL AND differs from the prior. Going from NULL to
-        # a real value still counts (we just learned it); going the other
-        # way doesn't (we forgot it momentarily).
-        any_value_changed = " OR ".join(
-            (
-                f"((latest.{c} IS NULL AND _in.{c} IS NOT NULL) "
-                f"OR (latest.{c} IS NOT NULL AND _in.{c} IS NOT NULL "
-                f"AND latest.{c} != _in.{c}))"
-            )
-            for c in value_cols
-        )
+        key = (*identity_cols, snapshot_col)
+        batch = _last_per_key(df[cols], key)
         update_clause = ", ".join(
             f"{c} = EXCLUDED.{c}" for c in cols if c not in (*identity_cols, snapshot_col)
         )
-        partition = ", ".join(identity_cols)
         col_list = ", ".join(cols)
-        pk_list = ", ".join((*identity_cols, snapshot_col))
+        pk_list = ", ".join(key)
 
-        with (
-            self._registered(_last_per_key(df[cols], (*identity_cols, snapshot_col))),
-            self.transaction(),
-        ):
+        with self.transaction():
+            latest = self._latest_snapshots(table, batch, identity_cols, snapshot_col)
+            eligible = _changed_snapshots(batch, latest, identity_cols, value_cols, snapshot_col)
             before = int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
-            sql = f"""
-                    WITH ranked AS (
-                        SELECT *,
-                               ROW_NUMBER() OVER (
-                                   PARTITION BY {partition}
-                                   ORDER BY {snapshot_col} DESC
-                               ) AS _rn
-                          FROM {table}
-                         WHERE EXISTS (SELECT 1 FROM _in WHERE {in_batch})
-                    ),
-                    latest AS (
-                        SELECT * FROM ranked WHERE _rn = 1
-                    ),
-                    eligible AS (
-                        SELECT _in.* FROM _in
-                        LEFT JOIN latest ON {identity_eq}
-                        WHERE
-                            latest.{snapshot_col} IS NULL
-                            OR _in.{snapshot_col} <= latest.{snapshot_col}
-                            OR ({any_value_changed})
+            if not eligible.empty:
+                with self._registered(eligible):
+                    self.con.execute(
+                        f"INSERT INTO {table} ({col_list}) SELECT {col_list} FROM _in "
+                        f"ON CONFLICT ({pk_list}) DO UPDATE SET {update_clause}"
                     )
-                    INSERT INTO {table} ({col_list})
-                    SELECT {col_list} FROM eligible
-                    ON CONFLICT ({pk_list})
-                    DO UPDATE SET {update_clause}
-                """
-            self.con.execute(sql)
             after = int(self.con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
             return after - before
+
+    def _latest_snapshots(
+        self,
+        table: str,
+        batch: pd.DataFrame,
+        identity_cols: list[str],
+        snapshot_col: str,
+    ) -> pd.DataFrame:
+        """The stored latest row of every identity present in ``batch``."""
+        ids = batch[identity_cols].drop_duplicates()
+        in_batch = " AND ".join(f"_ids.{c} = {table}.{c}" for c in identity_cols)
+        partition = ", ".join(identity_cols)
+        with self._registered(ids, "_ids"):
+            return self.con.execute(
+                f"""
+                SELECT * EXCLUDE (_rn) FROM (
+                    SELECT *, ROW_NUMBER() OVER (
+                               PARTITION BY {partition} ORDER BY {snapshot_col} DESC
+                           ) AS _rn
+                      FROM {table}
+                     WHERE EXISTS (SELECT 1 FROM _ids WHERE {in_batch})
+                ) WHERE _rn = 1
+                """
+            ).fetchdf()
 
     # ---- multi-asset helpers ------------------------------------------------
 
