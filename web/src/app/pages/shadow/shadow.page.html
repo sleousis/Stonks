@@ -221,6 +221,7 @@
           [columns]="decisionColumns"
           [rowKey]="decisionRowKey"
           [total]="decisions.value().total"
+          [offset]="decisions.value().offset"
           [pageSize]="decisionsPage"
           [initialSort]="{ key: 'as_of', dir: 'desc' }"
           (pageChange)="decisionOffset.set($event.offset)"

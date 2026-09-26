@@ -1,0 +1,129 @@
+@use 'breakpoints' as bp;
+
+.facts {
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0 0 var(--space-4);
+
+  @include bp.from-tablet {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  &.compact {
+    margin: 0;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 8rem), 1fr));
+  }
+
+  &.result {
+    margin-top: var(--space-4);
+  }
+
+  div {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-2);
+  }
+
+  dt {
+    font-size: var(--text-xs);
+    color: var(--color-ink-3);
+  }
+
+  dd {
+    margin: 0;
+    font-weight: var(--weight-semibold);
+    overflow-wrap: anywhere;
+  }
+}
+
+.date-row {
+  max-width: 16rem;
+  padding-bottom: 0;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+  list-style: none;
+  max-height: 20rem;
+  overflow-y: auto;
+
+  li {
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-3);
+    font-size: var(--text-xs);
+  }
+}
+
+.intro {
+  margin-bottom: var(--space-4);
+  font-size: var(--text-sm);
+  max-width: 70ch;
+}
+
+.ensure-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr);
+
+  @include bp.from-tablet {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.error {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-loss);
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+
+  @include bp.phone {
+    .btn {
+      width: 100%;
+    }
+  }
+}
+
+.warnings {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.failed {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.spec {
+  margin: 0;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--text-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@include bp.phone {
+  .panel-head .btn {
+    width: 100%;
+  }
+}

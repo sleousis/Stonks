@@ -2,6 +2,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   type ElementRef,
   Injector,
   afterNextRender,
@@ -15,10 +16,12 @@ import { filter, skip } from 'rxjs';
 
 import { AuthTokenService } from '../core/auth/auth-token.service';
 import { ShortcutsService } from '../core/commands/shortcuts.service';
+import { HaltStateService } from '../core/halts/halt-state.service';
 import { ConnectivityService } from '../core/pwa/connectivity.service';
 import { ThemeService } from '../core/theme/theme.service';
 import { CommandPalette } from '../shared/ui/command-palette/command-palette';
 import { ConfirmDialog } from '../shared/ui/confirm-dialog';
+import { SessionStrip } from '../shared/ui/session-strip';
 import { OfflinePage } from '../shared/ui/offline-page';
 import { ShortcutHelp } from '../shared/ui/shortcut-help';
 import { ToastOutlet } from '../shared/ui/toast-outlet';
@@ -45,6 +48,8 @@ import { registerShellCommands } from './shell-commands';
     CommandPalette,
     ShortcutHelp,
     OfflinePage,
+    // ops
+    SessionStrip,
   ],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
@@ -67,6 +72,8 @@ export class Shell {
 
   constructor() {
     registerShellCommands();
+    // ops: keep the halt state in the session strip current
+    inject(HaltStateService).watch(inject(DestroyRef));
     this.router.events
       .pipe(
         filter((e) => e instanceof NavigationEnd),

@@ -3,19 +3,18 @@ import { RouterLink } from '@angular/router';
 
 import type { LabRunView } from '../../api/models';
 import { formatNumber } from '../../core/format/format';
-import { humanize } from '../../shared/ui/param-form/param-spec';
-import { splitMetrics } from '../../shared/metrics';
-import { HelpTip } from '../../shared/ui/help-tip';
-import { StatTile } from '../../shared/ui/stat-tile';
-import { StatusPill } from '../../shared/ui/status-pill';
-import { SURVIVAL_TESTS } from './lab-requests';
+import { humanize } from '../ui/param-form/param-spec';
+import { splitMetrics } from '../metrics';
+import { HelpTip } from '../ui/help-tip';
+import { StatTile } from '../ui/stat-tile';
+import { StatusPill } from '../ui/status-pill';
+import { PreflightIssues } from './preflight-issues';
+import { testLabel } from './survival-tests';
 import { FigureGrid, benchmarkFigures, benchmarkName } from './result-figures';
 
-export { formatMetric, metricLabel } from '../../shared/metrics';
+export { formatMetric, metricLabel } from '../metrics';
 
-export function testLabel(id: string): string {
-  return SURVIVAL_TESTS.find((t) => t.id === id)?.label ?? humanize(id);
-}
+export { testLabel } from './survival-tests';
 
 function paramText(v: unknown): string {
   if (typeof v === 'number') return formatNumber(v);
@@ -31,7 +30,7 @@ function paramText(v: unknown): string {
 @Component({
   selector: 'app-lab-run-result',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FigureGrid, HelpTip, RouterLink, StatTile, StatusPill],
+  imports: [FigureGrid, HelpTip, PreflightIssues, RouterLink, StatTile, StatusPill],
   template: `
     @let r = result();
     <div class="summary">
@@ -64,6 +63,10 @@ function paramText(v: unknown): string {
         <a class="num" [routerLink]="['/strategies', id]">{{ id }}</a
         >.
       </p>
+    }
+
+    @if (r.preflight) {
+      <app-preflight-issues [preflight]="r.preflight" />
     }
 
     <section aria-labelledby="best-params-title">

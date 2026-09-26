@@ -85,6 +85,27 @@ describe('DataTable', () => {
     expect(pages).toEqual([{ offset: 2, limit: 2 }]);
   });
 
+  it('server mode shows the page given by the offset input', async () => {
+    // A page re-creates the table after each load: the offset keeps the pager right.
+    const { fixture, el } = await render({ pageSize: 2, total: 7, offset: 4 });
+    const pages: unknown[] = [];
+    fixture.componentInstance.pageChange.subscribe((p) => pages.push(p));
+    expect(el.textContent).toContain('5–6 of 7');
+    const button = (text: string) =>
+      [...el.querySelectorAll<HTMLButtonElement>('.pager button')].find(
+        (b) => b.textContent?.trim() === text,
+      )!;
+    expect(button('Previous').disabled).toBe(false);
+    button('Next').click();
+    await fixture.whenStable();
+    expect(pages).toEqual([{ offset: 6, limit: 2 }]);
+
+    fixture.componentRef.setInput('offset', 6);
+    await fixture.whenStable();
+    expect(el.textContent).toContain('7–7 of 7');
+    expect(button('Next').disabled).toBe(true);
+  });
+
   it('shows the empty message', async () => {
     const { el } = await render({ rows: [], emptyMessage: 'Nothing here.' });
     expect(el.querySelector('tbody')?.textContent).toContain('Nothing here.');

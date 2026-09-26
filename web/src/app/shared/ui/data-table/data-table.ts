@@ -41,6 +41,8 @@ export interface TableColumn<T> {
   sortable?: boolean;
   /** Colour numbers by sign (gain/loss). */
   tone?: boolean;
+  /** Money columns: the row's currency (ISO 4217); USD when missing. */
+  currency?: (row: T) => string | null | undefined;
   /**
    * Phone card layout: `title` is the card heading (use it for the key
    * column, e.g. ticker or id), `hide` drops the column on phones, and the
@@ -125,6 +127,12 @@ export class DataTable<T extends object> {
   readonly initialSort = input<SortState | null>(null);
   /** Server mode: total rows across all pages. */
   readonly total = input<number | null>(null);
+  /**
+   * Server mode: the offset of the rows shown (the API page's `offset`). The
+   * pager reads its page from it, so a table re-created after a load still
+   * shows the right range.
+   */
+  readonly offset = input<number | null>(null);
   readonly emptyMessage = input('No rows to show.');
   readonly pageChange = output<PageRequest>();
 
@@ -136,10 +144,16 @@ export class DataTable<T extends object> {
   });
 
   protected readonly sort = linkedSignal<SortState | null>(() => this.initialSort());
-  protected readonly page = linkedSignal<readonly T[], number>({
-    source: () => this.rows(),
-    // New rows in client mode start from page one; server mode keeps the page.
-    computation: (_rows, prev) => (this.total() !== null && prev ? prev.value : 0),
+  protected readonly page = linkedSignal<{ rows: readonly T[]; offset: number | null }, number>({
+    source: () => ({ rows: this.rows(), offset: this.offset() }),
+    // Client mode: new rows start from page one. Server mode: the page comes
+    // from the offset when given, else it stays where it was.
+    computation: ({ offset }, prev) => {
+      if (this.total() === null) return 0;
+      const size = this.pageSize();
+      if (offset !== null && size > 0) return Math.floor(offset / size);
+      return prev ? prev.value : 0;
+    },
   });
   protected readonly liveMessage = signal('');
 
@@ -222,9 +236,9 @@ export class DataTable<T extends object> {
     if (value === null || value === undefined || value === '') return '–';
     switch (col.format) {
       case 'money':
-        return formatMoney(value as number);
+        return formatMoney(value as number, { currency: col.currency?.(row) });
       case 'signedMoney':
-        return formatMoney(value as number, { signed: true });
+        return formatMoney(value as number, { signed: true, currency: col.currency?.(row) });
       case 'percent':
         return formatPercent(value as number);
       case 'signedPercent':

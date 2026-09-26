@@ -1,4 +1,5 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideRouter } from '@angular/router';
 import { signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 
@@ -8,7 +9,7 @@ import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { FakeChartEngine, provideFakeChart } from '../../../testing/fake-chart';
 import { nextRequest, tick } from '../../../testing/http';
 import { makeDraft } from '../../../testing/studio-fixtures';
-import { DraftTest, costsFor, drawdowns, parseTickers } from './draft-test';
+import { DraftTest, costsFor, parseTickers } from './draft-test';
 
 const PRESETS: CostModelPreset[] = [
   { name: 'zero', description: 'No costs.', settings: {} },
@@ -87,12 +88,6 @@ describe('draft test helpers', () => {
     expect(costsFor(undefined, 'equity')).toEqual({ slippage_bps: 0, fee_per_trade: 0 });
   });
 
-  it('computes running drawdowns', () => {
-    const dd = drawdowns(RESULT.equity);
-    expect(dd.slice(0, 2)).toEqual([0, 0]);
-    expect(dd[2]).toBeCloseTo(-0.1);
-  });
-
   it('parses tickers typed with commas or spaces', () => {
     expect(parseTickers(' aapl.us, msft.us  AAPL.US;nvda.us')).toEqual([
       'AAPL.US',
@@ -118,6 +113,7 @@ describe('DraftTest', () => {
         ...provideApi(),
         provideHttpClientTesting(),
         provideFakeChart(chart),
+        provideRouter([]),
         { provide: JobsService, useValue: { track } },
       ],
     });
@@ -185,6 +181,7 @@ describe('DraftTest', () => {
     await settle();
 
     expect(track).toHaveBeenCalledWith('job_bt', expect.anything());
+    expect(el.querySelector('app-backtest-result')).not.toBeNull();
     const text = el.textContent ?? '';
     expect(text).toContain('-1.00%');
     expect(text).toContain('0.35');
@@ -218,8 +215,9 @@ describe('DraftTest', () => {
     await settle();
 
     const text = el.textContent ?? '';
-    expect(text).toContain('Did not survive');
-    const pills = [...el.querySelectorAll('.reports app-status-pill')].map((p) =>
+    expect(el.querySelector('app-lab-run-result')).not.toBeNull();
+    expect(text).toContain('Failed');
+    const pills = [...el.querySelectorAll('app-lab-run-result .test app-status-pill')].map((p) =>
       p.textContent?.trim(),
     );
     expect(pills).toEqual(['pass', 'fail']);

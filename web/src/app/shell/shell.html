@@ -57,6 +57,8 @@
   </aside>
 
   <main id="main" #main tabindex="-1">
+    <!-- ops: session strip with the halt state -->
+    <app-session-strip />
     @if (connectivity.online()) {
       <router-outlet />
     } @else {

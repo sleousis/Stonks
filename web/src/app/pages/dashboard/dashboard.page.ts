@@ -93,7 +93,7 @@ export class DashboardPage {
   protected readonly dayChange = computed(() => {
     const row = this.latest();
     if (!row || row.daily_change == null) return null;
-    return `${formatMoney(row.daily_change, { signed: true })} (${formatPercent(row.daily_return, { signed: true })}) on ${row.day}`;
+    return `${formatMoney(row.daily_change, { signed: true, currency: this.currency() })} (${formatPercent(row.daily_return, { signed: true })}) on ${row.day}`;
   });
   protected readonly dayTone = computed(() => toneClass(this.latest()?.daily_change));
 
@@ -107,9 +107,15 @@ export class DashboardPage {
 
   protected readonly positionsDetail = computed(() => {
     if (!this.portfolio.hasValue()) return null;
-    const n = this.portfolio.value().positions.length;
-    return n === 1 ? '1 position' : `${n} positions`;
+    const p = this.portfolio.value();
+    const n = p.positions.length;
+    const count = n === 1 ? '1 position' : `${n} positions`;
+    if (!n || p.unrealized_pnl == null) return count;
+    return `${count}, ${formatMoney(p.unrealized_pnl, { signed: true, currency: p.currency })} unrealized`;
   });
+  protected readonly positionsTone = computed(() =>
+    this.portfolio.hasValue() ? toneClass(this.portfolio.value().unrealized_pnl) : '',
+  );
 
   protected readonly drawdownNow = computed(() => this.latest()?.drawdown ?? null);
   protected readonly worstDrawdown = computed(() => {
@@ -117,7 +123,13 @@ export class DashboardPage {
     return rows.length ? Math.min(...rows.map((r) => r.drawdown)) : null;
   });
 
-  protected readonly money = formatMoney;
+  /** The portfolio's currency from the API (USD until it loads). */
+  protected readonly currency = computed(() =>
+    this.portfolio.hasValue() ? (this.portfolio.value().currency ?? null) : null,
+  );
+  protected money(value: number | null | undefined): string {
+    return formatMoney(value, { currency: this.currency() });
+  }
   protected readonly percent = formatPercent;
 
   // Chart -------------------------------------------------------------------
@@ -150,8 +162,8 @@ export class DashboardPage {
     const last = rows.at(-1);
     if (!first || !last) return null;
     return (
-      `Portfolio value from ${first.day} to ${last.day}: ${formatMoney(first.total_value)} to ` +
-      `${formatMoney(last.total_value)}, cumulative return ${formatPercent(last.cumulative_return, { signed: true })}. ` +
+      `Portfolio value from ${first.day} to ${last.day}: ${this.money(first.total_value)} to ` +
+      `${this.money(last.total_value)}, cumulative return ${formatPercent(last.cumulative_return, { signed: true })}. ` +
       `Current drawdown ${formatPercent(last.drawdown)}, worst ${formatPercent(this.worstDrawdown())}.`
     );
   });
@@ -160,9 +172,30 @@ export class DashboardPage {
   protected readonly positionColumns: TableColumn<PositionView>[] = [
     { key: 'ticker', label: 'Ticker', mobile: 'title' },
     { key: 'quantity', label: 'Quantity', format: 'number' },
-    { key: 'price', label: 'Price', format: 'money' },
+    {
+      key: 'avg_cost',
+      label: 'Avg cost',
+      format: 'money',
+      currency: (p) => p.currency,
+      mobile: 'hide',
+    },
+    { key: 'price', label: 'Price', format: 'money', currency: (p) => p.currency },
     { key: 'price_date', label: 'Priced', format: 'date', mobile: 'hide' },
-    { key: 'market_value', label: 'Value', format: 'money' },
+    { key: 'market_value', label: 'Value', format: 'money', currency: (p) => p.currency },
+    {
+      key: 'unrealized_pnl',
+      label: 'Unrealized P&L',
+      format: 'signedMoney',
+      tone: true,
+      currency: (p) => p.currency,
+    },
+    {
+      key: 'unrealized_pnl_pct',
+      label: 'P&L %',
+      format: 'signedPercent',
+      tone: true,
+      mobile: 'hide',
+    },
     { key: 'weight', label: 'Weight', format: 'percent' },
   ];
   protected readonly positionKey = (p: PositionView) => p.ticker;

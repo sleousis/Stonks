@@ -107,6 +107,7 @@ export const FILL_COLUMNS: TableColumn<FillView>[] = [
             [columns]="columns"
             [rowKey]="key"
             [total]="fills.value().total"
+            [offset]="fills.value().offset"
             [pageSize]="pageSize"
             [initialSort]="{ key: 'filled_at', dir: 'desc' }"
             (pageChange)="offset.set($event.offset)"

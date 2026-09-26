@@ -26,6 +26,7 @@ import { OrderStatus, orderReason } from './order-status';
       [columns]="columns"
       [rowKey]="key"
       [total]="total()"
+      [offset]="offset()"
       [pageSize]="pageSize()"
       [initialSort]="{ key: 'created_at', dir: 'desc' }"
       (pageChange)="pageChange.emit($event)"
@@ -55,6 +56,7 @@ export class OrdersTable {
   readonly caption = input('Orders placed by ticks');
   /** Server paging: the page's total. Null pages on the client. */
   readonly total = input<number | null>(null);
+  readonly offset = input<number | null>(null);
   readonly pageSize = input(50);
   /** Off inside a tick's own drill-down, where the link would point to itself. */
   readonly linkTicks = input(true);

@@ -78,6 +78,7 @@ export function barTime(timestamp: string, interval: string): string {
           [columns]="columns"
           [rowKey]="key"
           [total]="ticker() ? null : list.value().total"
+          [offset]="ticker() ? null : list.value().offset"
           [pageSize]="ticker() ? 0 : pageSize"
           [initialSort]="ticker() ? { key: 'interval', dir: 'asc' } : null"
           (pageChange)="offset.set($event.offset)"

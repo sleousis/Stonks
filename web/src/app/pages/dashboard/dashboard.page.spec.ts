@@ -39,6 +39,11 @@ const PORTFOLIO: PortfolioView = {
       price_date: '2026-09-25',
       market_value: 28_700,
       weight: 0.37,
+      avg_cost: 400,
+      cost_basis: 28_000,
+      unrealized_pnl: 700,
+      unrealized_pnl_pct: 0.025,
+      currency: 'USD',
     },
   ],
   positions_value: 51_750,
@@ -271,6 +276,31 @@ describe('DashboardPage', () => {
     expect(text).toContain('No open positions');
     expect(text).toContain('No P&L yet');
     expect(text).toContain('No ticks yet');
+    // The tick runner lives on Orders, then Ticks (UI-10).
+    const ticks = el.querySelector('section[aria-labelledby="ticks-title"]')!;
+    expect(ticks.querySelector('a')!.getAttribute('href')).toBe('/orders/ticks');
+    expect(ticks.textContent).not.toContain('`');
+    flushPending();
+  });
+
+  it('shows unrealized P&L with sign and tone, in the portfolio currency', async () => {
+    (await nextRequest(controller, '/api/portfolio')).flush({
+      ...PORTFOLIO,
+      currency: 'EUR',
+      unrealized_pnl: 700,
+    });
+    await settle();
+    const row = [
+      ...el.querySelectorAll('section[aria-labelledby="positions-title"] tbody tr'),
+    ].find((r) => r.textContent?.includes('MSFT.US'))!;
+    const pnl = row.querySelector('td[data-label="Unrealized P&L"]')!;
+    expect(pnl.textContent?.trim()).toBe('+$700.00');
+    expect(pnl.classList).toContain('gain');
+    expect(row.querySelector('td[data-label="Avg cost"]')!.textContent?.trim()).toBe('$400.00');
+    expect(row.querySelector('td[data-label="P&L %"]')!.textContent?.trim()).toBe('+2.50%');
+    const text = el.textContent ?? '';
+    expect(text).toContain('€76,750.00');
+    expect(text).toContain('2 positions, +€700.00 unrealized');
     flushPending();
   });
 });

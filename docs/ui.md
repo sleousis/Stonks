@@ -1,7 +1,8 @@
 # Trader console (web UI)
 
 The Angular app in `web/` is the trader console: dashboard, strategies, studio,
-lab, data, orders, shadow, go-live, health and settings. It talks only to the
+lab, data, universes, orders, shadow, go-live, halts, schedule and backups,
+data quality, health and settings. It talks only to the
 REST API (`src/stonks/api/`) through a client generated from the checked-in
 contract `web/openapi.json`.
 
@@ -283,10 +284,15 @@ sentence `summary` (the canvas is invisible to screen readers). Tests use
 `provideFakeChart()` from `src/testing/fake-chart.ts`.
 
 With a benchmark, the strategy and the benchmark share pane 0, both rebased
-to 100 (`rebase()` in `pages/lab/result-figures.ts`, `format: 'number'`);
+to 100 (`rebase()` in `shared/lab-results/result-figures.ts`, `format: 'number'`);
 the benchmark is a `muted` line and a small legend names it.
 
 ### Results and missing figures
+
+The result views live in `shared/lab-results/`: `<app-backtest-result>`,
+`<app-lab-run-result>` (with `<app-preflight-issues>`, the run's data
+checks) and `<app-figure-grid>`. The Lab page and Studio's backtest and lab
+panels both use them.
 
 The API sends non-finite figures (a Sharpe with no variance, a payoff ratio
 with no losing trades) as `null`. Show them as **n/a**, never 0 or a dash:
@@ -361,6 +367,34 @@ inject(CommandRegistry).register(
 Actions that change something confirm first, exactly like buttons do.
 Searches go through `api/search.service.ts` (silent: no error toasts).
 Tickers open `/data?instrument=<id>`.
+
+## Operations pages
+
+| Page | Route | What it does |
+|---|---|---|
+| Halts | `/ops/halts` | Active and past halts, the kill switch (global or one portfolio, reason, flatten), Resume and Clear |
+| Schedule and backups | `/ops/schedule` | Jobs with next and last run, recent runs and Run now. Backup jobs and Back up now |
+| Data quality | `/ops/data-quality` | Statement audit flags, filtered by ticker and severity |
+| Universes | `/universes`, `/universes/:id` | List, create (JSON spec or CSV), index history import, members on a date, Refresh and Ensure data |
+
+- `<app-session-strip>` sits above every page: the next scheduled run with
+  a live countdown (`GET /api/schedule`), and the halt state. It turns red
+  while a kill switch is on and amber for a breaker or operational halt.
+  `HaltStateService` (`core/halts/`) reads active halts every minute and
+  right after any halt action.
+- Server-paged tables pass the API page's offset: `[total]="p.total"
+  [offset]="p.offset"`. The table is re-created after each load, and the
+  offset keeps the pager on the right page.
+- Resume needs the typed words `RESUME TRADING` and a fresh second factor.
+  The page calls `StepUpService.ensure()` (`core/auth/step-up.service.ts`)
+  first, and again with `force` when the API answers 403
+  `step_up_required`. The default service never prompts. The sign-in work
+  provides the real one.
+- Refresh, Ensure data and Back up now return a job. Pages follow it with
+  `JobsService.track()` and show `<app-job-progress>`.
+- Run now on a tick job needs the job name typed, like a tick.
+- The backup list shows backup jobs the server ran (`GET /api/jobs?kind=backup`).
+  The API has no route for backups made from the command line.
 
 ## Install and notifications (PWA)
 
