@@ -34,7 +34,7 @@ from stonks.ingest.sources.registry import (
 )
 from stonks.logging import configure_logging, get_logger
 from stonks.notify import build_notifier
-from stonks.production.tick import TickSettings, run_tick
+from stonks.production.tick import BackdatedTickError, TickSettings, run_tick
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
@@ -788,15 +788,19 @@ def tick(
                 shadow_enabled=settings.production.shadow_enabled,
             )
 
-            result = run_tick(
-                state=state,
-                lake=lake,
-                registry=registry,
-                settings=tick_settings,
-                as_of=as_of_date,
-                dry_run=dry_run,
-                notifier=build_notifier(settings.notify),
-            )
+            try:
+                result = run_tick(
+                    state=state,
+                    lake=lake,
+                    registry=registry,
+                    settings=tick_settings,
+                    as_of=as_of_date,
+                    dry_run=dry_run,
+                    notifier=build_notifier(settings.notify),
+                )
+            except BackdatedTickError as exc:
+                console.print(f"[red]{exc}[/red]")
+                raise typer.Exit(code=1) from None
     finally:
         state.close()
 

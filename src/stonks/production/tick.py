@@ -36,6 +36,12 @@ _DBTickStatus = Literal["running", "ok", "partial", "error"]
 _log = get_logger("stonks.production.tick")
 
 
+class BackdatedTickError(ValueError):
+    """A non-dry-run tick was asked to trade a date earlier than the latest
+    portfolio snapshot. Trading it would apply today's portfolio to an old
+    date and write a new "latest" snapshot that belongs in the past."""
+
+
 @dataclass(frozen=True)
 class TickSettings:
     universe: Sequence[str]
@@ -73,6 +79,8 @@ def run_tick(
     tick_id = _new_tick_id(as_of)
     started = _iso_now()
     log = _log.bind(tick_id=tick_id, as_of=as_of.isoformat(), dry_run=dry_run)
+    if not dry_run:
+        _refuse_backdated(state, as_of, log)
 
     state.execute(
         "INSERT INTO tick_runs (id, started_at, status) VALUES (?, ?, 'running')",
@@ -402,9 +410,21 @@ def _iso_now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
+def _refuse_backdated(state: SqliteState, as_of: date, log: Any) -> None:
+    latest = state.sql("SELECT MAX(as_of) AS as_of FROM portfolio_snapshots")[0]["as_of"]
+    if latest is not None and as_of.isoformat() < latest:
+        log.error("tick.backdated_refused", latest_snapshot_as_of=latest)
+        raise BackdatedTickError(
+            f"refusing to trade as_of {as_of.isoformat()}: the portfolio already has a "
+            f"snapshot for {latest}; run with --dry-run to inspect a past date"
+        )
+
+
 def _load_or_seed_portfolio(state: SqliteState, initial_cash: float) -> Portfolio:
+    # NULL as_of (rows written without one) sorts last under DESC.
     rows = state.sql(
-        "SELECT cash, positions_json FROM portfolio_snapshots ORDER BY id DESC LIMIT 1"
+        "SELECT cash, positions_json FROM portfolio_snapshots "
+        "ORDER BY as_of DESC, id DESC LIMIT 1"
     )
     if not rows:
         return Portfolio(cash=initial_cash, positions={})
@@ -511,11 +531,12 @@ def _snapshot_portfolio(
     state.execute(
         """
         INSERT INTO portfolio_snapshots
-            (tick_id, taken_at, cash, positions_json, total_value)
-        VALUES (?, ?, ?, ?, ?)
+            (tick_id, as_of, taken_at, cash, positions_json, total_value)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
         [
             tick_id,
+            as_of.isoformat(),
             _iso_now(),
             portfolio.cash,
             json.dumps(portfolio.positions, sort_keys=True),
