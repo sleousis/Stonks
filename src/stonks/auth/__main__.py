@@ -11,13 +11,14 @@ python -m stonks.auth bootstrap-admin --email you@example.com [--state PATH]
 
 python -m stonks.auth reset-password --email you@example.com [--state PATH]
     Set a new password for any user and sign them out everywhere.
+
+The same commands live under ``stonks users`` (bootstrap, reset-password,
+list), which reads the [auth] settings from the config.
 """
 
 from __future__ import annotations
 
 import argparse
-import getpass
-import os
 import sys
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
@@ -25,10 +26,9 @@ from pathlib import Path
 
 from stonks.app.errors import AppError
 from stonks.auth.passwords import PasswordHasher
+from stonks.auth.prompt import read_new_password
 from stonks.auth.service import AuthService
 from stonks.store.state import SqliteState
-
-PASSWORD_ENV = "STONKS_AUTH_PASSWORD"
 
 
 def _hasher() -> PasswordHasher:
@@ -44,13 +44,7 @@ def _state_path(arg: str | None) -> Path:
 
 
 def _password() -> str:
-    from_env = os.environ.get(PASSWORD_ENV)
-    if from_env:
-        return from_env
-    first = getpass.getpass("New password: ")
-    if getpass.getpass("Repeat it: ") != first:
-        raise AppError("the passwords differ")
-    return first
+    return read_new_password()
 
 
 def _service(path: Path) -> AuthService:
