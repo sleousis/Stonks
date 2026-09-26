@@ -146,6 +146,12 @@ def test_returned_frames_are_copies_callers_cannot_poison_the_cache(lake):
     closes = cache.last_n_closes("X.US", Interval.HOUR_1, as_of, 5)
     closes[:] = -2.0
     assert (cache.last_n_closes("X.US", Interval.HOUR_1, as_of, 5) > 0).all()
+    assert (cache.last_n_bars("X.US", Interval.HOUR_1, as_of, 5)["close"] > 0).all()
+    window = cache.bars_between("X.US", Interval.HOUR_1, datetime(2026, 1, 1), as_of)
+    window.iloc[:, window.columns.get_loc("close")] = -3.0
+    assert (
+        cache.bars_between("X.US", Interval.HOUR_1, datetime(2026, 1, 1), as_of)["close"] > 0
+    ).all()
 
 
 # ---- per-lake holder ------------------------------------------------------
