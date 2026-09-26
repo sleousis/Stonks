@@ -24,6 +24,7 @@ from stonks.core.interval import Interval
 from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.redact import format_exception
 from stonks.ingest.schemas import (
+    DefiTvlRow,
     FinancialStatementsBundle,
     IntradayBar,
     MacroIndicatorRow,
@@ -163,6 +164,27 @@ class IngestPipeline:
                 for c in countries
                 for i in indicators
             ],
+        )
+
+    def run_defi_tvl(
+        self,
+        chains: Sequence[str],
+        since: date | None = None,
+    ) -> IngestRunResult:
+        """Pull each chain's daily DeFi TVL series and upsert it into
+        ``defi_tvl``. One chain is one unit of soft-fail accounting
+        (``tickers_ok`` / ``tickers_failed`` count chains), so an unknown
+        chain or a vendor outage on one never blocks the others."""
+
+        def ingest(chain: str) -> dict[str, Any]:
+            rows = list(self._source.fetch_chain_tvl(chain, since=since))
+            self._lake.upsert_defi_tvl(_defi_tvl_to_df(rows))
+            return {"rows": len(rows)}
+
+        return self._run_units(
+            kind="defi_tvl",
+            event="chain",
+            units=[({"chain": c}, partial(ingest, c)) for c in chains],
         )
 
     def run_metadata(self, tickers: Sequence[str]) -> IngestRunResult:
@@ -327,6 +349,12 @@ def _intraday_to_df(rows: Iterable[IntradayBar]) -> pd.DataFrame:
 
 def _macro_to_df(rows: Iterable[MacroIndicatorRow]) -> pd.DataFrame:
     cols = ("country_iso", "indicator", "observation_date", "period", "country_name", "value")
+    data = [tuple(getattr(r, c) for c in cols) for r in rows]
+    return pd.DataFrame(data, columns=list(cols))
+
+
+def _defi_tvl_to_df(rows: Iterable[DefiTvlRow]) -> pd.DataFrame:
+    cols = ("chain", "observation_date", "tvl_usd", "source")
     data = [tuple(getattr(r, c) for c in cols) for r in rows]
     return pd.DataFrame(data, columns=list(cols))
 

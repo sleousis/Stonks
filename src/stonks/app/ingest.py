@@ -26,7 +26,7 @@ INGEST_JOB = "ingest"
 
 IngestKind = Literal["prices", "intraday", "fundamentals", "metadata"]
 #: Mirrors ``stonks.ingest.sources.registry.SOURCE_IDS`` (a test pins it).
-SourceId = Literal["eodhd", "yahoo"]
+SourceId = Literal["eodhd", "yahoo", "defillama"]
 
 
 class IngestRequest(BaseModel):

@@ -4,6 +4,17 @@ Re-exports the cross-layer timeutil helpers under a strategy-local namespace
 so strategy examples import from a single obvious module rather than
 reaching into ``core`` directly, and hosts :func:`get_last_n_bars`, the
 bar-count history fetch every lookback-based strategy uses.
+
+Price basis
+-----------
+Every bar accessor takes ``basis``: ``"adjusted"`` (the default, for
+signals) back-adjusts OHLC and volume for splits and dividends **as of**
+the read's cutoff, using only events effective on or before it (see
+``stonks.features.price_adjustment``); ``"raw"`` returns what the market
+quoted. The latest bar as of the cutoff is identical in both, so adjusted
+levels line up with the raw prices orders fill at. A ticker with no
+corporate-action data (and ``adj_close`` equal to ``close``) reads exactly
+the same in both bases.
 """
 
 from __future__ import annotations
@@ -16,8 +27,11 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from stonks.core.corporate_actions import CorporateAction, PriceBasis
 from stonks.core.interval import Interval
 from stonks.core.timeutil import as_datetime, iso
+from stonks.features.price_adjustment import SeriesAdjustment
+from stonks.store.corporate_actions import LakeCorporateActions
 
 __all__ = ["BarCache", "LakeBarCaches", "as_datetime", "get_last_n_bars", "iso"]
 
@@ -52,9 +66,22 @@ def _window_start(end: datetime, span: timedelta) -> datetime:
         return datetime(1, 1, 1)
 
 
-def get_last_n_bars(lake: Any, ticker: str, interval: Interval, as_of: Any, n: int) -> pd.DataFrame:
+def _ticker_events(lake: Any, ticker: str) -> tuple[CorporateAction, ...]:
+    return LakeCorporateActions(lake).load([ticker]).for_ticker(ticker)
+
+
+def get_last_n_bars(
+    lake: Any,
+    ticker: str,
+    interval: Interval,
+    as_of: Any,
+    n: int,
+    *,
+    basis: PriceBasis = "adjusted",
+) -> pd.DataFrame:
     """Return the last ``n`` bars of ``ticker`` at ``interval`` with
-    timestamp ``<= as_of``, oldest first, re-indexed ``0..len-1``.
+    timestamp ``<= as_of``, oldest first, re-indexed ``0..len-1``, on the
+    given price ``basis`` (see the module docstring).
 
     Lookbacks are defined in bars, but markets close overnight, at
     weekends and on holidays, so a window of ``n * interval`` wall-clock
@@ -76,7 +103,11 @@ def get_last_n_bars(lake: Any, ticker: str, interval: Interval, as_of: Any, n: i
         df = lake.get_bars(ticker, interval, start=_window_start(end_dt, span), end=as_of)
     if df is None:
         return pd.DataFrame()
-    return df.iloc[-n:].reset_index(drop=True)
+    df = df.reset_index(drop=True)
+    lo = len(df) - len(df.iloc[-n:])
+    if basis == "adjusted" and lo < len(df):
+        return SeriesAdjustment.build(df, _ticker_events(lake, ticker)).apply(df, lo, len(df))
+    return df.iloc[lo:].reset_index(drop=True)
 
 
 # ---- shared bar cache -------------------------------------------------------
@@ -87,12 +118,14 @@ _HISTORY_END = datetime(2200, 1, 1)
 
 
 class _Series:
-    """One ticker's full bar history at one interval, oldest first."""
+    """One ticker's full bar history at one interval, oldest first, with
+    the back-adjustment factors from its corporate actions."""
 
-    __slots__ = ("closes", "frame", "timestamps")
+    __slots__ = ("adjustment", "closes", "frame", "timestamps")
 
-    def __init__(self, frame: pd.DataFrame) -> None:
+    def __init__(self, frame: pd.DataFrame, events: tuple[CorporateAction, ...] = ()) -> None:
         self.frame = frame.reset_index(drop=True)
+        self.adjustment = SeriesAdjustment.build(self.frame, events)
         if frame.empty:
             self.timestamps = np.array([], dtype="datetime64[us]")
             self.closes = np.array([], dtype=float)
@@ -105,19 +138,34 @@ class _Series:
         cutoff = np.datetime64(as_datetime(as_of), "us")
         return int(np.searchsorted(self.timestamps, cutoff, side="right"))
 
+    def rows(self, lo: int, hi: int, basis: PriceBasis) -> pd.DataFrame:
+        """Rows ``lo:hi`` (a copy), adjusted as of row ``hi - 1`` unless raw."""
+        if basis == "raw":
+            return self.frame.iloc[lo:hi].reset_index(drop=True)
+        return self.adjustment.apply(self.frame, lo, hi)
+
+    def close_slice(self, lo: int, hi: int, basis: PriceBasis) -> np.ndarray:
+        """Closes ``lo:hi`` (a copy), adjusted as of row ``hi - 1`` unless raw."""
+        if basis == "raw":
+            return self.closes[lo:hi].copy()
+        return self.adjustment.closes(self.closes, lo, hi)
+
 
 class BarCache:
     """Read-through, look-ahead-safe bar cache over one lake.
 
     The first read of a ``(ticker, interval)`` pulls that series' whole
-    history in one query; every later read slices it in memory. A backtest
-    asks for the trailing window on every bar, so this replaces one query
-    per ticker per bar with one query per ticker per run.
+    history in one query (plus one for its corporate actions); every later
+    read slices it in memory. A backtest asks for the trailing window on
+    every bar, so this replaces one query per ticker per bar with one query
+    per ticker per run.
 
     Look-ahead safety: the cache holds bars after ``as_of`` (it holds the
     whole series), so every accessor slices strictly on
     ``timestamp <= as_of`` (or ``<= end``) before returning anything, and
-    returns copies so callers can't mutate the cached history.
+    returns copies so callers can't mutate the cached history. Adjusted
+    reads (the default ``basis``) are adjusted as of the last returned bar,
+    so events after the cutoff never leak in (see the module docstring).
 
     Rows written to the lake after a series is first read are not seen.
     Scope a cache to something short-lived (one strategy instance, which is
@@ -134,33 +182,54 @@ class BarCache:
         key = (ticker, interval.code)
         series = self._series.get(key)
         if series is None:
-            df = self._lake().get_bars(ticker, interval, start=_HISTORY_START, end=_HISTORY_END)
-            series = _Series(df if df is not None else pd.DataFrame())
+            lake = self._lake()
+            df = lake.get_bars(ticker, interval, start=_HISTORY_START, end=_HISTORY_END)
+            if df is None or df.empty:
+                series = _Series(pd.DataFrame() if df is None else df)
+            else:
+                series = _Series(df, _ticker_events(lake, ticker))
             self._series[key] = series
         return series
 
-    def last_n_bars(self, ticker: str, interval: Interval, as_of: Any, n: int) -> pd.DataFrame:
+    def last_n_bars(
+        self,
+        ticker: str,
+        interval: Interval,
+        as_of: Any,
+        n: int,
+        *,
+        basis: PriceBasis = "adjusted",
+    ) -> pd.DataFrame:
         """Same contract as :func:`get_last_n_bars`: the last ``n`` bars with
         ``timestamp <= as_of``, oldest first, re-indexed ``0..len-1``."""
         series = self._get(ticker, interval)
         if n <= 0 or series.frame.empty:
             return series.frame.iloc[0:0].copy()
         end = series.end_index(as_of)
-        return series.frame.iloc[max(0, end - n) : end].reset_index(drop=True)
+        return series.rows(max(0, end - n), end, basis)
 
-    def last_n_closes(self, ticker: str, interval: Interval, as_of: Any, n: int) -> np.ndarray:
+    def last_n_closes(
+        self,
+        ticker: str,
+        interval: Interval,
+        as_of: Any,
+        n: int,
+        *,
+        basis: PriceBasis = "adjusted",
+    ) -> np.ndarray:
         """Closes of :meth:`last_n_bars` as a float array (a copy)."""
         series = self._get(ticker, interval)
         if n <= 0:
             return np.array([], dtype=float)
         end = series.end_index(as_of)
-        return series.closes[max(0, end - n) : end].copy()
+        return series.close_slice(max(0, end - n), end, basis)
 
     def last_close(
         self, ticker: str, interval: Interval, as_of: Any
     ) -> tuple[datetime, float] | None:
         """``(timestamp, close)`` of the latest bar with ``timestamp <= as_of``,
-        or ``None`` when there is none."""
+        or ``None`` when there is none. The latest bar as of a cutoff is
+        never adjusted, so this is the raw quote in either basis."""
         series = self._get(ticker, interval)
         end = series.end_index(as_of)
         if end == 0:
@@ -168,9 +237,17 @@ class BarCache:
         ts = pd.Timestamp(series.timestamps[end - 1]).to_pydatetime()
         return ts, float(series.closes[end - 1])
 
-    def bars_between(self, ticker: str, interval: Interval, start: Any, end: Any) -> pd.DataFrame:
+    def bars_between(
+        self,
+        ticker: str,
+        interval: Interval,
+        start: Any,
+        end: Any,
+        *,
+        basis: PriceBasis = "adjusted",
+    ) -> pd.DataFrame:
         """Bars with ``start <= timestamp <= end``, oldest first, like
-        ``lake.get_bars``."""
+        ``lake.get_bars``; adjusted as of the last returned bar."""
         series = self._get(ticker, interval)
         if series.frame.empty:
             return series.frame.iloc[0:0].copy()
@@ -178,7 +255,7 @@ class BarCache:
             np.searchsorted(series.timestamps, np.datetime64(as_datetime(start), "us"), "left")
         )
         hi = series.end_index(end)
-        return series.frame.iloc[lo:hi].reset_index(drop=True)
+        return series.rows(lo, hi, basis)
 
 
 class LakeBarCaches:

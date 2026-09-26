@@ -16,6 +16,7 @@ bar** in which that ticker has a bar. Orders still queued when the next
 rebalance decides are replaced by the fresh decisions; orders still queued
 after the last bar are never filled. Per bar the engine:
 
+0. applies corporate actions whose ex-date has arrived (see below),
 1. fills queued orders at this bar's opens (``broker.set_prices(opens)``),
 2. sets the broker's prices to closes (carried forward per ticker from its
    last bar when it has no bar at this timestamp, e.g. equities on a
@@ -28,6 +29,20 @@ query up front, joined to ``instruments`` for each ticker's asset class
 (missing row or NULL -> ``equity``). The broker receives those asset
 classes and, when filling, each fill bar's volume, so its ``CostModel``
 can charge per-asset-class fees and volume-aware slippage.
+
+Corporate actions
+-----------------
+Fills and marks use **raw** prices (what the market quoted); strategies
+read split/dividend-adjusted history through their bar accessors. The
+universe's splits and cash dividends are loaded once per run from a
+``CorporateActionsProvider`` (default: the lake's ``stock_splits`` and
+``dividends`` tables). On the first bar of a ticker dated on or after an
+ex-date, before that bar's fills, a split multiplies the held quantity
+(and queued orders for the ticker) by its ratio and a dividend credits
+``quantity x amount x (1 - dividend_withholding_rate)`` as cash; each
+applied event is listed in ``BacktestReport.corporate_actions`` so equity
+jumps are explainable. A ticker with no corporate-action rows behaves
+exactly as before. See ``stonks.backtest.corporate_actions``.
 
 Annualization
 -------------
@@ -46,13 +61,21 @@ from datetime import date, datetime
 
 import pandas as pd
 
+from stonks.backtest.corporate_actions import (
+    CorporateActionRecord,
+    CorporateActionSchedule,
+    adjust_orders_for_split,
+    apply_to_portfolio,
+)
 from stonks.backtest.report import BacktestReport, compute_report, periods_per_year
 from stonks.backtest.simulated_broker import SimulatedBroker
+from stonks.core.corporate_actions import CorporateActionsProvider, Split
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy
 from stonks.core.timeutil import as_datetime, day_end, day_start
 from stonks.core.types import AssetClass, Order
 from stonks.logging import get_logger
+from stonks.store.corporate_actions import LakeCorporateActions
 from stonks.store.lake import DuckDBLake
 
 _log = get_logger("stonks.backtest.engine")
@@ -67,6 +90,14 @@ class BacktestConfig:
     threshold: float = 0.0
     #: Rebalance every N bars (at the configured interval). 1 = every bar.
     rebalance_every_bars: int = 1
+    #: Fraction of each cash dividend withheld as tax (0 = credit in full).
+    dividend_withholding_rate: float = 0.0
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.dividend_withholding_rate <= 1.0:
+            raise ValueError(
+                f"dividend_withholding_rate must be in [0, 1], got {self.dividend_withholding_rate}"
+            )
 
 
 @dataclass(frozen=True)
@@ -84,15 +115,21 @@ class Backtester:
         broker: SimulatedBroker,
         lake: DuckDBLake,
         config: BacktestConfig,
+        corporate_actions: CorporateActionsProvider | None = None,
     ) -> None:
         self._strategies = list(strategies)
         self._broker = broker
         self._lake = lake
         self._config = config
+        self._corporate_actions = corporate_actions or LakeCorporateActions(lake)
 
     def run(self) -> BacktestReport:
         bars_by_ts, asset_classes = self._load_bars()
         self._broker.set_asset_classes(asset_classes)
+        schedule = CorporateActionSchedule(
+            self._corporate_actions.load(list(self._config.universe))
+        )
+        applied: list[CorporateActionRecord] = []
         equity_dates: list[datetime] = []
         equity_curve: list[float] = []
         last_close: dict[str, float] = {}
@@ -100,6 +137,9 @@ class Backtester:
 
         bars_since_rebalance: int | None = None
         for as_of, bars in bars_by_ts.items():
+            # 0. corporate actions going ex on this bar, before its fills
+            pending = self._apply_corporate_actions(schedule, bars, as_of, pending, applied)
+
             # 1. fill orders queued on a previous bar at this bar's open
             if pending:
                 pending = self._fill_pending(pending, bars, as_of)
@@ -134,6 +174,7 @@ class Backtester:
             equity_dates,
             equity_curve,
             periods_per_year=periods_per_year(self._config.interval, set(asset_classes.values())),
+            corporate_actions=applied,
         )
 
     # ---- internals ----------------------------------------------------------
@@ -173,6 +214,40 @@ class Backtester:
                 open=open_, close=float(row.close), volume=volume
             )
         return out, asset_classes
+
+    def _apply_corporate_actions(
+        self,
+        schedule: CorporateActionSchedule,
+        bars: dict[str, _Bar],
+        as_of: datetime,
+        pending: list[Order],
+        applied: list[CorporateActionRecord],
+    ) -> list[Order]:
+        """Apply every event due for a ticker with a bar at ``as_of`` to the
+        broker's portfolio (and splits to queued orders); returns the
+        possibly re-sized queue and appends applied events to ``applied``."""
+        bar_date = as_of.date()
+        portfolio = self._broker.fetch_portfolio()
+        for ticker in bars:
+            for action in schedule.due(ticker, bar_date):
+                if isinstance(action, Split):
+                    pending = adjust_orders_for_split(pending, action)
+                record = apply_to_portfolio(
+                    portfolio,
+                    action,
+                    as_of,
+                    withholding_rate=self._config.dividend_withholding_rate,
+                )
+                if record is not None:
+                    _log.debug(
+                        "corporate_action_applied",
+                        ticker=ticker,
+                        kind=record.kind,
+                        value=record.value,
+                        cash_delta=record.cash_delta,
+                    )
+                    applied.append(record)
+        return pending
 
     def _fill_pending(
         self, pending: list[Order], bars: dict[str, _Bar], as_of: datetime

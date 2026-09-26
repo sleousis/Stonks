@@ -35,7 +35,7 @@ def test_list_data_sources(client):
     resp = client.get("/api/sources")
     assert resp.status_code == 200
     by_id = {s["id"]: s for s in resp.json()}
-    assert set(by_id) == {"eodhd", "yahoo"}
+    assert set(by_id) == {"eodhd", "yahoo", "defillama"}
     assert by_id["eodhd"]["default"] is True
     assert by_id["eodhd"]["configured"] is False  # no key in the test settings
 

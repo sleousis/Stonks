@@ -617,7 +617,8 @@ def test_list_sources_reports_configuration(settings, seeded):
 
     svc = Services.create(AppContext(settings))
     by_id = {s.id: s for s in svc.ingest.sources()}
-    assert set(by_id) == {"eodhd", "yahoo"}
+    assert set(by_id) == {"eodhd", "yahoo", "defillama"}
+    assert by_id["defillama"].configured is True  # no key needed
     assert by_id["eodhd"].default is True
     assert by_id["eodhd"].configured is False
     assert "EODHD_API_KEY" in (by_id["eodhd"].detail or "")
