@@ -109,6 +109,7 @@ def test_integration_2_preset_contents():
         "mcpt",
         "event_study",
         "vs_random",
+        "cpcv",
     ):
         assert test_id in promotion
     # every preset id is registered: none is silently skipped
@@ -194,6 +195,7 @@ def test_preset_options_are_valid_for_their_tests():
     assert registry.preset_options("promotion") == {
         "mcpt": {"n_permutations": 200, "retune": "auto"},
         "cross_instrument": {"held_out_auto": 3},
+        "cpcv": {"n_groups": 6, "n_test_groups": 2},
     }
     assert registry.preset_options("quick") == {}
     for name in registry.preset_names():
