@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stonks MCP tools</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="top"><a href="./">Docs home</a><a href="rest.html">REST API</a><a href="mcp-tools.json">mcp-tools.json</a></nav>
+<main>
+  <h1>MCP tools</h1>
+  <p class="muted">Tools exposed by <code>stonks mcp</code>. It is a client of the REST API, so
+    <code>stonks serve</code> must be running.</p>
+  <p id="instructions"></p>
+  <input type="search" id="filter" placeholder="Filter tools" aria-label="Filter tools">
+  <div id="tools"><p class="muted">Loading...</p></div>
+  <div id="resources"></div>
+</main>
+<script>
+  const KINDS = [
+    ["read", "Read tools", "Only issue GETs. Safe to call any time."],
+    ["job", "Job tools", "Queue background work on the API. Research data only, never orders."],
+    ["guarded", "Guarded tools", "Need confirm=true to act. Without it they return a preview and change nothing."],
+  ];
+
+  function el(tag, attrs, ...children) {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) node.setAttribute(k, v);
+    for (const c of children) node.append(c);
+    return node;
+  }
+
+  function kindOf(t) {
+    if (t.annotations.read_only) return "read";
+    return t.needs_confirm ? "guarded" : "job";
+  }
+
+  function typeOf(s) {
+    if (s.anyOf) return s.anyOf.map(typeOf).join(" | ");
+    if (s.enum) return s.enum.map((v) => JSON.stringify(v)).join(" | ");
+    if (s.type === "array") return "list[" + typeOf(s.items || {}) + "]";
+    if (s.type === "string" && s.format) return s.format;
+    return s.type || "any";
+  }
+
+  function descOf(s) {
+    if (s.description) return s.description;
+    return (s.anyOf || []).map((o) => o.description).find(Boolean) || "";
+  }
+
+  function badges(t) {
+    const a = t.annotations;
+    const list = [[kindOf(t), kindOf(t)]];
+    list.push([a.read_only ? "read-only" : "writes", ""]);
+    if (a.destructive) list.push(["destructive", "warn"]);
+    if (a.idempotent) list.push(["idempotent", ""]);
+    if (a.open_world) list.push(["open world", ""]);
+    if (t.needs_confirm) list.push(["needs confirm", "warn"]);
+    return el("div", { class: "badges" }, ...list.map(([text, cls]) => el("span", { class: "badge " + cls }, text)));
+  }
+
+  function inputs(t) {
+    const props = t.input_schema.properties || {};
+    const names = Object.keys(props);
+    if (!names.length) return el("p", { class: "muted" }, "No inputs.");
+    const required = new Set(t.input_schema.required || []);
+    const head = el("tr", {}, ...["Input", "Type", "Req.", "Default", "Description"].map((h) => el("th", {}, h)));
+    const rows = names.map((n) => {
+      const p = props[n];
+      const dflt = "default" in p ? JSON.stringify(p.default) : "";
+      return el("tr", {},
+        el("td", {}, el("code", {}, n)), el("td", {}, typeOf(p)),
+        el("td", {}, required.has(n) ? "yes" : "no"), el("td", {}, el("code", {}, dflt)),
+        el("td", {}, descOf(p)));
+    });
+    return el("div", { class: "table-wrap" }, el("table", {}, el("thead", {}, head), el("tbody", {}, ...rows)));
+  }
+
+  function card(t) {
+    const node = el("section", { class: "tool", id: t.name }, el("h3", {}, t.name), badges(t), el("p", {}, t.description), inputs(t));
+    node.dataset.search = (t.name + " " + t.description).toLowerCase();
+    return node;
+  }
+
+  function render(ref) {
+    document.getElementById("instructions").textContent = ref.instructions;
+    const box = document.getElementById("tools");
+    box.replaceChildren();
+    for (const [kind, title, blurb] of KINDS) {
+      const group = ref.tools.filter((t) => kindOf(t) === kind);
+      if (!group.length) continue;
+      box.append(el("h2", {}, title), el("p", { class: "muted" }, blurb), ...group.map(card));
+    }
+    const res = ref.resources.map((r) => el("tr", {}, el("td", {}, el("code", {}, r.uri)), el("td", {}, r.mime_type || ""), el("td", {}, r.description)));
+    if (res.length) {
+      const head = el("tr", {}, ...["URI", "Type", "Description"].map((h) => el("th", {}, h)));
+      document.getElementById("resources").append(el("h2", {}, "Resources"),
+        el("div", { class: "table-wrap" }, el("table", {}, el("thead", {}, head), el("tbody", {}, ...res))));
+    }
+    // Cards are rendered after load, so jump to a #tool link by hand.
+    const target = location.hash && document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if (target) target.scrollIntoView();
+  }
+
+  document.getElementById("filter").addEventListener("input", (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    for (const node of document.querySelectorAll(".tool")) node.hidden = q && !node.dataset.search.includes(q);
+  });
+
+  fetch("./mcp-tools.json")
+    .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(render)
+    .catch((err) => { document.getElementById("tools").textContent = "Could not load mcp-tools.json (" + err.message + ")."; });
+</script>
+</body>
+</html>

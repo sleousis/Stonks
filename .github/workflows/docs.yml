@@ -1,0 +1,99 @@
+name: Docs
+
+# Publishes the generated API docs: Swagger UI + MCP tools on GitHub Pages,
+# and the Markdown references on the wiki. The code is the source of truth:
+# the build fails if the committed generated files are stale.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked
+      - name: Regenerate API docs
+        run: |
+          uv run python -m stonks.api.openapi
+          uv run python -m stonks.api.docs
+          uv run python -m stonks.mcp.docs
+      - name: Fail if committed docs are stale
+        run: |
+          stale="$(git status --porcelain -- web/openapi.json docs/api)"
+          if [ -n "$stale" ]; then
+            echo "$stale"
+            git diff -- web/openapi.json docs/api | head -200
+            echo "::error::Generated API docs are stale. Run the generators (see CLAUDE.md) and commit."
+            exit 1
+          fi
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          cp docs/site/* _site/
+          cp web/openapi.json docs/api/mcp-tools.json _site/
+          touch _site/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  wiki:
+    needs: build
+    runs-on: ubuntu-latest
+    # Wiki sync is best effort: problems are logged as warnings, never fail the run.
+    continue-on-error: true
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync Markdown references to the wiki
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          url="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git"
+          if ! git clone --depth 1 "$url" wiki; then
+            echo "::warning::Could not clone the wiki. Enable it and create one page in the UI first. Wiki not synced."
+            exit 0
+          fi
+          cp docs/api/rest.md wiki/API-Reference.md
+          cp docs/api/mcp-tools.md wiki/MCP-Tools.md
+          cd wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add API-Reference.md MCP-Tools.md
+          if git diff --cached --quiet; then
+            echo "Wiki already up to date."
+            exit 0
+          fi
+          git commit -m "Sync API reference from ${GITHUB_SHA::7}"
+          if ! git push; then
+            echo "::warning::Wiki push was rejected. API-Reference.md and MCP-Tools.md not synced."
+            exit 0
+          fi
+          echo "Wiki updated."
