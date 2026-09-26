@@ -12,8 +12,10 @@ applied to the portfolio) again.
 The broker is the simulated one unless ``TickSettings.broker_kind`` opts in
 to an external broker (``alpaca``, built by ``broker_factory``). Then the tick
 reconciles open orders before deciding, takes the portfolio from the broker
-account, records submitted orders as ``pending`` and books fills only through
-``execution.reconcile.reconcile_orders``.
+account, commits each order row as ``pending`` *before* submitting it (so a
+crash never leaves a submitted order unrecorded) and books statuses and fills
+only through ``execution.reconcile``, from the broker's state looked up by
+client id.
 """
 
 from __future__ import annotations
@@ -25,12 +27,18 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from typing import Any, Literal
 
+from stonks.backtest.costs import CostModelSettings
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.protocols import Broker
 from stonks.core.types import Fill, Order, OrderStatus, Portfolio
-from stonks.execution.brokers.base import BrokerKind, OrderRejectedError
+from stonks.execution.brokers.base import BrokerKind, OrderRejectedError, OrderStateSource
+from stonks.execution.brokers.simulated import SimulatedCosts
 from stonks.execution.orders import make_client_id
-from stonks.execution.reconcile import NON_TERMINAL_STATUSES, reconcile_orders
+from stonks.execution.reconcile import (
+    NON_TERMINAL_STATUSES,
+    reconcile_order,
+    reconcile_orders,
+)
 from stonks.logging import get_logger
 from stonks.notify import Notification, Notifier
 from stonks.production.prices import drop_stale_buys, held_tickers, load_prices
@@ -62,8 +70,14 @@ class TickSettings:
     universe: Sequence[str]
     threshold: float = 0.0
     initial_cash: float = 10_000.0
+    #: Legacy flat costs of the simulated broker (and the risk layer's cash
+    #: estimate). Only used when ``costs`` is None.
     slippage_bps: float = 0.0
     fee_per_trade: float = 0.0
+    #: The simulated broker's cost model (``[backtest.costs]``, the one
+    #: backtests use). Exclusive with ``slippage_bps`` / ``fee_per_trade``:
+    #: ``build_tick_settings`` resolves the precedence.
+    costs: CostModelSettings | None = None
     # Closes older than this many calendar days before ``as_of`` are ignored,
     # so delisted / failed-ingest tickers never fill at months-old prices.
     max_price_staleness_days: int = 7
@@ -74,6 +88,15 @@ class TickSettings:
     # "alpaca" trades through ``run_tick``'s ``broker_factory``; the broker
     # account is then the source of truth for the portfolio.
     broker_kind: BrokerKind = "simulated"
+
+    def __post_init__(self) -> None:
+        self.simulated_costs  # noqa: B018 - validates costs vs legacy (not both)
+
+    @property
+    def simulated_costs(self) -> SimulatedCosts:
+        return SimulatedCosts(
+            model=self.costs, slippage_bps=self.slippage_bps, fee_per_trade=self.fee_per_trade
+        )
 
 
 @dataclass(frozen=True)
@@ -198,6 +221,11 @@ def _run_tick_body(
                 "(build it with production.settings_builder.build_tick_runtime)"
             )
         broker = broker_factory(Portfolio(cash=0.0))
+        if not isinstance(broker, OrderStateSource):
+            raise TypeError(
+                f"broker_kind={settings.broker_kind!r}: the broker must look orders up by "
+                "client id (OrderStateSource) so crashed submissions can be reconciled"
+            )
         if not dry_run:
             pre = reconcile_orders(broker, state)
             log.info(
@@ -273,7 +301,9 @@ def _run_tick_body(
     risk_adjustments = list(risk_result.adjustments)
 
     if broker is None:
-        broker = _build_broker(portfolio, settings, prices, as_of, broker_factory)
+        broker = _build_broker(
+            portfolio, settings, prices, as_of, broker_factory, book.volumes, asset_classes
+        )
     orders_with_tick = [
         replace(
             o,
@@ -296,12 +326,42 @@ def _run_tick_body(
     any_failure = False
     # Simulated: broker outcomes are buffered and persisted together with the
     # portfolio snapshot in one transaction, so a crash can't leave fills
-    # recorded without the snapshot that reflects them. External: each order
-    # row is written the moment the broker has it (the order exists there
-    # whatever happens next), always as 'pending'; statuses and fills are
-    # then booked only by ``reconcile_orders``, from the broker's cumulative
-    # state, so no fill is ever booked twice.
+    # recorded without the snapshot that reflects them. External: see
+    # ``place_external``.
     outcomes: list[tuple[Order, OrderStatus, Fill | None]] = []
+
+    def place_external(order: Order) -> None:
+        """The order row is committed as 'pending' *before* the broker sees
+        the order, so no crash can leave a submitted order unrecorded: the
+        next tick's ``reconcile_orders`` looks every pending row up by
+        client id and books it, or rejects it when the broker never received
+        it. Right after a submit the row is synced (broker id, status, fill)
+        through the same ``reconcile_order``; fills are only ever booked from
+        the broker's cumulative state, so never twice."""
+        nonlocal placed, fills_count, any_failure
+        with state.transaction():
+            _record_order(state, order, status="pending")
+        try:
+            broker.place_order(order)
+        except OrderRejectedError as exc:
+            log.warning("tick.order.rejected", ticker=order.ticker, error=str(exc))
+            _record_order(state, order, status="rejected", reason=str(exc))
+            outcomes.append((order, "rejected", None))
+            return
+        except Exception as exc:
+            # It may or may not have reached the broker: the row stays
+            # pending and the next tick's reconcile settles it by client id.
+            any_failure = True
+            log.warning("tick.order.failed", ticker=order.ticker, error=str(exc))
+            return
+        placed += 1
+        outcomes.append((order, "pending", None))
+        try:
+            synced = reconcile_order(broker, state, order.client_id, reject_unknown=False)
+        except Exception as exc:
+            log.warning("tick.order.sync_failed", client_id=order.client_id, error=str(exc))
+            return
+        fills_count += int(synced.fill_inserted)
 
     def place(batch: list[Order]) -> None:
         nonlocal placed, fills_count, any_failure
@@ -317,12 +377,13 @@ def _run_tick_body(
                     status=existing,
                 )
                 continue
+            if external:
+                place_external(order)
+                continue
             try:
                 fill = broker.place_order(order)
             except OrderRejectedError as exc:
                 log.warning("tick.order.rejected", ticker=order.ticker, error=str(exc))
-                if external:
-                    _record_order(state, order, status="rejected")
                 outcomes.append((order, "rejected", None))
                 continue
             except Exception as exc:
@@ -330,10 +391,6 @@ def _run_tick_body(
                 log.warning("tick.order.failed", ticker=order.ticker, error=str(exc))
                 continue
             placed += 1
-            if external:
-                _record_order(state, order, status="pending")
-                outcomes.append((order, "pending", None))
-                continue
             outcomes.append((order, "filled" if fill else "rejected", fill))
             if fill is not None:
                 fills_count += 1
@@ -359,8 +416,6 @@ def _run_tick_body(
     place(buys)
 
     if not dry_run and external:
-        post = reconcile_orders(broker, state)
-        fills_count = post.fills_inserted
         # Report what the broker made of each submission (e.g. rejected).
         booked = _order_statuses(state, [o.client_id for o, _, _ in outcomes])
         outcomes = [(o, booked.get(o.client_id, st), f) for o, st, f in outcomes]
@@ -442,18 +497,21 @@ def _build_broker(
     prices: dict[str, float],
     as_of: date,
     factory: BrokerFactory | None = None,
+    volumes: dict[str, float] | None = None,
+    asset_classes: dict[str, str] | None = None,
 ) -> Broker:
-    """The one place the tick constructs its broker around ``portfolio``."""
+    """The one place the tick constructs its broker around ``portfolio``.
+
+    A simulated broker fills at the latest close through
+    ``settings.simulated_costs`` and gets what that cost model reads, as in
+    backtests: each ticker's asset class and the volume of the priced bar."""
     if factory is not None:
         broker = factory(portfolio)
     else:
-        broker = SimulatedBroker(
-            portfolio=portfolio,
-            slippage_bps=settings.slippage_bps,
-            fee_per_trade=settings.fee_per_trade,
-        )
+        broker = settings.simulated_costs.build_broker(portfolio)
     if isinstance(broker, SimulatedBroker):
-        broker.set_prices(prices, as_of=as_of)
+        broker.set_asset_classes(asset_classes or {})  # type: ignore[arg-type]
+        broker.set_prices(prices, as_of=as_of, volumes=volumes)
     return broker
 
 
@@ -498,6 +556,7 @@ def _shadow_phase(
             tick_id,
             settings,
             buyable=book.fresh,
+            volumes=book.volumes,
         )
     except Exception as exc:
         log.error("tick.shadow_failed", error=str(exc), error_type=type(exc).__name__)
@@ -636,23 +695,28 @@ def _live_order_status(state: SqliteState, client_id: str | None) -> str | None:
     return rows[0]["status"] if rows else None
 
 
-def _record_order(state: SqliteState, order: Order, status: OrderStatus) -> None:
+def _record_order(
+    state: SqliteState, order: Order, status: OrderStatus, reason: str | None = None
+) -> None:
     # ON CONFLICT DO UPDATE lets a retried tick progress the status of a
     # previously-``rejected`` order to ``filled`` if the re-submission
-    # succeeds. The ``WHERE status IS NOT excluded.status`` guard avoids
-    # rewriting ``updated_at`` when the status is unchanged (a retried
-    # tick replaying an already-filled order).
+    # succeeds (clearing the old rejection reason). The WHERE guard avoids
+    # rewriting ``updated_at`` when nothing changed (a retried tick
+    # replaying an already-filled order).
     now = _iso_now()
     state.execute(
         """
         INSERT INTO orders
             (client_id, tick_id, strategy_id, ticker, side, quantity,
-             order_type, limit_price, status, broker_order_id, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+             order_type, limit_price, status, status_reason, broker_order_id,
+             created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
         ON CONFLICT (client_id) DO UPDATE SET
             status = excluded.status,
+            status_reason = excluded.status_reason,
             updated_at = excluded.updated_at
           WHERE orders.status IS NOT excluded.status
+             OR orders.status_reason IS NOT excluded.status_reason
         """,
         [
             order.client_id,
@@ -664,6 +728,7 @@ def _record_order(state: SqliteState, order: Order, status: OrderStatus) -> None
             order.order_type,
             order.limit_price,
             status,
+            reason,
             now,
             now,
         ],

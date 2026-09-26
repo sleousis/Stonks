@@ -10,7 +10,7 @@ months-old price).
 from __future__ import annotations
 
 from collections.abc import Collection, Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 import pandas as pd
@@ -29,6 +29,9 @@ class PriceBook:
     prices: dict[str, float]
     #: Tickers whose close is inside the staleness window (buyable).
     fresh: frozenset[str]
+    #: Volume of the bar each price comes from (the cost model's impact
+    #: input); tickers whose bar has no volume are absent.
+    volumes: dict[str, float] = field(default_factory=dict)
 
 
 def load_prices(
@@ -47,7 +50,8 @@ def load_prices(
     # Latest close per ticker in one grouped query (no N+1 LIMIT-1 queries).
     df = lake.sql(
         """
-        SELECT ticker, arg_max(close, date) AS close, max(date) AS date
+        SELECT ticker, arg_max(close, date) AS close, arg_max(volume, date) AS volume,
+               max(date) AS date
           FROM prices
          WHERE ticker = ANY(?) AND date <= ?
          GROUP BY ticker
@@ -55,6 +59,7 @@ def load_prices(
         [tickers, as_of],
     )
     prices: dict[str, float] = {}
+    volumes: dict[str, float] = {}
     fresh: set[str] = set()
     for row in df.itertuples(index=False):
         is_fresh = pd.Timestamp(row.date).date() >= oldest
@@ -62,7 +67,9 @@ def load_prices(
             fresh.add(row.ticker)
         if is_fresh or row.ticker in held_set:
             prices[row.ticker] = float(row.close)
-    return PriceBook(prices=prices, fresh=frozenset(fresh))
+            if not pd.isna(row.volume):
+                volumes[row.ticker] = float(row.volume)
+    return PriceBook(prices=prices, fresh=frozenset(fresh), volumes=volumes)
 
 
 def drop_stale_buys(

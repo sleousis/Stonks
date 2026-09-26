@@ -66,11 +66,10 @@ from stonks.app.context import AppContext
 from stonks.app.errors import AppError, ConflictError, NotFoundError, ValidationError
 from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.app.lab import (
-    _OBJECTIVES,
-    _SURVIVAL_TESTS,
     BacktestRequest,
     BacktestResult,
     EquityPoint,
+    LabRunRequest,
     LabRunView,
     LabService,
     ObjectiveName,
@@ -79,19 +78,13 @@ from stonks.app.lab import (
 )
 from stonks.app.pagination import Page
 from stonks.app.serialize import finite, to_jsonable
-from stonks.app.strategies import StrategyRef, StrategyStatus, SurvivalReportView
+from stonks.app.strategies import StrategyRef, StrategyStatus
 from stonks.backtest.engine import BacktestConfig, Backtester
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.config import Settings
 from stonks.core.interval import Interval
 from stonks.core.params import validate_params
-from stonks.core.protocols import Tuner
 from stonks.core.types import Order, Portfolio
-from stonks.lab.dataset import LabDataset
-from stonks.lab.runner import LabRunner
-from stonks.lab.survival.base import SurvivalSuite
-from stonks.lab.tuning.grid import GridTuner
-from stonks.lab.tuning.random import RandomTuner
 from stonks.logging import get_logger
 from stonks.strategies.base import BaseStrategy
 from stonks.strategies.rule_based import RULE_STRATEGY_CLASS_PATH, RuleStrategy
@@ -278,7 +271,8 @@ class StudioService:
         self._lab = lab
         self._runner = runner
         runner.register(STUDIO_BACKTEST_JOB, self._handle_code_backtest)
-        runner.register(STUDIO_LAB_RUN_JOB, self._handle_lab_run)
+        # Cooperative, like API lab runs: stops between trials and tests.
+        runner.register(STUDIO_LAB_RUN_JOB, self._handle_lab_run, cancellable=True)
 
     # ---- reads -------------------------------------------------------------
 
@@ -489,51 +483,18 @@ class StudioService:
         else:
             self._require_code_enabled()
             cls = self._import_user_class(params["module"], params["path"])
-        interval = _parse_interval(request.interval)
-        tuner: Tuner = (
-            GridTuner(seed=request.seed) if request.tuner == "grid" else RandomTuner(request.seed)
+        # The same code path as API lab runs (costs, cancellation checks,
+        # walk-forward defaults); only registration also links the draft.
+        draft_id = params["draft_id"]
+        lab_request = LabRunRequest(
+            strategy=StrategyRef(class_path=f"{cls.__module__}:{cls.__name__}"),
+            **request.model_dump(),
         )
-        runner = LabRunner(
-            tuner=tuner,
-            objective=_OBJECTIVES[request.objective](),
-            suite=SurvivalSuite([_SURVIVAL_TESTS[t]() for t in request.survival_tests]),
-            budget=request.budget,
-        )
-        ctx.progress(0.05, "tuning")
-        with self._ctx.lake() as lake:
-            dataset = LabDataset(
-                lake=lake,
-                universe=list(request.universe),
-                start=request.start,
-                end=request.end,
-                train_ratio=request.train_ratio,
-                interval=interval,
-            )
-            result = runner.run(cls, dataset)
 
-        registered: str | None = None
-        if request.register_strategy:
-            ctx.progress(0.95, "registering")
-            name = self._draft_name(params["draft_id"])
-            registered = self._register(
-                params["draft_id"], name, result.strategy, result.survival_reports
-            )
-        return LabRunView(
-            class_path=_class_path(result.strategy),
-            best_params=to_jsonable(result.best_params),
-            best_score=finite(result.best_score),
-            verdict=result.verdict,  # type: ignore[arg-type]
-            survival_reports=[
-                SurvivalReportView(
-                    test_id=r.test_id,
-                    passed=r.passed,
-                    metrics={k: finite(v) for k, v in dict(r.metrics).items()},
-                    notes=r.notes,
-                )
-                for r in result.survival_reports
-            ],
-            registered_strategy_id=registered,
-        )
+        def register(strategy: Any, reports: list[Any]) -> str:
+            return self._register(draft_id, self._draft_name(draft_id), strategy, reports)
+
+        return self._lab.run_lab_class(cls, lab_request, progress=ctx, register=register)
 
     # ---- internals: drafts -------------------------------------------------
 

@@ -47,6 +47,19 @@ def test_no_close_after_as_of_is_used(lake_trending):
     assert book.prices == {"UP.US": 100.0}
 
 
+def test_volumes_come_from_the_same_bar_as_the_close(lake_trending):
+    # The cost model's impact term needs the volume of the bar being priced.
+    book = load_prices(
+        lake_trending, ["UP.US"], ["DOWN.US"], date(2026, 4, 8), max_staleness_days=7
+    )
+    assert book.volumes == {"UP.US": 1_000_000.0, "DOWN.US": 1_000_000.0}
+
+
+def test_unpriced_tickers_have_no_volume(lake_trending):
+    book = load_prices(lake_trending, ["UP.US"], [], date(2026, 9, 1), max_staleness_days=7)
+    assert book.volumes == {}
+
+
 def test_drop_stale_buys_keeps_sells_and_fresh_buys():
     orders = [
         Order(client_id="1", ticker="A", side="buy", quantity=1),

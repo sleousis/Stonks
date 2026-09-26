@@ -3,7 +3,10 @@
 Two paths, picked by broker capability:
 
 - **Order-state path** (brokers implementing ``OrderStateSource``, e.g.
-  Alpaca): every non-terminal row in ``orders`` is looked up by client_id.
+  Alpaca): every non-terminal row in ``orders`` is looked up by client_id
+  (``reconcile_order``, also used by the tick right after each submit).
+  Rows are written ``pending`` before submission, so a row the broker never
+  saw (no broker id, no fills) is marked ``rejected`` with a reason.
   The broker's *cumulative* filled quantity is compared with what ``fills``
   already holds for that order, and only the difference is inserted. That
   makes the sync idempotent by construction and works from a fresh,
@@ -31,6 +34,7 @@ from stonks.store.state import SqliteState
 _log = get_logger("stonks.execution.reconcile")
 
 NON_TERMINAL_STATUSES = ("pending", "partially_filled")
+NOT_FOUND_REASON = "not found at the broker: the submission never arrived"
 
 
 @dataclass(frozen=True)
@@ -83,44 +87,15 @@ def _reconcile_by_order_state(
     for row in rows:
         client_id = row["client_id"]
         try:
-            broker_state = broker.get_order_state(client_id)
+            outcome = reconcile_order(broker, state, client_id, now=now)
         except Exception as exc:
             _log.warning("reconcile.order_failed", client_id=client_id, error=str(exc))
             failed.append(client_id)
             continue
-        if broker_state is None:
-            _log.warning("reconcile.order_unknown_to_broker", client_id=client_id)
+        if outcome.unknown:
             unknown.append(client_id)
-            continue
-
-        with state.transaction():
-            booked_qty, booked_notional = _booked(state, client_id)
-            fill = delta_fill(
-                broker_state,
-                recorded_quantity=booked_qty,
-                recorded_notional=booked_notional,
-                filled_at=broker_state.updated_at or now,
-            )
-            if fill is not None:
-                _insert_fill(state, fill)
-                inserted += 1
-            cur = state.execute(
-                """
-                UPDATE orders
-                   SET status = ?, broker_order_id = ?, updated_at = ?
-                 WHERE client_id = ?
-                   AND (status IS NOT ? OR broker_order_id IS NOT ?)
-                """,
-                [
-                    broker_state.status,
-                    broker_state.broker_order_id,
-                    _iso(now),
-                    client_id,
-                    broker_state.status,
-                    broker_state.broker_order_id,
-                ],
-            )
-            updated += cur.rowcount
+        updated += outcome.updated
+        inserted += outcome.fill_inserted
     return ReconcileSummary(
         orders_checked=len(rows),
         orders_updated=updated,
@@ -128,6 +103,89 @@ def _reconcile_by_order_state(
         unknown_orders=tuple(unknown),
         failed_orders=tuple(failed),
     )
+
+
+@dataclass(frozen=True)
+class OrderSync:
+    """What ``reconcile_order`` did to one ledger row."""
+
+    #: The broker has never seen the client_id.
+    unknown: bool = False
+    #: The row's status / broker_order_id / reason changed.
+    updated: bool = False
+    fill_inserted: bool = False
+
+
+def reconcile_order(
+    broker: OrderStateSource,
+    state: SqliteState,
+    client_id: str,
+    *,
+    now: datetime | None = None,
+    reject_unknown: bool = True,
+) -> OrderSync:
+    """Sync one ``orders`` row with the broker's state for its client_id:
+    book the not-yet-recorded fill delta and update status and
+    broker_order_id, in one transaction. Broker errors propagate.
+
+    Rows are written ``pending`` *before* submission, so a row the broker
+    has never seen, with no broker id and no fills, was never received (the
+    process died between the write and the submit): it becomes ``rejected``
+    with a reason, which also lets a same-day rerun resubmit it. A row with
+    a broker id or fills was received, so "not found" there is a broker
+    anomaly and the row is left alone. ``reject_unknown=False`` never
+    rejects (right after a submit the broker may not list the order yet)."""
+    now = now or datetime.now(UTC)
+    broker_state = broker.get_order_state(client_id)
+    if broker_state is None:
+        _log.warning("reconcile.order_unknown_to_broker", client_id=client_id)
+        rejected = reject_unknown and _reject_never_received(state, client_id, now)
+        return OrderSync(unknown=True, updated=rejected)
+
+    with state.transaction():
+        booked_qty, booked_notional = _booked(state, client_id)
+        fill = delta_fill(
+            broker_state,
+            recorded_quantity=booked_qty,
+            recorded_notional=booked_notional,
+            filled_at=broker_state.updated_at or now,
+        )
+        if fill is not None:
+            _insert_fill(state, fill)
+        cur = state.execute(
+            """
+            UPDATE orders
+               SET status = ?, broker_order_id = ?, updated_at = ?
+             WHERE client_id = ?
+               AND (status IS NOT ? OR broker_order_id IS NOT ?)
+            """,
+            [
+                broker_state.status,
+                broker_state.broker_order_id,
+                _iso(now),
+                client_id,
+                broker_state.status,
+                broker_state.broker_order_id,
+            ],
+        )
+    return OrderSync(updated=cur.rowcount > 0, fill_inserted=fill is not None)
+
+
+def _reject_never_received(state: SqliteState, client_id: str, now: datetime) -> bool:
+    cur = state.execute(
+        """
+        UPDATE orders
+           SET status = 'rejected', status_reason = ?, updated_at = ?
+         WHERE client_id = ?
+           AND status = 'pending'
+           AND broker_order_id IS NULL
+           AND NOT EXISTS (SELECT 1 FROM fills WHERE order_client_id = orders.client_id)
+        """,
+        [NOT_FOUND_REASON, _iso(now), client_id],
+    )
+    if cur.rowcount:
+        _log.warning("reconcile.order_never_received", client_id=client_id)
+    return cur.rowcount > 0
 
 
 def _booked(state: SqliteState, client_id: str) -> tuple[float, float]:

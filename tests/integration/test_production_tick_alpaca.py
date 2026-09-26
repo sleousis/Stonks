@@ -297,3 +297,139 @@ def test_snapshot_prices_positions_that_appear_after_trading(env, monkeypatch):
     days = list(pd.bdate_range(start="2025-10-01", end="2026-04-01").date)
     down = 100.0 - 40.0 * days.index(AS_OF) / (len(days) - 1)
     assert snap["total_value"] == pytest.approx(9_000.0 + 2 * down)
+
+
+# ---- roadmap 8.5: no crash window between submit and the ledger -------------
+
+NEXT_DAY = date(2026, 3, 23)
+
+
+class Crash(BaseException):
+    """Simulated process death: nothing in the tick may catch it."""
+
+
+def _cid(sid, as_of=AS_OF):
+    return f"{as_of.isoformat()}:{sid}:UP.US:buy"
+
+
+def test_order_row_is_committed_pending_before_submit(env, tmp_path):
+    _, state, _, sid, client, _, _ = env
+    real_submit = client.submit_order
+    seen: list[list[dict]] = []
+
+    def spy(order_data):
+        # A second connection only sees committed rows.
+        other = SqliteState(tmp_path / "state.sqlite")
+        try:
+            rows = other.sql("SELECT client_id, status, broker_order_id FROM orders")
+            seen.append([dict(r) for r in rows])
+        finally:
+            other.close()
+        return real_submit(order_data)
+
+    client.submit_order = spy
+    _tick(env)
+
+    assert seen == [[{"client_id": _cid(sid), "status": "pending", "broker_order_id": None}]]
+    [row] = _orders(state)
+    assert (row["status"], row["broker_order_id"]) == ("pending", "broker-1")
+
+
+def test_crash_right_after_submit_is_recovered_by_the_next_tick(env):
+    _, state, _, sid, client, _, _ = env
+    real_submit = client.submit_order
+
+    def submit_then_die(order_data):
+        real_submit(order_data)
+        raise Crash
+
+    client.submit_order = submit_then_die
+    with pytest.raises(Crash):
+        _tick(env)
+    [row] = _orders(state)
+    assert (row["client_id"], row["status"], row["broker_order_id"]) == (
+        _cid(sid),
+        "pending",
+        None,
+    )
+
+    # The broker filled it meanwhile; the rerun must book it, never resubmit.
+    client.submit_order = real_submit
+    client.orders[_cid(sid)].update(
+        status="filled", filled_qty=client.orders[_cid(sid)]["qty"], filled_avg_price="190"
+    )
+    _tick(env)
+
+    assert len(client.submitted) == 1
+    [row] = _orders(state)
+    assert (row["status"], row["broker_order_id"]) == ("filled", "broker-1")
+    assert state.count_rows("fills") == 1
+
+
+def test_crash_right_before_submit_is_rejected_on_the_next_day(env):
+    _, state, _, sid, client, _, _ = env
+    real_submit = client.submit_order
+
+    def die(order_data):
+        raise Crash
+
+    client.submit_order = die
+    with pytest.raises(Crash):
+        _tick(env)
+    assert [r["status"] for r in _orders(state)] == ["pending"]
+
+    client.submit_order = real_submit
+    _tick(env, as_of=NEXT_DAY)
+
+    stale = state.sql("SELECT * FROM orders WHERE client_id = ?", [_cid(sid)])[0]
+    assert stale["status"] == "rejected"
+    assert "not found at the broker" in stale["status_reason"]
+    fresh = state.sql("SELECT * FROM orders WHERE client_id = ?", [_cid(sid, NEXT_DAY)])[0]
+    assert fresh["status"] == "pending"
+    assert [o.client_order_id for o in client.submitted] == [_cid(sid, NEXT_DAY)]
+
+
+def test_crash_right_before_submit_is_resubmitted_by_a_same_day_rerun(env):
+    _, state, _, sid, client, _, _ = env
+    real_submit = client.submit_order
+
+    def die(order_data):
+        raise Crash
+
+    client.submit_order = die
+    with pytest.raises(Crash):
+        _tick(env)
+
+    client.submit_order = real_submit
+    _tick(env)
+
+    assert [o.client_order_id for o in client.submitted] == [_cid(sid)]
+    [row] = _orders(state)
+    assert (row["status"], row["broker_order_id"], row["status_reason"]) == (
+        "pending",
+        "broker-1",
+        None,
+    )
+
+
+def test_submit_error_leaves_the_row_pending_for_the_next_reconcile(env):
+    from tests.unit.test_alpaca_broker import api_error
+
+    _, state, _, sid, client, _, _ = env
+    client.submit_errors.append(api_error(403, 40310000, "forbidden"))
+    result = _tick(env)
+
+    assert result.status == "partial"
+    [row] = _orders(state)
+    # The outcome is unknown (it may or may not have reached the broker):
+    # the next tick's reconcile settles it by client id.
+    assert row["status"] == "pending"
+
+
+def test_pre_trade_rejection_records_its_reason(env):
+    _, state, _, _, client, _, _ = env
+    client.account = {"cash": "10000", "currency": "USD", "status": "ACCOUNT_CLOSED"}
+    _tick(env)
+    [row] = _orders(state)
+    assert row["status"] == "rejected"
+    assert "ACCOUNT_CLOSED" in row["status_reason"]

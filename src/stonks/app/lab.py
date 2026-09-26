@@ -18,7 +18,7 @@ from stonks.backtest.costs import CostModel, CostModelSettings
 from stonks.backtest.engine import BacktestConfig, Backtester
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.interval import Interval
-from stonks.core.protocols import Objective, SurvivalTest, Tuner
+from stonks.core.protocols import Objective, Strategy, SurvivalReport, SurvivalTest, Tuner
 from stonks.core.types import Portfolio
 from stonks.lab.dataset import LabDataset
 from stonks.lab.objectives import CAGRObjective, FinalReturnObjective, SharpeObjective
@@ -69,6 +69,9 @@ _COST_MODELS: dict[str, tuple[str, Callable[[], CostModelSettings]]] = {
 }
 
 _log = get_logger("stonks.app.lab")
+
+#: Registers a lab-run result; returns the new strategy id.
+RegisterFn = Callable[[Strategy, list[SurvivalReport]], str]
 
 
 class _WindowRequest(BaseModel):
@@ -254,13 +257,32 @@ class LabService:
         return self._runner.submit(LAB_RUN_JOB, request.model_dump(mode="json"))
 
     def run_lab(self, request: LabRunRequest, progress: JobContext | None = None) -> LabRunView:
-        interval = _parse_interval(request.interval)
         cls = self._strategies.strategy_class(request.strategy)
+        return self.run_lab_class(cls, request, progress=progress)
+
+    def run_lab_class(
+        self,
+        cls: type[Strategy],
+        request: LabRunRequest,
+        *,
+        progress: JobContext | None = None,
+        register: RegisterFn | None = None,
+    ) -> LabRunView:
+        """The one lab-run code path (API, MCP and Strategy Studio): tunes
+        ``cls`` (``request.strategy`` is not resolved here), applies the
+        configured ``[backtest.costs]``, defaults walk-forward options from
+        ``[lab.walk_forward]`` and, with ``progress``, honours cancellation
+        between trials and survival tests. ``register`` replaces the plain
+        registry registration (e.g. the studio links the draft too)."""
+        interval = _parse_interval(request.interval)
         tuner: Tuner = (
             GridTuner(seed=request.seed) if request.tuner == "grid" else RandomTuner(request.seed)
         )
         objective: Objective = _OBJECTIVES[request.objective]()
-        tests: list[SurvivalTest] = [_survival_test(t, request) for t in request.survival_tests]
+        tests: list[SurvivalTest] = [
+            _survival_test(t, request, self._ctx.settings.lab.walk_forward)
+            for t in request.survival_tests
+        ]
         if progress is not None:
             objective = _CancellableObjective(objective, progress)
             tests = [_CancellableTest(t, progress) for t in tests]
@@ -288,12 +310,16 @@ class LabService:
         if request.register_strategy:
             if progress is not None:
                 progress.progress(0.95, "registering")
-            with self._ctx.registry() as registry:
-                registered = registry.register(result.strategy, result.survival_reports)
+            if register is not None:
+                registered = register(result.strategy, list(result.survival_reports))
+            else:
+                with self._ctx.registry() as registry:
+                    registered = registry.register(result.strategy, result.survival_reports)
             _log.info("lab.registered", strategy_id=registered, verdict=result.verdict)
 
+        strategy_cls = type(result.strategy)
         return LabRunView(
-            class_path=f"{cls.__module__}:{cls.__name__}",
+            class_path=f"{strategy_cls.__module__}:{strategy_cls.__name__}",
             best_params=to_jsonable(result.best_params),
             best_score=finite(result.best_score),
             verdict=result.verdict,  # type: ignore[arg-type]
@@ -350,9 +376,12 @@ class _CancellableTest:
         return self._inner.run(strategy, context)
 
 
-def _survival_test(name: str, request: LabRunRequest) -> SurvivalTest:
-    if name == "walk_forward" and request.walk_forward is not None:
-        return WalkForwardTest(config=request.walk_forward)
+def _survival_test(
+    name: str, request: LabRunRequest, walk_forward_default: WalkForwardConfig
+) -> SurvivalTest:
+    """Request options win; walk-forward otherwise uses ``[lab.walk_forward]``."""
+    if name == "walk_forward":
+        return WalkForwardTest(config=request.walk_forward or walk_forward_default)
     if name == "permutation" and request.mcpt is not None:
         return MonteCarloPermutationTest(**request.mcpt.model_dump())
     return _SURVIVAL_TESTS[name]()

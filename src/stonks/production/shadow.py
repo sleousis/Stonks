@@ -30,7 +30,6 @@ from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
-from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.types import Fill, Order, Portfolio
 from stonks.execution.orders import make_client_id
 from stonks.logging import get_logger
@@ -77,9 +76,11 @@ def evaluate_shadow_strategies(
     tick_id: str,
     settings: TickSettings,
     buyable: Collection[str] | None = None,
+    volumes: Mapping[str, float] | None = None,
 ) -> list[ShadowOutcome]:
     """``buyable`` restricts buys to tickers with a fresh close (default:
-    any ticker in ``prices``)."""
+    any ticker in ``prices``). ``volumes`` (of each priced bar) feed the
+    cost model's impact term, as in the real tick."""
     fresh = set(prices) if buyable is None else set(buyable)
     picks_by_strategy: dict[str, list[tuple[float, str]]] = {}
     for r, sid, ticker in ranked:
@@ -100,6 +101,7 @@ def evaluate_shadow_strategies(
                 tick_id,
                 settings,
                 fresh,
+                volumes or {},
             )
         except Exception as exc:
             log.warning("shadow.failed", error=str(exc), error_type=type(exc).__name__)
@@ -123,6 +125,7 @@ def _evaluate_one(
     tick_id: str,
     settings: TickSettings,
     fresh: Collection[str],
+    volumes: Mapping[str, float],
 ) -> ShadowOutcome:
     latest = state.sql(
         "SELECT as_of FROM shadow_portfolio_snapshots WHERE strategy_id = ? AND as_of >= ? "
@@ -164,13 +167,11 @@ def _evaluate_one(
             for o in risk_result.orders
         ]
 
-    # Always an in-memory simulated broker: shadow must never reach a real one.
-    broker = SimulatedBroker(
-        portfolio=portfolio,
-        slippage_bps=settings.slippage_bps,
-        fee_per_trade=settings.fee_per_trade,
-    )
-    broker.set_prices(prices, as_of=as_of)
+    # Always an in-memory simulated broker: shadow must never reach a real
+    # one. Same costs, asset classes and volumes as the real simulated tick.
+    broker = settings.simulated_costs.build_broker(portfolio)
+    broker.set_asset_classes(asset_classes)  # type: ignore[arg-type]
+    broker.set_prices(prices, as_of=as_of, volumes=volumes)
     results: list[tuple[Order, Fill | None]] = [(o, broker.place_order(o)) for o in orders]
 
     total_value = portfolio.total_value(prices)
