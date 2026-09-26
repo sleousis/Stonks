@@ -9,6 +9,9 @@
   and API server call it themselves), so an absolute ``STONKS_DATA_DIR`` or
   a real broker key can never reach a hermetic test. Tests that need one
   set it with ``monkeypatch.setenv``.
+- CLI output is plain text everywhere. Typer forces colored output when it
+  sees ``GITHUB_ACTIONS`` and decides at import time, so colors are turned
+  off here, before any test imports the CLI.
 """
 
 from __future__ import annotations
@@ -20,6 +23,10 @@ import dotenv
 import pytest
 
 _LIVE_FLAG = "STONKS_RUN_LIVE_TESTS"
+
+# Plain CLI output on every machine, including CI (see module docstring).
+os.environ["_TYPER_FORCE_DISABLE_TERMINAL"] = "1"
+os.environ["NO_COLOR"] = "1"
 
 # The .env at the repo root, relative to this conftest (tests/conftest.py).
 _ENV = Path(__file__).parent.parent / ".env"

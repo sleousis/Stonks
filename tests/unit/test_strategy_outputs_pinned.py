@@ -171,7 +171,23 @@ def test_strategy_outputs_match_pinned_golden_values(pinned_lake):
     actual = json.loads(json.dumps(compute_outputs(pinned_lake)))
     assert actual.keys() == golden.keys()
     for name in golden:
-        assert actual[name] == golden[name], name
+        assert _close(actual[name], golden[name]), name
+
+
+def _close(a, b) -> bool:
+    """Structural equality with a tiny float tolerance: the last bits of
+    floating-point results differ across OSes and Python builds."""
+    if isinstance(a, float) or isinstance(b, float):
+        return (
+            isinstance(a, int | float)
+            and isinstance(b, int | float)
+            and math.isclose(a, b, rel_tol=1e-9, abs_tol=1e-12)
+        )
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(_close(x, y) for x, y in zip(a, b, strict=True))
+    if isinstance(a, dict) and isinstance(b, dict):
+        return a.keys() == b.keys() and all(_close(a[k], b[k]) for k in a)
+    return a == b
 
 
 def test_pinned_outputs_are_not_trivial():
