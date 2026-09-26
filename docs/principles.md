@@ -82,7 +82,7 @@ Enforced: BL-47 (correlation-to-pool check) and BL-12 (per-strategy attribution)
 
 **P18. Costs are on by default in the lab, the tick and the API.**
 Why: a strategy that dies once costs are counted was never a strategy (Chan; Bogle; Carver).
-Enforced: today `[backtest.costs]` is all zeros (`config/default.toml`), and the tick builds a flat-slippage broker (`production/tick.py:439-454`). Roadmap 8.2 is putting the cost model into the tick now. BL-13 then makes realistic costs the default.
+Enforced: today `[backtest.costs]` is all zeros (`config/default.toml`), and the tick builds a flat-slippage broker (`production/tick.py`, `_build_broker`). Roadmap 8.2 is putting the cost model into the tick now. BL-13 then makes realistic costs the default.
 
 **P19. A strategy must survive twice the modelled costs, and costs may eat at most a third of the pre-cost Sharpe.**
 Why: cost estimates are uncertain, and Carver's "speed limit" caps turnover (Chan; Carver; Wilmott).
@@ -94,7 +94,7 @@ Enforced: today impact is `impact_bps·sqrt(q/volume)` with no volatility term a
 
 **P21. The backtest fills orders the way we trade live.**
 Why: a backtest filled at the open and a live order filled at some intraday price measure different things (Johnson).
-Enforced: today the backtest fills at the next open, but the simulated tick fills at the latest close (`production/tick.py:450-456`). Roadmap 8.2 (in progress) brings cost-model parity. BL-32 records any remaining convention gap in TCA. Alpaca auction orders are deferred because the owner does not want Alpaca yet.
+Enforced: today the backtest fills at the next open, but the simulated tick fills at the latest close (`production/tick.py`, `_build_broker`). Roadmap 8.2 (in progress) brings cost-model parity. BL-32 records any remaining convention gap in TCA. Alpaca auction orders are deferred because the owner does not want Alpaca yet.
 
 **P22. Every order records what it was supposed to cost and what it did cost.**
 Why: you can't calibrate a cost model you never measure (Kissell; Bacidore; Perold's implementation shortfall).
@@ -138,7 +138,7 @@ Enforced: today alpha and sizing are fused in each strategy's `decide`. BL-08 ad
 
 **P31. Strategies are combined, never picked winner-take-all.**
 Why: IR ≈ IC·√breadth. One winner per tick means a breadth of about one, and the book churns whenever the winner changes (Grinold and Kahn; Carver; Dalio).
-Enforced: today the tick trades only the owner of `ranked[0]` (`production/tick.py:237-244`). BL-12 fixes this.
+Enforced: today the tick trades only the owner of `ranked[0]` (the default `single_winner` route, `portfolio/pipeline.py`). BL-12 fixes this.
 
 **P32. Scores go on one scale before they are compared.**
 Why: raw `estimate_return` units differ by strategy. `BuyAndHold` returns 1.0 (`strategies/examples/buy_and_hold.py:44`) and beats any realistic forecast (Grinold and Kahn: α = σ·IC·z; Carver's forecast scaling, mean |f| = 10, capped at 20).

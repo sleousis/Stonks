@@ -15,6 +15,6 @@ CRON_TZ=UTC
 # Monthly patch window (the 8th): refresh the Caddy and restic images, drop
 # images unused for 90 days. OS patches are automatic (unattended-upgrades);
 # app updates go through releases.
-0     5  8   *   *    cd @DEPLOY_DIR@ && docker compose pull caddy && docker compose up -d caddy && docker compose --profile backup pull restic && docker image prune -af --filter until=2160h >> $HOME/stonks-cron.log 2>&1
+0     5  8   *   *    { cd @DEPLOY_DIR@ && docker compose pull caddy && docker compose up -d caddy && docker compose --profile backup pull restic && docker image prune -af --filter until=2160h; } >> $HOME/stonks-cron.log 2>&1
 # Keep the cron log small.
 0     6  *   *   0    tail -n 5000 $HOME/stonks-cron.log > $HOME/stonks-cron.log.tmp && mv $HOME/stonks-cron.log.tmp $HOME/stonks-cron.log
