@@ -271,6 +271,14 @@ def test_embargo_that_leaves_no_validation_window_is_a_usage_error(runner, lab_e
     assert "embargo" in r.output
 
 
+def test_configured_embargo_that_leaves_no_validation_window_is_a_usage_error(runner, lab_env):
+    cfg = lab_env / "config" / "default.toml"
+    cfg.write_text(cfg.read_text() + "\n\n[lab]\nembargo_bars = 500\n")
+    r = runner.invoke(app, ["lab", "run", "momentum", *UNIVERSE, *WINDOW, *FAST, "--tests", "oos"])
+    assert r.exit_code == 2, r.output
+    assert "embargo" in r.output
+
+
 def test_walk_forward_wfe_and_matrix_flags(runner, lab_env):
     out = lab_env / "result.json"
     r = _run(runner, "momentum", *UNIVERSE, *WINDOW, *FAST, "--tests", "walk_forward",

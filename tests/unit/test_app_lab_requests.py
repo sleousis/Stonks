@@ -138,6 +138,18 @@ def test_unknown_or_invalid_option_names_are_rejected():
         _req(test_options={"period_stability": {"max_sharpe_stdev": 2.0}})
 
 
+@pytest.mark.parametrize(
+    "test_id,options,needle",
+    [
+        ("walk_forward", {"config": {"n_splits": 2}}, "walk_forward field"),
+        ("mcpt", {"tuning": {}}, "tuning"),
+    ],
+)
+def test_object_valued_constructor_arguments_are_not_options(test_id, options, needle):
+    with pytest.raises(ValidationError, match=needle):
+        _req(survival_tests=[test_id], test_options={test_id: options})
+
+
 def test_test_options_need_their_test_in_the_resolved_suite():
     with pytest.raises(ValidationError, match="pbo"):
         _req(survival_tests=["oos"], test_options={"pbo": {"max_pbo": 0.3}})

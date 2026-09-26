@@ -63,6 +63,9 @@ CostModelName = Literal["zero", "realistic"]
 
 #: API names kept from before the survival-test registry (BL-10).
 _LEGACY_TEST_NAMES: dict[str, str] = {"permutation": "mcpt"}
+#: Constructor arguments that take objects the lab builds (a tuning setup,
+#: a settings model), not JSON options.
+_NOT_OPTIONS = frozenset({"config", "tuning"})
 
 
 def _accepted_test_names() -> list[str]:
@@ -410,8 +413,14 @@ class LabRunOptions(BaseModel):
             raise ValueError("walk_forward options given: add 'walk_forward' to survival_tests")
         if self.mcpt is not None and "mcpt" not in suite:
             raise ValueError("mcpt options given: add 'permutation' to survival_tests")
-        for key in self.test_options or {}:
+        for key, given in (self.test_options or {}).items():
             name = _LEGACY_TEST_NAMES.get(key, key)
+            reserved = sorted(set(given) & _NOT_OPTIONS)
+            if reserved:
+                raise ValueError(
+                    f"test_options for {key!r} can't set {reserved}: those are objects the "
+                    "lab builds (use the walk_forward field for walk-forward settings)"
+                )
             if name not in suite:
                 raise ValueError(
                     f"test_options given for {key!r}, which is not in the suite {suite}: "
@@ -558,19 +567,21 @@ def execute_lab_run(
     )
     if progress is not None:
         progress.progress(0.05, "tuning")
-    dataset = lab_dataset(
-        lake=lake,
-        universe=list(request.universe),
-        start=request.start,
-        end=request.end,
-        train_ratio=request.train_ratio,
-        interval=interval,
-        costs=lab_costs(settings, request.cost_model),
-        benchmark=lab_benchmark(settings, request.benchmark),
-        embargo_bars=(
-            request.embargo_bars if request.embargo_bars is not None else settings.lab.embargo_bars
-        ),
-    )
+    embargo = request.embargo_bars
+    try:
+        dataset = LabDataset(
+            lake=lake,
+            universe=list(request.universe),
+            start=request.start,
+            end=request.end,
+            train_ratio=request.train_ratio,
+            interval=interval,
+            costs=lab_costs(settings, request.cost_model),
+            benchmark=lab_benchmark(settings, request.benchmark),
+            embargo_bars=settings.lab.embargo_bars if embargo is None else embargo,
+        )
+    except ValueError as exc:  # e.g. [lab] embargo_bars leaves no validation window
+        raise ValidationError(str(exc)) from None
     result = runner.run(
         cls,
         dataset,
@@ -605,17 +616,6 @@ def execute_lab_run(
 def lab_benchmark(settings: Any, option: str | None) -> str:
     """The request's benchmark spec, else ``[lab] benchmark``."""
     return option if option is not None else settings.lab.benchmark
-
-
-def lab_dataset(*, benchmark: str, **fields: Any) -> LabDataset:
-    """A ``LabDataset`` carrying ``benchmark``: through its constructor when
-    it has the field, else as the duck-typed attribute ``run_backtest``
-    reads (``getattr(dataset, "benchmark", "auto")``)."""
-    if "benchmark" in getattr(LabDataset, "__dataclass_fields__", {}):
-        return LabDataset(**fields, benchmark=benchmark)  # type: ignore[call-arg]
-    dataset = LabDataset(**fields)
-    dataset.benchmark = benchmark  # type: ignore[attr-defined]
-    return dataset
 
 
 def _validation_benchmark(result: LabRunResult, dataset: LabDataset) -> BenchmarkResult | None:

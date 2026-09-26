@@ -1310,6 +1310,7 @@ def lab_run(
     """
     import json
 
+    from stonks.app.errors import ValidationError as AppValidationError
     from stonks.app.lab import LabRunRequest, McptOptions, execute_lab_run
     from stonks.app.serialize import to_jsonable
     from stonks.app.strategies import StrategyRef
@@ -1409,6 +1410,8 @@ def lab_run(
             fixed_params=pinned,
             parallel=_parallel_settings(settings, workers),
         )
+    except AppValidationError as exc:  # e.g. [lab] embargo_bars vs the window
+        raise typer.BadParameter(str(exc)) from None
     finally:
         lake.close()
         state.close()
