@@ -127,7 +127,12 @@ kbd {
     font-size: var(--text-sm);
   }
 
+  dt {
+    flex: none;
+  }
+
   dd {
+    min-width: 0;
     margin: 0;
     font-weight: var(--weight-medium);
     text-align: end;

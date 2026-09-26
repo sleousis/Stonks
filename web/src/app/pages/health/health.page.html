@@ -81,10 +81,14 @@
           #tickerInput
           id="health-tickers"
           class="input"
-          placeholder="Blank = production universe, e.g. AAPL.US MSFT.US"
+          placeholder="e.g. AAPL.US MSFT.US"
+          aria-describedby="health-tickers-hint"
           autocapitalize="characters"
           spellcheck="false"
         />
+        <span id="health-tickers-hint" class="hint"
+          >Leave blank to check the production universe.</span
+        >
       </div>
       <div class="form-actions">
         <button type="submit" class="btn">Check</button>
@@ -188,7 +192,11 @@
         [pageSize]="0"
       >
         <ng-template appCell="error" [appCellOf]="failedIngest.value().items" let-run>
-          <span class="error-text">{{ run.error || 'No message recorded.' }}</span>
+          @if (run.error) {
+            <span class="error-text">{{ run.error }}</span>
+          } @else {
+            <span class="muted">No message recorded.</span>
+          }
         </ng-template>
       </app-data-table>
     }

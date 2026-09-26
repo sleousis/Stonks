@@ -136,7 +136,6 @@ export class InstrumentSearch {
     { key: 'name', label: 'Name' },
     { key: 'asset_class', label: 'Class' },
     { key: 'exchange', label: 'Exchange', mobile: 'hide' },
-    { key: 'currency', label: 'Currency', mobile: 'hide' },
   ];
   protected readonly key = (r: InstrumentView) => r.id;
 

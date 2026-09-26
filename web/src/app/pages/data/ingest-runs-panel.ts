@@ -10,7 +10,6 @@ import {
 
 import { IngestService } from '../../api/ingest.service';
 import type { IngestRunView } from '../../api/models';
-import { formatDuration } from '../../core/format/format';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
@@ -28,6 +27,7 @@ const STATUSES = ['running', 'ok', 'partial', 'error'] as const;
   styles: `
     .error-text {
       display: inline-block;
+      min-width: 18ch;
       max-width: 40ch;
       white-space: normal;
       overflow-wrap: anywhere;
@@ -148,14 +148,6 @@ export class IngestRunsPanel {
     { key: 'status', label: 'Status' },
     { key: 'tickers_ok', label: 'Ok', format: 'number' },
     { key: 'tickers_failed', label: 'Failed', format: 'number' },
-    {
-      key: 'took',
-      label: 'Took',
-      sortable: false,
-      align: 'end',
-      value: (r) => formatDuration(r.started_at, r.finished_at),
-      mobile: 'hide',
-    },
     { key: 'error', label: 'Error', sortable: false },
   ];
   protected readonly key = (r: IngestRunView) => String(r.id);

@@ -153,6 +153,7 @@
 
 .error-text {
   display: inline-block;
+  min-width: 18ch;
   max-width: 48ch;
   white-space: normal;
   overflow-wrap: anywhere;
