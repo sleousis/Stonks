@@ -205,6 +205,13 @@ class HeadShouldersStrategy(SingleTickerLongFlat):
     alpha_family = "reversion"
     premise = "mean_reversion"
     label_horizon_bars = 10
+    required_history_bars = 27
+
+    def param_metadata(self) -> dict[str, int]:
+        p = self.params
+        return {
+            "required_history_bars": 4 * int(p["order"]) + 3,
+        }
 
     @classmethod
     def parameter_spec(cls):

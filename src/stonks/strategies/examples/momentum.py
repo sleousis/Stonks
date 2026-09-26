@@ -40,6 +40,13 @@ class Momentum(BaseStrategy):
     alpha_family = "trend"
     premise = "trend"
     label_horizon_bars = 21
+    required_history_bars = 148
+
+    def param_metadata(self) -> dict[str, int]:
+        p = self.params
+        return {
+            "required_history_bars": int(p["lookback_days"]) + int(p["skip_days"]) + 1,
+        }
 
     def __init__(self, params: Any) -> None:
         params = dict(params)

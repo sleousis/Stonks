@@ -128,6 +128,14 @@ class TVLDeviationStrategy(SingleTickerLongFlat):
     alpha_family = "reversion"
     premise = "mean_reversion"
     label_horizon_bars = 10
+    required_history_bars = 31
+
+    def param_metadata(self) -> dict[str, int]:
+        p = self.params
+        return {
+            "required_history_bars": max(int(p["fit_length"]), int(p["atr_lookback"]) + 1),
+        }
+
     applicable_asset_classes = ("crypto",)
 
     @classmethod

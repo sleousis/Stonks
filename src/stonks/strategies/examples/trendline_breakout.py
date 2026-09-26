@@ -49,6 +49,13 @@ class TrendlineBreakoutStrategy(BaseStrategy):
     alpha_family = "trend"
     premise = "trend"
     label_horizon_bars = 20
+    required_history_bars = 73
+
+    def param_metadata(self) -> dict[str, int]:
+        p = self.params
+        return {
+            "required_history_bars": int(p["lookback"]) + 1,
+        }
 
     @classmethod
     def parameter_spec(cls):

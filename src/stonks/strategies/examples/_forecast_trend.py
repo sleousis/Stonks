@@ -228,7 +228,10 @@ class ForecastTrendStrategy(BaseStrategy):
 
     def _min_bars(self) -> int:
         """Bars needed before any forecast is made."""
-        return max(1, int(self.required_history_bars))
+        return max(1, int(type(self).required_history_bars))
+
+    def param_metadata(self) -> dict[str, int]:
+        return {"required_history_bars": self._min_bars()}
 
     def _signed_forecast(self, bars: pd.DataFrame, asset_class: str) -> float | None:
         """The capped forecast at the last of ``bars`` (adjusted daily bars

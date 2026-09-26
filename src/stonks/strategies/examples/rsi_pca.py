@@ -69,6 +69,14 @@ class RSIPCAStrategy(BaseStrategy):
     alpha_family = "data_driven"
     premise = "none"
     label_horizon_bars = 6
+    required_history_bars = 26
+
+    def param_metadata(self) -> dict[str, int]:
+        p = self.params
+        return {
+            "label_horizon_bars": max(int(p["lookahead"]), int(p["hold_bars"])),
+            "required_history_bars": int(p["rsi_period_max"]) + 1,
+        }
 
     @classmethod
     def parameter_spec(cls):

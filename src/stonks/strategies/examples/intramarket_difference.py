@@ -82,6 +82,13 @@ class IntramarketDifferenceStrategy(SingleTickerLongFlat):
     alpha_family = "trend"
     premise = "trend"
     label_horizon_bars = 24
+    required_history_bars = 170
+
+    def param_metadata(self) -> dict[str, int]:
+        p = self.params
+        return {
+            "required_history_bars": max(int(p["lookback"]), int(p["atr_lookback"])) + 2,
+        }
 
     @classmethod
     def parameter_spec(cls):
