@@ -32,3 +32,18 @@ def test_resolve_accepts_id_class_name_or_class_path(name):
 def test_resolve_unknown_lists_the_choices():
     with pytest.raises(ValueError, match="momentum"):
         resolve_strategy("nope")
+
+
+def test_catalog_skips_private_helper_modules():
+    catalog = strategy_catalog()
+    assert "nt888_single_ticker" not in catalog
+    assert all(".examples._" not in cls.__module__ for cls in catalog.values())
+
+
+def test_catalog_lists_the_regime_and_last_trade_wrappers():
+    from stonks.strategies.feature_regime import FeatureRegimeFilter
+    from stonks.strategies.last_trade_filter import LastTradeFilter
+
+    catalog = strategy_catalog()
+    assert catalog["feature_regime_filter"] is FeatureRegimeFilter
+    assert catalog["last_trade_filter"] is LastTradeFilter
