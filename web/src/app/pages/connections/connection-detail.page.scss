@@ -1,0 +1,93 @@
+@use 'breakpoints' as bp;
+
+.back {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+
+  a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-min);
+  }
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: var(--space-3) var(--space-4);
+  margin: 0;
+
+  div {
+    min-width: 0;
+  }
+
+  dt {
+    font-size: var(--text-xs);
+    color: var(--color-ink-3);
+  }
+
+  dd {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0;
+  }
+}
+
+.problem {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-loss-soft);
+  color: var(--color-ink);
+  font-size: var(--text-sm);
+}
+
+.problem-inline {
+  color: var(--color-loss);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+
+  @include bp.phone {
+    .btn {
+      width: 100%;
+    }
+  }
+}
+
+.sync-result {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+
+  h3 {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-2);
+    font-size: var(--text-md);
+  }
+
+  p {
+    margin: 0 0 var(--space-2);
+  }
+}
+
+.sync-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  margin: 0 0 var(--space-2);
+}

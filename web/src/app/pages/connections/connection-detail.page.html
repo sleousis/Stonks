@@ -1,0 +1,165 @@
+<app-page-header
+  [title]="name()"
+  description="Stonks reads this broker's positions, cash and activity into the portfolios you link. It never trades there."
+/>
+
+<p class="back"><a routerLink="/connections">All connections</a></p>
+
+<div class="page-grid">
+  <!-- Status ---------------------------------------------------------------->
+  <section class="panel span-12" aria-labelledby="status-title">
+    <div class="panel-head">
+      <h2 id="status-title">Status</h2>
+    </div>
+    <div class="panel-body">
+      @if (connection.error(); as err) {
+        <app-error-state
+          title="Could not load this connection"
+          [error]="err"
+          (retry)="connection.reload()"
+        />
+      } @else if (!connection.hasValue()) {
+        <app-loading-state label="Loading the connection" [rows]="2" />
+      } @else {
+        @let c = connection.value();
+        <dl class="facts">
+          <div>
+            <dt>Status</dt>
+            <dd><app-status-pill [status]="c.status" [label]="statusLabel[c.status]" /></dd>
+          </div>
+          @if (c.label) {
+            <div>
+              <dt>Name</dt>
+              <dd>{{ c.label }}</dd>
+            </div>
+          }
+          <div>
+            <dt>Last sync</dt>
+            <dd>
+              @if (c.last_sync_at) {
+                <span [title]="c.last_sync_at | dateTime">{{ c.last_sync_at | ago }}</span>
+                @if (c.last_sync_status) {
+                  <app-status-pill
+                    [status]="c.last_sync_status"
+                    [label]="syncLabel[c.last_sync_status]"
+                  />
+                }
+              } @else {
+                Not yet
+              }
+            </dd>
+          </div>
+          <div>
+            <dt>Next sync</dt>
+            <dd>{{ c.next_sync_at ? (c.next_sync_at | dateTime) : 'Not planned' }}</dd>
+          </div>
+        </dl>
+        @if (c.last_error) {
+          <p class="problem" role="alert">{{ c.last_error }}</p>
+        }
+      }
+
+      <div class="actions">
+        @if (canLink()) {
+          <button
+            type="button"
+            class="btn btn-primary"
+            [disabled]="syncing() || !connection.hasValue()"
+            [attr.aria-busy]="syncing()"
+            (click)="sync()"
+          >
+            {{ syncing() ? 'Syncing…' : 'Sync now' }}
+          </button>
+        }
+        @if (canManage()) {
+          <button
+            type="button"
+            class="btn btn-danger"
+            [disabled]="disconnecting() || !connection.hasValue()"
+            [attr.aria-busy]="disconnecting()"
+            (click)="disconnect()"
+          >
+            {{ disconnecting() ? 'Disconnecting…' : 'Disconnect' }}
+          </button>
+        }
+      </div>
+      <app-permission-note permission="portfolio.manage" />
+      @if (session.whyNot('connection.manage') !== session.whyNot('portfolio.manage')) {
+        <app-permission-note permission="connection.manage" />
+      }
+
+      @if (syncResult(); as r) {
+        <div class="sync-result" aria-live="polite">
+          <h3>
+            Last sync from here
+            <app-status-pill [status]="r.status" [label]="syncLabel[r.status]" />
+          </h3>
+          @if (r.error) {
+            <p class="problem">{{ r.error }}</p>
+          }
+          <p>
+            Found <span class="num">{{ r.accounts_seen }}</span>
+            {{ r.accounts_seen === 1 ? 'account' : 'accounts' }}.
+          </p>
+          @if (r.portfolios.length === 0) {
+            <p class="muted">No linked portfolios were updated. Link an account below first.</p>
+          } @else {
+            <ul class="sync-list">
+              @for (p of r.portfolios; track p.portfolio_id + p.external_account_id) {
+                <li>
+                  <strong>{{ portfolioName(p.portfolio_id) }}</strong>:
+                  <span class="num">{{ p.positions }}</span>
+                  {{ p.positions === 1 ? 'position' : 'positions' }},
+                  <span class="num">{{ p.activities_new }}</span> new
+                  {{ p.activities_new === 1 ? 'activity' : 'activities' }}.
+                  @if (p.unmapped.length) {
+                    <span class="muted">Not recognised: {{ p.unmapped.join(', ') }}.</span>
+                  }
+                  @if (p.error) {
+                    <span class="problem-inline">{{ p.error }}</span>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      }
+    </div>
+  </section>
+
+  <!-- Accounts -------------------------------------------------------------->
+  <section class="panel span-12" aria-labelledby="accounts-title">
+    <div class="panel-head">
+      <h2 id="accounts-title">Accounts</h2>
+    </div>
+    <div class="panel-body">
+      @if (accounts.error(); as err) {
+        <app-error-state
+          title="Could not load the accounts"
+          [error]="err"
+          (retry)="accounts.reload()"
+        />
+      } @else if (!accounts.hasValue()) {
+        <app-loading-state label="Loading accounts" [rows]="2" />
+      } @else if (accounts.value().length === 0) {
+        <app-empty-state
+          title="No accounts found yet"
+          message="Accounts appear here after the broker confirms the connection. Try Sync now."
+        />
+      } @else {
+        <p class="hint">
+          Link an account to a portfolio so each sync copies its positions and cash there.
+        </p>
+        <app-account-list
+          [accounts]="accounts.value()"
+          [portfolios]="portfolios.options()"
+          [linkable]="true"
+          [canLink]="canLink()"
+          [busyId]="linkingId()"
+          (link)="link($event)"
+        />
+        <app-permission-note permission="portfolio.manage" />
+      }
+    </div>
+  </section>
+</div>
