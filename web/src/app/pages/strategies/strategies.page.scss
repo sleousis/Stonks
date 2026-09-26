@@ -1,0 +1,95 @@
+@use 'breakpoints' as bp;
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+
+  @include bp.from-tablet {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  min-width: 0;
+
+  @include bp.from-tablet {
+    display: inline-grid;
+    grid-template-columns: repeat(4, auto);
+  }
+}
+
+.segment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(var(--control-h) - 4px);
+  padding: 0 var(--space-3);
+  border-radius: 3px;
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+
+  &:hover {
+    color: var(--color-ink);
+  }
+
+  &.selected {
+    background: var(--color-surface);
+    color: var(--color-ink);
+    box-shadow: var(--shadow-1);
+  }
+
+  &:has(input:focus-visible) {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 1px;
+  }
+
+  @include bp.phone {
+    min-height: calc(var(--touch-min) - 4px);
+  }
+
+  @include bp.coarse {
+    min-height: calc(var(--touch-min) - 4px);
+  }
+}
+
+.search {
+  min-width: 0;
+
+  .input {
+    width: 100%;
+  }
+
+  @include bp.from-tablet {
+    flex: 0 1 20rem;
+  }
+}
+
+.id-link {
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+
+  @include bp.phone {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-min);
+  }
+}
