@@ -238,3 +238,47 @@ def test_every_constructor_is_long_only_capped_and_tradable(name: str) -> None:
         assert all(inp.tradable(t) for t in book.weights)
         for t in book.weights:
             assert sum(book.attribution[t].values()) == pytest.approx(1.0)
+
+
+# --- RS-06: all-positive picks keep every name ------------------------------------
+
+
+def _piped(name: str, raw: dict[str, dict[str, float]], **settings):
+    """Normalise ``raw`` the way the pipeline does, then construct."""
+    from stonks.portfolio.signals import normalize
+
+    constructor = get_constructor(name, **settings)
+    vols = {t: 0.2 for s in raw.values() for t in s}
+    signals = normalize(raw, constructor.signal_method, long_only=True)
+    return constructor.target_weights(_inp(signals, vols=vols))
+
+
+@pytest.mark.parametrize("name", ["equal_weight_top_n", "inverse_vol"])
+def test_ten_rising_positive_picks_fill_ten_slots(name) -> None:
+    raw = {"s": {f"T{i}": 0.01 * (i + 1) for i in range(10)}}
+    key = "n" if name == "equal_weight_top_n" else "top_n"
+    book = _piped(name, raw, **{key: 10})
+    assert len(book.weights) == 10
+    assert sum(book.weights.values()) == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize("name", ["equal_weight_top_n", "inverse_vol"])
+def test_three_equal_scores_get_three_equal_weights(name) -> None:
+    book = _piped(name, {"s": {"A": 0.5, "B": 0.5, "C": 0.5}})
+    assert book.weights == pytest.approx({"A": 1 / 3, "B": 1 / 3, "C": 1 / 3})
+
+
+def test_a_constant_cross_section_under_zscore_is_equal_conviction() -> None:
+    from stonks.portfolio.signals import normalize
+
+    out = normalize({"s": {"A": 0.5, "B": 0.5, "C": 0.5, "D": 0.5}}, "zscore")
+    assert out["s"] == pytest.approx(dict.fromkeys("ABCD", 1.0))
+
+
+def test_vol_target_ignores_names_with_a_clipped_zero_forecast() -> None:
+    """RS-22: iw = 1/N counts only names with a positive forecast."""
+    c = get_constructor("vol_target", tau=0.2, idm=1.0)
+    book = c.target_weights(_inp({"s": {"A": 10.0, "B": 0.0}}, vols={"A": 0.2, "B": 0.2}))
+    alone = c.target_weights(_inp({"s": {"A": 10.0}}, vols={"A": 0.2}))
+    assert book.weights.get("B", 0.0) == 0.0
+    assert book.weights["A"] == pytest.approx(alone.weights["A"])
