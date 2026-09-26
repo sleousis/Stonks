@@ -12,6 +12,7 @@ messages (``requests`` puts the full URL in its exception text).
 from __future__ import annotations
 
 from typing import Any, Protocol
+from urllib.parse import urlsplit
 
 import requests
 
@@ -69,4 +70,21 @@ class WebhookNotifier(Notifier):
         resp.raise_for_status()
 
     def _redact(self, text: str) -> str:
-        return text.replace(self._url, redact_url(self._url)) if self._url else text
+        """Scrub the URL and every secret-bearing fragment of it: urllib3
+        errors name only the path (``... with url: /services/T0/B0/TOKEN``),
+        so replacing the full URL alone would leak the token."""
+        if not self._url:
+            return text
+        parts = urlsplit(self._url)
+        replacements = {self._url: redact_url(self._url)}
+        if parts.query:
+            replacements[f"{parts.path}?{parts.query}"] = "/***"
+            replacements[parts.query] = "***"
+        if parts.path not in ("", "/"):
+            replacements[parts.path] = "/***"
+        if parts.password:
+            replacements[parts.password] = "***"
+        # Longest first, so the full URL wins over its own path.
+        for fragment in sorted(replacements, key=len, reverse=True):
+            text = text.replace(fragment, replacements[fragment])
+        return text

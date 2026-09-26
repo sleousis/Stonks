@@ -95,6 +95,25 @@ def test_webhook_never_raises_on_network_error_and_redacts_secret(capsys):
     assert "hooks.example.test/***" in out
 
 
+def test_webhook_redacts_path_only_error_messages(capsys):
+    # urllib3's MaxRetryError names only the path, not the full URL.
+    exc = requests.ConnectionError(
+        "HTTPSConnectionPool(host='hooks.example.test', port=443): Max retries exceeded "
+        "with url: /services/T000/B000/SECRETTOKEN (Caused by NewConnectionError)"
+    )
+    WebhookNotifier(url=SECRET_URL, session=_FakeSession(exc=exc)).notify(_n())
+    out = _output(capsys)
+    assert "notify.webhook.failed" in out
+    assert "SECRETTOKEN" not in out
+
+
+def test_webhook_redacts_query_string_secrets(capsys):
+    url = "https://hooks.example.test/hook?token=QUERYSECRET"
+    exc = requests.ConnectionError("Max retries exceeded with url: /hook?token=QUERYSECRET")
+    WebhookNotifier(url=url, session=_FakeSession(exc=exc)).notify(_n())
+    assert "QUERYSECRET" not in _output(capsys)
+
+
 def test_webhook_never_raises_on_http_error_status(capsys):
     notifier = WebhookNotifier(url=SECRET_URL, session=_FakeSession(resp=_Resp(500)))
     notifier.notify(_n())
