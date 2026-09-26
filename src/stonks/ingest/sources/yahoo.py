@@ -503,6 +503,12 @@ class YahooDataSource(DataSource):
                 attempt += 1
             except YFException as exc:
                 raise YahooDataSourceError(f"{symbol}: {exc}") from exc
+            except (KeyError, IndexError, TypeError, ValueError, AttributeError) as exc:
+                # ``fn`` only calls into yfinance; these come from the library
+                # choking on a malformed Yahoo payload for this symbol.
+                raise YahooDataSourceError(
+                    f"{symbol}: yfinance failed: {type(exc).__name__}: {exc}"
+                ) from exc
 
     def _throttle(self) -> None:
         if self._min_interval <= 0:

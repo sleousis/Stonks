@@ -268,6 +268,15 @@ def test_yfinance_exception_becomes_data_source_error():
     assert isinstance(info.value, DataSourceError)
 
 
+def test_yfinance_internal_parse_failure_soft_fails():
+    # yfinance occasionally trips over malformed Yahoo payloads with a bare
+    # KeyError/TypeError from inside the library; that is a vendor failure
+    # for this ticker, not a bug in our code, so it must not abort the run.
+    fake = FakeYF(frames=[KeyError("chart")])
+    with pytest.raises(YahooDataSourceError, match="KeyError"):
+        make_source(fake).fetch_prices("AAPL.US")
+
+
 def test_rate_limit_is_retried_with_backoff():
     from yfinance.exceptions import YFRateLimitError
 
