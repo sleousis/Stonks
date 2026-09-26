@@ -1,12 +1,17 @@
 """CatalogService — what can be run: strategy classes (with their parameter
 specs), bar intervals and asset classes.
 
-Strategy discovery goes through a list of :class:`StrategySource` plug-ins.
-Today the only source is the ``stonks.strategies.examples`` package; a user
-strategies directory or a draft store (e.g. JSON rule specs from a strategy
-studio) is one more source appended to the list. The catalog is also the
-allow-list for resolving a ``class_path`` sent by a client, so nothing
-outside a registered source is ever imported on request.
+Strategy discovery goes through a list of :class:`StrategySource` plug-ins:
+every class in a package (:class:`PackageStrategySource`, e.g. the
+examples) or an explicit list of class paths
+(:class:`ClassListStrategySource`, e.g. ``MacroRegimeFilter`` and the
+Strategy Studio's ``RuleStrategy``). A user strategies directory is one
+more source passed to :meth:`CatalogService.add_source`. The catalog is
+also the allow-list for resolving a ``class_path`` sent by a client, so
+nothing outside a registered source is ever imported on request.
+
+Discovery imports modules, so its result is cached until
+:meth:`CatalogService.refresh` or :meth:`CatalogService.add_source`.
 """
 
 from __future__ import annotations
@@ -14,6 +19,7 @@ from __future__ import annotations
 import importlib
 import inspect
 import pkgutil
+import threading
 from collections.abc import Sequence
 from typing import Any, Protocol, get_args, runtime_checkable
 
@@ -59,6 +65,38 @@ class PackageStrategySource:
         return found
 
 
+class ClassListStrategySource:
+    """Explicitly listed ``module:Class`` paths. A path whose module does
+    not exist (yet) is skipped quietly, so a source can name a class that
+    another package only ships later."""
+
+    def __init__(self, name: str, class_paths: Sequence[str]) -> None:
+        self.name = name
+        self.class_paths = tuple(class_paths)
+
+    def discover(self) -> list[type]:
+        found: list[type] = []
+        for path in self.class_paths:
+            module_name, _, cls_name = path.partition(":")
+            try:
+                module = importlib.import_module(module_name)
+            except ModuleNotFoundError as exc:
+                if exc.name is not None and module_name.startswith(exc.name):
+                    _log.debug("catalog.class_not_available", class_path=path)
+                else:  # the module exists but one of its imports is missing
+                    _log.warning("catalog.module_import_failed", module=module_name, error=str(exc))
+                continue
+            except Exception as exc:
+                _log.warning("catalog.module_import_failed", module=module_name, error=str(exc))
+                continue
+            cls = getattr(module, cls_name, None)
+            if isinstance(cls, type) and _looks_like_strategy(cls):
+                found.append(cls)
+            else:
+                _log.warning("catalog.not_a_strategy", class_path=path)
+        return found
+
+
 def _looks_like_strategy(cls: type) -> bool:
     return (
         not inspect.isabstract(cls)
@@ -100,23 +138,40 @@ class IntervalInfo(BaseModel):
 class CatalogService:
     def __init__(self, sources: Sequence[StrategySource]) -> None:
         self._sources = list(sources)
+        self._lock = threading.Lock()
+        self._cache: dict[str, tuple[str, type]] | None = None
 
-    def _classes(self) -> list[tuple[str, type]]:
-        seen: dict[str, tuple[str, type]] = {}
-        for source in self._sources:
-            for cls in source.discover():
-                seen.setdefault(class_path_of(cls), (source.name, cls))
-        return [seen[k] for k in sorted(seen)]
+    def add_source(self, source: StrategySource) -> None:
+        """Plug in one more source (e.g. user strategies); later sources
+        never shadow a class path an earlier one already offers."""
+        with self._lock:
+            self._sources.append(source)
+            self._cache = None
+
+    def refresh(self) -> None:
+        """Forget the discovered classes; the next call re-discovers."""
+        with self._lock:
+            self._cache = None
+
+    def _classes(self) -> dict[str, tuple[str, type]]:
+        with self._lock:
+            if self._cache is None:
+                seen: dict[str, tuple[str, type]] = {}
+                for source in self._sources:
+                    for cls in source.discover():
+                        seen.setdefault(class_path_of(cls), (source.name, cls))
+                self._cache = {k: seen[k] for k in sorted(seen)}
+            return self._cache
 
     def strategies(self) -> list[StrategyClassInfo]:
-        return [_describe(cls, source) for source, cls in self._classes()]
+        return [_describe(cls, source) for source, cls in self._classes().values()]
 
     def strategy_class(self, class_path: str) -> type:
         """Resolve a ``module:Class`` path, but only if a source offers it."""
-        for _, cls in self._classes():
-            if class_path_of(cls) == class_path:
-                return cls
-        raise ValidationError(f"unknown strategy class {class_path!r}; see the catalog")
+        entry = self._classes().get(class_path)
+        if entry is None:
+            raise ValidationError(f"unknown strategy class {class_path!r}; see the catalog")
+        return entry[1]
 
     def intervals(self) -> list[IntervalInfo]:
         return [

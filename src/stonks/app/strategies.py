@@ -120,22 +120,17 @@ class StrategyService:
         """The class a ref points at, without instantiating it."""
         if ref.class_path is not None:
             return self._catalog.strategy_class(ref.class_path)
-        with self._ctx.registry() as registry:
-            handle = next((h for h in registry.list_all() if h.id == ref.strategy_id), None)
-        if handle is None:
-            raise NotFoundError(f"no strategy with id {ref.strategy_id!r}")
-        return self._catalog.strategy_class(handle.class_path)
+        # A registered strategy was vetted when it was registered: load it
+        # through the registry (like ``resolve``), not the catalog
+        # allow-list, which only gates class paths sent by clients.
+        return type(self._load_registered(ref.strategy_id or ""))
 
     def resolve(self, ref: StrategyRef) -> Strategy:
         """Instantiate the strategy a ref points at. Registered ids load
         through the registry (restoring fitted state); class paths must be
         offered by the catalog and get their params validated."""
         if ref.strategy_id is not None:
-            with self._ctx.registry() as registry:
-                try:
-                    return registry.load(ref.strategy_id)
-                except KeyError:
-                    raise NotFoundError(f"no strategy with id {ref.strategy_id!r}") from None
+            return self._load_registered(ref.strategy_id)
         cls = self._catalog.strategy_class(ref.class_path or "")
         try:
             return cls(dict(ref.params))
@@ -143,6 +138,13 @@ class StrategyService:
             raise ValidationError(f"invalid params for {class_path_of(cls)}: {exc}") from None
 
     # ---- internals ---------------------------------------------------------
+
+    def _load_registered(self, strategy_id: str) -> Strategy:
+        with self._ctx.registry() as registry:
+            try:
+                return registry.load(strategy_id)
+            except KeyError:
+                raise NotFoundError(f"no strategy with id {strategy_id!r}") from None
 
     def _summary(self, h: StrategyHandle) -> StrategySummary:
         return StrategySummary(

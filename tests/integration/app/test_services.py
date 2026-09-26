@@ -460,3 +460,97 @@ def test_services_scrub_broker_keys_and_webhook_url(settings, seeded):
     settings.notify.webhook.url = "https://hooks.example/T0/B0/secret"
     secrets = list(Services.create(AppContext(settings)).runner.secrets())
     assert {"alpaca-key-1", "alpaca-secret-2", "https://hooks.example/T0/B0/secret"} <= set(secrets)
+
+
+# ---- catalog: caching, extra sources, registered strategies ------------------
+
+
+def test_catalog_discovers_each_source_once_until_refreshed():
+    calls = []
+
+    class CountingSource:
+        name = "counting"
+
+        def discover(self):
+            from stonks.strategies.examples.momentum import Momentum
+
+            calls.append(1)
+            return [Momentum]
+
+    catalog = CatalogService(sources=[CountingSource()])
+    catalog.strategies()
+    catalog.strategies()
+    catalog.strategy_class("stonks.strategies.examples.momentum:Momentum")
+    assert len(calls) == 1
+    catalog.refresh()
+    catalog.strategies()
+    assert len(calls) == 2
+
+
+def test_catalog_add_source_invalidates_cache():
+    from stonks.app.catalog import ClassListStrategySource
+
+    catalog = CatalogService(sources=[])
+    assert catalog.strategies() == []
+    catalog.add_source(
+        ClassListStrategySource("extra", ["stonks.strategies.examples.momentum:Momentum"])
+    )
+    assert [c.source for c in catalog.strategies()] == ["extra"]
+
+
+def test_class_list_source_skips_modules_that_do_not_exist_yet():
+    from stonks.app.catalog import ClassListStrategySource
+
+    src = ClassListStrategySource(
+        "studio",
+        [
+            "stonks.strategies.not_built_yet:RuleStrategy",
+            "stonks.strategies.macro_regime:MacroRegimeFilter",
+        ],
+    )
+    assert [c.__name__ for c in src.discover()] == ["MacroRegimeFilter"]
+
+
+def test_default_catalog_offers_macro_regime_quality_value_and_rule_strategy_slot():
+    from stonks.app.services import RULE_STRATEGY_CLASS_PATH, default_strategy_sources
+
+    catalog = CatalogService(sources=default_strategy_sources())
+    paths = {c.class_path for c in catalog.strategies()}
+    assert "stonks.strategies.macro_regime:MacroRegimeFilter" in paths
+    assert "stonks.strategies.examples.quality_value:QualityValue" in paths
+    assert RULE_STRATEGY_CLASS_PATH == "stonks.strategies.rule_based:RuleStrategy"
+    sources = default_strategy_sources()
+    assert any(RULE_STRATEGY_CLASS_PATH in getattr(s, "class_paths", ()) for s in sources)
+
+
+def test_registered_strategy_class_resolves_outside_the_catalog(settings, seeded):
+    from stonks.app.context import AppContext
+    from stonks.app.services import Services
+
+    svc = Services.create(AppContext(settings), strategy_sources=[])
+    cls = svc.strategies.strategy_class(StrategyRef(strategy_id=seeded["active_id"]))
+    assert cls.__name__ == "BuyAndHold"
+    with pytest.raises(NotFoundError):
+        svc.strategies.strategy_class(StrategyRef(strategy_id="nope"))
+
+
+def test_lab_run_on_registered_strategy_outside_catalog_is_accepted(settings, seeded):
+    from stonks.app.context import AppContext
+    from stonks.app.services import Services
+
+    svc = Services.create(AppContext(settings), strategy_sources=[])
+    svc.start()
+    try:
+        job = svc.lab.submit_lab_run(
+            LabRunRequest(
+                strategy=StrategyRef(strategy_id=seeded["active_id"]),
+                universe=["UP.US"],
+                start=date(2025, 10, 1),
+                end=date(2026, 4, 1),
+                budget=1,
+                survival_tests=["oos"],
+            )
+        )
+        assert svc.jobs.wait(job.id, timeout=60).status == "succeeded"
+    finally:
+        svc.shutdown()

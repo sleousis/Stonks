@@ -7,7 +7,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from stonks.app.catalog import CatalogService, PackageStrategySource, StrategySource
+from stonks.app.catalog import (
+    CatalogService,
+    ClassListStrategySource,
+    PackageStrategySource,
+    StrategySource,
+)
 from stonks.app.context import AppContext
 from stonks.app.ingest import IngestService
 from stonks.app.jobs import Job, JobRunner, JobStore
@@ -23,8 +28,17 @@ from stonks.logging import get_logger
 _log = get_logger("stonks.app.services")
 
 
+#: The Strategy Studio's declarative strategy; drafts are backtested as this
+#: class with params ``{"spec": {...}}``. Offered once the module exists.
+RULE_STRATEGY_CLASS_PATH = "stonks.strategies.rule_based:RuleStrategy"
+
+
 def default_strategy_sources() -> list[StrategySource]:
-    return [PackageStrategySource("stonks.strategies.examples", name="examples")]
+    return [
+        PackageStrategySource("stonks.strategies.examples", name="examples"),
+        ClassListStrategySource("wrappers", ["stonks.strategies.macro_regime:MacroRegimeFilter"]),
+        ClassListStrategySource("studio", [RULE_STRATEGY_CLASS_PATH]),
+    ]
 
 
 def _configured_secrets(context: AppContext) -> list[str]:
