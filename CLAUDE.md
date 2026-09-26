@@ -16,10 +16,13 @@ All commands assume `uv` (`pipx install uv`). Run from the repo root.
 
 ```bash
 uv sync                          # install deps into .venv (Python 3.12+)
-uv run pytest -n auto            # unit + integration tests in parallel; no network
+uv run pytest -n auto            # unit + integration tests in parallel; no network (sockets reach loopback only). Takes several minutes (about 12 on 3 workers)
 uv run pytest tests/unit/test_params_spec.py -k "tunable"   # one test by path + keyword
 STONKS_RUN_LIVE_TESTS=1 uv run pytest -m live   # live API contract tests (real keys in .env)
 uv run ruff check . && uv run ruff format .
+uv run python -m tools.pyright_gate            # pyright, fails on errors not in the baseline
+uv run pytest -n auto --cov --cov-report=json && uv run python -m tools.coverage_gate coverage.json
+uv run --with cosmic-ray python -m tools.mutation --only pnl   # mutation testing (slow)
 
 # Stores
 uv run stonks db init            # migrate lake.duckdb and state.sqlite
@@ -94,7 +97,7 @@ uv run python -m stonks.security keygen
 - **`lab/`**: `runner.py` (preflight, tune, fit, survival suite, verdict, optional register), `catalog.py` (every strategy the lab can name), tuners in `tuning/` (grid, random), `objectives.py`, `trials.py` (trial ledger with hypothesis and premortem, `lab_runs`/`lab_trials`), `manifest.py` (reproducibility), `parallel.py` (the one spawn process pool), `dataset.py` (windows, embargo), `signal_eval.py` (IC analysis), `backtesting.py`. `survival/registry.py` discovers 18 tests and names the presets `quick`, `standard` and `promotion`.
 - **`stats/`**: PSR, deflated Sharpe, MinTRL, bootstrap, HAC, CSCV/PBO, multiple testing (FDR).
 - **`backtest/`**: interval-aware `Backtester` (`engine.py`, runs the construction pipeline when `BacktestConfig.construction` is set), `SimulatedBroker` (idempotent by `client_id`), `fills.py` (participation cap, partial fills, limit/stop fills from the bar range, gap guard), `costs.py` (per-asset-class fee, spread and square-root impact), `trades.py` (FIFO round trips), `metrics.py` (Sharpe, Sortino, Calmar, Ulcer, VaR, ES, ...), `benchmark.py` (benchmark curve, alpha, beta), `corporate_actions.py` (splits and dividends), `calendar.py`, `report.py`.
-- **`registry/`**: `StrategyRegistry` over SQLite plus `ArtifactBundle` at `data/artifacts/<id>/`. Governance: `set_status` is the only writer of `strategies.status`, every change writes a `status_changes` row, and promotion needs a passing go-live check or an override with a reason.
+- **`registry/`**: `StrategyRegistry` over SQLite plus `ArtifactBundle` at `data/artifacts/<id>/` (the stored path is relative to the artifacts folder, so a restore into another data folder still loads). Governance: `set_status` is the only writer of `strategies.status`, every change writes a `status_changes` row, and promotion needs a passing go-live check or an override with a reason.
 - **`production/`**: `run_tick` (`tick.py`) in three phases: the signal phase (`ranker.py` scores each active strategy once), a portfolio phase over the books of a `TickPlan` (construction pipeline, risk rules, broker, ledger, `portfolio`-stage hooks; every entrypoint runs `TickPlan.default`, the single `pf_default` book, and `load_tick_plan` for per-portfolio books is not wired in yet), then model books (`shadow.py`) and `tick`-stage hooks. `risk.py` plus `rules/` (registered `RiskRule`s: the caps, position risk, portfolio vol, drawdown scaling, liquidity, sector cap, max holding, circuit breaker and operational halt, set under `[production.risk.rules.*]`), `halts.py` (`risk_halts` rows: kill switch, breaker trips, the operational halt that `run_health` opens), `quit_rule.py`, `hooks/` (position attribution, notification enqueue, the quit rule, and the `risk_halts` trade gate), `golive.py` (incubation gate), `pnl.py`, `health.py`, `corporate_actions.py`, `prices.py`, `settings_builder.py`.
 - **`execution/`**: `make_client_id` (`orders.py`), brokers in `brokers/` (`simulated`, `alpaca` wrapping `alpaca-py`, `make_broker`), `reconcile.py` (syncs broker order state and fills into `orders`/`fills`).
 - **`accounts/`**: users and roles (viewer, trader, admin), portfolios, subscriptions with modes `notify`/`paper`/`auto`, `BookSpec` with tighten-only merges, `Scope` ownership checks, `audit_log`. Existing installs map to `usr_owner` and `pf_default`.
@@ -102,13 +105,15 @@ uv run python -m stonks.security keygen
 - **`security/`**: AES-GCM envelope encryption (`SecretBox`) with master keys from `STONKS_SECRET_KEYS`.
 - **`notify/`**: `Notifier` seam for operator alerts (log, store, webhook) and the per-user notification router, outbox, delivery worker with retries, quiet hours and preferences, and channels (Web Push via VAPID, SMTP email, the user's own webhook).
 - **`scheduling/`**: built-in scheduler with exchange calendars, session/daily/interval triggers, catch-up, run records, dead-man deadlines and pings, Prometheus metrics, and `api`, `in_process` and `local` backends.
-- **`ops/`**: `backup`, `verify`, `restore`, `list`, `prune` of lake, state and artifacts with retention.
+- **`ops/`**: `backup`, `verify`, `restore`, `list`, `prune` of lake, state and artifacts with retention, plus `restore-snapshot` and `check-restore` for the off-server restore scripts.
 - **`reporting/`**: static HTML report, backtest tear sheets, signal research sections.
 - **`app/`**: the service layer (`services.py` wires lake, state, registry, lab, backtests, ticks, studio, jobs). No business logic in any transport.
-- **`api/`**: FastAPI app (`stonks serve`), bearer token `STONKS_API_TOKEN` for mutating routes, background jobs with SSE, OpenAPI contract, serves `web/dist`.
+- **`auth/`**: sign-in with passwords, sessions, mandatory TOTP 2FA, recovery codes, API tokens and role permissions (`stonks users`). Every API route declares the permission it needs.
+- **`universes/`**: stored universe definitions (list, exchange, rule, index) behind `UniverseProvider` and `IndexSource` registries, refreshed into point-in-time membership. See `docs/universes.md`.
+- **`api/`**: FastAPI app (`stonks serve`), session or API-token auth with per-route permissions (`STONKS_API_TOKEN` is a legacy credential), background jobs with SSE, OpenAPI contract, serves `web/dist`.
 - **`mcp/`**: `stonks mcp`, an MCP server that talks to the running REST API. Write tools need an explicit confirm.
 - **`web/`**: Angular console (dashboard, strategies, lab, studio, data, orders, shadow, go-live, health, settings), typed client generated from the OpenAPI spec, installable PWA. See `docs/ui.md`.
-- **Deploy**: `Dockerfile`, `deploy/` (Compose with api, scheduler and Caddy, Tailscale, restic backups, host checks), `infra/` (Terraform), `.github/workflows/` (ci, codeql, docs, release, deploy).
+- **Deploy**: `Dockerfile`, `deploy/` (Compose with api, scheduler and Caddy, Tailscale, restic backups, host checks), `infra/` (Terraform), `.github/workflows/` (ci, codeql, docs, release, deploy, mutation).
 
 ## Canonical schemas (current)
 
