@@ -288,6 +288,36 @@ uv run stonks pnl --strategy <id>      # a model book
 
 Columns: `date`, `value` (cash plus marked positions), `change`, `daily`, `cumulative` (since the first snapshot) and `drawdown` (below the running peak). `--since` only trims rows; `cumulative` and `drawdown` still count from inception.
 
+## Trading costs and the journal
+
+Every order the tick places records its decision: the price the strategy decided at (the latest close), the day, why it traded (the trigger, the strategy, the signal score and rank, the constructor and the target weight) and what the cost model expected it to cost. Each fill records its arrival price, the market price before costs.
+
+```bash
+uv run stonks tca summary                     # the default portfolio, all orders
+uv run stonks tca summary --by strategy       # or ticker, portfolio, day, week, month
+uv run stonks tca journal --since 2026-09-01  # orders with reason, outcome and notes
+uv run stonks tca order <client-id>           # one order in full
+uv run stonks tca note <client-id> "text"     # add a note
+uv run stonks tca edit-note <note-id> "text"  # change your note
+uv run stonks tca refresh                     # fill next-session prices from the lake
+```
+
+The summary shows implementation shortfall in basis points of the traded value at the decision price. Positive numbers are costs.
+
+- `delay`: the move from the decision price to the arrival price.
+- `impact`: the move from the arrival price to the fill price (spread, slippage, impact).
+- `fees`: the fees charged.
+- `IS`: all three together.
+- `opportunity`: what the unfilled part cost, measured at the next session's close.
+- `convention`: how much more the live fill paid than a backtest would have, which fills at the next session's open.
+- `model` and `gap`: the cost model's estimate and the realised shortfall minus that estimate. A gap that stays above zero means the cost model is too cheap.
+
+The next session's open and close arrive a day later. The tick fills them in after every run, and `stonks tca refresh` does it by hand. For an external broker the arrival price is that next open.
+
+The go-live report shows the strategy's live shortfall next to the modelled cost. The same numbers are in the API under `/api/tca` and in the MCP tools `tca_summary`, `trade_journal` and `order_tca`. A trader only sees the orders of their own portfolios and edits only their own notes.
+
+Backtests use the same math. `Backtester.decision_prices` holds the close each order was decided at, and `production.tca.backtest_shortfalls` prices the simulated fills against it.
+
 ## Without the scheduler
 
 Plain cron works too. After the US close in UTC terms (22:30 UTC is safe all year):
