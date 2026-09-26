@@ -1,0 +1,255 @@
+<app-page-header
+  title="Profile"
+  description="Your account, password, recovery codes and API tokens."
+>
+  <button actions type="button" class="btn" (click)="signOut()">Sign out</button>
+</app-page-header>
+
+<div class="page-grid">
+  <div class="column span-6">
+    <!-- Account --------------------------------------------------------------->
+    <section class="panel" aria-labelledby="account-title">
+      <div class="panel-head">
+        <h2 id="account-title">Account</h2>
+      </div>
+      @if (me(); as m) {
+        <dl class="facts">
+          <div>
+            <dt>Name</dt>
+            <dd>{{ m.display_name }}</dd>
+          </div>
+          <div>
+            <dt>Email</dt>
+            <dd>{{ m.email ?? 'None' }}</dd>
+          </div>
+          <div>
+            <dt>Role</dt>
+            <dd>{{ roleLabel() }}</dd>
+          </div>
+          <div>
+            <dt>Signed in with</dt>
+            <dd>{{ m.via === 'session' ? 'Password and code' : 'API token' }}</dd>
+          </div>
+          <div>
+            <dt>Authenticator</dt>
+            <dd>
+              <app-status-pill
+                [status]="m.mfa_enrolled ? 'ok' : 'warn'"
+                [label]="m.mfa_enrolled ? 'Set up' : 'Not set up'"
+              />
+            </dd>
+          </div>
+        </dl>
+      } @else {
+        <app-empty-state title="Not signed in" message="Sign in to see and change your account." />
+      }
+    </section>
+
+    <!-- Password -------------------------------------------------------------->
+    @if (viaSession()) {
+      <section class="panel" aria-labelledby="password-title">
+        <div class="panel-head">
+          <h2 id="password-title">Password</h2>
+        </div>
+        <form
+          class="panel-body form-grid"
+          [formGroup]="passwordForm"
+          (ngSubmit)="changePassword()"
+          novalidate
+        >
+          <div class="field">
+            <label for="pw-current">Current password</label>
+            <input
+              id="pw-current"
+              class="input"
+              type="password"
+              formControlName="current"
+              autocomplete="current-password"
+            />
+            @if (passwordForm.controls.current.touched && passwordForm.controls.current.invalid) {
+              <span class="error">Enter your current password.</span>
+            }
+          </div>
+          <div class="field">
+            <label for="pw-next">New password</label>
+            <input
+              id="pw-next"
+              class="input"
+              type="password"
+              formControlName="next"
+              autocomplete="new-password"
+              aria-describedby="pw-next-hint"
+              [attr.aria-invalid]="
+                passwordForm.controls.next.touched && passwordForm.controls.next.invalid
+              "
+            />
+            @if (passwordForm.controls.next.touched && passwordForm.controls.next.invalid) {
+              <span class="error">Use at least {{ passwordMin }} characters.</span>
+            } @else {
+              <span id="pw-next-hint" class="hint"
+                >At least {{ passwordMin }} characters. A long phrase works well.</span
+              >
+            }
+          </div>
+          <div class="field">
+            <label for="pw-repeat">New password again</label>
+            <input
+              id="pw-repeat"
+              class="input"
+              type="password"
+              formControlName="repeat"
+              autocomplete="new-password"
+            />
+            @if (passwordForm.controls.repeat.touched && passwordForm.hasError('mismatch')) {
+              <span class="error">The two passwords differ.</span>
+            }
+          </div>
+          <div>
+            <button
+              type="submit"
+              class="btn btn-primary"
+              [disabled]="savingPassword()"
+              [attr.aria-busy]="savingPassword()"
+            >
+              {{ savingPassword() ? 'Saving…' : 'Change password' }}
+            </button>
+          </div>
+          <p class="hint">Asks for a code from your app. Your other devices are signed out.</p>
+        </form>
+      </section>
+
+      <!-- Recovery codes ------------------------------------------------------->
+      <section class="panel" aria-labelledby="codes-title">
+        <div class="panel-head">
+          <h2 id="codes-title">Recovery codes</h2>
+        </div>
+        <div class="panel-body stack">
+          <p class="lead">
+            Each code signs you in once if you lose your phone. Making new ones stops the old ones.
+          </p>
+          @if (newCodes(); as codes) {
+            <app-one-time-secret
+              [values]="codes"
+              label="Recovery codes"
+              warning="Shown once. You cannot see these again."
+            />
+          }
+          <div>
+            <button
+              type="button"
+              class="btn"
+              [disabled]="makingCodes()"
+              (click)="makeRecoveryCodes()"
+            >
+              Make new codes
+            </button>
+          </div>
+        </div>
+      </section>
+    }
+  </div>
+
+  <div class="column span-6">
+    <!-- API tokens ------------------------------------------------------------->
+    <section class="panel" aria-labelledby="tokens-title">
+      <div class="panel-head">
+        <h2 id="tokens-title">API tokens</h2>
+      </div>
+      <div class="panel-body stack">
+        <p class="lead">For scripts and the MCP server. A token can do only what you can do.</p>
+
+        @if (createdToken(); as token) {
+          <app-one-time-secret
+            [values]="[token]"
+            label="API token"
+            warning="Shown once. Copy it now."
+          />
+        }
+
+        @if (viaSession()) {
+          <form class="form-grid" [formGroup]="tokenForm" (ngSubmit)="createToken()" novalidate>
+            <div class="field">
+              <label for="token-name">Name</label>
+              <input
+                id="token-name"
+                class="input"
+                formControlName="name"
+                autocomplete="off"
+                placeholder="My laptop script"
+              />
+            </div>
+            <fieldset class="scopes">
+              <legend>What it may do</legend>
+              @for (s of scopes(); track s.value) {
+                <label class="check">
+                  <input type="checkbox" [formControlName]="s.value" />
+                  <span
+                    ><strong>{{ s.label }}</strong> <span class="muted">{{ s.help }}</span></span
+                  >
+                </label>
+              }
+            </fieldset>
+            <div class="field">
+              <label for="token-expiry">Ends after</label>
+              <select id="token-expiry" class="input" formControlName="expires">
+                @for (e of expiry; track e.label) {
+                  <option [value]="e.days ?? 'never'">{{ e.label }}</option>
+                }
+              </select>
+            </div>
+            @if (tokenError(); as err) {
+              <p class="error" role="alert">{{ err }}</p>
+            }
+            <div>
+              <button
+                type="submit"
+                class="btn btn-primary"
+                [disabled]="creatingToken()"
+                [attr.aria-busy]="creatingToken()"
+              >
+                {{ creatingToken() ? 'Creating…' : 'Create token' }}
+              </button>
+            </div>
+          </form>
+        } @else {
+          <p class="note">Sign in with your password to create tokens.</p>
+        }
+      </div>
+
+      @if (tokens.error(); as err) {
+        <app-error-state
+          title="Could not load your tokens"
+          [error]="err"
+          (retry)="tokens.reload()"
+        />
+      } @else if (!tokens.hasValue()) {
+        @if (me()) {
+          <app-loading-state label="Loading your tokens" [rows]="2" />
+        }
+      } @else if (activeTokens().length === 0) {
+        <app-empty-state title="No tokens" message="Tokens you create show here." />
+      } @else {
+        <ul class="tokens" aria-label="Your tokens">
+          @for (t of activeTokens(); track t.id) {
+            <li>
+              <div class="token-main">
+                <span class="token-name">{{ t.name }}</span>
+                <span class="muted">{{ scopeLabel(t) }}</span>
+                <span class="dates">{{ tokenDates(t) }}</span>
+              </div>
+              <button
+                type="button"
+                class="btn"
+                [disabled]="revoking() === t.id"
+                [attr.aria-label]="'Revoke ' + t.name"
+                (click)="revoke(t)"
+              >
+                Revoke
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  </div>
+</div>
