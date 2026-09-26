@@ -156,6 +156,14 @@ def test_null_bar_volume_reaches_the_cost_model_as_unknown(tmp_path):
     lake.close()
 
 
+def test_empty_universe_runs_and_reports_zeroes(tmp_path):
+    lake = _lake(tmp_path, ["AAPL.US"], {"AAPL.US": "crypto"})
+    report = _run(lake, "AAPL.US", [])
+    assert report.equity_curve == []
+    assert report.sharpe == 0.0
+    lake.close()
+
+
 def test_empty_window_reports_zeroes(tmp_path):
     lake = _lake(tmp_path, [], {})
     report = _run(lake, "AAPL.US", ["AAPL.US"])
