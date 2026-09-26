@@ -16,7 +16,8 @@ All commands assume `uv` (installed via `pipx install uv`). Run from the repo ro
 
 ```bash
 uv sync                         # install deps into .venv with Python 3.12+
-uv run pytest                   # unit + integration tests; no network
+uv run pytest -n auto           # full suite in parallel on every core (~1 min); no network
+uv run pytest                   # same suite on one core; use for a single file or test
 uv run pytest -m live           # live API contract tests (requires STONKS_RUN_LIVE_TESTS=1 and a real EODHD key in .env)
 uv run pytest tests/unit/test_params_spec.py -k "tunable"   # single test by path + keyword
 uv run ruff check .
