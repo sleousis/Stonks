@@ -9,9 +9,11 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 |------|------|---------------|
 | [`backtest_draft`](#backtest_draft) | job | no |
 | [`create_draft`](#create_draft) | job | no |
+| [`create_universe`](#create_universe) | guarded | yes |
 | [`disable_draft`](#disable_draft) | guarded | yes |
 | [`enable_draft`](#enable_draft) | guarded | yes |
 | [`engage_kill_switch`](#engage_kill_switch) | guarded | yes |
+| [`ensure_universe_data`](#ensure_universe_data) | guarded | yes |
 | [`get_bars`](#get_bars) | read | no |
 | [`get_broker`](#get_broker) | read | no |
 | [`get_catalog`](#get_catalog) | read | no |
@@ -28,7 +30,10 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_strategy`](#get_strategy) | read | no |
 | [`get_strategy_history`](#get_strategy_history) | read | no |
 | [`get_tick`](#get_tick) | read | no |
+| [`get_universe`](#get_universe) | read | no |
+| [`get_universe_members`](#get_universe_members) | read | no |
 | [`health`](#health) | read | no |
+| [`import_index_history`](#import_index_history) | guarded | yes |
 | [`lab_run_draft`](#lab_run_draft) | guarded | yes |
 | [`list_connections`](#list_connections) | read | no |
 | [`list_cost_models`](#list_cost_models) | read | no |
@@ -45,7 +50,9 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_strategies`](#list_strategies) | read | no |
 | [`list_studio_templates`](#list_studio_templates) | read | no |
 | [`list_ticks`](#list_ticks) | read | no |
+| [`list_universes`](#list_universes) | read | no |
 | [`promote_strategy`](#promote_strategy) | guarded | yes |
+| [`refresh_universe`](#refresh_universe) | guarded | yes |
 | [`register_draft`](#register_draft) | guarded | yes |
 | [`retire_strategy`](#retire_strategy) | guarded | yes |
 | [`run_backtest`](#run_backtest) | job | no |
@@ -227,6 +234,28 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `tick_id` | string | yes |  |  |
+
+### `get_universe`
+
+One stored universe definition.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `universe_id` | string | yes |  | universe id, e.g. sp500 or us_common |
+
+### `get_universe_members`
+
+Members of a universe on a date (default today), point in time:
+names that later died are members on the days they were listed.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `universe_id` | string | yes |  | universe id, e.g. sp500 or us_common |
+| `as_of` | date \| null | no | `null` | YYYY-MM-DD |
 
 ### `health`
 
@@ -411,6 +440,14 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
 
+### `list_universes`
+
+Stored universes: id, kind, spec, last refresh and member count.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
 ### `search_instruments`
 
 Search instruments in the lake by id/name and asset class.
@@ -586,6 +623,23 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 
 Need `confirm=true` to act. Without it they return a preview and change nothing.
 
+### `create_universe`
+
+Store a universe definition. It has no members until refreshed
+(refresh_universe). Without confirm=true returns a preview.
+
+Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `universe_id` | string | yes |  | universe id, e.g. sp500 or us_common |
+| `kind` | "list" \| "exchange" \| "rule" \| "index" | yes |  |  |
+| `spec` | object \| null | no | `null` | kind settings. list: {tickers, spans}. exchange: {exchange, source, security_types, include_delisted}. rule: {start, end, rebalance, min_adv, min_price, asset_classes, sectors, exclude_sectors, exchanges}. index: {index_id, source, start_date} |
+| `name` | string \| null | no | `null` |  |
+| `description` | string \| null | no | `null` |  |
+| `csv` | string \| null | no | `null` | list only: CSV with a ticker column (replaces spec) |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
 ### `disable_draft`
 
 Move a registered draft's strategy back to shadow (stops trading it).
@@ -629,6 +683,38 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 | `reason` | string | yes |  | audited |
 | `portfolio_id` | string \| null | no | `null` |  |
 | `flatten` | boolean | no | `false` | stop buys only; sells and exits still go through |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
+### `ensure_universe_data`
+
+Queue a job that fetches only the missing bars of every member
+over the window (delisted names included) from the data source.
+Follow up with wait_for_job. Without confirm=true returns a preview.
+
+Safety: writes, non-destructive, idempotent, open world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `universe_id` | string | yes |  | universe id, e.g. sp500 or us_common |
+| `start` | date | yes |  | YYYY-MM-DD |
+| `end` | date | yes |  | YYYY-MM-DD |
+| `interval` | string | no | `"1d"` |  |
+| `source` | "eodhd" \| "yahoo" \| "defillama" \| null | no | `null` |  |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
+### `import_index_history`
+
+Import an index's constituents and changes. CSV columns
+date,ticker,action with action add, remove or member. Without
+confirm=true returns a preview.
+
+Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `index_id` | string | yes |  | lower_snake_case index code, e.g. sp500 |
+| `content` | string | yes |  | the CSV or JSON text |
+| `format` | "csv" \| "json" | no | `"csv"` |  |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
 ### `lab_run_draft`
@@ -681,6 +767,19 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 | `reason` | string \| null | no | `null` | why (logged in the audit trail); required for demotions and overrides |
 | `override` | boolean | no | `false` | promote without a passing go-live check; needs a reason of at least 20 characters |
+
+### `refresh_universe`
+
+Queue a refresh that rebuilds the universe's membership (an
+exchange universe lists symbols at the data source). Follow up with
+wait_for_job. Without confirm=true returns a preview.
+
+Safety: writes, non-destructive, idempotent, open world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `universe_id` | string | yes |  | universe id, e.g. sp500 or us_common |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
 ### `register_draft`
 
