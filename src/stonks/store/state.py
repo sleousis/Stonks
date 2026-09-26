@@ -120,6 +120,18 @@ class SqliteState:
 
     @contextmanager
     def transaction(self) -> Iterator[None]:
+        """Group writes into one atomic unit: COMMIT on clean exit,
+        ROLLBACK + re-raise on exception.
+
+        Re-entrant: when a transaction is already open (an outer
+        ``transaction()`` or an explicit BEGIN), the inner call joins it
+        and the outermost owner keeps the COMMIT/ROLLBACK responsibility —
+        an exception escaping the inner block rolls back everything once
+        it reaches the outer one. Mirrors ``DuckDBLake.transaction()``.
+        """
+        if self.con.in_transaction:
+            yield
+            return
         self.con.execute("BEGIN")
         try:
             yield
