@@ -22,20 +22,38 @@ the same events again from ``S``. No event with ``ex_date > D`` is ever
 applied (no look-ahead), and a portfolio with no dated snapshot (freshly
 seeded, or legacy rows without ``as_of``) has nothing due.
 
-Assumption: the lake's bars are current through ``D``. A split whose
-ex-date bar has not been ingested yet would be applied to the quantity
-while the quote is still the pre-split close.
+The since-window rule above is what model books (``production.shadow``)
+and pre-ledger state files still use. It assumes the event row and the
+ex-date bar are both in the lake when the ex-date tick runs.
+
+Real books: the ledger (TO-05)
+------------------------------
+Real portfolios keep a ``corporate_action_ledger``: each event is handled
+once per portfolio, whenever its row reaches the lake, and only once the
+lake holds a bar for its ticker on or after the ex-date (before that the
+quote is still in the pre-event basis; the event is deferred and reported).
+The quantity an event acts on is the one held at the close before the
+ex-date (the latest snapshot dated before it, in the ex-date's share
+basis), so a late split scales only the shares held before its ex-date:
+shares bought later were bought at post-split quotes. A position that was
+closed in between is skipped. The ledger rows are written in the
+transaction that writes the tick's snapshot, so a crash or a dry run
+persists nothing and a rerun finds the events handled.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+import json
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import date, datetime, time
+from typing import Any
 
 from stonks.backtest.corporate_actions import CorporateActionRecord, apply_to_portfolio
 from stonks.core.corporate_actions import CorporateAction, CorporateActions, Dividend, Split
 from stonks.core.types import Portfolio
 from stonks.execution.reconcile import NON_TERMINAL_STATUSES
+from stonks.production.ledger import ledger_filter
 from stonks.store.corporate_actions import LakeCorporateActions
 from stonks.store.state import SqliteState
 
@@ -139,3 +157,265 @@ def record_as_dict(record: CorporateActionRecord) -> dict[str, object]:
         "quantity_after": record.quantity_after,
         "cash_delta": record.cash_delta,
     }
+
+
+# ---- the per-portfolio ledger (TO-05) --------------------------------------------
+
+LEDGER = "corporate_action_ledger"
+LEDGER_START = "corporate_action_ledger_start"
+
+
+def ledger_enabled(state: SqliteState) -> bool:
+    """Whether the ledger exists (migration 018 applied)."""
+    rows = state.sql("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", [LEDGER])
+    return bool(rows)
+
+
+def _kind(event: CorporateAction) -> str:
+    return "split" if isinstance(event, Split) else "dividend"
+
+
+def _value(event: CorporateAction) -> float:
+    return event.ratio if isinstance(event, Split) else event.amount
+
+
+def event_as_dict(event: CorporateAction) -> dict[str, object]:
+    return {
+        "ex_date": event.ex_date.isoformat(),
+        "ticker": event.ticker,
+        "kind": _kind(event),
+        "value": _value(event),
+    }
+
+
+@dataclass(frozen=True)
+class PlannedAction:
+    event: CorporateAction
+    #: Shares held at the close before the ex-date, in the ex-date's basis.
+    base_quantity: float
+
+
+@dataclass
+class CorporateActionPlan:
+    """What a tick does with the events of one portfolio."""
+
+    #: Due now: applied to the portfolio and recorded in the ledger.
+    due: list[PlannedAction] = field(default_factory=list)
+    #: Due by date, but the ex-date bar is not in the lake yet.
+    deferred: list[CorporateAction] = field(default_factory=list)
+
+    @property
+    def splits(self) -> list[Split]:
+        return [p.event for p in self.due if isinstance(p.event, Split)]
+
+
+def plan_corporate_actions(
+    state: SqliteState,
+    lake: Any,
+    actions: CorporateActions,
+    *,
+    portfolio_id: str,
+    as_of: date,
+) -> CorporateActionPlan:
+    """The events of ``actions`` not yet handled for ``portfolio_id`` with
+    ``ex_date <= as_of`` (after the ledger's start, if it has one), split
+    into due (ex-date bar present) and deferred."""
+    plan = CorporateActionPlan()
+    start = _ledger_start(state, portfolio_id)
+    handled = _handled(state, portfolio_id)
+    candidates = [
+        event
+        for events in actions.by_ticker.values()
+        for event in events
+        if event.ex_date <= as_of
+        and (start is None or event.ex_date > start)
+        and (event.ticker, event.ex_date.isoformat(), _kind(event)) not in handled
+    ]
+    if not candidates:
+        return plan
+    candidates.sort(key=lambda e: (e.ex_date, isinstance(e, Dividend), e.ticker))
+    last_bar = _last_bar_dates(lake, sorted({e.ticker for e in candidates}), as_of)
+    history = _snapshot_history(state, portfolio_id)
+    for event in candidates:
+        seen = last_bar.get(event.ticker)
+        if seen is None or seen < event.ex_date:
+            plan.deferred.append(event)
+            continue
+        plan.due.append(PlannedAction(event, _base_quantity(history, event, actions)))
+    return plan
+
+
+def apply_plan(
+    portfolio: Portfolio, plan: CorporateActionPlan, *, withholding_rate: float = 0.0
+) -> list[CorporateActionRecord]:
+    """Apply the due events to ``portfolio`` in place. A split adds
+    ``(ratio - 1) x base_quantity`` shares (never below zero); a dividend
+    credits ``base_quantity x amount x (1 - withholding_rate)``. Returns
+    one record per event that changed the portfolio."""
+    records: list[CorporateActionRecord] = []
+    for planned in plan.due:
+        event, base = planned.event, planned.base_quantity
+        if base <= 0:
+            continue
+        held = portfolio.positions.get(event.ticker, 0.0)
+        stamp = datetime.combine(event.ex_date, time())
+        if isinstance(event, Split):
+            after = max(held + (event.ratio - 1.0) * base, 0.0)
+            if after > 0:
+                portfolio.positions[event.ticker] = after
+            else:
+                portfolio.positions.pop(event.ticker, None)
+            records.append(
+                CorporateActionRecord(stamp, event.ticker, "split", event.ratio, held, after, 0.0)
+            )
+        else:
+            cash = base * event.amount * (1.0 - withholding_rate)
+            portfolio.cash += cash
+            records.append(
+                CorporateActionRecord(
+                    stamp, event.ticker, "dividend", event.amount, held, held, cash
+                )
+            )
+    return records
+
+
+def record_plan(
+    state: SqliteState,
+    plan: CorporateActionPlan,
+    records: Sequence[CorporateActionRecord],
+    *,
+    portfolio_id: str,
+    tick_id: str,
+    now: str,
+) -> None:
+    """Write one ledger row per due event (call inside the snapshot's
+    transaction)."""
+    by_key = {(r.ticker, r.timestamp.date(), r.kind): r for r in records}
+    for planned in plan.due:
+        event = planned.event
+        rec = by_key.get((event.ticker, event.ex_date, _kind(event)))
+        state.execute(
+            f"INSERT OR IGNORE INTO {LEDGER} (portfolio_id, ticker, ex_date, kind, value,"
+            " quantity_before, quantity_after, cash_delta, tick_id, applied_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                portfolio_id,
+                event.ticker,
+                event.ex_date.isoformat(),
+                _kind(event),
+                _value(event),
+                rec.quantity_before if rec else 0.0,
+                rec.quantity_after if rec else 0.0,
+                rec.cash_delta if rec else 0.0,
+                tick_id,
+                now,
+            ],
+        )
+
+
+def adjust_orders_for_splits(
+    state: SqliteState, client_ids: Sequence[str], splits: Sequence[Split], *, now: str
+) -> int:
+    """Re-express working orders decided before each split's ex-date in
+    post-split shares. An order's decision date is its client id's leading
+    date (``make_client_id``); an order without one counts as earlier."""
+    if not client_ids or not splits:
+        return 0
+    status_ph = ",".join("?" for _ in NON_TERMINAL_STATUSES)
+    touched = 0
+    for split in splits:
+        earlier = [c for c in client_ids if _decided_before(c, split.ex_date)]
+        if not earlier:
+            continue
+        ids_ph = ",".join("?" for _ in earlier)
+        cursor = state.execute(
+            "UPDATE orders SET quantity = quantity * ?,"
+            " limit_price = limit_price / ?, updated_at = ?"
+            f" WHERE ticker = ? AND status IN ({status_ph}) AND client_id IN ({ids_ph})",
+            [split.ratio, split.ratio, now, split.ticker, *NON_TERMINAL_STATUSES, *earlier],
+        )
+        touched += cursor.rowcount
+    return touched
+
+
+def _decided_before(client_id: str, ex_date: date) -> bool:
+    try:
+        decided = date.fromisoformat(client_id[:10])
+    except ValueError:
+        return True
+    return decided < ex_date
+
+
+def _ledger_start(state: SqliteState, portfolio_id: str) -> date | None:
+    rows = state.sql(
+        f"SELECT start_as_of FROM {LEDGER_START} WHERE portfolio_id = ?", [portfolio_id]
+    )
+    return date.fromisoformat(rows[0]["start_as_of"]) if rows else None
+
+
+def _handled(state: SqliteState, portfolio_id: str) -> set[tuple[str, str, str]]:
+    rows = state.sql(
+        f"SELECT ticker, ex_date, kind FROM {LEDGER} WHERE portfolio_id = ?", [portfolio_id]
+    )
+    return {(r["ticker"], r["ex_date"], r["kind"]) for r in rows}
+
+
+def _last_bar_dates(lake: Any, tickers: Sequence[str], as_of: date) -> dict[str, date]:
+    """Each ticker's latest daily bar date on or before ``as_of``."""
+    if not tickers or not hasattr(lake, "sql"):
+        return {}
+    df = lake.sql(
+        "SELECT ticker, MAX(date) AS latest FROM prices"
+        " WHERE ticker = ANY(?) AND date <= ? GROUP BY ticker",
+        [list(tickers), as_of],
+    )
+    out: dict[str, date] = {}
+    for row in df.itertuples(index=False):
+        latest = row.latest
+        out[row.ticker] = latest.date() if isinstance(latest, datetime) else latest
+    return out
+
+
+def _snapshot_history(state: SqliteState, portfolio_id: str) -> list[tuple[date, dict]]:
+    """The portfolio's tick snapshots, one per day (a rerun's later one
+    wins), oldest first."""
+    where, params = ledger_filter(state, "portfolio_snapshots", portfolio_id, tick_only=True)
+    rows = state.sql(
+        f"SELECT as_of, positions_json FROM portfolio_snapshots WHERE {where}"
+        " AND as_of IS NOT NULL ORDER BY as_of, id",
+        params,
+    )
+    by_day: dict[date, dict] = {}
+    for r in rows:
+        by_day[date.fromisoformat(r["as_of"])] = json.loads(r["positions_json"])
+    return sorted(by_day.items())
+
+
+def _base_quantity(
+    history: Sequence[tuple[date, Mapping[str, float]]],
+    event: CorporateAction,
+    actions: CorporateActions,
+) -> float:
+    """Shares of ``event.ticker`` held at the close before its ex-date, in
+    the ex-date's basis: the latest snapshot dated before the ex-date,
+    scaled by the splits in between. Zero when there is none, or when the
+    position was closed at any snapshot since (bought back later means
+    bought at post-event quotes)."""
+    before = [(day, pos) for day, pos in history if day < event.ex_date]
+    if not before:
+        return 0.0
+    day0, positions0 = before[-1]
+    quantity = float(positions0.get(event.ticker, 0.0))
+    if quantity <= 0:
+        return 0.0
+    for day, positions in history:
+        if day > day0 and float(positions.get(event.ticker, 0.0)) <= 0:
+            return 0.0
+    for other in actions.by_ticker.get(event.ticker, ()):
+        if not isinstance(other, Split) or other is event:
+            continue
+        if day0 < other.ex_date < event.ex_date or (
+            isinstance(event, Dividend) and other.ex_date == event.ex_date
+        ):
+            quantity *= other.ratio
+    return quantity

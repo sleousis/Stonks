@@ -133,6 +133,26 @@ def test_tick_skip_can_be_disabled(settings):
     assert get_action("tick")(ctx).status == "succeeded"
 
 
+def test_ingest_metadata_pulls_corporate_actions_for_the_universe(settings, monkeypatch):
+    """TO-05: splits and dividends come from the metadata ingest, so it is
+    a scheduled job of its own."""
+    seen: list[str] = []
+
+    class MetaSource(FakeSource):
+        def fetch_metadata(self, ticker):
+            from stonks.ingest.metadata_bundle import MetadataBundle
+
+            seen.append(ticker)
+            return MetadataBundle()
+
+    monkeypatch.setattr(jobs_mod, "build_source", lambda sid, cfg: MetaSource())
+    ctx, _ = _ctx(settings, "ingest_metadata", date(2026, 9, 25))
+    out = get_action("ingest_metadata")(ctx)
+    assert out.status == "succeeded", out.detail
+    assert sorted(seen) == ["AAPL.US", "MSFT.US"]
+    assert out.detail["tickers_ok"] == 2
+
+
 def test_ingest_prices_for_the_lookback_window(settings, monkeypatch):
     source = FakeSource()
     monkeypatch.setattr(jobs_mod, "build_source", lambda sid, cfg: source)

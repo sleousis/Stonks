@@ -113,6 +113,27 @@ def in_process_ingest_prices(ctx: RunContext) -> JobOutcome:
     return ingest_job_outcome(*ex.run_job(job, INGEST_JOB, IngestResultView))
 
 
+@IN_PROCESS_ACTIONS.register("ingest_metadata")
+def in_process_ingest_metadata(ctx: RunContext) -> JobOutcome:
+    from stonks.app.ingest import INGEST_JOB, IngestRequest, IngestResultView
+
+    ex = _executor(ctx)
+    universe = job_universe(ctx, ex.members)
+    if not universe:
+        return JobOutcome("skipped", {"reason": "empty_universe"})
+    closed = closed_day_outcome(ctx, universe, ex.asset_classes(universe))
+    if closed is not None:
+        return closed
+    job = ex.services.ingest.submit(
+        IngestRequest(
+            kind="metadata",
+            source=str(ctx.params.get("source", "eodhd")),
+            tickers=universe,
+        )
+    )
+    return ingest_job_outcome(*ex.run_job(job, INGEST_JOB, IngestResultView))
+
+
 @IN_PROCESS_ACTIONS.register("tick")
 def in_process_tick(ctx: RunContext) -> JobOutcome:
     from stonks.app.ticks import TICK_JOB, TickRequest, TickResultView

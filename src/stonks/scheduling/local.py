@@ -9,6 +9,8 @@ The actions call the same services as the CLI:
 
 - ``ingest_prices``: ``IngestPipeline.run_prices`` for the universe over
   the last ``lookback_days`` up to the fire's date;
+- ``ingest_metadata``: ``IngestPipeline.run_metadata`` for the universe
+  (splits and dividends the tick applies);
 - ``tick``: ``run_tick`` through ``build_tick_runtime`` for the fire's date;
 - ``health``: ``run_health`` (checks plus the operational halt), alerting
   when unhealthy;
@@ -111,6 +113,35 @@ def ingest_prices_action(ctx: RunContext) -> JobOutcome:
             since=ctx.fire.as_of - timedelta(days=lookback),
             until=ctx.fire.as_of,
         )
+    detail = {
+        "ingest_run_id": result.run_id,
+        "ingest_status": result.status,
+        "tickers_ok": result.tickers_ok,
+        "tickers_failed": result.tickers_failed,
+    }
+    return JobOutcome("failed" if result.status == "error" else "succeeded", detail)
+
+
+@register_action("ingest_metadata")
+def ingest_metadata_action(ctx: RunContext) -> JobOutcome:
+    """Metadata for the universe: splits and dividends among it, which the
+    tick applies to held positions (TO-05)."""
+    from stonks.ingest.sources.registry import DEFAULT_SOURCE_ID
+    from stonks.ingest.wiring import build_ingest_pipeline
+    from stonks.store.lake import DuckDBLake
+
+    universe = job_universe(ctx, lake_members(ctx))
+    if not universe:
+        return JobOutcome("skipped", {"reason": "empty_universe"})
+    source = build_source(str(ctx.params.get("source", DEFAULT_SOURCE_ID)), ctx.settings.sources)
+    with DuckDBLake(ctx.settings.lake.path) as lake:
+        lake.migrate()
+        closed = closed_day_outcome(ctx, universe, lake.get_asset_classes(universe))
+        if closed is not None:
+            return closed
+        result = build_ingest_pipeline(
+            ctx.settings, source, lake, source_factory=build_source
+        ).run_metadata(universe)
     detail = {
         "ingest_run_id": result.run_id,
         "ingest_status": result.status,

@@ -22,7 +22,14 @@ from stonks.scheduling.jobs import JobOutcome, UnknownActionError, build_job_spe
 from stonks.scheduling.local import LOCAL_ACTIONS, LocalExecutor, register_action
 from stonks.scheduling.triggers import DailyTrigger, IntervalTrigger, SessionTrigger
 
-BUILTIN = {"ingest_prices", "tick", "health", "report", "universes_refresh"}
+BUILTIN = {
+    "ingest_prices",
+    "ingest_metadata",
+    "tick",
+    "health",
+    "report",
+    "universes_refresh",
+}
 
 
 def test_default_jobs_build():
@@ -36,6 +43,7 @@ def test_default_jobs_build():
         "backup",
         "connections_sync",
         "universes_refresh",
+        "ingest_metadata",
     }
     tick = by_name["tick"]
     assert tick.trigger == SessionTrigger("XNYS", "close", timedelta(minutes=45))
@@ -47,6 +55,8 @@ def test_default_jobs_build():
     assert ingest_at < tick.trigger.offset
     # stored universes are refreshed and filled before the tick trades them
     assert by_name["universes_refresh"].trigger.offset < tick.trigger.offset
+    # splits and dividends reach the lake before the tick applies them (TO-05)
+    assert by_name["ingest_metadata"].trigger.offset < tick.trigger.offset
 
 
 @pytest.mark.parametrize("registry", [LOCAL_ACTIONS, API_ACTIONS, IN_PROCESS_ACTIONS])

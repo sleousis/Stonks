@@ -91,7 +91,8 @@ class JobConfig(BaseModel):
 
 def default_jobs() -> list[JobConfig]:
     """The daily loop on the NYSE calendar: refresh stored universes and
-    fill their recent bars, ingest, tick, report after the close; health
+    fill their recent bars, ingest metadata (splits, dividends) and prices,
+    tick, report after the close; health
     every four hours; a backup every night; due broker syncs every hour.
     ``universes_refresh`` skips while no universe is stored."""
     return [
@@ -99,6 +100,15 @@ def default_jobs() -> list[JobConfig]:
             name="universes_refresh",
             action="universes_refresh",
             trigger=SessionTriggerConfig(offset_minutes=20),
+        ),
+        # Splits and dividends for the tick (TO-05). The free EODHD plan
+        # has no metadata endpoint, so it reads Yahoo; set params.source
+        # to "eodhd" on a paid plan.
+        JobConfig(
+            name="ingest_metadata",
+            action="ingest_metadata",
+            trigger=SessionTriggerConfig(offset_minutes=25),
+            params={"source": "yahoo"},
         ),
         JobConfig(
             name="ingest_prices",

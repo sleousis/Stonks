@@ -91,10 +91,17 @@ from stonks.portfolio.pipeline import (
     vols_from_history,
 )
 from stonks.production.corporate_actions import (
+    CorporateActionPlan,
+    adjust_orders_for_splits,
     adjust_working_orders,
     apply_corporate_actions,
+    apply_plan,
+    event_as_dict,
+    ledger_enabled,
     load_corporate_actions,
+    plan_corporate_actions,
     record_as_dict,
+    record_plan,
     working_orders,
 )
 from stonks.production.hooks import (
@@ -649,7 +656,36 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     working = _working_orders(state, scope)
     actions = load_corporate_actions(lake, [*held_tickers(portfolio.positions), *working.values()])
     applied = []
-    if not external:
+    plan: CorporateActionPlan | None = None
+    if scope is not None and ledger_enabled(state):
+        # the per-portfolio ledger: by ex-date, once, late rows included (TO-05)
+        plan = plan_corporate_actions(state, lake, actions, portfolio_id=scope, as_of=as_of)
+        if not external:
+            applied = apply_plan(
+                portfolio, plan, withholding_rate=settings.dividend_withholding_rate
+            )
+        for event in plan.deferred:
+            log.warning("tick.corporate_action_deferred", **event_as_dict(event))
+        if plan.deferred and not dry_run:
+            _safe_notify(
+                run.notifier,
+                Notification(
+                    level="warning",
+                    title="corporate actions deferred",
+                    message="no bar on or after the ex-date yet; applied once it is ingested",
+                    fields={
+                        "tick_id": tick_id,
+                        "as_of": as_of.isoformat(),
+                        "portfolio_id": portfolio_id,
+                        "events": [
+                            f"{e.ticker} {event_as_dict(e)['kind']} {e.ex_date.isoformat()}"
+                            for e in plan.deferred
+                        ],
+                    },
+                ),
+                log,
+            )
+    elif not external:
         applied = apply_corporate_actions(
             portfolio,
             actions,
@@ -657,18 +693,25 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             as_of=as_of,
             withholding_rate=settings.dividend_withholding_rate,
         )
-        for record in applied:
-            log.info("tick.corporate_action", **record_as_dict(record))
+    for record in applied:
+        log.info("tick.corporate_action", **record_as_dict(record))
     corporate_summary: dict[str, Any] = (
         {"corporate_actions": [record_as_dict(r) for r in applied]} if applied else {}
     )
+    if plan is not None and plan.deferred:
+        corporate_summary["deferred_corporate_actions"] = [event_as_dict(e) for e in plan.deferred]
 
     def persist_corporate_actions() -> int:
-        """Split-adjust the working orders; call inside the transaction
-        that writes this tick's snapshot."""
-        return adjust_working_orders(
-            state, list(working), actions, since=since, as_of=as_of, now=_iso_now()
-        )
+        """Record the handled events and split-adjust the working orders;
+        call inside the transaction that writes this tick's snapshot.
+        Returns how many rows changed (a noop tick then still snapshots)."""
+        now = _iso_now()
+        if plan is None:
+            return adjust_working_orders(
+                state, list(working), actions, since=since, as_of=as_of, now=now
+            )
+        record_plan(state, plan, applied, portfolio_id=portfolio_id, tick_id=tick_id, now=now)
+        return len(plan.due) + adjust_orders_for_splits(state, list(working), plan.splits, now=now)
 
     held = held_tickers(portfolio.positions)
     book_prices = load_prices(

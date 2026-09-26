@@ -7,6 +7,7 @@ it. This backend starts each job on the API's own job routes and waits on
 
 - ``ingest_prices``: ``POST /api/ingest/runs`` (kind ``prices``) for the
   universe over the last ``lookback_days`` up to the fire's date;
+- ``ingest_metadata``: ``POST /api/ingest/runs`` with ``kind = metadata``;
 - ``tick``: ``POST /api/ticks`` for the fire's date;
 - ``health``: ``POST /api/health/run`` (checks plus the operational
   halt), alerting here when unhealthy;
@@ -226,6 +227,26 @@ def api_ingest_prices(ctx: RunContext) -> JobOutcome:
         "tickers": universe,
         "since": since,
         "until": until,
+    }
+    job_id, status, error, result = _run_job(
+        ex, "/api/ingest/runs", body, "/api/ingest/jobs/{job_id}/result"
+    )
+    return ingest_job_outcome(status, error, result, job_id)
+
+
+@API_ACTIONS.register("ingest_metadata")
+def api_ingest_metadata(ctx: RunContext) -> JobOutcome:
+    ex = _executor(ctx)
+    universe = job_universe(ctx, _members(ex))
+    if not universe:
+        return JobOutcome("skipped", {"reason": "empty_universe"})
+    closed = closed_day_outcome(ctx, universe, {})
+    if closed is not None:
+        return closed
+    body = {
+        "kind": "metadata",
+        "source": str(ctx.params.get("source", "eodhd")),
+        "tickers": universe,
     }
     job_id, status, error, result = _run_job(
         ex, "/api/ingest/runs", body, "/api/ingest/jobs/{job_id}/result"

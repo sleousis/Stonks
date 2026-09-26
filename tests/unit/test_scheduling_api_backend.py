@@ -224,6 +224,19 @@ def test_ingest_posts_the_lookback_window():
     }
 
 
+def test_ingest_metadata_posts_a_metadata_run():
+    api = FakeApi(
+        job_statuses=("succeeded",),
+        result={"run_id": 8, "status": "ok", "tickers_ok": 1, "tickers_failed": 0},
+    )
+    ex, _ = _executor(api)
+    ctx, _ = _ctx(ex, "ingest_metadata", FRIDAY, source="yahoo")
+    out = ex.execute(ctx)
+    assert out.status == "succeeded" and out.detail["ingest_run_id"] == 8
+    assert api.requests[0][:2] == ("POST", "/api/ingest/runs")
+    assert api.requests[0][2] == {"kind": "metadata", "source": "yahoo", "tickers": ["AAPL.US"]}
+
+
 def test_closed_day_makes_no_request():
     api = FakeApi()
     ex, _ = _executor(api)
