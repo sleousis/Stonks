@@ -115,7 +115,7 @@ from stonks.production.hooks import (
 )
 from stonks.production.hooks.attribution import load_attribution
 from stonks.production.ledger import ledger_filter
-from stonks.production.prices import held_tickers, load_history, load_prices
+from stonks.production.prices import PriceBook, held_tickers, load_history, load_prices
 from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.ranker import Ranker, SignalSet, StrategyPool
 from stonks.production.risk import RiskPolicy, build_risk_context, needs_risk_context
@@ -182,6 +182,11 @@ class TickSettings:
     #: traded, not even sold (TO-04). The full tick over the configured
     #: universe is unscoped, so a holding that left the universe is sold.
     scoped: bool = False
+    #: Per ticker, the daily bar a scheduled tick must see before it buys
+    #: (the session that closed by the fire time, TO-10). A ticker whose
+    #: latest bar is older (the price ingest failed) is marked and sellable
+    #: but not buyable. None (manual ticks): the staleness window only.
+    bars_due: Mapping[str, date] | None = None
 
     def __post_init__(self) -> None:
         self.simulated_costs  # noqa: B018 - validates costs vs legacy (not both)
@@ -762,7 +767,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     market = MarketView(
         as_of=as_of,
         prices=prices,
-        buyable=book_prices.fresh,
+        buyable=_buyable(book_prices, settings.bars_due),
         volumes=book_prices.volumes,
         asset_classes=asset_classes,
         vols_annual=({} if construction.is_single_winner else run.vols([*universe, *held])),
@@ -1199,6 +1204,15 @@ def _client_id_fn(as_of: date, portfolio_id: str) -> Callable[[str | None, str, 
         )
 
     return make
+
+
+def _buyable(book: PriceBook, due: Mapping[str, date] | None) -> frozenset[str]:
+    """Fresh tickers, less those whose due session bar is missing."""
+    if not due:
+        return book.fresh
+    return frozenset(
+        t for t in book.fresh if t not in due or book.bar_dates.get(t, date.min) >= due[t]
+    )
 
 
 def _in_universe(scores: Mapping[str, float], universe: Sequence[str] | None) -> dict[str, float]:

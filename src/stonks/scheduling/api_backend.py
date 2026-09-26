@@ -267,6 +267,7 @@ def api_tick(ctx: RunContext) -> JobOutcome:
         "as_of": ctx.fire.as_of.isoformat(),
         "tickers": universe,
         "scoped": job_is_scoped(ctx),
+        "bars_due_at": ctx.fire.scheduled_for.isoformat(),
         "dry_run": bool(ctx.params.get("dry_run", False)),
     }
     job_id, status, error, result = _run_job(

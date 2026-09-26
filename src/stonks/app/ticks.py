@@ -19,6 +19,7 @@ from stonks.core.types import AssetClass
 from stonks.production.settings_builder import build_tick_runtime
 from stonks.production.tick import BackdatedTickError, run_tick
 from stonks.production.universe import EmptyUniverseError, production_tickers
+from stonks.scheduling.calendar import bars_due
 
 TICK_JOB = "tick"
 
@@ -42,6 +43,15 @@ class TickRequest(BaseModel):
             "Trade only the tick's tickers and leave other holdings alone, not even"
             " selling them. Default: true when tickers or asset_class narrow the"
             " universe."
+        ),
+    )
+
+    bars_due_at: datetime | None = Field(
+        default=None,
+        description=(
+            "Buy only tickers whose latest session that closed by this time has its"
+            " daily bar in the lake (scheduled ticks send their fire time). Tickers"
+            " whose bar is missing are marked and sellable, not buyable."
         ),
     )
 
@@ -125,7 +135,14 @@ class TickService:
                     raise ValidationError(
                         f"no instruments in the universe match asset_class={request.asset_class!r}"
                     )
-            runtime = build_tick_runtime(self._ctx.settings, universe, scoped=request.is_scoped)
+            due = None
+            if request.bars_due_at is not None:
+                due = bars_due(
+                    universe, lake.get_asset_classes(universe), _utc(request.bars_due_at)
+                )
+            runtime = build_tick_runtime(
+                self._ctx.settings, universe, scoped=request.is_scoped, bars_due=due
+            )
             try:
                 result = run_tick(
                     state=state,
@@ -169,6 +186,11 @@ class TickService:
 _AS_OF_SQL = (
     "(SELECT MAX(s.as_of) FROM portfolio_snapshots s WHERE s.tick_id = t.id) AS snapshot_as_of"
 )
+
+
+def _utc(when: datetime) -> datetime:
+    """A naive time is read as UTC."""
+    return when if when.tzinfo is not None else when.replace(tzinfo=UTC)
 
 
 def _as_of(row: Any) -> date | None:

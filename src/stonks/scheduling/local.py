@@ -156,6 +156,7 @@ def tick_action(ctx: RunContext) -> JobOutcome:
     from stonks.production.settings_builder import build_tick_runtime
     from stonks.production.tick import BackdatedTickError, run_tick
     from stonks.registry.store import StrategyRegistry
+    from stonks.scheduling.calendar import bars_due
     from stonks.store.lake import DuckDBLake
     from stonks.store.state import SqliteState
 
@@ -170,7 +171,14 @@ def tick_action(ctx: RunContext) -> JobOutcome:
             closed = closed_day_outcome(ctx, universe, lake.get_asset_classes(universe))
             if closed is not None:
                 return closed
-            runtime = build_tick_runtime(settings, universe, scoped=job_is_scoped(ctx))
+            runtime = build_tick_runtime(
+                settings,
+                universe,
+                scoped=job_is_scoped(ctx),
+                bars_due=bars_due(
+                    universe, lake.get_asset_classes(universe), ctx.fire.scheduled_for
+                ),
+            )
             try:
                 result = run_tick(
                     state=state,

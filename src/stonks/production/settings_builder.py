@@ -4,8 +4,9 @@ the same risk policy, shadow switch, alert routing and broker."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date
 
 from stonks.config import Settings
 from stonks.core.protocols import Broker
@@ -35,13 +36,18 @@ class TickRuntime:
 
 
 def build_tick_settings(
-    settings: Settings, universe: Sequence[str], *, scoped: bool = False
+    settings: Settings,
+    universe: Sequence[str],
+    *,
+    scoped: bool = False,
+    bars_due: Mapping[str, date] | None = None,
 ) -> TickSettings:
     """Simulated fill costs follow ``SimulatedCosts.from_settings``:
     ``[backtest.costs]`` when configured (legacy ``[production]``
     ``slippage_bps`` / ``fee_per_trade`` then ignored), else the legacy pair.
     ``scoped``: the universe was narrowed by the caller (explicit tickers),
-    so holdings outside it are left alone (``TickSettings.scoped``)."""
+    so holdings outside it are left alone (``TickSettings.scoped``).
+    ``bars_due``: a scheduled tick's due session bars (``TickSettings.bars_due``)."""
     p = settings.production
     costs = SimulatedCosts.from_settings(settings)
     return TickSettings(
@@ -60,11 +66,16 @@ def build_tick_settings(
         model_books=p.model_books,
         quit_rule=p.quit_rule,
         scoped=scoped,
+        bars_due=dict(bars_due) if bars_due else None,
     )
 
 
 def build_tick_runtime(
-    settings: Settings, universe: Sequence[str], *, scoped: bool = False
+    settings: Settings,
+    universe: Sequence[str],
+    *,
+    scoped: bool = False,
+    bars_due: Mapping[str, date] | None = None,
 ) -> TickRuntime:
     """The simulated default gets no factory (the tick builds its in-memory
     broker, no keys needed). ``alpaca`` is strictly opt-in via
@@ -77,7 +88,7 @@ def build_tick_runtime(
             return make_broker(settings, portfolio)
 
     return TickRuntime(
-        settings=build_tick_settings(settings, universe, scoped=scoped),
+        settings=build_tick_settings(settings, universe, scoped=scoped, bars_due=bars_due),
         notifier=notifier_from_settings(settings),
         broker_factory=factory,
         books_from_subscriptions=settings.production.books_from_subscriptions,

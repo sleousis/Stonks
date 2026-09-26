@@ -9044,6 +9044,19 @@
             ],
             "title": "Asset Class"
           },
+          "bars_due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Buy only tickers whose latest session that closed by this time has its daily bar in the lake (scheduled ticks send their fire time). Tickers whose bar is missing are marked and sellable, not buyable.",
+            "title": "Bars Due At"
+          },
           "dry_run": {
             "default": false,
             "title": "Dry Run",

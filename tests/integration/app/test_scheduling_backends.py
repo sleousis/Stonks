@@ -141,6 +141,32 @@ def test_in_process_tick_and_ingest(settings, services):
     assert ex.execute(ctx).detail["reason"] == "market_closed"
 
 
+@pytest.mark.parametrize(("as_of", "buys"), [(date(2026, 4, 2), 0), (date(2026, 4, 1), 1)])
+def test_a_scheduled_tick_after_a_failed_ingest_places_no_buys(settings, services, as_of, buys):
+    """TO-10: the seeded bars end 2026-04-01. On 04-02 the session's bar is
+    missing (the price ingest failed), so the scheduled tick buys nothing,
+    though the 7-day staleness window alone would let it."""
+    from stonks.core.protocols import SurvivalReport
+    from stonks.registry.store import StrategyRegistry
+    from stonks.strategies.examples.buy_and_hold import BuyAndHold
+    from tests.fixtures.governance import seed_status
+
+    with SqliteState(settings.state.path) as s:
+        registry = StrategyRegistry(state=s, artifacts_dir=settings.registry.artifacts_dir)
+        sid = registry.register(
+            BuyAndHold({"ticker": "FLAT.US", "allocation": 0.2}),
+            reports=[SurvivalReport(test_id="oos", passed=True, metrics={})],
+            strategy_id="bah_flat",
+        )
+        seed_status(registry, "bah_active", "retired")
+        seed_status(registry, sid, "active")
+    ex = InProcessExecutor(services)
+    ctx, _ = _ctx(settings, ex, "tick", as_of, tickers=["FLAT.US"])
+    out = ex.execute(ctx)
+    assert out.status == "succeeded", out.detail
+    assert out.detail["orders_placed"] == buys
+
+
 def test_in_process_health(settings, services):
     ex = InProcessExecutor(services)
     ctx, notifier = _ctx(settings, ex, "health", date(2026, 9, 25), tickers=["UP.US"])

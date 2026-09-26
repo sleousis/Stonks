@@ -150,6 +150,7 @@ def in_process_tick(ctx: RunContext) -> JobOutcome:
             as_of=ctx.fire.as_of,
             tickers=universe,
             scoped=job_is_scoped(ctx),
+            bars_due_at=ctx.fire.scheduled_for,
             dry_run=bool(ctx.params.get("dry_run", False)),
         )
     )

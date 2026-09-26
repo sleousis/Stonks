@@ -118,9 +118,9 @@ def test_a_tick_job_with_its_own_tickers_runs_scoped(settings, monkeypatch, para
     seen: list[bool] = []
     real = settings_builder.build_tick_runtime
 
-    def spy(settings_, universe, *, scoped=False):
+    def spy(settings_, universe, *, scoped=False, **kw):
         seen.append(scoped)
-        return real(settings_, universe, scoped=scoped)
+        return real(settings_, universe, scoped=scoped, **kw)
 
     monkeypatch.setattr(settings_builder, "build_tick_runtime", spy)
     ctx, _ = _ctx(settings, "tick", date(2026, 9, 25), **params)

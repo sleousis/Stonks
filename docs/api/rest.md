@@ -2124,6 +2124,7 @@ Costs of a group of orders, weighted by notional, in bps.
 |-------|------|----------|-------------|
 | `as_of` | date \| null | no |  |
 | `asset_class` | "equity" \| "crypto" \| "commodity" \| "bond" \| null | no |  |
+| `bars_due_at` | date-time \| null | no | Buy only tickers whose latest session that closed by this time has its daily bar in the lake (scheduled ticks send their fire time). Tickers whose bar is missing are marked and sellable, not buyable. |
 | `dry_run` | boolean | no |  |
 | `scoped` | boolean \| null | no | Trade only the tick's tickers and leave other holdings alone, not even selling them. Default: true when tickers or asset_class narrow the universe. |
 | `tickers` | list[string] \| null | no |  |

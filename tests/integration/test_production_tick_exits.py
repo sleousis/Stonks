@@ -280,3 +280,33 @@ def test_the_full_universe_tick_still_sells_a_dropped_holding(env):
 
     rows = state.sql("SELECT ticker, side FROM orders WHERE tick_id = ?", [result.tick_id])
     assert ("DOWN.US", "sell") in [(r["ticker"], r["side"]) for r in rows]
+
+
+# ---- TO-10: a scheduled tick doesn't buy without the session's bar ---------------
+
+
+def test_a_tick_without_the_due_bar_places_no_buys_but_still_sells(env):
+    """The price ingest failed: the latest bar is 04-01, the 04-02 session's
+    bar is due. Buys would fill at a close that was never available on 04-02."""
+    lake, state, registry = env
+    sid = _register(registry, RankAndRotate({"ticker": "UP.US", "allocation": 1.0}))
+    _hold(state, sid, {"DOWN.US": 10.0}, cash=1_000.0, as_of="2026-04-01")
+    due = {"UP.US": date(2026, 4, 2), "DOWN.US": date(2026, 4, 2)}
+    settings = TickSettings(universe=["UP.US", "DOWN.US"], initial_cash=10_000.0, bars_due=due)
+
+    result = run_tick(state, lake, registry, settings, as_of=date(2026, 4, 2))
+
+    rows = state.sql("SELECT ticker, side FROM orders WHERE tick_id = ?", [result.tick_id])
+    assert [(r["ticker"], r["side"]) for r in rows] == [("DOWN.US", "sell")]
+    assert _summary(state, result.tick_id)["stale_buys_dropped"] == ["UP.US"]
+
+
+def test_a_tick_with_the_due_bar_buys(env):
+    lake, state, registry = env
+    _register(registry, RankAndRotate({"ticker": "UP.US", "allocation": 1.0}))
+    settings = TickSettings(
+        universe=["UP.US"], initial_cash=10_000.0, bars_due={"UP.US": date(2026, 4, 1)}
+    )
+    result = run_tick(state, lake, registry, settings, as_of=date(2026, 4, 1))
+    rows = state.sql("SELECT ticker, side FROM orders WHERE tick_id = ?", [result.tick_id])
+    assert [(r["ticker"], r["side"]) for r in rows] == [("UP.US", "buy")]

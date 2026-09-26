@@ -189,6 +189,8 @@ def test_tick_posts_the_fire_date_and_waits_for_the_job():
         "as_of": "2026-09-25",
         "tickers": ["AAPL.US"],
         "scoped": False,
+        # buys need the bar of the session that closed by the fire (TO-10)
+        "bars_due_at": "2026-09-25T21:00:00+00:00",
         "dry_run": False,
     }
     assert sleeps == [1.5, 1.5]  # queued, running, then succeeded
