@@ -1084,6 +1084,51 @@
         "title": "ConnectionView",
         "type": "object"
       },
+      "CostComparisonView": {
+        "description": "Live shortfall of the strategy's real orders against the cost\nmodel's estimate (BL-32, P22), in bps.",
+        "properties": {
+          "live_is_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Is Bps"
+          },
+          "model_gap_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Gap Bps"
+          },
+          "modelled_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelled Bps"
+          },
+          "orders": {
+            "default": 0,
+            "title": "Orders",
+            "type": "integer"
+          }
+        },
+        "title": "CostComparisonView",
+        "type": "object"
+      },
       "CostModelPreset": {
         "properties": {
           "description": {
@@ -2450,6 +2495,16 @@
             "title": "Checks",
             "type": "array"
           },
+          "costs": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CostComparisonView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "passed": {
             "title": "Passed",
             "type": "boolean"
@@ -3484,6 +3539,199 @@
         "title": "JobEvent",
         "type": "object"
       },
+      "JournalEntryView": {
+        "description": "One order: why it was placed, the signal context, the outcome and the\nnotes people added.",
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decision_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Price"
+          },
+          "next_session_move_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Session Move Bps"
+          },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/JournalNoteView"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio Id"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          },
+          "shortfall": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShortfallView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "side": {
+            "title": "Side",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Id"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          },
+          "trigger": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger"
+          }
+        },
+        "required": [
+          "client_id",
+          "portfolio_id",
+          "strategy_id",
+          "ticker",
+          "side",
+          "quantity",
+          "status",
+          "status_reason",
+          "created_at",
+          "decided_at",
+          "decision_price",
+          "trigger",
+          "context",
+          "shortfall",
+          "next_session_move_bps",
+          "notes"
+        ],
+        "title": "JournalEntryView",
+        "type": "object"
+      },
+      "JournalNoteView": {
+        "properties": {
+          "author": {
+            "title": "Author",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "order_client_id": {
+            "title": "Order Client Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "order_client_id",
+          "author",
+          "note",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "JournalNoteView",
+        "type": "object"
+      },
       "KillSwitchRequest": {
         "additionalProperties": false,
         "properties": {
@@ -4365,6 +4613,22 @@
         "title": "MfaView",
         "type": "object"
       },
+      "NoteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "NoteRequest",
+        "type": "object"
+      },
       "OperationalHaltSettings": {
         "additionalProperties": false,
         "properties": {
@@ -4706,6 +4970,37 @@
           "offset"
         ],
         "title": "Page[Job]",
+        "type": "object"
+      },
+      "Page_JournalEntryView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/JournalEntryView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[JournalEntryView]",
         "type": "object"
       },
       "Page_OrderView_": {
@@ -6756,6 +7051,203 @@
         "title": "ShadowPnlSummary",
         "type": "object"
       },
+      "ShortfallView": {
+        "description": "Implementation shortfall of one order. Costs are positive, in bps of\nthe filled quantity's value at the decision price; ``null`` while an\ninput is not known yet.",
+        "properties": {
+          "arrival_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arrival Price"
+          },
+          "benchmark_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark Price"
+          },
+          "convention_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Convention Bps"
+          },
+          "decision_price": {
+            "title": "Decision Price",
+            "type": "number"
+          },
+          "delay_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delay Bps"
+          },
+          "expected_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Bps"
+          },
+          "fee_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fee Bps"
+          },
+          "fill_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fill Price"
+          },
+          "filled_quantity": {
+            "title": "Filled Quantity",
+            "type": "number"
+          },
+          "impact_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Impact Bps"
+          },
+          "is_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Bps"
+          },
+          "is_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Cost"
+          },
+          "opportunity_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opportunity Bps"
+          },
+          "opportunity_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opportunity Cost"
+          },
+          "ordered_quantity": {
+            "title": "Ordered Quantity",
+            "type": "number"
+          },
+          "post_close_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Post Close Price"
+          },
+          "side": {
+            "title": "Side",
+            "type": "string"
+          },
+          "total_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Bps"
+          }
+        },
+        "required": [
+          "side",
+          "ordered_quantity",
+          "filled_quantity",
+          "decision_price",
+          "arrival_price",
+          "fill_price",
+          "benchmark_price",
+          "post_close_price",
+          "expected_bps",
+          "delay_bps",
+          "impact_bps",
+          "fee_bps",
+          "is_bps",
+          "opportunity_bps",
+          "convention_bps",
+          "total_bps",
+          "is_cost",
+          "opportunity_cost"
+        ],
+        "title": "ShortfallView",
+        "type": "object"
+      },
       "SignalICRequest": {
         "properties": {
           "end": {
@@ -7694,6 +8186,202 @@
           "accounts_seen"
         ],
         "title": "SyncResultView",
+        "type": "object"
+      },
+      "TcaGroupView": {
+        "description": "Costs of a group of orders, weighted by notional, in bps.",
+        "properties": {
+          "convention_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Convention Bps"
+          },
+          "delay_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delay Bps"
+          },
+          "expected_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Bps"
+          },
+          "fee_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fee Bps"
+          },
+          "filled_notional": {
+            "title": "Filled Notional",
+            "type": "number"
+          },
+          "filled_orders": {
+            "title": "Filled Orders",
+            "type": "integer"
+          },
+          "impact_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Impact Bps"
+          },
+          "is_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Bps"
+          },
+          "is_cost": {
+            "title": "Is Cost",
+            "type": "number"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "model_gap_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Gap Bps"
+          },
+          "opportunity_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opportunity Bps"
+          },
+          "opportunity_cost": {
+            "title": "Opportunity Cost",
+            "type": "number"
+          },
+          "orders": {
+            "title": "Orders",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "orders",
+          "filled_orders",
+          "filled_notional",
+          "is_cost",
+          "is_bps",
+          "delay_bps",
+          "impact_bps",
+          "fee_bps",
+          "opportunity_cost",
+          "opportunity_bps",
+          "convention_bps",
+          "expected_bps",
+          "model_gap_bps"
+        ],
+        "title": "TcaGroupView",
+        "type": "object"
+      },
+      "TcaSummaryView": {
+        "properties": {
+          "by": {
+            "enum": [
+              "all",
+              "strategy",
+              "ticker",
+              "portfolio",
+              "day",
+              "week",
+              "month"
+            ],
+            "title": "By",
+            "type": "string"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/TcaGroupView"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Until"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "by",
+          "since",
+          "until",
+          "groups"
+        ],
+        "title": "TcaSummaryView",
         "type": "object"
       },
       "TickRequest": {
@@ -19931,6 +20619,666 @@
         "summary": "Templates",
         "tags": [
           "studio"
+        ]
+      }
+    },
+    "/api/tca/journal": {
+      "get": {
+        "description": "The trade journal, newest first: each order with its reason, the\nsignal context, the outcome and your notes.",
+        "operationId": "listJournal",
+        "parameters": [
+          {
+            "description": "orders decided on or after this day",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "orders decided on or after this day",
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "strategy_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Strategy Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ticker",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ticker"
+            }
+          },
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_JournalEntryView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Journal",
+        "tags": [
+          "tca"
+        ]
+      }
+    },
+    "/api/tca/notes/{note_id}": {
+      "put": {
+        "description": "Replace the text of a note you wrote.",
+        "operationId": "updateJournalNote",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "note_id",
+            "required": true,
+            "schema": {
+              "title": "Note Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JournalNoteView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Journal Note",
+        "tags": [
+          "tca"
+        ],
+        "x-permission": "portfolio.manage"
+      }
+    },
+    "/api/tca/orders/{client_id}": {
+      "get": {
+        "description": "One of your orders in full: decision, context, shortfall and notes.",
+        "operationId": "getOrderTca",
+        "parameters": [
+          {
+            "description": "the order's client id",
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "description": "the order's client id",
+              "maxLength": 200,
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JournalEntryView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Order Tca",
+        "tags": [
+          "tca"
+        ]
+      }
+    },
+    "/api/tca/orders/{client_id}/notes": {
+      "post": {
+        "description": "Add a free-text note to one of your orders.",
+        "operationId": "addJournalNote",
+        "parameters": [
+          {
+            "description": "the order's client id",
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "description": "the order's client id",
+              "maxLength": 200,
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JournalNoteView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Journal Note",
+        "tags": [
+          "tca"
+        ],
+        "x-permission": "portfolio.manage"
+      }
+    },
+    "/api/tca/summary": {
+      "get": {
+        "description": "Implementation shortfall (delay, impact, fees, opportunity) against\nthe cost model's estimate, weighted by notional, in bps.",
+        "operationId": "getTcaSummary",
+        "parameters": [
+          {
+            "description": "group by strategy, ticker, portfolio, day, week or month",
+            "in": "query",
+            "name": "by",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "description": "group by strategy, ticker, portfolio, day, week or month",
+              "enum": [
+                "all",
+                "strategy",
+                "ticker",
+                "portfolio",
+                "day",
+                "week",
+                "month"
+              ],
+              "title": "By",
+              "type": "string"
+            }
+          },
+          {
+            "description": "orders decided on or after this day",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "orders decided on or after this day",
+              "title": "Since"
+            }
+          },
+          {
+            "description": "orders decided on or before this day",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "orders decided on or before this day",
+              "title": "Until"
+            }
+          },
+          {
+            "in": "query",
+            "name": "strategy_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Strategy Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ticker",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ticker"
+            }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TcaSummaryView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Tca Summary",
+        "tags": [
+          "tca"
         ]
       }
     },

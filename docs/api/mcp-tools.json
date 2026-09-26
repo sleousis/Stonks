@@ -2135,6 +2135,30 @@
     },
     {
       "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "One of your orders in full: decision price and context, arrival\nand fill prices, the shortfall split and the notes.",
+      "input_schema": {
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id"
+        ],
+        "title": "order_tcaArguments",
+        "type": "object"
+      },
+      "name": "order_tca",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
         "destructive": true,
         "idempotent": true,
         "open_world": false,
@@ -3349,6 +3373,179 @@
       },
       "name": "sync_connection",
       "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Implementation shortfall of your orders in bps of notional:\ndelay (decision to arrival), impact (arrival to fill), fees and the\nopportunity cost of what did not fill, next to the cost model's\nestimate (model_gap_bps = realised minus modelled).",
+      "input_schema": {
+        "properties": {
+          "by": {
+            "default": "all",
+            "description": "how to group the orders",
+            "enum": [
+              "all",
+              "strategy",
+              "ticker",
+              "portfolio",
+              "day",
+              "week",
+              "month"
+            ],
+            "title": "By",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Since"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Strategy Id"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ticker"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Until"
+          }
+        },
+        "title": "tca_summaryArguments",
+        "type": "object"
+      },
+      "name": "tca_summary",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Your orders, newest first: why each was placed (trigger, signal\nscore and rank), the outcome (shortfall, next-day move) and notes.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Since"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Strategy Id"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ticker"
+          }
+        },
+        "title": "trade_journalArguments",
+        "type": "object"
+      },
+      "name": "trade_journal",
+      "needs_confirm": false
     },
     {
       "annotations": {

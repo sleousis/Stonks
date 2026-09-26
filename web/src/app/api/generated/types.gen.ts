@@ -526,6 +526,31 @@ export type ConnectionView = {
 };
 
 /**
+ * CostComparisonView
+ *
+ * Live shortfall of the strategy's real orders against the cost
+ * model's estimate (BL-32, P22), in bps.
+ */
+export type CostComparisonView = {
+    /**
+     * Live Is Bps
+     */
+    live_is_bps?: number | null;
+    /**
+     * Model Gap Bps
+     */
+    model_gap_bps?: number | null;
+    /**
+     * Modelled Bps
+     */
+    modelled_bps?: number | null;
+    /**
+     * Orders
+     */
+    orders?: number;
+};
+
+/**
  * CostModelPreset
  */
 export type CostModelPreset = {
@@ -1256,6 +1281,7 @@ export type GoLiveReport = {
      * Checks
      */
     checks: Array<GoLiveCheckView>;
+    costs?: CostComparisonView | null;
     /**
      * Passed
      */
@@ -1796,6 +1822,108 @@ export type JobEvent = {
 };
 
 /**
+ * JournalEntryView
+ *
+ * One order: why it was placed, the signal context, the outcome and the
+ * notes people added.
+ */
+export type JournalEntryView = {
+    /**
+     * Client Id
+     */
+    client_id: string;
+    /**
+     * Context
+     */
+    context: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Decided At
+     */
+    decided_at: string | null;
+    /**
+     * Decision Price
+     */
+    decision_price: number | null;
+    /**
+     * Next Session Move Bps
+     */
+    next_session_move_bps: number | null;
+    /**
+     * Notes
+     */
+    notes: Array<JournalNoteView>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string | null;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    shortfall: ShortfallView | null;
+    /**
+     * Side
+     */
+    side: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Status Reason
+     */
+    status_reason: string | null;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Trigger
+     */
+    trigger: string | null;
+};
+
+/**
+ * JournalNoteView
+ */
+export type JournalNoteView = {
+    /**
+     * Author
+     */
+    author: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Note
+     */
+    note: string;
+    /**
+     * Order Client Id
+     */
+    order_client_id: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+};
+
+/**
  * KillSwitchRequest
  */
 export type KillSwitchRequest = {
@@ -2213,6 +2341,16 @@ export type MfaView = {
 };
 
 /**
+ * NoteRequest
+ */
+export type NoteRequest = {
+    /**
+     * Note
+     */
+    note: string;
+};
+
+/**
  * OperationalHaltSettings
  */
 export type OperationalHaltSettings = {
@@ -2420,6 +2558,28 @@ export type PageJob = {
      * Items
      */
     items: Array<Job>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[JournalEntryView]
+ */
+export type PageJournalEntryView = {
+    /**
+     * Items
+     */
+    items: Array<JournalEntryView>;
     /**
      * Limit
      */
@@ -3636,6 +3796,88 @@ export type ShadowPnlSummary = {
 };
 
 /**
+ * ShortfallView
+ *
+ * Implementation shortfall of one order. Costs are positive, in bps of
+ * the filled quantity's value at the decision price; ``null`` while an
+ * input is not known yet.
+ */
+export type ShortfallView = {
+    /**
+     * Arrival Price
+     */
+    arrival_price: number | null;
+    /**
+     * Benchmark Price
+     */
+    benchmark_price: number | null;
+    /**
+     * Convention Bps
+     */
+    convention_bps: number | null;
+    /**
+     * Decision Price
+     */
+    decision_price: number;
+    /**
+     * Delay Bps
+     */
+    delay_bps: number | null;
+    /**
+     * Expected Bps
+     */
+    expected_bps: number | null;
+    /**
+     * Fee Bps
+     */
+    fee_bps: number | null;
+    /**
+     * Fill Price
+     */
+    fill_price: number | null;
+    /**
+     * Filled Quantity
+     */
+    filled_quantity: number;
+    /**
+     * Impact Bps
+     */
+    impact_bps: number | null;
+    /**
+     * Is Bps
+     */
+    is_bps: number | null;
+    /**
+     * Is Cost
+     */
+    is_cost: number | null;
+    /**
+     * Opportunity Bps
+     */
+    opportunity_bps: number | null;
+    /**
+     * Opportunity Cost
+     */
+    opportunity_cost: number | null;
+    /**
+     * Ordered Quantity
+     */
+    ordered_quantity: number;
+    /**
+     * Post Close Price
+     */
+    post_close_price: number | null;
+    /**
+     * Side
+     */
+    side: string;
+    /**
+     * Total Bps
+     */
+    total_bps: number | null;
+};
+
+/**
  * SignalICRequest
  */
 export type SignalIcRequest = {
@@ -4212,6 +4454,96 @@ export type SyncResultView = {
      * Status
      */
     status: 'ok' | 'partial' | 'error';
+};
+
+/**
+ * TcaGroupView
+ *
+ * Costs of a group of orders, weighted by notional, in bps.
+ */
+export type TcaGroupView = {
+    /**
+     * Convention Bps
+     */
+    convention_bps: number | null;
+    /**
+     * Delay Bps
+     */
+    delay_bps: number | null;
+    /**
+     * Expected Bps
+     */
+    expected_bps: number | null;
+    /**
+     * Fee Bps
+     */
+    fee_bps: number | null;
+    /**
+     * Filled Notional
+     */
+    filled_notional: number;
+    /**
+     * Filled Orders
+     */
+    filled_orders: number;
+    /**
+     * Impact Bps
+     */
+    impact_bps: number | null;
+    /**
+     * Is Bps
+     */
+    is_bps: number | null;
+    /**
+     * Is Cost
+     */
+    is_cost: number;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Model Gap Bps
+     */
+    model_gap_bps: number | null;
+    /**
+     * Opportunity Bps
+     */
+    opportunity_bps: number | null;
+    /**
+     * Opportunity Cost
+     */
+    opportunity_cost: number;
+    /**
+     * Orders
+     */
+    orders: number;
+};
+
+/**
+ * TcaSummaryView
+ */
+export type TcaSummaryView = {
+    /**
+     * By
+     */
+    by: 'all' | 'strategy' | 'ticker' | 'portfolio' | 'day' | 'week' | 'month';
+    /**
+     * Groups
+     */
+    groups: Array<TcaGroupView>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Since
+     */
+    since: string | null;
+    /**
+     * Until
+     */
+    until: string | null;
 };
 
 /**
@@ -10205,6 +10537,294 @@ export type ListStudioTemplatesResponses = {
 };
 
 export type ListStudioTemplatesResponse = ListStudioTemplatesResponses[keyof ListStudioTemplatesResponses];
+
+export type ListJournalData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Since
+         *
+         * orders decided on or after this day
+         */
+        since?: string | null;
+        /**
+         * Strategy Id
+         */
+        strategy_id?: string | null;
+        /**
+         * Ticker
+         */
+        ticker?: string | null;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/tca/journal';
+};
+
+export type ListJournalErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListJournalError = ListJournalErrors[keyof ListJournalErrors];
+
+export type ListJournalResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageJournalEntryView;
+};
+
+export type ListJournalResponse = ListJournalResponses[keyof ListJournalResponses];
+
+export type UpdateJournalNoteData = {
+    body: NoteRequest;
+    path: {
+        /**
+         * Note Id
+         */
+        note_id: number;
+    };
+    query?: never;
+    url: '/api/tca/notes/{note_id}';
+};
+
+export type UpdateJournalNoteErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type UpdateJournalNoteError = UpdateJournalNoteErrors[keyof UpdateJournalNoteErrors];
+
+export type UpdateJournalNoteResponses = {
+    /**
+     * Successful Response
+     */
+    200: JournalNoteView;
+};
+
+export type UpdateJournalNoteResponse = UpdateJournalNoteResponses[keyof UpdateJournalNoteResponses];
+
+export type GetOrderTcaData = {
+    body?: never;
+    path: {
+        /**
+         * Client Id
+         *
+         * the order's client id
+         */
+        client_id: string;
+    };
+    query?: never;
+    url: '/api/tca/orders/{client_id}';
+};
+
+export type GetOrderTcaErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetOrderTcaError = GetOrderTcaErrors[keyof GetOrderTcaErrors];
+
+export type GetOrderTcaResponses = {
+    /**
+     * Successful Response
+     */
+    200: JournalEntryView;
+};
+
+export type GetOrderTcaResponse = GetOrderTcaResponses[keyof GetOrderTcaResponses];
+
+export type AddJournalNoteData = {
+    body: NoteRequest;
+    path: {
+        /**
+         * Client Id
+         *
+         * the order's client id
+         */
+        client_id: string;
+    };
+    query?: never;
+    url: '/api/tca/orders/{client_id}/notes';
+};
+
+export type AddJournalNoteErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type AddJournalNoteError = AddJournalNoteErrors[keyof AddJournalNoteErrors];
+
+export type AddJournalNoteResponses = {
+    /**
+     * Successful Response
+     */
+    201: JournalNoteView;
+};
+
+export type AddJournalNoteResponse = AddJournalNoteResponses[keyof AddJournalNoteResponses];
+
+export type GetTcaSummaryData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * By
+         *
+         * group by strategy, ticker, portfolio, day, week or month
+         */
+        by?: 'all' | 'strategy' | 'ticker' | 'portfolio' | 'day' | 'week' | 'month';
+        /**
+         * Since
+         *
+         * orders decided on or after this day
+         */
+        since?: string | null;
+        /**
+         * Until
+         *
+         * orders decided on or before this day
+         */
+        until?: string | null;
+        /**
+         * Strategy Id
+         */
+        strategy_id?: string | null;
+        /**
+         * Ticker
+         */
+        ticker?: string | null;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/tca/summary';
+};
+
+export type GetTcaSummaryErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetTcaSummaryError = GetTcaSummaryErrors[keyof GetTcaSummaryErrors];
+
+export type GetTcaSummaryResponses = {
+    /**
+     * Successful Response
+     */
+    200: TcaSummaryView;
+};
+
+export type GetTcaSummaryResponse = GetTcaSummaryResponses[keyof GetTcaSummaryResponses];
 
 export type ListTicksData = {
     body?: never;
