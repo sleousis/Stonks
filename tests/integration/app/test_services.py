@@ -447,3 +447,16 @@ def test_finished_tick_job_cannot_be_cancelled(services):
     services.jobs.wait(job.id, timeout=30)
     with pytest.raises(ConflictError):
         services.jobs.cancel(job.id)
+
+
+def test_services_scrub_broker_keys_and_webhook_url(settings, seeded):
+    from pydantic import SecretStr
+
+    from stonks.app.context import AppContext
+    from stonks.app.services import Services
+
+    settings.brokers.alpaca.api_key = SecretStr("alpaca-key-1")
+    settings.brokers.alpaca.secret_key = SecretStr("alpaca-secret-2")
+    settings.notify.webhook.url = "https://hooks.example/T0/B0/secret"
+    secrets = list(Services.create(AppContext(settings)).runner.secrets())
+    assert {"alpaca-key-1", "alpaca-secret-2", "https://hooks.example/T0/B0/secret"} <= set(secrets)

@@ -430,3 +430,21 @@ def test_job_events_stream_times_out(settings, seeded, fake_source):
     name, data = events[-1]
     assert name == "end"
     assert data["reason"] == "timeout"
+
+
+def test_unhandled_error_log_scrubs_configured_secrets(settings, seeded, capsys):
+    settings.api.allowed_hosts = ["testserver"]
+    settings.sources.eodhd.api_key = "vendor-key-xyz"
+    app = create_app(settings)
+
+    @app.get("/api/_boom")
+    def boom() -> dict:
+        raise RuntimeError("upstream said: bad key vendor-key-xyz")
+
+    with TestClient(app, client=LOOPBACK, raise_server_exceptions=False) as c:
+        resp = c.get("/api/_boom")
+    assert resp.status_code == 500
+    assert "vendor-key-xyz" not in resp.text
+    out = capsys.readouterr().out
+    assert "api.unhandled_error" in out
+    assert "vendor-key-xyz" not in out

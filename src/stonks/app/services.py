@@ -29,7 +29,14 @@ def default_strategy_sources() -> list[StrategySource]:
 
 def _configured_secrets(context: AppContext) -> list[str]:
     s = context.settings
-    values = [s.sources.eodhd.api_key, s.api.token.get_secret_value() if s.api.token else None]
+    alpaca = s.brokers.alpaca
+    values = [
+        s.sources.eodhd.api_key,
+        s.api.token.get_secret_value() if s.api.token else None,
+        alpaca.api_key.get_secret_value() if alpaca.api_key else None,
+        alpaca.secret_key.get_secret_value() if alpaca.secret_key else None,
+        s.notify.webhook.url,
+    ]
     return [v for v in values if v]
 
 
