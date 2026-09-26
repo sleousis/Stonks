@@ -246,3 +246,25 @@ def test_job_errors_are_scrubbed_of_credentials(store):
     assert "abc123" not in done.error
     assert "hunter2" not in done.error
     assert "RuntimeError" in done.error
+
+
+def test_job_waiting_on_lock_at_shutdown_is_cancelled_not_run(store):
+    runner = JobRunner(store, max_workers=2)
+    gate = threading.Event()
+    ran: list[str] = []
+
+    def work(params: dict, ctx: JobContext) -> None:
+        if params["name"] == "first":
+            gate.wait(10)
+        ran.append(params["name"])
+
+    runner.register("writer", work, lock="lake_write")
+    first = runner.submit("writer", {"name": "first"})
+    _wait_for_status(store, first.id, "running")
+    second = runner.submit("writer", {"name": "second"})
+    time.sleep(0.1)  # second is now blocked on the lock inside a worker
+    runner.shutdown(wait=False)
+    gate.set()
+    _wait_for_status(store, first.id, "succeeded")
+    _wait_for_status(store, second.id, "cancelled")
+    assert ran == ["first"]

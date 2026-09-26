@@ -236,6 +236,7 @@ class JobRunner:
         self._locks: dict[str, threading.Lock] = {}
         self._futures: dict[str, Future[None]] = {}
         self._guard = threading.Lock()
+        self._stopping = threading.Event()
 
     @property
     def store(self) -> JobStore:
@@ -254,6 +255,8 @@ class JobRunner:
         return sorted(self._handlers)
 
     def submit(self, kind: str, params: dict[str, Any]) -> Job:
+        if self._stopping.is_set():
+            raise ConflictError("job runner is shutting down")
         if kind not in self._handlers:
             raise ValidationError(f"unknown job kind {kind!r}; known: {self.kinds}")
         job = self._store.create(kind, params)
@@ -286,6 +289,7 @@ class JobRunner:
         """Stop accepting work. Jobs that never started are cancelled; a
         running job left behind (``wait=False``) is marked failed by
         :meth:`JobStore.recover_interrupted` at the next startup."""
+        self._stopping.set()
         with self._guard:
             pending = dict(self._futures)
         for job_id, future in pending.items():
@@ -306,6 +310,10 @@ class JobRunner:
         if lock is not None:
             lock.acquire()
         try:
+            # A job that waited on its lock past shutdown must not start.
+            if self._stopping.is_set():
+                self._store.finish(job_id, "cancelled", error="server shut down before start")
+                return
             if not self._store.claim(job_id):
                 log.info("job.skipped", reason="not queued (cancelled)")
                 return
