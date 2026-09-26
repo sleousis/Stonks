@@ -8,9 +8,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable
 
 from stonks.core.types import Fill, OrderSide, OrderStatus
+
+#: Which broker the production tick trades through (``[brokers].kind``).
+BrokerKind = Literal["simulated", "alpaca"]
 
 
 class BrokerError(RuntimeError):

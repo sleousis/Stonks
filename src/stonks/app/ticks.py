@@ -10,12 +10,13 @@ from typing import Any
 from pydantic import BaseModel
 
 from stonks.app.context import AppContext
-from stonks.app.errors import NotFoundError, ValidationError
+from stonks.app.errors import ConflictError, NotFoundError, ValidationError
 from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.app.orders import OrdersService, OrderView
 from stonks.app.pagination import Page
 from stonks.core.types import AssetClass
-from stonks.production.tick import TickSettings, run_tick
+from stonks.production.settings_builder import build_tick_runtime
+from stonks.production.tick import BackdatedTickError, run_tick
 
 TICK_JOB = "tick"
 
@@ -86,7 +87,6 @@ class TickService:
 
     def run(self, request: TickRequest) -> TickResultView:
         universe = self._universe(request)
-        p = self._ctx.settings.production
         with self._ctx.state() as state, self._ctx.lake() as lake:
             registry = self._ctx.registry_on(state)
             if request.asset_class is not None:
@@ -96,21 +96,20 @@ class TickService:
                     raise ValidationError(
                         f"no instruments in the universe match asset_class={request.asset_class!r}"
                     )
-            result = run_tick(
-                state=state,
-                lake=lake,
-                registry=registry,
-                settings=TickSettings(
-                    universe=universe,
-                    threshold=p.threshold,
-                    initial_cash=p.initial_cash,
-                    slippage_bps=p.slippage_bps,
-                    fee_per_trade=p.fee_per_trade,
-                    max_price_staleness_days=p.max_price_staleness_days,
-                ),
-                as_of=request.as_of,
-                dry_run=request.dry_run,
-            )
+            runtime = build_tick_runtime(self._ctx.settings, universe)
+            try:
+                result = run_tick(
+                    state=state,
+                    lake=lake,
+                    registry=registry,
+                    settings=runtime.settings,
+                    as_of=request.as_of,
+                    dry_run=request.dry_run,
+                    notifier=runtime.notifier,
+                    broker_factory=runtime.broker_factory,
+                )
+            except BackdatedTickError as exc:
+                raise ConflictError(str(exc)) from None
         return TickResultView(
             tick_id=result.tick_id,
             status=result.status,

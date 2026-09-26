@@ -43,32 +43,52 @@ class SourcesConfig(BaseModel):
     yahoo: YahooSourceConfig = YahooSourceConfig()
 
 
+def _env_secret(name: str) -> SecretStr | None:
+    value = os.environ.get(name)
+    return SecretStr(value) if value else None
+
+
 class AlpacaBrokerConfig(BaseModel):
-    """Alpaca trading API. Paper by default; the live endpoint additionally
-    requires ``allow_live = true``. Keys come from ``ALPACA_API_KEY`` /
-    ``ALPACA_SECRET_KEY`` (env wins over TOML) and are kept as SecretStr so
-    they never show up in reprs or logs."""
+    """Alpaca trading API, used only when ``[brokers].kind = "alpaca"``.
+    Paper by default; the live endpoint additionally requires
+    ``allow_live = true``. Keys are env-only (``ALPACA_API_KEY`` /
+    ``ALPACA_SECRET_KEY``), exactly like the API token, so they can never land
+    in a checked-in TOML file, and are kept as SecretStr so they never show
+    up in reprs or logs."""
+
+    # A rejected TOML key must not be echoed back in the validation error.
+    model_config = ConfigDict(hide_input_in_errors=True)
 
     paper: bool = True
     allow_live: bool = False
     max_retries: int = 3
     retry_backoff_seconds: float = 1.0
-    api_key: SecretStr | None = None
-    secret_key: SecretStr | None = None
+    api_key: SecretStr | None = Field(default_factory=lambda: _env_secret("ALPACA_API_KEY"))
+    secret_key: SecretStr | None = Field(default_factory=lambda: _env_secret("ALPACA_SECRET_KEY"))
 
-    @model_validator(mode="after")
-    def _keys_from_env(self) -> AlpacaBrokerConfig:
-        api_key = os.environ.get("ALPACA_API_KEY")
-        secret_key = os.environ.get("ALPACA_SECRET_KEY")
-        if api_key:
-            self.api_key = SecretStr(api_key)
-        if secret_key:
-            self.secret_key = SecretStr(secret_key)
-        return self
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_file_keys(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        found = [k for k in ("api_key", "secret_key") if k in data]
+        if found:
+            # Outer models render the offending input in their error message;
+            # blank the secrets in place so it can't echo them.
+            for key in found:
+                data[key] = "**********"
+            names = ", ".join(f"brokers.alpaca.{k}" for k in found)
+            raise ValueError(
+                f"{names} must not be set in config; use ALPACA_API_KEY / ALPACA_SECRET_KEY"
+            )
+        return data
 
 
 class BrokersConfig(BaseModel):
-    # Which broker the production tick trades through.
+    model_config = ConfigDict(hide_input_in_errors=True)
+
+    # Which broker the production tick trades through. "simulated" (default)
+    # needs no keys; "alpaca" is opt-in and needs ALPACA_API_KEY/SECRET_KEY.
     kind: Literal["simulated", "alpaca"] = "simulated"
     alpaca: AlpacaBrokerConfig = Field(default_factory=AlpacaBrokerConfig)
 

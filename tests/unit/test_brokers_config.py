@@ -46,11 +46,21 @@ def test_alpaca_keys_come_from_env_and_are_secret(tmp_path, monkeypatch):
     assert "shhh-secret" not in str(settings.model_dump())
 
 
-def test_env_wins_over_toml_for_keys(tmp_path, monkeypatch):
+@pytest.mark.parametrize("key", ["api_key", "secret_key"])
+def test_alpaca_keys_in_toml_are_rejected(tmp_path, monkeypatch, key):
     monkeypatch.setenv("ALPACA_API_KEY", "from-env")
     cfg = tmp_path / "cfg.toml"
-    cfg.write_text('[brokers.alpaca]\napi_key = "from-toml"\n')
-    assert load_settings(config_path=cfg).brokers.alpaca.api_key.get_secret_value() == "from-env"
+    cfg.write_text(f'[brokers.alpaca]\n{key} = "from-toml"\n')
+    with pytest.raises(ValueError, match="ALPACA_"):
+        load_settings(config_path=cfg)
+
+
+def test_alpaca_keys_in_toml_error_does_not_echo_the_secret(tmp_path):
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text('[brokers.alpaca]\nsecret_key = "shhh-toml-secret"\n')
+    with pytest.raises(ValueError) as exc:
+        load_settings(config_path=cfg)
+    assert "shhh-toml-secret" not in str(exc.value)
 
 
 def test_make_broker_simulated_uses_production_costs():

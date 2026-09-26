@@ -246,3 +246,11 @@ def test_tick_failure_posts_to_configured_webhook(runner, seeded, monkeypatch):
     assert result.exit_code != 0
     assert len(posts) == 1
     assert posts[0]["json"]["level"] == "error"
+
+
+def test_backdated_tick_exits_1_with_clear_error(runner, seeded):
+    assert runner.invoke(app, ["tick", "--as-of", "2026-03-20"]).exit_code == 0
+    result = runner.invoke(app, ["tick", "--as-of", "2026-03-19"])
+    assert result.exit_code == 1
+    assert "2026-03-20" in result.output
+    assert "Traceback" not in result.output

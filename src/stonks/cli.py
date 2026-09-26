@@ -34,7 +34,8 @@ from stonks.ingest.sources.registry import (
 )
 from stonks.logging import configure_logging, get_logger
 from stonks.notify import build_notifier
-from stonks.production.tick import TickSettings, run_tick
+from stonks.production.settings_builder import build_tick_runtime
+from stonks.production.tick import BackdatedTickError, run_tick
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
@@ -777,26 +778,21 @@ def tick(
                         "ingest profiles first or relax the filter"
                     )
 
-            tick_settings = TickSettings(
-                universe=universe,
-                threshold=settings.production.threshold,
-                initial_cash=settings.production.initial_cash,
-                slippage_bps=settings.production.slippage_bps,
-                fee_per_trade=settings.production.fee_per_trade,
-                max_price_staleness_days=settings.production.max_price_staleness_days,
-                risk=settings.production.risk,
-                shadow_enabled=settings.production.shadow_enabled,
-            )
-
-            result = run_tick(
-                state=state,
-                lake=lake,
-                registry=registry,
-                settings=tick_settings,
-                as_of=as_of_date,
-                dry_run=dry_run,
-                notifier=build_notifier(settings.notify),
-            )
+            runtime = build_tick_runtime(settings, universe)
+            try:
+                result = run_tick(
+                    state=state,
+                    lake=lake,
+                    registry=registry,
+                    settings=runtime.settings,
+                    as_of=as_of_date,
+                    dry_run=dry_run,
+                    notifier=runtime.notifier,
+                    broker_factory=runtime.broker_factory,
+                )
+            except BackdatedTickError as exc:
+                console.print(f"[red]{exc}[/red]")
+                raise typer.Exit(code=1) from None
     finally:
         state.close()
 
@@ -866,8 +862,9 @@ def pnl(
         None, "--strategy", help="show a shadow strategy's virtual P&L instead of the real one"
     ),
 ) -> None:
-    """Daily P&L from portfolio snapshots: value, daily change, cumulative
-    return and drawdown from the running peak."""
+    """Daily P&L from portfolio snapshots, one row per tick as_of: value,
+    change since the previous row (blank when more than 4 days apart, see
+    ``days``), cumulative return and drawdown from the running peak."""
     from stonks.production.pnl import load_pnl
 
     settings = _settings()
@@ -887,11 +884,12 @@ def pnl(
 
     title = f"P&L ({'shadow ' + strategy if strategy else 'portfolio'})"
     table = Table(title=title)
-    for col in ("date", "value", "change", "daily", "cumulative", "drawdown"):
+    for col in ("date", "days", "value", "change", "daily", "cumulative", "drawdown"):
         table.add_column(col, justify="right")
     for r in rows:
         table.add_row(
             r.day.isoformat(),
+            "-" if r.days_elapsed is None else str(r.days_elapsed),
             f"{r.total_value:,.2f}",
             "-" if r.daily_change is None else f"{r.daily_change:+,.2f}",
             pct(r.daily_return),
