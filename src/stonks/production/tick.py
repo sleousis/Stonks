@@ -16,10 +16,10 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from stonks.backtest.simulated_broker import SimulatedBroker
-from stonks.core.types import Order, OrderStatus, Portfolio
+from stonks.core.types import Fill, Order, OrderStatus, Portfolio
 from stonks.execution.orders import make_client_id
 from stonks.logging import get_logger
 from stonks.production.ranker import Ranker
@@ -69,6 +69,37 @@ def run_tick(
         [tick_id, started],
     )
 
+    # Any failure past this point closes the tick as 'error' so the ledger
+    # never keeps a row stuck at 'running'; the exception still propagates.
+    try:
+        return _run_tick_body(
+            state, lake, registry, settings, as_of, dry_run, tick_id=tick_id, log=log
+        )
+    except Exception as exc:
+        log.error("tick.error", error=str(exc), error_type=type(exc).__name__)
+        try:
+            _close_tick(
+                state,
+                tick_id,
+                status="error",
+                summary={"error": str(exc), "error_type": type(exc).__name__},
+            )
+        except Exception as close_exc:  # pragma: no cover - best effort
+            log.error("tick.close_failed", error=str(close_exc))
+        raise
+
+
+def _run_tick_body(
+    state: SqliteState,
+    lake: DuckDBLake,
+    registry: StrategyRegistry,
+    settings: TickSettings,
+    as_of: date,
+    dry_run: bool,
+    *,
+    tick_id: str,
+    log: Any,
+) -> TickResult:
     # 1. rank
     ranker = Ranker(
         registry=registry,
@@ -127,6 +158,10 @@ def run_tick(
     placed = 0
     fills_count = 0
     any_failure = False
+    # Broker outcomes are buffered and persisted together with the portfolio
+    # snapshot in one transaction, so a crash can't leave fills recorded
+    # without the snapshot that reflects them.
+    outcomes: list[tuple[Order, OrderStatus, Fill | None]] = []
     for order in orders_with_tick:
         if dry_run:
             placed += 1
@@ -141,16 +176,20 @@ def run_tick(
             log.warning("tick.order.failed", ticker=order.ticker, error=str(exc))
             continue
 
-        _record_order(state, order, status="filled" if fill else "rejected")
+        outcomes.append((order, "filled" if fill else "rejected", fill))
         placed += 1
         if fill is not None:
-            _record_fill(state, fill)
             fills_count += 1
 
     if not dry_run:
-        _snapshot_portfolio(state, tick_id, portfolio, prices, as_of)
+        with state.transaction():
+            for order, order_status, fill in outcomes:
+                _record_order(state, order, status=order_status)
+                if fill is not None:
+                    _record_fill(state, fill)
+            _snapshot_portfolio(state, tick_id, portfolio, prices, as_of)
 
-    status = "ok" if not any_failure else "partial"
+    status: TickStatus = "ok" if not any_failure else "partial"
     _close_tick(
         state,
         tick_id,
@@ -253,7 +292,7 @@ def _record_order(state: SqliteState, order: Order, status: OrderStatus) -> None
     )
 
 
-def _record_fill(state: SqliteState, fill) -> None:  # type: ignore[no-untyped-def]
+def _record_fill(state: SqliteState, fill: Fill) -> None:
     state.execute(
         """
         INSERT INTO fills

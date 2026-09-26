@@ -120,3 +120,51 @@ def test_rerun_after_crash_before_snapshot_does_not_resubmit_filled_orders(tick_
     assert state.count_rows("orders") == 1
     assert state.count_rows("fills") == 1
     assert r2.fills == 0
+
+
+def test_crash_before_snapshot_rolls_back_orders_and_fills_and_marks_tick_error(
+    tick_env, monkeypatch
+):
+    import json
+
+    import stonks.production.tick as tick_mod
+
+    lake, state, registry = tick_env
+    settings = TickSettings(universe=["UP.US"], threshold=0.0, initial_cash=10_000.0)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(tick_mod, "_snapshot_portfolio", boom)
+
+    with pytest.raises(RuntimeError, match="disk full"):
+        run_tick(state, lake, registry, settings, as_of=date(2026, 3, 20))
+
+    # orders, fills and snapshot commit together or not at all
+    assert state.count_rows("orders") == 0
+    assert state.count_rows("fills") == 0
+    assert state.count_rows("portfolio_snapshots") == 0
+
+    runs = state.sql("SELECT status, finished_at, summary_json FROM tick_runs")
+    assert len(runs) == 1
+    assert runs[0]["status"] == "error"
+    assert runs[0]["finished_at"] is not None
+    assert "disk full" in json.loads(runs[0]["summary_json"])["error"]
+
+
+def test_crash_during_rank_marks_tick_error(tick_env, monkeypatch):
+    from stonks.production.ranker import Ranker
+
+    lake, state, registry = tick_env
+    settings = TickSettings(universe=["UP.US"], threshold=0.0, initial_cash=10_000.0)
+
+    def boom(self, as_of):
+        raise RuntimeError("lake exploded")
+
+    monkeypatch.setattr(Ranker, "rank", boom)
+
+    with pytest.raises(RuntimeError, match="lake exploded"):
+        run_tick(state, lake, registry, settings, as_of=date(2026, 3, 20))
+
+    runs = state.sql("SELECT status FROM tick_runs")
+    assert [r["status"] for r in runs] == ["error"]
