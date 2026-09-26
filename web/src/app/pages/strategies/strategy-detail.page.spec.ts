@@ -158,7 +158,7 @@ describe('StrategyDetailPage', () => {
     opts: { passed?: boolean; pnl?: PnlRowView[]; orders?: OrderView[] } = {},
   ): Promise<void> {
     (await nextRequest(controller, '/api/strategies/momentum-v3')).flush(detail);
-    (await nextRequest(controller, '/api/strategies/momentum-v3/history')).flush(history);
+    (await nextRequest(controller, '/api/strategies/momentum-v3/history')).flush(page(history));
     (await nextRequest(controller, '/api/orders')).flush(page(opts.orders ?? []));
     await settle();
     if (detail.status === 'shadow') {
@@ -175,7 +175,7 @@ describe('StrategyDetailPage', () => {
 
   async function reloaded(status: StrategyDetail['status']): Promise<void> {
     (await nextRequest(controller, '/api/strategies/momentum-v3')).flush({ ...DETAIL, status });
-    (await nextRequest(controller, '/api/strategies/momentum-v3/history')).flush(HISTORY);
+    (await nextRequest(controller, '/api/strategies/momentum-v3/history')).flush(page(HISTORY));
     await settle();
   }
 
@@ -359,7 +359,7 @@ describe('StrategyDetailPage', () => {
       { title: 'Not Found', status: 404, detail: 'no strategy with id momentum-v3' },
       { status: 404, statusText: 'Not Found' },
     );
-    (await nextRequest(controller, '/api/strategies/momentum-v3/history')).flush([]);
+    (await nextRequest(controller, '/api/strategies/momentum-v3/history')).flush(page([]));
     (await nextRequest(controller, '/api/orders')).flush(page([]));
     await settle();
     expect(el.querySelector('[role="alert"]')?.textContent).toContain(
@@ -452,7 +452,7 @@ describe('StrategyDetailPage', () => {
         ...DETAIL,
         status: 'retired',
       });
-      (await nextRequest(controller, '/api/strategies/momentum-v3/history')).flush([]);
+      (await nextRequest(controller, '/api/strategies/momentum-v3/history')).flush(page([]));
       const req = await nextRequest(controller, '/api/orders');
       expect(req.request.urlWithParams).toContain('strategy_id=momentum-v3');
       req.flush(page([]));

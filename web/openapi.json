@@ -1021,6 +1021,11 @@
       },
       "ConnectionView": {
         "properties": {
+          "accounts_count": {
+            "default": 0,
+            "title": "Accounts Count",
+            "type": "integer"
+          },
           "consecutive_failures": {
             "title": "Consecutive Failures",
             "type": "integer"
@@ -4983,6 +4988,99 @@
         "title": "Page[AlertView]",
         "type": "object"
       },
+      "Page_BackupView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BackupView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[BackupView]",
+        "type": "object"
+      },
+      "Page_BrokerAccountView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/stonks__app__connections__BrokerAccountView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[BrokerAccountView]",
+        "type": "object"
+      },
+      "Page_ConnectionView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectionView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[ConnectionView]",
+        "type": "object"
+      },
       "Page_CoverageRow_": {
         "properties": {
           "items": {
@@ -5074,6 +5172,37 @@
           "offset"
         ],
         "title": "Page[FillView]",
+        "type": "object"
+      },
+      "Page_HaltView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/HaltView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[HaltView]",
         "type": "object"
       },
       "Page_IngestRunView_": {
@@ -5231,6 +5360,68 @@
         "title": "Page[OrderView]",
         "type": "object"
       },
+      "Page_PortfolioSummaryView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioSummaryView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[PortfolioSummaryView]",
+        "type": "object"
+      },
+      "Page_PushDeviceView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PushDeviceView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[PushDeviceView]",
+        "type": "object"
+      },
       "Page_ShadowDecisionView_": {
         "properties": {
           "items": {
@@ -5355,6 +5546,37 @@
         "title": "Page[StatementFlagView]",
         "type": "object"
       },
+      "Page_StatusChangeView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StatusChangeView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[StatusChangeView]",
+        "type": "object"
+      },
       "Page_StrategySummary_": {
         "properties": {
           "items": {
@@ -5386,6 +5608,37 @@
         "title": "Page[StrategySummary]",
         "type": "object"
       },
+      "Page_SubscriptionView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[SubscriptionView]",
+        "type": "object"
+      },
       "Page_TickRun_": {
         "properties": {
           "items": {
@@ -5415,6 +5668,130 @@
           "offset"
         ],
         "title": "Page[TickRun]",
+        "type": "object"
+      },
+      "Page_TokenView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TokenView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[TokenView]",
+        "type": "object"
+      },
+      "Page_TradingModeView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TradingModeView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[TradingModeView]",
+        "type": "object"
+      },
+      "Page_UniverseView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UniverseView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[UniverseView]",
+        "type": "object"
+      },
+      "Page_UserView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[UserView]",
         "type": "object"
       },
       "ParameterInfo": {
@@ -5657,6 +6034,11 @@
               }
             ],
             "title": "Initial Cash"
+          },
+          "is_default": {
+            "default": false,
+            "title": "Is Default",
+            "type": "boolean"
           },
           "kind": {
             "enum": [
@@ -6466,6 +6848,14 @@
             "title": "Display Name",
             "type": "string"
           },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "has_paper": {
+            "title": "Has Paper",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -6477,7 +6867,9 @@
           "auth_flow",
           "capabilities",
           "credential_fields",
-          "can_trade"
+          "can_trade",
+          "enabled",
+          "has_paper"
         ],
         "title": "ProviderView",
         "type": "object"
@@ -12143,16 +12535,44 @@
       "get": {
         "description": "Your API tokens (never the secret), revoked ones included.",
         "operationId": "listApiTokens",
+        "parameters": [
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/TokenView"
-                  },
-                  "title": "Response Listapitokens",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_TokenView_"
                 }
               }
             },
@@ -12452,16 +12872,44 @@
       "get": {
         "description": "Every person with an account: identity, role, status. No holdings.",
         "operationId": "listUsers",
+        "parameters": [
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/UserView"
-                  },
-                  "title": "Response Listusers",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_UserView_"
                 }
               }
             },
@@ -12993,16 +13441,44 @@
       "get": {
         "description": "Backups under ``[backup].dir``, newest first.",
         "operationId": "listBackups",
+        "parameters": [
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/BackupView"
-                  },
-                  "title": "Response Listbackups",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_BackupView_"
                 }
               }
             },
@@ -13913,16 +14389,44 @@
       "get": {
         "description": "The caller's connections, oldest first.",
         "operationId": "listConnections",
+        "parameters": [
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ConnectionView"
-                  },
-                  "title": "Response Listconnections",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_ConnectionView_"
                 }
               }
             },
@@ -14288,7 +14792,7 @@
     },
     "/api/connections/providers": {
       "get": {
-        "description": "Providers an admin enabled (``[connections].enabled_providers``) and\nconfigured; nothing else can be connected.",
+        "description": "Every provider. ``enabled`` marks the ones an admin turned on\n(``[connections].enabled_providers``) and configured: nothing else can\nbe connected. ``has_paper`` marks providers with paper accounts.",
         "operationId": "listProviders",
         "responses": {
           "200": {
@@ -14554,6 +15058,36 @@
               "title": "Connection Id",
               "type": "string"
             }
+          },
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -14561,11 +15095,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/stonks__app__connections__BrokerAccountView"
-                  },
-                  "title": "Response Listconnectionaccounts",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_BrokerAccountView_"
                 }
               }
             },
@@ -14837,6 +15367,36 @@
               "title": "Include Cleared",
               "type": "boolean"
             }
+          },
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -14844,11 +15404,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/HaltView"
-                  },
-                  "title": "Response Listhalts",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_HaltView_"
                 }
               }
             },
@@ -19214,18 +19770,46 @@
     },
     "/api/portfolios": {
       "get": {
-        "description": "Your portfolios, oldest first, each marked paper or live.",
+        "description": "Your portfolios, oldest first, each marked paper or live. Empty\nfor someone who only follows strategies for signals.",
         "operationId": "listPortfolios",
+        "parameters": [
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/PortfolioSummaryView"
-                  },
-                  "title": "Response Listportfolios",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_PortfolioSummaryView_"
                 }
               }
             },
@@ -19298,16 +19882,44 @@
       "get": {
         "description": "For each of your portfolios: does it trade paper or live money, and\nthrough which broker.",
         "operationId": "listTradingModes",
+        "parameters": [
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/TradingModeView"
-                  },
-                  "title": "Response Listtradingmodes",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_TradingModeView_"
                 }
               }
             },
@@ -19459,16 +20071,44 @@
       "get": {
         "description": "Your registered browsers and installed apps (no endpoints or keys).",
         "operationId": "listPushSubscriptions",
+        "parameters": [
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/PushDeviceView"
-                  },
-                  "title": "Response Listpushsubscriptions",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_PushDeviceView_"
                 }
               }
             },
@@ -19616,6 +20256,89 @@
           }
         ],
         "summary": "Create Push Subscription",
+        "tags": [
+          "push"
+        ],
+        "x-permission": "notifications.manage"
+      }
+    },
+    "/api/push/subscriptions/{device_id}": {
+      "delete": {
+        "description": "Unregister one of your devices by the id the list shows, for\nremoving another browser from Settings (404 when it isn't yours).",
+        "operationId": "deletePushDevice",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Device Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Push Device",
         "tags": [
           "push"
         ],
@@ -21014,6 +21737,36 @@
               "title": "Strategy Id",
               "type": "string"
             }
+          },
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -21021,11 +21774,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/StatusChangeView"
-                  },
-                  "title": "Response Getstrategyhistory",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_StatusChangeView_"
                 }
               }
             },
@@ -22960,16 +23709,44 @@
       "get": {
         "description": "Your subscriptions, with the paper-day count and what still blocks auto.",
         "operationId": "listSubscriptions",
+        "parameters": [
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/SubscriptionView"
-                  },
-                  "title": "Response Listsubscriptions",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_SubscriptionView_"
                 }
               }
             },
@@ -24300,16 +25077,44 @@
       "get": {
         "description": "Every stored universe, by id.",
         "operationId": "listUniverses",
+        "parameters": [
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/UniverseView"
-                  },
-                  "title": "Response Listuniverses",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_UniverseView_"
                 }
               }
             },

@@ -13,7 +13,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from stonks.api.deps import ScopeDep, ServicesDep, needs
+from stonks.api.deps import PageDep, ScopeDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.app.connections import (
     BrokerAccountView,
@@ -27,6 +27,7 @@ from stonks.app.connections import (
     StartPortalRequest,
     SyncResultView,
 )
+from stonks.app.pagination import Page, page_of
 from stonks.auth import Permission
 
 router = APIRouter(prefix="/api/connections", tags=["connections"], responses=PROBLEM_RESPONSES)
@@ -40,10 +41,10 @@ def list_providers(services: ServicesDep, scope: ScopeDep) -> list[ProviderView]
     return services.connections.providers(scope)
 
 
-@router.get("", response_model=list[ConnectionView], operation_id="listConnections")
-def list_connections(services: ServicesDep, scope: ScopeDep) -> list[ConnectionView]:
+@router.get("", response_model=Page[ConnectionView], operation_id="listConnections")
+def list_connections(services: ServicesDep, scope: ScopeDep, page: PageDep) -> Page[ConnectionView]:
     """The caller's connections, oldest first."""
-    return services.connections.list(scope)
+    return page_of(services.connections.list(scope), page)
 
 
 @router.post(
@@ -112,14 +113,14 @@ def delete_connection(connection_id: str, services: ServicesDep, scope: ScopeDep
 
 @router.get(
     "/{connection_id}/accounts",
-    response_model=list[BrokerAccountView],
+    response_model=Page[BrokerAccountView],
     operation_id="listConnectionAccounts",
 )
 def list_accounts(
-    connection_id: str, services: ServicesDep, scope: ScopeDep
-) -> list[BrokerAccountView]:
+    connection_id: str, services: ServicesDep, scope: ScopeDep, page: PageDep
+) -> Page[BrokerAccountView]:
     """External accounts seen on the connection, with the linked portfolio."""
-    return services.connections.accounts(scope, connection_id)
+    return page_of(services.connections.accounts(scope, connection_id), page)
 
 
 @router.post(

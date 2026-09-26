@@ -13,7 +13,6 @@ import { firstValueFrom } from 'rxjs';
 
 import type { PushDeviceView } from '../../api/models';
 import { NotificationsService } from '../../api/notifications.service';
-import { isMissingRoute } from '../../api/subscriptions.service';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { formatAgo, formatDate } from '../../core/format/format';
@@ -248,13 +247,7 @@ export class PushDevices implements OnInit {
       this.toasts.success(`Removed ${name}.`);
       this.devices.reload();
     } catch (err) {
-      if (isMissingRoute(err)) {
-        this.toasts.info(
-          'Removing another device from here is coming soon. For now, turn notifications off in Settings on that device.',
-        );
-      } else {
-        this.toasts.error(err instanceof Error ? err.message : 'Could not remove the device.');
-      }
+      this.toasts.error(err instanceof Error ? err.message : 'Could not remove the device.');
     } finally {
       this.removing.set(null);
     }

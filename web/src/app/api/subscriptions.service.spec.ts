@@ -3,8 +3,9 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
 import { ApiError } from '../core/http/api-error';
+import { nextRequest } from '../../testing/http';
 import { provideApi } from './provide-api';
-import { SubscriptionsService, isMissingRoute } from './subscriptions.service';
+import { SubscriptionsService } from './subscriptions.service';
 
 describe('SubscriptionsService', () => {
   let svc: SubscriptionsService;
@@ -22,27 +23,28 @@ describe('SubscriptionsService', () => {
 
   it('lists the caller subscriptions', async () => {
     const result = svc.list();
-    controller.expectOne({ method: 'GET', url: '/api/subscriptions' }).flush([]);
+    const req = await nextRequest(controller, '/api/subscriptions');
+    expect(req.request.urlWithParams).toContain('limit=500');
+    req.flush({ items: [], total: 0, limit: 500, offset: 0 });
     expect(await result).toEqual([]);
   });
 
   it('patches the mode or the switch', async () => {
     const result = svc.update('sub 1', { mode: 'paper' });
-    const req = controller.expectOne('/api/subscriptions/sub%201');
+    const req = await nextRequest(controller, '/api/subscriptions/sub%201', 'PATCH');
     expect(req.request.method).toBe('PATCH');
     expect(req.request.body).toEqual({ mode: 'paper' });
     req.flush({ id: 'sub 1' });
     expect(await result).toEqual({ id: 'sub 1' });
   });
 
-  it('turns failures into ApiErrors and spots a server without the routes', async () => {
+  it('turns failures into ApiErrors', async () => {
     const result = svc.list();
-    controller
-      .expectOne('/api/subscriptions')
-      .flush({ title: 'Not Found', status: 404 }, { status: 404, statusText: 'Not Found' });
+    (await nextRequest(controller, '/api/subscriptions')).flush(
+      { title: 'Not Found', status: 404 },
+      { status: 404, statusText: 'Not Found' },
+    );
     const err = await result.catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
-    expect(isMissingRoute(err)).toBe(true);
-    expect(isMissingRoute(new ApiError(409, 'Conflict', 'x'))).toBe(false);
   });
 });

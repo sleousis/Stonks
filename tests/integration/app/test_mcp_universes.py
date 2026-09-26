@@ -36,7 +36,7 @@ async def test_create_needs_confirm_then_refresh_and_members(mcp, test_client):
     args = {"universe_id": "mine", "kind": "list", "spec": {"tickers": ["UP.US", "FLAT.US"]}}
     preview = await call(mcp, "create_universe", args)
     assert preview["preview"] is True and preview["applied"] is False
-    assert (await call(mcp, "list_universes")) == {"items": []}
+    assert (await call(mcp, "list_universes"))["items"] == []
 
     created = await call(mcp, "create_universe", {**args, "confirm": True})
     assert created["applied"] is True and created["universe"]["id"] == "mine"
@@ -92,7 +92,7 @@ async def test_delete_needs_confirm(mcp, test_client):
     assert [u["id"] for u in (await call(mcp, "list_universes"))["items"]] == ["gone"]
     deleted = await call(mcp, "delete_universe", {"universe_id": "gone", "confirm": True})
     assert deleted["applied"] is True and deleted["universe"]["id"] == "gone"
-    assert (await call(mcp, "list_universes")) == {"items": []}
+    assert (await call(mcp, "list_universes"))["items"] == []
 
 
 def test_universe_and_lab_ensure_jobs_have_typed_result_routes():

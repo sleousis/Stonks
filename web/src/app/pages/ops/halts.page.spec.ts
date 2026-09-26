@@ -12,9 +12,10 @@ import { HaltStateService } from '../../core/halts/halt-state.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
-import { nextRequest, tick } from '../../../testing/http';
+import { nextRequest, page, tick } from '../../../testing/http';
 import { answerDialog, dialogForm, fillDialog } from '../../../testing/status-dialog';
 import { HaltsPage } from './halts.page';
+import { book } from '../../../testing/portfolio-fixtures';
 
 function halt(over: Partial<HaltView>): HaltView {
   return {
@@ -84,7 +85,7 @@ describe('HaltsPage', () => {
     pending = [...pending, ...http.match(isHalts)];
     for (const req of pending) {
       const everything = req.request.urlWithParams.includes('include_cleared=true');
-      req.flush(everything ? all : all.filter((h) => h.active));
+      req.flush(page(everything ? all : all.filter((h) => h.active)));
     }
     await settle();
   }
@@ -204,8 +205,8 @@ describe('HaltsPage', () => {
 
   describe('as a trader', () => {
     const BOOKS: PortfolioRef[] = [
-      { id: 'pf_default', name: 'Main book', is_default: true },
-      { id: 'pf_2', name: 'Crypto book' },
+      book({ id: 'pf_default', name: 'Main book', is_default: true }),
+      book({ id: 'pf_2', name: 'Crypto book' }),
     ];
 
     beforeEach(() => setup(TRADER, BOOKS));

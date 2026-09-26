@@ -66,10 +66,10 @@ def test_demotion_routes_take_a_reason(client, seeded, action, status):
 
 def test_history_route(client, seeded):
     sid = seeded["active_id"]
-    history = client.get(f"/api/strategies/{sid}/history").json()
+    history = client.get(f"/api/strategies/{sid}/history").json()["items"]
     assert [(c["from_status"], c["to_status"]) for c in history] == [("shadow", "active")]
     client.post(f"/api/strategies/{sid}/retire", json={"reason": "done"}, headers=AUTH)
-    history = client.get(f"/api/strategies/{sid}/history").json()
+    history = client.get(f"/api/strategies/{sid}/history").json()["items"]
     assert history[-1]["to_status"] == "retired"
     assert client.get("/api/strategies/missing/history").status_code == 404
 
@@ -118,7 +118,7 @@ def test_studio_enable_disable_take_reason_and_override(client):
     assert off.status_code == 200, off.json()
     assert off.json()["strategy_status"] == "shadow"
     sid = off.json()["registered_strategy_id"]
-    history = client.get(f"/api/strategies/{sid}/history").json()
+    history = client.get(f"/api/strategies/{sid}/history").json()["items"]
     assert [c["actor"] for c in history] == ["user:usr_owner", "user:usr_owner"]
 
 

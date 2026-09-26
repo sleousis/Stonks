@@ -100,7 +100,7 @@ def test_a_disabled_provider_cannot_be_connected(client):
 def test_connections_count_their_accounts(client):
     body = _connect(client)
     assert body["accounts_count"] == 1
-    [listed] = client.get("/api/connections", headers=AUTH).json()
+    [listed] = client.get("/api/connections", headers=AUTH).json()["items"]
     assert listed["accounts_count"] == 1
     got = client.get(f"/api/connections/{body['id']}", headers=AUTH).json()
     assert got["accounts_count"] == 1
@@ -119,7 +119,7 @@ def test_connect_with_keys_never_echoes_or_logs_the_secret(client, settings, cap
     accounts = client.get(f"/api/connections/{body['id']}/accounts", headers=AUTH)
     assert accounts.status_code == 200
     assert TOKEN not in accounts.text
-    [acc] = accounts.json()
+    [acc] = accounts.json()["items"]
     assert acc["portfolio_id"]  # a broker portfolio was created and linked
     audit = _audit(settings, body["id"])
     assert any(a == "connection.connect" for _, a, _ in audit)
@@ -147,7 +147,7 @@ def test_refused_keys_are_422_without_the_secret(client):
     assert resp.status_code == 422
     assert resp.headers["content-type"].startswith("application/problem+json")
     assert bad not in resp.text
-    assert client.get("/api/connections", headers=AUTH).json() == []
+    assert client.get("/api/connections", headers=AUTH).json()["items"] == []
 
 
 def test_validation_errors_do_not_echo_credentials(client):
@@ -194,7 +194,7 @@ def test_get_sync_and_delete_a_connection(client):
 def test_link_account_to_an_existing_broker_portfolio(client, settings):
     conn = _connect(client)
     cid = conn["id"]
-    [acc] = client.get(f"/api/connections/{cid}/accounts", headers=AUTH).json()
+    [acc] = client.get(f"/api/connections/{cid}/accounts", headers=AUTH).json()["items"]
     # Already linked to the auto-created portfolio: linking again elsewhere is refused.
     again = client.post(
         f"/api/connections/{cid}/link",
@@ -265,7 +265,7 @@ def test_other_users_connections_are_404(client, settings, box):
             bob, "fake", {"token": "bob-token-12345"}
         )
     cid = rec.id
-    assert client.get("/api/connections", headers=AUTH).json() == []
+    assert client.get("/api/connections", headers=AUTH).json()["items"] == []
     for method, path, body in [
         ("GET", f"/api/connections/{cid}", None),
         ("GET", f"/api/connections/{cid}/accounts", None),

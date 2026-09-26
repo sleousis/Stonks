@@ -35,10 +35,10 @@ async def mcp(test_client):
 
 @pytest.mark.anyio
 async def test_the_kill_switch_is_guarded_and_listed(mcp, test_client):
-    assert (await call(mcp, "list_halts")) == {"items": []}
+    assert (await call(mcp, "list_halts"))["items"] == []
     preview = await call(mcp, "engage_kill_switch", {"scope": "user", "reason": "away"})
     assert preview["preview"] is True and preview["applied"] is False
-    assert test_client.get("/api/halts", headers=AUTH).json() == []
+    assert test_client.get("/api/halts", headers=AUTH).json()["items"] == []
     done = await call(
         mcp, "engage_kill_switch", {"scope": "user", "reason": "away", "confirm": True}
     )

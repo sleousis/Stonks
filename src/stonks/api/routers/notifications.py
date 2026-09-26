@@ -8,7 +8,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query, Response
 
-from stonks.api.deps import ScopeDep, ServicesDep, needs
+from stonks.api.deps import PageDep, ScopeDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.app.notifications import (
     FeedView,
@@ -23,6 +23,7 @@ from stonks.app.notifications import (
     VapidKeyView,
     WebhookUpdate,
 )
+from stonks.app.pagination import Page, page_of
 from stonks.auth import Permission
 from stonks.notify.service import FEED_LIMIT_MAX
 
@@ -41,11 +42,13 @@ def vapid_key(services: ServicesDep, scope: ScopeDep) -> VapidKeyView:
 
 
 @push_router.get(
-    "/subscriptions", response_model=list[PushDeviceView], operation_id="listPushSubscriptions"
+    "/subscriptions", response_model=Page[PushDeviceView], operation_id="listPushSubscriptions"
 )
-def list_push_subscriptions(services: ServicesDep, scope: ScopeDep) -> list[PushDeviceView]:
+def list_push_subscriptions(
+    services: ServicesDep, scope: ScopeDep, page: PageDep
+) -> Page[PushDeviceView]:
     """Your registered browsers and installed apps (no endpoints or keys)."""
-    return services.notifications.devices(scope)
+    return page_of(services.notifications.devices(scope), page)
 
 
 @push_router.post(

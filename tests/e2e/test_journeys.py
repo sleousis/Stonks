@@ -20,8 +20,6 @@ pytestmark = pytest.mark.e2e
 def test_first_sign_in_enrols_totp_then_signs_in_with_a_code(browse, stack, viewport):
     person = stack.add_person("trader", f"new-{viewport}@e2e.test", f"New {viewport.title()}")
     v: Visit = browse()
-    # BUG-3: a person with no portfolio yet gets 404s on home (tested below).
-    v.guard.expect_refusal(404, r"/api/(portfolio|pnl)$", "BUG-3: no portfolio yet")
     page = v.go("/")
     expect(page).to_have_url(re.compile(r"/login"))
     v.check_page("login")
@@ -101,14 +99,15 @@ def test_trader_home_shows_portfolio_signals_and_strategies(browse, stack, viewp
     v.check_page("home-trader")
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-2: GET /api/subscriptions has no route yet")
 def test_trader_home_lists_followed_strategies(browse, stack, viewport):
     v = browse(stack.trader)
     card = v.page.locator("app-strategies-card")
-    expect(card).not_to_contain_text("Coming soon", timeout=5_000)
+    expect(card.locator("app-loading-state")).to_have_count(0)
+    expect(card).not_to_contain_text("Coming soon")
+    expect(card).not_to_contain_text("Could not load")
+    v.guard.assert_clean()
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-3: a trader with no portfolio gets 404s on home")
 def test_new_trader_home_loads_without_errors(browse, stack, viewport):
     person = stack.add_person("trader", f"empty-{viewport}@e2e.test", "Empty Trader")
     person.totp_secret = pyotp.random_base32()
@@ -117,6 +116,7 @@ def test_new_trader_home_loads_without_errors(browse, stack, viewport):
     card = v.page.locator("app-portfolio-card")
     expect(card.locator("app-loading-state")).to_have_count(0)
     v.page.wait_for_load_state("networkidle")
+    expect(card).to_contain_text("No portfolio yet")
     expect(card).not_to_contain_text("Could not load", timeout=1_000)
     v.guard.assert_clean()
 
@@ -196,17 +196,16 @@ def test_promote_gate_refuses_then_admin_overrides_and_trader_is_refused(browse,
     sid = SHADOW_IDS[viewport]
     promote_url = rf"/api/strategies/{sid}/promote$"
 
-    # BUG-4: the console offers Promote to traders; the server refuses it.
+    # A trader sees Go live turned off with the reason, and the server
+    # refuses the call anyway.
     trader = browse(stack.trader)
     trader.guard.expect_refusal(403, promote_url, "traders cannot promote")
     page = trader.go(f"/strategies/{sid}")
     expect(page.get_by_role("heading", level=1)).to_contain_text(sid)
-    with page.expect_response(re.compile(promote_url)) as refused:
-        page.get_by_role("button", name="Promote to active").click()
-        dialog = page.locator("dialog[open]")
-        fill_status_dialog(dialog, sid, "A trader tries to promote this one.")
-        dialog.get_by_role("button", name=re.compile("^Promote")).click()
-    assert refused.value.status == 403
+    expect(page.get_by_role("button", name="Go live")).to_be_disabled()
+    expect(page.locator("app-permission-note")).to_be_visible()
+    refused = trader.api("POST", f"/api/strategies/{sid}/promote", data={"reason": "trader tries"})
+    assert refused.status == 403
     status = trader.api("GET", f"/api/strategies/{sid}").json()["status"]
     assert status == "shadow"
 
@@ -214,7 +213,7 @@ def test_promote_gate_refuses_then_admin_overrides_and_trader_is_refused(browse,
     page = admin.go(f"/strategies/{sid}")
     admin.check_page("strategy-detail")
     admin.guard.expect_refusal(409, rf"/api/strategies/{sid}/promote$", "the go-live gate refuses")
-    page.get_by_role("button", name="Promote to active").click()
+    page.get_by_role("button", name="Go live").click()
     dialog = page.locator("dialog[open]")
     expect(dialog).to_contain_text("Go-live check failed")
     fill_status_dialog(dialog, sid, "First promotion attempt from e2e.")
@@ -254,10 +253,10 @@ def run_real_tick(v: Visit, as_of: str, ticker: str) -> None:
     page.get_by_label("Dry run").uncheck()
     page.get_by_label("As of").fill(as_of)
     page.get_by_role("textbox", name="Tickers", exact=True).fill(ticker)
-    page.get_by_role("button", name="Run tick", exact=True).click()
-    dialog = page.get_by_role("dialog")
+    page.get_by_role("button", name="Start trading run", exact=True).click()
+    dialog = page.get_by_role("dialog", name="Trading run ticket")
     dialog.get_by_role("textbox").fill("simulated")
-    dialog.get_by_role("button", name="Run tick").click()
+    dialog.get_by_role("button", name="Start trading run").click()
 
 
 def tick_result(v: Visit):

@@ -9,13 +9,14 @@ import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
-import { nextRequest, tick } from '../../../testing/http';
+import { nextRequest, page, tick } from '../../../testing/http';
 import { ConnectionDetailPage } from './connection-detail.page';
 import { ALPACA, account, connection, sessionStub } from './connections.fixtures';
+import { book } from '../../../testing/portfolio-fixtures';
 
 const PORTFOLIOS: PortfolioRef[] = [
-  { id: 'pf_default', name: 'Main', mode: 'paper', is_default: true },
-  { id: 'pf_broker', name: 'Alpaca mirror', mode: 'live' },
+  book({ id: 'pf_default', name: 'Main', trading: 'paper', is_default: true }),
+  book({ id: 'pf_broker', name: 'Alpaca mirror', trading: 'live' }),
 ];
 
 describe('ConnectionDetailPage', () => {
@@ -59,10 +60,12 @@ describe('ConnectionDetailPage', () => {
     (await nextRequest(http, '/api/connections/con_1')).flush(
       connection({ last_sync_at: new Date().toISOString(), last_sync_status: 'ok' }),
     );
-    (await nextRequest(http, '/api/connections/con_1/accounts')).flush([
-      account(),
-      account({ external_account_id: 'acc_2', name: 'IRA', portfolio_id: 'pf_broker' }),
-    ]);
+    (await nextRequest(http, '/api/connections/con_1/accounts')).flush(
+      page([
+        account(),
+        account({ external_account_id: 'acc_2', name: 'IRA', portfolio_id: 'pf_broker' }),
+      ]),
+    );
     await settle();
   }
 
@@ -98,9 +101,9 @@ describe('ConnectionDetailPage', () => {
     req.flush({ connection_id: 'con_1', external_account_id: 'acc_1', portfolio_id: 'pf_broker' });
     await settle();
     expect(success).toHaveBeenCalledWith('Linked Individual to Alpaca mirror.');
-    (await nextRequest(http, '/api/connections/con_1/accounts')).flush([
-      account({ portfolio_id: 'pf_broker' }),
-    ]);
+    (await nextRequest(http, '/api/connections/con_1/accounts')).flush(
+      page([account({ portfolio_id: 'pf_broker' })]),
+    );
     await settle();
   });
 

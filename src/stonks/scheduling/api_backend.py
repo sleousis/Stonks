@@ -334,7 +334,7 @@ def api_universes_refresh(ctx: RunContext) -> JobOutcome:
     over the trailing ``ensure_days`` (both as lake-writer jobs in the API)."""
     ex = _executor(ctx)
     results: dict[str, dict[str, Any]] = {}
-    for universe in ex.client.get("/api/universes"):
+    for universe in ex.client.get_all("/api/universes"):
         uid = universe["id"]
         _, status, error, result = _run_job(
             ex, f"/api/universes/{uid}/refresh", {}, "/api/universes/refresh/{job_id}/result"

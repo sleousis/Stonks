@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 
-import { unwrap } from './api-call';
+import { allItems, unwrap } from './api-call';
 import {
   createUniverse,
   deleteUniverse,
@@ -19,7 +19,7 @@ import type { EnsureDataRequest, IndexHistoryImport, UniverseCreate } from './mo
 @Injectable({ providedIn: 'root' })
 export class UniversesService {
   list() {
-    return unwrap(listUniverses());
+    return allItems((query) => unwrap(listUniverses({ query })));
   }
 
   get(id: string) {

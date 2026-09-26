@@ -8,7 +8,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
-import { nextRequest, tick } from '../../../testing/http';
+import { nextRequest, page, tick } from '../../../testing/http';
 import { UniversesPage } from './universes.page';
 
 const UNIVERSES: UniverseView[] = [
@@ -66,7 +66,7 @@ describe('UniversesPage', () => {
     fixture = TestBed.createComponent(UniversesPage);
     el = fixture.nativeElement;
     fixture.detectChanges();
-    (await nextRequest(http, '/api/universes')).flush(UNIVERSES);
+    (await nextRequest(http, '/api/universes')).flush(page(UNIVERSES));
     await settle();
   });
 
@@ -104,7 +104,7 @@ describe('UniversesPage', () => {
     expect(post.request.body).toMatchObject({ id: 'tech', kind: 'exchange', csv: null });
     expect(post.request.body.spec).toMatchObject({ exchange: 'US' });
     post.flush({ id: 'tech', kind: 'exchange', spec: {} });
-    (await nextRequest(http, '/api/universes')).flush(UNIVERSES);
+    (await nextRequest(http, '/api/universes')).flush(page(UNIVERSES));
     await settle();
     expect(navigate).toHaveBeenCalledWith(['/universes', 'tech']);
   });
@@ -135,7 +135,7 @@ describe('UniversesPage', () => {
       csv: 'ticker,start_date\nAAPL.US,2020-01-02\n',
     });
     post.flush({ id: 'watch2', kind: 'list', spec: {} });
-    (await nextRequest(http, '/api/universes')).flush(UNIVERSES);
+    (await nextRequest(http, '/api/universes')).flush(page(UNIVERSES));
     await settle();
   });
 

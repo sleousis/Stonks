@@ -5,7 +5,7 @@ import { provideRouter } from '@angular/router';
 import { OrdersService } from '../../api/orders.service';
 import { PortfolioService } from '../../api/portfolio.service';
 import { provideApi } from '../../api/provide-api';
-import { nextRequest } from '../../../testing/http';
+import { nextRequest, page } from '../../../testing/http';
 import { PortfolioContextService } from './portfolio-context.service';
 
 const LIST = [
@@ -31,7 +31,7 @@ describe('PortfolioContextService', () => {
   async function load(body: object | null = LIST, status = 200) {
     const loading = ctx.load();
     const req = await nextRequest(controller, '/api/portfolios');
-    if (status === 200) req.flush(body);
+    if (status === 200) req.flush(Array.isArray(body) ? page(body) : body);
     else req.flush({ title: 'x', status }, { status, statusText: 'x' });
     await loading;
   }

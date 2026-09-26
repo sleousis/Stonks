@@ -46,7 +46,7 @@ async def test_subscribe_is_guarded_then_applies(mcp, test_client):
     args = {"strategy_id": "bah_shadow", "mode": "paper", "portfolio_id": "pf_default"}
     preview = await call(mcp, "subscribe", args)
     assert preview["preview"] is True and preview["applied"] is False
-    assert test_client.get("/api/subscriptions", headers=AUTH).json() == []
+    assert test_client.get("/api/subscriptions", headers=AUTH).json()["items"] == []
     done = await call(mcp, "subscribe", args | {"confirm": True})
     sub = done["subscription"]
     assert done["applied"] is True and sub["mode"] == "paper"
@@ -55,7 +55,7 @@ async def test_subscribe_is_guarded_then_applies(mcp, test_client):
 
     off = await call(mcp, "update_subscription", {"subscription_id": sub["id"], "enabled": False})
     assert off["preview"] is True
-    assert test_client.get("/api/subscriptions", headers=AUTH).json()[0]["enabled"] is True
+    assert test_client.get("/api/subscriptions", headers=AUTH).json()["items"][0]["enabled"] is True
     applied = await call(
         mcp,
         "update_subscription",

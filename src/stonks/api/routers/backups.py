@@ -9,7 +9,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Response
 
-from stonks.api.deps import OptionalPrincipalDep, PrincipalDep, ServicesDep, require_permission
+from stonks.api.deps import (
+    OptionalPrincipalDep,
+    PageDep,
+    PrincipalDep,
+    ServicesDep,
+    require_permission,
+)
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.api.routers._jobs_common import JOB_CREATED, accepted
 from stonks.app.backups import (
@@ -22,6 +28,7 @@ from stonks.app.backups import (
     VerifyView,
 )
 from stonks.app.jobs import Job
+from stonks.app.pagination import Page, page_of
 from stonks.auth import Permission
 
 router = APIRouter(prefix="/api/backups", tags=["backups"], responses=PROBLEM_RESPONSES)
@@ -54,11 +61,11 @@ BackupId = Annotated[str, Path(max_length=64)]
 
 
 @router.get(
-    "", response_model=list[BackupView], operation_id="listBackups", dependencies=ADMIN_ONLY
+    "", response_model=Page[BackupView], operation_id="listBackups", dependencies=ADMIN_ONLY
 )
-def list_backups(services: ServicesDep) -> list[BackupView]:
+def list_backups(services: ServicesDep, page: PageDep) -> Page[BackupView]:
     """Backups under ``[backup].dir``, newest first."""
-    return services.backups.list()
+    return page_of(services.backups.list(), page)
 
 
 @router.post(

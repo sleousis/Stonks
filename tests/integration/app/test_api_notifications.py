@@ -107,14 +107,14 @@ def test_register_list_and_remove_a_browser(client):
     assert ENDPOINT not in resp.text and P256DH not in resp.text and AUTH_KEY not in resp.text
 
     listed = client.get("/api/push/subscriptions", headers=AUTH)
-    assert [d["id"] for d in listed.json()] == [device["id"]]
+    assert [d["id"] for d in listed.json()["items"]] == [device["id"]]
     assert ENDPOINT not in listed.text
 
     removed = client.request(
         "DELETE", "/api/push/subscriptions", json={"endpoint": ENDPOINT}, headers=AUTH
     )
     assert removed.status_code == 204
-    assert client.get("/api/push/subscriptions", headers=AUTH).json() == []
+    assert client.get("/api/push/subscriptions", headers=AUTH).json()["items"] == []
     again = client.request(
         "DELETE", "/api/push/subscriptions", json={"endpoint": ENDPOINT}, headers=AUTH
     )
@@ -125,7 +125,7 @@ def test_a_device_is_removed_by_its_id(client, settings):
     device = _subscribe(client).json()
     path = f"/api/push/subscriptions/{device['id']}"
     assert client.delete(path, headers=AUTH).status_code == 204
-    assert client.get("/api/push/subscriptions", headers=AUTH).json() == []
+    assert client.get("/api/push/subscriptions", headers=AUTH).json()["items"] == []
     assert client.delete(path, headers=AUTH).status_code == 404
 
 

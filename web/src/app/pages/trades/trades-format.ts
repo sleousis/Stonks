@@ -47,6 +47,6 @@ export function portfolioLive(
   options: readonly PortfolioRef[],
 ): boolean | null {
   const p = id ? options.find((o) => o.id === id) : options.find((o) => o.is_default);
-  if (!p?.mode) return null;
-  return p.mode === 'live';
+  if (!p?.trading) return null;
+  return p.trading === 'live';
 }

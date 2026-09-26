@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 
-import { unwrap } from './api-call';
+import { allItems, unwrap } from './api-call';
 import {
   completeConnectionPortal,
   connectWithKeys,
@@ -32,7 +32,7 @@ export class ConnectionsService {
   }
 
   list() {
-    return unwrap(listConnections());
+    return allItems((query) => unwrap(listConnections({ query })));
   }
 
   get(connectionId: string) {
@@ -40,7 +40,9 @@ export class ConnectionsService {
   }
 
   accounts(connectionId: string) {
-    return unwrap(listConnectionAccounts({ path: { connection_id: connectionId } }));
+    return allItems((query) =>
+      unwrap(listConnectionAccounts({ path: { connection_id: connectionId }, query })),
+    );
   }
 
   connectWithKeys(body: ConnectWithKeysRequestWritable) {
