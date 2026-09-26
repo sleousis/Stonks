@@ -95,12 +95,78 @@ About 60 trading books from three reading lists and the Axon "100 books" series,
 | 8.5 Alpaca submit crash window | A crash between an Alpaca submit and writing its pending row leaves that order unrecorded. Record the order as pending before submitting and reconcile unknown broker orders by client id. | `production/tick.py`, `execution/` |
 | 8.6 Splits and dividends in backtests | High priority, found by the book research. The engine and strategies trade on raw `close`, and the stored splits and dividends are never read, so a 10:1 split looks like a 90% loss and dividends are never credited. Use adjusted prices for signals, apply split ratios to holdings, and credit dividends as cash. | `backtest/`, `strategies/_common.py` |
 
+## Phase 9: Book-driven improvements
+
+This phase is roadmap item 7.7. It builds the backlog in `docs/research/book-lessons.md` (items BL-01 to BL-49) against the rules in `docs/principles.md`.
+
+Items 8.2, 8.5, 8.6, 6.6, 6.7 and 5.2 are already in progress and are not repeated here. BL-01 is 8.6, and BL-07 extends 6.6's `lab/parallel.py`.
+
+Each wave has up to six packages with disjoint file ownership. Each package also owns the test files for its own modules. The shared files are `config.py`, `config/default.toml`, `cli.py`, the API routers, the MCP server, `lab/catalog.py`, `pyproject.toml`, `tests/conftest.py` and the docs. They are only changed in the integration step after each wave.
+
+### Wave 1: foundations
+
+| WP | Scope | Owns |
+|----|-------|------|
+| 9.1.1 Trade ledger and metrics (BL-02, BL-03) | FIFO round trips and trade stats on `BacktestReport`; Sharpe with ddof=1, Sortino, Calmar, drawdown duration, skew, kurtosis, ES, turnover, costs paid. | `backtest/trades.py`, `backtest/metrics.py`, `backtest/report.py`, `backtest/simulated_broker.py`, `lab/backtesting.py` |
+| 9.1.2 Trial ledger and stats (BL-04, BL-05, BL-06) | Every trial recorded with hypothesis and premortem, plus a running count per strategy class; `stonks.stats` with PSR, MinTRL, DSR, bootstrap, HAC, CSCV and FDR; reproducibility manifest. | `lab/runner.py`, `lab/trials.py`, `lab/manifest.py`, `src/stonks/stats/*`, `registry/artifact.py`, `store/migrations_sqlite/006_lab_trials.sql` |
+| 9.1.3 Parallel lab (BL-07) | 6.6's pool extended to tuners: read-only snapshot lakes, one DuckDB connection per worker, spawned seeds per task, `TrialOutcome` with per-bar returns. | `lab/parallel.py`, `lab/tuning/*`, `lab/objectives.py`, `core/protocols.py`, `store/lake.py` |
+| 9.1.4 Portfolio construction seam (BL-08, BL-09) | `PortfolioConstructor` ABC and registry; signal normalisation; single-winner, equal-weight, inverse-vol and vol-target constructors; buffered `orders_from_targets`; volatility estimators; cross-sectional helpers. | `src/stonks/portfolio/*`, `features/volatility.py`, `features/cross_section.py` |
+| 9.1.5 Registries (BL-10, BL-11) | Survival-test registry with `quick` and `promotion` presets; `RiskRule` registry, `RiskContext`, and the existing caps as rules. | `lab/survival/registry.py`, `app/lab.py`, `production/risk.py`, `production/prices.py`, `production/rules/{__init__,caps}.py` |
+| 9.1.6 Governance and metadata (BL-24, BL-26) | Status-change audit; promotion needs a passing go-live or an override with a reason; strategy hypothesis, family, label horizon and required history. | `store/migrations_sqlite/007_status_changes.sql`, `registry/store.py`, `app/strategies.py`, `strategies/base.py` |
+
+Integration 1: realistic costs by default (BL-13), `[lab.parallel]`, the CLI and API flags, `scipy` as an explicit dependency.
+
+### Wave 2: validation gates and construction wiring
+
+| WP | Scope | Owns |
+|----|-------|------|
+| 9.2.1 Multi-strategy construction (BL-12) | One pipeline for the tick and the backtest replaces winner-take-all; per-strategy attribution; post-tick hook registry. | `production/tick.py`, `production/ranker.py`, `production/shadow.py`, `production/hooks.py`, `portfolio/pipeline.py`, `backtest/engine.py`, `store/migrations_sqlite/008_position_attribution.sql` |
+| 9.2.2 Selection-bias gates (BL-14, BL-15, BL-16) | Deflated Sharpe, PBO via CSCV, a PSR-based OOS gate with a 20-trade minimum. | `lab/survival/deflated_sharpe.py`, `lab/survival/pbo.py`, `lab/survival/oos.py` |
+| 9.2.3 Trade and cost robustness (BL-17, BL-18, BL-19) | Monte Carlo over trades; costs at 2× plus Carver's speed limit; parameter plateau; cross-instrument consistency. | `lab/survival/{mc_trades,cost_stress,plateau,cross_instrument}.py` |
+| 9.2.4 Walk-forward and windows (BL-20, BL-21) | Embargo, walk-forward efficiency, stitched PSR and parallel folds; validation windows for perturbation, runs and period stability; MCPT n=200. | `lab/dataset.py`, `lab/survival/{walk_forward,perturbation,runs_test,period_stability,permutation}.py` |
+| 9.2.5 Benchmarks (BL-22, BL-23) | Benchmark curve and stats, beta and alpha attribution, `benchmark_relative` test, tear-sheet report. | `backtest/benchmark.py`, `lab/backtesting.py`, `lab/survival/benchmark_relative.py`, `reporting/*` |
+| 9.2.6 Incubation go-live (BL-25) | At least 63 days or MinTRL, whichever is longer, and 20 trades; live results inside the Monte Carlo band; a promotion checklist. | `production/golive.py` |
+
+### Wave 3: risk, execution realism, research tools, data
+
+| WP | Scope | Owns |
+|----|-------|------|
+| 9.3.1 Risk rules (BL-27) | Per-position risk budget, portfolio volatility cap, drawdown scaling, liquidity, sector cap, maximum holding time. | `production/rules/{risk_per_position,portfolio_vol,drawdown_scaling,liquidity,sector_cap,max_holding}.py` |
+| 9.3.2 Circuit breaker and quit rule (BL-28, BL-29) | Monthly and weekly loss halts, a latched drawdown halt, an operational halt, a logged reset; the quit rule as a post-tick hook. | `production/rules/{circuit_breaker,operational_halt}.py`, `production/halts.py`, `production/quit_rule.py`, `production/health.py`, `store/migrations_sqlite/009_risk_halts.sql` |
+| 9.3.3 Execution realism (BL-30, BL-31) | Participation cap and partial fills, limit and stop fills from the bar range, gap guard, volatility-aware impact, per-ticker spreads. | `backtest/fills.py`, `backtest/simulated_broker.py`, `backtest/engine.py`, `backtest/costs.py`, `features/spread.py` |
+| 9.3.4 TCA and journal (BL-32) | Decision price and context on every order, implementation shortfall, `stonks tca` and journal services. | `core/types.py`, `store/migrations_sqlite/010_tca.sql`, `production/tca.py`, `production/tick.py`, `execution/reconcile.py` |
+| 9.3.5 Signal research (BL-33, BL-34, BL-35) | Signal IC analysis, event study against baseline drift, vs-random test. | `lab/signal_eval.py`, `lab/survival/event_study.py`, `lab/survival/vs_random.py` |
+| 9.3.6 Data integrity (BL-36, BL-37) | Statement audit, point-in-time universe membership, lab preflight. | `store/audit.py`, `store/migrations_duckdb/{011_statement_flags,012_universe_membership}.sql`, `store/lake.py`, `lab/universe.py`, `lab/preflight.py`, `lab/runner.py` |
+
+### Wave 4: strategies
+
+| WP | Scope | Owns |
+|----|-------|------|
+| 9.4.1 QuantMomentum (BL-38) | 12-2 momentum, top decile, frog-in-the-pan filter, quarterly rebalance. | `strategies/examples/quant_momentum.py`, `features/momentum.py` |
+| 9.4.2 Stocks on the Move (BL-39) | Regression slope × R² score, moving-average and gap filters, `atr_parity` constructor. | `strategies/examples/stocks_on_the_move.py`, `features/trend.py`, `portfolio/atr_parity.py` |
+| 9.4.3 Cross-asset trend (BL-40) | EWMAC, time-series momentum, all-time-high trend, `TrailingStopWrapper`. | `strategies/examples/{ewmac_trend,time_series_momentum,ath_trend}.py`, `strategies/trailing_stop.py`, `features/trend_following.py` |
+| 9.4.4 QuantValue (BL-41) | EBIT/TEV value with forensic screens (STA, SNOA, Beneish, Altman) and FP/FS quality; Piotroski and magic-formula modes. | `strategies/examples/quant_value.py`, `features/fundamentals.py`, `store/lake.py` |
+| 9.4.5 Composite regime filter (BL-42) | k-of-n `RegimeFilter` over macro, price trend, realised volatility, yield curve and higher-timeframe conditions. | `strategies/regime.py`, `features/regime_conditions.py` |
+| 9.4.6 Legacy defaults (BL-43) | Momentum 12-1 default, breakouts moved off single stocks, vol-scaled DSL stops, metadata backfill. | existing `strategies/examples/*.py`, `strategies/rules/*` |
+
+### Wave 5: advanced
+
+| WP | Scope | Owns |
+|----|-------|------|
+| 9.5.1 Optimising constructors (BL-44) | Covariance estimators, HRP, ERC, mean-variance with costs (cvxpy, wrapped), effective number of bets. | `portfolio/{covariance,hrp,erc,optimizers,diversification}.py` |
+| 9.5.2 ML hygiene (BL-45) | Purged and combinatorial CV, CPCV test, triple-barrier and uniqueness toolkit, bet sizing. | `lab/cv.py`, `lab/survival/cpcv.py`, `features/labels.py`, `features/ml.py`, `strategies/examples/trendline_meta_label.py`, `lab/dataset.py` |
+| 9.5.3 Latent regimes (BL-46) | Markov-switching regime filter; VIX term-structure condition. | `features/regimes.py`, `strategies/latent_regime.py`, `features/regime_conditions_vix.py`, `ingest/sources/yahoo.py` |
+| 9.5.4 Live monitoring (BL-47) | VaR/ES with violation ratio, alpha-decay monitor, correlation-to-pool test. | `production/risk_metrics.py`, `production/decay.py`, `lab/survival/pool_correlation.py`, `store/migrations_sqlite/011_risk_snapshots.sql` |
+| 9.5.5 Stress (BL-48) | Crisis windows, stress simulation, `VolForecaster` with GARCH (arch, wrapped). | `lab/survival/crisis.py`, `lab/survival/stress.py`, `features/vol_forecast.py` |
+| 9.5.6 Engineering guards (BL-49) | Point-in-time lake proxy, universe membership in engine and ranker, pyright, Hypothesis property tests, vectorised pre-screen. | `store/pit.py`, `lab/vectorized.py`, `pyrightconfig.json`, `backtest/engine.py`, `production/ranker.py`, `.github/workflows/ci.yml`, `tests/property/*` |
+
 ## Execution order
 
 1. Wave 1 in parallel: backtest (1.2, 1.3, 3.5), lab (1.4, 1.5, 3.3), production (2.3, 2.4, 2.5), broker (2.1, 2.2), data (3.4), strategies (3.1, 3.2, 4.2), and the service layer plus REST API for existing features (5.1).
 2. Merge, review the combined diff, fix confirmed findings.
 3. Wave 2: broker in the tick (2.6), reporting (4.1), go-live gate (4.3), API routes for the Wave 1 features, MCP server (5.3), Strategy Studio backend (5.5).
 4. In parallel with Wave 2: neurotrader888 ports (6.1 to 6.5) and book research (7.1 to 7.5).
-5. Integration and cleanup (8.1 to 8.6), then the book synthesis (7.6).
-6. Wave 3: Angular trader console (5.2) including the Strategy Studio UI (5.5), built against the finished API contract, then end-to-end tests (5.4), alongside the first book-driven improvements (7.7) and the port follow-ups (6.6).
-7. Final review, fix, re-review.
+5. Integration and cleanup (8.1 to 8.6), the port follow-ups (6.6, 6.7), and the book synthesis (7.6).
+6. Angular trader console (5.2) including the Strategy Studio UI (5.5), then end-to-end tests (5.4). This runs alongside Phase 9, which never touches `web/`.
+7. Phase 9 (7.7), once 8.2, 8.5, 8.6, 6.6 and 6.7 are merged. Waves 9.1 to 9.5 run in order, up to six agents per wave, each wave followed by its integration step (merge, wire the shared files, review, fix, full test run).
+8. Final review, fix, re-review.
