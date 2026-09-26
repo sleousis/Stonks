@@ -102,7 +102,7 @@ jobs:
           done
           docker logs stonks-ci | tail -n 20
           [ "$status" = healthy ]
-          docker exec stonks-ci stonks db init
+          docker run --rm stonks:ci stonks db init  # own container: serve holds the lake (one writer)
           docker exec stonks-ci test -f /app/web/dist/index.html
           docker exec stonks-ci sh -c 'test "$(id -u)" = 10001'
 
