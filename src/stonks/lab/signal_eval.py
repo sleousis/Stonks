@@ -81,6 +81,7 @@ from stonks.lab.parallel import (
 from stonks.logging import get_logger
 from stonks.stats.hac import newey_west_se
 from stonks.store.corporate_actions import LakeCorporateActions
+from stonks.strategies.base import strategy_data_tickers
 
 _log = get_logger("stonks.lab.signal_eval")
 
@@ -239,7 +240,7 @@ def map_over_tickers[T, R](
         problem = _unpicklable(strategy, dataset, fn, tasks[0])
         if problem is None:
             saved = PortableStrategy(strategy).__getstate__()["portable"]
-            with dataset_snapshot(dataset) as shipped:
+            with dataset_snapshot(dataset, strategy_data_tickers(strategy)) as shipped:
                 return run_tasks(
                     _run_fn,
                     [(fn, t) for t in tasks],

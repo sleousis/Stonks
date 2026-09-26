@@ -223,6 +223,10 @@ class StocksOnTheMove(BaseStrategy):
 
     # ---- internals ---------------------------------------------------------------
 
+    def data_tickers(self) -> tuple[str, ...]:
+        index = str(self.params["index_ticker"])
+        return (index,) if index else ()
+
     def _universe(self, lake: Any) -> list[str]:
         explicit = parse_universe(str(self.params["universe"]))
         if explicit:

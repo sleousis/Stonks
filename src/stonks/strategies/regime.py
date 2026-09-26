@@ -150,6 +150,17 @@ class RegimeFilter(InnerStrategyWrapper):
         self._bar_caches = LakeBarCaches()
         self._lakes: weakref.WeakKeyDictionary[Any, _LakeState] = weakref.WeakKeyDictionary()
 
+    def data_tickers(self) -> tuple[str, ...]:
+        """The inner strategy's data tickers plus every ticker a condition
+        reads (any string field whose name ends in ``ticker``)."""
+        own = [
+            value
+            for cond in self.conditions
+            for name, value in cond.spec().items()
+            if name.endswith("ticker") and isinstance(value, str) and value
+        ]
+        return tuple(dict.fromkeys([*super().data_tickers(), *own]))
+
     # ---- regime -------------------------------------------------------------------
 
     def _state(self, lake: Any) -> _LakeState:

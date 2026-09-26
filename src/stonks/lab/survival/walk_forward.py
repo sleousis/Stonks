@@ -92,6 +92,7 @@ from stonks.lab.survival.base import TuningSetup
 from stonks.lab.tuning.base import tune_and_fit
 from stonks.logging import get_logger
 from stonks.stats.sharpe import psr, return_moments
+from stonks.strategies.base import strategy_data_tickers
 
 _log = get_logger("stonks.lab.survival.walk_forward")
 
@@ -334,7 +335,8 @@ def run_folds(
         embargo_bars=_embargo_bars(context, strategy),
     )
     pooled = planned_workers(len(folds), max_workers=max_workers) > 1
-    with dataset_snapshot(context) if pooled else nullcontext(context) as shipped:
+    extra = strategy_data_tickers(strategy)
+    with dataset_snapshot(context, extra) if pooled else nullcontext(context) as shipped:
         return run_tasks(
             _run_fold,
             list(folds),

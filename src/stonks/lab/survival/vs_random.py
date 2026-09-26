@@ -52,7 +52,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.lab.backtesting import run_backtest
-from stonks.lab.dataset import scoring_window
+from stonks.lab.dataset import data_tickers, scoring_window
 from stonks.lab.parallel import PortableLake, planned_workers, run_tasks, task_seeds
 from stonks.lab.survival.base import TuningSetup
 from stonks.lab.survival.permutation import (
@@ -148,7 +148,7 @@ def _score(run: _Run, seed: int | None) -> tuple[float, float]:
         else:
             bars = bootstrap_noise_bars(run.history, run.train_end, block=run.block, seed=seed)
         with _modified_lake(
-            run.source.lake, run.context.universe, bars, run.interval, run.coarser
+            run.source.lake, data_tickers(run.context), bars, run.interval, run.coarser
         ) as lake:
             dataset = dataclasses.replace(run.context, lake=lake)
             strategy, tuned = tune_and_fit(run.strategy_cls, dataset, run.setup, run.fixed)
@@ -216,7 +216,7 @@ class VsRandomTest:
             )
         state = _Run(
             context=dataclasses.replace(context, lake=None),
-            source=PortableLake(context.lake, context.universe),
+            source=PortableLake(context.lake, data_tickers(context)),
             strategy_cls=type(strategy),
             fixed=setup.retune_fixed_params(strategy),
             setup=setup,

@@ -47,7 +47,7 @@ import pandas as pd
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.lab.backtesting import run_backtest
-from stonks.lab.dataset import LabDataset, ScoringWindow, scoring_window
+from stonks.lab.dataset import LabDataset, ScoringWindow, data_tickers, scoring_window
 from stonks.lab.lake_copy import copy_universe_lake
 from stonks.lab.parallel import PortableLake, PortableStrategy, run_tasks
 from stonks.logging import get_logger
@@ -98,7 +98,7 @@ class PerturbationTest:
                 noisy,
                 payload=_NoiseRun(
                     context=dataclasses.replace(context, lake=None),
-                    source=PortableLake(context.lake, context.universe),
+                    source=PortableLake(context.lake, data_tickers(context)),
                     strategy=PortableStrategy(strategy),
                     bars=bars,
                     z=z,
@@ -144,7 +144,7 @@ class _NoiseRun:
 
 
 def _noisy_curve(run: _NoiseRun, sigma: float) -> list[float]:
-    lake = _perturbed_lake(run.source.lake, run.context.universe, run.bars, run.z, sigma)
+    lake = _perturbed_lake(run.source.lake, data_tickers(run.context), run.bars, run.z, sigma)
     try:
         report = run_backtest(run.strategy.strategy, run.context, run.window, lake=lake)
     finally:
@@ -154,7 +154,8 @@ def _noisy_curve(run: _NoiseRun, sigma: float) -> list[float]:
 
 def _universe_bars(context: LabDataset, end: date) -> pd.DataFrame:
     """Every bar (all intervals, all history up to ``end``) for the
-    universe, in a deterministic row order so noise draws are stable."""
+    universe and the tickers the strategy reads (RS-01), in a
+    deterministic row order so noise draws are stable."""
     return context.lake.sql(
         """
         SELECT ticker, timestamp, interval, open, high, low, close, adj_close, volume
@@ -162,7 +163,7 @@ def _universe_bars(context: LabDataset, end: date) -> pd.DataFrame:
          WHERE ticker = ANY(?) AND CAST(timestamp AS DATE) <= ?
          ORDER BY ticker, interval, timestamp
         """,
-        [list(context.universe), end],
+        [data_tickers(context), end],
     )
 
 

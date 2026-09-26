@@ -118,6 +118,9 @@ class IntramarketDifferenceStrategy(SingleTickerLongFlat):
             *common_specs("ETH-USD.CC"),
         ]
 
+    def data_tickers(self) -> tuple[str, ...]:
+        return (str(self.params["reference_ticker"]),)
+
     def _evaluate(self, cache: BarCache, ticker: str, as_of: Any) -> dict[str, float] | None:
         lookback = int(self.params["lookback"])
         atr_lb = int(self.params["atr_lookback"])

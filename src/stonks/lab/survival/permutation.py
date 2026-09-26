@@ -39,7 +39,7 @@ from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.features.price_adjustment import SeriesAdjustment
 from stonks.lab.backtesting import run_backtest
-from stonks.lab.dataset import scoring_window
+from stonks.lab.dataset import data_tickers, scoring_window
 from stonks.lab.lake_copy import CORPORATE_ACTION_TABLES, copy_universe_lake
 from stonks.lab.parallel import PortableLake, PortableStrategy, run_tasks
 from stonks.lab.survival.base import TuningSetup
@@ -396,7 +396,7 @@ class PermutationScorer:
             return None
         return cls(
             context=dataclasses.replace(context, lake=None),
-            source=PortableLake(context.lake, context.universe),
+            source=PortableLake(context.lake, data_tickers(context)),
             strategy=PortableStrategy(strategy),
             evaluate=evaluate,
             interval=interval,
@@ -421,7 +421,11 @@ class PermutationScorer:
 
     def score(self, bars_by_ticker: dict[str, pd.DataFrame]) -> float:
         with _modified_lake(
-            self.source.lake, self.context.universe, bars_by_ticker, self.interval, self.coarser
+            self.source.lake,
+            data_tickers(self.context),
+            bars_by_ticker,
+            self.interval,
+            self.coarser,
         ) as lake:
             dataset = dataclasses.replace(self.context, lake=lake)
             return self.evaluate(self.strategy.strategy, dataset)
@@ -461,10 +465,13 @@ def permutation_p_value(real: float, permuted: list[float], *, minimize: bool = 
 def _history_bars(
     context: Any, interval: Interval, window: tuple[date, date]
 ) -> dict[str, tuple[pd.DataFrame, int]]:
-    """Per ticker: every dataset-interval bar up to the window end (all
-    earlier history included, for look-backs), back-adjusted as of its
-    last bar, and how many of them fall before the window start."""
+    """Per ticker of ``data_tickers(context)`` (the universe plus the
+    tickers the strategy reads, so references are permuted together with
+    the universe, RS-01): every dataset-interval bar up to the window end
+    (all earlier history included, for look-backs), back-adjusted as of
+    its last bar, and how many of them fall before the window start."""
     start, end = window
+    tickers = data_tickers(context)
     frame = context.lake.sql(
         """
         SELECT ticker, timestamp, open, high, low, close, adj_close, volume
@@ -472,9 +479,9 @@ def _history_bars(
          WHERE ticker = ANY(?) AND interval = ? AND CAST(timestamp AS DATE) <= ?
          ORDER BY ticker, timestamp
         """,
-        [list(context.universe), interval.code, end],
+        [tickers, interval.code, end],
     )
-    actions = LakeCorporateActions(context.lake).load(list(context.universe))
+    actions = LakeCorporateActions(context.lake).load(tickers)
     out: dict[str, tuple[pd.DataFrame, int]] = {}
     for ticker, bars in frame.groupby("ticker", sort=False):
         bars = _adjusted(bars.reset_index(drop=True), actions.for_ticker(str(ticker)))
@@ -496,7 +503,7 @@ def _adjusted(bars: pd.DataFrame, events: Sequence[Any]) -> pd.DataFrame:
 
 def _coarser_intervals(context: Any, interval: Interval) -> list[Interval]:
     codes = context.lake.sql(
-        "SELECT DISTINCT interval FROM bars WHERE ticker = ANY(?)", [list(context.universe)]
+        "SELECT DISTINCT interval FROM bars WHERE ticker = ANY(?)", [data_tickers(context)]
     )["interval"]
     found = [Interval.parse(c) for c in codes]
     return sorted((i for i in found if i.seconds > interval.seconds), key=lambda i: i.seconds)
