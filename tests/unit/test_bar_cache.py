@@ -106,6 +106,17 @@ def test_last_n_closes_is_a_float_array_of_the_close_column(lake):
     np.testing.assert_array_equal(closes, expected)
 
 
+def test_last_close_is_the_latest_bar_at_or_before_as_of(lake):
+    cache = BarCache(lake)
+    as_of = datetime(2026, 2, 7, 12)  # Saturday -> Friday's 20:00 bar
+    ts, close = cache.last_close("X.US", Interval.HOUR_1, as_of)
+    expected = get_last_n_bars(lake, "X.US", Interval.HOUR_1, as_of, 1)
+    assert ts == datetime(2026, 2, 6, 20)
+    assert close == float(expected["close"].iloc[0])
+    assert cache.last_close("X.US", Interval.HOUR_1, datetime(2026, 1, 5, 13)) is None
+    assert cache.last_close("NOPE.US", Interval.HOUR_1, as_of) is None
+
+
 def test_bars_between_is_inclusive_on_both_ends(lake):
     cache = BarCache(lake)
     start, end = datetime(2026, 1, 6, 15), datetime(2026, 1, 7, 15)

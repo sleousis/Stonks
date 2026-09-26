@@ -156,6 +156,18 @@ class BarCache:
         end = series.end_index(as_of)
         return series.closes[max(0, end - n) : end].copy()
 
+    def last_close(
+        self, ticker: str, interval: Interval, as_of: Any
+    ) -> tuple[datetime, float] | None:
+        """``(timestamp, close)`` of the latest bar with ``timestamp <= as_of``,
+        or ``None`` when there is none."""
+        series = self._get(ticker, interval)
+        end = series.end_index(as_of)
+        if end == 0:
+            return None
+        ts = pd.Timestamp(series.timestamps[end - 1]).to_pydatetime()
+        return ts, float(series.closes[end - 1])
+
     def bars_between(self, ticker: str, interval: Interval, start: Any, end: Any) -> pd.DataFrame:
         """Bars with ``start <= timestamp <= end``, oldest first, like
         ``lake.get_bars``."""
