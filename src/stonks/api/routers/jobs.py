@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import time
 from collections.abc import AsyncIterable
+from datetime import datetime
 from typing import Annotated, Literal
+from urllib.parse import urlencode
 
 import anyio
 from fastapi import APIRouter, Depends, Request
@@ -16,6 +18,8 @@ from stonks.app.jobs import Job, JobStatus
 from stonks.app.pagination import Page
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"], responses=PROBLEM_RESPONSES)
+#: The event stream authorizes itself (bearer *or* a job-scoped stream token).
+events_router = APIRouter(prefix="/api/jobs", tags=["jobs"], responses=PROBLEM_RESPONSES)
 
 
 class JobEvent(BaseModel):
@@ -56,13 +60,33 @@ def cancel_job(job_id: str, services: ServicesDep) -> Job:
     return services.jobs.cancel(job_id)
 
 
+class StreamToken(BaseModel):
+    token: str
+    expires_at: datetime
+    #: The events URL with the token attached, ready for ``new EventSource``.
+    events_url: str
+
+
+@router.post("/{job_id}/stream-token", response_model=StreamToken, operation_id="createStreamToken")
+def create_stream_token(job_id: str, services: ServicesDep) -> StreamToken:
+    """A short-lived token (``api.stream_token_ttl_seconds``) that lets a
+    client which cannot send the bearer header (browser ``EventSource``)
+    read this job's event stream, and nothing else."""
+    issued = services.jobs.stream_token(job_id)
+    return StreamToken(
+        token=issued.token,
+        expires_at=issued.expires_at,
+        events_url=f"/api/jobs/{job_id}/events?{urlencode({'token': issued.token})}",
+    )
+
+
 def _existing_job(job_id: str, services: ServicesDep) -> Job:
     # Resolved before the stream starts so an unknown id is a normal 404
     # instead of an error in the middle of a 200 event stream.
     return services.jobs.get(job_id)
 
 
-@router.get(
+@events_router.get(
     "/{job_id}/events",
     response_class=EventSourceResponse,
     operation_id="streamJobEvents",

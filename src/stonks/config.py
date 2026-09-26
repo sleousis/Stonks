@@ -180,6 +180,9 @@ class ApiConfig(BaseModel):
     max_concurrent_jobs: int = Field(default=2, ge=1)
     # A job event stream closes (event ``end``, reason ``timeout``) after this.
     sse_max_stream_seconds: float = Field(default=3600.0, gt=0)
+    # Lifetime of a job-scoped ``?token=`` for event streams (EventSource
+    # can't send the bearer header); see POST /api/jobs/{id}/stream-token.
+    stream_token_ttl_seconds: int = Field(default=300, ge=10, le=3600)
     default_page_size: int = Field(default=50, ge=1)
     max_page_size: int = Field(default=500, ge=1)
     ui_dist: Path = Path("web/dist")

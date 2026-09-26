@@ -33,5 +33,11 @@ API_ROUTERS: list[APIRouter] = [
     sources.router,
 ]
 
+#: Routers that run their own auth dependency instead of :func:`authorize`
+#: (the job event stream also accepts a job-scoped ``?token=``).
+STREAM_ROUTERS: list[APIRouter] = [
+    jobs.events_router,
+]
+
 #: Routers that stay open (liveness probes).
 PUBLIC_ROUTERS: list[APIRouter] = [health.router]

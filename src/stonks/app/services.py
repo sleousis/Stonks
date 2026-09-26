@@ -25,6 +25,7 @@ from stonks.app.orders import OrdersService
 from stonks.app.pagination import Page
 from stonks.app.portfolio import PortfolioService
 from stonks.app.strategies import StrategyService
+from stonks.app.stream_tokens import IssuedStreamToken, StreamTokenSigner
 from stonks.app.ticks import TickService
 from stonks.logging import get_logger
 
@@ -60,9 +61,10 @@ def _configured_secrets(context: AppContext) -> list[str]:
 class JobService:
     """Transport-facing view of the job runner."""
 
-    def __init__(self, runner: JobRunner) -> None:
+    def __init__(self, runner: JobRunner, stream_tokens: StreamTokenSigner) -> None:
         self._runner = runner
         self._store = runner.store
+        self._tokens = stream_tokens
 
     @property
     def kinds(self) -> list[str]:
@@ -103,6 +105,17 @@ class JobService:
             detail = f": {job.error}" if job.error else ""
             raise ConflictError(f"job {job_id} has no result; it is {job.status}{detail}")
         return model.model_validate(job.result)
+
+    def stream_token(self, job_id: str) -> IssuedStreamToken:
+        """A short-lived token that authorizes reading this job's event
+        stream only (see :mod:`stonks.app.stream_tokens`)."""
+        self._store.get(job_id)  # NotFoundError for an unknown job
+        token = self._tokens.issue(job_id)
+        _log.info("job.stream_token_issued", job_id=job_id, expires_at=token.expires_at)
+        return token
+
+    def verify_stream_token(self, job_id: str, token: str) -> bool:
+        return self._tokens.verify(token, job_id)
 
     def is_tracked(self, job_id: str) -> bool:
         """False once this process will never update the job again."""
@@ -146,7 +159,9 @@ class Services:
         return cls(
             context=context,
             runner=runner,
-            jobs=JobService(runner),
+            jobs=JobService(
+                runner, StreamTokenSigner(ttl_seconds=settings.api.stream_token_ttl_seconds)
+            ),
             catalog=catalog,
             portfolio=PortfolioService(context),
             strategies=strategies,

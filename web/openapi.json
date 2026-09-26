@@ -2040,6 +2040,30 @@
         "title": "StrategySummary",
         "type": "object"
       },
+      "StreamToken": {
+        "properties": {
+          "events_url": {
+            "title": "Events Url",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "expires_at",
+          "events_url"
+        ],
+        "title": "StreamToken",
+        "type": "object"
+      },
       "SurvivalReportView": {
         "properties": {
           "metrics": {
@@ -3313,6 +3337,25 @@
               "title": "Job Id",
               "type": "string"
             }
+          },
+          {
+            "description": "Stream token from POST /api/jobs/{job_id}/stream-token, for clients (browser EventSource) that cannot send the bearer header.",
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stream token from POST /api/jobs/{job_id}/stream-token, for clients (browser EventSource) that cannot send the bearer header.",
+              "title": "Token"
+            }
           }
         ],
         "responses": {
@@ -3401,6 +3444,94 @@
           }
         ],
         "summary": "Stream Job Events",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/jobs/{job_id}/stream-token": {
+      "post": {
+        "description": "A short-lived token (``api.stream_token_ttl_seconds``) that lets a\nclient which cannot send the bearer header (browser ``EventSource``)\nread this job's event stream, and nothing else.",
+        "operationId": "createStreamToken",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamToken"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Stream Token",
         "tags": [
           "jobs"
         ]
