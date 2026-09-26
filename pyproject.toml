@@ -23,6 +23,7 @@ dependencies = [
     "scipy>=1.14",
     "exchange-calendars>=4.13.2",
     "filelock>=4.0.3",
+    "pywebpush>=2.5.0",
 ]
 
 [project.scripts]
