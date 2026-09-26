@@ -220,6 +220,44 @@
         "title": "CoverageRow",
         "type": "object"
       },
+      "DataSourceInfo": {
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "default": {
+            "title": "Default",
+            "type": "boolean"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "id": {
+            "enum": [
+              "eodhd",
+              "yahoo"
+            ],
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "default",
+          "configured"
+        ],
+        "title": "DataSourceInfo",
+        "type": "object"
+      },
       "FillView": {
         "properties": {
           "fee": {
@@ -338,6 +376,15 @@
               }
             ],
             "title": "Since"
+          },
+          "source": {
+            "default": "eodhd",
+            "enum": [
+              "eodhd",
+              "yahoo"
+            ],
+            "title": "Source",
+            "type": "string"
           },
           "tickers": {
             "default": [],
@@ -3937,6 +3984,87 @@
         "summary": "List Snapshots",
         "tags": [
           "portfolio"
+        ]
+      }
+    },
+    "/api/sources": {
+      "get": {
+        "description": "Data sources an ingest request can name, and whether each is configured.",
+        "operationId": "listDataSources",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DataSourceInfo"
+                  },
+                  "title": "Response Listdatasources",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Sources",
+        "tags": [
+          "sources"
         ]
       }
     },

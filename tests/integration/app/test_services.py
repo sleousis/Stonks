@@ -554,3 +554,71 @@ def test_lab_run_on_registered_strategy_outside_catalog_is_accepted(settings, se
         assert svc.jobs.wait(job.id, timeout=60).status == "succeeded"
     finally:
         svc.shutdown()
+
+
+# ---- data sources -------------------------------------------------------------
+
+
+def test_ingest_source_literal_matches_source_registry():
+    from typing import get_args
+
+    from stonks.app.ingest import SourceId
+    from stonks.ingest.sources.registry import SOURCE_IDS
+
+    assert get_args(SourceId) == SOURCE_IDS
+
+
+def test_ingest_request_source_defaults_and_validates():
+    assert IngestRequest(kind="prices", tickers=["A.US"]).source == "eodhd"
+    assert IngestRequest(kind="prices", tickers=["A.US"], source="yahoo").source == "yahoo"
+    with pytest.raises(ValueError):
+        IngestRequest(kind="prices", tickers=["A.US"], source="bogus")
+
+
+def test_context_builds_sources_through_the_registry(settings):
+    from stonks.app.context import AppContext
+    from stonks.ingest.sources.yahoo import YahooDataSource
+
+    ctx = AppContext(settings)
+    assert isinstance(ctx.build_source("yahoo"), YahooDataSource)
+    with pytest.raises(ConfigurationError, match="EODHD_API_KEY"):
+        ctx.build_source("eodhd")
+    with pytest.raises(ConfigurationError):
+        ctx.build_source()  # default source is eodhd
+    with pytest.raises(ValidationError):
+        ctx.build_source("bogus")
+
+
+def test_ingest_submit_uses_the_requested_source(settings, seeded):
+    from stonks.app.context import AppContext
+    from stonks.app.services import Services
+    from tests.integration.app.conftest import FakeDataSource
+
+    svc = Services.create(AppContext(settings))  # no EODHD key
+    svc.start()
+    built: list[str | None] = []
+
+    def spy(source_id=None):
+        built.append(source_id)
+        return FakeDataSource()  # hermetic: never reach the real vendor
+
+    svc.context.build_source = spy  # type: ignore[method-assign]
+    try:
+        job = svc.ingest.submit(IngestRequest(kind="prices", tickers=["X.US"], source="yahoo"))
+        assert svc.jobs.wait(job.id, timeout=30).status == "succeeded"
+    finally:
+        svc.shutdown()
+    assert built and set(built) == {"yahoo"}
+
+
+def test_list_sources_reports_configuration(settings, seeded):
+    from stonks.app.context import AppContext
+    from stonks.app.services import Services
+
+    svc = Services.create(AppContext(settings))
+    by_id = {s.id: s for s in svc.ingest.sources()}
+    assert set(by_id) == {"eodhd", "yahoo"}
+    assert by_id["eodhd"].default is True
+    assert by_id["eodhd"].configured is False
+    assert "EODHD_API_KEY" in (by_id["eodhd"].detail or "")
+    assert by_id["yahoo"].configured is True

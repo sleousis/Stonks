@@ -14,6 +14,7 @@ from stonks.api.routers import (
     market,
     orders,
     portfolio,
+    sources,
     strategies,
     ticks,
 )
@@ -29,6 +30,7 @@ API_ROUTERS: list[APIRouter] = [
     lab.router,
     catalog.router,
     jobs.router,
+    sources.router,
 ]
 
 #: Routers that stay open (liveness probes).
