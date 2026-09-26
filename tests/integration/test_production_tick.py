@@ -100,3 +100,23 @@ def test_tick_with_no_active_strategies_is_noop(tmp_path, lake_trending):
         assert result.orders_placed == 0
     finally:
         state.close()
+
+
+def test_rerun_after_crash_before_snapshot_does_not_resubmit_filled_orders(tick_env):
+    """A tick that crashed after recording its fill but before the snapshot
+    is re-run for the same ``as_of``: the already-filled order must not be
+    submitted again, and its fill must not be applied a second time."""
+    lake, state, registry = tick_env
+    settings = TickSettings(universe=["UP.US"], threshold=0.0, initial_cash=10_000.0)
+    r1 = run_tick(state, lake, registry, settings, as_of=date(2026, 3, 20))
+    assert r1.fills == 1
+    # Simulate the crash: the snapshot never landed.
+    state.execute("DELETE FROM portfolio_snapshots")
+
+    r2 = run_tick(state, lake, registry, settings, as_of=date(2026, 3, 20))
+
+    assert r2.tick_id != r1.tick_id  # tick_runs ids stay unique per run
+    assert state.count_rows("tick_runs") == 2
+    assert state.count_rows("orders") == 1
+    assert state.count_rows("fills") == 1
+    assert r2.fills == 0

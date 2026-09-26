@@ -2,9 +2,11 @@
 
 Each invocation is a fresh process. State lives in SqliteState + DuckDBLake;
 the tick is stateless across runs. Orders are idempotent via a deterministic
-``client_id`` derived from (tick_id, strategy_id, ticker, side), so a crashed
-tick re-run on the same day will short-circuit duplicate submissions at the
-broker.
+``client_id`` derived from (as_of date, strategy_id, ticker, side) — not from
+the per-run ``tick_id``, which stays unique so every run gets its own
+``tick_runs`` row. Re-running a crashed tick for the same ``as_of`` therefore
+reproduces the same client_ids, and any order already recorded as ``filled``
+is skipped instead of being submitted (and applied to the portfolio) again.
 """
 
 from __future__ import annotations
@@ -116,7 +118,7 @@ def run_tick(
             tick_id=tick_id,
             strategy_id=winner_id,
             client_id=make_client_id(
-                tick_id=tick_id, strategy_id=winner_id, ticker=o.ticker, side=o.side
+                as_of=as_of, strategy_id=winner_id, ticker=o.ticker, side=o.side
             ),
         )
         for o in orders
@@ -128,6 +130,9 @@ def run_tick(
     for order in orders_with_tick:
         if dry_run:
             placed += 1
+            continue
+        if _already_filled(state, order.client_id):
+            log.info("tick.order.skipped_already_filled", client_id=order.client_id)
             continue
         try:
             fill = broker.place_order(order)
@@ -204,6 +209,14 @@ def _current_prices(lake: DuckDBLake, universe: Sequence[str], as_of: date) -> d
     if df.empty:
         return {}
     return {row.ticker: float(row.close) for row in df.itertuples(index=False)}
+
+
+def _already_filled(state: SqliteState, client_id: str | None) -> bool:
+    rows = state.sql(
+        "SELECT 1 FROM orders WHERE client_id = ? AND status = 'filled'",
+        [client_id],
+    )
+    return bool(rows)
 
 
 def _record_order(state: SqliteState, order: Order, status: OrderStatus) -> None:
