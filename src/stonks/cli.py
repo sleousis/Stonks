@@ -566,12 +566,20 @@ def registry_show(strategy_id: str) -> None:
         state.close()
 
 
+def _set_status_or_exit(registry: StrategyRegistry, strategy_id: str, status: str) -> None:
+    try:
+        registry.set_status(strategy_id, status)
+    except KeyError:
+        console.print(f"[red]no strategy with id {strategy_id!r}[/red]")
+        raise typer.Exit(code=1) from None
+
+
 @registry_app.command("promote")
 def registry_promote(strategy_id: str) -> None:
     settings = _settings()
     state, registry = _open_registry(settings)
     try:
-        registry.set_status(strategy_id, "active")
+        _set_status_or_exit(registry, strategy_id, "active")
         console.print(f"[green]{strategy_id} → active[/green]")
     finally:
         state.close()
@@ -582,7 +590,7 @@ def registry_retire(strategy_id: str) -> None:
     settings = _settings()
     state, registry = _open_registry(settings)
     try:
-        registry.set_status(strategy_id, "retired")
+        _set_status_or_exit(registry, strategy_id, "retired")
         console.print(f"[yellow]{strategy_id} → retired[/yellow]")
     finally:
         state.close()
