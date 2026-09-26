@@ -47,9 +47,22 @@ def _build_yahoo(cfg: SourcesConfig) -> DataSource:
     )
 
 
+def _build_defillama(cfg: SourcesConfig) -> DataSource:
+    from stonks.ingest.sources.defillama import DefiLlamaDataSource
+
+    llama = cfg.defillama
+    return DefiLlamaDataSource(
+        base_url=llama.base_url,
+        timeout_seconds=llama.timeout_seconds,
+        max_retries=llama.max_retries,
+        retry_backoff_seconds=llama.retry_backoff_seconds,
+    )
+
+
 _FACTORIES: dict[str, Callable[[SourcesConfig], DataSource]] = {
     "eodhd": _build_eodhd,
     "yahoo": _build_yahoo,
+    "defillama": _build_defillama,
 }
 
 SOURCE_IDS: tuple[str, ...] = tuple(_FACTORIES)

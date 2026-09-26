@@ -579,7 +579,8 @@
           "id": {
             "enum": [
               "eodhd",
-              "yahoo"
+              "yahoo",
+              "defillama"
             ],
             "title": "Id",
             "type": "string"
@@ -1152,7 +1153,8 @@
             "default": "eodhd",
             "enum": [
               "eodhd",
-              "yahoo"
+              "yahoo",
+              "defillama"
             ],
             "title": "Source",
             "type": "string"

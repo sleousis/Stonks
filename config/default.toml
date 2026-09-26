@@ -92,6 +92,13 @@ retry_backoff_seconds = 2.0
 # Yahoo rate-limits aggressively; space consecutive requests out.
 min_request_interval_seconds = 0.5
 
+[sources.defillama]
+# Free public API (no key); DeFi TVL per chain for `stonks ingest tvl`.
+base_url = "https://api.llama.fi"
+timeout_seconds = 30
+max_retries = 3
+retry_backoff_seconds = 1.0
+
 [brokers]
 # Broker `stonks tick` (CLI and API) trades through. "simulated" (default)
 # fills in memory against the last portfolio snapshot and needs no keys.

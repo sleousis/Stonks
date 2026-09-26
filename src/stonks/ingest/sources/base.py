@@ -17,6 +17,7 @@ from datetime import date
 from stonks.core.interval import Interval
 from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.schemas import (
+    DefiTvlRow,
     ExchangeInfo,
     FinancialStatementsBundle,
     IntradayBar,
@@ -32,6 +33,12 @@ class DataSourceError(RuntimeError):
     / ``json.JSONDecodeError`` / ``pydantic.ValidationError`` so genuine
     programmer bugs (KeyError, AttributeError, TypeError…) surface loudly
     instead of being silently filed as "ticker had no data."""
+
+
+class UnsupportedCapabilityError(DataSourceError):
+    """The source does not offer this kind of data at all (e.g. prices from
+    a DeFi-TVL vendor). A :class:`DataSourceError`, so the pipeline counts
+    the unit as failed and moves on instead of aborting the run."""
 
 
 class DataSource(ABC):
@@ -93,3 +100,15 @@ class DataSource(ABC):
         """
         del country_iso, indicator
         return ()
+
+    def fetch_chain_tvl(self, chain: str, since: date | None = None) -> Iterable[DefiTvlRow]:
+        """Return the daily DeFi total-value-locked series for one chain
+        (canonical lower-case name, e.g. ``"ethereum"``), optionally only
+        observations on or after ``since``.
+
+        Optional capability: sources without TVL data inherit this default,
+        which raises :class:`UnsupportedCapabilityError` so a mis-pointed
+        ``--source`` shows up as a failed unit instead of a silent empty run.
+        """
+        del since
+        raise UnsupportedCapabilityError(f"{self.source_id} does not serve DeFi TVL ({chain!r})")
