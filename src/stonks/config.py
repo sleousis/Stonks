@@ -11,7 +11,9 @@ import os
 import tomllib
 from pathlib import Path
 
-from pydantic import BaseModel
+from typing import Any
+
+from pydantic import BaseModel, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
@@ -54,6 +56,37 @@ class ProductionConfig(BaseModel):
     max_price_staleness_days: int = 7
 
 
+def _api_token_from_env() -> SecretStr | None:
+    token = os.environ.get("STONKS_API_TOKEN")
+    return SecretStr(token) if token else None
+
+
+class ApiConfig(BaseModel):
+    """REST API server (``stonks serve``). The bearer token is env-only
+    (``STONKS_API_TOKEN``) so it can never land in a checked-in TOML file."""
+
+    host: str = "127.0.0.1"
+    port: int = 8000
+    # The only browser origin CORS lets through (the Angular dev server).
+    ui_origin: str = "http://localhost:4200"
+    # GET routes skip the token when the peer is a loopback address.
+    open_reads_on_loopback: bool = True
+    # Extra Host header values accepted besides localhost / 127.0.0.1 / ::1.
+    allowed_hosts: list[str] = []
+    max_concurrent_jobs: int = Field(default=2, ge=1)
+    default_page_size: int = Field(default=50, ge=1)
+    max_page_size: int = Field(default=500, ge=1)
+    ui_dist: Path = Path("web/dist")
+    token: SecretStr | None = Field(default_factory=_api_token_from_env)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_file_token(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "token" in data:
+            raise ValueError("api.token must not be set in config; use STONKS_API_TOKEN")
+        return data
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -63,6 +96,7 @@ class Settings(BaseSettings):
     logging: LoggingConfig = LoggingConfig()
     sources: SourcesConfig = SourcesConfig()
     production: ProductionConfig = ProductionConfig()
+    api: ApiConfig = Field(default_factory=ApiConfig)
 
 
 def load_settings(config_path: Path | None = None) -> Settings:
