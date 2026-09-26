@@ -107,7 +107,8 @@
             <ul class="sync-list">
               @for (p of r.portfolios; track p.portfolio_id + p.external_account_id) {
                 <li>
-                  <strong>{{ portfolioName(p.portfolio_id) }}</strong>:
+                  <strong>{{ portfolioName(p.portfolio_id) }}</strong
+                  >:
                   <span class="num">{{ p.positions }}</span>
                   {{ p.positions === 1 ? 'position' : 'positions' }},
                   <span class="num">{{ p.activities_new }}</span> new

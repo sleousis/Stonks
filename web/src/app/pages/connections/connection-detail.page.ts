@@ -91,9 +91,7 @@ export class ConnectionDetailPage implements OnInit {
   }
 
   async link(choice: LinkChoice): Promise<void> {
-    const target = choice.portfolioId
-      ? this.portfolioName(choice.portfolioId)
-      : 'a new portfolio';
+    const target = choice.portfolioId ? this.portfolioName(choice.portfolioId) : 'a new portfolio';
     const ok = await this.confirm.confirm({
       title: `Link ${choice.account.name}?`,
       message: `Each sync copies its positions and cash into ${target}. Nothing is traded.`,

@@ -10,8 +10,7 @@ export default [
     // Before ':id', so the portal's return address is not read as an id.
     path: 'callback',
     title: 'Finishing your connection',
-    loadComponent: () =>
-      import('./connection-callback.page').then((m) => m.ConnectionCallbackPage),
+    loadComponent: () => import('./connection-callback.page').then((m) => m.ConnectionCallbackPage),
   },
   {
     path: ':id',

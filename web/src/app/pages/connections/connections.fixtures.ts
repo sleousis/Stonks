@@ -54,8 +54,8 @@ export function account(over: Partial<ConnectedAccountView> = {}): ConnectedAcco
 /** A SessionService stand-in that grants everything, or nothing (a viewer). */
 export function sessionStub(allowed: boolean) {
   return {
-    can: (_p: Permission) => allowed,
-    whyNot: (_p: Permission) => (allowed ? null : 'Traders only.'),
+    can: (permission: Permission) => allowed || !permission,
+    whyNot: (permission: Permission) => (allowed || !permission ? null : 'Traders only.'),
     me: signal(null),
     // Read by the session interceptor on every unsafe call.
     csrfToken: () => null,
