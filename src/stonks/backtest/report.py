@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from stonks.backtest.calendar import calendar_for_universe
+from stonks.backtest.corporate_actions import CorporateActionRecord
 from stonks.core.interval import Interval
 from stonks.core.types import AssetClass
 
@@ -54,6 +55,10 @@ class BacktestReport:
     #: returns but no negative ones ("all upside") and ``0.0`` when there are
     #: no positive returns at all (either all-flat or all-loss).
     profit_factor: float = 0.0
+    #: Splits and dividends applied to held positions, in order; they
+    #: explain equity-curve jumps (a dividend credits cash, a split changes
+    #: the share count at unchanged value).
+    corporate_actions: tuple[CorporateActionRecord, ...] = ()
 
 
 def compute_report(
@@ -61,9 +66,11 @@ def compute_report(
     equity_dates: Sequence[date],
     equity_curve: Sequence[float],
     periods_per_year: float = _TRADING_DAYS_PER_YEAR,
+    corporate_actions: Iterable[CorporateActionRecord] = (),
 ) -> BacktestReport:
     dates = list(equity_dates)
     curve = list(equity_curve)
+    events = tuple(corporate_actions)
     if not curve:
         return BacktestReport(
             strategy_id=strategy_id,
@@ -73,6 +80,7 @@ def compute_report(
             sharpe=0.0,
             max_drawdown=0.0,
             cagr=0.0,
+            corporate_actions=events,
         )
 
     start = curve[0]
@@ -122,6 +130,7 @@ def compute_report(
         max_drawdown=max_dd,
         cagr=cagr,
         profit_factor=profit_factor,
+        corporate_actions=events,
     )
 
 
