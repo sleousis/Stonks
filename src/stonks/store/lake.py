@@ -1104,6 +1104,79 @@ class DuckDBLake:
                 )
         return len(flags)
 
+    # ---- universe membership (BL-37, migration 015) --------------------------
+
+    _UNIVERSE_MEMBERSHIP_COLS = ("universe_id", "ticker", "start_date", "end_date")
+
+    def upsert_universe_membership(self, df: pd.DataFrame) -> int:
+        """Upsert membership spans keyed on ``(universe_id, ticker,
+        start_date)``. ``end_date`` (optional column, NULL for an open span)
+        is the first day the ticker is no longer a member."""
+        if df.empty:
+            return 0
+        df = df.reindex(columns=list(self._UNIVERSE_MEMBERSHIP_COLS))
+        start = pd.to_datetime(df["start_date"])
+        end = pd.to_datetime(df["end_date"])
+        bad = end.notna() & (end <= start)
+        if bad.any():
+            rows = df[bad][["ticker", "start_date", "end_date"]].to_dict("records")
+            raise ValueError(f"universe_membership: end_date must be after start_date: {rows}")
+        df = df.assign(
+            start_date=[d.date() for d in start],
+            end_date=[None if pd.isna(d) else d.date() for d in end],
+        )
+        return self._upsert(
+            df,
+            table="universe_membership",
+            cols=self._UNIVERSE_MEMBERSHIP_COLS,
+            pk=("universe_id", "ticker", "start_date"),
+        )
+
+    def members_as_of(self, universe_id: str, as_of: Any) -> list[str]:
+        """Tickers in ``universe_id`` on ``as_of``, sorted."""
+        return self.members_between(universe_id, as_of, as_of)
+
+    def members_between(self, universe_id: str, start: Any, end: Any) -> list[str]:
+        """Tickers in ``universe_id`` on at least one day of ``[start,
+        end]``, sorted. Names that left or were delisted inside the window
+        are included."""
+        rows = self.con.execute(
+            """
+            SELECT DISTINCT ticker FROM universe_membership
+             WHERE universe_id = ? AND start_date <= ?
+               AND (end_date IS NULL OR end_date > ?)
+             ORDER BY ticker
+            """,
+            [universe_id, _as_calendar_date(end), _as_calendar_date(start)],
+        ).fetchall()
+        return [r[0] for r in rows]
+
+    def universe_ids(self) -> list[str]:
+        """Every universe with at least one membership row, sorted."""
+        rows = self.con.execute(
+            "SELECT DISTINCT universe_id FROM universe_membership ORDER BY universe_id"
+        ).fetchall()
+        return [r[0] for r in rows]
+
+    def get_universe_membership(
+        self, universe_id: str | None = None, tickers: list[str] | None = None
+    ) -> pd.DataFrame:
+        """Membership spans, optionally narrowed to one universe or some
+        tickers."""
+        where, params = [], []
+        if universe_id is not None:
+            where.append("universe_id = ?")
+            params.append(universe_id)
+        if tickers is not None:
+            where.append("ticker = ANY(?)")
+            params.append(list(tickers))
+        clause = f"WHERE {' AND '.join(where)}" if where else ""
+        df = self.con.execute(
+            f"SELECT * FROM universe_membership {clause} ORDER BY universe_id, ticker, start_date",
+            params,
+        ).fetchdf()
+        return _dates_to_python(df, ("start_date", "end_date"))
+
     def get_statement_flags(
         self, ticker: str | None = None, *, severity: str | None = None
     ) -> pd.DataFrame:
