@@ -184,9 +184,26 @@ def test_tick_posts_the_fire_date_and_waits_for_the_job():
     assert out.status == "succeeded" and out.detail["tick_id"] == "tick_2026-09-25_x"
     method, path, body = api.requests[0]
     assert (method, path) == ("POST", "/api/ticks")
-    assert body == {"as_of": "2026-09-25", "tickers": ["AAPL.US"], "dry_run": False}
+    # the configured universe: a full tick, not a scoped one (TO-04)
+    assert body == {
+        "as_of": "2026-09-25",
+        "tickers": ["AAPL.US"],
+        "scoped": False,
+        "dry_run": False,
+    }
     assert sleeps == [1.5, 1.5]  # queued, running, then succeeded
     assert api.requests[-1][1] == "/api/ticks/jobs/job_1/result"
+
+
+def test_a_tick_job_with_its_own_tickers_is_scoped():
+    """TO-04: a job's ``params.tickers`` (the crypto tick) must leave other
+    holdings alone."""
+    api = FakeApi(result={"tick_id": "t", "status": "ok", "orders_placed": 0, "fills": 0})
+    ex, _ = _executor(api)
+    ctx, _ = _ctx(ex, "tick", FRIDAY, tickers=["BTC-USD.CC"])
+    ex.execute(ctx)
+    body = api.requests[0][2]
+    assert body["tickers"] == ["BTC-USD.CC"] and body["scoped"] is True
 
 
 def test_ingest_posts_the_lookback_window():

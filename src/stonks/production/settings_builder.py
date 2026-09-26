@@ -34,10 +34,14 @@ class TickRuntime:
         return load_tick_plan(state, self.settings)
 
 
-def build_tick_settings(settings: Settings, universe: Sequence[str]) -> TickSettings:
+def build_tick_settings(
+    settings: Settings, universe: Sequence[str], *, scoped: bool = False
+) -> TickSettings:
     """Simulated fill costs follow ``SimulatedCosts.from_settings``:
     ``[backtest.costs]`` when configured (legacy ``[production]``
-    ``slippage_bps`` / ``fee_per_trade`` then ignored), else the legacy pair."""
+    ``slippage_bps`` / ``fee_per_trade`` then ignored), else the legacy pair.
+    ``scoped``: the universe was narrowed by the caller (explicit tickers),
+    so holdings outside it are left alone (``TickSettings.scoped``)."""
     p = settings.production
     costs = SimulatedCosts.from_settings(settings)
     return TickSettings(
@@ -55,10 +59,13 @@ def build_tick_settings(settings: Settings, universe: Sequence[str]) -> TickSett
         construction=p.construction,
         model_books=p.model_books,
         quit_rule=p.quit_rule,
+        scoped=scoped,
     )
 
 
-def build_tick_runtime(settings: Settings, universe: Sequence[str]) -> TickRuntime:
+def build_tick_runtime(
+    settings: Settings, universe: Sequence[str], *, scoped: bool = False
+) -> TickRuntime:
     """The simulated default gets no factory (the tick builds its in-memory
     broker, no keys needed). ``alpaca`` is strictly opt-in via
     ``[brokers].kind``; its factory connects lazily, inside the tick, so a
@@ -70,7 +77,7 @@ def build_tick_runtime(settings: Settings, universe: Sequence[str]) -> TickRunti
             return make_broker(settings, portfolio)
 
     return TickRuntime(
-        settings=build_tick_settings(settings, universe),
+        settings=build_tick_settings(settings, universe, scoped=scoped),
         notifier=notifier_from_settings(settings),
         broker_factory=factory,
         books_from_subscriptions=settings.production.books_from_subscriptions,

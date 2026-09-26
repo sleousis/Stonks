@@ -170,6 +170,11 @@ class TickSettings:
     model_books: Literal["shadow", "all"] = "shadow"
     #: ``[production.quit_rule]``: read by the ``quit_rule`` tick hook.
     quit_rule: QuitRuleSettings = field(default_factory=QuitRuleSettings)
+    #: A scoped tick (explicit tickers, e.g. a crypto-only job) trades only
+    #: tickers of ``universe``: holdings outside it are marked but never
+    #: traded, not even sold (TO-04). The full tick over the configured
+    #: universe is unscoped, so a holding that left the universe is sold.
+    scoped: bool = False
 
     def __post_init__(self) -> None:
         self.simulated_costs  # noqa: B018 - validates costs vs legacy (not both)
@@ -775,6 +780,14 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         )
     risk_adjustments = list(pipeline.adjustments)
     slice_policy = book_input.risk_overrides.get(winner_id) if winner_id else None
+    proposed = pipeline.orders
+    outside: list[str] = []
+    if settings.scoped:
+        allowed = set(universe)
+        outside = sorted({o.ticker for o in proposed if o.ticker not in allowed})
+        if outside:
+            log.info("tick.outside_universe_skipped", tickers=outside)
+        proposed = [o for o in proposed if o.ticker in allowed]
 
     halt = run_gates(
         GateContext(
@@ -787,7 +800,6 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         ),
         log,
     )
-    proposed = pipeline.orders
     if halt is not None:
         log.warning("tick.portfolio_halted", halt=halt.halt, gate=halt.gate, reason=halt.reason)
         proposed = [] if halt.halt == "all" else [o for o in proposed if o.side == "sell"]
@@ -991,6 +1003,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                 else {}
             ),
             "stale_buys_dropped": pipeline.stale_buys,
+            **({"outside_universe_skipped": outside} if outside else {}),
             **({"open_order_conflicts": open_conflicts} if open_conflicts else {}),
             **(
                 {"halted": {"halt": halt.halt, "gate": halt.gate, "reason": halt.reason}}

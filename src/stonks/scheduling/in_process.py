@@ -37,6 +37,7 @@ from stonks.scheduling.jobs import (
     RunContext,
     build_job_specs,
     closed_day_outcome,
+    job_is_scoped,
     job_universe,
     universes_outcome,
 )
@@ -127,6 +128,7 @@ def in_process_tick(ctx: RunContext) -> JobOutcome:
         TickRequest(
             as_of=ctx.fire.as_of,
             tickers=universe,
+            scoped=job_is_scoped(ctx),
             dry_run=bool(ctx.params.get("dry_run", False)),
         )
     )

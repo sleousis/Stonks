@@ -2125,6 +2125,7 @@ Costs of a group of orders, weighted by notional, in bps.
 | `as_of` | date \| null | no |  |
 | `asset_class` | "equity" \| "crypto" \| "commodity" \| "bond" \| null | no |  |
 | `dry_run` | boolean | no |  |
+| `scoped` | boolean \| null | no | Trade only the tick's tickers and leave other holdings alone, not even selling them. Default: true when tickers or asset_class narrow the universe. |
 | `tickers` | list[string] \| null | no |  |
 
 ### TickResultView

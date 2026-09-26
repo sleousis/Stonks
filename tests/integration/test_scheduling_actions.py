@@ -109,6 +109,25 @@ def test_tick_with_crypto_in_the_universe_runs_on_weekends(settings):
     assert get_action("tick")(ctx).status == "succeeded"
 
 
+@pytest.mark.parametrize(("params", "scoped"), [({}, False), ({"tickers": ["BTC-USD.CC"]}, True)])
+def test_a_tick_job_with_its_own_tickers_runs_scoped(settings, monkeypatch, params, scoped):
+    """TO-04: ``params.tickers`` narrows the tick, so holdings outside it
+    are left alone; the configured universe runs the full tick."""
+    from stonks.production import settings_builder
+
+    seen: list[bool] = []
+    real = settings_builder.build_tick_runtime
+
+    def spy(settings_, universe, *, scoped=False):
+        seen.append(scoped)
+        return real(settings_, universe, scoped=scoped)
+
+    monkeypatch.setattr(settings_builder, "build_tick_runtime", spy)
+    ctx, _ = _ctx(settings, "tick", date(2026, 9, 25), **params)
+    assert get_action("tick")(ctx).status == "succeeded"
+    assert seen == [scoped]
+
+
 def test_tick_skip_can_be_disabled(settings):
     ctx, _ = _ctx(settings, "tick", date(2026, 11, 26), skip_closed_days=False)
     assert get_action("tick")(ctx).status == "succeeded"

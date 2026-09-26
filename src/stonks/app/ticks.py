@@ -36,6 +36,20 @@ class TickRequest(BaseModel):
     #: Overrides ``[production].universe``.
     tickers: list[str] | None = None
     asset_class: AssetClass | None = None
+    scoped: bool | None = Field(
+        default=None,
+        description=(
+            "Trade only the tick's tickers and leave other holdings alone, not even"
+            " selling them. Default: true when tickers or asset_class narrow the"
+            " universe."
+        ),
+    )
+
+    @property
+    def is_scoped(self) -> bool:
+        if self.scoped is not None:
+            return self.scoped
+        return bool(self.tickers) or self.asset_class is not None
 
 
 class TickRunView(BaseModel):
@@ -111,7 +125,7 @@ class TickService:
                     raise ValidationError(
                         f"no instruments in the universe match asset_class={request.asset_class!r}"
                     )
-            runtime = build_tick_runtime(self._ctx.settings, universe)
+            runtime = build_tick_runtime(self._ctx.settings, universe, scoped=request.is_scoped)
             try:
                 result = run_tick(
                     state=state,

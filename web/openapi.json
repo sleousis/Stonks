@@ -9049,6 +9049,18 @@
             "title": "Dry Run",
             "type": "boolean"
           },
+          "scoped": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Trade only the tick's tickers and leave other holdings alone, not even selling them. Default: true when tickers or asset_class narrow the universe.",
+            "title": "Scoped"
+          },
           "tickers": {
             "anyOf": [
               {

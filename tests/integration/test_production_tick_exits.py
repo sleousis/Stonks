@@ -223,3 +223,60 @@ def test_stale_close_blocks_new_buys(env):
     assert result.fills == 0
     snap = _latest_snapshot(state)
     assert snap["total_value"] == pytest.approx(5_000.0 + 200.0)  # UP's last close is 200
+
+
+# ---- TO-04: a scoped tick never trades holdings outside its tickers ---------------
+
+
+class RankAndRotate(BuyAndHold):
+    """Ranks its target (BuyAndHold's score), then sells every holding it
+    didn't pick and buys one share of the target: a momentum-like rotation."""
+
+    decide = ExitWhenUnpicked.decide
+
+
+def _summary(state, tick_id):
+    return json.loads(state.sql("SELECT summary_json FROM tick_runs WHERE id = ?", [tick_id])[0][0])
+
+
+def test_a_scoped_tick_leaves_holdings_outside_its_tickers_alone(env):
+    """The documented crypto tick: an equity holding, a crypto-only universe.
+    Nothing ranks, the owner decides exits, and none of them may trade."""
+    lake, state, registry = env
+    sid = _register(registry, ExitWhenUnpicked({"ticker": "UP.US", "allocation": 1.0}))
+    _hold(state, sid, {"DOWN.US": 10.0})
+
+    settings = TickSettings(universe=["UP.US"], initial_cash=10_000.0, scoped=True)
+    run_tick(state, lake, registry, settings, as_of=AS_OF)
+
+    assert state.sql("SELECT ticker FROM orders WHERE side = 'sell'") == []
+    snap = state.sql("SELECT positions_json FROM portfolio_snapshots ORDER BY id DESC LIMIT 1")
+    assert not snap or json.loads(snap[0]["positions_json"]) == {"DOWN.US": 10.0}
+
+
+def test_a_scoped_winner_trades_inside_its_tickers_only(env):
+    lake, state, registry = env
+    sid = _register(registry, RankAndRotate({"ticker": "UP.US", "allocation": 1.0}))
+    _hold(state, sid, {"DOWN.US": 10.0}, cash=1_000.0)
+
+    settings = TickSettings(universe=["UP.US"], initial_cash=10_000.0, scoped=True)
+    result = run_tick(state, lake, registry, settings, as_of=AS_OF)
+
+    rows = state.sql("SELECT ticker, side FROM orders WHERE tick_id = ?", [result.tick_id])
+    assert [(r["ticker"], r["side"]) for r in rows] == [("UP.US", "buy")]
+    assert _summary(state, result.tick_id)["outside_universe_skipped"] == ["DOWN.US"]
+    assert json.loads(_latest_snapshot(state)["positions_json"])["DOWN.US"] == 10.0
+
+
+def test_the_full_universe_tick_still_sells_a_dropped_holding(env):
+    """Unscoped (the configured universe): a holding that left the universe
+    is still sold, as before."""
+    lake, state, registry = env
+    sid = _register(registry, RankAndRotate({"ticker": "UP.US", "allocation": 1.0}))
+    _hold(state, sid, {"DOWN.US": 10.0}, cash=1_000.0)
+
+    settings = TickSettings(universe=["UP.US"], initial_cash=10_000.0)
+    result = run_tick(state, lake, registry, settings, as_of=AS_OF)
+
+    rows = state.sql("SELECT ticker, side FROM orders WHERE tick_id = ?", [result.tick_id])
+    assert ("DOWN.US", "sell") in [(r["ticker"], r["side"]) for r in rows]

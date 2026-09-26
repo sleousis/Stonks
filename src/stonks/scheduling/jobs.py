@@ -157,6 +157,12 @@ class JobExecutor(ABC):
 MembersResolver = Callable[[str, date], list[str]]
 
 
+def job_is_scoped(ctx: RunContext) -> bool:
+    """A job with its own ``params.tickers`` (e.g. a crypto-only tick)
+    covers only those tickers: its tick must leave other holdings alone."""
+    return bool(ctx.params.get("tickers"))
+
+
 def job_universe(ctx: RunContext, members: MembersResolver | None = None) -> list[str]:
     """``params.tickers``, else ``[production].universe``. A universe id
     there is resolved on the fire's date through ``members``; without a

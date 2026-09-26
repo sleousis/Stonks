@@ -35,6 +35,7 @@ from stonks.scheduling.jobs import (
     RunContext,
     closed_day_outcome,
     ensure_window,
+    job_is_scoped,
     job_universe,
     universes_outcome,
 )
@@ -124,7 +125,7 @@ def tick_action(ctx: RunContext) -> JobOutcome:
             closed = closed_day_outcome(ctx, universe, lake.get_asset_classes(universe))
             if closed is not None:
                 return closed
-            runtime = build_tick_runtime(settings, universe)
+            runtime = build_tick_runtime(settings, universe, scoped=job_is_scoped(ctx))
             try:
                 result = run_tick(
                     state=state,
