@@ -38,6 +38,7 @@ export const routes: Routes = [
   // ops: halts, schedule and backups, data quality, universes
   { path: 'ops', loadChildren: () => import('./pages/ops/ops.routes') },
   { path: 'universes', loadChildren: () => import('./pages/universes/universes.routes') },
+  { path: 'help', loadChildren: () => import('./pages/help/help.routes') },
   {
     path: '**',
     title: 'Not found',

@@ -5,7 +5,7 @@ import { TicksService } from '../api/ticks.service';
 import { type PaletteCommand, CommandRegistry } from '../core/commands/command-registry';
 import { type KeySequence, ShortcutsService } from '../core/commands/shortcuts.service';
 import { ConfirmService } from '../core/confirm/confirm.service';
-import { WIKI_GLOSSARY_URL } from '../core/help/glossary';
+import { GLOSSARY_PATH } from '../core/help/glossary';
 import { JobsService } from '../core/jobs/jobs.service';
 import { ToastService } from '../core/notify/toast.service';
 import { ThemeService } from '../core/theme/theme.service';
@@ -119,9 +119,7 @@ export function registerShellCommands(): void {
       label: 'Open the glossary',
       group: 'Actions',
       keywords: ['help', 'metrics', 'definitions', 'sharpe'],
-      run: () => {
-        globalThis.open?.(WIKI_GLOSSARY_URL, '_blank', 'noopener');
-      },
+      run: () => void router.navigateByUrl(GLOSSARY_PATH),
     },
   ];
 

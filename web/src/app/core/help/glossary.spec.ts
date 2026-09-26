@@ -1,4 +1,4 @@
-import { GLOSSARY, METRIC_KEYS, WIKI_GLOSSARY_URL, findGlossary } from './glossary';
+import { GLOSSARY, METRIC_KEYS, findGlossary, glossaryUrl } from './glossary';
 
 /**
  * Every metric label a shared tile, table column or survival-test row shows
@@ -155,7 +155,8 @@ describe('glossary', () => {
     expect(findGlossary(null)).toBeNull();
   });
 
-  it('links to the wiki glossary', () => {
-    expect(WIKI_GLOSSARY_URL).toBe('https://github.com/sleousis/Stonks/wiki/Glossary');
+  it('links to the in-app glossary, never an outside wiki (UI-13)', () => {
+    expect(glossaryUrl()).toBe('/help/glossary');
+    expect(glossaryUrl('sharpe')).toBe('/help/glossary#sharpe');
   });
 });

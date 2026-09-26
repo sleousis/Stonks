@@ -1,12 +1,18 @@
 // Plain-English, one-line explanations of every figure the console shows.
 // The single source for in-app help: <app-help-tip>, stat tiles and table
-// headers look terms up here by key or by their visible label. Longer
-// definitions live on the wiki Glossary page, which every tip links to.
+// headers look terms up here by key or by their visible label. Every tip
+// links to the in-app glossary page (/help/glossary), built from this file.
 //
 // Add a metric: add a key to METRIC_KEYS, an entry below (the compiler
 // insists), and any labels or API keys it appears under as `aliases`.
 
-export const WIKI_GLOSSARY_URL = 'https://github.com/sleousis/Stonks/wiki/Glossary';
+/** The in-app glossary page. Each term has an anchor named after its key. */
+export const GLOSSARY_PATH = '/help/glossary';
+
+/** `/help/glossary#max_drawdown`, or the page itself without a key. */
+export function glossaryUrl(key?: string): string {
+  return key ? `${GLOSSARY_PATH}#${key}` : GLOSSARY_PATH;
+}
 
 export const METRIC_KEYS = [
   // Returns

@@ -30,6 +30,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { path: '/ops/data-quality', label: 'Data quality', key: 'q', group: 'System' },
   { path: '/health', label: 'Health', key: 'h', group: 'System' },
   { path: '/settings', label: 'Settings', key: ',', group: 'System' },
+  { path: '/help/glossary', label: 'Glossary', key: 'i', group: 'System' },
 ];
 
 /** Groups under the "Advanced" fold. 'You' sits above it. */

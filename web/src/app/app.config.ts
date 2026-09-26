@@ -38,7 +38,7 @@ export const appConfig: ApplicationConfig = {
     provideRouter(
       protectRoutes(routes),
       withComponentInputBinding(),
-      withInMemoryScrolling({ scrollPositionRestoration: 'top' }),
+      withInMemoryScrolling({ scrollPositionRestoration: 'top', anchorScrolling: 'enabled' }),
     ),
     { provide: TitleStrategy, useClass: StonksTitleStrategy },
     ...provideApi(),
