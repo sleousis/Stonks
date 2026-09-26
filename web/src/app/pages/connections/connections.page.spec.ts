@@ -10,7 +10,7 @@ import { ToastService } from '../../core/notify/toast.service';
 import { nextRequest, tick } from '../../../testing/http';
 import { BROWSER_REDIRECT } from './browser-redirect';
 import { ConnectionsPage } from './connections.page';
-import { ALPACA, SNAPTRADE, account, connection, sessionStub } from './connections.fixtures';
+import { ALPACA, SNAPTRADE, connection, sessionStub } from './connections.fixtures';
 
 describe('ConnectionsPage', () => {
   let fixture: ComponentFixture<ConnectionsPage>;
@@ -62,13 +62,12 @@ describe('ConnectionsPage', () => {
     (await nextRequest(http, '/api/connections/providers')).flush(
       opts.providers ?? [ALPACA, SNAPTRADE],
     );
-    (await nextRequest(http, '/api/connections')).flush(list);
-    for (const c of list) {
-      (await nextRequest(http, `/api/connections/${c.id}/accounts`)).flush([
-        account(),
-        account({ external_account_id: 'acc_2' }),
-      ]);
-    }
+    (await nextRequest(http, '/api/connections')).flush({
+      items: list,
+      total: list.length,
+      limit: 500,
+      offset: 0,
+    });
     await settle();
   }
 
@@ -99,9 +98,33 @@ describe('ConnectionsPage', () => {
     expect(el.textContent).toContain('An admin must turn on a broker');
   });
 
+  it('lists providers that are turned off without a way to connect them', async () => {
+    await setUp({
+      providers: [
+        { ...ALPACA, enabled: false },
+        { ...SNAPTRADE, enabled: false },
+      ],
+    });
+    expect(el.textContent).toContain('No brokers are turned on yet');
+    const cards = el.querySelectorAll('.provider');
+    expect(cards.length).toBe(2);
+    expect(cards[0].textContent).toContain('Turned off');
+    expect(button('Connect with keys')).toBeUndefined();
+    expect(button('Sign in at SnapTrade')).toBeUndefined();
+  });
+
+  it('says when a provider has paper accounts', async () => {
+    await setUp();
+    const cards = el.querySelectorAll('.provider');
+    expect(cards[0].textContent).toContain('Paper accounts work too.');
+    expect(cards[1].textContent).not.toContain('Paper accounts');
+  });
+
   it('lists connections with status, last sync and account count', async () => {
     await setUp({
-      connections: [connection({ last_sync_at: new Date().toISOString(), label: 'Main' })],
+      connections: [
+        connection({ last_sync_at: new Date().toISOString(), label: 'Main', accounts_count: 2 }),
+      ],
     });
     const row = el.querySelector('.connection')!;
     expect(row.getAttribute('href')).toBe('/connections/con_1');

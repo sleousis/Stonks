@@ -34,6 +34,7 @@ Z-score is undefined) fail with "insufficient data".
 from __future__ import annotations
 
 import math
+from typing import ClassVar
 
 import numpy as np
 
@@ -54,6 +55,13 @@ def round_trip_trades(report: BacktestReport) -> list[RoundTrip]:
 
 class RunsTestSurvivalTest:
     id = "runs_test"
+
+    #: Plain words for each option, shown by the console's options editor.
+    option_help: ClassVar[dict[str, str]] = {
+        "max_abs_z_score": "Largest runs test z-score, up or down, that passes. Big values mean wins and losses cluster.",
+        "trade_level": "Test the order of wins and losses per trade instead of per bar.",
+        "window": "Which data to test on: val is the held-out window, full is all of it.",
+    }
 
     def __init__(
         self,

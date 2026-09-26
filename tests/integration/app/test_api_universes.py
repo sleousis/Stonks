@@ -57,7 +57,7 @@ def test_create_list_show_and_members(client):
     assert resp.json()["refreshed_at"] is None
     assert client.post("/api/universes", json=body, headers=AUTH).status_code == 409
 
-    listed = client.get("/api/universes").json()
+    listed = client.get("/api/universes").json()["items"]
     assert [u["id"] for u in listed] == ["mine"]
 
     job = client.post("/api/universes/mine/refresh", headers=AUTH)

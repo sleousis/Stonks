@@ -15,7 +15,6 @@ import {
   type SubscriptionUpdate,
   type SubscriptionView,
   SubscriptionsService,
-  isMissingRoute,
 } from '../../api/subscriptions.service';
 import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
@@ -48,18 +47,11 @@ interface Row {
         <a routerLink="/strategies" class="more">Browse strategies</a>
       </div>
       @if (subs.error(); as err) {
-        @if (missing()) {
-          <app-empty-state
-            title="Coming soon"
-            message="Strategy switches need a server update. Until then, ask an admin to change modes."
-          />
-        } @else {
-          <app-error-state
-            title="Could not load your strategies"
-            [error]="err"
-            (retry)="subs.reload()"
-          />
-        }
+        <app-error-state
+          title="Could not load your strategies"
+          [error]="err"
+          (retry)="subs.reload()"
+        />
       } @else if (!subs.hasValue()) {
         <app-loading-state label="Loading your strategies" [rows]="3" />
       } @else if (rows().length === 0) {
@@ -312,7 +304,6 @@ export class StrategiesCard {
   protected readonly busy = signal<string | null>(null);
 
   protected readonly subs = resource({ loader: () => this.api.list() });
-  protected readonly missing = computed(() => isMissingRoute(this.subs.error()));
 
   /** The list as shown, updated in place from each change's response. */
   private readonly items = linkedSignal(() => (this.subs.hasValue() ? this.subs.value() : []));

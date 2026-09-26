@@ -70,7 +70,7 @@ def _connect(tc: TestClient) -> str:
 
 @pytest.mark.anyio
 async def test_list_connections_and_accounts(mcp, test_client):
-    assert (await call(mcp, "list_connections")) == {"items": []}
+    assert (await call(mcp, "list_connections"))["items"] == []
     cid = _connect(test_client)
     listed = await call(mcp, "list_connections")
     assert [c["id"] for c in listed["items"]] == [cid]

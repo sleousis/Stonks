@@ -210,10 +210,6 @@ describe('LoginPage', () => {
       problem(401, 'not_authenticated'),
       UNAUTHORIZED,
     );
-    (await nextRequest(controller, '/api/strategies')).flush(
-      problem(401, 'not_authenticated'),
-      UNAUTHORIZED,
-    );
     await settle();
     expect(el.querySelector('[role="alert"]')?.textContent).toContain('token did not work');
     expect(TestBed.inject(AuthTokenService).token()).toBeNull();

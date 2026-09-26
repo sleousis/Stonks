@@ -97,6 +97,10 @@ class ProviderView(BaseModel):
     #: What ``POST /api/connections/keys`` expects in ``fields``.
     credential_fields: list[str]
     can_trade: bool
+    #: An admin turned it on and it is configured: only these can be connected.
+    enabled: bool
+    #: The provider offers paper (simulated money) accounts.
+    has_paper: bool
 
 
 class ConnectionView(BaseModel):
@@ -111,10 +115,13 @@ class ConnectionView(BaseModel):
     next_sync_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    #: Broker accounts this connection has seen.
+    accounts_count: int = 0
 
     @classmethod
-    def of(cls, r: ConnectionRecord) -> ConnectionView:
+    def of(cls, r: ConnectionRecord, accounts_count: int = 0) -> ConnectionView:
         return cls(
+            accounts_count=accounts_count,
             id=r.id,
             provider=r.provider,
             label=r.label,
@@ -266,17 +273,21 @@ class ConnectionsAppService:
                     capabilities=list(p.capabilities),
                     credential_fields=list(p.credential_fields),
                     can_trade=p.can_trade,
+                    enabled=p.enabled,
+                    has_paper=p.has_paper,
                 )
-                for p in svc.available_providers(scope)
+                for p in svc.providers(scope)
             ]
 
     def list(self, scope: Scope) -> list[ConnectionView]:
         with self._service() as svc:
-            return [ConnectionView.of(r) for r in svc.list(scope)]
+            records = svc.list(scope)
+            counts = svc.account_counts([r.id for r in records])
+            return [ConnectionView.of(r, counts[r.id]) for r in records]
 
     def get(self, scope: Scope, connection_id: str) -> ConnectionView:
         with self._service() as svc:
-            return ConnectionView.of(svc.get(scope, connection_id))
+            return _view(svc, svc.get(scope, connection_id))
 
     def accounts(self, scope: Scope, connection_id: str) -> list[BrokerAccountView]:
         with self._service() as svc:
@@ -290,7 +301,7 @@ class ConnectionsAppService:
             raise ValidationError(f"credential values must be at most {CREDENTIAL_MAX} characters")
         with self._service() as svc:
             record = svc.connect_with_keys(scope, request.provider, fields, label=request.label)
-        return ConnectionView.of(record)
+            return _view(svc, record)
 
     def start_portal(self, scope: Scope, request: StartPortalRequest) -> PortalLinkView:
         with self._service() as svc:
@@ -312,7 +323,7 @@ class ConnectionsAppService:
     ) -> ConnectionView:
         with self._service() as svc:
             record = svc.complete_portal(scope, connection_id, state, outcome=outcome)
-        return ConnectionView.of(record)
+            return _view(svc, record)
 
     def link_account(
         self, scope: Scope, connection_id: str, request: LinkAccountRequest
@@ -364,3 +375,7 @@ class ConnectionsAppService:
             remote_removed=r.remote_removed,
             remote_error=r.remote_error,
         )
+
+
+def _view(svc: Any, record: ConnectionRecord) -> ConnectionView:
+    return ConnectionView.of(record, svc.account_counts([record.id])[record.id])

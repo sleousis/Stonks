@@ -7,6 +7,7 @@ import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { ADMIN, TRADER, UNAUTHORIZED, problem } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
+import { book } from '../../../testing/portfolio-fixtures';
 import { HomePage } from './home.page';
 
 const PORTFOLIO: PortfolioView = {
@@ -71,26 +72,27 @@ describe('HomePage', () => {
     if (me) {
       req.flush(me);
     } else {
-      req.flush(problem(401, 'not_authenticated'), UNAUTHORIZED);
-      (await nextRequest(controller, '/api/strategies')).flush({
-        items: [],
-        total: 0,
-        limit: 1,
-        offset: 0,
-      });
+      req.flush({ ...problem(401, 'reads_open'), code: 'reads_open' }, UNAUTHORIZED);
     }
     await loading;
   }
 
   async function flushCommon() {
     (await nextRequest(controller, '/api/notifications')).flush({ items: [], unread_count: 0 });
-    (await nextRequest(controller, '/api/subscriptions')).flush([]);
+    (await nextRequest(controller, '/api/subscriptions')).flush(page([]));
+  }
+
+  function page<T>(items: T[]) {
+    return { items, total: items.length, limit: 500, offset: 0 };
   }
 
   it('shows a trader their portfolio, signals and strategies', async () => {
     await signIn(TRADER);
     const fixture = TestBed.createComponent(HomePage);
     fixture.detectChanges();
+    (await nextRequest(controller, '/api/portfolios')).flush(
+      page([book({ id: 'pf_1', name: 'Main' })]),
+    );
     (await nextRequest(controller, '/api/portfolio')).flush(PORTFOLIO);
     (await nextRequest(controller, '/api/pnl')).flush(PNL);
     await flushCommon();
@@ -133,6 +135,10 @@ describe('HomePage', () => {
     await signIn(null);
     const fixture = TestBed.createComponent(HomePage);
     fixture.detectChanges();
+    (await nextRequest(controller, '/api/portfolios')).flush(
+      problem(401, 'not_authenticated'),
+      UNAUTHORIZED,
+    );
     (await nextRequest(controller, '/api/portfolio')).flush(
       problem(401, 'not_authenticated'),
       UNAUTHORIZED,
@@ -144,5 +150,20 @@ describe('HomePage', () => {
     const el: HTMLElement = fixture.nativeElement;
     expect(el.querySelector('h1')?.textContent).toContain('Home');
     expect(el.querySelector('.banner a')?.getAttribute('href')).toBe('/login');
+  });
+
+  it('tells a trader with no portfolio how to get one, and asks for no holdings (BUG-3)', async () => {
+    await signIn(TRADER);
+    const fixture = TestBed.createComponent(HomePage);
+    fixture.detectChanges();
+    (await nextRequest(controller, '/api/portfolios')).flush(page([]));
+    await flushCommon();
+    await tick();
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.textContent).toContain('No portfolio yet');
+    expect(el.textContent).not.toContain('Could not load');
+    controller.expectNone('/api/portfolio');
+    controller.expectNone('/api/pnl');
   });
 });

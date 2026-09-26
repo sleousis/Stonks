@@ -52,18 +52,43 @@ class CostStressOptions(BaseModel):
 
     #: Cost multipliers reported as ``sharpe_<m>x``; must contain 0, 1 and
     #: ``stress_multiplier``.
-    multipliers: tuple[float, ...] = (0.0, 1.0, 2.0, 3.0)
-    stress_multiplier: float = Field(default=2.0, gt=1.0)
+    multipliers: tuple[float, ...] = Field(
+        default=(0.0, 1.0, 2.0, 3.0),
+        description="Cost levels to test, as multiples of normal costs. Must include 0, 1 and the stress level.",
+    )
+    stress_multiplier: float = Field(
+        default=2.0, gt=1.0, description="The cost multiple the strategy must survive."
+    )
     #: ``sharpe(stress) >= fraction * sharpe(1x)``.
-    min_stressed_sharpe_fraction: float = Field(default=0.5, ge=0.0, le=1.0)
-    min_break_even: float = Field(default=2.0, ge=0.0)
+    min_stressed_sharpe_fraction: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Share of the normal Sharpe the strategy must keep at the stress level.",
+    )
+    min_break_even: float = Field(
+        default=2.0,
+        ge=0.0,
+        description="Lowest cost multiple at which the strategy still breaks even.",
+    )
     #: Upper end of the break-even search.
-    max_break_even: float = Field(default=10.0, gt=1.0)
-    bisection_tolerance: float = Field(default=0.1, gt=0.0)
+    max_break_even: float = Field(
+        default=10.0, gt=1.0, description="Highest cost multiple the break-even search tries."
+    )
+    bisection_tolerance: float = Field(
+        default=0.1, gt=0.0, description="How precisely to find the break-even multiple."
+    )
     #: Carver's speed limit: ``cost_sr <= min(max_cost_sharpe,
     #: max_cost_sharpe_fraction * sharpe(0x))``.
-    max_cost_sharpe: float = Field(default=0.13, ge=0.0)
-    max_cost_sharpe_fraction: float = Field(default=1.0 / 3.0, ge=0.0, le=1.0)
+    max_cost_sharpe: float = Field(
+        default=0.13, ge=0.0, description="Most Sharpe that costs may eat."
+    )
+    max_cost_sharpe_fraction: float = Field(
+        default=1.0 / 3.0,
+        ge=0.0,
+        le=1.0,
+        description="Most of the cost-free Sharpe that costs may eat, as a fraction.",
+    )
     #: Worker processes; ``None`` means ``lab.parallel.default_max_workers()``.
     max_workers: int | None = Field(default=None, ge=1)
 

@@ -26,13 +26,23 @@ def test_portfolios_lists_only_your_own(client, settings, people):
     _portfolio(settings, people["bob"], "Bob book")
     alice = client.get("/api/portfolios", headers=people["alice"]["headers"])
     assert alice.status_code == 200
-    assert [p["id"] for p in alice.json()] == [alice_pf]
-    assert alice.json()[0]["trading"] == "paper"
+    assert [p["id"] for p in alice.json()["items"]] == [alice_pf]
+    assert alice.json()["items"][0]["trading"] == "paper"
     assert "Bob book" not in alice.text
     # Admins see their own books too, never other people's.
-    assert client.get("/api/portfolios", headers=people["ada"]["headers"]).json() == []
-    owner = client.get("/api/portfolios", headers=AUTH).json()
+    ada = client.get("/api/portfolios", headers=people["ada"]["headers"]).json()
+    assert ada["items"] == [] and ada["total"] == 0
+    owner = client.get("/api/portfolios", headers=AUTH).json()["items"]
     assert [p["id"] for p in owner] == [DEFAULT_PORTFOLIO_ID]
+
+
+def test_portfolios_mark_the_one_reads_use_by_default(client, settings, people):
+    _portfolio(settings, people["alice"], "First")
+    _portfolio(settings, people["alice"], "Second")
+    listed = client.get("/api/portfolios", headers=people["alice"]["headers"]).json()["items"]
+    assert sum(p["is_default"] for p in listed) == 1
+    owner = client.get("/api/portfolios", headers=AUTH).json()["items"]
+    assert owner[0]["is_default"] is True
 
 
 def test_trading_modes_say_paper_or_live_per_portfolio(client, settings, people):
@@ -40,11 +50,11 @@ def test_trading_modes_say_paper_or_live_per_portfolio(client, settings, people)
     mirror = _portfolio(settings, people["alice"], "Mirror", kind="broker")
     modes = client.get("/api/portfolios/trading-modes", headers=people["alice"]["headers"])
     assert modes.status_code == 200, modes.text
-    by_id = {m["portfolio_id"]: m for m in modes.json()}
+    by_id = {m["portfolio_id"]: m for m in modes.json()["items"]}
     assert set(by_id) == {sim, mirror}
     assert (by_id[sim]["trading"], by_id[sim]["broker"]) == ("paper", "simulated")
     assert (by_id[mirror]["trading"], by_id[mirror]["broker"]) == ("live", "connection")
-    default = client.get("/api/portfolios/trading-modes", headers=AUTH).json()
+    default = client.get("/api/portfolios/trading-modes", headers=AUTH).json()["items"]
     assert [(m["portfolio_id"], m["trading"], m["broker"]) for m in default] == [
         (DEFAULT_PORTFOLIO_ID, "paper", "simulated")
     ]
@@ -57,7 +67,7 @@ def test_the_default_book_follows_the_alpaca_endpoint(client, settings, paper, a
     settings.brokers.kind = "alpaca"
     settings.brokers.alpaca.paper = paper
     settings.brokers.alpaca.allow_live = allow_live
-    [mode] = client.get("/api/portfolios/trading-modes", headers=AUTH).json()
+    [mode] = client.get("/api/portfolios/trading-modes", headers=AUTH).json()["items"]
     assert (mode["trading"], mode["broker"]) == (trading, "alpaca")
 
 
@@ -81,8 +91,8 @@ def test_subscribe_list_and_scope(client, settings, people):
     assert sub["paused_reason"] is None
 
     listed = client.get("/api/subscriptions", headers=alice["headers"])
-    assert [s["id"] for s in listed.json()] == [sub["id"]]
-    assert client.get("/api/subscriptions", headers=bob["headers"]).json() == []
+    assert [s["id"] for s in listed.json()["items"]] == [sub["id"]]
+    assert client.get("/api/subscriptions", headers=bob["headers"]).json()["items"] == []
 
     # Bob can't subscribe Alice's portfolio, nor see or change her subscription.
     stolen = client.post(

@@ -37,6 +37,10 @@ describe('ToastOutlet', () => {
     expect(show).not.toHaveBeenCalled();
   });
 
+  it('names its region apart from the Notifications panel (A11Y-1)', () => {
+    expect(layer().getAttribute('aria-label')).toBe('Messages');
+  });
+
   it('gives errors role alert and other toasts role status', () => {
     toasts.error('Could not reach the broker.', 'Order failed');
     toasts.success('Saved.');

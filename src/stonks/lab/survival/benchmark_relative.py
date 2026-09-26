@@ -21,7 +21,7 @@ while the benchmark falls would otherwise pass on a positive excess CAGR.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 from stonks.backtest.benchmark import DEFAULT_BENCHMARK, normalize_spec
 from stonks.core.protocols import Strategy, SurvivalReport
@@ -32,6 +32,17 @@ _WINDOWS = ("val", "full")
 
 class BenchmarkRelativeTest:
     id = "benchmark_relative"
+
+    #: Plain words for each option, shown by the console's options editor.
+    option_help: ClassVar[dict[str, str]] = {
+        "min_ir": "Lowest information ratio against the benchmark that passes.",
+        "min_excess_cagr": "Lowest yearly growth above the benchmark that passes.",
+        "require_alpha_tstat": "Optional floor on how sure the alpha is (2.0 is a common bar). Blank only reports it.",
+        "window": "Which data to test on: val is the held-out window, full is all of it.",
+        "benchmark": "Ticker to compare with. Blank uses the run's benchmark.",
+        "min_trades": "Fewest round trips to judge. Fewer fails for lack of data.",
+        "min_bars": "Fewest paired returns to judge. Fewer fails for lack of data.",
+    }
 
     def __init__(
         self,

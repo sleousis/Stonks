@@ -412,7 +412,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Stop new orders at once. Without confirm=true returns a preview\nand changes nothing. Resuming is done in the console or the CLI with\na typed confirmation.",
+      "description": "Stop new orders at once and cancel the orders still working at the\nbroker. Without confirm=true returns a preview and changes nothing.\nResuming is done in the console or the CLI with a typed confirmation\nand a fresh 2FA code.",
       "input_schema": {
         "properties": {
           "confirm": {
@@ -423,7 +423,7 @@
           },
           "flatten": {
             "default": false,
-            "description": "stop buys only; sells and exits still go through",
+            "description": "stop buys and cancel working buy orders only: sells and exits still go through, and no position is closed",
             "title": "Flatten",
             "type": "boolean"
           },

@@ -6,6 +6,7 @@ import {
   portfolioName,
   triggerLabel,
 } from './trades-format';
+import { book } from '../../../testing/portfolio-fixtures';
 
 describe('trades-format', () => {
   it('formats basis points with a sign, n/a while unknown', () => {
@@ -24,8 +25,8 @@ describe('trades-format', () => {
 
   it('looks portfolios up in the picker list, never showing a raw id', () => {
     const options = [
-      { id: 'pf_1', name: 'Main', mode: 'live' as const, is_default: true },
-      { id: 'pf_2', name: 'Practice', mode: 'paper' as const },
+      book({ id: 'pf_1', name: 'Main', trading: 'live', is_default: true }),
+      book({ id: 'pf_2', name: 'Practice', trading: 'paper' }),
     ];
     expect(portfolioName('pf_2', options)).toBe('Practice');
     expect(portfolioName('pf_9', options)).toBeNull();

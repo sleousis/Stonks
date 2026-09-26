@@ -51,9 +51,20 @@ class DeflatedSharpeTest:
     class Options(BaseModel):
         model_config = ConfigDict(extra="forbid")
 
-        min_dsr: float = Field(0.95, ge=0.8, le=0.99)
-        include_prior_runs: bool = True
-        n_eff_method: NEffMethod = "effective_rank"
+        min_dsr: float = Field(
+            0.95,
+            ge=0.8,
+            le=0.99,
+            description="Lowest deflated Sharpe probability that passes. It discounts luck from trying many settings.",
+        )
+        include_prior_runs: bool = Field(
+            default=True,
+            description="Count the settings tried in earlier lab runs of this strategy too.",
+        )
+        n_eff_method: NEffMethod = Field(
+            default="effective_rank",
+            description="How to count trials that behave alike as fewer independent ones.",
+        )
 
     def __init__(
         self,

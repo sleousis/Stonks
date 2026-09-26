@@ -1,12 +1,10 @@
-import { HttpClient } from '@angular/common/http';
-import { Injectable, inject } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { Injectable } from '@angular/core';
 
-import { toApiError } from '../core/http/api-error';
 import { SILENT_HEADERS } from '../core/http/interceptors';
-import { unwrap } from './api-call';
+import { allItems, unwrap } from './api-call';
 import {
   createPushSubscription,
+  deletePushDevice,
   deletePushSubscription,
   getNotificationPreferences,
   getVapidKey,
@@ -33,8 +31,6 @@ import type {
  */
 @Injectable({ providedIn: 'root' })
 export class NotificationsService {
-  private readonly http = inject(HttpClient);
-
   vapidKey() {
     return unwrap(getVapidKey({ headers: SILENT_HEADERS }));
   }
@@ -48,25 +44,12 @@ export class NotificationsService {
   }
 
   pushDevices() {
-    return unwrap(listPushSubscriptions());
+    return allItems((query) => unwrap(listPushSubscriptions({ query })));
   }
 
-  /**
-   * Remove another registered device by its id. The device list carries no
-   * endpoints, so this uses the planned `DELETE /api/push/subscriptions/{id}`
-   * (HttpClient, silent). Until the server has it, the call fails with 404
-   * or 405: check with `isMissingRoute()`.
-   */
+  /** Remove another registered device by the id the device list shows. Silent. */
   async removePushDevice(id: string): Promise<void> {
-    try {
-      await firstValueFrom(
-        this.http.delete(`/api/push/subscriptions/${encodeURIComponent(id)}`, {
-          headers: SILENT_HEADERS,
-        }),
-      );
-    } catch (err) {
-      throw toApiError(err);
-    }
+    await unwrap(deletePushDevice({ path: { device_id: id }, headers: SILENT_HEADERS }));
   }
 
   preferences() {

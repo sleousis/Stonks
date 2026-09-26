@@ -27,6 +27,7 @@ from stonks.api.deps import (
     CSRF_COOKIE,
     SESSION_COOKIE,
     AuthDep,
+    PageDep,
     PrincipalDep,
     SessionDep,
     client_ip,
@@ -34,6 +35,7 @@ from stonks.api.deps import (
     require_permission,
 )
 from stonks.api.errors import PROBLEM_RESPONSES, ProblemDetails
+from stonks.app.pagination import Page, page_of
 from stonks.auth import (
     ApiScope,
     ApiTokenInfo,
@@ -385,10 +387,10 @@ def regenerate_recovery_codes(
 # ---- API tokens -------------------------------------------------------------------
 
 
-@router.get("/tokens", response_model=list[TokenView], operation_id="listApiTokens")
-def list_tokens(principal: PrincipalDep, auth: AuthDep) -> list[TokenView]:
+@router.get("/tokens", response_model=Page[TokenView], operation_id="listApiTokens")
+def list_tokens(principal: PrincipalDep, auth: AuthDep, page: PageDep) -> Page[TokenView]:
     """Your API tokens (never the secret), revoked ones included."""
-    return [_token_view(t) for t in auth.list_tokens(principal)]
+    return page_of([_token_view(t) for t in auth.list_tokens(principal)], page)
 
 
 @router.post(
@@ -434,11 +436,11 @@ _users_read = Depends(require_permission(Permission.USERS_READ))
 
 
 @router.get(
-    "/users", response_model=list[UserView], operation_id="listUsers", dependencies=[_users_read]
+    "/users", response_model=Page[UserView], operation_id="listUsers", dependencies=[_users_read]
 )
-def list_users(principal: PrincipalDep, auth: AuthDep) -> list[UserView]:
+def list_users(principal: PrincipalDep, auth: AuthDep, page: PageDep) -> Page[UserView]:
     """Every person with an account: identity, role, status. No holdings."""
-    return [_user_view(u) for u in auth.list_users(principal)]
+    return page_of([_user_view(u) for u in auth.list_users(principal)], page)
 
 
 @router.post(

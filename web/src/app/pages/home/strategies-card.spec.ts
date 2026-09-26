@@ -32,7 +32,8 @@ describe('StrategiesCard', () => {
     fixture = TestBed.createComponent(StrategiesCard);
     fixture.detectChanges();
     const req = await nextRequest(controller, '/api/subscriptions');
-    if (status === 200) req.flush(list);
+    const items = Array.isArray(list) ? list : [];
+    if (status === 200) req.flush({ items, total: items.length, limit: 500, offset: 0 });
     else req.flush({ title: 'x', status }, { status, statusText: 'x' });
     await tick();
     fixture.detectChanges();
@@ -102,9 +103,10 @@ describe('StrategiesCard', () => {
     expect(radio(el, 'paper').checked).toBe(true);
   });
 
-  it('explains when the server has no subscription routes yet', async () => {
-    const el = await render(null, 404);
-    expect(el.textContent).toContain('Coming soon');
+  it('offers a retry when the list cannot load', async () => {
+    const el = await render(null, 500);
+    expect(el.textContent).toContain('Could not load your strategies');
+    expect(el.textContent).not.toContain('Coming soon');
   });
 
   it('says how to start when the trader follows nothing', async () => {

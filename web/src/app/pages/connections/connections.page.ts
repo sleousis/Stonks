@@ -72,19 +72,16 @@ export class ConnectionsPage {
 
   protected readonly providers = resource({ loader: () => this.api.providers() });
   protected readonly connections = resource({
-    loader: async (): Promise<ConnectionRow[]> => {
-      const list = await this.api.list();
-      const counts = await Promise.all(
-        list.map((c) =>
-          this.api.accounts(c.id).then(
-            (a) => a.length,
-            () => null,
-          ),
-        ),
-      );
-      return list.map((connection, i) => ({ connection, accounts: counts[i] }));
-    },
+    loader: async (): Promise<ConnectionRow[]> =>
+      (await this.api.list()).map((connection) => ({
+        connection,
+        accounts: connection.accounts_count ?? null,
+      })),
   });
+  /** Nothing can be connected until an admin turns a provider on. */
+  protected readonly noneEnabled = computed(
+    () => this.providers.hasValue() && !this.providers.value().some((p) => p.enabled),
+  );
 
   protected readonly canManage = computed(() => this.session.can('connection.manage'));
   protected readonly statusLabel = CONNECTION_STATUS_LABEL;

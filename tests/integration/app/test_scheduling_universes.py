@@ -75,6 +75,17 @@ def test_refreshes_then_fills_recent_bars(settings, backend, request, source):
     assert {c[0] for c in source.price_calls} == {"NEW.US"}
 
 
+def test_api_refresh_reads_every_page_of_universes(settings, api_executor):
+    """AS-17: the universe list is paged; the job must refresh them all."""
+    settings.api.default_page_size = 1
+    _store(settings, "one", ["UP.US"])
+    _store(settings, "two", ["UP.US"])
+    ctx, _ = _ctx(settings, api_executor, "universes_refresh", AS_OF, ensure=False)
+    out = api_executor.execute(ctx)
+    assert out.status == "succeeded", out.detail
+    assert set(out.detail["universes"]) == {"one", "two"}
+
+
 def test_local_backend_refreshes_then_fills(settings, seeded, source, monkeypatch):
     import stonks.scheduling.local as local
 

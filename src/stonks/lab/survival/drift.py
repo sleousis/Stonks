@@ -15,6 +15,7 @@ import random
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from typing import ClassVar
 
 from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.lab.dataset import LabDataset
@@ -25,6 +26,13 @@ _log = get_logger("stonks.lab.survival.drift")
 
 class DriftTest:
     id = "drift"
+
+    #: Plain words for each option, shown by the console's options editor.
+    option_help: ClassVar[dict[str, str]] = {
+        "max_psi": "Largest shift in feature values between tuning and held-out data (PSI) that passes.",
+        "sample_dates": "How many dates to sample in each window.",
+        "bins": "How many buckets to sort feature values into.",
+    }
 
     def __init__(
         self,

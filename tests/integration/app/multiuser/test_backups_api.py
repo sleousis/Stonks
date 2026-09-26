@@ -30,7 +30,7 @@ def _wait(client, job_id: str, headers: dict, timeout: float = 60) -> dict:
 def test_admins_list_backups_on_disk(client, people, backup_id):
     listed = client.get("/api/backups", headers=people["ada"]["headers"])
     assert listed.status_code == 200, listed.text
-    [item] = listed.json()
+    [item] = listed.json()["items"]
     assert item["id"] == backup_id and item["created_at"]
     assert item["size_bytes"] > 0
     assert client.get("/api/backups", headers=people["alice"]["headers"]).status_code == 403

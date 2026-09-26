@@ -28,6 +28,11 @@ const TOP_HOLDINGS = 8;
         />
       } @else if (!portfolio.hasValue()) {
         <app-loading-state label="Loading your portfolio" [rows]="4" />
+      } @else if (portfolio.value() === null) {
+        <app-empty-state
+          title="No portfolio yet"
+          message="You get signals from the strategies you follow. To paper trade them, ask your admin for a portfolio."
+        />
       } @else {
         <div class="panel-body body">
           <div class="tiles">
@@ -128,22 +133,34 @@ export class PortfolioCard {
 
   private readonly portfolioCtx = inject(PortfolioContextService);
 
+  /**
+   * Null when the person has no portfolio (they follow strategies for
+   * signals only): then nothing asks for holdings, so no 404 (BUG-3).
+   */
   protected readonly portfolio = resource({
     params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
-    loader: () => this.api.get(),
+    loader: () => this.ifBook(() => this.api.get()),
   });
   protected readonly pnl = resource({
     params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
-    loader: () => this.api.pnl(),
+    loader: () => this.ifBook(() => this.api.pnl()),
   });
 
+  private async ifBook<T>(read: () => Promise<T>): Promise<T | null> {
+    await this.portfolioCtx.load();
+    const ctx = this.portfolioCtx;
+    if (ctx.state() === 'ready' && ctx.options().length === 0) return null;
+    return read();
+  }
+
   private readonly latest = computed(() =>
-    this.pnl.hasValue() ? (this.pnl.value().rows.at(-1) ?? null) : null,
+    this.pnl.hasValue() ? (this.pnl.value()?.rows.at(-1) ?? null) : null,
   );
 
-  protected readonly value = computed(() =>
-    this.portfolio.hasValue() ? formatMoney(this.portfolio.value().total_value) : '',
-  );
+  protected readonly value = computed(() => {
+    const book = this.portfolio.hasValue() ? this.portfolio.value() : null;
+    return book ? formatMoney(book.total_value) : '';
+  });
   protected readonly dayChange = computed(() => {
     const row = this.latest();
     return row?.daily_change == null ? null : formatMoney(row.daily_change, { signed: true });
@@ -155,8 +172,8 @@ export class PortfolioCard {
   protected readonly dayTone = computed(() => toneClass(this.latest()?.daily_change));
 
   private readonly sorted = computed(() =>
-    this.portfolio.hasValue()
-      ? [...this.portfolio.value().positions].sort(
+    this.portfolio.hasValue() && this.portfolio.value()
+      ? [...this.portfolio.value()!.positions].sort(
           (a, b) => (b.market_value ?? 0) - (a.market_value ?? 0),
         )
       : [],

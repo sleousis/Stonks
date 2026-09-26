@@ -523,7 +523,7 @@ def survival_test_catalog() -> list[SurvivalTestInfo]:
             SurvivalTestInfo(
                 id=name,
                 description=survival_registry.describe(name),
-                options_schema=survival_registry.options_model(name).model_json_schema(),
+                options_schema=survival_registry.options_schema(name),
                 config_schema=config.model_json_schema() if config is not None else None,
                 presets=[p for p, tests in presets.items() if name in tests],
             )

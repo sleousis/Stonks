@@ -7,7 +7,7 @@ import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ADMIN } from '../../../testing/auth-fixtures';
-import { nextRequest, tick } from '../../../testing/http';
+import { nextRequest, page, tick } from '../../../testing/http';
 import { AdminUsersPage } from './admin-users.page';
 
 const ANN: UserView = {
@@ -44,14 +44,14 @@ describe('AdminUsersPage', () => {
   async function render(users: UserView[] = [ANN, ME]) {
     fixture = TestBed.createComponent(AdminUsersPage);
     fixture.detectChanges();
-    (await nextRequest(controller, '/api/auth/users')).flush(users);
+    (await nextRequest(controller, '/api/auth/users')).flush(page(users));
     await tick();
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
   }
 
   async function reload(users: UserView[]) {
-    (await nextRequest(controller, '/api/auth/users')).flush(users);
+    (await nextRequest(controller, '/api/auth/users')).flush(page(users));
     await tick();
     fixture.detectChanges();
   }

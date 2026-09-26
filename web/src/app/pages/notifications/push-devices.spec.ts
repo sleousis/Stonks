@@ -12,7 +12,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { type ConfirmOptions, ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { NotificationPermissionService } from '../../core/pwa/notification-permission.service';
-import { nextRequest, tick } from '../../../testing/http';
+import { nextRequest, page, tick } from '../../../testing/http';
 import { PushDevices, deviceName, isThisBrowser } from './push-devices';
 
 const PHONE: PushDeviceView = {
@@ -63,7 +63,7 @@ describe('PushDevices', () => {
   async function render(devices: PushDeviceView[] = [PHONE, LAPTOP]) {
     fixture = TestBed.createComponent(PushDevices);
     fixture.detectChanges();
-    (await nextRequest(http, '/api/push/subscriptions')).flush(devices);
+    (await nextRequest(http, '/api/push/subscriptions')).flush(page(devices));
     await tick();
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
@@ -93,7 +93,7 @@ describe('PushDevices', () => {
       expect.objectContaining({ title: 'Remove Safari on iPhone?', tone: 'danger' }),
     );
     req.flush(null, { status: 204, statusText: 'No Content' });
-    (await nextRequest(http, '/api/push/subscriptions')).flush([LAPTOP]);
+    (await nextRequest(http, '/api/push/subscriptions')).flush(page([LAPTOP]));
     await tick();
     fixture.detectChanges();
     expect(rows(el).length).toBe(1);
@@ -108,17 +108,17 @@ describe('PushDevices', () => {
     expect(http.match(() => true).length).toBe(0);
   });
 
-  it('says calmly when the server cannot remove other devices yet', async () => {
+  it('shows the error when another device cannot be removed', async () => {
     setup();
-    const info = vi.spyOn(TestBed.inject(ToastService), 'info');
+    const error = vi.spyOn(TestBed.inject(ToastService), 'error');
     const el = await render();
     removeIn(rows(el)[0]).click();
-    (await nextRequest(http, '/api/push/subscriptions/dev_1', 'DELETE')).flush(null, {
-      status: 405,
-      statusText: 'Method Not Allowed',
-    });
+    (await nextRequest(http, '/api/push/subscriptions/dev_1', 'DELETE')).flush(
+      { title: 'Not Found', status: 404, detail: 'push subscription not found' },
+      { status: 404, statusText: 'Not Found' },
+    );
     await tick();
-    expect(info).toHaveBeenCalledWith(expect.stringContaining('coming soon'));
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('not found'));
   });
 
   it('removes this browser by turning its push subscription off', async () => {
@@ -129,7 +129,7 @@ describe('PushDevices', () => {
     const laptop = rows(el)[1];
     expect(laptop.textContent).toContain('This browser');
     removeIn(laptop).click();
-    (await nextRequest(http, '/api/push/subscriptions')).flush([PHONE]);
+    (await nextRequest(http, '/api/push/subscriptions')).flush(page([PHONE]));
     expect(disable).toHaveBeenCalled();
     await tick();
   });

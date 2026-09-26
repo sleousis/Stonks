@@ -28,6 +28,7 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'DELETE /api/auth/users/{user_id}/mfa': 'users.manage',
   'DELETE /api/connections/{connection_id}': 'connection.manage',
   'DELETE /api/push/subscriptions': 'notifications.manage',
+  'DELETE /api/push/subscriptions/{device_id}': 'notifications.manage',
   'DELETE /api/studio/drafts/{draft_id}': 'lab.run',
   'DELETE /api/universes/{universe_id}': 'strategy.promote',
   'GET /api/auth/users': 'users.read',

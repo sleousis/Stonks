@@ -7,7 +7,7 @@ import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
 import { TRADER } from '../../../testing/auth-fixtures';
-import { nextRequest, tick } from '../../../testing/http';
+import { nextRequest, page, tick } from '../../../testing/http';
 import { CATALOG, MOMENTUM } from '../../../testing/lab-fixtures';
 import type { Job, MeView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
@@ -78,7 +78,7 @@ describe('SweepsPage', () => {
       case '/api/catalog/intervals':
         return req.flush([{ code: '1d', is_intraday: false, seconds: 86400 }]);
       case '/api/universes':
-        return req.flush([{ id: 'sp500', kind: 'index', name: 'S&P 500' }]);
+        return req.flush(page([{ id: 'sp500', kind: 'index', name: 'S&P 500' }]));
       case '/api/jobs/sw-1':
         return req.flush(job({}));
       case '/api/lab/sweeps/sw-1/result':

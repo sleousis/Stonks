@@ -89,6 +89,16 @@ class SchedulerApiClient:
         clean = {k: v for k, v in (params or {}).items() if v is not None}
         return self._request("GET", path, params=clean)
 
+    def get_all(self, path: str, params: dict[str, Any] | None = None) -> list[Any]:
+        """Every item of a paged list route (``{items, total, limit, offset}``),
+        page after page."""
+        items: list[Any] = []
+        while True:
+            page = self.get(path, {**(params or {}), "offset": len(items)})
+            items.extend(page["items"])
+            if not page["items"] or len(items) >= page["total"]:
+                return items
+
     def post(self, path: str, body: dict[str, Any]) -> Any:
         if self._token is None:
             raise SchedulerApiError(

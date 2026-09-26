@@ -23,10 +23,17 @@ from stonks.lab.signal_eval import DEFAULT_HORIZONS, signal_ic
 class SignalICOptions(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    horizons: tuple[int, ...] = DEFAULT_HORIZONS
-    every_bars: int = Field(default=5, ge=1)
-    n_quantiles: int = Field(default=5, ge=2, le=10)
-    window: Literal["val", "full"] = "val"
+    horizons: tuple[int, ...] = Field(
+        default=DEFAULT_HORIZONS, description="Bars ahead at which to compare scores with returns."
+    )
+    every_bars: int = Field(default=5, ge=1, description="Score the strategy every this many bars.")
+    n_quantiles: int = Field(
+        default=5, ge=2, le=10, description="How many groups to rank tickers into by score."
+    )
+    window: Literal["val", "full"] = Field(
+        default="val",
+        description="Which data to test on: val is the held-out window, full is all of it.",
+    )
     #: Worker processes; ``None`` means ``lab.parallel.default_max_workers()``.
     max_workers: int | None = Field(default=None, ge=1)
 

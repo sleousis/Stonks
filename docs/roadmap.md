@@ -363,21 +363,23 @@ The last phase. The whole project is reviewed file by file, fixed, tested throug
 | 18.7 Feature completeness | A capability matrix of API, console, CLI and MCP. Fill every gap and add the parity test. |
 | 18.8 Release | Changelog, docs and wiki final pass, version 1.0 tag and a deploy dry run. |
 
-**Gate status (18.3, measured 2026-09-26)**
+**Gate status (integration step 6, measured 2026-09-27)**
 
 CI enforces each gate at today's value where it is still below the target, so it passes now and the floor only moves up. Raise a floor in the same change that lifts coverage.
 
 | Gate | Target | Today | Enforced by |
 |---|---|---|---|
-| Coverage overall (coverage.py's combined line and branch number) | 90 | 93.6 (lines 95.3, branches 86.2) | `fail_under = 90` in `pyproject.toml` |
-| Coverage `core/` | 95 | 92.6 | floor 92 in `tools/coverage_gate.py` |
-| Coverage `production/` | 95 | 95.6 | floor 95 |
+| Coverage overall (coverage.py's combined line and branch number) | 90 | 94.2 (lines 95.7, branches 87.6) | `fail_under = 90` in `pyproject.toml` |
+| Coverage `core/` | 95 | 98.4 | floor 98 in `tools/coverage_gate.py` |
+| Coverage `production/` | 95 | 95.5 | floor 95 |
 | Coverage `execution/` | 95 | 95.9 | floor 95 |
-| Coverage `auth/` | 95 | 94.0 | floor 94 |
+| Coverage `auth/` | 95 | 98.5 | floor 95 |
 | Coverage `portfolio/` | 95 | 96.3 | floor 95 |
-| Pyright basic over `src/stonks` | 0 errors | 449 errors | `tools/pyright_gate.py` fails on any error not in `tools/pyright-baseline.json` |
+| Pyright basic over `src/stonks` | 0 errors | 479 errors, all in the baseline (10 fixed and locked in this step) | `tools/pyright_gate.py` fails on any error not in `tools/pyright-baseline.json` |
 | Surviving mutants on the money paths | under 10% | 19.8% over six targets (the risk rules still to run in full) | `tools/mutation.py`, weekly and manual (`.github/workflows/mutation.yml`) |
 | Ruff | no ignore without a comment | met | `[tool.ruff.lint]`, every ignore says why |
+| End to end, desktop and 375px phone | every journey passes | 26 passed (13 per viewport), 0 xfail, no known app issue | `uv run pytest -m e2e tests/e2e`, `.github/workflows/e2e.yml` |
+| axe violations | 0 | 0 on every page, both viewports, admin and trader | `test_accessibility.py`, `KNOWN_AXE` is empty |
 
 First mutation run per target (cosmic-ray, mutants inside type annotations skipped as equivalent):
 

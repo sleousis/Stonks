@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 
-import { unwrap } from './api-call';
+import { allItems, unwrap } from './api-call';
 import {
   createUser,
   listUsers,
@@ -18,7 +18,7 @@ import type { UserCreateRequest, UserUpdateRequest } from './models';
 @Injectable({ providedIn: 'root' })
 export class UsersService {
   list() {
-    return unwrap(listUsers());
+    return allItems((query) => unwrap(listUsers({ query })));
   }
 
   create(body: UserCreateRequest) {

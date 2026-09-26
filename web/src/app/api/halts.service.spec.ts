@@ -1,7 +1,7 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
-import { nextRequest } from '../../testing/http';
+import { nextRequest, page } from '../../testing/http';
 import { HaltsService, RESUME_CONFIRMATION } from './halts.service';
 import { provideApi } from './provide-api';
 
@@ -22,13 +22,13 @@ describe('HaltsService', () => {
     const active = halts.list();
     const req = await nextRequest(controller, '/api/halts');
     expect(req.request.urlWithParams).toContain('include_cleared=false');
-    req.flush([]);
+    req.flush(page([]));
     expect(await active).toEqual([]);
 
     const all = halts.list(true);
     const req2 = await nextRequest(controller, '/api/halts');
     expect(req2.request.urlWithParams).toContain('include_cleared=true');
-    req2.flush([]);
+    req2.flush(page([]));
     await all;
   });
 

@@ -67,9 +67,12 @@ def test_every_page_has_no_axe_violations(browse, stack, viewport):
     assert not found, "axe violations:\n" + "\n".join(f"{k}: {v}" for k, v in found.items())
 
 
+# Skipped while KNOWN_AXE is empty: nothing is known to be broken.
+@pytest.mark.skipif(not KNOWN_AXE, reason="no known axe violations")
 @pytest.mark.parametrize(
     ("path", "rule"),
-    [pytest.param(path, rule, id=f"{path}-{rule}") for path, rule in KNOWN_AXE],
+    [pytest.param(path, rule, id=f"{path}-{rule}") for path, rule in KNOWN_AXE]
+    or [pytest.param("/", "none", id="none")],
 )
 def test_known_axe_violation_is_still_there(browse, stack, viewport, path, rule):
     """Fails (xfail) while the app still has the violation; passes once fixed,

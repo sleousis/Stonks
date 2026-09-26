@@ -29,6 +29,7 @@ from stonks.auth import (
     SessionInfo,
     require,
 )
+from stonks.auth.errors import ReadsOpen
 from stonks.auth.policy import POLICY
 from stonks.config import ApiConfig
 
@@ -100,10 +101,19 @@ def _resolve(request: Request, creds: HTTPAuthorizationCredentials | None) -> Pr
             csrf=request.headers.get(CSRF_HEADER),
             unsafe=request.method not in _SAFE_METHODS,
         )
+    elif request.method in _SAFE_METHODS and _reads_open(request):
+        raise ReadsOpen()
     else:
         raise NotAuthenticated()
     request.state.principal = principal
     return principal
+
+
+def _reads_open(request: Request) -> bool:
+    """True when :func:`authorize` lets this request's reads through
+    without a credential."""
+    cfg = get_api_config(request)
+    return cfg.open_reads_on_loopback and _is_loopback(client_ip(request))
 
 
 def authorize(
@@ -118,9 +128,8 @@ def authorize(
     auth only when ``open_reads_on_loopback`` is on and the peer is a
     loopback address.
     """
-    cfg = get_api_config(request)
     safe = request.method in _SAFE_METHODS
-    if safe and cfg.open_reads_on_loopback and _is_loopback(client_ip(request)):
+    if safe and _reads_open(request):
         return
     principal = _resolve(request, creds)
     if not safe and not principal.can_write and not _route_allows_readers(request):

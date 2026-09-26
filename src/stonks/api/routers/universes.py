@@ -4,10 +4,17 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, Response
 
-from stonks.api.deps import OptionalPrincipalDep, PrincipalDep, ServicesDep, require_permission
+from stonks.api.deps import (
+    OptionalPrincipalDep,
+    PageDep,
+    PrincipalDep,
+    ServicesDep,
+    require_permission,
+)
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.api.routers._jobs_common import JOB_CREATED, accepted
 from stonks.app.jobs import Job
+from stonks.app.pagination import Page, page_of
 from stonks.app.universes import (
     UNIVERSE_ENSURE_JOB,
     UNIVERSE_REFRESH_JOB,
@@ -30,10 +37,10 @@ _lab = [Depends(require_permission(Permission.LAB_RUN))]
 _admin = [Depends(require_permission(Permission.STRATEGY_PROMOTE))]
 
 
-@router.get("", response_model=list[UniverseView], operation_id="listUniverses")
-def list_universes(services: ServicesDep) -> list[UniverseView]:
+@router.get("", response_model=Page[UniverseView], operation_id="listUniverses")
+def list_universes(services: ServicesDep, page: PageDep) -> Page[UniverseView]:
     """Every stored universe, by id."""
-    return services.universes.list()
+    return page_of(services.universes.list(), page)
 
 
 @router.post(

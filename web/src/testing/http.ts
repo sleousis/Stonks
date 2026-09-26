@@ -1,5 +1,10 @@
 import type { HttpTestingController, TestRequest } from '@angular/common/http/testing';
 
+/** A paged list body (`{ items, total, limit, offset }`) holding every item. */
+export function page<T>(items: readonly T[]) {
+  return { items: [...items], total: items.length, limit: 500, offset: 0 };
+}
+
 /** Let pending promises and zero-delay timers run. */
 export function tick(ms = 0): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

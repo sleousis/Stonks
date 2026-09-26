@@ -10,8 +10,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path
 
-from stonks.api.deps import PrincipalDep, ServicesDep, needs
+from stonks.api.deps import PageDep, PrincipalDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
+from stonks.app.pagination import Page, page_of
 from stonks.app.portfolio import PortfolioSummaryView, TradingModeView
 from stonks.app.subscriptions import SubscribeRequest, SubscriptionUpdate, SubscriptionView
 from stonks.auth import Permission
@@ -26,36 +27,43 @@ SubscriptionId = Annotated[str, Path(max_length=64)]
 
 @router.get(
     "",
-    response_model=list[PortfolioSummaryView],
+    response_model=Page[PortfolioSummaryView],
     operation_id="listPortfolios",
     dependencies=needs(Permission.READ),
 )
-def list_portfolios(services: ServicesDep, principal: PrincipalDep) -> list[PortfolioSummaryView]:
-    """Your portfolios, oldest first, each marked paper or live."""
-    return services.portfolio.list_mine(principal)
+def list_portfolios(
+    services: ServicesDep, principal: PrincipalDep, page: PageDep
+) -> Page[PortfolioSummaryView]:
+    """Your portfolios, oldest first, each marked paper or live. Empty
+    for someone who only follows strategies for signals."""
+    return page_of(services.portfolio.list_mine(principal), page)
 
 
 @router.get(
     "/trading-modes",
-    response_model=list[TradingModeView],
+    response_model=Page[TradingModeView],
     operation_id="listTradingModes",
     dependencies=needs(Permission.READ),
 )
-def list_trading_modes(services: ServicesDep, principal: PrincipalDep) -> list[TradingModeView]:
+def list_trading_modes(
+    services: ServicesDep, principal: PrincipalDep, page: PageDep
+) -> Page[TradingModeView]:
     """For each of your portfolios: does it trade paper or live money, and
     through which broker."""
-    return services.portfolio.trading_modes(principal)
+    return page_of(services.portfolio.trading_modes(principal), page)
 
 
 @subscriptions_router.get(
     "",
-    response_model=list[SubscriptionView],
+    response_model=Page[SubscriptionView],
     operation_id="listSubscriptions",
     dependencies=needs(Permission.READ),
 )
-def list_subscriptions(services: ServicesDep, principal: PrincipalDep) -> list[SubscriptionView]:
+def list_subscriptions(
+    services: ServicesDep, principal: PrincipalDep, page: PageDep
+) -> Page[SubscriptionView]:
     """Your subscriptions, with the paper-day count and what still blocks auto."""
-    return services.subscriptions.list(principal)
+    return page_of(services.subscriptions.list(principal), page)
 
 
 @subscriptions_router.post(

@@ -26,11 +26,11 @@ import { ModeStamp } from './mode-stamp';
           <option value="">My default portfolio</option>
           @for (p of ctx.options(); track p.id) {
             <option [value]="p.id" [selected]="p.id === ctx.selectedId()">
-              {{ p.name }}{{ p.mode === 'live' ? ' (live)' : '' }}
+              {{ p.name }}{{ p.trading === 'live' ? ' (live)' : '' }}
             </option>
           }
         </select>
-        @if (ctx.current()?.mode; as mode) {
+        @if (ctx.current()?.trading; as mode) {
           <app-mode-stamp [live]="mode === 'live'" />
         }
       </span>

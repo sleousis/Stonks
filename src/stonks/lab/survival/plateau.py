@@ -58,12 +58,36 @@ class PlateauOptions(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     #: Step as a fraction of each numeric parameter's range.
-    step: float = Field(default=0.15, ge=0.05, le=0.3)
-    min_train_ratio: float = Field(default=0.7, ge=0.5, le=0.9)
-    min_oos_sharpe_fraction: float = Field(default=0.5, ge=0.0, le=1.0)
-    min_neighbours: int = Field(default=2, ge=1)
+    step: float = Field(
+        default=0.15,
+        ge=0.05,
+        le=0.3,
+        description="How far to nudge each setting, as a fraction of its range.",
+    )
+    min_train_ratio: float = Field(
+        default=0.7,
+        ge=0.5,
+        le=0.9,
+        description="Nudged settings must keep at least this share of the best training score.",
+    )
+    min_oos_sharpe_fraction: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Nudged settings must keep at least this share of the held-out Sharpe.",
+    )
+    min_neighbours: int = Field(
+        default=2,
+        ge=1,
+        description="Fewest nudged settings to judge. Fewer fails for lack of data.",
+    )
     #: Optional gate on Ehlers' robustness ratio; ``None`` only reports it.
-    min_robustness_ratio: float | None = Field(default=None, ge=0.0, le=1.0)
+    min_robustness_ratio: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Optional floor on the robustness ratio. Blank only reports it.",
+    )
     #: Worker processes; ``None`` means ``lab.parallel.default_max_workers()``.
     max_workers: int | None = Field(default=None, ge=1)
 

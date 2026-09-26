@@ -8,7 +8,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { FORBIDDEN, TRADER, problem } from '../../../testing/auth-fixtures';
-import { nextRequest, tick } from '../../../testing/http';
+import { nextRequest, page, tick } from '../../../testing/http';
 import { ProfilePage } from './profile.page';
 
 const TOKEN: TokenView = {
@@ -41,7 +41,7 @@ describe('ProfilePage', () => {
     await loading;
     fixture = TestBed.createComponent(ProfilePage);
     fixture.detectChanges();
-    (await nextRequest(controller, '/api/auth/tokens')).flush(tokens);
+    (await nextRequest(controller, '/api/auth/tokens')).flush(page(tokens));
     await tick();
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
@@ -128,7 +128,7 @@ describe('ProfilePage', () => {
     const req = await nextRequest(controller, '/api/auth/tokens', 'POST');
     expect(req.request.body).toEqual({ name: 'ci', scopes: ['read'], expires_in_days: 90 });
     req.flush({ token: 'stk_new_secret', info: { ...TOKEN, id: 'tok_2', name: 'ci' } });
-    (await nextRequest(controller, '/api/auth/tokens')).flush([TOKEN]);
+    (await nextRequest(controller, '/api/auth/tokens')).flush(page([TOKEN]));
     await tick();
     fixture.detectChanges();
     expect(el.querySelector('.single')?.textContent).toBe('stk_new_secret');
@@ -153,7 +153,7 @@ describe('ProfilePage', () => {
       status: 204,
       statusText: 'No Content',
     });
-    (await nextRequest(controller, '/api/auth/tokens')).flush([]);
+    (await nextRequest(controller, '/api/auth/tokens')).flush(page([]));
     await tick();
     fixture.detectChanges();
     expect(el.textContent).toContain('No tokens');

@@ -802,9 +802,10 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 
 ### `engage_kill_switch`
 
-Stop new orders at once. Without confirm=true returns a preview
-and changes nothing. Resuming is done in the console or the CLI with
-a typed confirmation.
+Stop new orders at once and cancel the orders still working at the
+broker. Without confirm=true returns a preview and changes nothing.
+Resuming is done in the console or the CLI with a typed confirmation
+and a fresh 2FA code.
 
 Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 
@@ -813,7 +814,7 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 | `scope` | "global" \| "user" \| "portfolio" | yes |  | global: every portfolio (admins only); user: all of yours; portfolio: one of yours (give portfolio_id) |
 | `reason` | string | yes |  | audited |
 | `portfolio_id` | string \| null | no | `null` |  |
-| `flatten` | boolean | no | `false` | stop buys only; sells and exits still go through |
+| `flatten` | boolean | no | `false` | stop buys and cancel working buy orders only: sells and exits still go through, and no position is closed |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
 ### `ensure_universe_data`

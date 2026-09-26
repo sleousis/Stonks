@@ -59,8 +59,8 @@ class BrokerAccountRow:
 
 @dataclass(frozen=True)
 class ProviderInfo:
-    """What a UI needs to offer a provider. Only enabled and configured
-    providers are listed."""
+    """What a UI needs to offer a provider. ``enabled`` is true when an
+    admin turned it on and it is configured: only those can be connected."""
 
     name: str
     display_name: str
@@ -68,6 +68,8 @@ class ProviderInfo:
     capabilities: tuple[str, ...]
     credential_fields: tuple[str, ...]
     can_trade: bool
+    enabled: bool = True
+    has_paper: bool = False
 
 
 @dataclass(frozen=True)

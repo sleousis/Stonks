@@ -73,22 +73,32 @@
         />
       } @else if (!providers.hasValue()) {
         <app-loading-state label="Loading brokers" [rows]="2" />
-      } @else if (providers.value().length === 0) {
-        <app-empty-state
-          title="No brokers are turned on yet"
-          message="An admin must turn on a broker before anyone can connect one. Ask your admin."
-        />
       } @else {
+        @if (noneEnabled()) {
+          <app-empty-state
+            title="No brokers are turned on yet"
+            message="An admin must turn on a broker before anyone can connect one. Ask your admin."
+          />
+        }
         <ul class="providers">
           @for (p of providers.value(); track p.name) {
-            <li class="provider">
+            <li class="provider" [class.off]="!p.enabled">
               <div class="provider-head">
                 <h3>{{ p.display_name }}</h3>
-                <app-status-pill status="active" label="Turned on" />
+                @if (p.enabled) {
+                  <app-status-pill status="active" label="Turned on" />
+                } @else {
+                  <app-status-pill status="disabled" tone="neutral" label="Turned off" />
+                }
               </div>
-              <p>{{ gives(p) }} Read only.</p>
+              <p>
+                {{ gives(p) }} Read only.
+                @if (p.has_paper) {
+                  Paper accounts work too.
+                }
+              </p>
               <p class="muted">{{ flow(p) }}</p>
-              @if (canManage()) {
+              @if (canManage() && p.enabled) {
                 @if (p.auth_flow === 'portal') {
                   <button
                     type="button"

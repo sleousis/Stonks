@@ -27,7 +27,7 @@ export function providerFlow(provider: ProviderView): string {
 
 /** Brokers with a paper endpoint take an extra `paper` field (Alpaca). */
 export function offersPaper(provider: ProviderView): boolean {
-  return provider.auth_flow === 'api_key' && provider.capabilities.includes('trade');
+  return provider.has_paper;
 }
 
 const FIELD_WORDS: Record<string, string> = {

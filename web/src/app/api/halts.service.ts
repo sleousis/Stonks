@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 
 import { SILENT_HEADERS } from '../core/http/interceptors';
-import { unwrap } from './api-call';
+import { allItems, unwrap } from './api-call';
 import {
   clearHalt,
   engageKillSwitch,
@@ -19,11 +19,13 @@ export const RESUME_CONFIRMATION = 'RESUME TRADING';
 export class HaltsService {
   /** Active halts, or every halt with `includeCleared`. `silent` skips error toasts (polling). */
   list(includeCleared = false, silent = false) {
-    return unwrap(
-      listHalts({
-        query: { include_cleared: includeCleared },
-        headers: silent ? SILENT_HEADERS : undefined,
-      }),
+    return allItems((page) =>
+      unwrap(
+        listHalts({
+          query: { include_cleared: includeCleared, ...page },
+          headers: silent ? SILENT_HEADERS : undefined,
+        }),
+      ),
     );
   }
 

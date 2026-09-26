@@ -127,6 +127,8 @@ class PortfolioSummaryView(BaseModel):
     broker_connection_id: str | None
     trading: Trading
     created_at: datetime
+    #: The portfolio reads use when no ``portfolio_id`` is sent.
+    is_default: bool = False
 
 
 class PortfolioService:
@@ -164,6 +166,11 @@ class PortfolioService:
         with self._ctx.state() as state:
             books = PortfolioRepository(state).list(principal.scope)
         modes = {m.portfolio_id: m for m in self._modes(books)}
+        open_books = sorted(
+            (p for p in books if p.status != "archived"),
+            key=lambda p: (p.id != DEFAULT_PORTFOLIO_ID, p.created_at, p.id),
+        )
+        default_id = open_books[0].id if open_books else None
         return [
             PortfolioSummaryView(
                 id=p.id,
@@ -175,6 +182,7 @@ class PortfolioService:
                 broker_connection_id=p.broker_connection_id,
                 trading=modes[p.id].trading,
                 created_at=datetime.fromisoformat(p.created_at),
+                is_default=p.id == default_id,
             )
             for p in books
         ]

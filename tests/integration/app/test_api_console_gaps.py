@@ -73,6 +73,26 @@ def test_survival_tests_list_their_option_schemas(client):
     assert "oos" in promo["quick"]["tests"]
 
 
+def test_every_survival_option_says_what_it_does_and_hides_plumbing(client):
+    for test in client.get("/api/lab/survival-tests").json():
+        schema = test["options_schema"]
+        props = schema.get("properties", {})
+        # seeds and worker counts are plumbing, not choices for a trader
+        assert not {"seed", "max_workers"} & set(props), test["id"]
+        assert not {"seed", "max_workers"} & set(schema.get("required", [])), test["id"]
+        for name, prop in props.items():
+            text = prop.get("description", "")
+            assert text.strip(), f"{test['id']}.{name} has no description"
+            assert "``" not in text and ";" not in text, f"{test['id']}.{name}: {text}"
+
+
+def test_hidden_options_are_still_accepted_in_a_request():
+    from stonks.lab.survival.registry import options_model
+
+    assert options_model("oos")(seed=3).seed == 3
+    assert "max_workers" in options_model("perturbation").model_fields
+
+
 # ---- lab sweeps --------------------------------------------------------------------------------
 
 

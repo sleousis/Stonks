@@ -5,7 +5,7 @@ import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/route
 
 import { provideApi } from '../../api/provide-api';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
-import { nextRequest, tick } from '../../../testing/http';
+import { nextRequest, page, tick } from '../../../testing/http';
 import { ConnectionCallbackPage } from './connection-callback.page';
 import { SNAPTRADE, account, connection } from './connections.fixtures';
 
@@ -54,9 +54,9 @@ describe('ConnectionCallbackPage', () => {
     expect(url).toContain('status=SUCCESS');
     req.flush(connection({ id: 'con_2', provider: 'snaptrade' }));
     await tick();
-    (await nextRequest(http, '/api/connections/con_2/accounts')).flush([
-      account({ connection_id: 'con_2', name: 'Brokerage', portfolio_id: 'pf_9' }),
-    ]);
+    (await nextRequest(http, '/api/connections/con_2/accounts')).flush(
+      page([account({ connection_id: 'con_2', name: 'Brokerage', portfolio_id: 'pf_9' })]),
+    );
     (await nextRequest(http, '/api/connections/providers')).flush([SNAPTRADE]);
     await settle();
     expect(el.textContent).toContain('SnapTrade is connected.');
@@ -75,7 +75,7 @@ describe('ConnectionCallbackPage', () => {
       }),
     );
     await tick();
-    (await nextRequest(http, '/api/connections/con_2/accounts')).flush([]);
+    (await nextRequest(http, '/api/connections/con_2/accounts')).flush(page([]));
     (await nextRequest(http, '/api/connections/providers')).flush([]);
     await settle();
     expect(el.textContent).toContain('Waiting to finish');

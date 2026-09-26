@@ -6,9 +6,9 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, Path, Query, Response
 
-from stonks.api.deps import ScopeDep, ServicesDep, needs
+from stonks.api.deps import PageDep, ScopeDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.app.notifications import (
     FeedView,
@@ -23,6 +23,7 @@ from stonks.app.notifications import (
     VapidKeyView,
     WebhookUpdate,
 )
+from stonks.app.pagination import Page, page_of
 from stonks.auth import Permission
 from stonks.notify.service import FEED_LIMIT_MAX
 
@@ -41,11 +42,13 @@ def vapid_key(services: ServicesDep, scope: ScopeDep) -> VapidKeyView:
 
 
 @push_router.get(
-    "/subscriptions", response_model=list[PushDeviceView], operation_id="listPushSubscriptions"
+    "/subscriptions", response_model=Page[PushDeviceView], operation_id="listPushSubscriptions"
 )
-def list_push_subscriptions(services: ServicesDep, scope: ScopeDep) -> list[PushDeviceView]:
+def list_push_subscriptions(
+    services: ServicesDep, scope: ScopeDep, page: PageDep
+) -> Page[PushDeviceView]:
     """Your registered browsers and installed apps (no endpoints or keys)."""
-    return services.notifications.devices(scope)
+    return page_of(services.notifications.devices(scope), page)
 
 
 @push_router.post(
@@ -74,6 +77,21 @@ def delete_push_subscription(
 ) -> Response:
     """Unregister a browser by its endpoint (404 when it isn't yours)."""
     services.notifications.unsubscribe(scope, body.endpoint)
+    return Response(status_code=204)
+
+
+@push_router.delete(
+    "/subscriptions/{device_id}",
+    status_code=204,
+    operation_id="deletePushDevice",
+    dependencies=needs(Permission.NOTIFICATIONS_MANAGE),
+)
+def delete_push_device(
+    device_id: Annotated[str, Path(max_length=64)], services: ServicesDep, scope: ScopeDep
+) -> Response:
+    """Unregister one of your devices by the id the list shows, for
+    removing another browser from Settings (404 when it isn't yours)."""
+    services.notifications.remove_device(scope, device_id)
     return Response(status_code=204)
 
 

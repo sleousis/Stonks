@@ -150,7 +150,7 @@ def test_the_rest_routes_engage_list_and_resume(client):
     r = client.post("/api/halts/kill", json={"scope": "global", "reason": "panic"}, headers=AUTH)
     assert r.status_code == 201, r.text
     halt_id = r.json()["id"]
-    listed = client.get("/api/halts", headers=AUTH).json()
+    listed = client.get("/api/halts", headers=AUTH).json()["items"]
     assert [h["id"] for h in listed] == [halt_id]
     bad = client.post(
         f"/api/halts/{halt_id}/resume",
@@ -178,8 +178,8 @@ def test_the_rest_routes_engage_list_and_resume(client):
     finally:
         client.app.dependency_overrides.clear()
     assert ok.status_code == 200 and ok.json()["active"] is False
-    assert client.get("/api/halts", headers=AUTH).json() == []
-    assert len(client.get("/api/halts?include_cleared=true", headers=AUTH).json()) == 1
+    assert client.get("/api/halts", headers=AUTH).json()["items"] == []
+    assert client.get("/api/halts?include_cleared=true", headers=AUTH).json()["total"] == 1
 
 
 def test_the_rest_routes_need_the_token(client):

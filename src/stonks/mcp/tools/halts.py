@@ -1,7 +1,7 @@
 """Kill switch and risk-halt tools (roadmap 12.6, BL-28): a read-only list,
 plus a guarded kill switch. Resuming the kill switch and clearing a halt
 turn trading back on, so they stay in the console and the CLI (resuming
-needs a typed confirmation, and later a fresh second factor)."""
+needs a typed confirmation and a fresh 2FA code)."""
 
 # No ``from __future__ import annotations`` (see common.py).
 
@@ -44,18 +44,28 @@ def register(t: ToolContext) -> None:
         reason: Annotated[str, Field(min_length=1, max_length=500, description="audited")],
         portfolio_id: str | None = None,
         flatten: Annotated[
-            bool, Field(description="stop buys only; sells and exits still go through")
+            bool,
+            Field(
+                description="stop buys and cancel working buy orders only: sells and exits "
+                "still go through, and no position is closed"
+            ),
         ] = False,
         confirm: Confirm = False,
     ) -> dict[str, Any]:
-        """Stop new orders at once. Without confirm=true returns a preview
-        and changes nothing. Resuming is done in the console or the CLI with
-        a typed confirmation."""
+        """Stop new orders at once and cancel the orders still working at the
+        broker. Without confirm=true returns a preview and changes nothing.
+        Resuming is done in the console or the CLI with a typed confirmation
+        and a fresh 2FA code."""
         body = drop_none(
             {"scope": scope, "portfolio_id": portfolio_id, "flatten": flatten, "reason": reason}
         )
         if not confirm:
-            what = "buys (sells and exits still go through)" if flatten else "every new order"
+            what = (
+                "buys and cancels working buy orders (sells and exits still go through, "
+                "and no position is closed)"
+                if flatten
+                else "every new order and cancels working orders"
+            )
             target = {
                 "global": "every portfolio",
                 "user": "all of your portfolios",
@@ -66,8 +76,9 @@ def register(t: ToolContext) -> None:
                 "applied": False,
                 "request": body,
                 "warnings": [
-                    f"stops {what} for {target} from the next tick until resumed",
-                    "resuming needs the console or the CLI and the typed confirmation",
+                    f"stops {what} for {target} until resumed",
+                    "resuming needs the console or the CLI, the typed confirmation "
+                    "and a fresh 2FA code",
                 ],
                 "next_step": CONFIRM_HINT,
             }

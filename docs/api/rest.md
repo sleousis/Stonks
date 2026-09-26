@@ -38,10 +38,10 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | POST | `/api/auth/mfa/verify` | Verify Mfa | none | [MfaCodeRequest](#mfacoderequest) | [MfaView](#mfaview) |
 | POST | `/api/auth/password` | Change Password | `password.change` | [PasswordChangeRequest](#passwordchangerequest) |  |
 | POST | `/api/auth/recovery-codes` | Regenerate Recovery Codes | `mfa.recovery_codes` |  | [RecoveryCodesView](#recoverycodesview) |
-| GET | `/api/auth/tokens` | List Tokens | sign-in |  | list[[TokenView](#tokenview)] |
+| GET | `/api/auth/tokens` | List Tokens | sign-in |  | [Page_TokenView_](#page_tokenview_) |
 | POST | `/api/auth/tokens` | Create Token | `tokens.manage` | [TokenCreateRequest](#tokencreaterequest) | [TokenCreatedView](#tokencreatedview) |
 | DELETE | `/api/auth/tokens/{token_id}` | Revoke Token | `tokens.revoke` |  |  |
-| GET | `/api/auth/users` | List Users | `users.read` |  | list[[UserView](#userview)] |
+| GET | `/api/auth/users` | List Users | `users.read` |  | [Page_UserView_](#page_userview_) |
 | POST | `/api/auth/users` | Create User | `users.manage` | [UserCreateRequest](#usercreaterequest) | [UserView](#userview) |
 | PATCH | `/api/auth/users/{user_id}` | Update User | `users.manage` | [UserUpdateRequest](#userupdaterequest) | [UserView](#userview) |
 | DELETE | `/api/auth/users/{user_id}/mfa` | Reset User Mfa | `users.manage` |  |  |
@@ -51,7 +51,7 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/backups` | List Backups | `operations.run` |  | list[[BackupView](#backupview)] |
+| GET | `/api/backups` | List Backups | `operations.run` |  | [Page_BackupView_](#page_backupview_) |
 | POST | `/api/backups` | Start Backup | `operations.run` |  | [Job](#job) |
 | GET | `/api/backups/jobs/{job_id}/result` | Get Backup Result | `operations.run` |  | [BackupResultView](#backupresultview) |
 | GET | `/api/backups/restores/{job_id}/result` | Get Restore Result | `operations.run` |  | [RestoreResultView](#restoreresultview) |
@@ -77,14 +77,14 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/connections` | List Connections | sign-in |  | list[[ConnectionView](#connectionview)] |
+| GET | `/api/connections` | List Connections | sign-in |  | [Page_ConnectionView_](#page_connectionview_) |
 | GET | `/api/connections/callback` | Complete Portal | sign-in |  | [ConnectionView](#connectionview) |
 | POST | `/api/connections/keys` | Connect With Keys | `connection.manage` | [ConnectWithKeysRequest](#connectwithkeysrequest) | [ConnectionView](#connectionview) |
 | POST | `/api/connections/portal` | Start Portal | `connection.manage` | [StartPortalRequest](#startportalrequest) | [PortalLinkView](#portallinkview) |
 | GET | `/api/connections/providers` | List Providers | sign-in |  | list[[ProviderView](#providerview)] |
 | GET | `/api/connections/{connection_id}` | Get Connection | sign-in |  | [ConnectionView](#connectionview) |
 | DELETE | `/api/connections/{connection_id}` | Delete Connection | `connection.manage` |  | [DisconnectView](#disconnectview) |
-| GET | `/api/connections/{connection_id}/accounts` | List Accounts | sign-in |  | list[[stonks__app__connections__BrokerAccountView](#stonks__app__connections__brokeraccountview)] |
+| GET | `/api/connections/{connection_id}/accounts` | List Accounts | sign-in |  | [Page_BrokerAccountView_](#page_brokeraccountview_) |
 | POST | `/api/connections/{connection_id}/link` | Link Account | `portfolio.manage` | [LinkAccountRequest](#linkaccountrequest) | [LinkResultView](#linkresultview) |
 | POST | `/api/connections/{connection_id}/sync` | Sync Connection | `portfolio.manage` |  | [SyncResultView](#syncresultview) |
 
@@ -92,7 +92,7 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/halts` | List Halts | sign-in |  | list[[HaltView](#haltview)] |
+| GET | `/api/halts` | List Halts | sign-in |  | [Page_HaltView_](#page_haltview_) |
 | POST | `/api/halts/kill` | Engage Kill Switch | `killswitch.user` | [KillSwitchRequest](#killswitchrequest) | [HaltView](#haltview) |
 | GET | `/api/halts/{halt_id}` | Get Halt | sign-in |  | [HaltView](#haltview) |
 | POST | `/api/halts/{halt_id}/clear` | Clear Halt | `risk.reset` | [ClearHaltRequest](#clearhaltrequest) | [HaltView](#haltview) |
@@ -182,16 +182,17 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | GET | `/api/portfolio` | Get Portfolio | sign-in |  | [PortfolioView](#portfolioview) |
 | GET | `/api/portfolio/snapshots` | List Snapshots | sign-in |  | [Page_SnapshotView_](#page_snapshotview_) |
 | GET | `/api/portfolio/totals` | Get Totals | `portfolio.totals` |  | [PortfolioTotalsView](#portfoliototalsview) |
-| GET | `/api/portfolios` | List Portfolios | `data.read` |  | list[[PortfolioSummaryView](#portfoliosummaryview)] |
-| GET | `/api/portfolios/trading-modes` | List Trading Modes | `data.read` |  | list[[TradingModeView](#tradingmodeview)] |
+| GET | `/api/portfolios` | List Portfolios | `data.read` |  | [Page_PortfolioSummaryView_](#page_portfoliosummaryview_) |
+| GET | `/api/portfolios/trading-modes` | List Trading Modes | `data.read` |  | [Page_TradingModeView_](#page_tradingmodeview_) |
 
 ## push endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/push/subscriptions` | List Push Subscriptions | sign-in |  | list[[PushDeviceView](#pushdeviceview)] |
+| GET | `/api/push/subscriptions` | List Push Subscriptions | sign-in |  | [Page_PushDeviceView_](#page_pushdeviceview_) |
 | POST | `/api/push/subscriptions` | Create Push Subscription | `notifications.manage` | [PushSubscriptionRequest](#pushsubscriptionrequest) | [PushDeviceView](#pushdeviceview) |
 | DELETE | `/api/push/subscriptions` | Delete Push Subscription | `notifications.manage` | [PushUnsubscribeRequest](#pushunsubscriberequest) |  |
+| DELETE | `/api/push/subscriptions/{device_id}` | Delete Push Device | `notifications.manage` |  |  |
 | GET | `/api/push/vapid-key` | Vapid Key | sign-in |  | [VapidKeyView](#vapidkeyview) |
 
 ## risk endpoints
@@ -235,7 +236,7 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | GET | `/api/strategies/summary` | Strategy Summary | sign-in |  | [StrategyStatusCounts](#strategystatuscounts) |
 | GET | `/api/strategies/{strategy_id}` | Get Strategy | sign-in |  | [StrategyDetail](#strategydetail) |
 | GET | `/api/strategies/{strategy_id}/golive` | Get Golive | sign-in |  | [GoLiveReport](#golivereport) |
-| GET | `/api/strategies/{strategy_id}/history` | Get Strategy History | sign-in |  | list[[StatusChangeView](#statuschangeview)] |
+| GET | `/api/strategies/{strategy_id}/history` | Get Strategy History | sign-in |  | [Page_StatusChangeView_](#page_statuschangeview_) |
 | POST | `/api/strategies/{strategy_id}/promote` | Promote | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
 | POST | `/api/strategies/{strategy_id}/retire` | Retire | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
 | POST | `/api/strategies/{strategy_id}/shadow` | Shadow | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
@@ -264,7 +265,7 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/subscriptions` | List Subscriptions | `data.read` |  | list[[SubscriptionView](#subscriptionview)] |
+| GET | `/api/subscriptions` | List Subscriptions | `data.read` |  | [Page_SubscriptionView_](#page_subscriptionview_) |
 | POST | `/api/subscriptions` | Subscribe | `portfolio.trade` | [SubscribeRequest](#subscriberequest) | [SubscriptionView](#subscriptionview) |
 | PATCH | `/api/subscriptions/{subscription_id}` | Update Subscription | `portfolio.trade` | [SubscriptionUpdate](#subscriptionupdate) | [SubscriptionView](#subscriptionview) |
 
@@ -291,7 +292,7 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/universes` | List Universes | sign-in |  | list[[UniverseView](#universeview)] |
+| GET | `/api/universes` | List Universes | sign-in |  | [Page_UniverseView_](#page_universeview_) |
 | POST | `/api/universes` | Create Universe | `lab.run` | [UniverseCreate](#universecreate) | [UniverseView](#universeview) |
 | GET | `/api/universes/ensure/{job_id}/result` | Get Ensure Result | sign-in |  | [EnsureReport](#ensurereport) |
 | POST | `/api/universes/index-history` | Import Index History | `lab.run` | [IndexHistoryImport](#indexhistoryimport) | [IndexHistoryView](#indexhistoryview) |
@@ -503,6 +504,7 @@ API-key connect. ``fields`` are the provider's ``credential_fields`` (plus ``pap
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `accounts_count` | integer | no |  |
 | `consecutive_failures` | integer | yes |  |
 | `created_at` | date-time | yes |  |
 | `id` | string | yes |  |
@@ -1262,6 +1264,33 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
 
+### Page_BackupView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[BackupView](#backupview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_BrokerAccountView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[stonks__app__connections__BrokerAccountView](#stonks__app__connections__brokeraccountview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_ConnectionView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[ConnectionView](#connectionview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
 ### Page_CoverageRow_
 
 | Field | Type | Required | Description |
@@ -1285,6 +1314,15 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[FillView](#fillview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_HaltView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[HaltView](#haltview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
@@ -1334,6 +1372,24 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
 
+### Page_PortfolioSummaryView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[PortfolioSummaryView](#portfoliosummaryview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_PushDeviceView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[PushDeviceView](#pushdeviceview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
 ### Page_ShadowDecisionView_
 
 | Field | Type | Required | Description |
@@ -1370,6 +1426,15 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
 
+### Page_StatusChangeView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[StatusChangeView](#statuschangeview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
 ### Page_StrategySummary_
 
 | Field | Type | Required | Description |
@@ -1379,11 +1444,56 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
 
+### Page_SubscriptionView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[SubscriptionView](#subscriptionview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
 ### Page_TickRun_
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[TickRun](#tickrun)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_TokenView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[TokenView](#tokenview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_TradingModeView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[TradingModeView](#tradingmodeview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_UniverseView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[UniverseView](#universeview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_UserView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[UserView](#userview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
@@ -1450,6 +1560,7 @@ One row per day. ``strategy_id`` is ``None`` for the real portfolio and a shadow
 | `created_at` | date-time | yes |  |
 | `id` | string | yes |  |
 | `initial_cash` | number \| null | yes |  |
+| `is_default` | boolean | no |  |
 | `kind` | "simulated" \| "broker" | yes |  |
 | `name` | string | yes |  |
 | `status` | "active" \| "paused" \| "archived" | yes |  |
@@ -1607,6 +1718,8 @@ What a reviewer reads before promoting; it doesn't change the verdict. ``None`` 
 | `capabilities` | list[string] | yes |  |
 | `credential_fields` | list[string] | yes |  |
 | `display_name` | string | yes |  |
+| `enabled` | boolean | yes |  |
+| `has_paper` | boolean | yes |  |
 | `name` | string | yes |  |
 
 ### PushDeviceView
@@ -1777,6 +1890,7 @@ Type: "viewer" \| "trader" \| "admin"
 | `next_as_of` | date \| null | yes |  |
 | `next_run_at` | date-time \| null | yes |  |
 | `trigger` | string | yes |  |
+| `trigger_text` | string | no |  |
 
 ### ScheduledRunView
 

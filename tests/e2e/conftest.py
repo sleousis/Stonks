@@ -48,28 +48,18 @@ class Refusal:
         return status == self.status and re.search(self.path, url) is not None
 
 
-#: Failed requests the console makes today that are not part of any journey.
-#: Each one is an app issue listed in docs/testing.md; remove it once fixed.
+#: Failed requests every signed-out visit makes on purpose. Anything else
+#: the console gets refused is an app issue: list it in docs/testing.md and
+#: here until it is fixed.
 KNOWN_NOISE: tuple[Refusal, ...] = (
     Refusal(401, r"/api/auth/me$", "signed out: the console asks who is signed in"),
-    Refusal(401, r"/api/(halts|schedule|strategies)\b", "BUG-1: shell polls while signed out"),
-    Refusal(404, r"/api/subscriptions$", "BUG-2: no /api/subscriptions route yet"),
 )
 
 
 #: axe violations the console has today, by (page path, rule). Each is an app
-#: fix listed in docs/testing.md; a strict xfail keeps it visible until fixed.
-KNOWN_AXE: dict[tuple[str, str], str] = {
-    ("/settings", "landmark-unique"): (
-        "A11Y-1: the Notifications panel on Settings has the same name as the toast region"
-    ),
-    ("/universes", "landmark-unique"): (
-        "A11Y-2: the data table's scroll region repeats its panel's name (Stored universes)"
-    ),
-    ("/ops/halts", "landmark-unique"): (
-        "A11Y-2: the data table's scroll region repeats its panel's name (Active halts)"
-    ),
-}
+#: fix listed in docs/testing.md; a test keeps it visible until fixed. Empty
+#: today: add an entry only for a violation that cannot be fixed yet.
+KNOWN_AXE: dict[tuple[str, str], str] = {}
 
 
 def new_axe_violations(page: Page, violations: list[dict[str, Any]]) -> list[dict[str, Any]]:

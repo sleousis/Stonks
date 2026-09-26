@@ -51,14 +51,33 @@ _DEFAULT_ASSET_CLASS = "equity"
 class CrossInstrumentOptions(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    min_positive_share: float = Field(default=0.6, ge=0.5, le=0.8)
-    max_pnl_share: float = Field(default=0.5, gt=0.0, le=1.0)
-    min_tickers: int = Field(default=3, ge=2)
+    min_positive_share: float = Field(
+        default=0.6,
+        ge=0.5,
+        le=0.8,
+        description="Share of tickers that must make money per trade on average.",
+    )
+    max_pnl_share: float = Field(
+        default=0.5,
+        gt=0.0,
+        le=1.0,
+        description="Largest share of the total profit one ticker may hold.",
+    )
+    min_tickers: int = Field(
+        default=3, ge=2, description="Fewest tickers to judge. Fewer fails for lack of data."
+    )
     #: Extra tickers to test; any outside the universe's asset classes are
     #: dropped (and named in the notes).
-    held_out: list[str] = Field(default_factory=list)
+    held_out: list[str] = Field(
+        default_factory=list,
+        description="Extra tickers to test that the strategy was not tuned on. Tickers of other asset classes are dropped.",
+    )
     #: How many more same-class tickers to pick from the lake, in id order.
-    held_out_auto: int = Field(default=0, ge=0)
+    held_out_auto: int = Field(
+        default=0,
+        ge=0,
+        description="How many more tickers of the same asset class to pick from the stored data.",
+    )
     #: Worker processes; ``None`` means ``lab.parallel.default_max_workers()``.
     max_workers: int | None = Field(default=None, ge=1)
 

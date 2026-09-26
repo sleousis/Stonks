@@ -171,6 +171,27 @@ def test_compose_runs_the_scheduler_loop_against_the_api():
     assert env["STONKS_DATA_DIR"] == "/data"
 
 
+def _seconds(value: str) -> int:
+    units = {"s": 1, "m": 60, "h": 3600}
+    return int(value[:-1]) * units[value[-1]]
+
+
+def test_compose_lets_a_running_tick_finish_before_the_api_is_killed():
+    """A tick is never interrupted mid-way (``JobRunner.shutdown``), so the
+    api container must wait at least as long as the scheduler waits for it,
+    not Docker's default 10 s."""
+    from pathlib import Path
+
+    import yaml
+
+    compose = yaml.safe_load(
+        (Path(__file__).parents[2] / "deploy" / "compose.yaml").read_text(encoding="utf-8")
+    )
+    api = _seconds(compose["services"]["api"]["stop_grace_period"])
+    scheduler = _seconds(compose["services"]["scheduler"]["stop_grace_period"])
+    assert api >= 5 * 60 and api >= scheduler
+
+
 # ---- actions ----------------------------------------------------------------------------
 
 

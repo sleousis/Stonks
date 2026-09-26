@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 
 import { SILENT_HEADERS } from '../core/http/interceptors';
-import { unwrap } from './api-call';
+import { allItems, unwrap } from './api-call';
 import {
   getGoLiveReport,
   getStrategy,
@@ -45,7 +45,9 @@ export class StrategiesService {
 
   /** Audited status changes and interventions, oldest first. */
   history(strategyId: string) {
-    return unwrap(getStrategyHistory({ path: { strategy_id: strategyId } }));
+    return allItems((query) =>
+      unwrap(getStrategyHistory({ path: { strategy_id: strategyId }, query })),
+    );
   }
 
   /**

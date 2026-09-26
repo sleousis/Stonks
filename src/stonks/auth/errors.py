@@ -29,6 +29,17 @@ class NotAuthenticated(AuthError):
         super().__init__(message, headers={"WWW-Authenticate": "Bearer"})
 
 
+class ReadsOpen(NotAuthenticated):
+    """No credential on a route about the caller, while this server answers
+    reads without one (``open_reads_on_loopback`` from a loopback peer). A
+    signed-out console reads this instead of probing a data route."""
+
+    code = "reads_open"
+
+    def __init__(self) -> None:
+        super().__init__("nobody is signed in; this server answers reads without a credential")
+
+
 class InvalidCredentials(AuthError):
     """Wrong email, password or second-factor code (never says which)."""
 

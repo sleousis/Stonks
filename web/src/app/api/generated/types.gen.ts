@@ -516,6 +516,10 @@ export type ConnectWithKeysRequest = {
  */
 export type ConnectionView = {
     /**
+     * Accounts Count
+     */
+    accounts_count?: number;
+    /**
      * Consecutive Failures
      */
     consecutive_failures: number;
@@ -2555,6 +2559,72 @@ export type PageAlertView = {
 };
 
 /**
+ * Page[BackupView]
+ */
+export type PageBackupView = {
+    /**
+     * Items
+     */
+    items: Array<BackupView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[BrokerAccountView]
+ */
+export type PageBrokerAccountView = {
+    /**
+     * Items
+     */
+    items: Array<StonksAppConnectionsBrokerAccountView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[ConnectionView]
+ */
+export type PageConnectionView = {
+    /**
+     * Items
+     */
+    items: Array<ConnectionView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[CoverageRow]
  */
 export type PageCoverageRow = {
@@ -2606,6 +2676,28 @@ export type PageFillView = {
      * Items
      */
     items: Array<FillView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[HaltView]
+ */
+export type PageHaltView = {
+    /**
+     * Items
+     */
+    items: Array<HaltView>;
     /**
      * Limit
      */
@@ -2731,6 +2823,50 @@ export type PageOrderView = {
 };
 
 /**
+ * Page[PortfolioSummaryView]
+ */
+export type PagePortfolioSummaryView = {
+    /**
+     * Items
+     */
+    items: Array<PortfolioSummaryView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[PushDeviceView]
+ */
+export type PagePushDeviceView = {
+    /**
+     * Items
+     */
+    items: Array<PushDeviceView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[ShadowDecisionView]
  */
 export type PageShadowDecisionView = {
@@ -2819,6 +2955,28 @@ export type PageStatementFlagView = {
 };
 
 /**
+ * Page[StatusChangeView]
+ */
+export type PageStatusChangeView = {
+    /**
+     * Items
+     */
+    items: Array<StatusChangeView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[StrategySummary]
  */
 export type PageStrategySummary = {
@@ -2841,6 +2999,28 @@ export type PageStrategySummary = {
 };
 
 /**
+ * Page[SubscriptionView]
+ */
+export type PageSubscriptionView = {
+    /**
+     * Items
+     */
+    items: Array<SubscriptionView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[TickRun]
  */
 export type PageTickRun = {
@@ -2848,6 +3028,94 @@ export type PageTickRun = {
      * Items
      */
     items: Array<TickRun>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[TokenView]
+ */
+export type PageTokenView = {
+    /**
+     * Items
+     */
+    items: Array<TokenView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[TradingModeView]
+ */
+export type PageTradingModeView = {
+    /**
+     * Items
+     */
+    items: Array<TradingModeView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[UniverseView]
+ */
+export type PageUniverseView = {
+    /**
+     * Items
+     */
+    items: Array<UniverseView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[UserView]
+ */
+export type PageUserView = {
+    /**
+     * Items
+     */
+    items: Array<UserView>;
     /**
      * Limit
      */
@@ -3009,6 +3277,10 @@ export type PortfolioSummaryView = {
      * Initial Cash
      */
     initial_cash: number | null;
+    /**
+     * Is Default
+     */
+    is_default?: boolean;
     /**
      * Kind
      */
@@ -3455,6 +3727,14 @@ export type ProviderView = {
      */
     display_name: string;
     /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Has Paper
+     */
+    has_paper: boolean;
+    /**
      * Name
      */
     name: string;
@@ -3824,6 +4104,10 @@ export type ScheduledJobView = {
      * Trigger
      */
     trigger: string;
+    /**
+     * Trigger Text
+     */
+    trigger_text?: string;
 };
 
 /**
@@ -6487,7 +6771,18 @@ export type RegenerateRecoveryCodesResponse = RegenerateRecoveryCodesResponses[k
 export type ListApiTokensData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/auth/tokens';
 };
 
@@ -6526,11 +6821,9 @@ export type ListApiTokensError = ListApiTokensErrors[keyof ListApiTokensErrors];
 
 export type ListApiTokensResponses = {
     /**
-     * Response Listapitokens
-     *
      * Successful Response
      */
-    200: Array<TokenView>;
+    200: PageTokenView;
 };
 
 export type ListApiTokensResponse = ListApiTokensResponses[keyof ListApiTokensResponses];
@@ -6641,7 +6934,18 @@ export type RevokeApiTokenResponse = RevokeApiTokenResponses[keyof RevokeApiToke
 export type ListUsersData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/auth/users';
 };
 
@@ -6680,11 +6984,9 @@ export type ListUsersError = ListUsersErrors[keyof ListUsersErrors];
 
 export type ListUsersResponses = {
     /**
-     * Response Listusers
-     *
      * Successful Response
      */
-    200: Array<UserView>;
+    200: PageUserView;
 };
 
 export type ListUsersResponse = ListUsersResponses[keyof ListUsersResponses];
@@ -6903,7 +7205,18 @@ export type ResetUserPasswordResponse = ResetUserPasswordResponses[keyof ResetUs
 export type ListBackupsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/backups';
 };
 
@@ -6934,11 +7247,9 @@ export type ListBackupsError = ListBackupsErrors[keyof ListBackupsErrors];
 
 export type ListBackupsResponses = {
     /**
-     * Response Listbackups
-     *
      * Successful Response
      */
-    200: Array<BackupView>;
+    200: PageBackupView;
 };
 
 export type ListBackupsResponse = ListBackupsResponses[keyof ListBackupsResponses];
@@ -7382,7 +7693,18 @@ export type ListStrategyClassesResponse = ListStrategyClassesResponses[keyof Lis
 export type ListConnectionsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/connections';
 };
 
@@ -7413,11 +7735,9 @@ export type ListConnectionsError = ListConnectionsErrors[keyof ListConnectionsEr
 
 export type ListConnectionsResponses = {
     /**
-     * Response Listconnections
-     *
      * Successful Response
      */
-    200: Array<ConnectionView>;
+    200: PageConnectionView;
 };
 
 export type ListConnectionsResponse = ListConnectionsResponses[keyof ListConnectionsResponses];
@@ -7703,7 +8023,18 @@ export type ListConnectionAccountsData = {
          */
         connection_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/connections/{connection_id}/accounts';
 };
 
@@ -7734,11 +8065,9 @@ export type ListConnectionAccountsError = ListConnectionAccountsErrors[keyof Lis
 
 export type ListConnectionAccountsResponses = {
     /**
-     * Response Listconnectionaccounts
-     *
      * Successful Response
      */
-    200: Array<StonksAppConnectionsBrokerAccountView>;
+    200: PageBrokerAccountView;
 };
 
 export type ListConnectionAccountsResponse = ListConnectionAccountsResponses[keyof ListConnectionAccountsResponses];
@@ -7845,6 +8174,16 @@ export type ListHaltsData = {
          * also cleared and expired halts
          */
         include_cleared?: boolean;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
     };
     url: '/api/halts';
 };
@@ -7876,11 +8215,9 @@ export type ListHaltsError = ListHaltsErrors[keyof ListHaltsErrors];
 
 export type ListHaltsResponses = {
     /**
-     * Response Listhalts
-     *
      * Successful Response
      */
-    200: Array<HaltView>;
+    200: PageHaltView;
 };
 
 export type ListHaltsResponse = ListHaltsResponses[keyof ListHaltsResponses];
@@ -9929,7 +10266,18 @@ export type GetPortfolioTotalsResponse = GetPortfolioTotalsResponses[keyof GetPo
 export type ListPortfoliosData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/portfolios';
 };
 
@@ -9960,11 +10308,9 @@ export type ListPortfoliosError = ListPortfoliosErrors[keyof ListPortfoliosError
 
 export type ListPortfoliosResponses = {
     /**
-     * Response Listportfolios
-     *
      * Successful Response
      */
-    200: Array<PortfolioSummaryView>;
+    200: PagePortfolioSummaryView;
 };
 
 export type ListPortfoliosResponse = ListPortfoliosResponses[keyof ListPortfoliosResponses];
@@ -9972,7 +10318,18 @@ export type ListPortfoliosResponse = ListPortfoliosResponses[keyof ListPortfolio
 export type ListTradingModesData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/portfolios/trading-modes';
 };
 
@@ -10003,11 +10360,9 @@ export type ListTradingModesError = ListTradingModesErrors[keyof ListTradingMode
 
 export type ListTradingModesResponses = {
     /**
-     * Response Listtradingmodes
-     *
      * Successful Response
      */
-    200: Array<TradingModeView>;
+    200: PageTradingModeView;
 };
 
 export type ListTradingModesResponse = ListTradingModesResponses[keyof ListTradingModesResponses];
@@ -10056,7 +10411,18 @@ export type DeletePushSubscriptionResponse = DeletePushSubscriptionResponses[key
 export type ListPushSubscriptionsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/push/subscriptions';
 };
 
@@ -10087,11 +10453,9 @@ export type ListPushSubscriptionsError = ListPushSubscriptionsErrors[keyof ListP
 
 export type ListPushSubscriptionsResponses = {
     /**
-     * Response Listpushsubscriptions
-     *
      * Successful Response
      */
-    200: Array<PushDeviceView>;
+    200: PagePushDeviceView;
 };
 
 export type ListPushSubscriptionsResponse = ListPushSubscriptionsResponses[keyof ListPushSubscriptionsResponses];
@@ -10136,6 +10500,52 @@ export type CreatePushSubscriptionResponses = {
 };
 
 export type CreatePushSubscriptionResponse = CreatePushSubscriptionResponses[keyof CreatePushSubscriptionResponses];
+
+export type DeletePushDeviceData = {
+    body?: never;
+    path: {
+        /**
+         * Device Id
+         */
+        device_id: string;
+    };
+    query?: never;
+    url: '/api/push/subscriptions/{device_id}';
+};
+
+export type DeletePushDeviceErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type DeletePushDeviceError = DeletePushDeviceErrors[keyof DeletePushDeviceErrors];
+
+export type DeletePushDeviceResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeletePushDeviceResponse = DeletePushDeviceResponses[keyof DeletePushDeviceResponses];
 
 export type GetVapidKeyData = {
     body?: never;
@@ -10795,7 +11205,18 @@ export type GetStrategyHistoryData = {
          */
         strategy_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/strategies/{strategy_id}/history';
 };
 
@@ -10826,11 +11247,9 @@ export type GetStrategyHistoryError = GetStrategyHistoryErrors[keyof GetStrategy
 
 export type GetStrategyHistoryResponses = {
     /**
-     * Response Getstrategyhistory
-     *
      * Successful Response
      */
-    200: Array<StatusChangeView>;
+    200: PageStatusChangeView;
 };
 
 export type GetStrategyHistoryResponse = GetStrategyHistoryResponses[keyof GetStrategyHistoryResponses];
@@ -11731,7 +12150,18 @@ export type ListStudioTemplatesResponse = ListStudioTemplatesResponses[keyof Lis
 export type ListSubscriptionsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/subscriptions';
 };
 
@@ -11762,11 +12192,9 @@ export type ListSubscriptionsError = ListSubscriptionsErrors[keyof ListSubscript
 
 export type ListSubscriptionsResponses = {
     /**
-     * Response Listsubscriptions
-     *
      * Successful Response
      */
-    200: Array<SubscriptionView>;
+    200: PageSubscriptionView;
 };
 
 export type ListSubscriptionsResponse = ListSubscriptionsResponses[keyof ListSubscriptionsResponses];
@@ -12345,7 +12773,18 @@ export type GetTickResponse = GetTickResponses[keyof GetTickResponses];
 export type ListUniversesData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/universes';
 };
 
@@ -12376,11 +12815,9 @@ export type ListUniversesError = ListUniversesErrors[keyof ListUniversesErrors];
 
 export type ListUniversesResponses = {
     /**
-     * Response Listuniverses
-     *
      * Successful Response
      */
-    200: Array<UniverseView>;
+    200: PageUniverseView;
 };
 
 export type ListUniversesResponse = ListUniversesResponses[keyof ListUniversesResponses];

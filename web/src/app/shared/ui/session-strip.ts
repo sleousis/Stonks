@@ -4,13 +4,16 @@ import {
   DestroyRef,
   InjectionToken,
   computed,
+  effect,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import type { ScheduledJobView } from '../../api/models';
 import { ScheduleService } from '../../api/schedule.service';
+import { SessionService } from '../../core/auth/session.service';
 import { HaltStateService } from '../../core/halts/halt-state.service';
 import { haltSummary } from '../../core/halts/halt-view';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
@@ -187,6 +190,7 @@ export class SessionStrip {
   private readonly schedule = inject(ScheduleService);
   private readonly halts = inject(HaltStateService);
   private readonly pollMs = inject(SCHEDULE_POLL_MS);
+  private readonly session = inject(SessionService);
   protected readonly portfolios = inject(PortfolioContextService);
 
   private readonly jobs = signal<readonly ScheduledJobView[]>([]);
@@ -211,7 +215,10 @@ export class SessionStrip {
   });
 
   constructor() {
-    void this.load();
+    // Nothing is asked of the API before sign-in (BUG-1).
+    effect(() => {
+      if (this.session.canRead()) untracked(() => void this.load());
+    });
     const clock = setInterval(() => this.now.set(Date.now()), 1000);
     const poll = this.pollMs > 0 ? setInterval(() => void this.load(), this.pollMs) : null;
     inject(DestroyRef).onDestroy(() => {
@@ -221,6 +228,7 @@ export class SessionStrip {
   }
 
   private async load(): Promise<void> {
+    if (!this.session.canRead()) return;
     try {
       this.jobs.set((await this.schedule.overview({ limit: 1 }, true)).jobs);
     } catch {

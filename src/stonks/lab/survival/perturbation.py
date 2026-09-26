@@ -45,7 +45,7 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -66,6 +66,13 @@ _PRICE_COLS = ("open", "high", "low", "close", "adj_close")
 
 class PerturbationTest:
     id = "perturbation"
+
+    #: Plain words for each option, shown by the console's options editor.
+    option_help: ClassVar[dict[str, str]] = {
+        "noise_sigmas": "Noise levels added to prices, as fractions.",
+        "min_correlation": "Lowest correlation of daily returns with the clean run that passes.",
+        "window": "Which data to test on: val is the held-out window, full is all of it.",
+    }
 
     def __init__(
         self,

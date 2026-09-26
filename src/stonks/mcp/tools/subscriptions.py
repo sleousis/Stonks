@@ -99,7 +99,11 @@ def register(t: ToolContext) -> None:
         sid = seg(subscription_id)
         if not confirm:
             current = next(
-                (s for s in await t.get("/api/subscriptions") if s.get("id") == subscription_id),
+                (
+                    s
+                    for s in (await t.get("/api/subscriptions", params={"limit": 500}))["items"]
+                    if s.get("id") == subscription_id
+                ),
                 None,
             )
             if current is None:

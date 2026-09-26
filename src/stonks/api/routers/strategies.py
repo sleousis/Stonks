@@ -6,7 +6,7 @@ from fastapi import APIRouter, Body, Depends, Query
 
 from stonks.api.deps import PageDep, PrincipalDep, ServicesDep, require_permission
 from stonks.api.errors import PROBLEM_RESPONSES
-from stonks.app.pagination import Page
+from stonks.app.pagination import Page, page_of
 from stonks.app.strategies import (
     StatusChangeRequest,
     StatusChangeView,
@@ -51,12 +51,14 @@ def get_strategy(strategy_id: str, services: ServicesDep) -> StrategyDetail:
 
 @router.get(
     "/{strategy_id}/history",
-    response_model=list[StatusChangeView],
+    response_model=Page[StatusChangeView],
     operation_id="getStrategyHistory",
 )
-def get_strategy_history(strategy_id: str, services: ServicesDep) -> list[StatusChangeView]:
+def get_strategy_history(
+    strategy_id: str, services: ServicesDep, page: PageDep
+) -> Page[StatusChangeView]:
     """The strategy's audited status changes and interventions, oldest first."""
-    return services.strategies.history(strategy_id)
+    return page_of(services.strategies.history(strategy_id), page)
 
 
 def _change(

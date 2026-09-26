@@ -33,7 +33,7 @@ export interface LinkChoice {
           <div class="linked">
             @if (a.portfolio_id) {
               <span>Feeds {{ portfolioName(a.portfolio_id) }}</span>
-              @if (portfolio(a.portfolio_id)?.mode; as mode) {
+              @if (portfolio(a.portfolio_id)?.trading; as mode) {
                 <app-mode-stamp [live]="mode === 'live'" />
               }
             } @else {
@@ -54,7 +54,7 @@ export interface LinkChoice {
                 <option value="" [selected]="!chosen(a)">A new portfolio for this account</option>
                 @for (p of portfolios(); track p.id) {
                   <option [value]="p.id" [selected]="chosen(a) === p.id">
-                    {{ p.name }}{{ p.mode === 'live' ? ' (live)' : '' }}
+                    {{ p.name }}{{ p.trading === 'live' ? ' (live)' : '' }}
                   </option>
                 }
               </select>

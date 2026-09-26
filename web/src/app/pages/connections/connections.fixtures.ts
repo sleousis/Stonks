@@ -10,6 +10,8 @@ export const ALPACA: ProviderView = {
   capabilities: ['read_activity', 'read_balances', 'read_positions', 'trade'],
   credential_fields: ['api_key', 'secret_key'],
   can_trade: true,
+  enabled: true,
+  has_paper: true,
 };
 
 export const SNAPTRADE: ProviderView = {
@@ -19,6 +21,8 @@ export const SNAPTRADE: ProviderView = {
   capabilities: ['read_activity', 'read_balances', 'read_positions'],
   credential_fields: [],
   can_trade: false,
+  enabled: true,
+  has_paper: false,
 };
 
 export function connection(over: Partial<ConnectionView> = {}): ConnectionView {
@@ -34,6 +38,7 @@ export function connection(over: Partial<ConnectionView> = {}): ConnectionView {
     next_sync_at: null,
     created_at: '2026-09-26T09:00:00Z',
     updated_at: '2026-09-26T09:00:00Z',
+    accounts_count: 0,
     ...over,
   };
 }

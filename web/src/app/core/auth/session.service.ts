@@ -57,6 +57,15 @@ export class SessionService {
   /** Signed in through the browser session (step-up works only here). */
   readonly viaSession = computed(() => this.meSignal()?.via === 'session');
   readonly signedIn = computed(() => this.statusSignal() === 'signed-in');
+  /**
+   * The API will answer reads: signed in, or open reads (dev profile).
+   * App-wide pollers wait for this, so nothing asks a protected route
+   * before sign-in.
+   */
+  readonly canRead = computed(() => {
+    const status = this.statusSignal();
+    return status === 'signed-in' || status === 'open';
+  });
 
   /**
    * May the current user do this? Mirrors the server's policy (see
@@ -160,7 +169,9 @@ export class SessionService {
       this.meSignal.set(null);
       if (err instanceof ApiError && err.code === 'mfa_required') status = 'mfa-pending';
       else if (err instanceof ApiError && err.isNetwork) status = 'unreachable';
-      else status = (await this.api.readsAreOpen()) ? 'open' : 'signed-out';
+      // The server says in the 401 itself when reads need no credential.
+      else if (err instanceof ApiError && err.code === 'reads_open') status = 'open';
+      else status = 'signed-out';
     }
     this.statusSignal.set(status);
     return status;

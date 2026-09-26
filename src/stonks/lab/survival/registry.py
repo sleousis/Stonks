@@ -26,7 +26,7 @@ from functools import cache
 from types import ModuleType
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, create_model
+from pydantic import BaseModel, ConfigDict, Field, create_model
 from pydantic import ValidationError as PydanticValidationError
 
 from stonks.core.protocols import SurvivalTest
@@ -171,6 +171,9 @@ def build_survival_test(
 
 #: Constructor parameters that are objects the lab builds, never options.
 LAB_BUILT_PARAMS = frozenset({"config", "tuning"})
+#: Options a request may still set but the console never shows: a seed and a
+#: worker count are plumbing, not research choices.
+HIDDEN_OPTIONS = frozenset({"seed", "max_workers"})
 
 
 def _test_class(name: str) -> type:
@@ -224,10 +227,26 @@ def options_model(name: str) -> type[BaseModel]:
             if model is not None:
                 return model
         default = ... if param.default is param.empty else param.default
-        fields[param.name] = (annotation, default)
+        help_text = getattr(cls, "option_help", {}).get(param.name)
+        fields[param.name] = (annotation, Field(default, description=help_text))
     return create_model(  # type: ignore[call-overload]
         f"{cls.__name__}Options", __config__=ConfigDict(extra="forbid"), **fields
     )
+
+
+def options_schema(name: str) -> dict[str, Any]:
+    """JSON Schema of test ``name``'s options for an editor: the model's
+    schema without :data:`HIDDEN_OPTIONS`. Requests still accept those."""
+    schema = options_model(name).model_json_schema()
+    props = schema.get("properties", {})
+    for key in HIDDEN_OPTIONS:
+        props.pop(key, None)
+    required = [k for k in schema.get("required", []) if k not in HIDDEN_OPTIONS]
+    if required:
+        schema["required"] = required
+    else:
+        schema.pop("required", None)
+    return schema
 
 
 def config_model(name: str) -> type[BaseModel] | None:

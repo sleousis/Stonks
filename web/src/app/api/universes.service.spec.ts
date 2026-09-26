@@ -1,7 +1,7 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
-import { nextRequest } from '../../testing/http';
+import { nextRequest, page } from '../../testing/http';
 import { provideApi } from './provide-api';
 import { UniversesService } from './universes.service';
 
@@ -20,7 +20,7 @@ describe('UniversesService', () => {
 
   it('lists, creates and deletes', async () => {
     const list = universes.list();
-    (await nextRequest(controller, '/api/universes')).flush([]);
+    (await nextRequest(controller, '/api/universes')).flush(page([]));
     expect(await list).toEqual([]);
 
     const created = universes.create({ id: 'big', kind: 'list', spec: { tickers: ['A.US'] } });

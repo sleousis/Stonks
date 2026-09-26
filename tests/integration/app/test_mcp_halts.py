@@ -35,16 +35,30 @@ async def mcp(test_client):
 
 @pytest.mark.anyio
 async def test_the_kill_switch_is_guarded_and_listed(mcp, test_client):
-    assert (await call(mcp, "list_halts")) == {"items": []}
+    assert (await call(mcp, "list_halts"))["items"] == []
     preview = await call(mcp, "engage_kill_switch", {"scope": "user", "reason": "away"})
     assert preview["preview"] is True and preview["applied"] is False
-    assert test_client.get("/api/halts", headers=AUTH).json() == []
+    assert test_client.get("/api/halts", headers=AUTH).json()["items"] == []
     done = await call(
         mcp, "engage_kill_switch", {"scope": "user", "reason": "away", "confirm": True}
     )
     assert done["applied"] is True and done["halt"]["kind"] == "kill"
     listed = await call(mcp, "list_halts")
     assert [h["id"] for h in listed["items"]] == [done["halt"]["id"]]
+
+
+@pytest.mark.anyio
+async def test_the_preview_says_what_the_kill_switch_really_does(mcp):
+    stop_all = await call(mcp, "engage_kill_switch", {"scope": "user", "reason": "r"})
+    flatten = await call(
+        mcp, "engage_kill_switch", {"scope": "user", "reason": "r", "flatten": True}
+    )
+    all_text = " ".join(stop_all["warnings"])
+    flat_text = " ".join(flatten["warnings"])
+    assert "every new order" in all_text and "cancels working orders" in all_text
+    assert "stops buys" in flat_text and "cancels working buy orders" in flat_text
+    assert "no position is closed" in flat_text
+    assert "fresh 2FA code" in all_text
 
 
 @pytest.mark.anyio
