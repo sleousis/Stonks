@@ -15,7 +15,7 @@ from datetime import UTC, datetime, timedelta
 import numpy as np
 import pandas as pd
 
-from stonks.lab.survival.permutation import permute_bars
+from stonks.lab.survival.permutation import permute_bars, permute_bars_together
 
 
 def _synthetic_bars(n: int = 200, seed: int = 7) -> pd.DataFrame:
@@ -165,3 +165,70 @@ def test_output_matches_reference_loop_exactly_for_seed():
         for col in ("open", "high", "low", "close"):
             assert np.array_equal(out[col].to_numpy(), ref[col]), (col, start_index, seed)
         assert np.array_equal(out["adj_close"].to_numpy(), ref["close"])
+
+
+# ---- several tickers: one shared permutation (Masters multi-market MCPT) ------
+
+
+def _scaled(bars: pd.DataFrame, factor: float, ticker: str) -> pd.DataFrame:
+    out = bars.copy()
+    for col in ("open", "high", "low", "close", "adj_close"):
+        out[col] = out[col] * factor
+    out["ticker"] = ticker
+    return out
+
+
+def test_single_ticker_matches_permute_bars_for_a_seed():
+    bars = _synthetic_bars(n=120, seed=5)
+    for start_index, seed in [(0, 1), (30, 9)]:
+        (out,) = permute_bars_together({"X.US": (bars, start_index)}, seed=seed).values()
+        pd.testing.assert_frame_equal(out, permute_bars(bars, start_index=start_index, seed=seed))
+
+
+def test_tickers_are_permuted_with_one_shared_ordering():
+    """Two perfectly co-moving tickers stay perfectly co-moving: every bar
+    of both draws its returns from the same source bar."""
+    a = _synthetic_bars(n=150, seed=11)
+    b = _scaled(a, 3.0, "Y.US")
+    out = permute_bars_together({"X.US": (a, 20), "Y.US": (b, 20)}, seed=4)
+    pa, pb = out["X.US"], out["Y.US"]
+    assert not np.allclose(pa["close"].to_numpy(), a["close"].to_numpy())  # it did shuffle
+    for col in ("open", "high", "low", "close"):
+        np.testing.assert_allclose(pb[col].to_numpy(), 3.0 * pa[col].to_numpy(), rtol=1e-12)
+
+
+def test_cross_asset_return_correlation_survives():
+    rng = np.random.default_rng(0)
+    a = _synthetic_bars(n=400, seed=21)
+    # b: a's close-to-close log returns plus independent noise (corr ~0.9)
+    ra = np.diff(np.log(a["close"].to_numpy()))
+    rb = ra + rng.normal(0, 0.01, len(ra))
+    b = a.copy()
+    b["ticker"] = "Y.US"
+    b["close"] = 50.0 * np.exp(np.concatenate([[0.0], np.cumsum(rb)]))
+    b["open"] = np.concatenate([[b["close"].iloc[0]], b["close"].to_numpy()[:-1]])
+    b["high"] = np.maximum(b["open"], b["close"])
+    b["low"] = np.minimum(b["open"], b["close"])
+    b["adj_close"] = b["close"]
+
+    def corr(x, y):
+        return np.corrcoef(np.diff(np.log(x["close"])), np.diff(np.log(y["close"])))[0, 1]
+
+    out = permute_bars_together({"X.US": (a, 0), "Y.US": (b, 0)}, seed=3)
+    assert corr(a, b) > 0.8
+    assert corr(out["X.US"], out["Y.US"]) > 0.8 * corr(a, b)
+
+
+def test_tickers_with_different_histories_keep_their_own_shape():
+    a = _synthetic_bars(n=100, seed=1)
+    b = _scaled(a.iloc[10:].reset_index(drop=True), 2.0, "Y.US")  # starts 10 bars later
+    b = b.drop(index=[40, 41]).reset_index(drop=True)  # and has a gap
+    out = permute_bars_together({"X.US": (a, 20), "Y.US": (b, 10)}, seed=8)
+    assert len(out["X.US"]) == len(a) and len(out["Y.US"]) == len(b)
+    pd.testing.assert_frame_equal(out["X.US"].iloc[:21], a.iloc[:21])
+    pd.testing.assert_frame_equal(out["Y.US"].iloc[:11], b.iloc[:11])
+    assert list(out["Y.US"]["timestamp"]) == list(b["timestamp"])
+    # every permuted bar's (high, low, close) relative comes from the ticker's own bars
+    rel = np.round(np.log(b["close"] / b["open"]).to_numpy()[11:], 12)
+    got = np.round(np.log(out["Y.US"]["close"] / out["Y.US"]["open"]).to_numpy()[11:], 12)
+    assert sorted(got) == sorted(rel)

@@ -42,6 +42,33 @@ stuck_tick_minutes = 60
 stuck_ingest_minutes = 180
 ingest_failure_lookback_hours = 24
 
+[backtest.costs]
+# Transaction costs for lab backtests (`stonks lab run`). All zero = no costs.
+# Production can build the same model via settings.backtest.costs.build().
+# Square-root-law impact in bps of an order the size of the whole bar, capped.
+impact_bps = 0.0
+max_impact_bps = 500.0
+
+[backtest.costs.default]
+# Fallback for asset classes not listed under [backtest.costs.asset_classes.*].
+fee_flat = 0.0
+half_spread_bps = 0.0
+fee_bps = 0.0
+
+# [backtest.costs.asset_classes.crypto]
+# half_spread_bps = 5.0
+# fee_bps = 10.0
+
+[lab.walk_forward]
+# Defaults for `stonks lab run --walk-forward` (CLI flags override).
+n_splits = 4
+# test_days = 30                   # omit: split the validation window evenly
+# train_days = 120                 # omit: everything before the first test window
+anchored = false
+metric = "sharpe"
+min_positive_share = 0.5
+min_mean_score = 0.0
+
 [notify]
 # Backends: "log" (structlog) and/or "webhook" (JSON POST). [] disables alerts.
 backends = ["log"]

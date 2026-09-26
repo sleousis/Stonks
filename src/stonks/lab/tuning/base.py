@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import dataclasses
 import itertools
 import math
 import random
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any
 
 from stonks.core.params import ParameterSpec, ParamSpace, tunable_only
@@ -16,21 +17,59 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 def tune_and_fit(
-    strategy_cls: type[Strategy], dataset: Any, setup: TuningSetup
+    strategy_cls: type[Strategy],
+    dataset: Any,
+    setup: TuningSetup,
+    fixed_params: Mapping[str, Any] | None = None,
 ) -> tuple[Strategy, TunerResult]:
     """Tune ``strategy_cls`` on ``dataset``'s train window, then build and
     fit the winning configuration on the same dataset. The one tune → fit
-    sequence shared by the runner and every re-tuning survival test."""
+    sequence shared by the runner and every re-tuning survival test.
+
+    ``fixed_params`` pin parameters for the whole search (see
+    :func:`fix_params`); re-tuning tests pass ``fixed_params_of(strategy)``
+    so a hand-set non-tunable param (a wrapper's inner strategy, a ticker)
+    is never reset to its class default."""
+    fixed = dict(fixed_params or {})
+    space = fix_params(strategy_cls.parameter_spec(), fixed)
     tuned = setup.tuner.tune(
         strategy_cls=strategy_cls,
-        param_space=strategy_cls.parameter_spec(),
+        param_space=space,
         objective=setup.objective,
         dataset=dataset,
         budget=setup.budget,
     )
-    strategy = strategy_cls(tuned.best_params)
+    best = {**tuned.best_params, **fixed}
+    if best != dict(tuned.best_params):
+        tuned = TunerResult(best_params=best, best_score=tuned.best_score, history=tuned.history)
+    strategy = strategy_cls(best)
     strategy.fit(dataset)  # no-op for rule-based
     return strategy, tuned
+
+
+def fix_params(space: ParamSpace, fixed: Mapping[str, Any]) -> list[ParameterSpec]:
+    """``space`` with each ``fixed`` param pinned: its default becomes the
+    fixed value and it is no longer tunable, so tuners fill it in through
+    their usual default-merging. Unknown names raise ``ValueError``."""
+    names = {s.name for s in space}
+    unknown = sorted(set(fixed) - names)
+    if unknown:
+        raise ValueError(f"fixed params not in the parameter spec: {unknown}")
+    return [
+        dataclasses.replace(s, default=fixed[s.name], tunable=False) if s.name in fixed else s
+        for s in space
+    ]
+
+
+def fixed_params_of(strategy: Strategy) -> dict[str, Any]:
+    """The non-tunable params of an already-built strategy — what a
+    re-tune must carry over instead of taking the class defaults."""
+    params = getattr(strategy, "params", None) or {}
+    return {
+        s.name: params[s.name]
+        for s in type(strategy).parameter_spec()
+        if not s.tunable and s.name in params
+    }
 
 
 def expand_grid(space: ParamSpace, grid_size: int) -> Iterable[dict[str, Any]]:
