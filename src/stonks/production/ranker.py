@@ -1,4 +1,5 @@
-"""Strategy ranker — iterates active strategies × universe and collects
+"""Strategy ranker — iterates strategies of one registry status (``active``
+by default, ``shadow`` for shadow mode) × universe and collects
 (expected_return, strategy_id, ticker) tuples that clear a threshold.
 
 Sorted descending by expected return.
@@ -9,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
+from typing import Literal
 
 from stonks.logging import get_logger
 from stonks.registry.store import StrategyRegistry
@@ -31,14 +33,16 @@ class Ranker:
         lake: DuckDBLake,
         universe: Sequence[str],
         threshold: float = 0.0,
+        status: Literal["active", "shadow"] = "active",
     ) -> None:
         self._registry = registry
+        self._status = status
         self._lake = lake
         self._universe = list(universe)
         self._threshold = threshold
 
     def rank(self, as_of: date) -> list[tuple[float, str, str]]:
-        handles = self._registry.list_active()
+        handles = self._registry.list_all(status=self._status)
         # Resolve asset classes once per tick. Tickers without an
         # ``instruments`` row are treated as "asset class unknown" and
         # skipped with a single warning per tick — defaulting to equity

@@ -753,6 +753,7 @@ def tick(
                 fee_per_trade=settings.production.fee_per_trade,
                 max_price_staleness_days=settings.production.max_price_staleness_days,
                 risk=settings.production.risk,
+                shadow_enabled=settings.production.shadow_enabled,
             )
 
             result = run_tick(

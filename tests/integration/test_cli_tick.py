@@ -174,6 +174,45 @@ def test_tick_applies_risk_policy_from_config(runner, seeded):
     assert "orders=0" in result.output
 
 
+def _add_shadow_strategy(tmp_path):
+    state = SqliteState(tmp_path / "data" / "state.sqlite")
+    try:
+        registry = StrategyRegistry(state=state, artifacts_dir=tmp_path / "data" / "artifacts")
+        sid = registry.register(
+            BuyAndHold({"ticker": "UP.US", "allocation": 0.5}),
+            reports=[SurvivalReport(test_id="oos", passed=True, metrics={})],
+        )
+        registry.set_status(sid, "shadow")
+    finally:
+        state.close()
+
+
+def _count(tmp_path, table):
+    state = SqliteState(tmp_path / "data" / "state.sqlite")
+    try:
+        return state.count_rows(table)
+    finally:
+        state.close()
+
+
+def test_tick_evaluates_shadow_strategies(runner, seeded):
+    tmp_path, _ = seeded
+    _add_shadow_strategy(tmp_path)
+    result = runner.invoke(app, ["tick", "--as-of", "2026-03-20"])
+    assert result.exit_code == 0, result.output
+    assert _count(tmp_path, "shadow_portfolio_snapshots") == 1
+
+
+def test_tick_respects_shadow_disabled_in_config(runner, seeded):
+    tmp_path, _ = seeded
+    _add_shadow_strategy(tmp_path)
+    cfg = tmp_path / "config" / "default.toml"
+    cfg.write_text(cfg.read_text().replace("[production]", "[production]\nshadow_enabled = false"))
+    result = runner.invoke(app, ["tick", "--as-of", "2026-03-20"])
+    assert result.exit_code == 0, result.output
+    assert _count(tmp_path, "shadow_portfolio_snapshots") == 0
+
+
 def test_tick_failure_posts_to_configured_webhook(runner, seeded, monkeypatch):
     import stonks.notify.webhook as webhook_mod
     import stonks.production.tick as tick_mod

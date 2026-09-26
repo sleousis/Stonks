@@ -25,6 +25,7 @@ from stonks.logging import get_logger
 from stonks.notify import Notification, Notifier
 from stonks.production.ranker import Ranker
 from stonks.production.risk import RiskPolicy, apply_risk
+from stonks.production.shadow import evaluate_shadow_strategies
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
@@ -46,6 +47,8 @@ class TickSettings:
     # so delisted / failed-ingest tickers never fill at months-old prices.
     max_price_staleness_days: int = 7
     risk: RiskPolicy = field(default_factory=RiskPolicy)
+    # Evaluate shadow strategies against virtual portfolios (never traded).
+    shadow_enabled: bool = True
 
 
 @dataclass(frozen=True)
@@ -142,7 +145,8 @@ def _run_tick_body(
     log: Any,
     notifier: Notifier | None,
 ) -> TickResult:
-    # 1. rank
+    # 1. rank active strategies; prices are needed by both the real and the
+    #    shadow path, so load them up front.
     ranker = Ranker(
         registry=registry,
         lake=lake,
@@ -150,9 +154,19 @@ def _run_tick_body(
         threshold=settings.threshold,
     )
     ranked = ranker.rank(as_of=as_of)
+    prices = _current_prices(
+        lake,
+        settings.universe,
+        as_of,
+        max_staleness_days=settings.max_price_staleness_days,
+    )
 
     if not ranked:
-        _close_tick(state, tick_id, status="noop", summary={"reason": "no_candidates"})
+        summary: dict[str, Any] = {"reason": "no_candidates"}
+        summary.update(
+            _shadow_phase(state, lake, registry, settings, as_of, dry_run, tick_id, prices, log)
+        )
+        _close_tick(state, tick_id, status="noop", summary=summary)
         log.info("tick.noop", reason="no_candidates")
         return TickResult(
             tick_id=tick_id,
@@ -172,14 +186,8 @@ def _run_tick_body(
     strategy = registry.load(winner_id)
     my_picks = [(r, t) for r, sid, t in ranked if sid == winner_id]
 
-    # 2. prepare portfolio + prices
+    # 2. prepare portfolio
     portfolio = _load_or_seed_portfolio(state, initial_cash=settings.initial_cash)
-    prices = _current_prices(
-        lake,
-        settings.universe,
-        as_of,
-        max_staleness_days=settings.max_price_staleness_days,
-    )
 
     # 3. decide, then let the risk layer clip/drop before anything reaches
     #    the broker.
@@ -255,6 +263,11 @@ def _run_tick_body(
             log,
         )
 
+    # 4. shadow strategies, strictly after the real ledger has committed.
+    shadow_summary = _shadow_phase(
+        state, lake, registry, settings, as_of, dry_run, tick_id, prices, log
+    )
+
     status: TickStatus = "ok" if not any_failure else "partial"
     _close_tick(
         state,
@@ -266,6 +279,7 @@ def _run_tick_body(
             "orders_placed": placed,
             "fills": fills_count,
             "risk_adjustments": [a.as_dict() for a in risk_result.adjustments],
+            **shadow_summary,
         },
     )
     return TickResult(
@@ -295,6 +309,45 @@ def _build_broker(
     )
     broker.set_prices(prices, as_of=as_of)
     return broker
+
+
+def _shadow_phase(
+    state: SqliteState,
+    lake: DuckDBLake,
+    registry: StrategyRegistry,
+    settings: TickSettings,
+    as_of: date,
+    dry_run: bool,
+    tick_id: str,
+    prices: dict[str, float],
+    log: Any,
+) -> dict[str, Any]:
+    """Rank and evaluate shadow strategies; return the tick-summary fragment.
+    Never raises: a shadow failure must not fail the real tick."""
+    if dry_run or not settings.shadow_enabled:
+        return {}
+    try:
+        shadow_ranked = Ranker(
+            registry=registry,
+            lake=lake,
+            universe=settings.universe,
+            threshold=settings.threshold,
+            status="shadow",
+        ).rank(as_of=as_of)
+        outcomes = evaluate_shadow_strategies(
+            state,
+            registry,
+            shadow_ranked,
+            prices,
+            _asset_classes(lake, settings.universe),
+            as_of,
+            tick_id,
+            settings,
+        )
+    except Exception as exc:
+        log.error("tick.shadow_failed", error=str(exc), error_type=type(exc).__name__)
+        return {"shadow_error": f"{type(exc).__name__}: {exc}"}
+    return {"shadow": [o.as_dict() for o in outcomes]}
 
 
 def _safe_notify(notifier: Notifier | None, notification: Notification, log: Any) -> None:
