@@ -125,6 +125,7 @@ from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.ranker import Ranker, SignalSet, StrategyPool
 from stonks.production.risk import RiskPolicy, build_risk_context, needs_risk_context
 from stonks.production.shadow import evaluate_shadow_strategies, shadow_held_tickers
+from stonks.production.signals import record_signals, signals_recorded
 from stonks.production.tca import annotate_orders, decision_values, tca_recorded
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
@@ -576,6 +577,7 @@ def _run_tick_body(
 
     # 3. model books, strictly after the real ledgers committed, then hooks.
     shadow_summary = _shadow_phase(run)
+    _record_signal_phase(run)
     notify_signals = _notify_signals(run)
     hook_summary = run_tick_hooks(
         TickHookContext(
@@ -1507,6 +1509,29 @@ def _shadow_phase(run: _TickRun) -> dict[str, Any]:
         log.error("tick.shadow_failed", error=str(exc), error_type=type(exc).__name__)
         return {"shadow_error": f"{type(exc).__name__}: {exc}"}
     return {"shadow": [o.as_dict() for o in outcomes]}
+
+
+def _record_signal_phase(run: _TickRun) -> None:
+    """Store the day's signals and events (``production.signals``) of every
+    strategy scored this tick, after the model books advanced. Never
+    raises: a failure here must not fail the tick."""
+    if run.dry_run:
+        return
+    try:
+        if not signals_recorded(run.state):
+            return
+        scored = run.signals if run._shadow is None else run.signals.merged(run._shadow)
+        record_signals(
+            run.state,
+            run.lake,
+            scored.scores,
+            scored.instances,
+            tick_id=run.tick_id,
+            as_of=run.as_of,
+            max_price_staleness_days=run.settings.max_price_staleness_days,
+        )
+    except Exception as exc:
+        run.log.error("tick.signals_failed", error=str(exc), error_type=type(exc).__name__)
 
 
 def _safe_notify(notifier: Notifier | None, notification: Notification, log: Any) -> None:
