@@ -886,6 +886,23 @@ How one shadow strategy was evaluated during the tick.
 |-------|------|----------|-------------|
 | `spec` | object | yes |  |
 
+### StatusChangeView
+
+One audited status change or intervention (BL-24).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `actor` | string | yes |  |
+| `created_at` | string | yes |  |
+| `from_status` | string \| null | yes |  |
+| `golive_passed` | boolean \| null | yes |  |
+| `golive_report` | object \| null | yes |  |
+| `id` | integer | yes |  |
+| `kind` | string | yes |  |
+| `override` | boolean | yes |  |
+| `reason` | string | yes |  |
+| `to_status` | string \| null | yes |  |
+
 ### StrategyClassInfo
 
 | Field | Type | Required | Description |
@@ -905,10 +922,24 @@ How one shadow strategy was evaluated during the tick.
 | `class_path` | string | yes |  |
 | `created_at` | string | yes |  |
 | `id` | string | yes |  |
+| `metadata` | [StrategyMetadataView](#strategymetadataview) | yes |  |
 | `params` | object | yes |  |
 | `status` | "active" \| "shadow" \| "retired" | yes |  |
+| `status_history` | list[[StatusChangeView](#statuschangeview)] | yes |  |
 | `survival_reports` | list[[SurvivalReportView](#survivalreportview)] | yes |  |
 | `updated_at` | string | yes |  |
+
+### StrategyMetadataView
+
+The strategy's hypothesis card and capability hooks (BL-26).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `alpha_family` | "trend" \| "reversion" \| "carry" \| "value" \| "quality" \| "growth" \| "sentiment" \| "data_driven" \| "benchmark" \| "other" | yes |  |
+| `hypothesis` | string | yes |  |
+| `label_horizon_bars` | integer | yes |  |
+| `premise` | "trend" \| "mean_reversion" \| "none" | yes |  |
+| `required_history_bars` | integer | yes |  |
 
 ### StrategyRef
 
@@ -939,6 +970,7 @@ How many registered strategies are in each lifecycle status.
 | `class_path` | string | yes |  |
 | `created_at` | string | yes |  |
 | `id` | string | yes |  |
+| `metadata` | [StrategyMetadataView](#strategymetadataview) | yes |  |
 | `params` | object | yes |  |
 | `status` | "active" \| "shadow" \| "retired" | yes |  |
 | `updated_at` | string | yes |  |

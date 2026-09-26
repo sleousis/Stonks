@@ -78,7 +78,7 @@ from stonks.app.lab import (
 )
 from stonks.app.pagination import Page
 from stonks.app.serialize import finite, to_jsonable
-from stonks.app.strategies import StrategyRef, StrategyStatus
+from stonks.app.strategies import StrategyRef, StrategyStatus, change_status
 from stonks.backtest.engine import BacktestConfig, Backtester
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.config import Settings
@@ -450,11 +450,13 @@ class StudioService:
         self._register(draft.id, draft.name, strategy, [])
         return self.get_draft(draft_id)
 
-    def enable(self, draft_id: str) -> Draft:
-        return self._set_status(draft_id, "active")
+    def enable(self, draft_id: str, *, reason: str | None = None, override: bool = False) -> Draft:
+        """Promote the registered strategy: same go-live rules as
+        ``StrategyService.promote``."""
+        return self._set_status(draft_id, "active", reason=reason, override=override)
 
-    def disable(self, draft_id: str) -> Draft:
-        return self._set_status(draft_id, "shadow")
+    def disable(self, draft_id: str, *, reason: str | None = None) -> Draft:
+        return self._set_status(draft_id, "shadow", reason=reason)
 
     def user_strategy_class(self, class_path: str) -> type:
         """Resolve a registered code strategy's ``stonks_user_strategies.<stem>:Class``
@@ -566,17 +568,30 @@ class StudioService:
         _log.info("studio.draft_registered", draft_id=draft_id, strategy_id=sid)
         return sid
 
-    def _set_status(self, draft_id: str, status: StrategyStatus) -> Draft:
+    def _set_status(
+        self,
+        draft_id: str,
+        status: StrategyStatus,
+        *,
+        reason: str | None = None,
+        override: bool = False,
+    ) -> Draft:
         draft = self.get_draft(draft_id)
         if draft.registered_strategy_id is None:
             raise ConflictError(f"draft {draft_id} is not registered yet")
-        with self._ctx.registry() as registry:
-            try:
-                registry.set_status(draft.registered_strategy_id, status)
-            except KeyError:
-                raise NotFoundError(
-                    f"registered strategy {draft.registered_strategy_id!r} no longer exists"
-                ) from None
+        try:
+            change_status(
+                self._ctx,
+                draft.registered_strategy_id,
+                status,
+                actor="studio",
+                reason=reason,
+                override=override,
+            )
+        except NotFoundError:
+            raise NotFoundError(
+                f"registered strategy {draft.registered_strategy_id!r} no longer exists"
+            ) from None
         _log.info(
             "studio.strategy_status",
             draft_id=draft_id,

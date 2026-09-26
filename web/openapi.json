@@ -3280,6 +3280,94 @@
         "title": "SpecValidateRequest",
         "type": "object"
       },
+      "StatusChangeView": {
+        "description": "One audited status change or intervention (BL-24).",
+        "properties": {
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "from_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Status"
+          },
+          "golive_passed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Golive Passed"
+          },
+          "golive_report": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Golive Report"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "override": {
+            "title": "Override",
+            "type": "boolean"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "to_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Status"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "from_status",
+          "to_status",
+          "actor",
+          "reason",
+          "override",
+          "golive_passed",
+          "golive_report",
+          "created_at"
+        ],
+        "title": "StatusChangeView",
+        "type": "object"
+      },
       "StrategyClassInfo": {
         "properties": {
           "applicable_asset_classes": {
@@ -3345,6 +3433,9 @@
             "title": "Id",
             "type": "string"
           },
+          "metadata": {
+            "$ref": "#/components/schemas/StrategyMetadataView"
+          },
           "params": {
             "additionalProperties": true,
             "title": "Params",
@@ -3358,6 +3449,13 @@
             ],
             "title": "Status",
             "type": "string"
+          },
+          "status_history": {
+            "items": {
+              "$ref": "#/components/schemas/StatusChangeView"
+            },
+            "title": "Status History",
+            "type": "array"
           },
           "survival_reports": {
             "items": {
@@ -3377,11 +3475,64 @@
           "status",
           "params",
           "applicable_asset_classes",
+          "metadata",
           "created_at",
           "updated_at",
-          "survival_reports"
+          "survival_reports",
+          "status_history"
         ],
         "title": "StrategyDetail",
+        "type": "object"
+      },
+      "StrategyMetadataView": {
+        "description": "The strategy's hypothesis card and capability hooks (BL-26).",
+        "properties": {
+          "alpha_family": {
+            "enum": [
+              "trend",
+              "reversion",
+              "carry",
+              "value",
+              "quality",
+              "growth",
+              "sentiment",
+              "data_driven",
+              "benchmark",
+              "other"
+            ],
+            "title": "Alpha Family",
+            "type": "string"
+          },
+          "hypothesis": {
+            "title": "Hypothesis",
+            "type": "string"
+          },
+          "label_horizon_bars": {
+            "title": "Label Horizon Bars",
+            "type": "integer"
+          },
+          "premise": {
+            "enum": [
+              "trend",
+              "mean_reversion",
+              "none"
+            ],
+            "title": "Premise",
+            "type": "string"
+          },
+          "required_history_bars": {
+            "title": "Required History Bars",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "hypothesis",
+          "alpha_family",
+          "premise",
+          "label_horizon_bars",
+          "required_history_bars"
+        ],
+        "title": "StrategyMetadataView",
         "type": "object"
       },
       "StrategyRef": {
@@ -3468,6 +3619,9 @@
             "title": "Id",
             "type": "string"
           },
+          "metadata": {
+            "$ref": "#/components/schemas/StrategyMetadataView"
+          },
           "params": {
             "additionalProperties": true,
             "title": "Params",
@@ -3493,6 +3647,7 @@
           "status",
           "params",
           "applicable_asset_classes",
+          "metadata",
           "created_at",
           "updated_at"
         ],
