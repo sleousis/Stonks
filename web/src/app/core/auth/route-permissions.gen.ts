@@ -56,6 +56,7 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'POST /api/halts/{halt_id}/clear': 'risk.reset',
   'POST /api/halts/{halt_id}/resume': 'killswitch.resume',
   'POST /api/halts/kill': 'killswitch.user',
+  'POST /api/health/run': 'operations.run',
   'POST /api/ingest/runs': 'operations.run',
   'POST /api/jobs/{job_id}/cancel': 'lab.run',
   'POST /api/jobs/{job_id}/stream-token': 'data.read',
