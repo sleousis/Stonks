@@ -1104,6 +1104,69 @@ class DuckDBLake:
                 )
         return len(flags)
 
+    # ---- data coverage (BL-37 lab preflight) ---------------------------------
+
+    def bar_coverage(
+        self, tickers: list[str], interval: Interval, start: Any, end: Any
+    ) -> pd.DataFrame:
+        """Per ticker with bars of ``interval`` up to ``end``: ``first_bar``
+        and ``last_bar`` inside ``[start, end]`` (NULL when none),
+        ``n_window`` bars inside it and ``n_before`` bars before ``start``.
+        Tickers with no bar up to ``end`` are absent."""
+        if not tickers:
+            return pd.DataFrame(columns=["ticker", "first_bar", "last_bar", "n_window", "n_before"])
+        lo = day_start(_as_calendar_date(start))
+        hi = day_end(_as_calendar_date(end))
+        return self.con.execute(
+            """
+            SELECT ticker,
+                   MIN(timestamp) FILTER (WHERE timestamp >= ?) AS first_bar,
+                   MAX(timestamp) FILTER (WHERE timestamp >= ?) AS last_bar,
+                   COUNT(*) FILTER (WHERE timestamp >= ?) AS n_window,
+                   COUNT(*) FILTER (WHERE timestamp < ?) AS n_before
+              FROM bars
+             WHERE ticker = ANY(?) AND interval = ? AND timestamp <= ?
+             GROUP BY ticker ORDER BY ticker
+            """,
+            [lo, lo, lo, lo, list(tickers), str(interval), hi],
+        ).fetchdf()
+
+    def quarantine_counts(
+        self, tickers: list[str], interval: Interval, start: Any, end: Any
+    ) -> dict[str, int]:
+        """``{ticker: quarantined bar count}`` inside ``[start, end]`` for
+        ``interval`` (tickers with none are absent)."""
+        if not tickers:
+            return {}
+        rows = self.con.execute(
+            """
+            SELECT ticker, COUNT(*) FROM quarantined_bars
+             WHERE ticker = ANY(?) AND interval = ? AND timestamp BETWEEN ? AND ?
+             GROUP BY ticker
+            """,
+            [
+                list(tickers),
+                str(interval),
+                day_start(_as_calendar_date(start)),
+                day_end(_as_calendar_date(end)),
+            ],
+        ).fetchall()
+        return {r[0]: int(r[1]) for r in rows}
+
+    def delisted_tickers(self, tickers: list[str]) -> list[str]:
+        """The ``tickers`` whose instrument profile marks them delisted."""
+        if not tickers:
+            return []
+        rows = self.con.execute(
+            """
+            SELECT id FROM instruments
+             WHERE id = ANY(?) AND (COALESCE(is_delisted, FALSE) OR delisted_date IS NOT NULL)
+             ORDER BY id
+            """,
+            [list(tickers)],
+        ).fetchall()
+        return [r[0] for r in rows]
+
     # ---- universe membership (BL-37, migration 015) --------------------------
 
     _UNIVERSE_MEMBERSHIP_COLS = ("universe_id", "ticker", "start_date", "end_date")
