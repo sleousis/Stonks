@@ -188,8 +188,7 @@ class JobStore:
         with self._state() as s:
             total = int(s.sql(f"SELECT COUNT(*) FROM jobs{clause}", params)[0][0])
             rows = s.sql(
-                f"SELECT * FROM jobs{clause} ORDER BY created_at DESC, rowid DESC "
-                "LIMIT ? OFFSET ?",
+                f"SELECT * FROM jobs{clause} ORDER BY created_at DESC, rowid DESC LIMIT ? OFFSET ?",
                 [*params, limit, offset],
             )
         return Page[Job](
