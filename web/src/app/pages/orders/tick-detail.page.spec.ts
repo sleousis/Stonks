@@ -27,7 +27,7 @@ const TICK: TickRunWithOrders = {
   started_at: '2026-09-25T21:00:00Z',
   finished_at: '2026-09-25T21:00:04Z',
   status: 'partial',
-  orders: [{ ...ORDER, status_reason: 'insufficient buying power' } as OrderView],
+  orders: [{ ...ORDER, status_reason: 'insufficient buying power' }],
   summary: {
     winner_strategy_id: 'momentum-v3',
     winner_expected_return: 0.012,

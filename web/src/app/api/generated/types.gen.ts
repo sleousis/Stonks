@@ -641,6 +641,90 @@ export type FillView = {
 };
 
 /**
+ * GoLiveCheckView
+ */
+export type GoLiveCheckView = {
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Limit
+     */
+    limit: number | null;
+    /**
+     * Name
+     */
+    name: 'status' | 'min_days' | 'max_drawdown' | 'max_drift' | 'min_trades' | 'survival';
+    /**
+     * Passed
+     */
+    passed: boolean;
+    /**
+     * Value
+     */
+    value: number | null;
+};
+
+/**
+ * GoLivePolicy
+ *
+ * Limits a paper-trading period must meet before ``stonks golive check``
+ * passes (``[golive]``). The gate only reports; promotion stays a human
+ * action. Every limit is strict about missing data: a period with no
+ * snapshots, no fills or no backtest expectation fails.
+ */
+export type GoLivePolicy = {
+    /**
+     * Max Drawdown
+     */
+    max_drawdown?: number;
+    /**
+     * Max Drift
+     */
+    max_drift?: number;
+    /**
+     * Min Days
+     */
+    min_days?: number;
+    /**
+     * Min Trades
+     */
+    min_trades?: number;
+    /**
+     * Require All Survival Passed
+     */
+    require_all_survival_passed?: boolean;
+};
+
+/**
+ * GoLiveReport
+ */
+export type GoLiveReport = {
+    /**
+     * Checks
+     */
+    checks: Array<GoLiveCheckView>;
+    /**
+     * Passed
+     */
+    passed: boolean;
+    policy: GoLivePolicy;
+    /**
+     * Source
+     */
+    source: 'shadow' | 'portfolio' | 'none';
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string;
+};
+
+/**
  * Health
  */
 export type Health = {
@@ -1106,6 +1190,10 @@ export type OrderView = {
      * Status
      */
     status: string;
+    /**
+     * Status Reason
+     */
+    status_reason?: string | null;
     /**
      * Strategy Id
      */
@@ -2096,6 +2184,18 @@ export type StreamToken = {
 };
 
 /**
+ * StudioCapabilities
+ *
+ * What this server lets the Studio do.
+ */
+export type StudioCapabilities = {
+    /**
+     * Code Strategies
+     */
+    code_strategies: boolean;
+};
+
+/**
  * SurvivalReportView
  */
 export type SurvivalReportView = {
@@ -2246,6 +2346,10 @@ export type TickSummary = {
      */
     error_type?: string | null;
     /**
+     * Exit Strategy Id
+     */
+    exit_strategy_id?: string | null;
+    /**
      * Fills
      */
     fills?: number | null;
@@ -2269,6 +2373,10 @@ export type TickSummary = {
      * Shadow Error
      */
     shadow_error?: string | null;
+    /**
+     * Stale Buys Dropped
+     */
+    stale_buys_dropped?: Array<string>;
     /**
      * Winner Expected Return
      */
@@ -4191,6 +4299,57 @@ export type GetStrategyResponses = {
 
 export type GetStrategyResponse = GetStrategyResponses[keyof GetStrategyResponses];
 
+export type GetGoLiveReportData = {
+    body?: never;
+    path: {
+        /**
+         * Strategy Id
+         */
+        strategy_id: string;
+    };
+    query?: {
+        /**
+         * Since
+         */
+        since?: string | null;
+    };
+    url: '/api/strategies/{strategy_id}/golive';
+};
+
+export type GetGoLiveReportErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetGoLiveReportError = GetGoLiveReportErrors[keyof GetGoLiveReportErrors];
+
+export type GetGoLiveReportResponses = {
+    /**
+     * Successful Response
+     */
+    200: GoLiveReport;
+};
+
+export type GetGoLiveReportResponse = GetGoLiveReportResponses[keyof GetGoLiveReportResponses];
+
 export type PromoteStrategyData = {
     body?: never;
     path: {
@@ -4328,6 +4487,51 @@ export type ShadowStrategyResponses = {
 };
 
 export type ShadowStrategyResponse = ShadowStrategyResponses[keyof ShadowStrategyResponses];
+
+export type GetStudioCapabilitiesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/studio/capabilities';
+};
+
+export type GetStudioCapabilitiesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Code strategies are disabled
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetStudioCapabilitiesError = GetStudioCapabilitiesErrors[keyof GetStudioCapabilitiesErrors];
+
+export type GetStudioCapabilitiesResponses = {
+    /**
+     * Successful Response
+     */
+    200: StudioCapabilities;
+};
+
+export type GetStudioCapabilitiesResponse = GetStudioCapabilitiesResponses[keyof GetStudioCapabilitiesResponses];
 
 export type ListDraftsData = {
     body?: never;

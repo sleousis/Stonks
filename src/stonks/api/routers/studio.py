@@ -27,6 +27,7 @@ from stonks.app.studio import (
     DraftValidation,
     RuleTemplateView,
     SpecValidateRequest,
+    StudioCapabilities,
     StudioService,
     ValidateRequest,
     studio_service,
@@ -47,6 +48,15 @@ def _call[T](services: Any, fn: Callable[[StudioService], T]) -> T:
         return fn(studio_service(services))
     except CodeStrategiesDisabledError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from None
+
+
+@router.get(
+    "/capabilities", response_model=StudioCapabilities, operation_id="getStudioCapabilities"
+)
+def capabilities(services: ServicesDep) -> StudioCapabilities:
+    """Which Studio features this server allows (e.g. code strategies), so a
+    client can hide what would answer 403."""
+    return _call(services, lambda s: s.capabilities())
 
 
 @router.get("/templates", response_model=list[RuleTemplateView], operation_id="listStudioTemplates")

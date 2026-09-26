@@ -18,15 +18,12 @@ export const NO_TOKEN: TokenCheck = {
 };
 
 /**
- * Reads the outcome of `JobsApiService.probeToken()` when it throws. The
- * probe asks about a job that does not exist, so a 404 means the token got
- * past authentication. Never includes the token in the message.
+ * Reads why `GET /api/auth/check` failed (a 200 is `TOKEN_ACCEPTED`).
+ * Never includes the token in the message.
  */
 export function tokenCheckFromError(err: unknown): TokenCheck {
   const status = err instanceof ApiError ? err.status : -1;
   switch (status) {
-    case 404:
-      return TOKEN_ACCEPTED;
     case 401:
     case 403:
       return {

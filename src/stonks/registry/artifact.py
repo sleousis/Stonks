@@ -3,7 +3,9 @@
 Layout::
 
     data/artifacts/<strategy_id>/
-    ├── meta.json            # class_path, created_at, stonks version (+ strategy's own keys)
+    ├── meta.json            # class_path, created_at, stonks version (+ strategy's own
+    │                        #   keys, + lab provenance: lab_run_id, n_trials_total,
+    │                        #   hypothesis, premortem, manifest)
     ├── params.json          # the Params dict
     ├── fitted_state.*       # optional, written by Strategy.save; rule-based strategies skip
     └── reports/
@@ -20,7 +22,7 @@ same params the strategy holds.
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -34,6 +36,10 @@ except ImportError:  # pragma: no cover
     _STONKS_VERSION = "0.1.0"
 
 
+#: ``meta.json`` keys the registry owns; extra metadata never overrides them.
+REGISTRY_META_KEYS = ("class_path", "created_at", "stonks_version")
+
+
 @dataclass
 class ArtifactBundle:
     path: Path
@@ -41,6 +47,10 @@ class ArtifactBundle:
     params: dict[str, Any]
     reports: list[SurvivalReport] = field(default_factory=list)
     created_at: str | None = None
+    #: Extra ``meta.json`` keys, e.g. lab provenance (``lab_run_id``,
+    #: ``n_trials_total``, ``hypothesis``, ``premortem``, ``manifest``; see
+    #: ``LabRunResult.artifact_meta``). On load: every non-registry key.
+    meta: dict[str, Any] = field(default_factory=dict)
 
     def save(self) -> None:
         base = Path(self.path)
@@ -53,22 +63,14 @@ class ArtifactBundle:
         # A strategy may already have written its own meta.json into this
         # directory (``Strategy.save``); keep its keys and let the bundle's
         # registry-owned keys win on overlap.
-        meta_path = base / "meta.json"
-        existing: dict[str, Any] = {}
-        if meta_path.exists():
-            try:
-                loaded = json.loads(meta_path.read_text())
-            except json.JSONDecodeError:
-                loaded = {}
-            if isinstance(loaded, dict):
-                existing = loaded
         meta = {
-            **existing,
+            **_read_meta(base),
+            **self.meta,
             "class_path": self.class_path,
             "created_at": created_at,
             "stonks_version": _STONKS_VERSION,
         }
-        (base / "meta.json").write_text(json.dumps(meta, indent=2, sort_keys=True))
+        (base / "meta.json").write_text(json.dumps(meta, indent=2, sort_keys=True, default=str))
         (base / "params.json").write_text(json.dumps(self.params, indent=2, sort_keys=True))
 
         for report in self.reports:
@@ -109,11 +111,33 @@ class ArtifactBundle:
             params=params,
             reports=reports,
             created_at=meta.get("created_at"),
+            meta={k: v for k, v in meta.items() if k not in REGISTRY_META_KEYS},
         )
 
 
 def load_reports(path: Path) -> Sequence[SurvivalReport]:
     return ArtifactBundle.load(path).reports
+
+
+def update_meta(path: Path, extra: Mapping[str, Any]) -> None:
+    """Merge ``extra`` into an existing bundle's ``meta.json`` (e.g. lab
+    provenance after ``StrategyRegistry.register``). Registry-owned keys
+    are never overwritten."""
+    base = Path(path)
+    meta = _read_meta(base)
+    meta.update({k: v for k, v in extra.items() if k not in REGISTRY_META_KEYS})
+    (base / "meta.json").write_text(json.dumps(meta, indent=2, sort_keys=True, default=str))
+
+
+def _read_meta(base: Path) -> dict[str, Any]:
+    meta_path = base / "meta.json"
+    if not meta_path.exists():
+        return {}
+    try:
+        loaded = json.loads(meta_path.read_text())
+    except json.JSONDecodeError:
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
 
 
 def _iso_now() -> str:

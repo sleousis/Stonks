@@ -141,13 +141,10 @@ describe('SettingsPage', () => {
     fixture.detectChanges();
     button('Test token').click();
 
-    const probe = await nextRequest(http, '/api/jobs/token-check/stream-token', 'POST');
+    const probe = await nextRequest(http, '/api/auth/check', 'GET');
     expect(probe.request.headers.get('Authorization')).toBe(`Bearer ${SECRET}`);
     expect(probe.request.urlWithParams).not.toContain(SECRET);
-    probe.flush(
-      { title: 'Not found', status: 404, detail: 'job not found' },
-      { status: 404, statusText: 'Not Found' },
-    );
+    probe.flush({ authenticated: true });
     await tick();
     fixture.detectChanges();
 
@@ -168,7 +165,7 @@ describe('SettingsPage', () => {
     const before = toasts.toasts().length;
     button('Test token').click();
 
-    (await nextRequest(http, '/api/jobs/token-check/stream-token', 'POST')).flush(
+    (await nextRequest(http, '/api/auth/check', 'GET')).flush(
       { title: 'Unauthorized', status: 401, detail: 'missing or invalid bearer token' },
       { status: 401, statusText: 'Unauthorized' },
     );

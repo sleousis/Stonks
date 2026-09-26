@@ -47,9 +47,14 @@ class TickSummary(BaseModel):
     error: str | None = None
     error_type: str | None = None
     winner_strategy_id: str | None = None
+    #: Set with ``reason="no_candidates"`` when the tick only ran exits for
+    #: this strategy's positions (no winner was traded).
+    exit_strategy_id: str | None = None
     winner_expected_return: float | None = None
     orders_placed: int | None = None
     fills: int | None = None
+    #: Tickers whose buys were dropped because their latest close was stale.
+    stale_buys_dropped: list[str] = []
     risk_adjustments: list[RiskAdjustmentView] = []
     shadow: list[ShadowOutcomeView] = []
     shadow_error: str | None = None

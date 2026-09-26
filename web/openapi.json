@@ -1092,6 +1092,144 @@
         "title": "FillView",
         "type": "object"
       },
+      "GoLiveCheckView": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "name": {
+            "enum": [
+              "status",
+              "min_days",
+              "max_drawdown",
+              "max_drift",
+              "min_trades",
+              "survival"
+            ],
+            "title": "Name",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "name",
+          "passed",
+          "value",
+          "limit",
+          "detail"
+        ],
+        "title": "GoLiveCheckView",
+        "type": "object"
+      },
+      "GoLivePolicy": {
+        "additionalProperties": false,
+        "description": "Limits a paper-trading period must meet before ``stonks golive check``\npasses (``[golive]``). The gate only reports; promotion stays a human\naction. Every limit is strict about missing data: a period with no\nsnapshots, no fills or no backtest expectation fails.",
+        "properties": {
+          "max_drawdown": {
+            "default": 0.15,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1.0,
+            "title": "Max Drawdown",
+            "type": "number"
+          },
+          "max_drift": {
+            "default": 0.1,
+            "minimum": 0.0,
+            "title": "Max Drift",
+            "type": "number"
+          },
+          "min_days": {
+            "default": 20,
+            "minimum": 1.0,
+            "title": "Min Days",
+            "type": "integer"
+          },
+          "min_trades": {
+            "default": 5,
+            "minimum": 1.0,
+            "title": "Min Trades",
+            "type": "integer"
+          },
+          "require_all_survival_passed": {
+            "default": true,
+            "title": "Require All Survival Passed",
+            "type": "boolean"
+          }
+        },
+        "title": "GoLivePolicy",
+        "type": "object"
+      },
+      "GoLiveReport": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/GoLiveCheckView"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/GoLivePolicy"
+          },
+          "source": {
+            "enum": [
+              "shadow",
+              "portfolio",
+              "none"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_id",
+          "status",
+          "source",
+          "passed",
+          "checks",
+          "policy"
+        ],
+        "title": "GoLiveReport",
+        "type": "object"
+      },
       "Health": {
         "properties": {
           "status": {
@@ -1960,6 +2098,17 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
           },
           "strategy_id": {
             "anyOf": [
@@ -3523,6 +3672,20 @@
         "title": "StreamToken",
         "type": "object"
       },
+      "StudioCapabilities": {
+        "description": "What this server lets the Studio do.",
+        "properties": {
+          "code_strategies": {
+            "title": "Code Strategies",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code_strategies"
+        ],
+        "title": "StudioCapabilities",
+        "type": "object"
+      },
       "SurvivalReportView": {
         "properties": {
           "metrics": {
@@ -3827,6 +3990,17 @@
             ],
             "title": "Error Type"
           },
+          "exit_strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Strategy Id"
+          },
           "fills": {
             "anyOf": [
               {
@@ -3886,6 +4060,14 @@
               }
             ],
             "title": "Shadow Error"
+          },
+          "stale_buys_dropped": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Stale Buys Dropped",
+            "type": "array"
           },
           "winner_expected_return": {
             "anyOf": [
@@ -7930,6 +8112,111 @@
         ]
       }
     },
+    "/api/strategies/{strategy_id}/golive": {
+      "get": {
+        "description": "Every go-live check of the strategy's paper period against\n``[golive]`` (same as ``stonks golive check``). Reports only; promotion\nstays a human action.",
+        "operationId": "getGoLiveReport",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "strategy_id",
+            "required": true,
+            "schema": {
+              "title": "Strategy Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoLiveReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Golive",
+        "tags": [
+          "strategies"
+        ]
+      }
+    },
     "/api/strategies/{strategy_id}/promote": {
       "post": {
         "operationId": "promoteStrategy",
@@ -8188,6 +8475,93 @@
         "summary": "Shadow",
         "tags": [
           "strategies"
+        ]
+      }
+    },
+    "/api/studio/capabilities": {
+      "get": {
+        "description": "Which Studio features this server allows (e.g. code strategies), so a\nclient can hide what would answer 403.",
+        "operationId": "getStudioCapabilities",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudioCapabilities"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Code strategies are disabled"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Capabilities",
+        "tags": [
+          "studio"
         ]
       }
     },

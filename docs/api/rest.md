@@ -135,6 +135,7 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#broke
 | GET | `/api/strategies` | List Strategies | token, or open on loopback |  | [Page_StrategySummary_](#page_strategysummary_) |
 | GET | `/api/strategies/summary` | Strategy Summary | token, or open on loopback |  | [StrategyStatusCounts](#strategystatuscounts) |
 | GET | `/api/strategies/{strategy_id}` | Get Strategy | token, or open on loopback |  | [StrategyDetail](#strategydetail) |
+| GET | `/api/strategies/{strategy_id}/golive` | Get Golive | token, or open on loopback |  | [GoLiveReport](#golivereport) |
 | POST | `/api/strategies/{strategy_id}/promote` | Promote | bearer token |  | [StrategyDetail](#strategydetail) |
 | POST | `/api/strategies/{strategy_id}/retire` | Retire | bearer token |  | [StrategyDetail](#strategydetail) |
 | POST | `/api/strategies/{strategy_id}/shadow` | Shadow | bearer token |  | [StrategyDetail](#strategydetail) |
@@ -143,6 +144,7 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#broke
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
+| GET | `/api/studio/capabilities` | Capabilities | token, or open on loopback |  | [StudioCapabilities](#studiocapabilities) |
 | GET | `/api/studio/drafts` | List Drafts | token, or open on loopback |  | [Page_Draft_](#page_draft_) |
 | POST | `/api/studio/drafts` | Create Draft | bearer token | [DraftCreate](#draftcreate) | [Draft](#draft) |
 | GET | `/api/studio/drafts/{draft_id}` | Get Draft | token, or open on loopback |  | [Draft](#draft) |
@@ -412,6 +414,39 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `tick_id` | string \| null | yes |  |
 | `ticker` | string | yes |  |
 
+### GoLiveCheckView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `detail` | string | yes |  |
+| `limit` | number \| null | yes |  |
+| `name` | "status" \| "min_days" \| "max_drawdown" \| "max_drift" \| "min_trades" \| "survival" | yes |  |
+| `passed` | boolean | yes |  |
+| `value` | number \| null | yes |  |
+
+### GoLivePolicy
+
+Limits a paper-trading period must meet before ``stonks golive check`` passes (``[golive]``). The gate only reports; promotion stays a human action. Every limit is strict about missing data: a period with no snapshots, no fills or no backtest expectation fails.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_drawdown` | number | no |  |
+| `max_drift` | number | no |  |
+| `min_days` | integer | no |  |
+| `min_trades` | integer | no |  |
+| `require_all_survival_passed` | boolean | no |  |
+
+### GoLiveReport
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `checks` | list[[GoLiveCheckView](#golivecheckview)] | yes |  |
+| `passed` | boolean | yes |  |
+| `policy` | [GoLivePolicy](#golivepolicy) | yes |  |
+| `source` | "shadow" \| "portfolio" \| "none" | yes |  |
+| `status` | string | yes |  |
+| `strategy_id` | string | yes |  |
+
 ### Health
 
 | Field | Type | Required | Description |
@@ -586,6 +621,7 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `quantity` | number | yes |  |
 | `side` | string | yes |  |
 | `status` | string | yes |  |
+| `status_reason` | string \| null | no |  |
 | `strategy_id` | string \| null | yes |  |
 | `tick_id` | string \| null | yes |  |
 | `ticker` | string | yes |  |
@@ -951,6 +987,14 @@ How many registered strategies are in each lifecycle status.
 | `expires_at` | date-time | yes |  |
 | `token` | string | yes |  |
 
+### StudioCapabilities
+
+What this server lets the Studio do.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `code_strategies` | boolean | yes |  |
+
 ### SurvivalReportView
 
 | Field | Type | Required | Description |
@@ -1009,12 +1053,14 @@ How many registered strategies are in each lifecycle status.
 |-------|------|----------|-------------|
 | `error` | string \| null | no |  |
 | `error_type` | string \| null | no |  |
+| `exit_strategy_id` | string \| null | no |  |
 | `fills` | integer \| null | no |  |
 | `orders_placed` | integer \| null | no |  |
 | `reason` | string \| null | no |  |
 | `risk_adjustments` | list[[RiskAdjustmentView](#riskadjustmentview)] | no |  |
 | `shadow` | list[[ShadowOutcomeView](#shadowoutcomeview)] | no |  |
 | `shadow_error` | string \| null | no |  |
+| `stale_buys_dropped` | list[string] | no |  |
 | `winner_expected_return` | number \| null | no |  |
 | `winner_strategy_id` | string \| null | no |  |
 

@@ -9,7 +9,7 @@ import {
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 
 import { IngestService } from '../../api/ingest.service';
-import { JobsApiService } from '../../api/jobs-api.service';
+import { AuthService } from '../../api/auth.service';
 import { LabService } from '../../api/lab.service';
 import type { AssetClassCosts, CostModelPreset, RiskPolicy } from '../../api/models';
 import { SystemService } from '../../api/system.service';
@@ -44,7 +44,7 @@ interface CostRow {
 export class SettingsPage {
   private readonly auth = inject(AuthTokenService);
   private readonly toasts = inject(ToastService);
-  private readonly jobsApi = inject(JobsApiService);
+  private readonly authApi = inject(AuthService);
   private readonly system = inject(SystemService);
   private readonly ingestApi = inject(IngestService);
   private readonly labApi = inject(LabService);
@@ -172,7 +172,7 @@ export class SettingsPage {
     }
     this.testing.set(true);
     try {
-      await this.jobsApi.probeToken();
+      await this.authApi.check();
       this.tokenCheck.set(TOKEN_ACCEPTED);
     } catch (err) {
       this.tokenCheck.set(tokenCheckFromError(err));
