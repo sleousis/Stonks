@@ -19,9 +19,9 @@ general: in this process they hand back the object itself; pickled (only
 when a pool is used) they serialize a portable copy, once, and rebuild it
 in the worker.
 
-- :class:`StrategyHandle` — a strategy, via its own ``save`` / ``load``
+- :class:`PortableStrategy` — a strategy, via its own ``save`` / ``load``
   (the registry's round-trip contract, so fitted state comes along).
-- :class:`LakeHandle` — a lake's universe tables (everything but
+- :class:`PortableLake` — a lake's universe tables (everything but
   ``bars``, see ``lab.lake_copy``), rebuilt in the worker as a private
   in-memory lake: one DuckDB connection per worker, none shared.
 
@@ -137,7 +137,7 @@ def _call(task_fn: Callable[[Any, Any], Any], task: Any) -> Any:
 # ---- handles ----------------------------------------------------------------
 
 
-class StrategyHandle:
+class PortableStrategy:
     """A strategy that can cross into a worker process (see module doc)."""
 
     def __init__(self, strategy: Strategy) -> None:
@@ -173,13 +173,13 @@ class StrategyHandle:
         self._portable = state["portable"]
 
 
-class LakeHandle:
+class PortableLake:
     """A lake's ``universe`` tables (no ``bars``) that can cross into a
     worker process, where they become a private in-memory lake."""
 
     def __init__(self, lake: DuckDBLake, universe: Sequence[str]) -> None:
         if not universe:
-            raise ValueError("LakeHandle needs a non-empty universe")
+            raise ValueError("PortableLake needs a non-empty universe")
         self.lake = lake
         self.universe = list(universe)
         self._owned = False

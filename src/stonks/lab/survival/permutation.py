@@ -39,7 +39,7 @@ from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.lab.backtesting import run_backtest
 from stonks.lab.lake_copy import copy_universe_lake
-from stonks.lab.parallel import LakeHandle, StrategyHandle, run_tasks
+from stonks.lab.parallel import PortableLake, PortableStrategy, run_tasks
 from stonks.lab.survival.base import TuningSetup
 from stonks.lab.tuning.base import tune_and_fit
 from stonks.logging import get_logger
@@ -341,8 +341,8 @@ class PermutationScorer:
     bars are exactly the ones from the window start on."""
 
     context: Any  # the dataset, lake detached (``source`` carries it)
-    source: LakeHandle
-    strategy: StrategyHandle
+    source: PortableLake
+    strategy: PortableStrategy
     evaluate: Evaluator
     interval: Interval
     coarser: list[Interval]
@@ -359,8 +359,8 @@ class PermutationScorer:
             return None
         return cls(
             context=dataclasses.replace(context, lake=None),
-            source=LakeHandle(context.lake, context.universe),
-            strategy=StrategyHandle(strategy),
+            source=PortableLake(context.lake, context.universe),
+            strategy=PortableStrategy(strategy),
             evaluate=evaluate,
             interval=interval,
             coarser=_coarser_intervals(context, interval),

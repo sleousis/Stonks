@@ -12,7 +12,7 @@ import pytest
 
 from stonks.core.interval import Interval
 from stonks.lab.dataset import LabDataset
-from stonks.lab.parallel import LakeHandle, StrategyHandle, default_max_workers, run_tasks
+from stonks.lab.parallel import PortableLake, PortableStrategy, default_max_workers, run_tasks
 from stonks.store.lake import DuckDBLake
 from stonks.strategies.examples.rsi_pca import RSIPCAStrategy
 
@@ -31,7 +31,7 @@ def _boom(state, task):
     raise RuntimeError(f"task {task} failed")
 
 
-def _lake_task(handle: LakeHandle, ticker: str):
+def _lake_task(handle: PortableLake, ticker: str):
     lake = handle.lake
     n_bars = int(lake.sql("SELECT COUNT(*) AS n FROM bars")["n"].iloc[0])
     ids = sorted(lake.sql("SELECT id FROM instruments")["id"])
@@ -137,7 +137,7 @@ def test_strategy_handle_is_the_instance_in_process_and_a_faithful_copy_when_pic
             interval=Interval.DAY_1,
         )
     )
-    handle = StrategyHandle(strategy)
+    handle = PortableStrategy(strategy)
     assert handle.strategy is strategy
 
     copy = pickle.loads(pickle.dumps(handle)).strategy
@@ -151,13 +151,13 @@ def test_strategy_handle_is_the_instance_in_process_and_a_faithful_copy_when_pic
 
 def test_unfitted_strategy_handle_round_trips():
     strategy = RSIPCAStrategy({"ticker": "X.US"})
-    copy = pickle.loads(pickle.dumps(StrategyHandle(strategy))).strategy
+    copy = pickle.loads(pickle.dumps(PortableStrategy(strategy))).strategy
     assert copy.params == strategy.params and not copy.is_fitted
 
 
 def test_lake_handle_carries_the_universe_tables_without_bars(lake):
     lake, _ = lake
-    handle = LakeHandle(lake, ["X.US"])
+    handle = PortableLake(lake, ["X.US"])
     assert handle.lake is lake
 
     copy = pickle.loads(pickle.dumps(handle))
@@ -175,7 +175,7 @@ def test_lake_handle_opens_in_each_worker(lake):
         _lake_task,
         ["a", "b", "c"],
         setup=_identity,
-        payload=LakeHandle(lake, ["X.US"]),
+        payload=PortableLake(lake, ["X.US"]),
         max_workers=2,
     )
     assert out == [("a", 0, ["X.US"]), ("b", 0, ["X.US"]), ("c", 0, ["X.US"])]
