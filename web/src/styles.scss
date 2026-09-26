@@ -1,0 +1,296 @@
+// Global styles: tokens, a small reset, and the shared primitives every page
+// uses (buttons, fields, panels, grid). Component-specific styles stay in the
+// component. See docs/ui.md for the conventions.
+@use '@fontsource-variable/public-sans';
+@use 'tokens';
+@use 'breakpoints' as bp;
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  line-height: var(--leading-body);
+  font-feature-settings: 'ss01';
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  line-height: var(--leading-tight);
+  font-weight: var(--weight-semibold);
+  text-wrap: balance;
+}
+
+a {
+  color: var(--color-primary);
+  text-underline-offset: 2px;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+// One visible focus style everywhere; mouse clicks don't show it.
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--color-brass-soft);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.gain {
+  color: var(--color-gain);
+}
+
+.loss {
+  color: var(--color-loss);
+}
+
+.muted {
+  color: var(--color-ink-3);
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+// Buttons ---------------------------------------------------------------
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--control-h);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+
+  &:hover:not(:disabled) {
+    background: var(--color-surface-2);
+    border-color: var(--color-ink-3);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  &.btn-primary {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-primary-ink);
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--color-primary) 88%, var(--color-ink));
+    }
+  }
+
+  &.btn-danger {
+    background: var(--color-loss);
+    border-color: var(--color-loss);
+    color: var(--color-surface);
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--color-loss) 88%, var(--color-ink));
+    }
+  }
+
+  &.btn-ghost {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  &.btn-icon {
+    width: var(--control-h);
+    padding: 0;
+  }
+}
+
+// Fields ------------------------------------------------------------------
+.field {
+  display: grid;
+  gap: var(--space-1);
+
+  > label {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  .hint {
+    font-size: var(--text-xs);
+    color: var(--color-ink-3);
+  }
+
+  .error {
+    font-size: var(--text-xs);
+    color: var(--color-loss);
+  }
+}
+
+.input {
+  width: 100%;
+  min-height: var(--control-h);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font-size: var(--text-md);
+
+  &[aria-invalid='true'] {
+    border-color: var(--color-loss);
+  }
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-h);
+  cursor: pointer;
+
+  input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--color-primary);
+  }
+}
+
+// Forms: one column on phones, two from tablet when marked .form-grid-2.
+.form-grid {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 640px;
+
+  @include bp.from-tablet {
+    &.form-grid-2 {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+}
+
+// Panels ------------------------------------------------------------------
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+  min-width: 0;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+
+  h2 {
+    font-size: var(--text-lg);
+  }
+}
+
+.panel-body {
+  padding: var(--space-4);
+}
+
+// Page grid: one column on phones; 12 columns from tablet. Children opt in
+// with .span-4 / .span-5 / .span-6 / .span-7 / .span-8 / .span-12.
+.page-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+
+  @include bp.from-desktop {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+
+    @each $n in 4, 5, 6, 7, 8, 12 {
+      > .span-#{$n} {
+        grid-column: span $n;
+      }
+    }
+  }
+}
+
+// Touch: every interactive control gets a 44px target on coarse pointers
+// and phones.
+@mixin touch-targets {
+  .btn,
+  .input,
+  .check {
+    min-height: var(--touch-min);
+  }
+
+  .btn.btn-icon {
+    width: var(--touch-min);
+  }
+}
+
+@include bp.coarse {
+  @include touch-targets;
+}
+
+@include bp.phone {
+  @include touch-targets;
+}

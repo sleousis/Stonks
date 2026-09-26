@@ -1,0 +1,71 @@
+@use 'breakpoints' as bp;
+
+.tiles {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: var(--space-4);
+
+  .tile-value {
+    grid-column: 1 / -1;
+  }
+
+  @include bp.from-desktop {
+    grid-template-columns: 1.6fr repeat(4, minmax(0, 1fr));
+
+    .tile-value {
+      grid-column: auto;
+    }
+  }
+}
+
+.panel-link {
+  font-size: var(--text-sm);
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+
+  @include bp.coarse {
+    min-height: var(--touch-min);
+  }
+
+  @include bp.phone {
+    min-height: var(--touch-min);
+  }
+}
+
+.health-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.checks {
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-3);
+  list-style: none;
+
+  li {
+    display: grid;
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-2);
+    padding: var(--space-2) 0;
+    border-top: 1px solid var(--color-border);
+  }
+}
+
+.check-name {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.check-detail {
+  font-size: var(--text-xs);
+  color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
