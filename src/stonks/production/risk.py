@@ -25,7 +25,7 @@ without it they are skipped and listed in ``RiskResult.skipped_rules``.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date
 
@@ -48,6 +48,9 @@ __all__ = [
     "RiskResult",
     "apply_risk",
     "build_risk_context",
+    "entry_dates_from_fills",
+    "model_book_risk_context",
+    "needs_risk_context",
 ]
 
 _log = get_logger("stonks.production.risk")
@@ -120,6 +123,17 @@ def apply_risk(
             current, adj = stage.apply(current, ctx)
         adjustments.extend(adj)
     return RiskResult(orders=current, adjustments=adjustments, skipped_rules=skipped)
+
+
+def needs_risk_context(*policies: RiskPolicy | None) -> bool:
+    """Any of ``policies`` enables a rule that needs history, so the caller
+    should build a ``RiskContext`` (otherwise the rule is skipped)."""
+    return any(
+        policy is not None
+        and policy.enabled
+        and any(rule.needs_history and rule.enabled(policy) for rule in _rules.registered_rules())
+        for policy in policies
+    )
 
 
 def _stages(rules: Sequence[RiskRule]) -> list[list[OrderRule] | RiskRule]:
@@ -215,14 +229,63 @@ def _entry_dates(
         """,
         [*held, as_of.isoformat(), *params],
     )
+    return entry_dates_from_fills(
+        (r["ticker"], r["side"], float(r["quantity"]), date.fromisoformat(r["filled_at"][:10]))
+        for r in rows
+    )
+
+
+def entry_dates_from_fills(
+    fills: Iterable[tuple[str, str, float, date]],
+) -> dict[str, date]:
+    """``(ticker, side, quantity, day)`` fills, oldest first -> the day each
+    still-open position was last opened from flat."""
     net: dict[str, float] = {}
     entry: dict[str, date] = {}
-    for r in rows:
-        before = net.get(r["ticker"], 0.0)
-        after = before + (r["quantity"] if r["side"] == "buy" else -r["quantity"])
-        net[r["ticker"]] = after
+    for ticker, side, quantity, day in fills:
+        before = net.get(ticker, 0.0)
+        after = before + (quantity if side == "buy" else -quantity)
+        net[ticker] = after
         if before <= 1e-12 < after:
-            entry[r["ticker"]] = date.fromisoformat(r["filled_at"][:10])
+            entry[ticker] = day
         elif after <= 1e-12:
-            entry.pop(r["ticker"], None)
+            entry.pop(ticker, None)
     return entry
+
+
+def model_book_risk_context(
+    base: RiskContext,
+    state: SqliteState,
+    strategy_id: str,
+    portfolio: Portfolio,
+    as_of: date,
+) -> RiskContext:
+    """``base`` (history and sectors, from :func:`build_risk_context`) for a
+    strategy's model book: its virtual portfolio, its equity curve and the
+    entry dates of its filled shadow decisions."""
+    from stonks.production.pnl import load_pnl
+
+    held = [t for t, q in portfolio.positions.items() if abs(q) > 1e-12]
+    entry: dict[str, date] = {}
+    if held:
+        marks = ",".join("?" for _ in held)
+        rows = state.sql(
+            "SELECT ticker, side, quantity, as_of FROM shadow_decisions"
+            f" WHERE strategy_id = ? AND status = 'filled' AND ticker IN ({marks})"
+            " AND as_of <= ? ORDER BY as_of, id",
+            [strategy_id, *held, as_of.isoformat()],
+        )
+        entry = entry_dates_from_fills(
+            (r["ticker"], r["side"], float(r["quantity"]), date.fromisoformat(r["as_of"]))
+            for r in rows
+        )
+    curve = [
+        (r.day, r.total_value) for r in load_pnl(state, strategy_id=strategy_id) if r.day <= as_of
+    ]
+    return replace(
+        base,
+        portfolio=portfolio,
+        equity_curve=curve,
+        entry_dates=entry,
+        portfolio_id=None,
+    )

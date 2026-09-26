@@ -21,6 +21,7 @@ from stonks.core.types import AssetClass
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
 from stonks.portfolio.settings import ConstructionSettings
+from stonks.production.rules.settings import RuleSettings
 from stonks.store.bars import BarBackend
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
@@ -159,6 +160,10 @@ class RiskPolicy(BaseModel):
     cash_buffer_fraction: float = Field(default=0.0, ge=0.0, le=1.0)
     # Buys whose (possibly clipped) notional falls below this are dropped.
     min_order_notional: float = Field(default=0.0, ge=0.0)
+    # ``[production.risk.rules.<rule>]``: the W3.1 rules (max_holding,
+    # drawdown_scaling, portfolio_vol, risk_per_position, sector_cap,
+    # liquidity), every one off by default.
+    rules: RuleSettings = RuleSettings()
 
     def tighter_of(self, *overrides: RiskPolicy | Mapping[str, Any] | None) -> RiskPolicy:
         """This policy tightened by each partial override (a ``RiskPolicy``

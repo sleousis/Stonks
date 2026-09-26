@@ -1,11 +1,10 @@
 """Settings of the W3.1 risk rules (BL-27), one model per rule, grouped in
 ``RuleSettings``. Every rule is off by default.
 
-The rules read them as ``policy.rules.<rule name>``: the integration step
-adds ``rules: RuleSettings = RuleSettings()`` to ``RiskPolicy`` (config
-``[production.risk.rules.<rule name>]``) and registers
-:func:`tighter_rule_settings` as its ``accounts.book.MERGE_RULES`` entry,
-so portfolio and subscription overrides can only tighten them.
+The rules read them as ``policy.rules.<rule name>``: ``RiskPolicy.rules``
+(config ``[production.risk.rules.<rule name>]``), merged by
+:func:`tighter_rule_settings` (its ``accounts.book.MERGE_RULES`` entry), so
+portfolio and subscription overrides can only tighten them.
 """
 
 from __future__ import annotations

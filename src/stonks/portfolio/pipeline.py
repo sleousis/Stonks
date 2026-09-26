@@ -249,8 +249,13 @@ def _single_winner(
     proposed = strategies(winner).decide(picks, book.portfolio, dict(market.prices), market.as_of)
     kept, stale = _drop_stale(proposed, market)
     risk = apply_book_risk(kept, book, market, book.risk_overrides.get(winner))
+    # Orders a risk rule created (e.g. a max_holding forced sell) keep the
+    # rule's client id and no strategy; the winner's own orders take its ids.
+    decided = {o.client_id for o in kept}
     orders = [
         replace(o, strategy_id=winner, client_id=make_id(winner, o.ticker, o.side))
+        if o.client_id in decided
+        else o
         for o in risk.orders
     ]
     return PipelineResult(

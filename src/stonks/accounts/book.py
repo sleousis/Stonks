@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from stonks.accounts.models import DEFAULT_PORTFOLIO_ID, Mode, Portfolio, Subscription
 from stonks.config import RiskPolicy
+from stonks.production.rules.settings import tighter_rule_settings
 
 if TYPE_CHECKING:
     from stonks.config import Settings
@@ -60,6 +61,7 @@ MERGE_RULES: dict[str, Callable[[Any, Any], Any]] = {
     "max_weight_per_asset_class": _min_caps,
     "cash_buffer_fraction": max,
     "min_order_notional": max,
+    "rules": tighter_rule_settings,
 }
 
 

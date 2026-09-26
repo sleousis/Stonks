@@ -110,7 +110,7 @@ from stonks.production.hooks.attribution import load_attribution
 from stonks.production.ledger import ledger_filter
 from stonks.production.prices import held_tickers, load_history, load_prices
 from stonks.production.ranker import Ranker, SignalSet, StrategyPool
-from stonks.production.risk import RiskPolicy
+from stonks.production.risk import RiskPolicy, build_risk_context, needs_risk_context
 from stonks.production.shadow import evaluate_shadow_strategies, shadow_held_tickers
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
@@ -705,6 +705,22 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         asset_classes=asset_classes,
         vols_annual=({} if construction.is_single_winner else run.vols([*universe, *held])),
     )
+    # Rules that need history (W3.1) run only with a context: built when the
+    # book's policy (or a strategy slice's) enables one.
+    risk_context = None
+    if needs_risk_context(book.spec.risk, *book.spec.risk_overrides.values()):
+        risk_context = build_risk_context(
+            lake,
+            state,
+            portfolio,
+            prices,
+            as_of,
+            policy=book.spec.risk,
+            universe=universe,
+            cost_model=settings.costs,
+            volumes=book_prices.volumes,
+            portfolio_id=portfolio_id,
+        )
     book_input = BookInput(
         portfolio=portfolio,
         construction=construction,
@@ -713,6 +729,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         risk_overrides=book.spec.risk_overrides,
         prior_attribution=(load_attribution(state, portfolio_id, as_of) if run.scoped else {}),
         costs=settings.fill_costs,
+        risk_context=risk_context,
     )
     candidates = None if book.legacy else set(strategy_ids)
 
@@ -1119,6 +1136,20 @@ def _shadow_phase(run: _TickRun) -> dict[str, Any]:
             run.as_of,
             max_staleness_days=settings.max_price_staleness_days,
         )
+        shadow_prices = book.prices
+        base_context = None
+        if needs_risk_context(settings.risk):
+            base_context = build_risk_context(
+                lake,
+                state,
+                Portfolio(cash=0.0),
+                shadow_prices,
+                run.as_of,
+                policy=settings.risk,
+                universe=[*settings.universe, *shadow_held],
+                cost_model=settings.costs,
+                volumes=book.volumes,
+            )
         outcomes = evaluate_shadow_strategies(
             state,
             run.registry,
@@ -1133,6 +1164,7 @@ def _shadow_phase(run: _TickRun) -> dict[str, Any]:
             corporate_actions=shadow_actions,
             strategies=run.pool.checkout,
             statuses=statuses,
+            risk_context=base_context,
         )
     except Exception as exc:
         log.error("tick.shadow_failed", error=str(exc), error_type=type(exc).__name__)

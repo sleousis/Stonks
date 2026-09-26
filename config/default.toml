@@ -61,6 +61,21 @@ min_order_notional = 0.0
 [production.risk.max_weight_per_asset_class]
 # crypto = 0.2                     # classes not listed are uncapped
 
+# History-aware risk rules (BL-27), all off by default. Portfolio and
+# subscription overrides can only tighten them. Examples:
+# [production.risk.rules.max_holding]
+# max_holding_bars = 60            # force-sell positions held 60+ bars
+# [production.risk.rules.sector_cap]
+# max_weight_per_sector = 0.3
+# [production.risk.rules.liquidity]
+# max_pct_adv = 0.05               # buys up to 5% of 20-day average volume
+# [production.risk.rules.portfolio_vol]
+# vol_cap = 0.20                   # scale buys down above 20% forecast vol
+# [production.risk.rules.risk_per_position]
+# max_risk = 0.01                  # k * ATR risk per position, fraction of equity
+# [production.risk.rules.drawdown_scaling]
+# schedule = [[0.10, 0.5], [0.20, 0.0]]   # size by drawdown from peak
+
 [production.health]
 # `stonks health` thresholds.
 max_bar_age_days = 4
