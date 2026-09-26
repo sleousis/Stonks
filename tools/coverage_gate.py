@@ -21,7 +21,7 @@ from typing import Any
 TARGET = 95.0
 
 #: Floors enforced now. Measured on 2026-09-26 (combined line and branch):
-#: core 92.6, production 95.6, execution 95.9, auth 94.1, portfolio 97.3.
+#: core 92.6, production 95.6, execution 95.9, auth 94.0, portfolio 96.3.
 PACKAGE_FLOORS: dict[str, float] = {
     "core": 92.0,
     "production": 95.0,

@@ -184,17 +184,20 @@ def run_target(target: Target, workdir: Path) -> dict[str, Any]:
     session = copy / "session.sqlite"
     env = {**os.environ, "PYTHONPATH": str(copy / "src")}
 
-    def cosmic_ray(step: str) -> None:
+    def cosmic_ray(*args: str) -> None:
         subprocess.run(
-            [sys.executable, "-m", "cosmic_ray.cli", step, str(config), str(session)],
+            [sys.executable, "-m", "cosmic_ray.cli", *args],
             cwd=copy,
             env=env,
             check=True,
         )
 
-    cosmic_ray("init")
+    # The target's tests must pass on the unmutated copy first: otherwise
+    # every mutant would count as killed.
+    cosmic_ray("baseline", str(config))
+    cosmic_ray("init", str(config), str(session))
     skipped = _skip_annotation_mutants(session, copy)
-    cosmic_ray("exec")
+    cosmic_ray("exec", str(config), str(session))
     outcomes, survivors = _outcomes(session)
     return {
         "target": target.name,

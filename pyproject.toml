@@ -143,7 +143,7 @@ source = ["stonks"]
 
 [tool.coverage.report]
 # The gate is coverage.py's combined line-and-branch number. Target 90
-# overall (measured 94 on 2026-09-26). The five strict packages have their
+# overall (measured 93.6 on 2026-09-26). The five strict packages have their
 # own floors (target 95) in tools/coverage_gate.py.
 fail_under = 90
 skip_covered = true

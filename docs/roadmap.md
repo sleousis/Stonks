@@ -350,6 +350,38 @@ The last phase. The whole project is reviewed file by file, fixed, tested throug
 | 18.7 Feature completeness | A capability matrix of API, console, CLI and MCP. Fill every gap and add the parity test. |
 | 18.8 Release | Changelog, docs and wiki final pass, version 1.0 tag and a deploy dry run. |
 
+**Gate status (18.3, measured 2026-09-26)**
+
+CI enforces each gate at today's value where it is still below the target, so it passes now and the floor only moves up. Raise a floor in the same change that lifts coverage.
+
+| Gate | Target | Today | Enforced by |
+|---|---|---|---|
+| Coverage overall (coverage.py's combined line and branch number) | 90 | 93.6 (lines 95.3, branches 86.2) | `fail_under = 90` in `pyproject.toml` |
+| Coverage `core/` | 95 | 92.6 | floor 92 in `tools/coverage_gate.py` |
+| Coverage `production/` | 95 | 95.6 | floor 95 |
+| Coverage `execution/` | 95 | 95.9 | floor 95 |
+| Coverage `auth/` | 95 | 94.0 | floor 94 |
+| Coverage `portfolio/` | 95 | 96.3 | floor 95 |
+| Pyright basic over `src/stonks` | 0 errors | 449 errors | `tools/pyright_gate.py` fails on any error not in `tools/pyright-baseline.json` |
+| Surviving mutants on the money paths | under 10% | 19.8% over six targets (the risk rules still to run in full) | `tools/mutation.py`, weekly and manual (`.github/workflows/mutation.yml`) |
+| Ruff | no ignore without a comment | met | `[tool.ruff.lint]`, every ignore says why |
+
+First mutation run per target (cosmic-ray, mutants inside type annotations skipped as equivalent):
+
+| Target | Module | Mutants run | Killed | Survived | Surviving |
+|---|---|---|---|---|---|
+| client_ids | `execution/orders.py` | 21 | 19 | 2 | 9.5% |
+| orders | `portfolio/orders.py` | 397 | 282 | 63 | 18.3% |
+| fills | `backtest/fills.py` | 393 | 188 | 108 | 36.5% |
+| risk | `production/risk.py` | 157 | 157 | 0 | 0% |
+| ledger_sync | `execution/reconcile.py` | 80 | 58 | 20 | 25.6% |
+| pnl | `production/pnl.py` | 184 | 127 | 12 | 8.6% |
+| rules | `production/rules/` | 136 of 2485 (sample) | 85 | 37 | about 30% |
+
+"Mutants run" includes incompetent ones (code that no longer runs), which count neither way. The rate is survived over killed plus survived: 205 of 1036, 19.8%. The first run found a real gap: the non-default portfolio branch of `make_client_id` had no unit test (now covered, 47.6% to 9.5%). The risk rules have about 2500 mutants, too many for a local run. The weekly job measures them. Next: kill the surviving fills, orders and ledger mutants with tests until every target is under 10%.
+
+Pyright strict plan. Strict mode comes one package at a time, smallest first, each in its own change that also shrinks the baseline: `core/`, then `execution/`, `auth/`, `portfolio/` and last `production/`. Each step adds the package to `strict` in `[tool.pyright]`. Most strict errors are unknown types from untyped libraries (pandas, alpaca-py, exchange_calendars, pywebpush), so each step adds `pandas-stubs` or a typed wrapper at the seam and uses `dict[str, Any]` instead of bare `dict`. The basic-mode baseline is burned down alongside: pandas `itertuples()` rows, constructor settings read from the base class, and pydantic models built with no arguments.
+
 ## Execution order
 
 1. Wave 1 in parallel: backtest (1.2, 1.3, 3.5), lab (1.4, 1.5, 3.3), production (2.3, 2.4, 2.5), broker (2.1, 2.2), data (3.4), strategies (3.1, 3.2, 4.2), and the service layer plus REST API for existing features (5.1).
