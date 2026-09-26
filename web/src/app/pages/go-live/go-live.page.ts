@@ -9,78 +9,18 @@ import {
 } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
-import type { GoLiveCheckView, StrategySummary } from '../../api/models';
+import type { StrategySummary } from '../../api/models';
 import { StrategiesService } from '../../api/strategies.service';
 import { SystemService } from '../../api/system.service';
-import { formatMoney, formatNumber, formatPercent, MISSING } from '../../core/format/format';
+import { formatMoney, formatPercent } from '../../core/format/format';
+import { type CheckRow, checkRow, checklistItems } from '../../shared/golive-checks';
+import { HelpTip } from '../../shared/ui/help-tip';
 import { CliCommand } from '../../shared/ui/cli-command';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 
-/** What each `stonks golive check` check measures (src/stonks/production/golive.py). */
-export const CHECK_MEASURES: Record<GoLiveCheckView['name'], string> = {
-  status: 'The strategy is in shadow or active, so it has a paper period.',
-  min_days: 'Distinct days with a paper snapshot.',
-  max_drawdown: 'Deepest peak-to-trough fall during the paper period.',
-  max_drift: 'Gap between the paper return and the return its out-of-sample backtest expects.',
-  min_trades: 'Filled trades during the paper period.',
-  survival: 'Every stored survival report passed.',
-  within_mc_band: 'Paper drawdown stays inside the Monte Carlo band from the backtest.',
-  quit_rule: 'Drawdown stays below 1.5x the backtest worst or the Monte Carlo limit.',
-  promotion_preset: 'The full promotion survival suite has run.',
-  nonzero_costs: 'The backtest used realistic, non-zero trading costs.',
-  hypothesis_recorded: 'A written hypothesis explains why the strategy should work.',
-  backtest_min_trades: 'The backtest closed enough trades to trust its statistics.',
-};
-
-export interface CheckRow {
-  name: GoLiveCheckView['name'];
-  passed: boolean;
-  measures: string;
-  value: string;
-  limit: string;
-  detail: string;
-}
-
-/** A check's value and limit as the gate compares them. */
-export function checkRow(c: GoLiveCheckView): CheckRow {
-  let value = MISSING;
-  let limit = MISSING;
-  switch (c.name) {
-    case 'min_days':
-    case 'min_trades':
-      value = formatNumber(c.value, { digits: 0 });
-      limit = c.limit == null ? MISSING : `≥ ${formatNumber(c.limit, { digits: 0 })}`;
-      break;
-    case 'max_drawdown':
-      // A flat period's drawdown is -0; show it as 0.00%.
-      value = formatPercent(c.value === 0 ? 0 : c.value);
-      limit = c.limit == null ? MISSING : `≤ ${formatPercent(c.limit)}`;
-      break;
-    case 'max_drift':
-      value = formatPercent(c.value, { signed: true });
-      limit = c.limit == null ? MISSING : `± ${formatPercent(c.limit)}`;
-      break;
-    case 'survival':
-      value =
-        c.value == null || c.limit == null
-          ? MISSING
-          : `${formatNumber(c.value, { digits: 0 })} of ${formatNumber(c.limit, { digits: 0 })}`;
-      limit = 'all passed';
-      break;
-    case 'status':
-      break;
-  }
-  return {
-    name: c.name,
-    passed: c.passed,
-    measures: CHECK_MEASURES[c.name],
-    value,
-    limit,
-    detail: c.detail,
-  };
-}
+export { CHECK_MEASURES, checkRow, type CheckRow } from '../../shared/golive-checks';
 
 const STATUS_ORDER: Record<StrategySummary['status'], number> = {
   shadow: 0,
@@ -91,7 +31,16 @@ const STATUS_ORDER: Record<StrategySummary['status'], number> = {
 @Component({
   selector: 'app-go-live-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, PageHeader, StatusPill, CliCommand, LoadingState, EmptyState, ErrorState],
+  imports: [
+    RouterLink,
+    HelpTip,
+    PageHeader,
+    StatusPill,
+    CliCommand,
+    LoadingState,
+    EmptyState,
+    ErrorState,
+  ],
   templateUrl: './go-live.page.html',
   styleUrl: './go-live.page.scss',
 })
@@ -125,6 +74,11 @@ export class GoLivePage {
   );
 
   protected readonly failedCount = computed(() => this.rows().filter((r) => !r.passed).length);
+
+  /** What a reviewer reads before promoting; it never changes the verdict. */
+  protected readonly checklist = computed(() =>
+    this.report.hasValue() ? checklistItems(this.report.value().checklist) : [],
+  );
 
   /** Shadow first (the usual candidates), then active, then retired. */
   protected readonly groups = computed(() => {
