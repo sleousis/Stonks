@@ -34,8 +34,9 @@ router = APIRouter(prefix="/api/connections", tags=["connections"], responses=PR
 
 @router.get("/providers", response_model=list[ProviderView], operation_id="listProviders")
 def list_providers(services: ServicesDep, scope: ScopeDep) -> list[ProviderView]:
-    """Providers an admin enabled (``[connections].enabled_providers``) and
-    configured; nothing else can be connected."""
+    """Every provider. ``enabled`` marks the ones an admin turned on
+    (``[connections].enabled_providers``) and configured: nothing else can
+    be connected. ``has_paper`` marks providers with paper accounts."""
     return services.connections.providers(scope)
 
 

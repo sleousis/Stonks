@@ -74,6 +74,7 @@ def _default_factory(api_key: str, secret_key: str, paper: bool) -> Any:
 @register_provider("alpaca")
 class AlpacaConnection(BrokerConnection):
     display_name: ClassVar[str] = "Alpaca"
+    has_paper: ClassVar[bool] = True
     auth_flow = "api_key"
     credential_fields = ("api_key", "secret_key")
     capabilities: ClassVar[frozenset[Capability]] = frozenset(

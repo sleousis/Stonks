@@ -76,13 +76,34 @@ def test_scoped_routes_need_the_token_even_for_loopback_reads(client):
     assert client.get("/api/connections", headers=AUTH).status_code == 200
 
 
-def test_providers_lists_only_enabled_ones(client):
+def test_providers_lists_every_provider_and_marks_the_enabled_ones(client):
     resp = client.get("/api/connections/providers", headers=AUTH)
     assert resp.status_code == 200
     by_name = {p["name"]: p for p in resp.json()}
-    assert set(by_name) == {"fake", "fake_portal"}
+    assert set(by_name) == {"alpaca", "fake", "fake_portal", "snaptrade"}
+    assert {n for n, p in by_name.items() if p["enabled"]} == {"fake", "fake_portal"}
     assert by_name["fake"]["auth_flow"] == "api_key"
     assert by_name["fake"]["credential_fields"] == ["token"]
+    assert by_name["alpaca"]["has_paper"] is True
+    assert by_name["snaptrade"]["has_paper"] is False
+
+
+def test_a_disabled_provider_cannot_be_connected(client):
+    resp = client.post(
+        "/api/connections/keys",
+        json={"provider": "alpaca", "fields": {"api_key": "a", "secret_key": "b"}},
+        headers=AUTH,
+    )
+    assert resp.status_code in (403, 409, 422), resp.text
+
+
+def test_connections_count_their_accounts(client):
+    body = _connect(client)
+    assert body["accounts_count"] == 1
+    [listed] = client.get("/api/connections", headers=AUTH).json()
+    assert listed["accounts_count"] == 1
+    got = client.get(f"/api/connections/{body['id']}", headers=AUTH).json()
+    assert got["accounts_count"] == 1
 
 
 def test_connect_with_keys_never_echoes_or_logs_the_secret(client, settings, caplog):
