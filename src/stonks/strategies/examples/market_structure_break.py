@@ -30,6 +30,7 @@ Deliberate deviations from the original research code:
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import numpy as np
@@ -120,7 +121,7 @@ class MarketStructureBreakStrategy(SingleTickerLongFlat):
         long = pos[-1] > 0
         # how far the close has broken above the level high
         score = close[-1] / level_high - 1.0 if long and level_high > 0 else 0.0
-        return {
+        state = {
             "close": float(close[-1]),
             "level_high": level_high,
             "level_low": float(lo[-1]),
@@ -128,3 +129,5 @@ class MarketStructureBreakStrategy(SingleTickerLongFlat):
             "signal": 1.0 if long else 0.0,
             "score": float(score),
         }
+        # No swing yet (flat prices): the levels are unknown, not NaN (RS-38).
+        return {k: v for k, v in state.items() if math.isfinite(v)}

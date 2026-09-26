@@ -61,8 +61,14 @@ def test_estimate_return_prefers_uptrending_over_downtrending(lake_with_trend):
     r_flat = s.estimate_return("FLAT.US", as_of, lake_with_trend)
 
     assert r_up is not None and r_up > 0
-    assert r_down is None or r_down <= 0  # below threshold → filtered or negative
-    assert r_flat is None or abs(r_flat) < 0.01
+    # RS-38: the other two are filtered by the threshold, and the filter is
+    # the reason (their lookback returns were computed: negative and zero)
+    assert r_down is None
+    assert r_flat is None
+    down = s.extract_features("DOWN.US", as_of, lake_with_trend).values["r_lookback"]
+    flat = s.extract_features("FLAT.US", as_of, lake_with_trend).values["r_lookback"]
+    assert down < 0
+    assert flat == pytest.approx(0.0)
 
 
 def test_estimate_return_returns_none_when_insufficient_history(lake_with_trend):

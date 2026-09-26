@@ -22,6 +22,7 @@ param. Param sets saved before BL-43 still load.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -29,7 +30,7 @@ from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
 from stonks.features.library import trendline_breakout_latest
-from stonks.strategies._common import LakeBarCaches, iso
+from stonks.strategies._common import LakeBarCaches, long_only_decide
 from stonks.strategies.base import BaseStrategy
 
 # Bound on memoized window fits per strategy instance (~0.6 KB each at the
@@ -124,7 +125,10 @@ class TrendlineBreakoutStrategy(BaseStrategy):
         if state is None:
             return None
         _support, resistance, current_close, signal = state
-        if signal <= 0 or resistance <= 0:
+        # a NaN close in the window leaves the lines undefined: no signal
+        if signal <= 0 or not (math.isfinite(resistance) and math.isfinite(current_close)):
+            return None
+        if resistance <= 0:
             return None
         return max(current_close / resistance - 1.0, 1e-6)
 
@@ -135,38 +139,15 @@ class TrendlineBreakoutStrategy(BaseStrategy):
         prices: Mapping[str, float],
         as_of,
     ) -> list[Order]:
-        target = self.params["ticker"]
-        price = prices.get(target)
-        holding = portfolio.positions.get(target, 0.0)
-        orders: list[Order] = []
-
-        if my_picks and price and price > 0 and holding <= 0 and portfolio.cash > 0:
-            qty = (portfolio.cash * float(self.params["allocation"])) / price
-            if qty > 0:
-                orders.append(
-                    Order(
-                        client_id=f"{self.id}:buy:{target}:{iso(as_of)}",
-                        ticker=target,
-                        side="buy",
-                        quantity=qty,
-                        order_type="market",
-                        strategy_id=self.id,
-                    )
-                )
-            return orders
-
-        if not my_picks and holding > 0:
-            orders.append(
-                Order(
-                    client_id=f"{self.id}:sell:{target}:{iso(as_of)}",
-                    ticker=target,
-                    side="sell",
-                    quantity=holding,
-                    order_type="market",
-                    strategy_id=self.id,
-                )
-            )
-        return orders
+        return long_only_decide(
+            self.id,
+            self.params["ticker"],
+            float(self.params["allocation"]),
+            my_picks,
+            portfolio,
+            prices,
+            as_of,
+        )
 
     # ---- internals ---------------------------------------------------------
 
