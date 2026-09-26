@@ -220,7 +220,10 @@ def test_apply_risk_matches_the_pre_registry_implementation(seed):
 
 
 def test_todays_caps_are_registered_in_order():
-    names = [r.name for r in registered_rules()]
+    caps = {"sell_within_position", "require_price", "max_open_positions"}
+    caps |= {"max_weight_per_ticker", "max_weight_per_asset_class", "cash_buffer"}
+    caps |= {"min_order_notional"}
+    names = [r.name for r in registered_rules() if r.name in caps]
     assert names == [
         "sell_within_position",
         "require_price",

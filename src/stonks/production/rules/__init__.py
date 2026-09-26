@@ -19,6 +19,24 @@ Two kinds:
   every rule before the next order is looked at, so a dropped buy never
   uses up cash or a position slot. Today's caps (``caps.py``) are order
   rules.
+
+Order of application (``order``; lower first):
+
+1. ``max_holding`` (1): forced sells of positions held too long;
+2. ``drawdown_scaling`` (2): every opening buy times the drawdown size;
+3. ``portfolio_vol`` (3): opening buys scaled to the volatility caps,
+   measured on the buys drawdown scaling left;
+4. one order-rule pass: ``sell_within_position`` (10), ``require_price``
+   (20), ``max_open_positions`` (30), ``max_weight_per_ticker`` (40),
+   ``max_weight_per_asset_class`` (50), ``risk_per_position`` (52),
+   ``sector_cap`` (54), ``liquidity`` (56), ``cash_buffer`` (60) and
+   ``min_order_notional`` (70), so cash and the minimum notional see the
+   final size.
+
+Every step only shrinks buys, so the result is at most what any single
+rule allows. A rule may declare ``enabled(policy)``; disabled rules are
+left out. The W3.1 rules (BL-27) are off unless ``policy.rules`` (see
+``settings.py``) switches them on.
 """
 
 from __future__ import annotations
@@ -110,6 +128,8 @@ class RiskContext:
     volumes: Mapping[str, float] = field(default_factory=dict)
     slippage_bps: float = 0.0
     fee_per_trade: float = 0.0
+    #: The decision day. Rules read no bar or equity point after it.
+    as_of: date | None = None
 
     def __post_init__(self) -> None:
         if self.cost_model is not None and (self.slippage_bps or self.fee_per_trade):
@@ -219,6 +239,11 @@ class RiskRule(ABC):
     #: Needs ``RiskContext`` history (bars, equity curve, ...); skipped when
     #: ``apply_risk`` is called without a context.
     needs_history: ClassVar[bool] = False
+
+    def enabled(self, policy: Any) -> bool:
+        """Whether ``policy`` switches this rule on. ``apply_risk`` leaves a
+        disabled rule out entirely (not run, not reported as skipped)."""
+        return True
 
     @abstractmethod
     def apply(

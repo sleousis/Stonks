@@ -100,6 +100,8 @@ def apply_risk(
     rules: list[RiskRule] = []
     skipped: list[str] = []
     for rule in _rules.registered_rules():
+        if not rule.enabled(policy):
+            continue
         if rule.needs_history and context is None:
             skipped.append(rule.name)
         else:
@@ -166,6 +168,7 @@ def build_risk_context(
             cost_model.build() if isinstance(cost_model, CostModelSettings) else cost_model
         ),
         volumes=dict(volumes or {}),
+        as_of=as_of,
     )
 
 
