@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import sqlite3
 import threading
 import time
 
@@ -268,3 +269,197 @@ def test_job_waiting_on_lock_at_shutdown_is_cancelled_not_run(store):
     _wait_for_status(store, first.id, "succeeded")
     _wait_for_status(store, second.id, "cancelled")
     assert ran == ["first"]
+
+
+# ---- scheduling: locks never occupy general workers --------------------------
+
+
+def test_tick_is_never_starved_by_lake_writers_or_lab_runs(store):
+    """Two ingests (one running, one waiting on ``lake_write``) plus lab runs
+    filling the general pool must not delay a tick."""
+    runner = JobRunner(store, max_workers=2)
+    gate = threading.Event()
+    runner.register("ingest", lambda p, c: gate.wait(10), lock="lake_write")
+    runner.register("lab", lambda p, c: gate.wait(10))
+    runner.register("tick", lambda p, c: {"ticked": True}, lock="tick")
+    try:
+        ingests = [runner.submit("ingest", {}).id for _ in range(2)]
+        labs = [runner.submit("lab", {}).id for _ in range(2)]
+        _wait_for_status(store, ingests[0], "running")
+        for jid in labs:
+            _wait_for_status(store, jid, "running")
+        tick = runner.submit("tick", {})
+        done = runner.wait(tick.id, timeout=5)
+        assert done.status == "succeeded"
+        # the second ingest is still queued behind the first, not holding a worker
+        assert store.get(ingests[1]).status == "queued"
+    finally:
+        gate.set()
+        runner.shutdown()
+
+
+def test_lake_writer_waiting_on_lock_leaves_general_pool_free(store):
+    runner = JobRunner(store, max_workers=1)
+    gate = threading.Event()
+    runner.register("ingest", lambda p, c: gate.wait(10), lock="lake_write")
+    runner.register("backtest", lambda p, c: "ok")
+    try:
+        first = runner.submit("ingest", {})
+        runner.submit("ingest", {})
+        _wait_for_status(store, first.id, "running")
+        assert runner.wait(runner.submit("backtest", {}).id, timeout=5).status == "succeeded"
+    finally:
+        gate.set()
+        runner.shutdown()
+
+
+# ---- store failures: last-resort handling ----------------------------------
+
+
+class _FlakyStore(JobStore):
+    """Raises ``database is locked`` on the first N calls of chosen methods."""
+
+    def __init__(self, path, failures: dict[str, int]) -> None:
+        super().__init__(path)
+        self.failures = dict(failures)
+
+    def _maybe_fail(self, name: str) -> None:
+        if self.failures.get(name, 0) > 0:
+            self.failures[name] -= 1
+            raise sqlite3.OperationalError("database is locked")
+
+    def claim(self, job_id):
+        self._maybe_fail("claim")
+        return super().claim(job_id)
+
+    def finish(self, job_id, status, **kw):
+        self._maybe_fail("finish")
+        return super().finish(job_id, status, **kw)
+
+    def set_progress(self, job_id, progress, message=None):
+        self._maybe_fail("set_progress")
+        return super().set_progress(job_id, progress, message)
+
+
+def _flaky(store: JobStore, **failures: int) -> _FlakyStore:
+    return _FlakyStore(store._path, failures)
+
+
+def test_finish_is_retried_when_the_database_is_locked(store):
+    flaky = _flaky(store, finish=2)
+    runner = JobRunner(flaky, max_workers=1, retry_delays=(0.0, 0.0, 0.0))
+    runner.register("ok", lambda p, c: {"v": 1})
+    try:
+        done = runner.wait(runner.submit("ok", {}).id, timeout=10)
+    finally:
+        runner.shutdown()
+    assert done.status == "succeeded"
+    assert done.result == {"v": 1}
+
+
+def test_claim_is_retried_when_the_database_is_locked(store):
+    flaky = _flaky(store, claim=1)
+    runner = JobRunner(flaky, max_workers=1, retry_delays=(0.0, 0.0))
+    runner.register("ok", lambda p, c: "fine")
+    try:
+        done = runner.wait(runner.submit("ok", {}).id, timeout=10)
+    finally:
+        runner.shutdown()
+    assert done.status == "succeeded"
+
+
+def test_progress_write_failure_does_not_fail_the_job(store):
+    flaky = _flaky(store, set_progress=5)
+
+    def handler(params: dict, ctx: JobContext) -> str:
+        ctx.progress(0.5, "halfway")
+        return "done"
+
+    runner = JobRunner(flaky, max_workers=1)
+    runner.register("p", handler)
+    try:
+        done = runner.wait(runner.submit("p", {}).id, timeout=10)
+    finally:
+        runner.shutdown()
+    assert done.status == "succeeded"
+
+
+def test_wait_returns_when_finish_keeps_failing(store):
+    flaky = _flaky(store, finish=100)
+    runner = JobRunner(flaky, max_workers=1, retry_delays=(0.0,))
+    runner.register("ok", lambda p, c: 1)
+    try:
+        job = runner.submit("ok", {})
+        started = time.monotonic()
+        stuck = runner.wait(job.id)  # no timeout: must not poll forever
+        assert time.monotonic() - started < 5
+        assert stuck.status == "running"
+        assert not runner.is_tracked(job.id)
+    finally:
+        runner.shutdown()
+
+
+# ---- cooperative cancellation ----------------------------------------------
+
+
+def _cancellable_loop(params: dict, ctx: JobContext) -> str:
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        ctx.check_cancelled()
+        time.sleep(0.01)
+    return "ran to the end"
+
+
+def test_running_cancellable_job_stops_at_next_checkpoint(store):
+    runner = JobRunner(store, max_workers=1)
+    runner.register("lab", _cancellable_loop, cancellable=True)
+    try:
+        job = runner.submit("lab", {})
+        _wait_for_status(store, job.id, "running")
+        requested = runner.cancel(job.id)
+        # the handler may already have reached its checkpoint
+        assert requested.status in ("running", "cancelled")
+        done = runner.wait(job.id, timeout=5)
+        assert done.status == "cancelled"
+        assert done.result is None
+    finally:
+        runner.shutdown()
+
+
+def test_running_non_cancellable_job_cancel_is_conflict(store):
+    runner = JobRunner(store, max_workers=1)
+    gate = threading.Event()
+    runner.register("tick", lambda p, c: gate.wait(10), lock="tick")
+    try:
+        job = runner.submit("tick", {})
+        _wait_for_status(store, job.id, "running")
+        with pytest.raises(ConflictError):
+            runner.cancel(job.id)
+    finally:
+        gate.set()
+        runner.shutdown()
+
+
+def test_runner_cancel_of_queued_job(store):
+    runner = JobRunner(store, max_workers=1)
+    gate = threading.Event()
+    runner.register("block", lambda p, c: gate.wait(10))
+    try:
+        first = runner.submit("block", {})
+        _wait_for_status(store, first.id, "running")
+        second = runner.submit("block", {})
+        assert runner.cancel(second.id).status == "cancelled"
+    finally:
+        gate.set()
+        runner.shutdown()
+
+
+def test_shutdown_requests_cancellation_of_running_cancellable_jobs(store):
+    runner = JobRunner(store, max_workers=1)
+    runner.register("lab", _cancellable_loop, cancellable=True)
+    job = runner.submit("lab", {})
+    _wait_for_status(store, job.id, "running")
+    started = time.monotonic()
+    runner.shutdown(wait=True)
+    assert time.monotonic() - started < 5
+    assert store.get(job.id).status == "cancelled"
