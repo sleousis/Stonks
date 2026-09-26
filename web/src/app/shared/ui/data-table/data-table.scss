@@ -88,6 +88,16 @@ tbody tr:last-child td {
   &:hover {
     color: var(--color-ink);
   }
+
+  // Touch targets: phones (incl. landscape, where the table layout shows)
+  // and any coarse pointer get a full 44px header button.
+  @include bp.phone {
+    min-height: var(--touch-min);
+  }
+
+  @include bp.coarse {
+    min-height: var(--touch-min);
+  }
 }
 
 .arrow {
