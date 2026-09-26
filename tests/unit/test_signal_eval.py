@@ -172,3 +172,35 @@ def test_rejects_bad_arguments(lake):
         signal_ic(StaticSignal({}), _ds(lake), horizons=(0,), max_workers=1)
     with pytest.raises(ValueError):
         signal_ic(StaticSignal({}), _ds(lake), every_bars=0, max_workers=1)
+
+
+# ---- RS-28: HAC standard errors keep the calendar of missing IC dates -------------
+
+
+def _reference_gap_hac(x: np.ndarray, lags: int) -> float:
+    """Amplitude-modulated Newey-West (Parzen 1963): autocovariances over
+    the pairs that are ``lag`` dates apart, both observed, divided by the
+    number of observed dates."""
+    ok = np.isfinite(x)
+    n = int(ok.sum())
+    d = np.where(ok, x - x[ok].mean(), 0.0)
+    s = float(d @ d) / n
+    for lag in range(1, lags + 1):
+        s += 2 * (1 - lag / (lags + 1)) * float(d[lag:] @ d[:-lag]) / n
+    return math.sqrt(s / n)
+
+
+def test_hac_se_is_gap_aware():
+    from stonks.lab.signal_eval import _mean_se
+    from stonks.stats.hac import newey_west_se
+
+    rng = np.random.default_rng(3)
+    x = np.convolve(rng.normal(size=80), np.ones(4) / 4, mode="same")
+    full = _mean_se(x, 3)
+    assert full[3] == pytest.approx(newey_west_se(x, 3))  # no gaps: the usual NW
+    gappy = x.copy()
+    gappy[[5, 6, 20, 41, 42, 43, 60]] = np.nan
+    _, _, _, se = _mean_se(gappy, 3)
+    assert se == pytest.approx(_reference_gap_hac(gappy, 3))
+    # compressing the gaps away pairs dates that are not lag-l apart
+    assert se != pytest.approx(newey_west_se(gappy[np.isfinite(gappy)], 3))
