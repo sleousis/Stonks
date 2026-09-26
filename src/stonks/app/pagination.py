@@ -18,8 +18,11 @@ class Page[T](BaseModel):
 class PageWindow(Protocol):
     """What :func:`page_of` needs from a request: ``api.deps.PageParams``."""
 
-    limit: int
-    offset: int
+    @property
+    def limit(self) -> int: ...
+
+    @property
+    def offset(self) -> int: ...
 
 
 def page_of[T](items: Sequence[T], window: PageWindow) -> Page[T]:
