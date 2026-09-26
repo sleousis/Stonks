@@ -314,6 +314,74 @@ async def test_lab_job(mcp):
     assert done["result"]["class_path"].endswith(":Momentum")
 
 
+MOMENTUM = "stonks.strategies.examples.momentum:Momentum"
+LAB_ARGS = {
+    "class_path": MOMENTUM,
+    "universe": ["UP.US", "DOWN.US"],
+    "start": "2025-10-01",
+    "end": "2026-04-01",
+    "budget": 2,
+}
+
+
+@pytest.mark.anyio
+async def test_lab_options_in_schemas(mcp):
+    tools = {t.name: t for t in (await mcp.list_tools()).tools}
+    backtest = tools["run_backtest"].input_schema
+    assert "cost_model" in backtest["properties"]
+    assert '"realistic"' in json.dumps(backtest)
+    lab = tools["run_lab"].input_schema
+    assert {"walk_forward", "mcpt"} <= set(lab["properties"])
+    text = json.dumps(lab)
+    for field in ("n_splits", "anchored", "n_permutations", "max_p_value", "walk_forward"):
+        assert field in text, field
+
+
+@pytest.mark.anyio
+async def test_backtest_cost_model_preset(mcp):
+    args = {
+        "class_path": BAH,
+        "params": {"ticker": "UP.US"},
+        "universe": ["UP.US"],
+        "start": "2025-10-01",
+        "end": "2026-04-01",
+    }
+    job = await call(mcp, "run_backtest", {**args, "cost_model": "realistic"})
+    done = await call(mcp, "wait_for_job", {"job_id": job["id"], "poll_seconds": 0.05})
+    assert done["job"]["status"] == "succeeded", done["job"]["error"]
+    assert job["params"]["cost_model"] == "realistic"
+    err = await call_error(mcp, "run_backtest", {**args, "cost_model": "zero", "slippage_bps": 5})
+    assert "422" in err and "not both" in err
+
+
+@pytest.mark.anyio
+async def test_lab_walk_forward_and_mcpt_options(mcp):
+    job = await call(
+        mcp,
+        "run_lab",
+        {
+            **LAB_ARGS,
+            "survival_tests": ["walk_forward", "permutation"],
+            "walk_forward": {"n_splits": 2, "metric": "final_return"},
+            "mcpt": {"n_permutations": 2, "seed": 3},
+        },
+    )
+    assert job["params"]["walk_forward"]["n_splits"] == 2
+    assert job["params"]["mcpt"]["n_permutations"] == 2
+    done = await call(mcp, "wait_for_job", {"job_id": job["id"], "poll_seconds": 0.05})
+    assert done["job"]["status"] == "succeeded", done["job"]["error"]
+    tests = {r["test_id"] for r in done["result"]["survival_reports"]}
+    assert tests == {"walk_forward", "mcpt"}  # the permutation test reports as "mcpt"
+
+
+@pytest.mark.anyio
+async def test_lab_options_need_their_test(mcp):
+    err = await call_error(
+        mcp, "run_lab", {**LAB_ARGS, "survival_tests": ["oos"], "mcpt": {"n_permutations": 2}}
+    )
+    assert "422" in err and "permutation" in err
+
+
 @pytest.mark.anyio
 async def test_ingest_job(mcp):
     job = await call(mcp, "run_ingest", {"kind": "prices", "tickers": ["NEW.US"]})

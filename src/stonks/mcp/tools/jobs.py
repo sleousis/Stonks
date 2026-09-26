@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal
 
 import anyio
 from mcp.server.mcpserver.exceptions import ToolError
-from pydantic import Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from stonks.mcp.tools.common import (
     JOB,
@@ -35,6 +35,50 @@ RESULT_ROUTES: dict[str, str] = {
     "ingest": "/api/ingest/jobs/{id}/result",
     "tick": "/api/ticks/jobs/{id}/result",
 }
+
+
+CostModelName = Literal["zero", "realistic"]
+Metric = Literal["sharpe", "cagr", "final_return"]
+
+
+class _Options(BaseModel):
+    """Lab-run option block. Unset fields are not sent, so the API's
+    request models own the defaults and the bounds."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    def body(self) -> dict[str, Any]:
+        return self.model_dump(exclude_none=True)
+
+
+class WalkForwardOptions(_Options):
+    """Settings of the ``walk_forward`` survival test."""
+
+    n_splits: int | None = Field(default=None, description="number of folds (default 4)")
+    test_days: int | None = Field(
+        default=None, description="days per test window; default splits the validation window"
+    )
+    train_days: int | None = Field(
+        default=None, description="days per train window; default all history before it"
+    )
+    anchored: bool | None = Field(default=None, description="expanding (true) or rolling window")
+    metric: Metric | None = Field(default=None, description="statistic scored per test window")
+    min_positive_share: float | None = Field(
+        default=None, description="share of folds that must score above 0 (0..1)"
+    )
+    min_mean_score: float | None = Field(default=None, description="mean fold score floor")
+
+
+class McptOptions(_Options):
+    """Settings of the ``permutation`` (Monte-Carlo permutation) survival test."""
+
+    n_permutations: int | None = Field(default=None, description="1..1000 (default 50)")
+    max_p_value: float | None = Field(default=None, description="pass threshold (default 0.05)")
+    metric: Literal["profit_factor", "sharpe", "final_return", "cagr"] | None = None
+    retune: bool | None = Field(
+        default=None, description="re-tune on every permutation: (n + 1) x budget backtests"
+    )
+    seed: int | None = None
 
 
 def strategy_ref(
@@ -69,22 +113,32 @@ def register(t: ToolContext) -> None:
         rebalance_every_bars: Annotated[int, Field(ge=1)] = 1,
         slippage_bps: Annotated[float, Field(ge=0)] = 0.0,
         fee_per_trade: Annotated[float, Field(ge=0)] = 0.0,
+        cost_model: Annotated[
+            CostModelName | None,
+            Field(
+                description="transaction-cost preset (see list_cost_models); replaces "
+                "slippage_bps/fee_per_trade. Neither: the configured [backtest.costs]"
+            ),
+        ] = None,
     ) -> dict[str, Any]:
         """Queue a backtest of one strategy over a universe and date window.
         Returns the job; use wait_for_job to get the metrics and equity curve.
         Simulated only: never places real orders."""
-        body = {
-            "strategy": strategy_ref(strategy_id, class_path, params),
-            "universe": universe,
-            "start": iso(start),
-            "end": iso(end),
-            "interval": interval,
-            "initial_cash": initial_cash,
-            "threshold": threshold,
-            "rebalance_every_bars": rebalance_every_bars,
-            "slippage_bps": slippage_bps,
-            "fee_per_trade": fee_per_trade,
-        }
+        body = drop_none(
+            {
+                "strategy": strategy_ref(strategy_id, class_path, params),
+                "universe": universe,
+                "start": iso(start),
+                "end": iso(end),
+                "interval": interval,
+                "initial_cash": initial_cash,
+                "threshold": threshold,
+                "rebalance_every_bars": rebalance_every_bars,
+                "slippage_bps": slippage_bps,
+                "fee_per_trade": fee_per_trade,
+                "cost_model": cost_model,
+            }
+        )
         return await t.post("/api/lab/backtests", body)
 
     @server.tool(annotations=JOB)
@@ -106,6 +160,14 @@ def register(t: ToolContext) -> None:
         register_strategy: Annotated[
             bool, Field(description="register the tuned strategy (lands in shadow status)")
         ] = False,
+        walk_forward: Annotated[
+            WalkForwardOptions | None,
+            Field(description="walk_forward test settings; add 'walk_forward' to survival_tests"),
+        ] = None,
+        mcpt: Annotated[
+            McptOptions | None,
+            Field(description="permutation (MCPT) settings; add 'permutation' to survival_tests"),
+        ] = None,
     ) -> dict[str, Any]:
         """Queue a lab run: tune a strategy class, fit, run the survival suite and
         give a pass/fail verdict. Returns the job; use wait_for_job for the result."""
@@ -123,6 +185,8 @@ def register(t: ToolContext) -> None:
                 "interval": interval,
                 "seed": seed,
                 "register_strategy": register_strategy,
+                "walk_forward": walk_forward.body() if walk_forward else None,
+                "mcpt": mcpt.body() if mcpt else None,
             }
         )
         return await t.post("/api/lab/runs", body)
