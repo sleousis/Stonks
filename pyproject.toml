@@ -129,6 +129,9 @@ known-first-party = ["stonks", "tests", "tools"]
 include = ["src/stonks"]
 typeCheckingMode = "basic"
 pythonVersion = "3.12"
+# Analyse as Linux everywhere, so a Windows dev box and CI agree on the
+# baseline.
+pythonPlatform = "Linux"
 venvPath = "."
 venv = ".venv"
 
