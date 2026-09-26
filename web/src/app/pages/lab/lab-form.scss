@@ -288,6 +288,14 @@
   }
 }
 
+// Option labels are long: one column on phones so selects are not clipped.
+@include bp.phone {
+  .opt-test .grid-2,
+  .sub.grid-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .textarea {
   min-height: 4.5rem;
   resize: vertical;

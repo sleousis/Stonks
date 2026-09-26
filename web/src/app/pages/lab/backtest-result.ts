@@ -76,11 +76,7 @@ export function chartTime(timestamp: string, interval: string): string {
         [height]="300"
       />
       @if (hasBenchmark()) {
-        <p class="legend muted">
-          <span class="swatch equity" aria-hidden="true"></span> Strategy
-          <span class="swatch bench" aria-hidden="true"></span> {{ benchLabel() }}, both start at
-          100.
-        </p>
+        <p class="legend muted">Strategy and {{ benchLabel() }} both start at 100.</p>
       }
     } @else {
       <p class="muted none">No equity curve: the window had fewer than two bars.</p>
@@ -152,23 +148,7 @@ export function chartTime(timestamp: string, interval: string): string {
       overflow-wrap: anywhere;
     }
     .legend {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: var(--space-1) var(--space-2);
       margin-top: calc(-1 * var(--space-2));
-    }
-    .swatch {
-      display: inline-block;
-      width: 14px;
-      height: 3px;
-      border-radius: 2px;
-    }
-    .swatch.equity {
-      background: var(--color-brass);
-    }
-    .swatch.bench {
-      background: var(--color-ink-3);
     }
   `,
 })

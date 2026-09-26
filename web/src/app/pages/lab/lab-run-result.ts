@@ -48,13 +48,13 @@ function paramText(v: unknown): string {
         label="Trials this run"
         help="trials"
         [value]="count(r.n_trials_run)"
-        detail="Parameter sets the tuner tried"
+        detail="Tried by the tuner"
       />
       <app-stat-tile
         label="Trials of this class"
         help="trials"
         [value]="count(r.n_trials_class)"
-        detail="Every run so far; the deflated Sharpe counts them"
+        detail="All runs so far"
       />
     </div>
 
@@ -163,7 +163,7 @@ function paramText(v: unknown): string {
       margin: 0;
       display: grid;
       gap: var(--space-2) var(--space-4);
-      grid-template-columns: repeat(auto-fill, minmax(min(100%, 9rem), 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 7.5rem), 1fr));
     }
     dt {
       font-size: var(--text-xs);
