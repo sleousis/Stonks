@@ -52,33 +52,44 @@ describe('SessionService', () => {
     expect(await loading).toBe('mfa-pending');
   });
 
-  it('is open when reads work without a credential (dev profile)', async () => {
+  it('is open when /me says reads work without a credential (dev profile)', async () => {
     const loading = session.load();
     (await nextRequest(controller, '/api/auth/me')).flush(
-      { title: 'Unauthorized', status: 401, detail: 'not_authenticated' },
+      {
+        title: 'Unauthorized',
+        status: 401,
+        detail: 'reads_open: nobody is signed in',
+        code: 'reads_open',
+      },
       UNAUTHORIZED,
     );
-    (await nextRequest(controller, '/api/strategies')).flush({
-      items: [],
-      total: 0,
-      limit: 1,
-      offset: 0,
-    });
     expect(await loading).toBe('open');
     expect(session.me()).toBeNull();
+    expect(session.canRead()).toBe(true);
   });
 
-  it('is signed out when reads need a credential too', async () => {
+  it('is signed out on a plain 401, without probing a data route (BUG-1)', async () => {
     const loading = session.load();
     (await nextRequest(controller, '/api/auth/me')).flush(
-      { title: 'Unauthorized', status: 401, detail: 'not_authenticated' },
-      UNAUTHORIZED,
-    );
-    (await nextRequest(controller, '/api/strategies')).flush(
-      { title: 'Unauthorized', status: 401, detail: 'not_authenticated' },
+      {
+        title: 'Unauthorized',
+        status: 401,
+        detail: 'not_authenticated',
+        code: 'not_authenticated',
+      },
       UNAUTHORIZED,
     );
     expect(await loading).toBe('signed-out');
+    expect(session.canRead()).toBe(false);
+    // afterEach's verify() fails on any other request, such as /api/strategies
+  });
+
+  it('may read only once signed in or open', async () => {
+    expect(session.canRead()).toBe(false);
+    const loading = session.load();
+    (await nextRequest(controller, '/api/auth/me')).flush(TRADER);
+    await loading;
+    expect(session.canRead()).toBe(true);
   });
 
   it('asks /me with the saved API token (token mode)', async () => {

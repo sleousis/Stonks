@@ -226,7 +226,7 @@ def test_personal_token_works_as_bearer_and_respects_scopes(remote, settings):
     ).json()
     token = created["token"]
     assert token.startswith("stk_")
-    listed = remote.get("/api/auth/tokens").json()
+    listed = remote.get("/api/auth/tokens").json()["items"]
     assert [t["id"] for t in listed] == [created["info"]["id"]]
     assert "token" not in listed[0]
 
@@ -306,7 +306,7 @@ def test_admin_user_management_over_http(app, settings, auth):
         )
         assert created.status_code == 201, created.text
         bob_id = created.json()["id"]
-        users = admin.get("/api/auth/users").json()
+        users = admin.get("/api/auth/users").json()["items"]
         assert {u["email"] for u in users} >= {"owner@example.com", "bob@example.com"}
         assert all(set(u) == set(users[0]) for u in users)  # identity only
         patched = admin.patch(
@@ -419,7 +419,7 @@ def test_user_a_cannot_reach_user_b_resources_through_any_scoped_route(app, sett
         assert c.get(f"/api/connections/{bob_conn}", headers=alice).status_code == 404
         assert c.delete(f"/api/connections/{bob_conn}", headers=alice).status_code == 404
         assert c.delete(f"/api/auth/tokens/{bob_token_info.id}", headers=alice).status_code == 404
-        assert c.get("/api/connections", headers=alice).json() == []
+        assert c.get("/api/connections", headers=alice).json()["items"] == []
         assert c.get("/api/notifications", headers=alice).json()["unread_count"] == 0
 
         # Bob's things are untouched.
@@ -518,3 +518,14 @@ def test_open_reads_on_loopback_still_work_without_credentials(app):
     with _client(app, peer=LOOPBACK) as c:
         assert c.get("/api/strategies").status_code == 200
         assert c.get("/api/auth/me").status_code == 401
+
+
+def test_me_tells_a_signed_out_console_whether_reads_are_open(app):
+    """BUG-1: the console learns this from /api/auth/me alone, so it never
+    probes a data route (and gets a 401) before anyone signs in."""
+    with _client(app, peer=LOOPBACK) as c:
+        resp = c.get("/api/auth/me")
+        assert resp.status_code == 401 and resp.json()["code"] == "reads_open"
+    with _client(app, peer=REMOTE) as c:
+        resp = c.get("/api/auth/me")
+        assert resp.status_code == 401 and resp.json()["code"] == "not_authenticated"

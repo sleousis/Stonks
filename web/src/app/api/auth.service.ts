@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 
 import { AuthTokenService } from '../core/auth/auth-token.service';
 import { SILENT_HEADERS } from '../core/http/interceptors';
-import { unwrap } from './api-call';
+import { allItems, unwrap } from './api-call';
 import {
   changePassword,
   checkAuth,
@@ -10,7 +10,6 @@ import {
   createApiToken,
   getMe,
   listApiTokens,
-  listStrategies,
   login,
   logout,
   regenerateRecoveryCodes,
@@ -64,19 +63,6 @@ export class AuthService {
     return unwrap(logout({ headers: SILENT_HEADERS }));
   }
 
-  /**
-   * True when this API answers reads without a credential (the dev
-   * profile's open reads on localhost). Asks for one strategy, silently.
-   */
-  async readsAreOpen(): Promise<boolean> {
-    try {
-      await unwrap(listStrategies({ query: { limit: 1 }, headers: SILENT_HEADERS }));
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
   changePassword(body: PasswordChangeRequest) {
     return unwrap(changePassword({ body }));
   }
@@ -86,7 +72,7 @@ export class AuthService {
   }
 
   tokens() {
-    return unwrap(listApiTokens());
+    return allItems((query) => unwrap(listApiTokens({ query })));
   }
 
   createToken(body: TokenCreateRequest) {

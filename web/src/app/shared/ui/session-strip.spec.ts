@@ -5,10 +5,12 @@ import { provideRouter } from '@angular/router';
 import type { HaltView, ScheduleView } from '../../api/models';
 import { ScheduleService } from '../../api/schedule.service';
 import type { PortfolioRef } from '../../api/portfolios.service';
+import { SessionService } from '../../core/auth/session.service';
 import { HaltStateService } from '../../core/halts/halt-state.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { tick } from '../../../testing/http';
 import { SCHEDULE_POLL_MS, SessionStrip, countdown, nextJob } from './session-strip';
+import { book } from '../../../testing/portfolio-fixtures';
 
 const NOW = Date.parse('2026-09-26T18:00:00Z');
 
@@ -64,6 +66,7 @@ describe('SessionStrip', () => {
     select: vi.fn(),
   };
   let overview: ReturnType<typeof vi.fn>;
+  const canRead = signal(true);
 
   async function render() {
     TestBed.configureTestingModule({
@@ -73,6 +76,7 @@ describe('SessionStrip', () => {
         { provide: ScheduleService, useValue: { overview } },
         { provide: SCHEDULE_POLL_MS, useValue: 0 },
         { provide: PortfolioContextService, useValue: portfolios },
+        { provide: SessionService, useValue: { canRead } },
       ],
     });
     const fixture = TestBed.createComponent(SessionStrip);
@@ -87,6 +91,13 @@ describe('SessionStrip', () => {
     overview = vi.fn().mockResolvedValue(schedule());
     active.set([]);
     options.set([]);
+    canRead.set(true);
+  });
+
+  it('asks nothing of the API while signed out (BUG-1)', async () => {
+    canRead.set(false);
+    await render();
+    expect(overview).not.toHaveBeenCalled();
   });
 
   afterEach(() => vi.useRealTimers());
@@ -128,8 +139,8 @@ describe('SessionStrip', () => {
   it('holds the portfolio picker when there is more than one portfolio', async () => {
     overview.mockRejectedValue(new Error('no scheduler'));
     options.set([
-      { id: 'pf_default', name: 'Main', mode: 'paper', is_default: true },
-      { id: 'pf_live', name: 'Real money', mode: 'live' },
+      book({ id: 'pf_default', name: 'Main', trading: 'paper', is_default: true }),
+      book({ id: 'pf_live', name: 'Real money', trading: 'live' }),
     ]);
     const el = await render();
     expect(portfolios.load).toHaveBeenCalled();
