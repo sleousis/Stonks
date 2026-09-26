@@ -7,6 +7,7 @@ a Fill, and a Portfolio are.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -70,9 +71,37 @@ class Portfolio:
         cash_delta = -fill.signed_quantity * fill.price - fill.fee
         self.cash += cash_delta
 
-    def total_value(self, prices: Mapping[str, float]) -> float:
+    def unmarked(self, prices: Mapping[str, float]) -> list[str]:
+        """Held tickers with no usable price in ``prices`` (absent or not a
+        finite number), sorted. Callers decide what to do: carry the last
+        mark forward, skip a risk rule, or refuse to trade."""
+        return sorted(t for t in self.positions if not _finite(prices.get(t)))
+
+    def total_value(self, prices: Mapping[str, float], *, strict: bool = False) -> float:
+        """Cash plus every position marked at ``prices``. A held ticker with
+        no price counts as 0 unless ``strict``, which raises
+        :class:`MissingPriceError` naming them (see :meth:`unmarked`)."""
+        if strict:
+            missing = self.unmarked(prices)
+            if missing:
+                raise MissingPriceError(missing)
         mark = sum(qty * prices.get(t, 0.0) for t, qty in self.positions.items())
         return self.cash + mark
+
+
+class MissingPriceError(KeyError):
+    """Held tickers have no price to mark them at."""
+
+    def __init__(self, tickers: list[str]) -> None:
+        super().__init__(f"no price for held ticker(s): {', '.join(tickers)}")
+        self.tickers = tickers
+
+
+def _finite(value: Any) -> bool:
+    try:
+        return math.isfinite(float(value))
+    except (TypeError, ValueError):
+        return False
 
 
 @dataclass(frozen=True)
