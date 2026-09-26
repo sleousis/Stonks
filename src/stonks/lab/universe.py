@@ -36,18 +36,25 @@ class UniverseRule:
 
     ``min_adv`` is the minimum average daily dollar volume (``close *
     volume``) over the last ``adv_window_bars`` daily bars up to the date.
-    ``None`` fields do not filter."""
+    ``min_price`` is the minimum last daily close on or before the date.
+    ``sectors`` and ``exchanges`` keep only instruments in those sets;
+    ``exclude_sectors`` drops some. ``None`` fields do not filter."""
 
     min_adv: float | None = None
     asset_classes: tuple[str, ...] | None = None
     exclude_sectors: tuple[str, ...] = ()
     adv_window_bars: int = 20
+    min_price: float | None = None
+    sectors: tuple[str, ...] | None = None
+    exchanges: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         if self.adv_window_bars < 1:
             raise ValueError(f"adv_window_bars must be >= 1, got {self.adv_window_bars}")
-        if self.asset_classes is not None:
-            object.__setattr__(self, "asset_classes", tuple(self.asset_classes))
+        for name in ("asset_classes", "sectors", "exchanges"):
+            value = getattr(self, name)
+            if value is not None:
+                object.__setattr__(self, name, tuple(value))
         object.__setattr__(self, "exclude_sectors", tuple(self.exclude_sectors))
 
     @classmethod
@@ -142,6 +149,19 @@ def _resolve_rule(lake: DuckDBLake, rule: UniverseRule, as_of: date) -> list[str
     if rule.exclude_sectors:
         where.append("NOT (COALESCE(i.sector, '') = ANY(?))")
         params.append(list(rule.exclude_sectors))
+    if rule.sectors is not None:
+        where.append("COALESCE(i.sector, '') = ANY(?)")
+        params.append(list(rule.sectors))
+    if rule.exchanges is not None:
+        # the instrument's venue (NYSE) or the ticker's exchange suffix (US)
+        where.append("(COALESCE(i.exchange, '') = ANY(?) OR string_split(i.id, '.')[-1] = ANY(?))")
+        params += [list(rule.exchanges), list(rule.exchanges)]
+    if rule.min_price is not None:
+        where.append(
+            """(SELECT b.close FROM bars b WHERE b.ticker = i.id AND b.interval = ?
+                  AND b.timestamp < ? ORDER BY b.timestamp DESC LIMIT 1) >= ?"""
+        )
+        params += [str(Interval.DAY_1), day_after, rule.min_price]
     sql = f"SELECT i.id AS ticker FROM instruments i WHERE {' AND '.join(where)}"
     if rule.min_adv is not None:
         sql = f"""
