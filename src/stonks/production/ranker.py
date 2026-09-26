@@ -57,7 +57,18 @@ class Ranker:
             )
         picks: list[tuple[float, str, str]] = []
         for handle in handles:
-            strategy = self._registry.load(handle.id)
+            # One broken strategy (renamed class path, corrupt artifact, …)
+            # must not take down the whole tick; skip it and keep ranking.
+            try:
+                strategy = self._registry.load(handle.id)
+            except Exception as exc:
+                _log.warning(
+                    "ranker.strategy_load.failed",
+                    strategy_id=handle.id,
+                    class_path=handle.class_path,
+                    error=str(exc),
+                )
+                continue
             allowed = set(getattr(strategy, "applicable_asset_classes", ("equity",)))
             for ticker in self._universe:
                 ticker_class = asset_classes.get(ticker)
