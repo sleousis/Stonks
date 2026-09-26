@@ -19,6 +19,7 @@ dependencies = [
     "uvicorn[standard]>=0.54.0",
     "mcp>=2.2.0",
     "httpx2>=2.13.1",
+    "scikit-learn>=1.9.1",
 ]
 
 [project.scripts]
