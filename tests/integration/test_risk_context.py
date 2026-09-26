@@ -150,3 +150,4 @@ def test_build_risk_context_fills_every_field(lake, state):
     assert ctx.entry_dates == {"A.US": date(2026, 3, 2), "B.US": date(2026, 3, 3)}
     assert ctx.cost_model is not None
     assert ctx.volumes == {"A.US": 1_000.0}
+    assert ctx.as_of == AS_OF
