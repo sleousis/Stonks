@@ -148,7 +148,8 @@ def compute_outputs(lake: DuckDBLake) -> dict[str, list]:
             for a in as_ofs
         ]
 
-    rsi = RSIPCAStrategy({"ticker": "AAA.US", "long_quantile": 0.9})
+    # hold_bars=1: the golden values predate the holding period
+    rsi = RSIPCAStrategy({"ticker": "AAA.US", "long_quantile": 0.9, "hold_bars": 1})
     rsi.fit(
         LabDataset(lake=lake, universe=["AAA.US"], start=date(2024, 1, 2), end=date(2025, 8, 29))
     )

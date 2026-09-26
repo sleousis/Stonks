@@ -19,17 +19,31 @@ At inference time we compute the current bar's RSI vector, center with the
 fitted means, project onto the fitted eigenvectors, dot into the linear
 coefficients, and compare to the thresholds.
 
-Implementation note: PCA is done the mathematically correct way —
-eigenvectors come out as the columns of ``np.linalg.eigh``'s output, so
-we project via ``X @ evecs[:, :n_components]``. This is worth flagging
-because some public implementations of this idea erroneously index the
-eigenvector matrix by row and end up with a different, non-PCA
-projection.
+Holding period: the model predicts a ``lookahead``-bar return, so a long
+entry is held for at least ``hold_bars`` bars (default: ``lookahead``). The
+position is long on a bar when the raw long signal fired on any of the last
+``hold_bars`` bars, including this one, so a fresh signal restarts the
+hold. The original neurotrader888 script gets a similar effect by
+smoothing its signal with a rolling mean over ``lookahead`` bars; Stonks is
+long-only and binary, so it holds the whole position instead of scaling
+it. The hold is replayed from bars, not from what the instance saw earlier:
+each of the last ``hold_bars`` predictions is computed exactly as it would
+have been on its own bar (memoized per lake), so a freshly loaded instance
+gives the same answer as one that walked every bar. ``hold_bars=1`` exits
+on the first bar the prediction drops below the threshold.
+
+Implementation note (intentional divergence from the original): PCA is
+done the mathematically correct way — eigenvectors come out as the columns
+of ``np.linalg.eigh``'s output, so we project via
+``X @ evecs[:, :n_components]``. The original script indexes the
+eigenvector matrix by row, which is a different, non-PCA projection, so
+this port will not reproduce its numbers exactly. That is deliberate.
 """
 
 from __future__ import annotations
 
 import json
+import weakref
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -64,6 +78,16 @@ class RSIPCAStrategy(BaseStrategy):
                 default=6,
                 bounds=(1, 48),
                 description="Forward return horizon (in bars) the linear model predicts.",
+            ),
+            ParameterSpec(
+                name="hold_bars",
+                kind="int",
+                default=6,
+                bounds=(1, 48),
+                description=(
+                    "Minimum bars a long is held after its latest signal. "
+                    "Defaults to lookahead when not given."
+                ),
             ),
             ParameterSpec(
                 name="long_quantile",
@@ -123,12 +147,18 @@ class RSIPCAStrategy(BaseStrategy):
 
     def __init__(self, params):
         BaseStrategy.__init__(self, params)
+        if "hold_bars" not in params:
+            self.params["hold_bars"] = int(self.params["lookahead"])
         self._rsi_means: np.ndarray | None = None
         self._evecs: np.ndarray | None = None  # shape (n_rsi, n_components)
         self._coefs: np.ndarray | None = None  # shape (n_components,)
         self._long_thresh: float | None = None
         self._short_thresh: float | None = None
         self._bar_caches = LakeBarCaches()
+        # per lake: bar timestamp -> prediction (None when not computable)
+        self._preds: weakref.WeakKeyDictionary[Any, dict[Any, float | None]] = (
+            weakref.WeakKeyDictionary()
+        )
 
     # ---- Strategy Protocol -------------------------------------------------
 
@@ -196,6 +226,7 @@ class RSIPCAStrategy(BaseStrategy):
         preds = projected @ coefs
         self._long_thresh = float(np.quantile(preds, float(self.params["long_quantile"])))
         self._short_thresh = float(np.quantile(preds, float(self.params["short_quantile"])))
+        self._preds = weakref.WeakKeyDictionary()  # predictions of the old fit are stale
 
     def extract_features(self, ticker: str, as_of, lake: Any) -> Features:
         pred = self._predict_current(ticker, as_of, lake)
@@ -212,13 +243,19 @@ class RSIPCAStrategy(BaseStrategy):
         )
 
     def estimate_return(self, ticker: str, as_of, lake: Any) -> float | None:
-        if ticker != self.params["ticker"]:
+        """The newest prediction above the long threshold among the last
+        ``hold_bars`` bars (this one included), or ``None`` — see the module
+        doc on the holding period."""
+        if ticker != self.params["ticker"] or not self.is_fitted or lake is None:
             return None
-        pred = self._predict_current(ticker, as_of, lake)
-        if pred is None:
-            return None
-        if pred > self._long_thresh:
-            return pred
+        interval = Interval.parse(self.params["interval"])
+        recent = self._bar_caches.for_lake(lake).last_n_bars(
+            ticker, interval, as_of, int(self.params["hold_bars"])
+        )
+        for ts in reversed(list(recent["timestamp"]) if not recent.empty else []):
+            pred = self._predict_at_bar(ticker, ts, lake)
+            if pred is not None and pred > self._long_thresh:
+                return pred
         return None
 
     def decide(
@@ -290,6 +327,19 @@ class RSIPCAStrategy(BaseStrategy):
         return instance
 
     # ---- internals ---------------------------------------------------------
+
+    def _predict_at_bar(self, ticker: str, bar_ts: Any, lake: Any) -> float | None:
+        """``_predict_current`` as of one bar's own timestamp, memoized per
+        lake: a backtest asks for the last ``hold_bars`` bars on every bar,
+        so each bar's prediction is computed once."""
+        try:
+            memo = self._preds.setdefault(lake, {})
+        except TypeError:  # lake not weakly referenceable: no memo
+            return self._predict_current(ticker, bar_ts, lake)
+        key = (ticker, bar_ts)
+        if key not in memo:
+            memo[key] = self._predict_current(ticker, bar_ts, lake)
+        return memo[key]
 
     def _predict_current(self, ticker: str, as_of, lake: Any) -> float | None:
         if not self.is_fitted or lake is None:
