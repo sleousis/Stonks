@@ -22,6 +22,7 @@ from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.types import Fill, Order, OrderStatus, Portfolio
 from stonks.execution.orders import make_client_id
 from stonks.logging import get_logger
+from stonks.notify import Notification, Notifier
 from stonks.production.ranker import Ranker
 from stonks.production.risk import RiskPolicy, apply_risk
 from stonks.registry.store import StrategyRegistry
@@ -63,6 +64,7 @@ def run_tick(
     settings: TickSettings,
     as_of: date | None = None,
     dry_run: bool = False,
+    notifier: Notifier | None = None,
 ) -> TickResult:
     as_of = as_of or utc_today()
     tick_id = _new_tick_id(as_of)
@@ -77,8 +79,16 @@ def run_tick(
     # Any failure past this point closes the tick as 'error' so the ledger
     # never keeps a row stuck at 'running'; the exception still propagates.
     try:
-        return _run_tick_body(
-            state, lake, registry, settings, as_of, dry_run, tick_id=tick_id, log=log
+        result = _run_tick_body(
+            state,
+            lake,
+            registry,
+            settings,
+            as_of,
+            dry_run,
+            tick_id=tick_id,
+            log=log,
+            notifier=notifier,
         )
     except Exception as exc:
         log.error("tick.error", error=str(exc), error_type=type(exc).__name__)
@@ -91,7 +101,33 @@ def run_tick(
             )
         except Exception as close_exc:  # pragma: no cover - best effort
             log.error("tick.close_failed", error=str(close_exc))
+        _safe_notify(
+            notifier,
+            Notification(
+                level="error",
+                title="tick failed",
+                message=f"{type(exc).__name__}: {exc}",
+                fields={"tick_id": tick_id, "as_of": as_of.isoformat(), "status": "error"},
+            ),
+            log,
+        )
         raise
+    if result.status == "partial":
+        _safe_notify(
+            notifier,
+            Notification(
+                level="warning",
+                title="tick partially failed",
+                message="one or more orders raised at the broker; see logs",
+                fields={
+                    "tick_id": tick_id,
+                    "as_of": as_of.isoformat(),
+                    "status": result.status,
+                },
+            ),
+            log,
+        )
+    return result
 
 
 def _run_tick_body(
@@ -104,6 +140,7 @@ def _run_tick_body(
     *,
     tick_id: str,
     log: Any,
+    notifier: Notifier | None,
 ) -> TickResult:
     # 1. rank
     ranker = Ranker(
@@ -205,6 +242,19 @@ def _run_tick_body(
                     _record_fill(state, fill)
             _snapshot_portfolio(state, tick_id, portfolio, prices, as_of)
 
+    rejected = [order.ticker for order, st, _ in outcomes if st == "rejected"]
+    if rejected:
+        _safe_notify(
+            notifier,
+            Notification(
+                level="warning",
+                title="orders rejected",
+                message=f"{len(rejected)} order(s) rejected by the broker",
+                fields={"tick_id": tick_id, "as_of": as_of.isoformat(), "rejected": rejected},
+            ),
+            log,
+        )
+
     status: TickStatus = "ok" if not any_failure else "partial"
     _close_tick(
         state,
@@ -245,6 +295,17 @@ def _build_broker(
     )
     broker.set_prices(prices, as_of=as_of)
     return broker
+
+
+def _safe_notify(notifier: Notifier | None, notification: Notification, log: Any) -> None:
+    """Notifiers promise never to raise; guard anyway so a misbehaving one
+    can never fail or mask the outcome of a tick."""
+    if notifier is None:
+        return
+    try:
+        notifier.notify(notification)
+    except Exception as exc:
+        log.error("tick.notify_failed", error=str(exc), error_type=type(exc).__name__)
 
 
 def _asset_classes(lake: DuckDBLake, tickers: Sequence[str]) -> dict[str, str]:

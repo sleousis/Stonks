@@ -172,3 +172,38 @@ def test_tick_applies_risk_policy_from_config(runner, seeded):
     result = runner.invoke(app, ["tick", "--as-of", "2026-03-20"])
     assert result.exit_code == 0, result.output
     assert "orders=0" in result.output
+
+
+def test_tick_failure_posts_to_configured_webhook(runner, seeded, monkeypatch):
+    import stonks.notify.webhook as webhook_mod
+    import stonks.production.tick as tick_mod
+
+    posts: list[dict] = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+    class FakeSession:
+        def post(self, url, json=None, timeout=None, headers=None):
+            posts.append({"url": url, "json": json})
+            return FakeResponse()
+
+    monkeypatch.setattr(webhook_mod.requests, "Session", FakeSession)
+    monkeypatch.setenv("STONKS_NOTIFY_WEBHOOK_URL", "https://hooks.example.test/tok")
+
+    def boom(*a, **k):
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(tick_mod, "_snapshot_portfolio", boom)
+    tmp_path, _ = seeded
+    cfg = tmp_path / "config" / "default.toml"
+    cfg.write_text(
+        cfg.read_text().replace(
+            "[sources.eodhd]", '[notify]\nbackends = ["webhook"]\n\n[sources.eodhd]'
+        )
+    )
+    result = runner.invoke(app, ["tick", "--as-of", "2026-03-20"])
+    assert result.exit_code != 0
+    assert len(posts) == 1
+    assert posts[0]["json"]["level"] == "error"

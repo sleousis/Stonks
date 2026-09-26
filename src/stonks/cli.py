@@ -28,6 +28,7 @@ from stonks.ingest.sources.eodhd import (
     eodhd_exchange_for_asset_class,
 )
 from stonks.logging import configure_logging, get_logger
+from stonks.notify import build_notifier
 from stonks.production.tick import TickSettings, run_tick
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
@@ -761,6 +762,7 @@ def tick(
                 settings=tick_settings,
                 as_of=as_of_date,
                 dry_run=dry_run,
+                notifier=build_notifier(settings.notify),
             )
     finally:
         state.close()
