@@ -131,6 +131,22 @@ def test_every_param_pinned_is_insufficient_data(ds):
     assert "insufficient data" in report.notes
 
 
+def test_no_validation_trades_is_insufficient_data(ds):
+    # a flat OOS Sharpe of 0 everywhere must not pass the OOS criterion by default
+    report = _test().run(SurfaceStrategy({"a": 10, "b": 0.5, "trade": False}), ds)
+    assert not report.passed
+    assert "insufficient data" in report.notes
+    assert "validation" in report.notes
+
+
+def test_neighbours_that_fail_to_build_are_insufficient_data(ds):
+    report = _test().run(SurfaceStrategy({"a": 10, "b": 0.5, "fragile": True}), ds)
+    assert not report.passed
+    assert "insufficient data" in report.notes
+    assert report.metrics["n_failed_neighbours"] == 4
+    assert report.metrics["n_neighbours"] == 0
+
+
 def test_reports_the_ehlers_ratio_and_share_of_profitable_trials(ds):
     test = _test(scores=[1.0, 0.5, 0.4, -0.2, float("nan")])
     report = test.run(SurfaceStrategy({"a": 10, "b": 0.5}), ds)

@@ -20,7 +20,9 @@ validation window with Sharpe. It passes when:
 
 Fewer than ``min_neighbours`` scorable neighbours (no numeric tunable
 parameter, all pinned, or neighbours that fail to build) is insufficient
-data and fails. A neighbour whose backtest raises is left out of the
+data and fails, as is a tuned strategy that makes no trade in the
+validation window (every OOS Sharpe would be 0 and the OOS criterion
+would pass vacuously). A neighbour whose backtest raises is left out of the
 medians and counted in ``n_failed_neighbours``.
 
 From the run's trial ledger (``bind_run``) it also reports Ehlers'
@@ -173,6 +175,13 @@ class PlateauTest:
                 0,
                 f"insufficient data: {len(scored)} neighbours scored, "
                 f"{opts.min_neighbours} required",
+            )
+            return SurvivalReport(self.id, False, metrics, "; ".join(notes))
+        if head.n_round_trips == 0:
+            notes.insert(
+                0,
+                "insufficient data: the tuned params make no trade in the validation "
+                "window, so the OOS criterion has nothing to compare",
             )
             return SurvivalReport(self.id, False, metrics, "; ".join(notes))
 

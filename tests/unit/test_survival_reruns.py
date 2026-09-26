@@ -60,7 +60,7 @@ def test_objective_score_needs_an_objective(ds):
         objective=SurfaceObjective(),
     )
     assert r.objective_score == pytest.approx(1.0)
-    assert r.n_round_trips == 0
+    assert r.n_round_trips == 2  # buys both tickers once and holds
 
 
 def test_a_failing_rerun_becomes_an_error_result(ds):

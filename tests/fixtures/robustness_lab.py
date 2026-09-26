@@ -82,7 +82,7 @@ class LongAll(BaseStrategy):
         ]
 
     def estimate_return(self, ticker, as_of, lake):
-        wanted = self.params["ticker"]
+        wanted = self.params.get("ticker", "")
         return 1.0 if not wanted or ticker == wanted else None
 
     def decide(self, my_picks, portfolio: Portfolio, prices, as_of) -> list[Order]:
@@ -91,7 +91,7 @@ class LongAll(BaseStrategy):
             return []
         if any(portfolio.positions.get(t, 0.0) > 0 for _, t in my_picks):
             return []
-        budget = portfolio.cash * float(self.params["allocation"]) / len(todo)
+        budget = portfolio.cash * float(self.params.get("allocation", 1.0)) / len(todo)
         return [
             Order(
                 client_id=f"{self.id}:{t}:{as_of.isoformat()}",
@@ -160,9 +160,11 @@ class FlipFlop(BaseStrategy):
         self._bar = 0
 
 
-class SurfaceStrategy(BaseStrategy):
-    """Never trades; its params define a synthetic score surface
-    (:class:`SurfaceObjective`)."""
+class SurfaceStrategy(LongAll):
+    """Buys and holds whatever its params (so its OOS Sharpe is the same
+    for every neighbour); the params define a synthetic train-score
+    surface (:class:`SurfaceObjective`). ``trade=False`` never trades;
+    ``fragile=True`` refuses any params but a=10, b=0.5."""
 
     id = "surface_fake"
 
@@ -174,13 +176,18 @@ class SurfaceStrategy(BaseStrategy):
             ParameterSpec(name="mode", kind="categorical", default="x", bounds=["x", "y"]),
             ParameterSpec(name="flag", kind="bool", default=False),
             ParameterSpec(name="shape", kind="categorical", default="smooth", tunable=False),
+            ParameterSpec(name="trade", kind="bool", default=True, tunable=False),
+            ParameterSpec(name="fragile", kind="bool", default=False, tunable=False),
         ]
 
-    def estimate_return(self, ticker, as_of, lake):
-        return None
+    def __init__(self, params) -> None:
+        super().__init__(params)
+        p = self.params
+        if p["fragile"] and not (p["a"] == 10 and abs(p["b"] - 0.5) < 1e-9):
+            raise ValueError("fragile surface: only a=10, b=0.5 builds")
 
-    def decide(self, my_picks, portfolio, prices, as_of):
-        return []
+    def estimate_return(self, ticker, as_of, lake):
+        return 1.0 if self.params["trade"] else None
 
 
 class SurfaceObjective:
