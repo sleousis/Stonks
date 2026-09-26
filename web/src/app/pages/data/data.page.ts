@@ -21,7 +21,7 @@ import { PricePanel } from './price-panel';
 const FALLBACK_INTERVALS = [{ code: '1d', is_intraday: false, seconds: 86_400 }];
 
 /**
- * What is in the lake and how fresh it is, plus ingest. The page owns the
+ * The price data we hold and how fresh it is, plus ingest. The page owns the
  * selected ticker and interval; each panel owns its own resource so one
  * failing route never blanks the rest.
  */

@@ -12,6 +12,7 @@ import {
 import type { InstrumentView, ListInstrumentsData } from '../../api/models';
 import { MarketService } from '../../api/market.service';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
+import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 
 type AssetClass = NonNullable<NonNullable<ListInstrumentsData['query']>['asset_class']>;
@@ -30,8 +31,8 @@ const DEBOUNCE_MS = 250;
     <section class="panel" aria-labelledby="search-title">
       <div class="panel-head">
         <h2 id="search-title">Instruments</h2>
-        @if (list.hasValue()) {
-          <span class="muted num count">{{ list.value().total }} found</span>
+        @if (page(); as found) {
+          <span class="muted num count">{{ found.total }} found</span>
         }
       </div>
       <div class="filters" role="search">
@@ -64,35 +65,37 @@ const DEBOUNCE_MS = 250;
           </select>
         </div>
       </div>
+      @let p = page();
       @if (list.error(); as err) {
         <app-error-state
           title="Could not search instruments"
           [error]="err"
           (retry)="list.reload()"
         />
-      } @else if (!list.hasValue()) {
+      } @else if (!p) {
         <app-loading-state label="Searching instruments" [rows]="5" />
-      } @else if (list.value().items.length === 0) {
+      } @else if (p.items.length === 0) {
         <app-empty-state
           title="No instruments match"
           [message]="
             q() || assetClass()
               ? 'Try a shorter search or another asset class.'
-              : 'Instruments appear after a metadata or prices ingest adds them to the lake.'
+              : 'Instruments appear after a metadata or prices ingest adds them.'
           "
         />
       } @else {
         <app-data-table
-          caption="Instruments in the lake; choose one to see its coverage and prices"
-          [rows]="list.value().items"
+          caption="Instruments we hold data for. Choose one to see its coverage and prices"
+          [rows]="p.items"
           [columns]="columns"
           [rowKey]="key"
-          [total]="list.value().total"
-          [offset]="list.value().offset"
+          [total]="p.total"
+          [offset]="p.offset"
+          [busy]="list.isLoading()"
           [pageSize]="pageSize"
           (pageChange)="offset.set($event.offset)"
         >
-          <ng-template appCell="id" [appCellOf]="list.value().items" let-row>
+          <ng-template appCell="id" [appCellOf]="p.items" let-row>
             <button
               type="button"
               class="pick"
@@ -131,6 +134,8 @@ export class InstrumentSearch {
     }),
     loader: ({ params }) => this.market.instruments(params),
   });
+  /** The last loaded page stays on screen while the next one loads. */
+  protected readonly page = keepLatest(this.list);
 
   protected readonly columns: TableColumn<InstrumentView>[] = [
     { key: 'id', label: 'Ticker', mobile: 'title' },

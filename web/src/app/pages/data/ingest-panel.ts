@@ -15,10 +15,12 @@ import { NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { IngestService } from '../../api/ingest.service';
 import { JobsApiService } from '../../api/jobs-api.service';
 import type { IngestResultView } from '../../api/models';
-import { AuthTokenService } from '../../core/auth/auth-token.service';
+import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
+import { PermissionNote } from '../../shared/ui/permission-note';
+import { ErrorState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 import {
   EMPTY_INGEST_FORM,
@@ -32,19 +34,20 @@ import {
 
 const FALLBACK_SOURCES: readonly IngestSource[] = ['eodhd'];
 
-/** "Run ingest": a form, a confirm step, then the job's live progress. */
+/**
+ * "Run ingest": a form, a confirm step, then the job's live progress. Needs
+ * `operations.run` (admins); others see the button off with the reason. A
+ * failed result load after the job succeeds shows an inline error with Retry.
+ */
 @Component({
   selector: 'app-ingest-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, StatusPill],
+  imports: [ReactiveFormsModule, StatusPill, PermissionNote, ErrorState],
   styleUrl: './ingest-panel.scss',
   template: `
     <section class="panel" aria-labelledby="ingest-title">
       <div class="panel-head">
         <h2 id="ingest-title">Run ingest</h2>
-        @if (!hasToken()) {
-          <span class="muted count">Needs the API token (Settings)</span>
-        }
       </div>
       <form class="panel-body form-grid form-grid-2" [formGroup]="form" (ngSubmit)="run()">
         <div class="field">
@@ -130,11 +133,12 @@ const FALLBACK_SOURCES: readonly IngestSource[] = ['eodhd'];
           <button
             type="submit"
             class="btn btn-primary"
-            [disabled]="busy()"
+            [disabled]="busy() || !allowed()"
             [attr.aria-busy]="busy()"
           >
             {{ busy() ? 'Ingest running…' : 'Run ingest' }}
           </button>
+          <app-permission-note permission="operations.run" />
         </div>
       </form>
 
@@ -142,9 +146,15 @@ const FALLBACK_SOURCES: readonly IngestSource[] = ['eodhd'];
         <div class="job" aria-live="polite">
           <div class="job-head">
             <app-status-pill [status]="j.status() ?? 'queued'" />
-            <span class="job-id muted">{{ j.jobId }}</span>
             @if (j.status() === 'queued') {
-              <button type="button" class="btn btn-ghost" (click)="cancel(j)">Cancel</button>
+              <button
+                type="button"
+                class="btn btn-ghost"
+                [disabled]="cancelling()"
+                (click)="cancel(j)"
+              >
+                {{ cancelling() ? 'Cancelling…' : 'Cancel' }}
+              </button>
             }
           </div>
           <label class="progress-label" for="ingest-progress">
@@ -154,6 +164,13 @@ const FALLBACK_SOURCES: readonly IngestSource[] = ['eodhd'];
           <progress id="ingest-progress" max="1" [value]="j.progress()"></progress>
           @if (j.error(); as e) {
             <p class="job-error" role="alert">{{ e }}</p>
+          }
+          @if (resultError(); as err) {
+            <app-error-state
+              title="The ingest finished, but its result could not load"
+              [error]="err"
+              (retry)="reloadResult()"
+            />
           }
           @if (result(); as r) {
             <p class="job-result">
@@ -173,7 +190,9 @@ export class IngestPanel {
   private readonly confirm = inject(ConfirmService);
   private readonly toasts = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
-  protected readonly hasToken = inject(AuthTokenService).hasToken;
+  private readonly session = inject(SessionService);
+  /** POST /api/ingest/runs needs operations.run. */
+  protected readonly allowed = computed(() => this.session.can('operations.run'));
 
   readonly intervals = input<readonly { code: string; is_intraday: boolean }[]>([]);
   /** Emits after an ingest job ends, so the page can refresh coverage and history. */
@@ -211,6 +230,10 @@ export class IngestPanel {
   protected readonly starting = signal(false);
   protected readonly job = signal<JobHandle | null>(null);
   protected readonly result = signal<IngestResultView | null>(null);
+  /** The job succeeded but GET result failed (GETs are not toasted). */
+  protected readonly resultError = signal<unknown>(null);
+  protected readonly cancelling = signal(false);
+  private resultJobId: string | null = null;
   protected readonly busy = computed(() => {
     const j = this.job();
     return this.starting() || (!!j && !j.done());
@@ -225,7 +248,7 @@ export class IngestPanel {
     const value: IngestFormValue = this.form.getRawValue();
     const problems = ingestProblems(value);
     this.problems.set(problems);
-    if (problems.length || this.busy()) return;
+    if (problems.length || this.busy() || !this.allowed()) return;
 
     const request = buildIngestRequest(value);
     const kindLabel = INGEST_KINDS.find((k) => k.value === request.kind)?.label ?? request.kind;
@@ -238,6 +261,7 @@ export class IngestPanel {
 
     this.starting.set(true);
     this.result.set(null);
+    this.resultError.set(null);
     try {
       const started = await this.ingestApi.start(request);
       const handle = this.jobs.track(started.id, this.destroyRef);
@@ -245,16 +269,11 @@ export class IngestPanel {
       this.starting.set(false);
       const last = await handle.finished;
       if (last?.status === 'succeeded') {
-        const result = await this.ingestApi.result(started.id);
-        this.result.set(result);
-        this.toasts.success(
-          `Ingest run #${result.run_id} finished: ${result.tickers_ok} ok, ${result.tickers_failed} failed.`,
-          'Ingest finished',
-        );
+        await this.loadResult(started.id);
       } else if (last?.status === 'failed') {
         this.toasts.error(last.error ?? 'The ingest job failed.', 'Ingest failed');
       } else if (last?.status === 'cancelled') {
-        this.toasts.info('Ingest cancelled.');
+        this.toasts.info('Cancelled the ingest.');
       }
       this.finished.emit();
     } catch {
@@ -264,11 +283,45 @@ export class IngestPanel {
     }
   }
 
-  protected async cancel(j: JobHandle): Promise<void> {
+  /** Retry after the result GET failed. */
+  protected async reloadResult(): Promise<void> {
+    if (this.resultJobId) await this.loadResult(this.resultJobId);
+  }
+
+  private async loadResult(jobId: string): Promise<void> {
+    this.resultJobId = jobId;
+    this.resultError.set(null);
     try {
+      const result = await this.ingestApi.result(jobId);
+      this.result.set(result);
+      this.toasts.success(
+        `Ingest run #${result.run_id} finished: ${result.tickers_ok} ok, ${result.tickers_failed} failed.`,
+        'Ingest finished',
+      );
+    } catch (err) {
+      // GET failures are not toasted, so say it here with a Retry.
+      this.resultError.set(err);
+    }
+  }
+
+  /** Cancel a queued ingest, after asking. */
+  protected async cancel(j: JobHandle): Promise<void> {
+    const ok = await this.confirm.confirm({
+      title: 'Cancel this ingest?',
+      message: 'It has not started yet and will not run.',
+      confirmLabel: 'Cancel job',
+      cancelLabel: 'Keep running',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    this.cancelling.set(true);
+    try {
+      // The job then ends as cancelled, and run() says so.
       await this.jobsApi.cancel(j.jobId);
     } catch {
       // Toasted by the error interceptor.
+    } finally {
+      this.cancelling.set(false);
     }
   }
 }
