@@ -175,3 +175,24 @@ def test_build_notifier_empty_backends_is_silent():
     notifier = build_notifier(NotifyConfig(backends=[]))
     assert notifier.children == []
     notifier.notify(_n())
+
+
+def test_build_notifier_with_outbox_routes_to_the_admins(tmp_path):
+    from stonks.notify import OutboxNotifier
+    from stonks.store.state import SqliteState
+
+    path = tmp_path / "state.sqlite"
+    with SqliteState(path) as state:
+        state.migrate()
+    notifier = build_notifier(NotifyConfig(backends=["outbox"]), state_path=path)
+    [child] = notifier.children
+    assert isinstance(child, OutboxNotifier)
+    notifier.notify(_n(level="error"))
+    with SqliteState(path) as state:
+        [row] = state.sql("SELECT user_id, category FROM notification_outbox")
+    assert (row["user_id"], row["category"]) == ("usr_owner", "system")
+
+
+def test_build_notifier_skips_outbox_without_a_state_path():
+    notifier = build_notifier(NotifyConfig(backends=["outbox"]))
+    assert notifier.children == []

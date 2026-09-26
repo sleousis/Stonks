@@ -4,94 +4,153 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project is
 
-An end-to-end multi-asset research + trading system organized as four blocks: ingestion → strategy lab → strategy store → production tick. Inspired by a sibling `stock_analysis` repo but deliberately redesigned for scale, pluggability, and live-trading readiness.
+An end-to-end multi-asset research and trading system: ingest data into a lake, test strategies in a lab, register the survivors, and run a daily production tick that trades one or more portfolios. The CLI, REST API, MCP server and Angular web console all sit on one service layer.
 
-Asset classes (closed set in `core.types.AssetClass`): `equity`, `crypto`, `commodity`, `bond`. Equities are the default and have the richest metadata surface (fundamentals, dividends, insiders, analysts, ESG, …). Non-equity classes use the same `bars` time series and add small per-class profile tables (`crypto_profiles`, `bond_profiles` + `bond_yield_history`, `commodity_contracts`).
+Asset classes (closed set in `core.types.AssetClass`): `equity`, `crypto`, `commodity`, `bond`. Equities are the default and have the richest metadata (statements, dividends, insiders, analysts, ...). Other classes use the same `bars` time series plus small profile tables.
 
-Full architecture lives in `docs/architecture.md`; each block has its own sub-plan in `docs/blocks/`.
+Read first: `docs/architecture.md` (the system), `docs/principles.md` (the research and risk rules every change must respect), `docs/operations.md`, `docs/deploy.md`, `docs/roadmap.md`, `docs/design/accounts-and-modes.md`, `docs/strategies/README.md`.
 
 ## Commands
 
-All commands assume `uv` (installed via `pipx install uv`). Run from the repo root.
+All commands assume `uv` (`pipx install uv`). Run from the repo root.
 
 ```bash
-uv sync                         # install deps into .venv with Python 3.12+
-uv run pytest -n auto           # full suite in parallel on every core (~1 min); no network
-uv run pytest                   # same suite on one core; use for a single file or test
-uv run pytest -m live           # live API contract tests (requires STONKS_RUN_LIVE_TESTS=1 and a real EODHD key in .env)
-uv run pytest tests/unit/test_params_spec.py -k "tunable"   # single test by path + keyword
-uv run ruff check .
-uv run ruff format .
-uv run stonks db init           # migrates both lake.duckdb and state.sqlite
-uv run stonks db info           # lists tables + row counts in both stores
+uv sync                          # install deps into .venv (Python 3.12+)
+uv run pytest -n auto            # unit + integration tests in parallel; no network
+uv run pytest tests/unit/test_params_spec.py -k "tunable"   # one test by path + keyword
+STONKS_RUN_LIVE_TESTS=1 uv run pytest -m live   # live API contract tests (real keys in .env)
+uv run ruff check . && uv run ruff format .
+
+# Stores
+uv run stonks db init            # migrate lake.duckdb and state.sqlite
+uv run stonks db info            # tables and row counts
+uv run python -m stonks.store.bars_migrate --to parquet   # move bars to the Parquet store
+
+# Ingest (--source eodhd|yahoo where it applies)
 uv run stonks ingest prices --tickers AAPL.US --since 2025-05-01
+uv run stonks ingest fundamentals|metadata|intraday --tickers AAPL.US
+uv run stonks ingest macro | tvl | exchanges
+uv run stonks ingest aggregate --tickers AAPL.US --from 1h --to 4h
+uv run stonks ingest all-intervals --tickers AAPL.US
+uv run stonks audit statements [--tickers AAPL.US]   # statement audit (also runs after ingest fundamentals)
+
+# Lab and registry
+uv run stonks lab run momentum --start 2023-01-01 --end 2025-01-01 --tickers AAPL.US,MSFT.US --preset promotion
+uv run stonks lab run ... --strict | --no-preflight   # data preflight: warnings as errors, or skip it
+uv run stonks lab sweep --start 2023-01-01 --end 2025-01-01
+uv run stonks lab ic --strategy momentum --tickers AAPL.US [--events]   # signal IC and event study
 uv run stonks registry list [--status active|shadow|retired]
-uv run stonks registry show <id>
-uv run stonks registry promote <id>
-uv run stonks registry retire <id>
+uv run stonks registry show|history <id>
+uv run stonks registry promote <id> [--override --reason "..."]
+uv run stonks registry shadow|retire <id> --reason "..."
+uv run stonks golive check <id>
+
+# Production
 uv run stonks tick [--dry-run] [--as-of YYYY-MM-DD] [--tickers AAPL.US,MSFT.US]
-uv run python -m stonks.api.openapi   # regenerate web/openapi.json after changing routes/models
-uv run python -m stonks.api.docs      # regenerate docs/api/rest.md from web/openapi.json
-uv run python -m stonks.mcp.docs      # regenerate docs/api/mcp-tools.{json,md} after changing MCP tools
+uv run stonks health [--notify]   # also opens or clears the global operational halt
+uv run stonks halts list [--all]
+uv run stonks halts kill --scope global|user|portfolio [--portfolio ID] [--flatten] --reason "..."
+uv run stonks halts resume ID --reason "..."   # asks you to type RESUME TRADING
+uv run stonks halts clear ID --reason "..."    # circuit-breaker or operational halt
+uv run stonks pnl [--since YYYY-MM-DD] [--strategy <shadow-id>]
+uv run stonks report [--backtest <job-or-strategy> --start ... --end ...]
+
+# Servers
+uv run stonks serve              # REST API + built console on 127.0.0.1:8000
+uv run stonks mcp                # MCP server over the running API
+
+# Operations
+uv run stonks schedule run|next|runs|run-now JOB|check|metrics
+uv run stonks backup backup|verify|restore|list|prune
+
+# Operator entry points
+uv run python -m stonks.notify vapid-keygen|test --user EMAIL|deliver
+uv run python -m stonks.connections providers|list|connect|sync [--due]|...
+uv run python -m stonks.security keygen
 ```
 
 ## Working rules (enforced)
 
-- **Principles.** `docs/principles.md` lists the research, validation, risk and engineering rules every change must respect. Its backlog is `docs/research/book-lessons.md`.
-- **TDD.** Write a failing unit test first, then the implementation. Every new component ships with unit tests. Integration tests live under `tests/integration/`; any test that hits a real network goes under `tests/integration/live/` and is gated by `@pytest.mark.live` + `STONKS_RUN_LIVE_TESTS=1`.
-- **No live-API calls in default test runs.** Default `pytest` must be hermetic. Use `FakeDataSource` (canned data) for pipeline tests.
-- **Secrets never land in git.** `.env` is gitignored; `.env.example` is the only checked-in template.
-- **Vendor-agnostic schemas.** Schemas, lake tables, and column names describe domain concepts, never vendor JSON shapes. EODHD is the first `DataSource`; other adapters must populate the same tables without renaming columns or inventing parallel schemas. Concretely:
-  - Fields whose vendor vocabulary varies (e.g. `before_after_market`, `security_type`, analyst-forecast `period_relative`) use **normalized literal values**; adapters map vendor strings to the canonical literal at parse time.
-  - Vendor-specific fields with no cross-vendor analogue (e.g. EODHD's `HomeCategory`, `LogoURL`) are **not added** — they don't earn a column.
+- **TDD.** Write a failing unit test first, then the implementation. Every new component ships with unit tests. Integration tests live under `tests/integration/`; anything that hits a real network goes under `tests/integration/live/`, marked `@pytest.mark.live` and gated by `STONKS_RUN_LIVE_TESTS=1`.
+- **Hermetic default runs.** Default `pytest` makes no network calls. Use `FakeDataSource` (canned data) for pipeline tests and the fake broker connection provider for connection tests.
+- **Secrets never land in git.** `.env` is gitignored; `.env.example` is the only checked-in template. Secrets come from the environment (API token, broker keys, VAPID, SMTP, `STONKS_SECRET_KEYS`), never TOML.
+- **Principles.** Research, validation, sizing and operations changes follow `docs/principles.md` (P-numbers are cited in code and tests).
+- **Vendor-agnostic schemas.** Schemas, lake tables and column names describe domain concepts, never vendor JSON shapes. Every `DataSource` fills the same tables with the same columns:
+  - Fields whose vendor vocabulary varies (`before_after_market`, `security_type`, analyst `period_relative`) use **normalized literal values**; adapters map vendor strings at parse time.
+  - Vendor-only fields with no cross-vendor analogue (EODHD `HomeCategory`, `LogoURL`) are **not added**.
   - **Domain identifiers** (CUSIP, CIK, ISIN, OpenFigi, LEI) live on `TickerProfile`; the EODHD ticker (`AAPL.US`) is one access key among many.
-  - **Column names use domain terms**, not vendor JSON keys (e.g. `change_pct` not `change_p`, `total_shares_pct` not `totalShares`).
-- **Third-party libraries.** Don't reinvent the wheel — prefer well-maintained external libraries (e.g. `vectorbt`, `FinanceToolkit`) over hand-rolled implementations of non-trivial trading/finance logic. But every non-trivial third-party library must be wrapped behind one of our seams (`Strategy`, `Tuner`, `DataSource`, `Broker`, `Objective`, `SurvivalTest`, or a new ABC if none fit) so vendor-specific types, naming, and quirks never leak into `core/` or downstream blocks. Trivial utility libraries (numpy, pandas, scipy) are exempt.
+  - **Column names use domain terms** (`change_pct` not `change_p`, `total_shares_pct` not `totalShares`).
+- **Third-party libraries.** Prefer well-maintained libraries over hand-rolled trading or finance logic, but wrap every non-trivial one behind a seam (`DataSource`, `Strategy`, `Tuner`, `Objective`, `SurvivalTest`, `Broker`, `BrokerConnection`, `PortfolioConstructor`, `RiskRule`, `BarStore`, a notification `Channel`, or a new ABC) so vendor types never leak into `core/` or other blocks. Examples: `yfinance` in `ingest/sources/yahoo.py`, `alpaca-py` in `execution/brokers/alpaca.py`, `exchange_calendars` in `scheduling/calendar.py`, `pywebpush` in `notify/webpush.py`, `cryptography` in `security/crypto.py`. numpy, pandas and scipy are exempt.
+- **Registries, not lists.** Survival tests, portfolio constructors, risk rules, tick hooks and strategies are discovered from their packages. A new one is one new module; no central list is edited.
 
 ## Architecture in one screen
 
-- **`core/`** — dependency-free primitives: `types.py` (Bar, Fundamentals, Order, Fill, Portfolio), `params.py` (`ParameterSpec`, `Params`, `ParamSpace`), `protocols.py` (`Strategy`, `Tuner`, `Objective`, `SurvivalTest`, `Broker`). Everything downstream imports from here.
-- **`ingest/`** — pluggable `DataSource` ABC + `IngestPipeline` that normalizes and idempotently upserts into the lake. EODHD is the first source. Adding Yahoo Finance is a one-file drop-in.
-- **`store/`** — `DuckDBLake` (interval-aware `bars`, three financial-statement tables, metadata, later features/artifacts) and `SqliteState` (strategies, survival_reports, tick_runs, orders, fills, portfolio_snapshots). Migrations live in `store/migrations_duckdb/*.sql` and `store/migrations_sqlite/*.sql`, applied in order at startup. The `bars` table is keyed by `(ticker, timestamp, interval)` and accepts any `Interval` code (1m, 5m, 15m, 30m, 1h, 4h, 12h, 1d, 1w); the old `prices` API is preserved as a daily shim. `SqliteState` is a thin foundation — domain helpers (`register_strategy`, `place_order`) belong to the blocks that own each table.
-- **`strategies/`** — `BaseStrategy` + examples (`buy_and_hold`, `momentum`). Rule-based, technical, aggregator, ML, hybrid all satisfy the `Strategy` Protocol. **Feature extraction lives inside each strategy**; there is intentionally no shared "features pipeline" stage. `features/library.py` is an optional toolkit of reusable helpers (`ttm`, `rolling_zscore`, `trailing_return`, …), nothing more. Strategies declare `applicable_asset_classes: tuple[AssetClass, ...]` (default `("equity",)`); the Ranker drops universe tickers outside that set.
-- **`lab/`** — `lab.runner` orchestrates tune → fit → survival suite → verdict. `GridTuner` + `RandomTuner`, `SharpeObjective`/`CAGRObjective`/`FinalReturnObjective`, and four survival tests (`oos`, `period_stability`, `perturbation`, `drift`). `Tuner` and `SurvivalTest` are strategy-agnostic; a new strategy never touches them, and a new tuner/test never touches any strategy.
-- **`registry/`** — `StrategyRegistry` over SQLite for metadata + `ArtifactBundle` on disk at `data/artifacts/<id>/` (`meta.json`, `params.json`, `reports/<test_id>.json`, optional `fitted_state.joblib`). Load round-trips a strategy via `importlib` from the stored class path.
-- **`backtest/`** — interval-aware `Backtester` + `SimulatedBroker` (idempotent via `client_id`) + `BacktestReport` with Sharpe / max-drawdown / CAGR. `BacktestConfig.interval: Interval` (default `DAY_1`) drives which bar granularity the engine iterates; `rebalance_every_bars` is a bar count, not a day count, so the same config works for daily and sub-daily backtests. Orders decided on bar t fill at bar t+1's open (no same-bar look-ahead), equity is marked at each bar's close with the last close carried forward for tickers with no bar, and Sharpe is annualized per interval. Shares the `Broker` Protocol with the execution/production layers.
-- **`execution/` + `production/`** — `make_client_id(as_of, strategy_id, ticker, side)` helper (keyed by date, not tick, so a rerun of a crashed tick reproduces the same ids); `Ranker.rank(as_of)` walks active strategies × universe; `run_tick(...)` is the one-shot entrypoint invoked via `stonks tick`. Stateless across invocations; all state lives in DuckDB + SQLite. Portfolio auto-seeds from `production.initial_cash` on first tick; thereafter it resumes from the latest `portfolio_snapshots` row.
+- **`core/`**: dependency-free primitives. `types.py` (Bar, Order, Fill, Portfolio, AssetClass), `interval.py`, `params.py` (`ParameterSpec`, `Params`, `ParamSpace`), `protocols.py` (`Strategy`, `Tuner`, `Objective`, `SurvivalTest`, `Broker`), `corporate_actions.py`, `timeutil.py`.
+- **`ingest/`**: `DataSource` ABC and `IngestPipeline` (normalize, validate, idempotent upsert, one `ingest_runs` row per run). Sources in `ingest/sources/`: `eodhd`, `yahoo` (wraps `yfinance`), `defillama` (DeFi TVL), picked by `--source` through `sources/registry.py`. `quality.py` checks every bar batch and moves bad rows to `quarantined_bars`; the pipeline can retry a failed ticker on a fallback source.
+- **`store/`**: `DuckDBLake` (`lake.py`) and `SqliteState` (`state.py`), migrations in `store/migrations_duckdb/*.sql` and `store/migrations_sqlite/*.sql` applied in order by `stonks db init`. Bars sit behind the `BarStore` seam (`bars.py`): the DuckDB `bars` table (default) or hive-partitioned Parquet files that stay readable while `stonks serve` holds the lake; `lake_settings.bars_backend` records which. `filelock.py`, `corporate_actions.py` (splits and dividends reads). `SqliteState` is a thin foundation; domain helpers belong to the block that owns each table.
+- **`features/`**: optional helper toolkit, no pipeline stage. `library.py` (`ttm`, `rolling_zscore`, `trailing_return`), indicators (ATR), volatility, cross-section, momentum, trend, forecast (Carver EWMAC, TSMOM), fundamentals (value, forensic, quality scores), trailing stop, complexity, extremes, ML seams, VSA, market profile, visibility graph, spread, sessions, price adjustment.
+- **`strategies/`**: `BaseStrategy` plus 25 examples in `strategies/examples/` (reference, fundamentals, book strategies such as `quant_momentum`, `stocks_on_the_move`, `quant_value`, trend following such as `ewmac_trend`, `tsmom`, `ath_trend`, and the neurotrader888 ports), the wrappers `MacroRegimeFilter`, `FeatureRegimeFilter`, `LastTradeFilter` and `TrailingStopWrapper` (`_wrapping.py`), and the declarative `RuleStrategy` (`rule_based.py`, `rules/`) behind the Strategy Studio. Feature extraction lives inside each strategy. Strategies declare `applicable_asset_classes`; the ranker drops other tickers. Full list: `docs/strategies/README.md`.
+- **`portfolio/`**: the construction seam. `PortfolioConstructor` ABC and registry (`base.py`), `signals.py` (normalisation), constructors `single_winner` (default), `equal_weight_top_n`, `inverse_vol`, `vol_target` (`constructors.py`) and `atr_parity`, buffered `orders_from_targets` (`orders.py`), and `pipeline.build_orders`, the one pipeline the tick and the backtest share (signals, constructor, orders, stale-price guard, risk rules, per-strategy attribution).
+- **`lab/`**: `runner.py` (preflight, tune, fit, survival suite, verdict, optional register), `catalog.py` (every strategy the lab can name), tuners in `tuning/` (grid, random), `objectives.py`, `trials.py` (trial ledger with hypothesis and premortem, `lab_runs`/`lab_trials`), `manifest.py` (reproducibility), `parallel.py` (the one spawn process pool), `dataset.py` (windows, embargo), `signal_eval.py` (IC analysis), `backtesting.py`. `survival/registry.py` discovers 18 tests and names the presets `quick`, `standard` and `promotion`.
+- **`stats/`**: PSR, deflated Sharpe, MinTRL, bootstrap, HAC, CSCV/PBO, multiple testing (FDR).
+- **`backtest/`**: interval-aware `Backtester` (`engine.py`, runs the construction pipeline when `BacktestConfig.construction` is set), `SimulatedBroker` (idempotent by `client_id`), `fills.py` (participation cap, partial fills, limit/stop fills from the bar range, gap guard), `costs.py` (per-asset-class fee, spread and square-root impact), `trades.py` (FIFO round trips), `metrics.py` (Sharpe, Sortino, Calmar, Ulcer, VaR, ES, ...), `benchmark.py` (benchmark curve, alpha, beta), `corporate_actions.py` (splits and dividends), `calendar.py`, `report.py`.
+- **`registry/`**: `StrategyRegistry` over SQLite plus `ArtifactBundle` at `data/artifacts/<id>/`. Governance: `set_status` is the only writer of `strategies.status`, every change writes a `status_changes` row, and promotion needs a passing go-live check or an override with a reason.
+- **`production/`**: `run_tick` (`tick.py`) in three phases: the signal phase (`ranker.py` scores each active strategy once), a portfolio phase over the books of a `TickPlan` (construction pipeline, risk rules, broker, ledger, `portfolio`-stage hooks; every entrypoint runs `TickPlan.default`, the single `pf_default` book, and `load_tick_plan` for per-portfolio books is not wired in yet), then model books (`shadow.py`) and `tick`-stage hooks. `risk.py` plus `rules/` (registered `RiskRule`s: the caps, position risk, portfolio vol, drawdown scaling, liquidity, sector cap, max holding, circuit breaker and operational halt, set under `[production.risk.rules.*]`), `halts.py` (`risk_halts` rows: kill switch, breaker trips, the operational halt that `run_health` opens), `quit_rule.py`, `hooks/` (position attribution, notification enqueue, the quit rule, and the `risk_halts` trade gate), `golive.py` (incubation gate), `pnl.py`, `health.py`, `corporate_actions.py`, `prices.py`, `settings_builder.py`.
+- **`execution/`**: `make_client_id` (`orders.py`), brokers in `brokers/` (`simulated`, `alpaca` wrapping `alpaca-py`, `make_broker`), `reconcile.py` (syncs broker order state and fills into `orders`/`fills`).
+- **`accounts/`**: users and roles (viewer, trader, admin), portfolios, subscriptions with modes `notify`/`paper`/`auto`, `BookSpec` with tighten-only merges, `Scope` ownership checks, `audit_log`. Existing installs map to `usr_owner` and `pf_default`.
+- **`connections/`**: `BrokerConnection` seam for read-only broker sync (positions, cash, activities). Providers `alpaca`, `snaptrade`, `fake`; none enabled by default. Credentials sealed with `security/`.
+- **`security/`**: AES-GCM envelope encryption (`SecretBox`) with master keys from `STONKS_SECRET_KEYS`.
+- **`notify/`**: `Notifier` seam for operator alerts (log, store, webhook) and the per-user notification router, outbox, delivery worker with retries, quiet hours and preferences, and channels (Web Push via VAPID, SMTP email, the user's own webhook).
+- **`scheduling/`**: built-in scheduler with exchange calendars, session/daily/interval triggers, catch-up, run records, dead-man deadlines and pings, Prometheus metrics, and `api`, `in_process` and `local` backends.
+- **`ops/`**: `backup`, `verify`, `restore`, `list`, `prune` of lake, state and artifacts with retention.
+- **`reporting/`**: static HTML report, backtest tear sheets, signal research sections.
+- **`app/`**: the service layer (`services.py` wires lake, state, registry, lab, backtests, ticks, studio, jobs). No business logic in any transport.
+- **`api/`**: FastAPI app (`stonks serve`), bearer token `STONKS_API_TOKEN` for mutating routes, background jobs with SSE, OpenAPI contract, serves `web/dist`.
+- **`mcp/`**: `stonks mcp`, an MCP server that talks to the running REST API. Write tools need an explicit confirm.
+- **`web/`**: Angular console (dashboard, strategies, lab, studio, data, orders, shadow, go-live, health, settings), typed client generated from the OpenAPI spec, installable PWA. See `docs/ui.md`.
+- **Deploy**: `Dockerfile`, `deploy/` (Compose with api, scheduler and Caddy, Tailscale, restic backups, host checks), `infra/` (Terraform), `.github/workflows/` (ci, codeql, docs, release, deploy).
 
 ## Canonical schemas (current)
 
-**Lake (DuckDB):**
-- `instruments (id, asset_class, exchange, currency, ipo_date, sector, industry, is_delisted, … + profile columns from migration 002)` — abstract instrument table, renamed from `tickers` in migration 007. `asset_class ∈ {equity, crypto, commodity, bond}` (default `equity`).
-- `bars (ticker, timestamp, interval, open, high, low, close, adj_close, volume; PK (ticker, timestamp, interval))` — canonical OHLCV at any granularity, asset-class-agnostic.
-- `prices` — read-only view over `bars` where `interval='1d'`, for back-compat SQL only. Write through `upsert_prices` (daily shim) or `upsert_bars` (any interval).
-- Financial statements (equity-only, migration 008): one wide table per statement, all keyed by `(ticker, period_end, frequency)`:
-  - `income_statement (ticker, period_end, frequency, filing_date, currency, revenue, cost_of_revenue, gross_profit, operating_income, net_income, ebitda, …)`
-  - `balance_sheet (ticker, period_end, frequency, filing_date, currency, total_assets, current_assets, cash, total_liabilities, total_stockholder_equity, …)`
-  - `cash_flow_statement (ticker, period_end, frequency, filing_date, currency, operating_cash_flow, investing_cash_flow, financing_cash_flow, capital_expenditures, free_cash_flow, …)`
-  Vendors omit lines that don't apply to a given filer (banks have no `cost_of_revenue`, software firms no `inventory`); `upsert_<statement>` reindexes sparse DataFrames so missing columns land as NULL on first INSERT, and uses `COALESCE(EXCLUDED.col, table.col)` on UPDATE so a NULL in the input does **not** overwrite a prior non-NULL value (real values still overwrite — the typical "vendor restated revenue" path).
-- Per-asset-class profiles (migration 007): `crypto_profiles`, `bond_profiles`, `bond_yield_history`, `commodity_contracts`. Equity-shaped tables (statements, dividends, …) simply hold no rows for non-equity instruments — no FK enforcement.
-- `macro_indicators (country_iso, indicator, observation_date, period, country_name, value; PK (country_iso, indicator, observation_date))` — country-level macroeconomic time series (GDP, inflation, unemployment, …). `country_iso` is ISO 3166-1 alpha-3 (`USA`, `DEU`); `indicator` is canonical `lower_snake_case` (`real_gdp_total`, `inflation_consumer_prices_annual`). `period ∈ {annual, quarterly, monthly}` (NULL on unknown vendor cadence). The set of indicators is open (vendors keep adding new series), so the column stays free-text rather than a closed Literal — adapters normalize their vendor strings into snake_case at parse time.
-- `ingest_runs (id, source, kind, started_at, finished_at, tickers_ok, tickers_failed, status, error)`
-- Equity metadata surface (from migration 002): `dividends`, `insider_transactions`, `news`, `news_sentiment`, `analyst_estimates`, `analyst_ratings`, `shares_outstanding`, `employee_count`, `segmentation`.
+**Lake (DuckDB, migrations 001-016):**
+- `instruments (id, asset_class, exchange, currency, ipo_date, sector, industry, is_delisted, name, identifiers, GICS, address, ...)`: renamed from `tickers` in 007. `asset_class` in {equity, crypto, commodity, bond}.
+- `bars (ticker, timestamp, interval, open, high, low, close, adj_close, volume; PK (ticker, timestamp, interval))`: OHLCV at any `Interval` code (1m, 5m, 1h, 4h, 1d, 1w, 1mo, ...). `prices` is a read-only view of `interval='1d'`. Write with `upsert_bars` or the daily `upsert_prices` shim. With the Parquet backend the rows live under `<lake dir>/bars` instead of the table.
+- Statements (008, equity only), keyed `(ticker, period_end, frequency)`: `income_statement`, `balance_sheet`, `cash_flow_statement`, each with `filing_date` and `currency`. `upsert_<statement>` reindexes sparse frames and uses `COALESCE(EXCLUDED.col, table.col)`, so a NULL never overwrites a stored value but a real restated value does.
+- Equity metadata (002, 004-006, 010): `dividends`, `stock_splits`, `market_cap_history`, `insider_transactions` (natural key), `news`, `news_sentiment`, `analyst_estimates`, `analyst_ratings`, `shares_outstanding`, `employee_count`, `segmentation`.
+- Per-class profiles (007): `crypto_profiles`, `bond_profiles`, `bond_yield_history`, `commodity_contracts`. No FK enforcement.
+- `macro_indicators (country_iso, indicator, observation_date, period, country_name, value)` (009): ISO alpha-3 country, `lower_snake_case` indicator (open set), `period` in {annual, quarterly, monthly} or NULL.
+- `defi_tvl (chain, observation_date, tvl_usd, source)` (011).
+- `lake_settings (key, value)` (012): today only `bars_backend`.
+- `quarantined_bars (id, run_id, ticker, timestamp, interval, OHLCV, reasons, source, quarantined_at)` and `ingest_runs.quality_json` (013).
+- `ingest_runs (id, source, kind, started_at, finished_at, tickers_ok, tickers_failed, status, error, quality_json)`.
+- `statement_flags (ticker, period_end, frequency, check_id, severity, detail, flagged_at)` (014): the statement audit's findings, replaced per audited ticker.
+- `universe_membership (universe_id, ticker, start_date, end_date)` (015): point-in-time universes, delisted names included.
+- `universe_definitions`, `index_constituent_snapshots`, `index_constituent_changes`, `bar_fetch_ranges` (016): stored universe definitions (list, exchange, rule, index), index history, and the bar ranges already requested so on-demand fetches skip them. See `docs/universes.md`.
 
-**State (SQLite):**
-- `strategies (id PK, class_path, params_json, artifact_path, status, created_at, updated_at)` — `status ∈ {active, shadow, retired}`
-- `survival_reports (id, strategy_id FK, test_id, passed, metrics_json, notes, created_at)`
-- `tick_runs (id PK /* ulid */, started_at, finished_at, status, summary_json)`
-- `orders (client_id PK /* idempotency */, tick_id FK, strategy_id FK, ticker, side, quantity, order_type, limit_price, status, broker_order_id, created_at, updated_at)`
-- `fills (id, order_client_id FK, ticker, quantity, price, fee, filled_at)`
-- `portfolio_snapshots (id, tick_id FK, taken_at, cash, positions_json, total_value)`
+**State (SQLite, migrations 001-016):**
+- 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.
+- 002: `shadow_decisions`, `shadow_portfolio_snapshots` (model books).
+- 003: `jobs` (API background jobs). 004: `portfolio_snapshots.as_of`. 005: `strategy_drafts` (Studio). 006: `orders.status_reason`. 007: `alerts`.
+- 008: `lab_runs`, `lab_trials` (trial ledger). 009: `status_changes` (governance audit).
+- 010 accounts: `users`, `portfolios`, `subscriptions`, `audit_log`; adds `portfolio_id` to orders, fills and snapshots, `owner_id` to jobs and drafts, `user_id`/`category`/`dedupe_key`/`read_at` to alerts.
+- 011 scheduler: `scheduled_runs`, `scheduler_instances`, `scheduler_deadline_alerts`.
+- 012 notify: `notification_outbox`, `notification_deliveries`, `push_subscriptions`, `notification_prefs`, `notification_settings`.
+- 013 connections: `broker_connections`, `broker_credentials`, `broker_accounts`, `broker_positions`, `broker_activities`; `portfolio_snapshots.source` (`tick` or sync).
+- 014: `position_attribution (tick_id, portfolio_id, as_of, ticker, strategy_id, subscription_id, quantity, target_weight, weight_share, source)`.
+- 015 auth: `sessions`, `api_tokens`, `recovery_codes`, `login_attempts`, and MFA columns on `users`.
+- 016: `risk_halts (id, kind, scope, user_id, portfolio_id, halt, reason, tripped_by, tripped_at, expires_on, cleared_at, cleared_by, clear_reason)`: the kill switch, circuit-breaker trips and the operational halt.
 
 ## Conventions to match
 
-- Settings are `pydantic` dataclasses / `BaseSettings`; never long kwarg lists.
-- Abstract base classes + Protocols are the seam for plugging in new behavior: `DataSource`, `Strategy`, `Tuner`, `Objective`, `SurvivalTest`, `Broker`.
-- Logging via `stonks.logging.get_logger(name)` (structlog JSON). Every cross-block action carries a `run_id` / `tick_id` so logs correlate.
-- Free-tier EODHD only returns EOD prices; the fundamentals endpoint returns a text error. Live fundamentals tests must handle that signal gracefully (skip, not fail).
-- **`Literal` vs `Enum`.** Default to `Literal[...]` for closed sets of stringly-typed tags that flow through serialization boundaries (DB columns, JSON, vendor APIs). Reach for `StrEnum` (3.11+) when the set grows behavior (methods, predicates), needs iteration as a first-class operation, or when named symbols at call sites read better than bare strings. Don't stick with `Literal` just because neighboring code uses it.
+- Settings are pydantic models (`config.py`, `config/default.toml`, env overrides); never long kwarg lists. Some blocks own their settings models (`scheduling/config.py`, `ops/config.py`, `ingest/quality_config.py`, `connections/settings.py`, `notify/settings.py`, `production/rules/settings.py`).
+- ABCs, Protocols and registries are the seams for new behavior (see the third-party rule above).
+- Logging via `stonks.logging.get_logger(name)` (structlog JSON). Cross-block actions carry a `run_id` / `tick_id` so logs correlate.
+- Free-tier EODHD only returns EOD prices; the fundamentals endpoint returns a text error. Live fundamentals tests skip on that signal, never fail.
+- **`Literal` vs `Enum`.** Default to `Literal[...]` for closed sets of string tags that cross serialization boundaries (DB columns, JSON, vendor APIs). Use `StrEnum` when the set grows behavior, needs iteration, or named symbols read better (e.g. `Role`, `Mode`).
+- Docs: plain, short English, one topic per page, no em dashes. `docs/api/*` and `docs/mcp.md` are generated.
 
 ## Known external limits
 
-- EODHD free tier: prices only, ≤ 1-year window.
-- Treat any ticker-level vendor failure as soft-fail (log + continue); the ingestion run row records `tickers_ok`/`tickers_failed`.
+- EODHD free tier: prices only, 1-year window at most.
+- Treat any ticker-level vendor failure as a soft fail (log and continue); the run row records `tickers_ok` / `tickers_failed`.
+- DuckDB allows one writing process per lake file; while `stonks serve` runs, other writers go through the API.

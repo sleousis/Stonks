@@ -11,6 +11,13 @@ from stonks.accounts.models import NotFound, Role, User, UserKind, UserStatus
 from stonks.store.state import SqliteState
 
 
+def normalize_email(email: str) -> str:
+    """The one spelling of an email we store and look up: trimmed and
+    lowercased. (The column is also ``COLLATE NOCASE``, so rows written
+    before this rule still match.)"""
+    return email.strip().lower()
+
+
 class UserRepository:
     def __init__(self, state: SqliteState) -> None:
         self._state = state
@@ -23,7 +30,7 @@ class UserRepository:
         return User.from_row(rows[0])
 
     def get_by_email(self, email: str) -> User:
-        rows = self._state.sql("SELECT * FROM users WHERE email = ?", [email.strip()])
+        rows = self._state.sql("SELECT * FROM users WHERE email = ?", [normalize_email(email)])
         if not rows:
             raise NotFound("user not found")
         return User.from_row(rows[0])
@@ -50,7 +57,7 @@ class UserRepository:
                 [
                     user_id,
                     kind,
-                    email.strip() if email else None,
+                    normalize_email(email) if email else None,
                     display_name,
                     Role(role).value,
                     timezone,

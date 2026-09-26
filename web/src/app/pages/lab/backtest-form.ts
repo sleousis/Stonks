@@ -18,12 +18,14 @@ import { ParamForm } from '../../shared/ui/param-form/param-form';
 import { type ParamValues, defaultParamValues } from '../../shared/ui/param-form/param-spec';
 import {
   type BacktestForm,
+  type BenchmarkForm,
   type CostChoice,
   type WindowForm,
   backtestErrors,
   buildBacktestRequest,
   defaultBacktestForm,
 } from './lab-requests';
+import { BenchmarkField } from './benchmark-field';
 import { StrategyPicker } from './strategy-picker';
 import { type StrategyPreset, presetParamValues } from './strategy-preset';
 import { WindowFields } from './window-fields';
@@ -32,7 +34,7 @@ import { WindowFields } from './window-fields';
 @Component({
   selector: 'app-backtest-form',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [StrategyPicker, ParamForm, WindowFields],
+  imports: [StrategyPicker, ParamForm, WindowFields, BenchmarkField],
   templateUrl: './backtest-form.html',
   styleUrl: './lab-form.scss',
 })
@@ -80,7 +82,7 @@ export class BacktestFormView {
     }));
   }
 
-  protected patch(p: Partial<BacktestForm> | Partial<WindowForm>): void {
+  protected patch(p: Partial<BacktestForm> | Partial<WindowForm> | Partial<BenchmarkForm>): void {
     this.form.update((f) => ({ ...f, ...p }));
   }
 

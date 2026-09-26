@@ -11,8 +11,10 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 
+import numpy as np
 import pandas as pd
 
+from stonks.features.indicators import true_range
 from stonks.strategies.rules.indicators import compute_indicator, required_bars
 from stonks.strategies.rules.spec import (
     AllCondition,
@@ -20,6 +22,7 @@ from stonks.strategies.rules.spec import (
     CompareCondition,
     ConstantOperand,
     NotCondition,
+    RiskExits,
     RuleSpec,
     referenced_indicators,
 )
@@ -30,7 +33,35 @@ Values = Mapping[str, tuple[float, float]]
 def window_size(spec: RuleSpec) -> int:
     """Bars to fetch per evaluation: the longest warm-up plus one previous
     bar for the ``crosses_*`` operators."""
-    return max(required_bars(ind) for ind in spec.indicators) + 1
+    need = max(required_bars(ind) for ind in spec.indicators)
+    if spec.risk.has_trailing_stop:
+        need = max(need, spec.risk.trailing_stop_period + 1)
+    return need + 1
+
+
+def stop_width(risk: RiskExits, bars: pd.DataFrame, bars_per_year: float) -> float | None:
+    """Price distance of the trailing stop below the high-water mark on the
+    last bar of ``bars``: the tighter of the vol and ATR stops that are
+    set, or ``None`` when neither is set or there are too few bars."""
+    period = risk.trailing_stop_period
+    if not risk.has_trailing_stop or bars is None or len(bars) < period + 1:
+        return None
+    window = bars.iloc[-(period + 1) :]
+    close = window["close"].astype(float).reset_index(drop=True)
+    widths: list[float] = []
+    if risk.trailing_stop_vol_multiple is not None:
+        sigma = float(np.log(close).diff().std(ddof=1))
+        if math.isfinite(sigma):
+            annual = sigma * math.sqrt(bars_per_year)
+            widths.append(risk.trailing_stop_vol_multiple * annual * float(close.iloc[-1]))
+    if risk.trailing_stop_atr_multiple is not None:
+        high = window["high"].astype(float).reset_index(drop=True)
+        low = window["low"].astype(float).reset_index(drop=True)
+        tr = true_range(high, low, close).iloc[1:]
+        atr_value = float(tr.mean())
+        if math.isfinite(atr_value):
+            widths.append(risk.trailing_stop_atr_multiple * atr_value)
+    return min(widths) if widths else None
 
 
 def used_indicators(spec: RuleSpec) -> set[str]:

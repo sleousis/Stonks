@@ -184,3 +184,76 @@ def test_default_toml_golive_matches_the_code_defaults(monkeypatch):
     monkeypatch.delenv("STONKS_NOTIFY_WEBHOOK_URL", raising=False)
     repo_cfg = Path(__file__).parents[2] / "config" / "default.toml"
     assert load_settings(config_path=repo_cfg).golive == GoLivePolicy()
+
+
+def test_breaker_halt_and_quit_rule_read_from_toml(tmp_path):
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text(
+        """
+[production.risk.rules.circuit_breaker]
+max_month_loss = 0.06
+max_week_loss = 0.04
+max_drawdown_halt = 0.20
+
+[production.risk.rules.operational_halt]
+max_bar_age_days = 5
+
+[production.quit_rule]
+quit_multiple = 2.0
+auto_demote = true
+min_eval_days = 63
+""".strip()
+    )
+    s = load_settings(config_path=cfg)
+    breaker = s.production.risk.rules.circuit_breaker
+    assert (breaker.max_month_loss, breaker.max_week_loss, breaker.max_drawdown_halt) == (
+        0.06,
+        0.04,
+        0.20,
+    )
+    assert s.production.risk.rules.operational_halt.max_bar_age_days == 5
+    q = s.production.quit_rule
+    assert (q.quit_multiple, q.auto_demote, q.min_eval_days) == (2.0, True, 63)
+
+
+def test_the_default_config_keeps_the_breaker_off_and_the_quit_rule_alerting():
+    from pathlib import Path
+
+    from stonks.production.quit_rule import QuitRuleSettings
+
+    s = load_settings(config_path=Path("config/default.toml"))
+    assert not s.production.risk.rules.circuit_breaker.active
+    assert not s.production.risk.rules.operational_halt.active
+    assert s.production.quit_rule == QuitRuleSettings(
+        quit_multiple=1.5, auto_demote=False, min_eval_days=126
+    )
+
+
+def test_lab_preflight_and_audit_tolerances_read_from_toml(tmp_path):
+    from stonks.store.audit import AuditTolerances
+
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text(
+        """
+[lab]
+preflight = false
+strict_preflight = true
+
+[audit]
+balance = 0.01
+quarterly_sum = 0.10
+""".strip()
+    )
+    s = load_settings(config_path=cfg)
+    assert (s.lab.preflight, s.lab.strict_preflight) == (False, True)
+    assert s.audit.tolerances() == AuditTolerances(balance=0.01, quarterly_sum=0.10)
+
+
+def test_lab_preflight_and_audit_defaults(tmp_path):
+    from stonks.store.audit import AuditTolerances
+
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text("")
+    s = load_settings(config_path=cfg)
+    assert (s.lab.preflight, s.lab.strict_preflight) == (True, False)
+    assert s.audit.tolerances() == AuditTolerances()

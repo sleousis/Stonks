@@ -16,7 +16,9 @@ def test_api_defaults_bind_loopback_and_angular_origin(monkeypatch):
     assert cfg.host == "127.0.0.1"
     assert cfg.port == 8000
     assert cfg.ui_origin == "http://localhost:4200"
-    assert cfg.open_reads_on_loopback is True
+    # Reads need a credential unless the dev profile turns this on.
+    assert cfg.open_reads_on_loopback is False
+    assert cfg.trusted_proxies == ["127.0.0.1"]
     assert cfg.max_concurrent_jobs >= 1
     assert cfg.token is None
     assert cfg.ui_dist == Path("web/dist")
@@ -53,6 +55,41 @@ def test_api_section_reads_from_toml(tmp_path, monkeypatch):
     assert settings.api.max_concurrent_jobs == 3
 
 
-def test_default_toml_has_api_section():
+def test_default_toml_has_api_section(monkeypatch):
+    monkeypatch.delenv("STONKS_PROFILE", raising=False)
     settings = load_settings(config_path=Path("config/default.toml"))
     assert settings.api.host == "127.0.0.1"
+    assert settings.api.open_reads_on_loopback is False
+
+
+def test_dev_profile_opens_loopback_reads(monkeypatch):
+    monkeypatch.setenv("STONKS_PROFILE", "dev")
+    settings = load_settings(config_path=Path("config/default.toml"))
+    assert settings.api.open_reads_on_loopback is True
+
+
+def test_trusted_proxies_from_toml_and_env(tmp_path, monkeypatch):
+    monkeypatch.delenv("STONKS_API_TRUSTED_PROXIES", raising=False)
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text('[api]\ntrusted_proxies = ["10.0.0.2"]\n')
+    assert load_settings(config_path=cfg).api.trusted_proxies == ["10.0.0.2"]
+    monkeypatch.setenv("STONKS_API_TRUSTED_PROXIES", "172.31.250.0/24, 127.0.0.1")
+    assert load_settings(config_path=cfg).api.trusted_proxies == ["172.31.250.0/24", "127.0.0.1"]
+
+
+def test_auth_section_from_toml_with_env_overrides(tmp_path, monkeypatch):
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text("[auth]\nsession_idle_hours = 4.0\nmax_failures = 7\n")
+    monkeypatch.delenv("STONKS_AUTH_MAX_FAILURES", raising=False)
+    monkeypatch.setenv("STONKS_AUTH_COOKIE_SECURE", "false")
+    settings = load_settings(config_path=cfg)
+    assert settings.auth.session_idle_hours == 4.0
+    assert settings.auth.max_failures == 7
+    assert settings.auth.cookie_secure is False
+    monkeypatch.setenv("STONKS_AUTH_MAX_FAILURES", "3")
+    assert load_settings(config_path=cfg).auth.max_failures == 3
+
+
+def test_trusted_proxies_must_be_addresses_or_networks():
+    with pytest.raises(ValidationError):
+        ApiConfig(trusted_proxies=["caddy"])

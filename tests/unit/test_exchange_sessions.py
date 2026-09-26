@@ -64,3 +64,20 @@ def test_week_index_is_monday_anchored_and_continuous():
     assert week_index(monday) == week_index(date(2025, 1, 5))
     assert week_index(date(2025, 1, 6)) == week_index(monday) + 1
     assert week_index(date(2024, 12, 29)) == week_index(monday) - 1
+
+
+def test_sessions_come_from_the_market_calendar():
+    # One source of truth with the scheduler (scheduling.calendar XNYS):
+    # one-off closures the holiday rules never knew are closed too.
+    from stonks.scheduling.calendar import get_calendar
+
+    assert not is_session(date(2018, 12, 5))  # national day of mourning
+    assert not is_session(date(2025, 1, 9))
+    xnys = get_calendar("XNYS")
+    for day in (date(2024, 6, 18), date(2024, 6, 19), date(2024, 3, 29), date(2021, 12, 31)):
+        assert is_session(day) == xnys.is_trading_day(day)
+
+
+def test_outside_the_calendar_window_weekdays_count_as_sessions():
+    assert is_session(date(1950, 1, 9))  # a Monday before the calendar's first session
+    assert not is_session(date(1950, 1, 7))  # a Saturday

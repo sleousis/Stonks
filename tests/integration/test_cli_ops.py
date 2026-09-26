@@ -153,3 +153,15 @@ def test_pnl_without_snapshots(runner, workdir):
 def test_pnl_rejects_bad_since(runner, workdir):
     result = runner.invoke(app, ["pnl", "--since", "yesterday"])
     assert result.exit_code != 0
+
+
+def test_health_opens_the_operational_halt_and_lists_it(runner, workdir):
+    result = runner.invoke(app, ["health", "--tickers", "UP.US,NOPE.US"])
+    assert result.exit_code == 1, result.output
+    assert "risk_halts" in result.output
+    state = SqliteState(workdir / "data" / "state.sqlite")
+    try:
+        [row] = state.sql("SELECT kind, scope FROM risk_halts WHERE cleared_at IS NULL")
+    finally:
+        state.close()
+    assert (row["kind"], row["scope"]) == ("operational", "global")

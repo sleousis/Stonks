@@ -48,7 +48,9 @@ _log = get_logger("stonks.lab.survival.registry")
 _SKIPPED_MODULES = frozenset({"base", "registry"})
 
 #: Named suites. ``quick`` is the everyday check; ``standard`` adds
-#: robustness, the deflated Sharpe and cost stress; ``promotion`` is what a
+#: robustness, the deflated Sharpe, cost stress and the (informational)
+#: signal IC; ``promotion`` (with the event study and the vs-random gate,
+#: P5/P6) is what a
 #: strategy should survive before it is registered (the default suite of
 #: registering lab runs).
 SUITE_PRESETS: dict[str, tuple[str, ...]] = {
@@ -60,6 +62,7 @@ SUITE_PRESETS: dict[str, tuple[str, ...]] = {
         "walk_forward",
         "deflated_sharpe",
         "cost_stress",
+        "signal_ic",
     ),
     "promotion": (
         "oos",
@@ -72,6 +75,8 @@ SUITE_PRESETS: dict[str, tuple[str, ...]] = {
         "cross_instrument",
         "benchmark_relative",
         "mcpt",
+        "event_study",
+        "vs_random",
     ),
 }
 

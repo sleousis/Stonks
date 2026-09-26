@@ -10,10 +10,12 @@
       [attr.aria-busy]="busy() === a.key"
       (click)="run(a.key)"
     >
-      {{ busy() === a.key ? 'Working…' : a.spec.label }}
+      {{ busy() === a.key ? 'Working…' : a.label }}
     </button>
   }
 </app-page-header>
+
+<app-status-change-dialog />
 
 <nav class="related" aria-label="Related pages">
   <a routerLink="/strategies" class="related-link"
@@ -70,8 +72,47 @@
       </dl>
     </section>
 
+    <!-- Research card ----------------------------------------------------->
+    @if (research(); as r) {
+      <section class="panel span-7" aria-labelledby="research-title">
+        <div class="panel-head">
+          <h2 id="research-title">Why it should work</h2>
+        </div>
+        <div class="research panel-body">
+          <div class="hypothesis">
+            <p class="research-label">Hypothesis <app-help-tip term="hypothesis" /></p>
+            @if (r.hypothesis) {
+              <blockquote>{{ r.hypothesis }}</blockquote>
+            } @else {
+              <p class="muted">
+                Not recorded. Add one when you next run it in Lab: the go-live gate asks for it.
+              </p>
+            }
+          </div>
+          <dl class="facts compact">
+            <div>
+              <dt>Alpha family</dt>
+              <dd>{{ r.family }}</dd>
+            </div>
+            <div>
+              <dt>Premise</dt>
+              <dd>{{ r.premise }}</dd>
+            </div>
+            <div>
+              <dt>Horizon <app-help-tip term="label_horizon" /></dt>
+              <dd class="num">{{ r.horizon }} bars</dd>
+            </div>
+            <div>
+              <dt>History needed</dt>
+              <dd class="num">{{ r.history }} bars</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+    }
+
     <!-- Parameters -------------------------------------------------------->
-    <section class="panel span-7" aria-labelledby="params-title">
+    <section class="panel span-5" aria-labelledby="params-title">
       <div class="panel-head">
         <h2 id="params-title">Parameters</h2>
         <span class="muted num">{{ params().length }}</span>
@@ -90,6 +131,67 @@
             </div>
           }
         </dl>
+      }
+    </section>
+
+    <!-- Status history ---------------------------------------------------->
+    <section class="panel span-7" aria-labelledby="history-title">
+      <div class="panel-head">
+        <h2 id="history-title">Status history</h2>
+        @if (history.hasValue()) {
+          <span class="muted num">{{ timeline().length }}</span>
+        }
+      </div>
+      @if (history.error(); as err) {
+        <app-error-state
+          title="Could not load the status history"
+          [error]="err"
+          (retry)="history.reload()"
+        />
+      } @else if (!history.hasValue()) {
+        <app-loading-state label="Loading status history" [rows]="4" />
+      } @else if (timeline().length === 0) {
+        <app-empty-state
+          title="No status changes yet"
+          message="Every promotion, move to shadow and retirement is recorded here with who did it and why."
+        />
+      } @else {
+        <ol class="timeline" aria-label="Status changes, newest first">
+          @for (h of timeline(); track h.id) {
+            <li [class.override]="h.override">
+              <span class="dot" aria-hidden="true"></span>
+              <div class="entry">
+                <p class="entry-head">
+                  @if (h.to) {
+                    <span class="move">
+                      @if (h.from) {
+                        <app-status-pill [status]="h.from" />
+                        <span class="arrow" aria-label="to">→</span>
+                      }
+                      <app-status-pill [status]="h.to" />
+                    </span>
+                  } @else {
+                    <span class="kind">{{ h.kind }}</span>
+                  }
+                  <time class="num muted" [attr.datetime]="h.when">{{ dateTime(h.when) }}</time>
+                </p>
+                <p class="reason">{{ h.reason || 'No reason given.' }}</p>
+                <p class="entry-meta">
+                  <span>By {{ h.actor }}</span>
+                  @if (h.golive !== null) {
+                    <app-status-pill
+                      [status]="h.golive ? 'pass' : 'fail'"
+                      [label]="h.golive ? 'Go-live passed' : 'Go-live failed'"
+                    />
+                  }
+                  @if (h.override) {
+                    <app-status-pill status="warn" label="Gate overridden" />
+                  }
+                </p>
+              </div>
+            </li>
+          }
+        </ol>
       }
     </section>
 
@@ -123,7 +225,7 @@
                 <dl class="metrics">
                   @for (m of r.metricList; track m.key) {
                     <div>
-                      <dt>{{ m.key }} <app-help-tip [term]="m.key" /></dt>
+                      <dt>{{ m.label }} <app-help-tip [term]="m.key" /></dt>
                       <dd class="num">{{ m.value }}</dd>
                     </div>
                   }

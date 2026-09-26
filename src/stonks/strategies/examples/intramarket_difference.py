@@ -74,6 +74,14 @@ def long_flat_states(diff: np.ndarray, threshold: float) -> np.ndarray:
 
 class IntramarketDifferenceStrategy(SingleTickerLongFlat):
     id = "intramarket_difference"
+    hypothesis = (
+        "When one market trends harder than a closely linked one, the gap "
+        "keeps widening for a while because flows reach them at different "
+        "speeds. Fails when the link between the two markets breaks."
+    )
+    alpha_family = "trend"
+    premise = "trend"
+    label_horizon_bars = 24
 
     @classmethod
     def parameter_spec(cls):

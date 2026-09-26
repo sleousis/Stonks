@@ -139,6 +139,7 @@ def test_health_failure_alerts_itself(settings):
     out = get_action("health")(ctx)  # no bars at all -> stale
     assert out.status == "failed" and out.alerted
     assert "freshness:AAPL.US" in out.detail["failed_checks"]
+    assert "risk_halts" in out.detail["failed_checks"]  # the operational halt it opened
     assert len(notifier.sent) == 1
 
 

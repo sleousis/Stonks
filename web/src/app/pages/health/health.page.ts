@@ -25,6 +25,7 @@ import {
   LEVEL_LABEL,
   LEVEL_TONE,
   checkLevel,
+  checkThreshold,
   splitChecks,
   worstLevel,
 } from './health-state';
@@ -149,6 +150,10 @@ export class HealthPage {
   );
 
   protected readonly checkTitle = (name: string) => CHECK_TITLES[name] ?? name;
+  /** The limit a check compares against, from the report's thresholds. */
+  protected threshold(name: string): string | null {
+    return checkThreshold(name, this.report.hasValue() ? this.report.value().thresholds : null);
+  }
 
   protected readonly freshnessColumns: TableColumn<FreshnessRow>[] = [
     { key: 'ticker', label: 'Ticker', mobile: 'title' },

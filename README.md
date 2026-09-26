@@ -1,50 +1,45 @@
 # Stonks
 
-End-to-end equity research + trading system. Ingests prices/fundamentals from vendor APIs into a local DuckDB "lake", lets a `Strategy` class ride through a lab (tune → fit → backtest → survival suite), registers survivors in SQLite state, and runs a cron-triggered production tick that ranks active strategies and (eventually) places real orders through a pluggable broker.
+Stonks is a research and trading system for stocks, crypto, commodities and bonds. It pulls market data into a local lake, tests strategies hard before trusting them, and runs a daily tick that trades paper or real portfolios, or only sends you signals.
+
+```mermaid
+flowchart LR
+  D[Ingest data] --> L[Lab: tune and test]
+  L --> R[Registry: shadow, active, retired]
+  R --> T[Daily tick: signals, portfolios, risk, broker]
+  T --> N[Notifications and reports]
+```
+
+You drive it from the CLI, the web console, the REST API or an MCP client.
 
 ## Quick start
 
 ```bash
 uv sync
-cp .env.example .env        # fill in EODHD_API_KEY
+cp .env.example .env        # add your EODHD_API_KEY
 uv run stonks db init
-uv run stonks ingest prices --tickers AAPL.US --since 2025-05-01
-uv run stonks db info
+uv run stonks ingest prices --tickers AAPL.US,MSFT.US --since 2025-01-01
+uv run stonks lab run momentum --tickers AAPL.US,MSFT.US --start 2025-01-01 --end 2025-09-01
+uv run stonks tick --dry-run --tickers AAPL.US,MSFT.US
+uv run stonks serve         # API on http://127.0.0.1:8000 (and the console, once web/ is built)
 ```
 
-## Architecture
+Tests: `uv run pytest -n auto` (no network needed).
 
-See [`docs/architecture.md`](docs/architecture.md) and the per-block documents under [`docs/blocks/`](docs/blocks/).
+## Learn more
 
-## API docs
-
-Generated from the code, published on every push to `main`:
-
-- Site: <https://sleousis.github.io/Stonks/> ([REST, Swagger UI](https://sleousis.github.io/Stonks/rest.html), [MCP tools](https://sleousis.github.io/Stonks/mcp.html))
-- Markdown: [`docs/api/rest.md`](docs/api/rest.md) and [`docs/api/mcp-tools.md`](docs/api/mcp-tools.md)
-
-A running `stonks serve` also serves live Swagger UI at `/docs` (ReDoc at `/redoc`, spec at `/openapi.json`). Use "Authorize" with `STONKS_API_TOKEN` for non-GET calls.
-
-## Testing
-
-```bash
-uv run pytest                               # unit + integration (no network)
-STONKS_RUN_LIVE_TESTS=1 uv run pytest       # also runs live contract tests
-uv run ruff check .
-```
+- [Wiki](https://github.com/sleousis/Stonks/wiki): guides for traders and operators, and the glossary.
+- [API docs](https://sleousis.github.io/Stonks/): REST and MCP reference, generated from the code.
+- [Architecture](docs/architecture.md) and [operations](docs/operations.md).
+- [Deploy guide](docs/deploy.md): one server with Docker Compose.
+- [Strategies](docs/strategies/README.md) and [principles](docs/principles.md).
+- [Roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
+- [Contributing](CONTRIBUTING.md) and [security](SECURITY.md).
 
 ## Upgrading an older lake
 
-`stonks db init` refuses to run a migration that would drop populated data. Migration 005 drops six legacy columns from `tickers` (now `instruments`) without copying them, so a lake created before it and still holding those values needs `STONKS_ALLOW_DESTRUCTIVE_MIGRATIONS=1`. Back up the lake file first. Fresh lakes are unaffected.
-
-## Roadmap
-
-See `docs/roadmap.md`.
-
-## Deploy and contribute
-
-Run Stonks on a server with Docker Compose: see `docs/deploy.md`. How to contribute: `CONTRIBUTING.md`. Changes per release: `CHANGELOG.md`.
+`stonks db init` refuses a migration that would drop stored data. A lake from before migration 005 that still holds the old `tickers` columns needs `STONKS_ALLOW_DESTRUCTIVE_MIGRATIONS=1`. Back up first (`uv run python -m stonks.ops backup`).
 
 ## License and disclaimer
 
-All rights reserved; see `LICENSE`. This is not financial advice; read `DISCLAIMER.md` before trading with it.
+All rights reserved; see [LICENSE](LICENSE). This is not financial advice. Read [DISCLAIMER.md](DISCLAIMER.md) before trading with it.

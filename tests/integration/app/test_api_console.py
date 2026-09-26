@@ -65,7 +65,7 @@ def test_positions_carry_cost_basis_and_unrealized_pnl(client, settings, seeded)
         [fill] = state.sql("SELECT quantity, price, fee FROM fills")
     avg = (fill["quantity"] * fill["price"] + fill["fee"]) / fill["quantity"]
 
-    body = client.get("/api/portfolio").json()
+    body = client.get("/api/portfolio", headers=AUTH).json()
     assert body["currency"] == "USD"
     [pos] = body["positions"]
     assert pos["ticker"] == "UP.US"
@@ -86,7 +86,7 @@ def test_portfolio_currency_follows_the_instruments(client, settings):
         lake.sql("UPDATE instruments SET currency = 'EUR' WHERE id = 'UP.US'")
     finally:
         lake.close()
-    body = client.get("/api/portfolio").json()
+    body = client.get("/api/portfolio", headers=AUTH).json()
     assert body["currency"] == "EUR"
     assert body["positions"][0]["currency"] == "EUR"
 
@@ -94,7 +94,7 @@ def test_portfolio_currency_follows_the_instruments(client, settings):
 def test_empty_book_defaults_to_usd(settings, fake_source):
     settings.api.allowed_hosts = ["testserver"]
     with TestClient(create_app(settings, source_factory=lambda: fake_source), client=LOOPBACK) as c:
-        body = c.get("/api/portfolio").json()
+        body = c.get("/api/portfolio", headers=AUTH).json()
     assert body["currency"] == "USD"
     assert body["positions"] == []
     assert body["unrealized_pnl"] == 0.0

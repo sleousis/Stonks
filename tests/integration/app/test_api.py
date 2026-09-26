@@ -82,7 +82,13 @@ def _operations(app):
 
 
 def test_every_mutating_route_requires_token(app, client):
-    mutating = [(m, p) for m, p, _ in _operations(app) if m not in {"GET", "HEAD", "OPTIONS"}]
+    # Sign-in and sign-out check their own credentials (tests/.../test_api_auth.py).
+    public = {"/api/auth/login", "/api/auth/logout"}
+    mutating = [
+        (m, p)
+        for m, p, _ in _operations(app)
+        if m not in {"GET", "HEAD", "OPTIONS"} and p not in public
+    ]
     assert len(mutating) >= 8
     for method, path in mutating:
         url = path.replace("{strategy_id}", "bah_shadow").replace("{job_id}", "job_x")
@@ -143,9 +149,9 @@ def test_unknown_api_route_is_problem_404(client):
 
 
 def test_portfolio_routes(client):
-    body = client.get("/api/portfolio").json()
+    body = client.get("/api/portfolio", headers=AUTH).json()
     assert body["positions"][0]["ticker"] == "UP.US"
-    snaps = client.get("/api/portfolio/snapshots").json()
+    snaps = client.get("/api/portfolio/snapshots", headers=AUTH).json()
     assert snaps["total"] == 1
 
 
@@ -189,9 +195,11 @@ def test_market_routes(client):
 
 
 def test_orders_ticks_routes(client, seeded):
-    orders = client.get("/api/orders", params={"tick_id": seeded["tick_id"]}).json()
+    orders = client.get("/api/orders", params={"tick_id": seeded["tick_id"]}, headers=AUTH).json()
     assert orders["total"] == 1
-    fills = client.get("/api/orders/fills", params={"tick_id": seeded["tick_id"]}).json()
+    fills = client.get(
+        "/api/orders/fills", params={"tick_id": seeded["tick_id"]}, headers=AUTH
+    ).json()
     assert fills["total"] == 1
     ticks = client.get("/api/ticks").json()
     assert ticks["total"] == 1
@@ -341,6 +349,29 @@ def test_cors_allows_only_configured_origin(client):
     assert "access-control-allow-origin" not in bad.headers
 
 
+def test_cors_lets_the_dev_origin_send_cookies_and_the_csrf_header(client):
+    ok = client.options(
+        "/api/halts/kill",
+        headers={
+            "Origin": "http://localhost:4200",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "x-csrf-token, content-type",
+        },
+    )
+    assert ok.status_code == 200
+    assert ok.headers.get("access-control-allow-credentials") == "true"
+    assert "x-csrf-token" in ok.headers.get("access-control-allow-headers", "").lower()
+    bad = client.options(
+        "/api/halts/kill",
+        headers={
+            "Origin": "http://evil.example",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "x-csrf-token",
+        },
+    )
+    assert "access-control-allow-origin" not in bad.headers
+
+
 # ---- OpenAPI ----------------------------------------------------------------
 
 
@@ -351,14 +382,15 @@ def test_every_api_route_has_tags_and_response_model(app):
         assert path.startswith("/api/"), path
         assert op.get("tags"), (method, path)
         assert op.get("operationId"), (method, path)
-        ok = next(v for k, v in op["responses"].items() if k.startswith("2"))
+        code, ok = next((k, v) for k, v in op["responses"].items() if k.startswith("2"))
         content = ok.get("content", {})
         media = next(iter(content.values()), {}) if content else {}
-        assert media.get("schema") or media.get("itemSchema"), (method, path)
+        if code != "204":  # No Content: nothing to describe
+            assert media.get("schema") or media.get("itemSchema"), (method, path)
         for code, resp in op["responses"].items():
             if int(code) >= 400:
                 assert list(resp["content"]) == ["application/problem+json"], (method, path)
-        if path != "/api/health":
+        if path not in ("/api/health", "/api/health/live", "/api/health/ready"):
             assert "422" in op["responses"] or "404" in op["responses"], (method, path)
 
 

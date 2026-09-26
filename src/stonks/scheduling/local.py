@@ -10,8 +10,12 @@ The actions call the same services as the CLI:
 - ``ingest_prices``: ``IngestPipeline.run_prices`` for the universe over
   the last ``lookback_days`` up to the fire's date;
 - ``tick``: ``run_tick`` through ``build_tick_runtime`` for the fire's date;
-- ``health``: ``check_health``, alerting when unhealthy;
-- ``report``: the static HTML report written to ``out``.
+- ``health``: ``run_health`` (checks plus the operational halt), alerting
+  when unhealthy;
+- ``report``: the static HTML report written to ``out``;
+- ``backup``: ``run_configured_backup`` (``[backup]`` target and retention);
+- ``connections_sync``: every due broker connection synced as
+  ``service:scheduler`` (state DB only, so every backend runs it here).
 
 ``ingest_prices`` and ``tick`` are skipped when no instrument in the
 universe trades on the fire's date (asset classes read from the lake).
@@ -55,8 +59,8 @@ def build_source(source_id: str, sources: Any) -> Any:
 
 @register_action("ingest_prices")
 def ingest_prices_action(ctx: RunContext) -> JobOutcome:
-    from stonks.ingest.pipeline import IngestPipeline
     from stonks.ingest.sources.registry import DEFAULT_SOURCE_ID
+    from stonks.ingest.wiring import build_ingest_pipeline
     from stonks.store.lake import DuckDBLake
 
     universe = job_universe(ctx)
@@ -69,7 +73,9 @@ def ingest_prices_action(ctx: RunContext) -> JobOutcome:
         closed = closed_day_outcome(ctx, universe, lake.get_asset_classes(universe))
         if closed is not None:
             return closed
-        result = IngestPipeline(source=source, lake=lake).run_prices(
+        result = build_ingest_pipeline(
+            ctx.settings, source, lake, source_factory=build_source
+        ).run_prices(
             universe,
             since=ctx.fire.as_of - timedelta(days=lookback),
             until=ctx.fire.as_of,
@@ -113,6 +119,7 @@ def tick_action(ctx: RunContext) -> JobOutcome:
                     dry_run=bool(ctx.params.get("dry_run", False)),
                     notifier=runtime.notifier,
                     broker_factory=runtime.broker_factory,
+                    plan=runtime.plan_for(state),
                 )
             except BackdatedTickError as exc:
                 return JobOutcome("skipped", {"reason": "backdated", "error": str(exc)})
@@ -132,7 +139,7 @@ def tick_action(ctx: RunContext) -> JobOutcome:
 
 @register_action("health")
 def health_action(ctx: RunContext) -> JobOutcome:
-    from stonks.production.health import check_health
+    from stonks.production.halts import run_health
     from stonks.store.lake import DuckDBLake
     from stonks.store.state import SqliteState
 
@@ -140,7 +147,7 @@ def health_action(ctx: RunContext) -> JobOutcome:
     state = SqliteState(settings.state.path)
     try:
         with DuckDBLake(settings.lake.path) as lake:
-            report = check_health(
+            report = run_health(
                 state, lake, job_universe(ctx), settings.production.health, now=ctx.now
             )
     finally:
@@ -178,3 +185,33 @@ def report_action(ctx: RunContext) -> JobOutcome:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(render_html(data), encoding="utf-8")
     return JobOutcome("succeeded", {"out": str(out)})
+
+
+@register_action("backup")
+def backup_action(ctx: RunContext) -> JobOutcome:
+    """Opens the lake read-only for the copy: only while no other process
+    holds it (with ``stonks serve`` running, the ``api`` and ``in_process``
+    backends back up inside the server instead)."""
+    from stonks.ops.backup import run_configured_backup
+
+    result = run_configured_backup(ctx.settings, now=ctx.now)
+    return JobOutcome("succeeded", {"backup_id": result.ref.id, "pruned": result.pruned})
+
+
+@register_action("connections_sync")
+def connections_sync_action(ctx: RunContext) -> JobOutcome:
+    """Sync every broker connection whose next sync is due."""
+    from stonks.accounts import Scope
+    from stonks.connections.service import ConnectionService
+    from stonks.connections.settings import ConnectionsConfig
+    from stonks.store.state import SqliteState
+
+    state = SqliteState(ctx.settings.state.path)
+    try:
+        service = ConnectionService(state, ConnectionsConfig.load())
+        results = service.sync_due(Scope.service("scheduler"))
+    finally:
+        state.close()
+    failed = [r.connection_id for r in results if not r.ok]
+    detail = {"connections": len(results), "failed": failed}
+    return JobOutcome("failed" if failed else "succeeded", detail)

@@ -1,4 +1,4 @@
-"""Lab orchestration: pre-register → tune → fit → survival suite → verdict.
+"""Lab orchestration: preflight → pre-register → tune → fit → survival suite → verdict.
 
 Every run gets a ``run_id`` and a reproducibility manifest (BL-06). The
 suite runs on a fresh copy of the dataset embargoed for the fitted
@@ -6,13 +6,20 @@ strategy (:func:`suite_dataset`). With a
 :class:`~stonks.lab.trials.TrialLedger` the run is pre-registered (hypothesis,
 premortem, tuner, budget, dataset, manifest) **before** tuning, every trial
 is recorded after it, and the verdict at the end (``error`` when it
-crashes). Survival tests with a ``bind_run(ctx)`` hook receive a
+crashes). Before any of that the BL-37 preflight
+(:func:`~stonks.lab.preflight.run_preflight`) checks data coverage, audit
+flags and universe membership: its errors stop the run, its warnings are
+logged and stored in the manifest. A dataset with a ``universe_id`` and no
+tickers first gets that universe's members over the window, and with a
+``data_ensurer`` their missing bars are fetched before the preflight
+(:func:`~stonks.lab.universe_data.prepare_dataset`). Survival tests with a ``bind_run(ctx)`` hook receive a
 :class:`~stonks.lab.trials.LabRunContext` before the suite runs.
 """
 
 from __future__ import annotations
 
 import dataclasses
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -25,6 +32,7 @@ from stonks.core.protocols import (
 )
 from stonks.lab.dataset import LabDataset
 from stonks.lab.manifest import build_manifest, collect_seeds
+from stonks.lab.preflight import PreflightError, PreflightReport, run_preflight
 from stonks.lab.survival.base import SurvivalSuite, TuningSetup
 from stonks.lab.trials import (
     LabRunContext,
@@ -36,6 +44,7 @@ from stonks.lab.trials import (
     trials_from_tuning,
 )
 from stonks.lab.tuning.base import tune_and_fit
+from stonks.lab.universe_data import prepare_dataset
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.lab.runner")
@@ -84,18 +93,38 @@ class LabRunResult:
     hypothesis: str | None = None
     premortem: str | None = None
     manifest: dict[str, Any] = field(default_factory=dict)
+    #: The BL-37 preflight report (``None`` when turned off or it crashed).
+    preflight: PreflightReport | None = None
 
     @property
     def artifact_meta(self) -> dict[str, Any]:
         """Lab provenance for the registered artifact's ``meta.json``
         (``ArtifactBundle(meta=...)`` or ``registry.artifact.update_meta``)."""
-        return {
+        meta: dict[str, Any] = {
             "lab_run_id": self.run_id,
             "n_trials_total": self.n_trials_class,
             "hypothesis": self.hypothesis,
             "premortem": self.premortem,
             "manifest": self.manifest,
         }
+        meta.update(self.ic_meta)
+        return meta
+
+    @property
+    def ic_meta(self) -> dict[str, Any]:
+        """``ic_estimate`` (and its horizon) from the ``signal_ic`` report,
+        for BL-08's alpha normalisation; empty when the run had none."""
+        for report in self.survival_reports:
+            if report.test_id != "signal_ic":
+                continue
+            estimate = report.metrics.get("ic_estimate")
+            if estimate is None or not math.isfinite(estimate):
+                return {}
+            return {
+                "ic_estimate": float(estimate),
+                "ic_horizon": int(report.metrics.get("ic_horizon") or 0),
+            }
+        return {}
 
 
 class LabRunner:
@@ -107,15 +136,27 @@ class LabRunner:
         budget: int = 20,
         ledger: TrialLedger | None = None,
         settings: Any = None,
+        *,
+        preflight: bool = True,
+        strict_preflight: bool = False,
+        data_ensurer: Any = None,
     ) -> None:
         """``ledger`` persists runs and trials (``None``: in-memory only);
-        ``settings`` feeds the manifest's config hash and default costs."""
+        ``settings`` feeds the manifest's config hash and default costs.
+        ``preflight`` runs the BL-37 data checks first (errors stop the
+        run, warnings are logged); ``strict_preflight`` makes every
+        warning an error. ``data_ensurer`` (a
+        :class:`~stonks.ingest.ensure.DataEnsurer`, opt in) fetches the
+        universe's missing bars before the preflight."""
         self._tuner = tuner
         self._objective = objective
         self._suite = suite
         self._budget = budget
         self._ledger = ledger
         self._settings = settings
+        self._preflight = preflight
+        self._strict_preflight = strict_preflight
+        self._data_ensurer = data_ensurer
 
     def run(
         self,
@@ -131,8 +172,16 @@ class LabRunner:
         that re-tune keep them pinned, plus the strategy's non-tunable params.
         ``hypothesis`` / ``premortem`` are recorded before tuning starts."""
         class_path = f"{strategy_cls.__module__}:{strategy_cls.__name__}"
+        dataset, ensured = prepare_dataset(
+            dataset, ensurer=self._data_ensurer, strategy=strategy_cls
+        )
+        preflight, preflight_record = self._run_preflight(strategy_cls, dataset, class_path)
         seeds = collect_seeds(self._tuner, self._suite.tests)
         manifest = self._manifest(dataset, seeds)
+        if ensured is not None:
+            manifest["ensure"] = ensured.model_dump(mode="json")
+        if preflight_record is not None:
+            manifest["preflight"] = preflight_record
         run_id = new_run_id()
         if self._ledger is not None:
             tuner_seed = seeds.get("tuner")
@@ -170,6 +219,7 @@ class LabRunner:
                     _log.warning("lab.ledger.finish_failed", run_id=run_id, error=str(exc))
             raise
         result.hypothesis, result.premortem = hypothesis, premortem
+        result.preflight = preflight
         if self._ledger is not None:
             self._ledger.finish_run(run_id, "pass" if result.verdict == "pass" else "fail")
         return result
@@ -250,6 +300,32 @@ class LabRunner:
             n_trials_class=n_class,
             manifest=manifest,
         )
+
+    def _run_preflight(
+        self, strategy_cls: type[Strategy], dataset: LabDataset, class_path: str
+    ) -> tuple[PreflightReport | None, dict[str, Any] | None]:
+        """The preflight report and its manifest record. Raises
+        :class:`PreflightError` on errors. A preflight that crashes never
+        blocks the run: it is logged and recorded as an error string."""
+        if not self._preflight:
+            return None, None
+        try:
+            report = run_preflight(dataset, strategy_cls, strict=self._strict_preflight)
+        except Exception as exc:
+            _log.warning("lab.preflight.failed", strategy=class_path, error=str(exc))
+            return None, {"error": str(exc)}
+        for issue in report.warnings:
+            _log.warning(
+                "lab.preflight.warning", strategy=class_path, code=issue.code, hint=issue.message
+            )
+        if not report.ok:
+            _log.error(
+                "lab.preflight.error",
+                strategy=class_path,
+                codes=[i.code for i in report.errors],
+            )
+            raise PreflightError(report)
+        return report, report.to_dict()
 
     def _manifest(self, dataset: LabDataset, seeds: dict[str, Any]) -> dict[str, Any]:
         try:

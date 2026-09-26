@@ -48,6 +48,11 @@ from stonks.strategies._wrapping import INTERVALS, InnerStrategyWrapper, inner_p
 
 class LastTradeFilter(InnerStrategyWrapper):
     id = "last_trade_filter"
+    hypothesis = (
+        "For some systems a losing trade is often followed by a winner, "
+        "as noise shakes out and then the move comes. Taking entries only "
+        "after a loser keeps the better trades. Adds no alpha of its own."
+    )
     id_suffix = "last_trade"
 
     @classmethod

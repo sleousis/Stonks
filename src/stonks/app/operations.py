@@ -9,12 +9,13 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
 from stonks.app.context import AppContext
 from stonks.app.errors import NotFoundError
 from stonks.app.pagination import Page
 from stonks.app.serialize import finite
 from stonks.config import HealthConfig, RiskPolicy
-from stonks.production.health import check_health
+from stonks.production.halts import run_health
 from stonks.production.pnl import PnlRow, load_pnl
 
 
@@ -92,11 +93,12 @@ class OperationsService:
 
     def health_report(self, tickers: Sequence[str] | None = None) -> HealthReportView:
         """Every check behind ``stonks health``; freshness covers ``tickers``
-        or, by default, ``[production].universe``."""
+        or, by default, ``[production].universe``. Like the CLI it opens or
+        clears the global operational halt and reports open halts."""
         p = self._ctx.settings.production
         universe = list(tickers) if tickers else list(p.universe)
         with self._ctx.state() as state, self._ctx.lake() as lake:
-            report = check_health(state, lake, universe, p.health)
+            report = run_health(state, lake, universe, p.health)
         return HealthReportView(
             healthy=report.healthy,
             checked_at=report.checked_at,
@@ -106,9 +108,13 @@ class OperationsService:
 
     # ---- P&L ---------------------------------------------------------------
 
-    def pnl(self, since: date | None = None) -> PnlSeries:
+    def pnl(
+        self, since: date | None = None, *, portfolio_id: str = DEFAULT_PORTFOLIO_ID
+    ) -> PnlSeries:
+        """One portfolio's daily P&L. Callers resolve ``portfolio_id``
+        through ``PortfolioService.resolve`` first."""
         with self._ctx.state() as state:
-            rows = load_pnl(state, since=since)
+            rows = load_pnl(state, since=since, portfolio_id=portfolio_id)
         return PnlSeries(strategy_id=None, rows=[_pnl_view(r) for r in rows])
 
     def shadow_pnl(self, strategy_id: str, since: date | None = None) -> PnlSeries:

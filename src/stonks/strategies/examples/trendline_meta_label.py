@@ -126,6 +126,14 @@ class BaseTrade:
 
 class TrendlineMetaLabelStrategy(BaseStrategy):
     id = "trendline_meta_label"
+    hypothesis = (
+        "Trendline breakouts work only in some conditions. A model "
+        "trained on past breakouts can tell good ones from bad and skip "
+        "the bad. Fails when the model is overfit or conditions change."
+    )
+    alpha_family = "data_driven"
+    premise = "trend"
+    label_horizon_bars = 12
     applicable_asset_classes = ("crypto", "equity")
 
     @classmethod

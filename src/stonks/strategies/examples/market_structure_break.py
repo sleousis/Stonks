@@ -65,6 +65,14 @@ def market_structure_positions(
 
 class MarketStructureBreakStrategy(SingleTickerLongFlat):
     id = "market_structure_break"
+    hypothesis = (
+        "A close above the last major swing high breaks the market "
+        "structure and starts a new up leg, as stops of short sellers get "
+        "hit. Fails in ranges where swing highs keep holding."
+    )
+    alpha_family = "trend"
+    premise = "trend"
+    label_horizon_bars = 24
 
     @classmethod
     def parameter_spec(cls):

@@ -107,7 +107,8 @@ class StatusChangeRequest(BaseModel):
 
     reason: str | None = Field(default=None, max_length=2_000)
     override: bool = False
-    #: Who asked (logged); defaults to the transport (``api``, ``studio``).
+    #: Deprecated and ignored: the audit actor is always the signed-in
+    #: caller. Still accepted so old clients don't get a 422.
     actor: str | None = Field(default=None, min_length=1, max_length=100)
 
 

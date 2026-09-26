@@ -197,6 +197,14 @@ def replay_inverse_hs(
 
 class HeadShouldersStrategy(SingleTickerLongFlat):
     id = "head_shoulders"
+    hypothesis = (
+        "An inverse head and shoulders marks the end of a downtrend. A "
+        "close through the neckline traps short sellers and starts a "
+        "rally. Fails when the pattern is noise or the downtrend resumes."
+    )
+    alpha_family = "reversion"
+    premise = "mean_reversion"
+    label_horizon_bars = 10
 
     @classmethod
     def parameter_spec(cls):

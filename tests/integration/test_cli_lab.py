@@ -425,3 +425,61 @@ def test_cost_model_zero_differs_from_the_realistic_default(runner, lab_env):
     runs = _lab_runs(lab_env)
     costs = [json.loads(r["manifest_json"])["costs"] for r in runs]
     assert costs[0] != costs[1]
+
+
+def test_lab_ic_wraps_the_signal_eval_command(monkeypatch):
+    import stonks.lab.signal_eval as signal_eval
+
+    seen = {}
+
+    def fake_main(argv=None, *, prog=None):
+        seen["argv"], seen["prog"] = list(argv), prog
+        return 0
+
+    monkeypatch.setattr(signal_eval, "main", fake_main)
+    result = CliRunner().invoke(
+        app, ["lab", "ic", "--strategy", "momentum", "--tickers", "A.US,B.US", "--events"]
+    )
+    assert result.exit_code == 0, result.output
+    assert seen == {
+        "argv": ["--strategy", "momentum", "--tickers", "A.US,B.US", "--events"],
+        "prog": "stonks lab ic",
+    }
+
+
+def test_preflight_warnings_are_printed_and_saved(runner, lab_env):
+    out = lab_env / "result.json"
+    r = _run(
+        runner,
+        "buy_and_hold",
+        "--tickers", "UP.US,NOPE.US",
+        *WINDOW, *FAST, "--tests", "oos",
+        "--json-out", str(out),
+    )  # fmt: skip
+    assert r.exit_code == 0, r.output
+    assert "missing_data" in r.output
+    codes = [i["code"] for i in _result(out)["preflight"]["issues"]]
+    assert "missing_data" in codes
+
+
+def test_strict_turns_preflight_warnings_into_a_usage_error(runner, lab_env):
+    r = runner.invoke(
+        app,
+        ["lab", "run", "buy_and_hold", "--tickers", "UP.US,NOPE.US", *WINDOW, *FAST,
+         "--tests", "oos", "--strict"],
+    )  # fmt: skip
+    assert r.exit_code != 0
+    assert "missing_data" in r.output
+
+
+def test_no_preflight_skips_it(runner, lab_env):
+    out = lab_env / "result.json"
+    r = _run(
+        runner,
+        "buy_and_hold",
+        "--tickers", "UP.US,NOPE.US",
+        *WINDOW, *FAST, "--tests", "oos", "--no-preflight",
+        "--json-out", str(out),
+    )  # fmt: skip
+    assert r.exit_code == 0, r.output
+    assert _result(out)["preflight"] is None

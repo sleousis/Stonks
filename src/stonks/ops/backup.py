@@ -587,6 +587,33 @@ def run_backup(
     return BackupRunResult(ref=ref, pruned=pruned)
 
 
+def configured_target(settings: Any, dest: str | Path | None = None) -> LocalFilesystemTarget:
+    """``dest``, else ``[backup].dir``, else a ``backups`` folder next to
+    the lake: where every entrypoint (CLI, server job, scheduler) backs up."""
+    root = dest or settings.backup.dir or Path(settings.lake.path).parent / "backups"
+    return LocalFilesystemTarget(root)
+
+
+def run_configured_backup(
+    settings: Any,
+    *,
+    lake: DuckDBLake | None = None,
+    dest: str | Path | None = None,
+    prune: bool = True,
+    now: datetime | None = None,
+) -> BackupRunResult:
+    """:func:`run_backup` of the configured stores to the configured target
+    with the ``[backup]`` retention (``prune=False`` keeps everything).
+    Pass ``lake`` when this process holds it (``stonks serve``)."""
+    return run_backup(
+        DataPaths.from_settings(settings),
+        configured_target(settings, dest),
+        settings.backup.retention if prune else None,
+        lake=lake,
+        now=now,
+    )
+
+
 # ---- helpers ----------------------------------------------------------------------------
 
 

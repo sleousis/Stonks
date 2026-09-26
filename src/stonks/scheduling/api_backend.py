@@ -91,6 +91,23 @@ def ingest_job_outcome(
     )
 
 
+def backup_job_outcome(
+    job_status: str, job_error: str | None, result: Mapping[str, Any] | None, job_id: str
+) -> JobOutcome:
+    if job_status == "succeeded" and result is not None:
+        return JobOutcome(
+            "succeeded",
+            {
+                "job_id": job_id,
+                "backup_id": result.get("backup_id"),
+                "pruned": result.get("pruned"),
+            },
+        )
+    return JobOutcome(
+        "failed", {"job_id": job_id, "error": job_error or f"backup job {job_status}"}
+    )
+
+
 def health_view_outcome(ctx: RunContext, view: Mapping[str, Any]) -> JobOutcome:
     """A ``HealthReportView`` (as JSON) through the usual health alert."""
     from stonks.production.health import HealthCheck, HealthReport
@@ -232,3 +249,19 @@ def api_report(ctx: RunContext) -> JobOutcome:
     from stonks.scheduling.local import report_action
 
     return report_action(ctx)
+
+
+@API_ACTIONS.register("backup")
+def api_backup(ctx: RunContext) -> JobOutcome:
+    """The server holds the lake, so it takes the backup (``POST /api/backups``)."""
+    job_id, status, error, result = _run_job(
+        _executor(ctx), "/api/backups", {}, "/api/backups/jobs/{job_id}/result"
+    )
+    return backup_job_outcome(status, error, result, job_id)
+
+
+@API_ACTIONS.register("connections_sync")
+def api_connections_sync(ctx: RunContext) -> JobOutcome:
+    from stonks.scheduling.local import connections_sync_action
+
+    return connections_sync_action(ctx)

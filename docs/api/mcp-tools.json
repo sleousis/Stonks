@@ -1,5 +1,5 @@
 {
-  "instructions": "Stonks research + trading system. Tools talk to the local REST API started\nwith `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs\nand ingests; follow up with wait_for_job. Status changes, draft\nregister/enable/disable and production ticks need confirm=true; call them\nfirst without it to get a preview and show it to the user before confirming.\nrun_tick is a dry run unless dry_run=false, and a real tick is refused unless\nthe API reports a paper/simulated broker. No tool can change broker settings\nor enable live trading.",
+  "instructions": "Stonks research + trading system. Tools talk to the local REST API started\nwith `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs,\nsignal IC analyses and ingests; follow up with wait_for_job. Status changes,\ndraft register/enable/disable, broker syncs and production ticks need\nconfirm=true; call them first without it to get a preview and show it to the\nuser before confirming.\nrun_tick is a dry run unless dry_run=false, and a real tick is refused unless\nthe API reports a paper/simulated broker. No tool can change broker settings\nor enable live trading.",
   "resource_templates": [],
   "resources": [
     {
@@ -194,6 +194,99 @@
         "open_world": false,
         "read_only": false
       },
+      "description": "Store a universe definition. It has no members until refreshed\n(refresh_universe). Without confirm=true returns a preview.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "csv": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "list only: CSV with a ticker column (replaces spec)",
+            "title": "Csv"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "kind": {
+            "enum": [
+              "list",
+              "exchange",
+              "rule",
+              "index"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "kind settings. list: {tickers, spans}. exchange: {exchange, source, security_types, include_delisted}. rule: {start, end, rebalance, min_adv, min_price, asset_classes, sectors, exclude_sectors, exchanges}. index: {index_id, source, start_date}",
+            "title": "Spec"
+          },
+          "universe_id": {
+            "description": "universe id, e.g. sp500 or us_common",
+            "title": "Universe Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "universe_id",
+          "kind"
+        ],
+        "title": "create_universeArguments",
+        "type": "object"
+      },
+      "name": "create_universe",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
       "description": "Move a registered draft's strategy back to shadow (stops trading it).\nNeeds a reason. Without confirm=true returns a preview and changes nothing.",
       "input_schema": {
         "properties": {
@@ -279,6 +372,135 @@
         "type": "object"
       },
       "name": "enable_draft",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Stop new orders at once. Without confirm=true returns a preview\nand changes nothing. Resuming is done in the console or the CLI with\na typed confirmation.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "flatten": {
+            "default": false,
+            "description": "stop buys only; sells and exits still go through",
+            "title": "Flatten",
+            "type": "boolean"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "reason": {
+            "description": "audited",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "scope": {
+            "description": "global: every portfolio (admins only); user: all of yours; portfolio: one of yours (give portfolio_id)",
+            "enum": [
+              "global",
+              "user",
+              "portfolio"
+            ],
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "reason"
+        ],
+        "title": "engage_kill_switchArguments",
+        "type": "object"
+      },
+      "name": "engage_kill_switch",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": true,
+        "read_only": false
+      },
+      "description": "Queue a job that fetches only the missing bars of every member\nover the window (delisted names included) from the data source.\nFollow up with wait_for_job. Without confirm=true returns a preview.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "end": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "interval": {
+            "default": "1d",
+            "title": "Interval",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "eodhd",
+                  "yahoo",
+                  "defillama"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source"
+          },
+          "start": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "universe_id": {
+            "description": "universe id, e.g. sp500 or us_common",
+            "title": "Universe Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "universe_id",
+          "start",
+          "end"
+        ],
+        "title": "ensure_universe_dataArguments",
+        "type": "object"
+      },
+      "name": "ensure_universe_data",
       "needs_confirm": true
     },
     {
@@ -384,6 +606,30 @@
         "type": "object"
       },
       "name": "get_catalog",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "External accounts on one of your connections, each with the\nportfolio that mirrors it (null when not linked).",
+      "input_schema": {
+        "properties": {
+          "connection_id": {
+            "title": "Connection Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "connection_id"
+        ],
+        "title": "get_connection_accountsArguments",
+        "type": "object"
+      },
+      "name": "get_connection_accounts",
       "needs_confirm": false
     },
     {
@@ -530,9 +776,23 @@
         "open_world": false,
         "read_only": true
       },
-      "description": "Daily P&L of the real portfolio (last snapshot per UTC day). Returns\nand drawdown are measured from inception even when since trims the rows.",
+      "description": "Daily P&L of one of your portfolios (last snapshot per UTC day). Returns\nand drawdown are measured from inception even when since trims the rows.",
       "input_schema": {
         "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
           "since": {
             "anyOf": [
               {
@@ -561,13 +821,44 @@
         "open_world": false,
         "read_only": true
       },
-      "description": "Current portfolio: cash, positions valued at the latest stored closes, weights and total value, from the latest snapshot.",
+      "description": "Current portfolio: cash, positions valued at the latest stored closes,\nweights and total value, from the latest snapshot.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          }
+        },
+        "title": "get_portfolioArguments",
+        "type": "object"
+      },
+      "name": "get_portfolio",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Admins only: cash and value summed across every active portfolio (no holdings).",
       "input_schema": {
         "properties": {},
         "title": "toolArguments",
         "type": "object"
       },
-      "name": "get_portfolio",
+      "name": "get_portfolio_totals",
       "needs_confirm": false
     },
     {
@@ -719,6 +1010,70 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "One stored universe definition.",
+      "input_schema": {
+        "properties": {
+          "universe_id": {
+            "description": "universe id, e.g. sp500 or us_common",
+            "title": "Universe Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "universe_id"
+        ],
+        "title": "get_universeArguments",
+        "type": "object"
+      },
+      "name": "get_universe",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Members of a universe on a date (default today), point in time:\nnames that later died are members on the days they were listed.",
+      "input_schema": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "description": "YYYY-MM-DD",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "As Of"
+          },
+          "universe_id": {
+            "description": "universe id, e.g. sp500 or us_common",
+            "title": "Universe Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "universe_id"
+        ],
+        "title": "get_universe_membersArguments",
+        "type": "object"
+      },
+      "name": "get_universe_members",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Check that the Stonks API is up and report its version.",
       "input_schema": {
         "properties": {},
@@ -727,6 +1082,52 @@
       },
       "name": "health",
       "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Import an index's constituents and changes. CSV columns\ndate,ticker,action with action add, remove or member. Without\nconfirm=true returns a preview.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "content": {
+            "description": "the CSV or JSON text",
+            "title": "Content",
+            "type": "string"
+          },
+          "format": {
+            "default": "csv",
+            "enum": [
+              "csv",
+              "json"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "index_id": {
+            "description": "lower_snake_case index code, e.g. sp500",
+            "title": "Index Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "index_id",
+          "content"
+        ],
+        "title": "import_index_historyArguments",
+        "type": "object"
+      },
+      "name": "import_index_history",
+      "needs_confirm": true
     },
     {
       "annotations": {
@@ -979,6 +1380,22 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Your broker connections: provider, status, last sync and error.\nNever includes credentials.",
+      "input_schema": {
+        "properties": {},
+        "title": "list_connectionsArguments",
+        "type": "object"
+      },
+      "name": "list_connections",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Transaction-cost presets run_backtest accepts as cost_model, with their settings.",
       "input_schema": {
         "properties": {},
@@ -1057,6 +1474,20 @@
             "default": null,
             "title": "Order Client Id"
           },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
           "tick_id": {
             "anyOf": [
               {
@@ -1086,6 +1517,28 @@
         "type": "object"
       },
       "name": "list_fills",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Halts you can see, newest first: the kill switch, circuit-breaker\ntrips (month loss, week loss, latched drawdown) and the operational\nhalt. By default only those in force today.",
+      "input_schema": {
+        "properties": {
+          "include_cleared": {
+            "default": false,
+            "title": "Include Cleared",
+            "type": "boolean"
+          }
+        },
+        "title": "list_haltsArguments",
+        "type": "object"
+      },
+      "name": "list_halts",
       "needs_confirm": false
     },
     {
@@ -1233,6 +1686,20 @@
             "title": "Offset",
             "type": "integer"
           },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
           "status": {
             "anyOf": [
               {
@@ -1312,6 +1779,20 @@
             "minimum": 0,
             "title": "Offset",
             "type": "integer"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
           }
         },
         "title": "list_portfolio_snapshotsArguments",
@@ -1459,6 +1940,68 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Statement periods the accounting audit flagged (BL-36): balance\nidentity, net income and cash mismatches, quarters vs annual, filings\ndated before period end, negative shares. Error flags make lab\npreflight warn.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "enum": [
+                  "error",
+                  "warning"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "only this severity",
+            "title": "Severity"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "description": "instrument id, e.g. AAPL.US or BTC-USD.CC",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ticker"
+          }
+        },
+        "title": "list_statement_flagsArguments",
+        "type": "object"
+      },
+      "name": "list_statement_flags",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Registered strategies (id, class, params, status), optionally by status\nor a search term.",
       "input_schema": {
         "properties": {
@@ -1576,6 +2119,22 @@
     },
     {
       "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Stored universes: id, kind, spec, last refresh and member count.",
+      "input_schema": {
+        "properties": {},
+        "title": "list_universesArguments",
+        "type": "object"
+      },
+      "name": "list_universes",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
         "destructive": true,
         "idempotent": true,
         "open_world": false,
@@ -1622,6 +2181,37 @@
         "type": "object"
       },
       "name": "promote_strategy",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": true,
+        "read_only": false
+      },
+      "description": "Queue a refresh that rebuilds the universe's membership (an\nexchange universe lists symbols at the data source). Follow up with\nwait_for_job. Without confirm=true returns a preview.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "universe_id": {
+            "description": "universe id, e.g. sp500 or us_common",
+            "title": "Universe Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "universe_id"
+        ],
+        "title": "refresh_universeArguments",
+        "type": "object"
+      },
+      "name": "refresh_universe",
       "needs_confirm": true
     },
     {
@@ -2430,6 +3020,124 @@
     },
     {
       "annotations": {
+        "destructive": false,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Queue a signal IC analysis: does the strategy's estimate_return rank\nfuture returns across the universe? Reports mean IC, ICIR, HAC t-stat\nand quantile spread per horizon, plus turnover and the IC estimate.\nNeeds at least 10 tickers (else n/a). Returns the job; use wait_for_job\nfor the result. Research only: writes nothing.",
+      "input_schema": {
+        "properties": {
+          "class_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "catalog class path, e.g. pkg.mod:Class",
+            "title": "Class Path"
+          },
+          "end": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "every_bars": {
+            "default": 5,
+            "description": "score every N bars",
+            "minimum": 1,
+            "title": "Every Bars",
+            "type": "integer"
+          },
+          "horizons": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "forward-return horizons in bars; default [1, 5, 21]",
+            "title": "Horizons"
+          },
+          "interval": {
+            "default": "1d",
+            "title": "Interval",
+            "type": "string"
+          },
+          "n_quantiles": {
+            "default": 5,
+            "maximum": 20,
+            "minimum": 2,
+            "title": "N Quantiles",
+            "type": "integer"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "strategy params (with class_path)",
+            "title": "Params"
+          },
+          "start": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "registered strategy id (or use class_path)",
+            "title": "Strategy Id"
+          },
+          "universe": {
+            "description": "instrument ids",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Universe",
+            "type": "array"
+          }
+        },
+        "required": [
+          "universe",
+          "start",
+          "end"
+        ],
+        "title": "run_signal_icArguments",
+        "type": "object"
+      },
+      "name": "run_signal_ic",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
         "destructive": true,
         "idempotent": false,
         "open_world": false,
@@ -2616,6 +3324,36 @@
       "annotations": {
         "destructive": true,
         "idempotent": true,
+        "open_world": true,
+        "read_only": false
+      },
+      "description": "Sync one of your connections now: read balances, positions and\nactivity from the provider (read-only there) into the linked broker\nportfolios. Without confirm=true returns a preview and syncs nothing.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "connection_id": {
+            "title": "Connection Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "connection_id"
+        ],
+        "title": "sync_connectionArguments",
+        "type": "object"
+      },
+      "name": "sync_connection",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
         "open_world": false,
         "read_only": false
       },
@@ -2780,7 +3518,7 @@
         "open_world": false,
         "read_only": true
       },
-      "description": "Poll a job until it finishes or the timeout passes. Returns\n{\"timed_out\": bool, \"job\": {...}, \"result\": {...} | null}: once the job\nsucceeded, \"result\" is its typed result (BacktestResult, LabRunView,\ningest or tick result); otherwise null and the job carries its error.",
+      "description": "Poll a job until it finishes or the timeout passes. Returns\n{\"timed_out\": bool, \"job\": {...}, \"result\": {...} | null}: once the job\nsucceeded, \"result\" is its typed result (BacktestResult, LabRunView,\nSignalICView, ingest or tick result); otherwise null and the job carries its error.",
       "input_schema": {
         "properties": {
           "job_id": {

@@ -26,6 +26,7 @@ import type {
   DraftUpdate,
   ListDraftsData,
   SpecValidateRequest,
+  StatusChangeRequest,
   ValidateRequest,
 } from './models';
 
@@ -78,12 +79,20 @@ export class StudioService {
     return unwrap(registerDraft({ path: { draft_id: draftId } }));
   }
 
-  enable(draftId: string) {
-    return unwrap(enableDraft({ path: { draft_id: draftId } }));
+  /** Promote the registered strategy: the same go-live gate (409) as Strategies. */
+  enable(draftId: string, body: StatusChangeRequest, silent = false) {
+    return unwrap(
+      enableDraft({
+        path: { draft_id: draftId },
+        body,
+        headers: silent ? SILENT_HEADERS : undefined,
+      }),
+    );
   }
 
-  disable(draftId: string) {
-    return unwrap(disableDraft({ path: { draft_id: draftId } }));
+  /** Back to shadow; `reason` is required. */
+  disable(draftId: string, body: StatusChangeRequest) {
+    return unwrap(disableDraft({ path: { draft_id: draftId }, body }));
   }
 
   schema() {

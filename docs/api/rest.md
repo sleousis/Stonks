@@ -12,163 +12,265 @@ flowchart LR
   S --> T[("state.sqlite<br/>strategies, orders, ticks")]
 ```
 
-Auth: reads (`GET`) are open to loopback clients by default
-(`[api].open_reads_on_loopback`). Every other method needs
-`Authorization: Bearer $STONKS_API_TOKEN`.
+Auth: every route except health and sign-in needs a credential: the browser
+session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...`.
+The Auth column names the permission a route checks (see `docs/security.md`).
+"sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [risk](#risk-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [ticks](#ticks-endpoints)
+Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [connections](#connections-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints)
 
 ## alerts endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/alerts` | List Alerts | token, or open on loopback |  | [Page_AlertView_](#page_alertview_) |
+| GET | `/api/alerts` | List Alerts | sign-in |  | [Page_AlertView_](#page_alertview_) |
 
 ## auth endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/auth/check` | Check Auth | token, or open on loopback |  | [AuthCheck](#authcheck) |
+| GET | `/api/auth/check` | Check Auth | sign-in |  | [AuthCheck](#authcheck) |
+| POST | `/api/auth/login` | Login | none | [LoginRequest](#loginrequest) | [LoginView](#loginview) |
+| POST | `/api/auth/logout` | Logout | none |  |  |
+| GET | `/api/auth/me` | Me | sign-in |  | [MeView](#meview) |
+| POST | `/api/auth/mfa/enrol` | Start Enrolment | none |  | [EnrolStartView](#enrolstartview) |
+| POST | `/api/auth/mfa/enrol/confirm` | Confirm Enrolment | none | [MfaCodeRequest](#mfacoderequest) | [MfaView](#mfaview) |
+| POST | `/api/auth/mfa/verify` | Verify Mfa | none | [MfaCodeRequest](#mfacoderequest) | [MfaView](#mfaview) |
+| POST | `/api/auth/password` | Change Password | `password.change` | [PasswordChangeRequest](#passwordchangerequest) |  |
+| POST | `/api/auth/recovery-codes` | Regenerate Recovery Codes | `mfa.recovery_codes` |  | [RecoveryCodesView](#recoverycodesview) |
+| GET | `/api/auth/tokens` | List Tokens | sign-in |  | list[[TokenView](#tokenview)] |
+| POST | `/api/auth/tokens` | Create Token | `tokens.manage` | [TokenCreateRequest](#tokencreaterequest) | [TokenCreatedView](#tokencreatedview) |
+| DELETE | `/api/auth/tokens/{token_id}` | Revoke Token | `tokens.revoke` |  |  |
+| GET | `/api/auth/users` | List Users | `users.read` |  | list[[UserView](#userview)] |
+| POST | `/api/auth/users` | Create User | `users.manage` | [UserCreateRequest](#usercreaterequest) | [UserView](#userview) |
+| PATCH | `/api/auth/users/{user_id}` | Update User | `users.manage` | [UserUpdateRequest](#userupdaterequest) | [UserView](#userview) |
+| DELETE | `/api/auth/users/{user_id}/mfa` | Reset User Mfa | `users.manage` |  |  |
+| POST | `/api/auth/users/{user_id}/password` | Reset User Password | `users.manage` | [PasswordResetRequest](#passwordresetrequest) |  |
+
+## backups endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| POST | `/api/backups` | Start Backup | `risk.global` |  | [Job](#job) |
+| GET | `/api/backups/jobs/{job_id}/result` | Get Backup Result | `risk.global` |  | [BackupResultView](#backupresultview) |
 
 ## brokers endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/brokers` | Get Broker Info | token, or open on loopback |  | [BrokerInfo](#brokerinfo) |
-| GET | `/api/brokers/alpaca/status` | Get Alpaca Status | token, or open on loopback |  | [AlpacaStatus](#alpacastatus) |
+| GET | `/api/brokers` | Get Broker Info | sign-in |  | [BrokerInfo](#brokerinfo) |
+| GET | `/api/brokers/alpaca/status` | Get Alpaca Status | sign-in |  | [AlpacaStatus](#alpacastatus) |
 
 ## catalog endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/catalog/asset-classes` | List Asset Classes | token, or open on loopback |  | list[string] |
-| GET | `/api/catalog/intervals` | List Intervals | token, or open on loopback |  | list[[IntervalInfo](#intervalinfo)] |
-| GET | `/api/catalog/strategies` | List Strategy Classes | token, or open on loopback |  | list[[StrategyClassInfo](#strategyclassinfo)] |
+| GET | `/api/catalog/asset-classes` | List Asset Classes | sign-in |  | list[string] |
+| GET | `/api/catalog/intervals` | List Intervals | sign-in |  | list[[IntervalInfo](#intervalinfo)] |
+| GET | `/api/catalog/strategies` | List Strategy Classes | sign-in |  | list[[StrategyClassInfo](#strategyclassinfo)] |
+
+## connections endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/connections` | List Connections | sign-in |  | list[[ConnectionView](#connectionview)] |
+| GET | `/api/connections/callback` | Complete Portal | sign-in |  | [ConnectionView](#connectionview) |
+| POST | `/api/connections/keys` | Connect With Keys | `connection.manage` | [ConnectWithKeysRequest](#connectwithkeysrequest) | [ConnectionView](#connectionview) |
+| POST | `/api/connections/portal` | Start Portal | `connection.manage` | [StartPortalRequest](#startportalrequest) | [PortalLinkView](#portallinkview) |
+| GET | `/api/connections/providers` | List Providers | sign-in |  | list[[ProviderView](#providerview)] |
+| GET | `/api/connections/{connection_id}` | Get Connection | sign-in |  | [ConnectionView](#connectionview) |
+| DELETE | `/api/connections/{connection_id}` | Delete Connection | `connection.manage` |  | [DisconnectView](#disconnectview) |
+| GET | `/api/connections/{connection_id}/accounts` | List Accounts | sign-in |  | list[[stonks__app__connections__BrokerAccountView](#stonks__app__connections__brokeraccountview)] |
+| POST | `/api/connections/{connection_id}/link` | Link Account | `portfolio.manage` | [LinkAccountRequest](#linkaccountrequest) | [LinkResultView](#linkresultview) |
+| POST | `/api/connections/{connection_id}/sync` | Sync Connection | `portfolio.manage` |  | [SyncResultView](#syncresultview) |
+
+## halts endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/halts` | List Halts | sign-in |  | list[[HaltView](#haltview)] |
+| POST | `/api/halts/kill` | Engage Kill Switch | `killswitch.user` | [KillSwitchRequest](#killswitchrequest) | [HaltView](#haltview) |
+| GET | `/api/halts/{halt_id}` | Get Halt | sign-in |  | [HaltView](#haltview) |
+| POST | `/api/halts/{halt_id}/clear` | Clear Halt | `risk.reset` | [ClearHaltRequest](#clearhaltrequest) | [HaltView](#haltview) |
+| POST | `/api/halts/{halt_id}/resume` | Resume Kill Switch | `killswitch.resume` | [ResumeRequest](#resumerequest) | [HaltView](#haltview) |
 
 ## health endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
 | GET | `/api/health` | Liveness probe | none |  | [Health](#health) |
-| GET | `/api/health/report` | Health Report | token, or open on loopback |  | [HealthReportView](#healthreportview) |
+| GET | `/api/health/live` | Liveness probe (process and hosted scheduler) | none |  | [ProbeView](#probeview) |
+| GET | `/api/health/ready` | Readiness probe (state migrated, lake present) | none |  | [ProbeView](#probeview) |
+| GET | `/api/health/report` | Health Report | sign-in |  | [HealthReportView](#healthreportview) |
 
 ## ingest endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/ingest/jobs/{job_id}/result` | Get Ingest Result | token, or open on loopback |  | [IngestResultView](#ingestresultview) |
-| GET | `/api/ingest/runs` | List Runs | token, or open on loopback |  | [Page_IngestRunView_](#page_ingestrunview_) |
-| POST | `/api/ingest/runs` | Start Ingest | bearer token | [IngestRequest](#ingestrequest) | [Job](#job) |
+| GET | `/api/ingest/jobs/{job_id}/result` | Get Ingest Result | sign-in |  | [IngestResultView](#ingestresultview) |
+| GET | `/api/ingest/runs` | List Runs | sign-in |  | [Page_IngestRunView_](#page_ingestrunview_) |
+| POST | `/api/ingest/runs` | Start Ingest | `operations.run` | [IngestRequest](#ingestrequest) | [Job](#job) |
 
 ## jobs endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/jobs` | List Jobs | token, or open on loopback |  | [Page_Job_](#page_job_) |
-| GET | `/api/jobs/{job_id}` | Get Job | token, or open on loopback |  | [Job](#job) |
-| POST | `/api/jobs/{job_id}/cancel` | Cancel Job | bearer token |  | [Job](#job) |
-| GET | `/api/jobs/{job_id}/events` | Stream Job Events | token, or open on loopback |  | SSE of [JobEvent](#jobevent) |
-| POST | `/api/jobs/{job_id}/stream-token` | Create Stream Token | bearer token |  | [StreamToken](#streamtoken) |
+| GET | `/api/jobs` | List Jobs | sign-in |  | [Page_Job_](#page_job_) |
+| GET | `/api/jobs/{job_id}` | Get Job | sign-in |  | [Job](#job) |
+| POST | `/api/jobs/{job_id}/cancel` | Cancel Job | `lab.run` |  | [Job](#job) |
+| GET | `/api/jobs/{job_id}/events` | Stream Job Events | sign-in |  | SSE of [JobEvent](#jobevent) |
+| POST | `/api/jobs/{job_id}/stream-token` | Create Stream Token | `data.read` |  | [StreamToken](#streamtoken) |
 
 ## lab endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| POST | `/api/lab/backtests` | Start Backtest | bearer token | [BacktestRequest](#backtestrequest) | [Job](#job) |
-| GET | `/api/lab/backtests/{job_id}/result` | Get Backtest Result | token, or open on loopback |  | [BacktestResult](#backtestresult) |
-| GET | `/api/lab/cost-models` | List Cost Models | token, or open on loopback |  | list[[CostModelPreset](#costmodelpreset)] |
-| POST | `/api/lab/runs` | Start Lab Run | bearer token | [LabRunRequest](#labrunrequest) | [Job](#job) |
-| GET | `/api/lab/runs/{job_id}/result` | Get Lab Run Result | token, or open on loopback |  | [LabRunView](#labrunview) |
+| POST | `/api/lab/backtests` | Start Backtest | `lab.run` | [BacktestRequest](#backtestrequest) | [Job](#job) |
+| GET | `/api/lab/backtests/{job_id}/result` | Get Backtest Result | sign-in |  | [BacktestResult](#backtestresult) |
+| GET | `/api/lab/cost-models` | List Cost Models | sign-in |  | list[[CostModelPreset](#costmodelpreset)] |
+| POST | `/api/lab/runs` | Start Lab Run | `lab.run` | [LabRunRequest](#labrunrequest) | [Job](#job) |
+| GET | `/api/lab/runs/{job_id}/result` | Get Lab Run Result | sign-in |  | [LabRunView](#labrunview) |
+| POST | `/api/lab/signal-ic` | Start Signal Ic | `lab.run` | [SignalICRequest](#signalicrequest) | [Job](#job) |
+| GET | `/api/lab/signal-ic/{job_id}/result` | Get Signal Ic Result | sign-in |  | [SignalICView](#signalicview) |
 
 ## market endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/market/bars` | Get Bars | token, or open on loopback |  | [BarSeries](#barseries) |
-| GET | `/api/market/coverage` | List Coverage | token, or open on loopback |  | [Page_CoverageRow_](#page_coveragerow_) |
-| GET | `/api/market/instruments` | List Instruments | token, or open on loopback |  | [Page_InstrumentView_](#page_instrumentview_) |
+| GET | `/api/market/bars` | Get Bars | sign-in |  | [BarSeries](#barseries) |
+| GET | `/api/market/coverage` | List Coverage | sign-in |  | [Page_CoverageRow_](#page_coveragerow_) |
+| GET | `/api/market/instruments` | List Instruments | sign-in |  | [Page_InstrumentView_](#page_instrumentview_) |
+
+## notifications endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/notifications` | List Notifications | sign-in |  | [FeedView](#feedview) |
+| GET | `/api/notifications/preferences` | Get Preferences | sign-in |  | [PreferencesView](#preferencesview) |
+| PUT | `/api/notifications/preferences` | Update Preferences | `notifications.manage` | [PreferencesUpdate](#preferencesupdate) | [PreferencesView](#preferencesview) |
+| PUT | `/api/notifications/quiet-hours` | Set Quiet Hours | `notifications.manage` | [QuietHoursUpdate](#quiethoursupdate) | [PreferencesView](#preferencesview) |
+| POST | `/api/notifications/read` | Mark Read | `notifications.manage` | [MarkReadRequest](#markreadrequest) | [MarkReadView](#markreadview) |
+| PUT | `/api/notifications/webhook` | Set Webhook | `notifications.manage` | [WebhookUpdate](#webhookupdate) | [PreferencesView](#preferencesview) |
 
 ## orders endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/orders` | List Orders | token, or open on loopback |  | [Page_OrderView_](#page_orderview_) |
-| GET | `/api/orders/fills` | List Fills | token, or open on loopback |  | [Page_FillView_](#page_fillview_) |
+| GET | `/api/orders` | List Orders | sign-in |  | [Page_OrderView_](#page_orderview_) |
+| GET | `/api/orders/fills` | List Fills | sign-in |  | [Page_FillView_](#page_fillview_) |
 
 ## pnl endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/pnl` | Get Pnl | token, or open on loopback |  | [PnlSeries](#pnlseries) |
+| GET | `/api/pnl` | Get Pnl | sign-in |  | [PnlSeries](#pnlseries) |
 
 ## portfolio endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/portfolio` | Get Portfolio | token, or open on loopback |  | [PortfolioView](#portfolioview) |
-| GET | `/api/portfolio/snapshots` | List Snapshots | token, or open on loopback |  | [Page_SnapshotView_](#page_snapshotview_) |
+| GET | `/api/portfolio` | Get Portfolio | sign-in |  | [PortfolioView](#portfolioview) |
+| GET | `/api/portfolio/snapshots` | List Snapshots | sign-in |  | [Page_SnapshotView_](#page_snapshotview_) |
+| GET | `/api/portfolio/totals` | Get Totals | `portfolio.totals` |  | [PortfolioTotalsView](#portfoliototalsview) |
+
+## push endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/push/subscriptions` | List Push Subscriptions | sign-in |  | list[[PushDeviceView](#pushdeviceview)] |
+| POST | `/api/push/subscriptions` | Create Push Subscription | `notifications.manage` | [PushSubscriptionRequest](#pushsubscriptionrequest) | [PushDeviceView](#pushdeviceview) |
+| DELETE | `/api/push/subscriptions` | Delete Push Subscription | `notifications.manage` | [PushUnsubscribeRequest](#pushunsubscriberequest) |  |
+| GET | `/api/push/vapid-key` | Vapid Key | sign-in |  | [VapidKeyView](#vapidkeyview) |
 
 ## risk endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/risk/policy` | Get Risk Policy | token, or open on loopback |  | [RiskPolicy](#riskpolicy) |
+| GET | `/api/risk/policy` | Get Risk Policy | sign-in |  | [RiskPolicy](#riskpolicy) |
+
+## schedule endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/schedule` | Get Schedule | sign-in |  | [ScheduleView](#scheduleview) |
+| POST | `/api/schedule/{job}/run-now` | Run Now | `operations.run` | [RunNowRequest](#runnowrequest) | [RunNowView](#runnowview) |
 
 ## shadow endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/shadow/decisions` | List Shadow Decisions | token, or open on loopback |  | [Page_ShadowDecisionView_](#page_shadowdecisionview_) |
-| GET | `/api/shadow/pnl` | List Shadow Pnl | token, or open on loopback |  | [Page_ShadowPnlSummary_](#page_shadowpnlsummary_) |
-| GET | `/api/shadow/strategies/{strategy_id}/pnl` | Get Shadow Pnl | token, or open on loopback |  | [PnlSeries](#pnlseries) |
+| GET | `/api/shadow/decisions` | List Shadow Decisions | sign-in |  | [Page_ShadowDecisionView_](#page_shadowdecisionview_) |
+| GET | `/api/shadow/pnl` | List Shadow Pnl | sign-in |  | [Page_ShadowPnlSummary_](#page_shadowpnlsummary_) |
+| GET | `/api/shadow/strategies/{strategy_id}/pnl` | Get Shadow Pnl | sign-in |  | [PnlSeries](#pnlseries) |
 
 ## sources endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/sources` | List Sources | token, or open on loopback |  | list[[DataSourceInfo](#datasourceinfo)] |
+| GET | `/api/sources` | List Sources | sign-in |  | list[[DataSourceInfo](#datasourceinfo)] |
+
+## statements endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/statements/flags` | List Statement Flags | sign-in |  | [Page_StatementFlagView_](#page_statementflagview_) |
 
 ## strategies endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/strategies` | List Strategies | token, or open on loopback |  | [Page_StrategySummary_](#page_strategysummary_) |
-| GET | `/api/strategies/summary` | Strategy Summary | token, or open on loopback |  | [StrategyStatusCounts](#strategystatuscounts) |
-| GET | `/api/strategies/{strategy_id}` | Get Strategy | token, or open on loopback |  | [StrategyDetail](#strategydetail) |
-| GET | `/api/strategies/{strategy_id}/golive` | Get Golive | token, or open on loopback |  | [GoLiveReport](#golivereport) |
-| GET | `/api/strategies/{strategy_id}/history` | Get Strategy History | token, or open on loopback |  | list[[StatusChangeView](#statuschangeview)] |
-| POST | `/api/strategies/{strategy_id}/promote` | Promote | bearer token | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
-| POST | `/api/strategies/{strategy_id}/retire` | Retire | bearer token | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
-| POST | `/api/strategies/{strategy_id}/shadow` | Shadow | bearer token | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
+| GET | `/api/strategies` | List Strategies | sign-in |  | [Page_StrategySummary_](#page_strategysummary_) |
+| GET | `/api/strategies/summary` | Strategy Summary | sign-in |  | [StrategyStatusCounts](#strategystatuscounts) |
+| GET | `/api/strategies/{strategy_id}` | Get Strategy | sign-in |  | [StrategyDetail](#strategydetail) |
+| GET | `/api/strategies/{strategy_id}/golive` | Get Golive | sign-in |  | [GoLiveReport](#golivereport) |
+| GET | `/api/strategies/{strategy_id}/history` | Get Strategy History | sign-in |  | list[[StatusChangeView](#statuschangeview)] |
+| POST | `/api/strategies/{strategy_id}/promote` | Promote | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
+| POST | `/api/strategies/{strategy_id}/retire` | Retire | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
+| POST | `/api/strategies/{strategy_id}/shadow` | Shadow | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
 
 ## studio endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/studio/capabilities` | Capabilities | token, or open on loopback |  | [StudioCapabilities](#studiocapabilities) |
-| GET | `/api/studio/drafts` | List Drafts | token, or open on loopback |  | [Page_Draft_](#page_draft_) |
-| POST | `/api/studio/drafts` | Create Draft | bearer token | [DraftCreate](#draftcreate) | [Draft](#draft) |
-| GET | `/api/studio/drafts/{draft_id}` | Get Draft | token, or open on loopback |  | [Draft](#draft) |
-| PATCH | `/api/studio/drafts/{draft_id}` | Update Draft | bearer token | [DraftUpdate](#draftupdate) | [Draft](#draft) |
-| DELETE | `/api/studio/drafts/{draft_id}` | Delete Draft | bearer token |  | [Draft](#draft) |
-| POST | `/api/studio/drafts/{draft_id}/backtests` | Start Backtest | bearer token | [DraftBacktestRequest](#draftbacktestrequest) | [Job](#job) |
-| POST | `/api/studio/drafts/{draft_id}/disable` | Disable Draft | bearer token | [StatusChangeRequest](#statuschangerequest) \| null | [Draft](#draft) |
-| POST | `/api/studio/drafts/{draft_id}/enable` | Enable Draft | bearer token | [StatusChangeRequest](#statuschangerequest) \| null | [Draft](#draft) |
-| POST | `/api/studio/drafts/{draft_id}/lab-runs` | Start Lab Run | bearer token | [DraftLabRunRequest](#draftlabrunrequest) | [Job](#job) |
-| POST | `/api/studio/drafts/{draft_id}/register` | Register Draft | bearer token |  | [Draft](#draft) |
-| POST | `/api/studio/drafts/{draft_id}/validate` | Validate Draft | bearer token | [ValidateRequest](#validaterequest) \| null | [DraftValidation](#draftvalidation) |
-| GET | `/api/studio/schema` | Schema | token, or open on loopback |  | object |
-| POST | `/api/studio/spec/validate` | Validate Spec | bearer token | [SpecValidateRequest](#specvalidaterequest) | [DraftValidation](#draftvalidation) |
-| GET | `/api/studio/templates` | Templates | token, or open on loopback |  | list[[RuleTemplateView](#ruletemplateview)] |
+| GET | `/api/studio/capabilities` | Capabilities | sign-in |  | [StudioCapabilities](#studiocapabilities) |
+| GET | `/api/studio/drafts` | List Drafts | sign-in |  | [Page_Draft_](#page_draft_) |
+| POST | `/api/studio/drafts` | Create Draft | `lab.run` | [DraftCreate](#draftcreate) | [Draft](#draft) |
+| GET | `/api/studio/drafts/{draft_id}` | Get Draft | sign-in |  | [Draft](#draft) |
+| PATCH | `/api/studio/drafts/{draft_id}` | Update Draft | `lab.run` | [DraftUpdate](#draftupdate) | [Draft](#draft) |
+| DELETE | `/api/studio/drafts/{draft_id}` | Delete Draft | `lab.run` |  | [Draft](#draft) |
+| POST | `/api/studio/drafts/{draft_id}/backtests` | Start Backtest | `lab.run` | [DraftBacktestRequest](#draftbacktestrequest) | [Job](#job) |
+| POST | `/api/studio/drafts/{draft_id}/disable` | Disable Draft | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [Draft](#draft) |
+| POST | `/api/studio/drafts/{draft_id}/enable` | Enable Draft | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [Draft](#draft) |
+| POST | `/api/studio/drafts/{draft_id}/lab-runs` | Start Lab Run | `lab.run` | [DraftLabRunRequest](#draftlabrunrequest) | [Job](#job) |
+| POST | `/api/studio/drafts/{draft_id}/register` | Register Draft | `strategy.promote` |  | [Draft](#draft) |
+| POST | `/api/studio/drafts/{draft_id}/validate` | Validate Draft | `lab.run` | [ValidateRequest](#validaterequest) \| null | [DraftValidation](#draftvalidation) |
+| GET | `/api/studio/schema` | Schema | sign-in |  | object |
+| POST | `/api/studio/spec/validate` | Validate Spec | `lab.run` | [SpecValidateRequest](#specvalidaterequest) | [DraftValidation](#draftvalidation) |
+| GET | `/api/studio/templates` | Templates | sign-in |  | list[[RuleTemplateView](#ruletemplateview)] |
 
 ## ticks endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/ticks` | List Ticks | token, or open on loopback |  | [Page_TickRun_](#page_tickrun_) |
-| POST | `/api/ticks` | Start Tick | bearer token | [TickRequest](#tickrequest) | [Job](#job) |
-| GET | `/api/ticks/jobs/{job_id}/result` | Get Tick Result | token, or open on loopback |  | [TickResultView](#tickresultview) |
-| GET | `/api/ticks/{tick_id}` | Get Tick | token, or open on loopback |  | [TickRunWithOrders](#tickrunwithorders) |
+| GET | `/api/ticks` | List Ticks | sign-in |  | [Page_TickRun_](#page_tickrun_) |
+| POST | `/api/ticks` | Start Tick | `operations.run` | [TickRequest](#tickrequest) | [Job](#job) |
+| GET | `/api/ticks/jobs/{job_id}/result` | Get Tick Result | sign-in |  | [TickResultView](#tickresultview) |
+| GET | `/api/ticks/{tick_id}` | Get Tick | sign-in |  | [TickRunWithOrders](#tickrunwithorders) |
+
+## universes endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/universes` | List Universes | sign-in |  | list[[UniverseView](#universeview)] |
+| POST | `/api/universes` | Create Universe | `lab.run` | [UniverseCreate](#universecreate) | [UniverseView](#universeview) |
+| GET | `/api/universes/ensure/{job_id}/result` | Get Ensure Result | sign-in |  | [EnsureReport](#ensurereport) |
+| POST | `/api/universes/index-history` | Import Index History | `lab.run` | [IndexHistoryImport](#indexhistoryimport) | [IndexHistoryView](#indexhistoryview) |
+| GET | `/api/universes/refresh/{job_id}/result` | Get Refresh Result | sign-in |  | [UniverseRefreshView](#universerefreshview) |
+| GET | `/api/universes/{universe_id}` | Get Universe | sign-in |  | [UniverseView](#universeview) |
+| DELETE | `/api/universes/{universe_id}` | Delete Universe | `strategy.promote` |  | [UniverseView](#universeview) |
+| POST | `/api/universes/{universe_id}/ensure` | Ensure Data | `lab.run` | [EnsureDataRequest](#ensuredatarequest) | [Job](#job) |
+| GET | `/api/universes/{universe_id}/members` | Get Members | sign-in |  | [UniverseMembers](#universemembers) |
+| POST | `/api/universes/{universe_id}/refresh` | Refresh Universe | `lab.run` |  | [Job](#job) |
 
 ## Schemas
 
@@ -187,11 +289,17 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#broke
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `account` | [BrokerAccountView](#brokeraccountview) \| null | no |  |
+| `account` | [stonks__app__brokers__BrokerAccountView](#stonks__app__brokers__brokeraccountview) \| null | no |  |
 | `clock` | [MarketClockView](#marketclockview) \| null | no |  |
 | `connected` | boolean | yes |  |
 | `error` | string \| null | no |  |
 | `paper` | boolean | yes |  |
+
+### ApiScope
+
+What a credential may do. A token never exceeds its user's role.
+
+Type: "read" \| "trade" \| "lab" \| "admin"
 
 ### AssetClassCosts
 
@@ -256,6 +364,13 @@ Fee and spread for one asset class.
 | `ulcer_index` | number \| null | no |  |
 | `var_95` | number \| null | no |  |
 
+### BackupResultView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `backup_id` | string | yes |  |
+| `pruned` | list[string] | yes |  |
+
 ### BarSeries
 
 | Field | Type | Required | Description |
@@ -303,19 +418,6 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `tracking_error` | number \| null | yes |  |
 | `up_capture` | number \| null | yes |  |
 
-### BrokerAccountView
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `buying_power` | number | yes |  |
-| `can_trade` | boolean | yes |  |
-| `cash` | number | yes |  |
-| `currency` | string | yes |  |
-| `equity` | number | yes |  |
-| `pattern_day_trader` | boolean | yes |  |
-| `status` | string | yes |  |
-| `trading_blocked` | boolean | yes |  |
-
 ### BrokerInfo
 
 | Field | Type | Required | Description |
@@ -324,6 +426,48 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `credentials_configured` | boolean | yes |  |
 | `kind` | "simulated" \| "alpaca" | yes |  |
 | `paper` | boolean | yes |  |
+
+### CircuitBreakerSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cooldown` | "rest_of_month" \| "none" | no |  |
+| `max_drawdown_halt` | number \| null | no |  |
+| `max_month_loss` | number \| null | no |  |
+| `max_week_loss` | number \| null | no |  |
+| `week_sessions` | integer | no |  |
+
+### ClearHaltRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `reason` | string | yes |  |
+
+### ConnectWithKeysRequest
+
+API-key connect. ``fields`` are the provider's ``credential_fields`` (plus ``paper`` for brokers with a paper endpoint). They are write-only: never logged, stored only sealed, never returned.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `fields` | dict[str, password] | yes |  |
+| `label` | string \| null | no |  |
+| `provider` | string | yes |  |
+
+### ConnectionView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `consecutive_failures` | integer | yes |  |
+| `created_at` | date-time | yes |  |
+| `id` | string | yes |  |
+| `label` | string \| null | yes |  |
+| `last_error` | string \| null | yes |  |
+| `last_sync_at` | date-time \| null | yes |  |
+| `last_sync_status` | "ok" \| "partial" \| "error" \| null | yes |  |
+| `next_sync_at` | date-time \| null | yes |  |
+| `provider` | string | yes |  |
+| `status` | "pending" \| "active" \| "error" | yes |  |
+| `updated_at` | date-time | yes |  |
 
 ### CostModelPreset
 
@@ -370,6 +514,15 @@ Settings for ``AssetClassCostModel``. Zero costs by default; ``CostModelSettings
 | `default` | boolean | yes |  |
 | `detail` | string \| null | no |  |
 | `id` | "eodhd" \| "yahoo" \| "defillama" | yes |  |
+
+### DisconnectView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `archived_portfolios` | list[string] | yes |  |
+| `connection_id` | string | yes |  |
+| `remote_error` | string \| null | yes |  |
+| `remote_removed` | boolean \| null | yes |  |
 
 ### Draft
 
@@ -429,12 +582,14 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `interval` | string | no |  |
 | `mcpt` | [McptOptions](#mcptoptions) \| null | no |  |
 | `objective` | "sharpe" \| "cagr" \| "final_return" | no |  |
+| `preflight` | boolean \| null | no |  |
 | `premortem` | string \| null | no |  |
 | `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |
 | `register_if_passes` | boolean | no |  |
 | `register_strategy` | boolean | no |  |
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
+| `strict_preflight` | boolean \| null | no |  |
 | `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "signal_ic" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
@@ -458,12 +613,78 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `smoke` | [SmokeCheck](#smokecheck) \| null | no |  |
 | `valid` | boolean | yes |  |
 
+### DrawdownScalingSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `schedule` | list[list[any]] \| null | no |  |
+
+### EnrolStartView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `otpauth_uri` | string | yes |  |
+| `secret` | string | yes |  |
+
+### EnsureDataRequest
+
+Fetch the missing bars of the universe's members over a window (every name that was a member on any day of it, delisted ones too).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `end` | date | yes |  |
+| `interval` | string | no |  |
+| `source` | "eodhd" \| "yahoo" \| "defillama" \| null | no |  |
+| `start` | date | yes |  |
+
+### EnsureReport
+
+What an ensure did. ``run_id`` is the ``ingest_runs`` row (``None`` when nothing was missing).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `bulk_days` | integer | no |  |
+| `clipped_start` | date \| null | no |  |
+| `end` | date | yes |  |
+| `failed` | list[string] | no |  |
+| `gaps` | integer | no |  |
+| `interval` | string | yes |  |
+| `run_id` | integer \| null | no |  |
+| `source` | string | yes |  |
+| `start` | date | yes |  |
+| `status` | string | no |  |
+| `tickers_failed` | integer | no |  |
+| `tickers_fetched` | integer | no |  |
+| `tickers_requested` | integer | no |  |
+| `tickers_up_to_date` | integer | no |  |
+| `warnings` | list[string] | no |  |
+
 ### EquityPoint
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `timestamp` | date-time | yes |  |
 | `value` | number | yes |  |
+
+### FeedItemView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `category` | string \| null | yes |  |
+| `created_at` | date-time | yes |  |
+| `deep_link` | string \| null | yes |  |
+| `id` | integer | yes |  |
+| `level` | string | yes |  |
+| `message` | string | yes |  |
+| `read_at` | date-time \| null | yes |  |
+| `title` | string | yes |  |
+
+### FeedView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[FeedItemView](#feeditemview)] | yes |  |
+| `unread_count` | integer | yes |  |
 
 ### FillView
 
@@ -521,6 +742,25 @@ Limits a paper-trading period must meet before ``stonks golive check`` passes (`
 | `status` | string | yes |  |
 | `strategy_id` | string | yes |  |
 
+### HaltView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `active` | boolean | yes |  |
+| `clear_reason` | string \| null | yes |  |
+| `cleared_at` | string \| null | yes |  |
+| `cleared_by` | string \| null | yes |  |
+| `expires_on` | date \| null | yes |  |
+| `halt` | "buys" \| "all" | yes |  |
+| `id` | integer | yes |  |
+| `kind` | "month_loss" \| "week_loss" \| "drawdown" \| "operational" \| "kill" | yes |  |
+| `portfolio_id` | string \| null | yes |  |
+| `reason` | string | yes |  |
+| `scope` | "global" \| "user" \| "portfolio" | yes |  |
+| `tripped_at` | string | yes |  |
+| `tripped_by` | string | yes |  |
+| `user_id` | string \| null | yes |  |
+
 ### Health
 
 | Field | Type | Required | Description |
@@ -556,6 +796,24 @@ Thresholds for ``stonks health`` (``[production.health]``).
 | `healthy` | boolean | yes |  |
 | `thresholds` | [HealthConfig](#healthconfig) | yes |  |
 
+### HorizonICView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `hac_lags` | integer | yes |  |
+| `hit_rate` | number \| null | yes |  |
+| `horizon` | integer | yes |  |
+| `ic_std` | number \| null | yes |  |
+| `icir` | number \| null | yes |  |
+| `mean_ic` | number \| null | yes |  |
+| `n_dates` | integer | yes |  |
+| `quantile_means` | list[number \| null] | yes |  |
+| `se_hac` | number \| null | yes |  |
+| `se_iid` | number \| null | yes |  |
+| `spread_mean` | number \| null | yes |  |
+| `spread_t_hac` | number \| null | yes |  |
+| `t_stat_hac` | number \| null | yes |  |
+
 ### IStarSettings
 
 Kissell's I-Star parameters: ``I = a1 (Q/ADV)^a2 sigma^a3`` bps, with a temporary part ``b1 I pov^a4`` and a permanent part ``(1 - b1) I``. The defaults are Kissell's published US-equity estimates, **not calibrated** for this system; treat them as a starting point.
@@ -569,6 +827,25 @@ Kissell's I-Star parameters: ``I = a1 (Q/ADV)^a2 sigma^a3`` bps, with a temporar
 | `b1` | number | no |  |
 | `periods_per_year` | number | no |  |
 | `pov` | number | no |  |
+
+### IndexHistoryImport
+
+An index constituent history as CSV (``date,ticker,action`` with ``add``, ``remove`` or ``member``) or JSON (``as_of``, ``constituents``, ``changes``).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `content` | string | yes |  |
+| `format` | "csv" \| "json" | no |  |
+| `index_id` | string | yes |  |
+
+### IndexHistoryView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date \| null | yes |  |
+| `changes` | integer | yes |  |
+| `constituents` | integer | yes |  |
+| `index_id` | string | yes |  |
 
 ### IngestRequest
 
@@ -656,6 +933,15 @@ One ``data:`` payload of the job event stream.
 | `reason` | "timeout" \| "untracked" \| null | no |  |
 | `status` | "queued" \| "running" \| "succeeded" \| "failed" \| "cancelled" | yes |  |
 
+### KillSwitchRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `flatten` | boolean | no |  |
+| `portfolio_id` | string \| null | no |  |
+| `reason` | string | yes |  |
+| `scope` | "global" \| "user" \| "portfolio" | yes |  |
+
 ### LabRunRequest
 
 Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the tuner searches the class's parameter space).
@@ -672,6 +958,7 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `interval` | string | no |  |
 | `mcpt` | [McptOptions](#mcptoptions) \| null | no |  |
 | `objective` | "sharpe" \| "cagr" \| "final_return" | no |  |
+| `preflight` | boolean \| null | no |  |
 | `premortem` | string \| null | no |  |
 | `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |
 | `register_if_passes` | boolean | no |  |
@@ -679,6 +966,7 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
 | `strategy` | [StrategyRef](#strategyref) | yes |  |
+| `strict_preflight` | boolean \| null | no |  |
 | `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "signal_ic" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
@@ -696,10 +984,64 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `class_path` | string | yes |  |
 | `n_trials_class` | integer | no |  |
 | `n_trials_run` | integer | no |  |
+| `preflight` | [PreflightView](#preflightview) \| null | no |  |
 | `registered_strategy_id` | string \| null | yes |  |
 | `run_id` | string | no |  |
 | `survival_reports` | list[[SurvivalReportView](#survivalreportview)] | yes |  |
 | `verdict` | "pass" \| "fail" | yes |  |
+
+### LinkAccountRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `external_account_id` | string | yes |  |
+| `name` | string \| null | no |  |
+| `portfolio_id` | string \| null | no |  |
+
+### LinkResultView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `connection_id` | string | yes |  |
+| `external_account_id` | string | yes |  |
+| `portfolio_id` | string | yes |  |
+
+### LiquiditySettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_amihud` | number \| null | no |  |
+| `max_pct_adv` | number \| null | no |  |
+| `min_median_dollar_volume` | number \| null | no |  |
+
+### LoginRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `email` | string | yes |  |
+| `password` | string | yes |  |
+
+### LoginView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `csrf_token` | string | yes |  |
+| `display_name` | string | yes |  |
+| `next_step` | "enrol" \| "verify" | yes |  |
+| `user_id` | string | yes |  |
+
+### MarkReadRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `ids` | list[integer] \| null | no |  |
+
+### MarkReadView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `unread_count` | integer | yes |  |
+| `updated` | integer | yes |  |
 
 ### MarketClockView
 
@@ -709,6 +1051,12 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `next_close` | date-time | yes |  |
 | `next_open` | date-time | yes |  |
 | `timestamp` | date-time | yes |  |
+
+### MaxHoldingSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_holding_bars` | integer \| null | no |  |
 
 ### McptOptions
 
@@ -721,6 +1069,41 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `n_permutations` | integer | no |  |
 | `retune` | boolean \| "auto" | no |  |
 | `seed` | integer \| null | no |  |
+
+### MeView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `display_name` | string | yes |  |
+| `email` | string \| null | yes |  |
+| `mfa_enrolled` | boolean | yes |  |
+| `mfa_fresh` | boolean | yes |  |
+| `role` | [Role](#role) | yes |  |
+| `scopes` | list[[ApiScope](#apiscope)] | yes |  |
+| `user_id` | string | yes |  |
+| `via` | "session" \| "token" \| "legacy" \| "cli" \| "scheduler" | yes |  |
+
+### MfaCodeRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `code` | string \| null | no |  |
+| `recovery_code` | string \| null | no |  |
+
+### MfaView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `csrf_token` | string \| null | no |  |
+| `method` | "totp" \| "recovery_code" | yes |  |
+| `recovery_codes` | list[string] \| null | no |  |
+| `recovery_codes_left` | integer | yes |  |
+
+### OperationalHaltSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_bar_age_days` | integer \| null | no |  |
 
 ### OrderView
 
@@ -839,6 +1222,15 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
 
+### Page_StatementFlagView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[StatementFlagView](#statementflagview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
 ### Page_StrategySummary_
 
 | Field | Type | Required | Description |
@@ -868,6 +1260,19 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `name` | string | yes |  |
 | `tunable` | boolean | yes |  |
 
+### PasswordChangeRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `current_password` | string | yes |  |
+| `new_password` | string | yes |  |
+
+### PasswordResetRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `new_password` | string | yes |  |
+
 ### PnlRowView
 
 | Field | Type | Required | Description |
@@ -889,6 +1294,38 @@ One row per day. ``strategy_id`` is ``None`` for the real portfolio and a shadow
 | `rows` | list[[PnlRowView](#pnlrowview)] | yes |  |
 | `strategy_id` | string \| null | yes |  |
 
+### PortalLinkView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `connection_id` | string | yes |  |
+| `expires_at` | date-time | yes |  |
+| `url` | string | yes |  |
+
+### PortfolioSyncView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `activities_new` | integer | yes |  |
+| `activities_seen` | integer | yes |  |
+| `error` | string \| null | yes |  |
+| `external_account_id` | string | yes |  |
+| `portfolio_id` | string | yes |  |
+| `positions` | integer | yes |  |
+| `snapshot_id` | integer \| null | yes |  |
+| `unmapped` | list[string] | yes |  |
+
+### PortfolioTotalsView
+
+Sums over every active portfolio's latest snapshot, for admins. No tickers and no per-person numbers (decision 2026-09-26).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cash` | number | yes |  |
+| `owners` | integer | yes | People who own those portfolios. |
+| `portfolios` | integer | yes | Active portfolios with at least one snapshot. |
+| `total_value` | number | yes | Sum of each book's value at its latest snapshot. |
+
 ### PortfolioView
 
 | Field | Type | Required | Description |
@@ -903,6 +1340,13 @@ One row per day. ``strategy_id`` is ``None`` for the real portfolio and a shadow
 | `tick_id` | string \| null | yes |  |
 | `total_value` | number | yes |  |
 | `unrealized_pnl` | number | no | Sum of the positions' unrealized_pnl (priced, known cost). |
+
+### PortfolioVolSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `shock_cap` | number \| null | no |  |
+| `vol_cap` | number \| null | no |  |
 
 ### PositionView
 
@@ -919,6 +1363,58 @@ One row per day. ``strategy_id`` is ``None`` for the real portfolio and a shadow
 | `unrealized_pnl` | number \| null | no | (price - avg_cost) * quantity at the latest stored close. |
 | `unrealized_pnl_pct` | number \| null | no | unrealized_pnl / \|cost_basis\| (0.05 = +5%). |
 | `weight` | number \| null | yes |  |
+
+### PreferenceItem
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `category` | "signal" \| "order" \| "risk" \| "system" | yes |  |
+| `channel` | string | yes |  |
+| `enabled` | boolean | yes |  |
+| `strategy_id` | string \| null | no |  |
+
+### PreferencesUpdate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `preferences` | list[[PreferenceItem](#preferenceitem)] | yes |  |
+
+### PreferencesView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `channels` | list[string] | yes |  |
+| `preferences` | list[[PreferenceItem](#preferenceitem)] | yes |  |
+| `quiet_end` | string \| null | yes |  |
+| `quiet_start` | string \| null | yes |  |
+| `timezone` | string | yes |  |
+| `webhook` | string \| null | yes |  |
+
+### PreflightIssueView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `code` | string | yes |  |
+| `details` | object | no |  |
+| `message` | string | yes |  |
+| `severity` | "error" \| "warning" | yes |  |
+
+### PreflightView
+
+The BL-37 data preflight of a lab run. A run only starts with no errors, so a result carries warnings (and ``ok`` true).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `issues` | list[[PreflightIssueView](#preflightissueview)] | yes |  |
+| `ok` | boolean | yes |  |
+| `skipped` | boolean | yes |  |
+
+### ProbeView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `checks` | dict[str, string] | no |  |
+| `status` | string | yes |  |
 
 ### ProblemDetails
 
@@ -944,6 +1440,74 @@ What a reviewer reads before promoting; it doesn't change the verdict. ``None`` 
 | `pbo` | number \| null | no |  |
 | `premortem` | string \| null | no |  |
 
+### ProviderView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `auth_flow` | string | yes |  |
+| `can_trade` | boolean | yes |  |
+| `capabilities` | list[string] | yes |  |
+| `credential_fields` | list[string] | yes |  |
+| `display_name` | string | yes |  |
+| `name` | string | yes |  |
+
+### PushDeviceView
+
+A registered browser or installed app: no endpoint, no keys.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `created_at` | date-time | yes |  |
+| `endpoint_host` | string | yes |  |
+| `failure_count` | integer | yes |  |
+| `id` | string | yes |  |
+| `last_success_at` | date-time \| null | yes |  |
+| `user_agent` | string \| null | yes |  |
+
+### PushKeys
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `auth` | string | yes |  |
+| `p256dh` | string | yes |  |
+
+### PushSubscriptionRequest
+
+The browser's ``PushSubscription.toJSON()`` plus its user agent.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `endpoint` | string | yes |  |
+| `expirationTime` | number \| null | no |  |
+| `keys` | [PushKeys](#pushkeys) | yes |  |
+| `user_agent` | string \| null | no |  |
+
+### PushUnsubscribeRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `endpoint` | string | yes |  |
+
+### QuietHoursUpdate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `end` | string \| null | no |  |
+| `start` | string \| null | no |  |
+
+### RecoveryCodesView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `recovery_codes` | list[string] | yes |  |
+
+### ResumeRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `confirmation` | string | yes |  |
+| `reason` | string | yes |  |
+
 ### RiskAdjustmentView
 
 One order the risk policy clipped or dropped.
@@ -957,6 +1521,14 @@ One order the risk policy clipped or dropped.
 | `side` | string | yes |  |
 | `ticker` | string | yes |  |
 
+### RiskPerPositionSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `atr_multiple` | number | no |  |
+| `max_risk` | number \| null | no |  |
+| `max_var` | number \| null | no |  |
+
 ### RiskPolicy
 
 Portfolio construction limits applied between ``strategy.decide`` and the broker (``[production.risk]``). Defaults are permissive, so an unconfigured install trades exactly what the strategy asks for.
@@ -969,6 +1541,24 @@ Portfolio construction limits applied between ``strategy.decide`` and the broker
 | `max_weight_per_asset_class` | dict[str, number] | no |  |
 | `max_weight_per_ticker` | number | no |  |
 | `min_order_notional` | number | no |  |
+| `rules` | [RuleSettings](#rulesettings) | no |  |
+
+### Role
+
+Type: "viewer" \| "trader" \| "admin"
+
+### RuleSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `circuit_breaker` | [CircuitBreakerSettings](#circuitbreakersettings) | no |  |
+| `drawdown_scaling` | [DrawdownScalingSettings](#drawdownscalingsettings) | no |  |
+| `liquidity` | [LiquiditySettings](#liquiditysettings) | no |  |
+| `max_holding` | [MaxHoldingSettings](#maxholdingsettings) | no |  |
+| `operational_halt` | [OperationalHaltSettings](#operationalhaltsettings) | no |  |
+| `portfolio_vol` | [PortfolioVolSettings](#portfoliovolsettings) | no |  |
+| `risk_per_position` | [RiskPerPositionSettings](#riskperpositionsettings) | no |  |
+| `sector_cap` | [SectorCapSettings](#sectorcapsettings) | no |  |
 
 ### RuleTemplateView
 
@@ -978,6 +1568,63 @@ Portfolio construction limits applied between ``strategy.decide`` and the broker
 | `id` | string | yes |  |
 | `spec` | object | yes |  |
 | `title` | string | yes |  |
+
+### RunNowRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date \| null | no |  |
+
+### RunNowView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `job` | string | yes |  |
+| `run_key` | string | yes |  |
+| `status` | string | no |  |
+
+### ScheduleView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `backend` | string | yes |  |
+| `hosted` | boolean | yes |  |
+| `jobs` | list[[ScheduledJobView](#scheduledjobview)] | yes |  |
+| `recent` | list[[ScheduledRunView](#scheduledrunview)] | yes |  |
+
+### ScheduledJobView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `action` | string | yes |  |
+| `name` | string | yes |  |
+| `next_as_of` | date \| null | yes |  |
+| `next_run_at` | date-time \| null | yes |  |
+| `trigger` | string | yes |  |
+
+### ScheduledRunView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `action` | string | yes |  |
+| `as_of` | string \| null | yes |  |
+| `catch_up` | boolean | yes |  |
+| `detail` | object \| null | yes |  |
+| `error` | string \| null | yes |  |
+| `finished_at` | date-time \| null | yes |  |
+| `id` | string | yes |  |
+| `job_name` | string | yes |  |
+| `run_key` | string | yes |  |
+| `scheduled_for` | date-time | yes |  |
+| `started_at` | date-time | yes |  |
+| `status` | string | yes |  |
+
+### SectorCapSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_weight_per_sector` | number \| null | no |  |
 
 ### ShadowDecisionView
 
@@ -1020,6 +1667,40 @@ How one shadow strategy was evaluated during the tick.
 | `strategy_id` | string | yes |  |
 | `total_value` | number \| null | yes |  |
 
+### SignalICRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `end` | date | yes |  |
+| `every_bars` | integer | no |  |
+| `horizons` | list[integer] | no |  |
+| `interval` | string | no |  |
+| `min_names` | integer | no |  |
+| `n_quantiles` | integer | no |  |
+| `start` | date | yes |  |
+| `strategy` | [StrategyRef](#strategyref) | yes |  |
+| `universe` | list[string] | yes |  |
+
+### SignalICView
+
+:class:`stonks.lab.signal_eval.SignalICResult`; NaN is null.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `every_bars` | integer | yes |  |
+| `horizons` | list[[HorizonICView](#horizonicview)] | no |  |
+| `ic_estimate` | number \| null | no |  |
+| `ic_horizon` | integer \| null | no |  |
+| `n_dates` | integer | yes |  |
+| `n_quantiles` | integer | yes |  |
+| `n_tickers` | integer | yes |  |
+| `note` | string | no |  |
+| `score_turnover` | number \| null | no |  |
+| `status` | string | yes |  |
+| `strategy_id` | string | yes |  |
+| `top_quantile_turnover` | number \| null | no |  |
+| `window` | list[any] | yes |  |
+
 ### SmokeCheck
 
 | Field | Type | Required | Description |
@@ -1047,6 +1728,27 @@ How one shadow strategy was evaluated during the tick.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `spec` | object | yes |  |
+
+### StartPortalRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `connection_id` | string \| null | no |  |
+| `label` | string \| null | no |  |
+| `provider` | string | yes |  |
+| `redirect_uri` | string | yes |  |
+
+### StatementFlagView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `check_id` | string | yes |  |
+| `detail` | string | yes |  |
+| `flagged_at` | date-time | yes |  |
+| `frequency` | string | yes |  |
+| `period_end` | date | yes |  |
+| `severity` | "error" \| "warning" | yes |  |
+| `ticker` | string | yes |  |
 
 ### StatusChangeRequest
 
@@ -1172,6 +1874,17 @@ What this server lets the Studio do.
 | `passed` | boolean | yes |  |
 | `test_id` | string | yes |  |
 
+### SyncResultView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `accounts_seen` | integer | yes |  |
+| `connection_id` | string | yes |  |
+| `error` | string \| null | yes |  |
+| `next_sync_at` | date-time \| null | yes |  |
+| `portfolios` | list[[PortfolioSyncView](#portfoliosyncview)] | yes |  |
+| `status` | "ok" \| "partial" \| "error" | yes |  |
+
 ### TickRequest
 
 | Field | Type | Required | Description |
@@ -1232,6 +1945,33 @@ What this server lets the Studio do.
 | `winner_expected_return` | number \| null | no |  |
 | `winner_strategy_id` | string \| null | no |  |
 
+### TokenCreateRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `expires_in_days` | integer \| null | no |  |
+| `name` | string | yes |  |
+| `scopes` | list[[ApiScope](#apiscope)] | yes |  |
+
+### TokenCreatedView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `info` | [TokenView](#tokenview) | yes |  |
+| `token` | string | yes |  |
+
+### TokenView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `created_at` | string | yes |  |
+| `expires_at` | string \| null | yes |  |
+| `id` | string | yes |  |
+| `last_used_at` | string \| null | yes |  |
+| `name` | string | yes |  |
+| `revoked_at` | string \| null | yes |  |
+| `scopes` | list[[ApiScope](#apiscope)] | yes |  |
+
 ### TradeStatsView
 
 Trade-level statistics of a backtest (``backtest.trades.TradeStats``). Win/loss figures are over closed round trips; ``None`` marks an unbounded ratio (no losing trades).
@@ -1270,6 +2010,83 @@ One round trip (a lot, or part of one, from buy to sell or to the end).
 | `return_pct` | number \| null | yes |  |
 | `ticker` | string | yes |  |
 
+### UniverseCreate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `csv` | string \| null | no |  |
+| `description` | string \| null | no |  |
+| `id` | string | yes |  |
+| `kind` | "list" \| "exchange" \| "rule" \| "index" | yes |  |
+| `name` | string \| null | no |  |
+| `spec` | object | no |  |
+
+### UniverseMembers
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `count` | integer | yes |  |
+| `tickers` | list[string] | yes |  |
+| `universe_id` | string | yes |  |
+
+### UniverseRefreshView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `current_members` | integer | yes |  |
+| `kind` | string | yes |  |
+| `members` | integer | yes |  |
+| `refreshed_at` | date-time \| null | no |  |
+| `spans` | integer | yes |  |
+| `universe_id` | string | yes |  |
+| `warnings` | list[string] | no |  |
+
+### UniverseView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `created_at` | date-time \| null | no |  |
+| `description` | string \| null | no |  |
+| `id` | string | yes |  |
+| `kind` | "list" \| "exchange" \| "rule" \| "index" | yes |  |
+| `member_count` | integer \| null | no |  |
+| `name` | string \| null | no |  |
+| `refreshed_at` | date-time \| null | no |  |
+| `spec` | object | yes |  |
+| `updated_at` | date-time \| null | no |  |
+
+### UserCreateRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `display_name` | string | yes |  |
+| `email` | string | yes |  |
+| `password` | string | yes |  |
+| `role` | [Role](#role) | yes |  |
+
+### UserUpdateRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `role` | [Role](#role) \| null | no |  |
+| `status` | "active" \| "disabled" \| null | no |  |
+
+### UserView
+
+Identity and status only. Admins never see holdings here.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `created_at` | string | yes |  |
+| `display_name` | string | yes |  |
+| `email` | string \| null | yes |  |
+| `id` | string | yes |  |
+| `last_login_at` | string \| null | yes |  |
+| `mfa_enrolled` | boolean | yes |  |
+| `role` | [Role](#role) | yes |  |
+| `status` | "active" \| "disabled" | yes |  |
+
 ### ValidateRequest
 
 Smoke-run on these lake tickers (sample data when empty), over the last ``bars`` bars up to ``as_of`` (latest data when omitted).
@@ -1286,6 +2103,12 @@ Smoke-run on these lake tickers (sample data when empty), over the last ``bars``
 |-------|------|----------|-------------|
 | `message` | string | yes |  |
 | `path` | string | yes |  |
+
+### VapidKeyView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `public_key` | string \| null | yes |  |
 
 ### WalkForwardConfig
 
@@ -1307,3 +2130,36 @@ Walk-forward settings. ``test_days=None`` splits the dataset's validation window
 | `seed` | integer \| null | no |  |
 | `test_days` | integer \| null | no |  |
 | `train_days` | integer \| null | no |  |
+
+### WebhookUpdate
+
+Your own webhook (a public ``https`` URL). Write-only: responses show its scheme and host only. Null removes it.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | password \| null | no |  |
+
+### stonks__app__brokers__BrokerAccountView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `buying_power` | number | yes |  |
+| `can_trade` | boolean | yes |  |
+| `cash` | number | yes |  |
+| `currency` | string | yes |  |
+| `equity` | number | yes |  |
+| `pattern_day_trader` | boolean | yes |  |
+| `status` | string | yes |  |
+| `trading_blocked` | boolean | yes |  |
+
+### stonks__app__connections__BrokerAccountView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `connection_id` | string | yes |  |
+| `currency` | string | yes |  |
+| `external_account_id` | string | yes |  |
+| `institution` | string \| null | yes |  |
+| `name` | string | yes |  |
+| `number_mask` | string \| null | yes |  |
+| `portfolio_id` | string \| null | yes |  |

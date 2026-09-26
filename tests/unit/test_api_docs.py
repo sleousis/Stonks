@@ -61,6 +61,7 @@ SPEC = {
                 "tags": ["things"],
                 "summary": "Create Thing",
                 "security": [{"HTTPBearer": []}],
+                "x-permission": "things.create",
                 "requestBody": {
                     "content": {"application/json": {"schema": {"$ref": REF + "NewThing"}}}
                 },
@@ -86,10 +87,10 @@ def test_groups_endpoints_by_tag_with_auth_and_models():
     assert "[things](#things-endpoints)" in md
     lines = md.splitlines()
     get_row = next(ln for ln in lines if ln.startswith("| GET | `/api/things`"))
-    assert "token, or open on loopback" in get_row
+    assert "| sign-in |" in get_row
     assert "list[[Thing](#thing)]" in get_row
     post_row = next(ln for ln in lines if ln.startswith("| POST | `/api/things`"))
-    assert "bearer token" in post_row
+    assert "`things.create`" in post_row
     assert "[NewThing](#newthing)" in post_row
     health_row = next(ln for ln in lines if ln.startswith("| GET | `/api/health`"))
     assert "| none |" in health_row

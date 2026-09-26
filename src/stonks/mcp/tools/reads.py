@@ -7,7 +7,7 @@ a route with query or path parameters is one small function in
 
 # No ``from __future__ import annotations`` (see common.py).
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import Field
 
@@ -18,6 +18,7 @@ from stonks.mcp.tools.common import (
     JobStatus,
     Limit,
     Offset,
+    PortfolioId,
     RouteRead,
     Since,
     StrategyStatus,
@@ -32,10 +33,9 @@ from stonks.mcp.tools.common import (
 ROUTE_READS: tuple[RouteRead, ...] = (
     RouteRead("health", "/api/health", "Check that the Stonks API is up and report its version."),
     RouteRead(
-        "get_portfolio",
-        "/api/portfolio",
-        "Current portfolio: cash, positions valued at the latest stored closes, "
-        "weights and total value, from the latest snapshot.",
+        "get_portfolio_totals",
+        "/api/portfolio/totals",
+        "Admins only: cash and value summed across every active portfolio (no holdings).",
     ),
     RouteRead(
         "get_risk_policy",
@@ -68,9 +68,20 @@ def register(t: ToolContext) -> None:
     server = t.server
 
     @server.tool(annotations=READ)
-    async def list_portfolio_snapshots(limit: Limit = 50, offset: Offset = 0) -> dict[str, Any]:
+    async def get_portfolio(portfolio_id: PortfolioId = None) -> dict[str, Any]:
+        """Current portfolio: cash, positions valued at the latest stored closes,
+        weights and total value, from the latest snapshot."""
+        return await t.get("/api/portfolio", {"portfolio_id": portfolio_id})
+
+    @server.tool(annotations=READ)
+    async def list_portfolio_snapshots(
+        portfolio_id: PortfolioId = None, limit: Limit = 50, offset: Offset = 0
+    ) -> dict[str, Any]:
         """Portfolio history: one snapshot per production tick, newest first."""
-        return await t.get("/api/portfolio/snapshots", {"limit": limit, "offset": offset})
+        return await t.get(
+            "/api/portfolio/snapshots",
+            {"portfolio_id": portfolio_id, "limit": limit, "offset": offset},
+        )
 
     @server.tool(annotations=READ)
     async def list_strategies(
@@ -146,6 +157,7 @@ def register(t: ToolContext) -> None:
 
     @server.tool(annotations=READ)
     async def list_orders(
+        portfolio_id: PortfolioId = None,
         tick_id: str | None = None,
         strategy_id: str | None = None,
         ticker: str | None = None,
@@ -157,6 +169,7 @@ def register(t: ToolContext) -> None:
         return await t.get(
             "/api/orders",
             {
+                "portfolio_id": portfolio_id,
                 "tick_id": tick_id,
                 "strategy_id": strategy_id,
                 "ticker": ticker,
@@ -168,6 +181,7 @@ def register(t: ToolContext) -> None:
 
     @server.tool(annotations=READ)
     async def list_fills(
+        portfolio_id: PortfolioId = None,
         tick_id: str | None = None,
         ticker: str | None = None,
         order_client_id: str | None = None,
@@ -178,6 +192,7 @@ def register(t: ToolContext) -> None:
         return await t.get(
             "/api/orders/fills",
             {
+                "portfolio_id": portfolio_id,
                 "tick_id": tick_id,
                 "ticker": ticker,
                 "order_client_id": order_client_id,
@@ -211,6 +226,24 @@ def register(t: ToolContext) -> None:
         )
 
     @server.tool(annotations=READ)
+    async def list_statement_flags(
+        ticker: Ticker | None = None,
+        severity: Annotated[
+            Literal["error", "warning"] | None, Field(description="only this severity")
+        ] = None,
+        limit: Limit = 50,
+        offset: Offset = 0,
+    ) -> dict[str, Any]:
+        """Statement periods the accounting audit flagged (BL-36): balance
+        identity, net income and cash mismatches, quarters vs annual, filings
+        dated before period end, negative shares. Error flags make lab
+        preflight warn."""
+        return await t.get(
+            "/api/statements/flags",
+            {"ticker": ticker, "severity": severity, "limit": limit, "offset": offset},
+        )
+
+    @server.tool(annotations=READ)
     async def get_catalog() -> dict[str, Any]:
         """Strategy classes that can be backtested or tuned, with their parameter
         specs, plus the valid bar intervals and asset classes."""
@@ -241,10 +274,10 @@ def register(t: ToolContext) -> None:
         return await t.get(f"/api/jobs/{seg(job_id)}")
 
     @server.tool(annotations=READ)
-    async def get_pnl(since: Since = None) -> dict[str, Any]:
-        """Daily P&L of the real portfolio (last snapshot per UTC day). Returns
+    async def get_pnl(since: Since = None, portfolio_id: PortfolioId = None) -> dict[str, Any]:
+        """Daily P&L of one of your portfolios (last snapshot per UTC day). Returns
         and drawdown are measured from inception even when since trims the rows."""
-        return await t.get("/api/pnl", {"since": iso(since)})
+        return await t.get("/api/pnl", {"since": iso(since), "portfolio_id": portfolio_id})
 
     @server.tool(annotations=READ)
     async def list_shadow_decisions(

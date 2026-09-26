@@ -20,7 +20,7 @@ def client(settings, seeded, fake_source):
         yield c
 
 
-def test_promote_route_accepts_override_reason_and_actor(client, seeded):
+def test_promote_route_takes_override_and_reason_and_audits_the_caller(client, seeded):
     sid = seeded["shadow_id"]
     resp = client.post(
         f"/api/strategies/{sid}/promote",
@@ -33,7 +33,8 @@ def test_promote_route_accepts_override_reason_and_actor(client, seeded):
     change = body["status_history"][-1]
     assert change["override"] is True
     assert change["reason"] == LONG_REASON
-    assert change["actor"] == "ui:alice"
+    # The body's actor is ignored: the audit row names the caller.
+    assert change["actor"] == "user:usr_owner"
 
 
 def test_promote_route_short_override_reason_is_422(client, seeded):
@@ -60,7 +61,7 @@ def test_demotion_routes_take_a_reason(client, seeded, action, status):
     )
     assert resp.status_code == 200, resp.json()
     assert resp.json()["status"] == status
-    assert resp.json()["status_history"][-1]["actor"] == "api"
+    assert resp.json()["status_history"][-1]["actor"] == "user:usr_owner"
 
 
 def test_history_route(client, seeded):
@@ -118,7 +119,7 @@ def test_studio_enable_disable_take_reason_and_override(client):
     assert off.json()["strategy_status"] == "shadow"
     sid = off.json()["registered_strategy_id"]
     history = client.get(f"/api/strategies/{sid}/history").json()
-    assert [c["actor"] for c in history] == ["studio", "studio"]
+    assert [c["actor"] for c in history] == ["user:usr_owner", "user:usr_owner"]
 
 
 def _spec():

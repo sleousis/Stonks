@@ -1,157 +1,153 @@
-# Block 3 — Strategy Lab
-
-> Status: **implemented** (Block 3a + Block 3b). Reference strategies: BuyAndHold (rule-based), Momentum (technical indicator), DonchianBreakout (horizontal-channel breakout), TrendlineBreakoutStrategy (slope-aware support/resistance breakout), RSIPCAStrategy (ML — PCA over many RSI periods + a linear predictor with quantile thresholds). The `fit` → `save` → `load` lifecycle is exercised end-to-end by RSIPCAStrategy. Backtester is **interval-agnostic** — `BacktestConfig.interval` accepts any `Interval` (1m, 5m, 15m, 30m, 1h, 4h, 12h, 1d, 1w). Rebalance cadence is bar-counted (`rebalance_every_bars`), so the same config works identically at every interval.
->
-> Survival suite now includes **MonteCarloPermutationTest (MCPT)** and **RunsTestSurvivalTest**: the former checks whether the strategy's real-data score is reliably better than scores on time-shuffled bars (bar-permutation null); the latter applies Wald-Wolfowitz Z to the per-bar return-sign sequence to flag strategies with strongly dependent wins/losses (regime lock-in).
->
+# Block 3: Strategy lab
 
 ## Purpose
 
-Turn a `Strategy` *class* into a fitted, survived strategy *instance* worth registering. All components are strategy-agnostic; a new strategy plugs in with zero changes to tuner, objectives, or survival tests.
+Turn a strategy class into a tuned, fitted instance that has survived a suite of tests, and only then register it. Every part is strategy-agnostic: a new strategy needs no change to the tuners, objectives or survival tests, and a new test needs no change to any strategy.
 
-## Module layout (target)
+The rules behind the tests are in [principles.md](../principles.md). The list of strategies is in [strategies/README.md](../strategies/README.md).
+
+## Module layout
 
 ```
-src/stonks/strategies/
-├── base.py                        # BaseStrategy with default save/load/fit no-ops
-└── examples/…                     # reference impls (buy_and_hold, value_screen, momentum, ensemble, linear_regressor)
-src/stonks/features/
-└── library.py                     # optional TTM, reindex_to_daily, pct_change_yoy helpers
 src/stonks/lab/
-├── dataset.py                     # LabDataset: train/val/test window resolver
-├── objectives.py                  # SharpeObjective, CAGRObjective, RMSEObjective
-├── tuning/
-│   ├── base.py                    # Tuner Protocol, TunerResult, SearchSpace derivation
-│   ├── grid.py
-│   ├── random.py
-│   └── optuna_tuner.py
-├── survival/
-│   ├── base.py                    # SurvivalTest Protocol, SurvivalReport, SurvivalSuite
-│   ├── oos.py                     # OutOfSampleBacktest
-│   ├── period_stability.py
-│   ├── perturbation.py
-│   └── drift.py                   # PSI/KS-based
-└── runner.py                      # tune → fit → suite → register
-src/stonks/backtest/
-├── engine.py                      # date loop; talks to Broker Protocol
-├── portfolio.py
-├── simulated_broker.py
-└── report.py                      # metrics: Sharpe, max_dd, CAGR, turnover
+├── runner.py        # preflight, pre-register, tune, fit, survival suite, verdict
+├── preflight.py     # data checks before a run (BL-37)
+├── universe.py      # point-in-time universes: id, list or rule (BL-37)
+├── catalog.py       # every strategy `stonks lab run` can name
+├── dataset.py       # LabDataset: train / validation windows, embargo
+├── objectives.py    # sharpe, cagr, final_return
+├── tuning/          # grid.py, random.py, tune_and_fit in base.py
+├── trials.py        # trial ledger: lab_runs, lab_trials
+├── manifest.py      # reproducibility manifest (git sha, config hash, data fingerprint)
+├── parallel.py      # the one spawn process pool (tuning, sweeps, reruns)
+├── lake_copy.py     # read-only snapshot lakes for workers
+├── backtesting.py   # backtest helpers shared by the lab and the API
+├── signal_eval.py   # IC analysis of a strategy's scores
+└── survival/        # one module per survival test + registry.py
+src/stonks/backtest/ # engine, simulated broker, fills, costs, trades, metrics, benchmark
+src/stonks/stats/    # PSR, deflated Sharpe, MinTRL, bootstrap, HAC, CSCV/PBO, FDR
 ```
 
-## `Strategy` Protocol
+## The `Strategy` protocol
 
 ```python
 class Strategy(Protocol):
     id: str
-
     @classmethod
     def parameter_spec(cls) -> ParamSpace: ...
     def __init__(self, params: Params) -> None: ...
-
-    # feature extraction lives here
-    def extract_features(self, ticker: str, as_of: date, lake: DuckDBLake) -> Features: ...
-
-    def fit(self, dataset: LabDataset) -> None: ...          # optional; default = no-op
-
-    def estimate_return(self, ticker: str, as_of: date, lake: DuckDBLake) -> float | None: ...
-    def decide(self, ranked: list[tuple[float, "Strategy"]], portfolio: Portfolio) -> list[Order]: ...
-
-    def save(self, path: Path) -> None: ...                  # default = write params.json only
+    def extract_features(self, ticker, as_of, lake) -> Features: ...
+    def fit(self, dataset) -> None: ...                       # optional
+    def estimate_return(self, ticker, as_of, lake) -> float | None: ...
+    def decide(self, my_picks, portfolio, prices, as_of) -> list[Order]: ...
+    def save(self, path: Path) -> None: ...
     @classmethod
-    def load(cls, path: Path) -> "Strategy": ...
+    def load(cls, path: Path) -> Strategy: ...
 ```
 
-- `ParameterSpec.tunable=False` marks params the tuner must leave alone (data paths, universe filters).
-- Feature-construction knobs (lookback window, smoothing) are normal `ParameterSpec` entries, so tuning optimizes them alongside decision knobs.
+- `BaseStrategy` gives defaults: no features, no-op `fit`, and `save` / `load` of `params.json` and `meta.json`.
+- `ParameterSpec(tunable=False)` marks params the tuner must leave alone.
+- Feature knobs (lookbacks, smoothing) are normal parameters, so tuning covers them.
+- Strategies also declare `applicable_asset_classes` and metadata (hypothesis, family, label horizon, required history).
 
-## `Tuner` + `Objective`
+## Tuners and objectives
 
-```python
-class Objective(Protocol):
-    name: str
-    direction: Literal["maximize", "minimize"]
-    def score(self, strategy: Strategy, dataset: LabDataset) -> float: ...
-
-class Tuner(Protocol):
-    def tune(self, strategy_cls: type[Strategy], param_space: ParamSpace,
-             objective: Objective, dataset: LabDataset, budget: int) -> TunerResult: ...
-```
-
-- Tuner reads `param_space` and nothing else about the strategy.
-- Implementations: `GridTuner`, `RandomTuner`, `OptunaTuner`. Adding a `BayesianTuner` is a single-file addition.
+- Tuners: `grid` and `random` (`--tuner`). A tuner reads only the `ParamSpace`.
+- Objectives: `sharpe` (default), `cagr`, `final_return` (`--objective`).
+- Trials run in parallel on `[lab.parallel] max_workers` processes (0 = every core). Results do not depend on the worker count.
 
 ## Survival tests
 
-```python
-class SurvivalTest(Protocol):
-    id: str
-    def run(self, strategy: Strategy, context: LabContext) -> SurvivalReport: ...
+A test is one module in `lab/survival/` with an `id` and a `run` method; `survival/registry.py` finds it. There are 18:
 
-@dataclass
-class SurvivalReport:
-    test_id: str
-    passed: bool
-    metrics: dict[str, float]
-    notes: str = ""
+| Id | Checks |
+|----|--------|
+| `oos` | Out-of-sample result on the validation window (PSR gate, minimum trades) |
+| `period_stability` | Works in each sub-period, not one lucky stretch |
+| `perturbation` | Holds up when prices and parameters get small noise |
+| `drift` | Feature distributions did not shift (PSI) |
+| `walk_forward` | Rolling tune and test windows, walk-forward efficiency |
+| `deflated_sharpe` | Sharpe still significant after counting every trial |
+| `pbo` | Probability of backtest overfitting (CSCV) |
+| `mc_trades` | Monte Carlo over the trade sequence |
+| `cost_stress` | Survives doubled costs and a speed limit |
+| `plateau` | Neighbouring parameters score nearly as well |
+| `cross_instrument` | Works on other instruments too |
+| `benchmark_relative` | Beats the benchmark after beta |
+| `mcpt` | Real score beats scores on shuffled bars |
+| `walk_forward_mcpt` | Permutation test inside walk-forward |
+| `runs_test` | Wins and losses do not cluster abnormally |
+| `signal_ic` | Scores rank future returns (informational) |
+| `event_study` | Entries beat baseline drift |
+| `vs_random` | Beats random entries with the same exposure |
 
-class SurvivalSuite:
-    def __init__(self, tests: list[SurvivalTest]): ...
-    def run(self, strategy: Strategy, context: LabContext) -> list[SurvivalReport]: ...
-```
+Presets (`--preset`):
 
-| Test | What it checks | Pass criterion (configurable) |
-|---|---|---|
-| `oos` | Performance on held-out final window. | Sharpe ≥ T_sharpe AND max_dd ≤ T_dd. |
-| `period_stability` | Backtest across K disjoint historical windows. | Std-dev of Sharpe across windows ≤ T_var. |
-| `perturbation` | Inject Gaussian noise into features/prices at N levels; re-run. | Return-curve correlation with baseline ≥ T_corr. |
-| `drift` | Compare training-period vs recent feature distributions. | Max PSI across features ≤ T_psi. |
+| Preset | Tests |
+|--------|-------|
+| `quick` (default; `--register` defaults to `promotion`) | `oos`, `period_stability` |
+| `standard` | `quick` plus `perturbation`, `walk_forward`, `deflated_sharpe`, `cost_stress` |
+| `promotion` | `oos`, `walk_forward`, `deflated_sharpe`, `pbo`, `mc_trades`, `cost_stress`, `plateau`, `cross_instrument`, `benchmark_relative`, `mcpt` (200 permutations) |
 
-Thresholds are config-driven; the lab runner reads them from `settings().lab.survival_thresholds`.
+`--tests a,b,c` picks tests by id instead. `--test-option` passes options to one test.
 
-## Runner sequence
+## Run sequence
 
 ```mermaid
 sequenceDiagram
-    autonumber
     participant User
     participant Runner as lab.runner
-    participant Cls as StrategyClass
+    participant Ledger as TrialLedger
     participant Tuner
     participant BT as Backtester
     participant Suite as SurvivalSuite
     participant Reg as StrategyRegistry
-
-    User->>Runner: run(StrategyClass, dataset, objective, tuner, suite)
-    Runner->>Cls: parameter_spec()
-    Cls-->>Runner: ParamSpace
-    Runner->>Tuner: tune(Cls, space, objective, dataset.train, budget)
-    loop per trial
-        Tuner->>Cls: Cls(params_i)
-        Tuner->>BT: backtest(strategy_i, dataset.train)
-        BT-->>Tuner: metrics
-        Tuner->>Tuner: objective.score
+    User->>Runner: stonks lab run <id>
+    Runner->>Runner: preflight (coverage, flags, membership)
+    Runner->>Ledger: pre-register (hypothesis, premortem, manifest)
+    Runner->>Tuner: tune on the train window
+    loop each trial (parallel)
+        Tuner->>BT: backtest(params)
+        BT-->>Tuner: score and per-bar returns
     end
-    Tuner-->>Runner: TunerResult(best_params)
-    Runner->>Cls: Cls(best_params)
-    Runner->>Cls: fit(dataset)
-    Runner->>Suite: run(strategy, context)
-    Suite-->>Runner: [SurvivalReport]
-    alt all passed
-        Runner->>Reg: register(strategy, best_params, reports)
-    else any failed
-        Runner-->>User: rejected + reports
+    Tuner-->>Runner: best params
+    Runner->>Ledger: record trials
+    Runner->>Runner: fit(best params)
+    Runner->>Suite: run tests on the embargoed dataset
+    Suite-->>Runner: reports
+    Runner->>Ledger: verdict
+    opt --register and every test passed
+        Runner->>Reg: register in shadow
     end
 ```
 
+```bash
+uv run stonks lab run momentum --tickers AAPL.US,MSFT.US --start 2023-01-01 --end 2025-01-01 \
+  --preset promotion --hypothesis "winners keep winning for months" --register
+uv run stonks lab sweep --start 2023-01-01 --end 2025-01-01 --csv-out sweep.csv
+```
+
+`lab sweep` runs every catalogued strategy (or `--strategies`) over one basket and summarises the verdicts.
+
+### Preflight and universes
+
+Before tuning, the runner checks the data (`lab/preflight.py`). An empty universe, or no bars at all in the window, stops the run with a clear message. Everything else is a warning: missing tickers, data that starts late, too little history for the strategy's `required_history_bars`, quarantined bars, audit flags, a static ticker list (survivorship bias, P14), members of the named universe missing from the dataset, a long window with no delisted name, zero costs, and a benchmark with no bars. Warnings go to the log and to the run manifest. `LabRunner(strict_preflight=True)` turns them into errors, and `preflight=False` turns the check off. A preflight that crashes never blocks a run.
+
+`lab/universe.py` resolves a universe on a date. It takes a universe id (rows in `universe_membership`), a static list, or a rule with `min_adv`, `asset_classes` and `exclude_sectors`. A rule includes a delisted name up to its delisting date. `resolve_window` gives every name that was in the universe at any point in a window.
+
 ## Backtester
 
-- Date-driven loop; pulls universe-of-the-day from the lake.
-- Calls `strategy.estimate_return` and `strategy.decide`; orders flow through the `Broker` Protocol (same interface used in production).
-- `SimulatedBroker` implements `Broker` for the lab; fills at next-bar open with configurable slippage/fees.
+- Interval-aware: `BacktestConfig.interval` is any `Interval`; `rebalance_every_bars` counts bars.
+- Orders decided on bar t fill at the next bar's open. Equity is marked at each close, carried forward for tickers with no bar.
+- `SimulatedBroker` uses the same `Broker` protocol as production. Its `FillModel` caps participation, fills limit and stop orders from the bar range and guards gaps. Its `CostModel` charges per-asset-class spread, fees and square-root impact (`[backtest.costs]`, realistic by default).
+- Splits and cash dividends are applied on their ex-dates.
+- When a construction method is configured, the engine runs the same construction pipeline as the tick (`portfolio/pipeline.py`).
+- `BacktestReport` carries the trade ledger (FIFO round trips), Sharpe, Sortino, Calmar, drawdown and its duration, Ulcer index, VaR, ES, skew, kurtosis, turnover and costs, plus benchmark alpha and beta.
 
-## Milestones
+## Signal research
 
-- **Lab M1:** `Strategy` base + `BaseStrategy` defaults + one rule-based example + `SimulatedBroker` + `Backtester` + `GridTuner` + `oos` test + `lab.runner`.
-- **Lab M2:** remaining three survival tests, `RandomTuner`, `OptunaTuner`.
-- **Lab M3:** ML example strategies + joblib artifact persistence.
+`lab/signal_eval.py` treats `estimate_return` as a signal and measures its rank IC against forward returns over several horizons. `--events` adds the event study.
+
+```bash
+uv run python -m stonks.lab.signal_eval --strategy momentum --tickers AAPL.US,MSFT.US --events --html signal.html
+```

@@ -18,9 +18,14 @@ import { errorMessage } from '../../core/http/api-error';
     </div>
   `,
   styles: `
+    /* Loading, empty and error all reserve 9.5rem (an error with a one-line
+       message and a 44px retry button), so swapping one for another does
+       not push the page around. Pass more rows when the content is taller. */
     .loading {
       display: grid;
+      align-content: start;
       gap: var(--space-2);
+      min-height: 9.5rem;
       padding: var(--space-4);
     }
     .bar {
@@ -75,7 +80,10 @@ export class LoadingState {
     .empty {
       display: grid;
       justify-items: start;
+      align-content: start;
       gap: var(--space-2);
+      /* Same floor as the loading and error states. */
+      min-height: 9.5rem;
       padding: var(--space-5) var(--space-4);
     }
     .title {
@@ -111,7 +119,10 @@ export class EmptyState {
     .error {
       display: grid;
       justify-items: start;
+      align-content: start;
       gap: var(--space-2);
+      /* 9.5rem with its margins: the loading and empty states' floor. */
+      min-height: calc(9.5rem - 2 * var(--space-3));
       margin: var(--space-3);
       padding: var(--space-3) var(--space-4);
       border-left: 3px solid var(--color-loss);

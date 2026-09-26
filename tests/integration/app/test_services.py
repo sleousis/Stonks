@@ -42,6 +42,17 @@ def test_app_package_never_imports_web_frameworks():
 # ---- portfolio --------------------------------------------------------------
 
 
+def test_services_build_the_auth_service_from_the_auth_section(settings, seeded):
+    from stonks.app.context import AppContext
+    from stonks.app.services import Services
+    from stonks.auth import AuthService
+
+    settings.auth = settings.auth.model_copy(update={"session_idle_hours": 3.0})
+    svc = Services.create(AppContext(settings))
+    assert isinstance(svc.auth, AuthService)
+    assert svc.auth.settings.session_idle_hours == 3.0
+
+
 def test_portfolio_current_values_positions_at_latest_prices(services):
     view = services.portfolio.current()
     assert view.tick_id is not None

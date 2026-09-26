@@ -18,6 +18,14 @@ from stonks.strategies.base import BaseStrategy
 
 class BuyAndHold(BaseStrategy):
     id = "buy_and_hold"
+    hypothesis = (
+        "The benchmark, not a bet: holding one asset earns its risk "
+        "premium. Every other strategy has to beat this after costs. It "
+        "fails only when the asset itself falls."
+    )
+    alpha_family = "benchmark"
+    premise = "none"
+    label_horizon_bars = 0
 
     @classmethod
     def parameter_spec(cls):

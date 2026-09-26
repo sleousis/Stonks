@@ -80,8 +80,12 @@ async def call_error(client: Client, name: str, args: dict[str, Any] | None = No
 # ---- tool catalogue -------------------------------------------------------------
 
 READ_TOOLS = {
+    "list_universes",
+    "get_universe",
+    "get_universe_members",
     "health",
     "get_portfolio",
+    "get_portfolio_totals",
     "list_portfolio_snapshots",
     "list_strategies",
     "get_strategy",
@@ -112,12 +116,17 @@ READ_TOOLS = {
     "validate_rule_spec",
     "list_drafts",
     "get_draft",
+    "list_connections",
+    "get_connection_accounts",
+    "list_halts",
+    "list_statement_flags",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
     "run_backtest",
     "run_lab",
     "run_ingest",
+    "run_signal_ic",
     "create_draft",
     "validate_draft",
     "backtest_draft",
@@ -126,6 +135,10 @@ JOB_TOOLS = {
 # Overwrite a draft's fields; no confirm (a draft is never traded).
 EDIT_TOOLS = {"update_draft"}
 GUARDED_TOOLS = {
+    "create_universe",
+    "refresh_universe",
+    "ensure_universe_data",
+    "import_index_history",
     "promote_strategy",
     "retire_strategy",
     "shadow_strategy",
@@ -133,6 +146,8 @@ GUARDED_TOOLS = {
     "register_draft",
     "enable_draft",
     "disable_draft",
+    "sync_connection",
+    "engage_kill_switch",
 }
 
 
@@ -182,6 +197,17 @@ async def test_health_and_portfolio(mcp):
 
 
 @pytest.mark.anyio
+async def test_portfolio_tools_take_a_portfolio_id_that_must_be_yours(mcp):
+    mine = await call(mcp, "get_portfolio", {"portfolio_id": "pf_default"})
+    assert [p["ticker"] for p in mine["positions"]] == ["UP.US"]
+    for tool in ("get_portfolio", "list_orders", "list_fills", "get_pnl"):
+        text = await call_error(mcp, tool, {"portfolio_id": "pf_someone_else"})
+        assert "not found" in text.lower(), (tool, text)
+    totals = await call(mcp, "get_portfolio_totals")
+    assert totals["portfolios"] >= 1 and "positions" not in totals
+
+
+@pytest.mark.anyio
 async def test_strategies(mcp, seeded):
     listed = await call(mcp, "list_strategies", {"status": "active"})
     assert [s["id"] for s in listed["items"]] == [seeded["active_id"]]
@@ -201,6 +227,12 @@ async def test_market(mcp):
     assert len(bars["bars"]) == 5
     coverage = await call(mcp, "get_coverage", {"ticker": "UP.US"})
     assert coverage["items"][0]["ticker"] == "UP.US"
+
+
+@pytest.mark.anyio
+async def test_statement_flags(mcp):
+    flags = await call(mcp, "list_statement_flags", {"ticker": "UP.US", "severity": "error"})
+    assert flags == {"items": [], "total": 0, "limit": 50, "offset": 0}
 
 
 @pytest.mark.anyio

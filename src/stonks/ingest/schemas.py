@@ -41,6 +41,8 @@ CryptoConsensusType = Literal[
 BondIssuerKind = Literal["sovereign", "corporate", "municipal", "agency", "supranational", "other"]
 BondKind = Literal["treasury", "corporate", "municipal", "zero_coupon", "other"]
 CommodityContractKind = Literal["spot", "continuous", "futures", "index", "other"]
+#: Equity sub-kind shared by :class:`TickerProfile` and :class:`SymbolListing`.
+SecurityType = Literal["common_stock", "preferred_stock", "adr", "etf", "fund", "other"]
 
 # Re-export for DataSource implementations that need to import from the
 # schemas module in a single statement.
@@ -77,6 +79,8 @@ __all__ = [
     "NewsSentimentRow",
     "OfficerRow",
     "RawPriceBar",
+    "SecurityType",
+    "SymbolListing",
     "SegmentationRow",
     "SharesOutstandingRow",
     "StockSplitRow",
@@ -943,3 +947,29 @@ class ExchangeInfo(FrozenRow):
     country_iso2: str | None = None
     country_iso3: str | None = None
     operating_mic: str | None = None
+
+
+class SymbolListing(FrozenRow):
+    """One symbol a :class:`DataSource` lists on an exchange, active or
+    delisted. Returned by :meth:`DataSource.list_symbols`; exchange
+    universes turn listings into membership spans and instrument rows.
+
+    ``security_type`` is the canonical equity sub-kind (``None`` for other
+    asset classes or when the vendor does not say). ``is_delisted`` is
+    ``True`` for symbols the vendor reports as no longer trading."""
+
+    ticker: str
+    exchange: str | None = None
+    name: str | None = None
+    currency: str | None = None
+    country: str | None = None
+    asset_class: AssetClass = "equity"
+    security_type: SecurityType | None = None
+    isin: str | None = None
+    is_delisted: bool = False
+
+    @model_validator(mode="after")
+    def _security_type_is_equity_only(self) -> SymbolListing:
+        if self.asset_class != "equity" and self.security_type is not None:
+            raise ValueError("security_type is equity-only")
+        return self

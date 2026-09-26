@@ -19,9 +19,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from stonks.api.deps import authorize, authorize_stream, require_token
+from stonks.api.deps import (
+    CSRF_HEADER,
+    MetricsAccessConfig,
+    authorize,
+    authorize_metrics,
+    authorize_stream,
+    require_token,
+    route_permissions,
+)
 from stonks.api.errors import PROBLEM_MEDIA_TYPE, install_error_handlers
-from stonks.api.routers import API_ROUTERS, PUBLIC_ROUTERS, STREAM_ROUTERS, TOKEN_ROUTERS
+from stonks.api.routers import (
+    API_ROUTERS,
+    METRICS_ROUTERS,
+    PUBLIC_ROUTERS,
+    STREAM_ROUTERS,
+    TOKEN_ROUTERS,
+)
 from stonks.api.routers.health import _version
 from stonks.api.routers.jobs import JobEvent
 from stonks.api.static import mount_spa
@@ -48,10 +62,16 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         svc.start()
+        # Hosts the scheduler loop when [scheduler].backend resolves to
+        # in_process; a no-op otherwise.
+        svc.schedule.start_hosted()
         _log.info("api.started", host=cfg.host, port=cfg.port)
         try:
             yield
         finally:
+            # Stop the loop first (it waits for a running job), so no new
+            # job is submitted to a runner that is shutting down.
+            svc.schedule.stop_hosted()
             # Queued jobs are cancelled and running lab runs asked to stop at
             # their next trial. wait=False only returns early: the
             # interpreter still joins running workers (ticks, ingests) at
@@ -69,6 +89,7 @@ def create_app(
     )
     app.state.services = svc
     app.state.sse_poll_seconds = sse_poll_seconds
+    app.state.metrics_access = MetricsAccessConfig()
 
     install_error_handlers(app)
     for router in PUBLIC_ROUTERS:
@@ -79,6 +100,8 @@ def create_app(
         app.include_router(router, dependencies=[Depends(require_token)])
     for router in STREAM_ROUTERS:
         app.include_router(router, dependencies=[Depends(authorize_stream)])
+    for router in METRICS_ROUTERS:
+        app.include_router(router, dependencies=[Depends(authorize_metrics)])
     if cfg.ui_dist.is_dir():
         mount_spa(app, cfg.ui_dist)
     _install_openapi_postprocessing(app)
@@ -86,12 +109,15 @@ def create_app(
     # Middleware: last added runs first. Host check first (DNS-rebinding
     # guard for the open-on-loopback reads), then CORS, then logging.
     app.add_middleware(_RequestLogMiddleware)
+    # Only the Angular dev server's origin ([api].ui_origin) may call the
+    # API cross-origin, with the session cookie and its CSRF header. The
+    # built console is same-origin and needs no CORS at all.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[cfg.ui_origin],
-        allow_credentials=False,
+        allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "Last-Event-ID"],
+        allow_headers=["Authorization", "Content-Type", "Last-Event-ID", CSRF_HEADER],
     )
     allowed = [*_LOOPBACK_HOSTS, cfg.host, *cfg.allowed_hosts]
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=sorted(set(allowed)))
@@ -125,6 +151,12 @@ def _install_openapi_postprocessing(app: FastAPI) -> None:
                             "contentMediaType": "application/json",
                             "contentSchema": {"$ref": "#/components/schemas/JobEvent"},
                         }
+        # The permission each route checks (design section 8), for clients
+        # and reviewers: ``x-permission: strategy.promote``.
+        for method, path, permission in route_permissions(app.routes):
+            op = spec.get("paths", {}).get(path, {}).get(method.lower())
+            if op is not None:
+                op["x-permission"] = permission.value
         app.openapi_schema = spec
         return spec
 

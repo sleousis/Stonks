@@ -59,6 +59,11 @@ _MEMO_MAX = 50_000
 
 class FeatureRegimeFilter(InnerStrategyWrapper):
     id = "feature_regime_filter"
+    hypothesis = (
+        "Some strategies only work when a market is orderly, and entropy "
+        "style features tell orderly from random. Gating on them cuts "
+        "losing trades. Adds no alpha of its own."
+    )
     id_suffix = "feature_regime"
 
     @classmethod

@@ -7,19 +7,28 @@ so the config surface stays small and discoverable.
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import tomllib
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from stonks.backtest.costs import CostModelSettings
+from stonks.backtest.fills import ExecutionSettings
 from stonks.core.types import AssetClass
+from stonks.ingest.quality_config import DataQualityConfig, FallbackConfig
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
+from stonks.ops.config import BackupConfig
+from stonks.portfolio.settings import ConstructionSettings
+from stonks.production.quit_rule import QuitRuleSettings
+from stonks.production.rules.settings import RuleSettings
+from stonks.scheduling.config import SchedulerConfig
+from stonks.store.audit import AuditTolerances
 from stonks.store.bars import BarBackend
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
@@ -158,6 +167,11 @@ class RiskPolicy(BaseModel):
     cash_buffer_fraction: float = Field(default=0.0, ge=0.0, le=1.0)
     # Buys whose (possibly clipped) notional falls below this are dropped.
     min_order_notional: float = Field(default=0.0, ge=0.0)
+    # ``[production.risk.rules.<rule>]``: the W3.1 rules (max_holding,
+    # drawdown_scaling, portfolio_vol, risk_per_position, sector_cap,
+    # liquidity) and the W3.2 halts (circuit_breaker, operational_halt),
+    # every one off by default.
+    rules: RuleSettings = RuleSettings()
 
     def tighter_of(self, *overrides: RiskPolicy | Mapping[str, Any] | None) -> RiskPolicy:
         """This policy tightened by each partial override (a ``RiskPolicy``
@@ -197,6 +211,22 @@ class ProductionConfig(BaseModel):
     dividend_withholding_rate: float = Field(default=0.0, ge=0.0, le=1.0)
     risk: RiskPolicy = RiskPolicy()
     health: HealthConfig = HealthConfig()
+    # ``[production.construction]``: the global constructor and no-trade
+    # buffer (default ``single_winner``, today's behaviour); a portfolio's
+    # ``construction_json`` is merged on top.
+    construction: ConstructionSettings = ConstructionSettings()
+    # Which strategies keep a model book: "shadow" (only shadow strategies)
+    # or "all" non-retired ones (design section 5).
+    model_books: Literal["shadow", "all"] = "shadow"
+    # Trade one book per portfolio from its paper/auto subscriptions (and
+    # record notify signals) instead of the single legacy book over every
+    # active strategy. Off by default. When on, a newly promoted strategy
+    # trades only once a subscription (e.g. on pf_default) includes it.
+    books_from_subscriptions: bool = False
+    # ``[production.quit_rule]`` (BL-29): alert (and with auto_demote, move
+    # to shadow) an active strategy whose attributed drawdown passes
+    # quit_multiple x its backtest drawdown.
+    quit_rule: QuitRuleSettings = QuitRuleSettings()
 
 
 class GoLivePolicy(BaseModel):
@@ -255,10 +285,12 @@ class NotifyConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # Any of "log", "webhook", "store". Empty list disables notifications.
-    # "store" persists every notification (all levels, redacted) to the
-    # state DB's ``alerts`` table, which ``GET /api/alerts`` reads.
-    backends: list[Literal["log", "webhook", "store"]] = ["log", "store"]
+    # Any of "log", "webhook", "store", "outbox". Empty list disables
+    # notifications. "store" persists every notification (all levels,
+    # redacted) to the state DB's ``alerts`` table, which ``GET /api/alerts``
+    # reads. "outbox" sends each one to every active admin through the
+    # per-user outbox (Web Push, email, their webhook; see stonks.notify).
+    backends: list[Literal["log", "webhook", "store", "outbox"]] = ["log", "store"]
     # Notifications below this level are dropped (except by "store").
     min_level: Literal["info", "warning", "error"] = "warning"
     webhook: WebhookConfig = WebhookConfig()
@@ -277,8 +309,16 @@ class ApiConfig(BaseModel):
     port: int = 8000
     # The only browser origin CORS lets through (the Angular dev server).
     ui_origin: str = "http://localhost:4200"
-    # GET routes skip the token when the peer is a loopback address.
-    open_reads_on_loopback: bool = True
+    # GET routes skip the credential when the peer is a loopback address.
+    # Off by default; the dev profile (STONKS_PROFILE=dev) turns it on.
+    open_reads_on_loopback: bool = False
+    # Peers whose X-Forwarded-For / X-Forwarded-Proto uvicorn believes
+    # (`stonks serve` passes them as forwarded_allow_ips). IPs or CIDR
+    # networks. Behind Caddy in Compose this is the Docker network, so the
+    # login limit and the audit log see the real client IP. A forwarded
+    # header from any other peer is ignored. Env: STONKS_API_TRUSTED_PROXIES
+    # (comma-separated).
+    trusted_proxies: list[str] = Field(default_factory=lambda: ["127.0.0.1"])
     # Extra Host header values accepted besides localhost / 127.0.0.1 / ::1.
     allowed_hosts: list[str] = []
     # Size of the general job pool (backtests, lab runs); ticks and ingests
@@ -304,6 +344,40 @@ class ApiConfig(BaseModel):
             raise ValueError("api.token must not be set in config; use STONKS_API_TOKEN")
         return data
 
+    @field_validator("trusted_proxies")
+    @classmethod
+    def _proxies_are_networks(cls, value: list[str]) -> list[str]:
+        for item in value:
+            try:
+                ipaddress.ip_network(item, strict=False)
+            except ValueError:
+                raise ValueError(f"api.trusted_proxies: {item!r} is not an IP or network") from None
+        return value
+
+
+class AuthConfig(BaseModel):
+    """``[auth]``: sign-in, sessions and the login limit (docs/security.md).
+
+    Every field can be overridden by ``STONKS_AUTH_<FIELD>`` in the
+    environment (e.g. ``STONKS_AUTH_COOKIE_SECURE=false``). Secrets never
+    live here: ``STONKS_SECRET_KEYS`` and ``STONKS_API_TOKEN`` are env only."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Send cookies with ``Secure``. Browsers accept it on http://localhost too.
+    cookie_secure: bool = True
+    session_idle_hours: float = Field(default=12.0, gt=0)
+    session_absolute_days: float = Field(default=7.0, gt=0)
+    #: How long a password-only session may wait for its second factor.
+    pending_login_minutes: float = Field(default=10.0, gt=0)
+    #: Sensitive actions need a second factor verified this recently.
+    step_up_minutes: float = Field(default=10.0, gt=0)
+    #: Failed attempts allowed in the window: per account for passwords,
+    #: per account for second-factor codes, and per client IP.
+    max_failures: int = Field(default=5, ge=1)
+    failure_window_minutes: float = Field(default=15.0, gt=0)
+    totp_issuer: str = "Stonks"
+
 
 class McpConfig(BaseModel):
     """MCP server (``stonks mcp``): a client of the running REST API, never
@@ -328,6 +402,14 @@ class BacktestSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     costs: CostModelSettings = Field(default_factory=CostModelSettings.realistic)
+    #: ``[backtest.execution]``: the simulated broker's fill model
+    #: (``[backtest.execution.fill]``, BL-30; absent = immediate fills at the
+    #: next open) and cash settlement (``settlement_days``).
+    execution: ExecutionSettings = ExecutionSettings()
+    #: ``[backtest.construction]``: run lab and API backtests through the
+    #: production construction pipeline (``None``: each strategy decides
+    #: alone, today's behaviour).
+    construction: ConstructionSettings | None = None
 
 
 class LabSettings(BaseModel):
@@ -346,6 +428,38 @@ class LabSettings(BaseModel):
     #: ``[lab.parallel]``: worker processes for tuning trials and sweeps
     #: (``max_workers = 0``: every core; 1: in-process) and BLAS threads each.
     parallel: ParallelSettings = ParallelSettings()
+    #: Run the BL-37 data preflight before tuning: errors stop the run,
+    #: warnings ride on the result (``--no-preflight``, request ``preflight``).
+    preflight: bool = True
+    #: Treat every preflight warning as an error (``--strict``, request
+    #: ``strict_preflight``).
+    strict_preflight: bool = False
+
+
+class AuditConfig(BaseModel):
+    """``[audit]``: relative gaps above which the statement audit (BL-36,
+    ``stonks audit statements``) flags a period."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    balance: float = Field(default=AuditTolerances.balance, gt=0.0)
+    net_income: float = Field(default=AuditTolerances.net_income, gt=0.0)
+    cash: float = Field(default=AuditTolerances.cash, gt=0.0)
+    gross_profit: float = Field(default=AuditTolerances.gross_profit, gt=0.0)
+    quarterly_sum: float = Field(default=AuditTolerances.quarterly_sum, gt=0.0)
+
+    def tolerances(self) -> AuditTolerances:
+        return AuditTolerances(**self.model_dump())
+
+
+class IngestConfig(BaseModel):
+    """``[ingest]``: bar validation (``[ingest.quality]``) and the fallback
+    source per primary (``[ingest.fallback]``, off by default)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    quality: DataQualityConfig = DataQualityConfig()
+    fallback: FallbackConfig = FallbackConfig()
 
 
 class Settings(BaseSettings):
@@ -360,10 +474,15 @@ class Settings(BaseSettings):
     production: ProductionConfig = ProductionConfig()
     notify: NotifyConfig = NotifyConfig()
     api: ApiConfig = Field(default_factory=ApiConfig)
+    auth: AuthConfig = AuthConfig()
     backtest: BacktestSettings = BacktestSettings()
     lab: LabSettings = LabSettings()
+    audit: AuditConfig = AuditConfig()
     golive: GoLivePolicy = GoLivePolicy()
     mcp: McpConfig = McpConfig()
+    ingest: IngestConfig = IngestConfig()
+    backup: BackupConfig = BackupConfig()
+    scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
 
 
 def configured_secrets(settings: Settings) -> list[str]:
@@ -408,6 +527,22 @@ def _overlay_env(data: dict) -> None:
     webhook_url = os.environ.get("STONKS_NOTIFY_WEBHOOK_URL")
     if webhook_url:
         data.setdefault("notify", {}).setdefault("webhook", {})["url"] = webhook_url
+
+    # The dev profile: reads from a loopback peer need no credential (the
+    # Angular dev server proxies from 127.0.0.1). Never set it on a server.
+    if os.environ.get("STONKS_PROFILE", "").strip().lower() == "dev":
+        data.setdefault("api", {})["open_reads_on_loopback"] = True
+
+    for name in AuthConfig.model_fields:
+        value = os.environ.get(f"STONKS_AUTH_{name.upper()}")
+        if value is not None and value.strip():
+            data.setdefault("auth", {})[name] = value.strip()
+
+    proxies = os.environ.get("STONKS_API_TRUSTED_PROXIES")
+    if proxies is not None and proxies.strip():
+        data.setdefault("api", {})["trusted_proxies"] = [
+            p.strip() for p in proxies.split(",") if p.strip()
+        ]
 
     log_level = os.environ.get("STONKS_LOG_LEVEL")
     if log_level:

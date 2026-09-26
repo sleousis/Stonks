@@ -1,103 +1,69 @@
-# Block 4 — Strategy Store (Registry)
-
-> Status: **implemented**. Metadata in SQLite (`strategies`, `survival_reports`); artifacts on disk under `data/artifacts/<id>/`.
+# Block 4: Strategy store (registry)
 
 ## Purpose
 
-Durable catalog of strategies that survived the lab. Production looks here to know what to rank. Lab looks here to avoid registering duplicates. Humans look here to audit and retire strategies.
+The durable list of strategies that passed the lab. The tick reads it to know what to score, the console and CLI read it to audit, and governance rules decide who may change a status.
 
 ## Storage
 
-- **Metadata:** SQLite (`strategies`, `survival_reports` tables — schemas in [`02_storage.md`](02_storage.md)).
-- **Artifacts:** on-disk bundles at `data/artifacts/<strategy_id>/` (params JSON + optional joblib-serialized fitted state + metadata). Inspectable without opening the DB.
-
-## Module layout (target)
+- **Metadata** in SQLite: `strategies`, `survival_reports`, and the audit table `status_changes` (see [02_storage.md](02_storage.md)).
+- **Artifacts** on disk at `data/artifacts/<strategy_id>/` (`[registry] artifacts_dir`).
 
 ```
-src/stonks/registry/
-├── store.py         # StrategyRegistry
-├── artifact.py      # ArtifactBundle(save/load); wraps joblib for ML + plain JSON for rule-based
-└── schema.sql
+data/artifacts/<strategy_id>/
+├── meta.json          # class_path, created_at, stonks_version, strategy metadata, lab provenance
+├── params.json        # the params
+├── reports/<test_id>.json
+└── ...                # fitted state the strategy saves itself (e.g. fitted_state.json, model/)
 ```
+
+Trial return matrices sit beside them at `data/artifacts/_trials/<run_id>.npz`.
 
 ## `StrategyRegistry`
 
 ```python
-class StrategyRegistry:
-    def __init__(self, state: SqliteState, artifacts_dir: Path): ...
-
-    # writes
-    def register(self, strategy: Strategy, params: Params,
-                 reports: list[SurvivalReport]) -> str: ...   # returns registered id
-    def set_status(self, strategy_id: str,
-                   status: Literal["active", "shadow", "retired"]) -> None: ...
-
-    # reads
-    def load(self, strategy_id: str) -> Strategy: ...
-    def list_active(self) -> list[StrategyHandle]: ...
-    def list_all(self) -> list[StrategyHandle]: ...
-    def get_reports(self, strategy_id: str) -> list[SurvivalReport]: ...
+registry = StrategyRegistry(state, artifacts_dir)
+sid = registry.register(strategy, reports)             # lands in shadow
+registry.set_status(sid, "active", actor=..., golive_report=report)   # or override=True, reason=...
+registry.load(sid)                                      # rebuilds via importlib from class_path
+registry.list_active(); registry.list_all(status="shadow")
+registry.get_reports(sid); registry.status_history(sid)
+registry.record_intervention(kind, actor=..., reason=...)   # risk reset, manual order, config change
 ```
 
-`StrategyHandle` holds `id, class_path, params, artifact_path, status, created_at` — enough for the production ranker to rehydrate via `load`.
-
-## Lifecycle
+## Lifecycle and governance
 
 ```mermaid
 stateDiagram-v2
-    [*] --> shadow: register (default)
-    shadow --> active: human approval / soak-time passed
-    active --> shadow: drift detected
-    active --> retired: human / poor live performance
-    shadow --> retired: human
-    retired --> [*]
+    [*] --> shadow: register
+    shadow --> active: promote (go-live passed, or override + reason)
+    active --> shadow: demote (reason)
+    active --> retired: retire (reason)
+    shadow --> retired: retire (reason)
 ```
 
-- `shadow`: ranked but not executed (paper only). Default state on fresh registration.
-- `active`: eligible for real execution.
-- `retired`: ignored by the ranker.
+- `shadow`: scored every tick and traded only in its model book (virtual portfolio). This is where incubation happens.
+- `active`: eligible for real portfolios.
+- `retired`: ignored.
 
-## Why artifacts on disk instead of in SQLite
+Rules (BL-24):
 
-- Inspectable: `ls data/artifacts/<id>/` shows `params.json` + `model.joblib`.
-- Keeps the state DB small; backups of state don't copy model weights.
-- Easy to version-control (outside git, via a separate artifact store later) or garbage-collect by status.
+- `set_status` is the only writer of `strategies.status`. Each change writes a `status_changes` row (actor, from, to, reason, override flag, go-live report) in the same transaction.
+- Promotion to `active` needs a passing go-live check (`production/golive.py`), or `--override` with a reason of at least 20 characters.
+- Demotions are always allowed but need a reason.
 
-## Artifact bundle layout
-
-```
-data/artifacts/<strategy_id>/
-├── meta.json                    # class_path, created_at, stonks version
-├── params.json                  # the Params dict
-├── fitted_state.joblib          # optional; rule-based strategies skip
-└── reports/
-    ├── oos.json
-    ├── period_stability.json
-    ├── perturbation.json
-    └── drift.json
-```
-
-## Rehydrating a strategy
-
-```python
-handle = registry.load(id)
-module = importlib.import_module(handle.class_path.module)
-cls = getattr(module, handle.class_path.name)
-strategy = cls(handle.params)
-if handle.artifact_path and (handle.artifact_path / "fitted_state.joblib").exists():
-    strategy = cls.load(handle.artifact_path)
-```
+Go-live details and incubation limits: [operations.md](../operations.md) and `[golive]` in `config/default.toml`.
 
 ## CLI
 
-```
-stonks registry list    [--status active|shadow|retired]
-stonks registry show    <id>
-stonks registry promote <id>      # shadow → active
-stonks registry retire  <id>
+```bash
+uv run stonks registry list [--status active|shadow|retired] [--asset-class crypto]
+uv run stonks registry show <id>
+uv run stonks registry history <id>
+uv run stonks golive check <id>
+uv run stonks registry promote <id> [--override --reason "why this is safe"]
+uv run stonks registry shadow <id> --reason "..."
+uv run stonks registry retire <id> --reason "..."
 ```
 
-## Testing (target)
-
-- `tests/integration/test_registry_roundtrip.py` — register a fake strategy, list active, load back, round-trip params.
-- `tests/integration/test_registry_status_transitions.py` — enforce legal transitions.
+The same actions exist in the REST API, the console (Strategies and Go-live pages) and, behind an explicit confirm, the MCP server.

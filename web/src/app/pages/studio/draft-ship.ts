@@ -6,13 +6,17 @@ import {
   input,
   output,
   signal,
+  viewChild,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import type { Draft } from '../../api/models';
+import { StrategiesService } from '../../api/strategies.service';
 import { StudioService } from '../../api/studio.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
+import { promoteThroughGate } from '../../shared/governance';
+import { StatusChangeDialog } from '../../shared/ui/status-change-dialog';
 import { StatusPill } from '../../shared/ui/status-pill';
 
 type Stage = 'draft' | 'shadow' | 'active' | 'retired';
@@ -25,12 +29,14 @@ type Stage = 'draft' | 'shadow' | 'active' | 'retired';
 @Component({
   selector: 'app-draft-ship',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, StatusPill],
+  imports: [RouterLink, StatusPill, StatusChangeDialog],
   templateUrl: './draft-ship.html',
   styleUrl: './draft-ship.scss',
 })
 export class DraftShip {
   private readonly studio = inject(StudioService);
+  private readonly strategies = inject(StrategiesService);
+  private readonly dialog = viewChild.required(StatusChangeDialog);
   private readonly confirm = inject(ConfirmService);
   private readonly toasts = inject(ToastService);
 
@@ -89,41 +95,43 @@ export class DraftShip {
     return this.enabled() ? this.disable() : this.enable();
   }
 
+  /** Same go-live gate as promoting in Strategies: report first, override on a 409. */
   async enable(): Promise<void> {
     const id = this.strategyId();
-    const ok = await this.confirm.confirm({
+    const draftId = this.draft().id;
+    const next = await promoteThroughGate({
+      id,
+      dialog: this.dialog(),
+      toasts: this.toasts,
+      golive: () => this.strategies.golive(id),
+      promote: (body) => this.studio.enable(draftId, body, true),
       title: `Enable ${id}?`,
       message:
         'It becomes active and places orders through the configured broker from the next tick.',
       confirmLabel: 'Enable',
-      typedConfirmation: id,
+      busy: (on) => this.busy.set(on),
     });
-    if (!ok) return;
-    await this.run(() => this.studio.enable(this.draft().id), `Enabled ${id}; it is now active.`);
+    if (!next) return;
+    this.toasts.success(`Enabled ${id}; it is now active.`);
+    this.changed.emit(next);
   }
 
   async disable(): Promise<void> {
     const id = this.strategyId();
-    const ok = await this.confirm.confirm({
+    const body = await this.dialog().open({
       title: `Disable ${id}?`,
       message:
         'It goes back to shadow: it keeps being evaluated but places no new orders. Open ' +
         'positions are not closed.',
       confirmLabel: 'Disable',
       tone: 'danger',
+      minReason: 1,
     });
-    if (!ok) return;
-    await this.run(
-      () => this.studio.disable(this.draft().id),
-      `Disabled ${id}; it is back in shadow.`,
-    );
-  }
-
-  private async run(call: () => Promise<Draft>, success: string): Promise<void> {
+    if (!body) return;
     this.busy.set(true);
     try {
-      const next = await call();
-      this.toasts.success(success);
+      const next = await this.studio.disable(this.draft().id, body);
+      this.toasts.success(`Disabled ${id}; it is back in shadow.`);
       this.changed.emit(next);
     } catch {
       // The error interceptor already showed the API's message.

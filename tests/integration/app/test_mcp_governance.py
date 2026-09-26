@@ -49,7 +49,7 @@ async def test_promote_with_override_and_reason(mcp, seeded):
     assert out["applied"] is True
     assert out["strategy"]["status"] == "active"
     change = out["strategy"]["status_history"][-1]
-    assert change["override"] is True and change["actor"] == "mcp"
+    assert change["override"] is True and change["actor"] == "user:usr_owner"
 
 
 @pytest.mark.anyio

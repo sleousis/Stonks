@@ -17,21 +17,27 @@ class _Clock:
 
 def test_issued_token_verifies_for_its_job():
     signer = StreamTokenSigner(ttl_seconds=120, clock=_Clock())
-    issued = signer.issue("job_abc")
+    issued = signer.issue("job_abc", "usr_a")
     assert signer.verify(issued.token, "job_abc")
     assert issued.expires_at.timestamp() == pytest.approx(1_000_120.0)
 
 
+def test_token_names_the_user_it_was_issued_to():
+    signer = StreamTokenSigner(ttl_seconds=120, clock=_Clock())
+    assert signer.verify(signer.issue("job_abc", "usr_a").token, "job_abc") == "usr_a"
+    assert signer.verify(signer.issue("job_abc", "usr_b").token, "job_abc") == "usr_b"
+
+
 def test_token_is_scoped_to_one_job():
     signer = StreamTokenSigner(ttl_seconds=120, clock=_Clock())
-    token = signer.issue("job_abc").token
+    token = signer.issue("job_abc", "usr_a").token
     assert not signer.verify(token, "job_other")
 
 
 def test_token_expires():
     clock = _Clock()
     signer = StreamTokenSigner(ttl_seconds=60, clock=clock)
-    token = signer.issue("job_abc").token
+    token = signer.issue("job_abc", "usr_a").token
     clock.now += 59
     assert signer.verify(token, "job_abc")
     clock.now += 2
@@ -41,7 +47,7 @@ def test_token_expires():
 def test_tampered_or_foreign_tokens_are_rejected():
     clock = _Clock()
     signer = StreamTokenSigner(ttl_seconds=60, clock=clock)
-    token = signer.issue("job_abc").token
+    token = signer.issue("job_abc", "usr_a").token
     payload, sig = token.split(".")
     assert not signer.verify(f"{payload}.{sig[:-2]}AA", "job_abc")
     assert not signer.verify(token + "x", "job_abc")
