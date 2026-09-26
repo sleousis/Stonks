@@ -220,11 +220,30 @@ def test_fresh_instance_only_exits(lake):
     assert [(o.side, o.ticker, o.quantity) for o in orders] == [("sell", "DOWN.US", 2.0)]
 
 
-def test_decide_on_another_day_than_evaluated_only_exits(lake):
+def test_decide_sizes_every_ticker_asked_even_after_older_days_were_evaluated(lake):
+    # a wrapper replaying the inner strategy over past bars asks older days
+    # in between; decide must still see every ticker of its own day
+    prices = {"UP.US": float(SERIES["UP.US"][-1]), "DOWN.US": float(SERIES["DOWN.US"][-1])}
+    plain = EWMACTrend({"tau": 0.05})
+    f = plain.estimate_return("UP.US", LAST, lake)
+    plain.estimate_return("DOWN.US", LAST, lake)
+    expected = plain.decide([(f, "UP.US")], Portfolio(cash=100_000.0), prices, LAST)
+
+    s = EWMACTrend({"tau": 0.05})
+    s.estimate_return("UP.US", LAST, lake)
+    s.estimate_return("DOWN.US", LAST - timedelta(days=40), lake)
+    s.estimate_return("DOWN.US", LAST, lake)
+    assert s.decide([(f, "UP.US")], Portfolio(cash=100_000.0), prices, LAST) == expected
+
+
+def test_decide_evaluates_its_own_day(lake):
+    fresh = EWMACTrend({})
+    f = fresh.estimate_return("UP.US", LAST, lake)
     s = EWMACTrend({})
     s.estimate_return("UP.US", LAST - timedelta(days=1), lake)
-    orders = s.decide([(12.0, "UP.US")], Portfolio(cash=1_000.0), {"UP.US": 100.0}, LAST)
-    assert orders == []
+    book, prices = Portfolio(cash=1_000.0), {"UP.US": 100.0}
+    orders = s.decide([(f, "UP.US")], book, prices, LAST)
+    assert orders and orders == fresh.decide([(f, "UP.US")], book, prices, LAST)
 
 
 # ---- backtest ------------------------------------------------------------------------

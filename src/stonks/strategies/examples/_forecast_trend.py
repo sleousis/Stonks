@@ -18,11 +18,12 @@ does the rest the same way for all three:
   whole risk budget. Gross is capped at 1.0 and buys never spend more than
   cash plus sale proceeds (``orders_from_targets``), with Carver's 10%
   no-trade buffer.
-- ``decide`` needs that day's forecasts and volatilities, which
-  ``estimate_return`` computes on the same instance (backtests, lab runs and
-  a tick all ask ``estimate_return`` first). A fresh instance that never
-  evaluated the day makes no buys and never resizes; it still sells held
-  names that are no longer picked.
+- ``decide`` gets no lake, so it sizes over every ticker this instance was
+  asked about on the last lake it saw, evaluated on ``decide``'s own day
+  (the rows ``estimate_return`` cached, recomputed if another day was
+  evaluated in between). A fresh instance that was never asked anything
+  makes no buys and never resizes; it still sells held names that are no
+  longer picked.
 """
 
 from __future__ import annotations
@@ -214,6 +215,9 @@ class ForecastTrendStrategy(BaseStrategy):
         self._bar_caches = LakeBarCaches()
         self._days: weakref.WeakKeyDictionary[Any, _Day] = weakref.WeakKeyDictionary()
         self._classes: weakref.WeakKeyDictionary[Any, dict[str, str]] = weakref.WeakKeyDictionary()
+        # per lake: every ticker asked (an ordered set), the instruments
+        # ``decide`` spreads the risk budget over
+        self._seen: weakref.WeakKeyDictionary[Any, dict[str, None]] = weakref.WeakKeyDictionary()
         self._last_lake: weakref.ref | None = None
 
     # ---- subclass hooks ------------------------------------------------------------
@@ -255,7 +259,7 @@ class ForecastTrendStrategy(BaseStrategy):
         if lake is None:
             return None
         day, cutoff = session_cutoff(as_of)
-        state = self._day_state(lake, day)
+        state = self._day_state(lake, day, ticker)
         if state is not None and ticker in state.rows:
             return state.rows[ticker]
         row = self._evaluate(ticker, cutoff, lake)
@@ -263,12 +267,17 @@ class ForecastTrendStrategy(BaseStrategy):
             state.rows[ticker] = row
         return row
 
-    def _day_state(self, lake: Any, day: date) -> _Day | None:
+    def _day_state(self, lake: Any, day: date, ticker: str | None = None) -> _Day | None:
+        """The row cache of ``day`` (one day per lake: a new day replaces
+        it). Also remembers ``lake`` and the tickers asked on it, which
+        :meth:`decide` sizes over."""
         try:
             state = self._days.get(lake)
             if state is None or state.day != day:
                 state = _Day(day)
                 self._days[lake] = state
+            if ticker is not None:
+                self._seen.setdefault(lake, {})[ticker] = None
             self._last_lake = weakref.ref(lake)
         except TypeError:  # a lake that can't be weakly referenced
             return None
@@ -339,10 +348,13 @@ class ForecastTrendStrategy(BaseStrategy):
         day, _ = session_cutoff(as_of)
         picked = {t for r, t in my_picks if r > 0}
         lake = self._last_lake() if self._last_lake is not None else None
-        state = self._days.get(lake) if lake is not None else None
-        if state is None or state.day != day:
+        seen = list(self._seen.get(lake, {})) if lake is not None else []
+        if not seen:
             return self._exits_only(picked, portfolio, prices, day)
-        rows = {t: r for t, r in state.rows.items() if r is not None}
+        # the rows of decide's own day (cached unless an evaluation of another
+        # day came in between, e.g. a wrapper replaying past bars)
+        evaluated = {t: self._row(t, as_of, lake) for t in seen}
+        rows = {t: r for t, r in evaluated.items() if r is not None}
         signals = {t: (max(r.forecast, 0.0) if t in picked else 0.0) for t, r in rows.items()}
         vols = {t: r.sigma_annual for t, r in rows.items() if r.sigma_annual is not None}
         returns = {t: r.returns for t, r in rows.items() if not r.returns.empty}
