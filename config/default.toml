@@ -82,6 +82,13 @@ fee_flat = 1.0
 half_spread_bps = 5.0
 fee_bps = 1.0
 
+[lab]
+# Benchmark every lab backtest, API backtest and tear sheet is compared
+# against: "auto" (SPY.US when the lake prices it, else the equal-weight
+# universe), "EW", a ticker such as "QQQ.US", or "none". `--benchmark` and the
+# API's `benchmark` field override it.
+benchmark = "auto"
+
 [lab.walk_forward]
 # Defaults for `stonks lab run --walk-forward` (CLI flags override).
 n_splits = 4

@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import functools
 import json
 
 import pytest
 from typer.testing import CliRunner
 
 from stonks.cli import app
-from stonks.lab.survival import oos
 from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
 
@@ -149,15 +147,13 @@ def test_mcpt_options(runner, lab_env, flag, mode):
     assert f"mode={mode}" in mcpt["notes"]
 
 
-def test_register_puts_a_passing_wrapped_strategy_in_shadow(runner, lab_env, monkeypatch):
-    # Buy-and-hold never closes a trade, so the default PSR gate (BL-16:
-    # >= 20 closed trades) fails it; this test is about registration, so
-    # the CLI's ``oos`` runs the legacy flat-Sharpe rule here.
-    monkeypatch.setattr(
-        oos,
-        "OutOfSampleTest",
-        functools.partial(oos.OutOfSampleTest, mode="sharpe", min_trades=0),
-    )
+#: Buy-and-hold never closes a trade, so the default PSR gate (BL-16: >= 20
+#: closed trades) fails it. Registration tests run ``oos`` with the legacy
+#: flat-Sharpe rule instead, through the survival-test options.
+LEGACY_OOS = ["--test-option", "oos.mode=sharpe", "--test-option", "oos.min_trades=0"]
+
+
+def test_register_puts_a_passing_wrapped_strategy_in_shadow(runner, lab_env):
     params = {
         "inner_class_path": "stonks.strategies.examples.buy_and_hold:BuyAndHold",
         "inner_params": {"ticker": "UP.US"},
@@ -172,6 +168,7 @@ def test_register_puts_a_passing_wrapped_strategy_in_shadow(runner, lab_env, mon
         *FAST,
         "--tests",
         "oos",
+        *LEGACY_OOS,
         "--register",
     )
     assert r.exit_code == 0, r.output
@@ -215,12 +212,56 @@ def test_register_skips_a_failing_strategy(runner, lab_env):
         (["momentum", *UNIVERSE, *WINDOW, "--tests", "bogus"], "unknown tests"),
         (["momentum", *UNIVERSE, *WINDOW, "--preset", "huge"], "--preset"),
         (["momentum", *UNIVERSE, *WINDOW, "--cost-model", "free"], "--cost-model"),
+        (["momentum", *UNIVERSE, *WINDOW, "--test-option", "oos"], "TEST.OPTION=VALUE"),
+        (["momentum", *UNIVERSE, *WINDOW, "--test-option", "bogus.x=1"], "bogus"),
+        (["momentum", *UNIVERSE, *WINDOW, "--test-option", "oos.nope=1"], "nope"),
+        (["momentum", *UNIVERSE, *WINDOW, "--test-option", "oos.min_trades=-1"], "min_trades"),
+        (["momentum", *UNIVERSE, *WINDOW, "--test-option", "pbo.max_pbo=0.3"], "pbo"),
     ],
 )
 def test_bad_input_is_a_usage_error(runner, lab_env, args, needle):
     r = runner.invoke(app, ["lab", "run", *args])
     assert r.exit_code == 2, r.output
     assert needle in r.output
+
+
+def test_test_options_reach_the_survival_test(runner, lab_env):
+    out = lab_env / "result.json"
+    args = ["buy_and_hold", "--params", '{"ticker": "UP.US"}', *UNIVERSE, *WINDOW, *FAST]
+    r = _run(runner, *args, "--tests", "oos", *LEGACY_OOS, "--json-out", str(out))
+    assert r.exit_code == 0, r.output
+    (rep,) = _result(out)["survival_reports"]
+    assert rep["passed"], rep["notes"]  # 0 trades pass once min_trades=0
+
+
+@pytest.mark.parametrize("flag,name", [([], "EW"), (["--benchmark", "UP.US"], "UP.US")])
+def test_benchmark_reaches_the_result(runner, lab_env, flag, name):
+    out = lab_env / "result.json"
+    r = _run(runner, "momentum", *UNIVERSE, *WINDOW, *FAST, "--tests", "oos", *flag,
+             "--json-out", str(out))  # fmt: skip
+    assert r.exit_code == 0, r.output
+    bench = _result(out)["benchmark"]
+    assert bench["name"] == name  # "auto" falls back to EW: the lake has no SPY.US
+    assert "excess_cagr" in bench
+
+
+def test_benchmark_none_turns_it_off(runner, lab_env):
+    out = lab_env / "result.json"
+    r = _run(runner, "momentum", *UNIVERSE, *WINDOW, *FAST, "--tests", "oos",
+             "--benchmark", "none", "--json-out", str(out))  # fmt: skip
+    assert r.exit_code == 0, r.output
+    assert _result(out)["benchmark"] is None
+
+
+def test_register_defaults_to_the_promotion_preset():
+    from stonks.cli import _lab_suite
+    from stonks.lab.survival.registry import resolve_preset
+
+    plain = _lab_suite(None, None, mcpt=False, walk_forward=False)
+    registering = _lab_suite(None, None, mcpt=False, walk_forward=False, registers=True)
+    assert plain == resolve_preset("quick")
+    assert registering == resolve_preset("promotion")
+    assert _lab_suite("oos", None, mcpt=False, walk_forward=False, registers=True) == ["oos"]
 
 
 # ---- Integration 1: ledger, presets, workers, costs --------------------------
@@ -312,6 +353,7 @@ def test_registered_strategy_meta_has_lab_provenance(runner, lab_env):
         *FAST,
         "--tests",
         "oos",
+        *LEGACY_OOS,
         "--register-if-passes",
         "--hypothesis",
         "drift up",

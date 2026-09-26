@@ -352,6 +352,28 @@ def test_backtest_returns_plain_report(services):
     assert result.equity[0].value == pytest.approx(10_000.0)
 
 
+def test_backtest_result_carries_its_benchmark(services):
+    auto = services.lab.run_backtest(_bah_request())
+    assert auto.benchmark is not None
+    assert auto.benchmark.name == "EW"  # "auto": no SPY.US in the lake
+    assert auto.benchmark.spec == "auto"
+    assert auto.benchmark.members == ["UP.US"]
+    assert len(auto.benchmark_equity) == len(auto.equity)
+    assert auto.benchmark_equity[0].value == pytest.approx(auto.equity[0].value)
+
+    vs_down = services.lab.run_backtest(_bah_request(benchmark="DOWN.US"))
+    assert vs_down.benchmark.name == "DOWN.US"
+    assert vs_down.benchmark.excess_cagr > 0
+
+    off = services.lab.run_backtest(_bah_request(benchmark="none"))
+    assert off.benchmark is None and off.benchmark_equity == []
+
+
+def test_backtest_benchmark_default_comes_from_lab_config(services):
+    services.lab._ctx.settings.lab.benchmark = "FLAT.US"
+    assert services.lab.run_backtest(_bah_request()).benchmark.name == "FLAT.US"
+
+
 def test_backtest_from_registered_strategy(services, seeded):
     result = services.lab.run_backtest(
         _bah_request(strategy=StrategyRef(strategy_id=seeded["active_id"]))

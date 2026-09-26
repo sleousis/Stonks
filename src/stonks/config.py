@@ -302,6 +302,10 @@ class LabSettings(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    #: Benchmark every lab backtest is compared against (BL-22): ``auto``
+    #: (SPY.US when the lake prices it, else the equal-weight universe),
+    #: ``EW``, a ticker such as ``QQQ.US``, or ``none``. Requests override it.
+    benchmark: str = Field(default="auto", max_length=32)
     walk_forward: WalkForwardConfig = WalkForwardConfig()
     #: ``[lab.parallel]``: worker processes for tuning trials and sweeps
     #: (``max_workers = 0``: every core; 1: in-process) and BLAS threads each.

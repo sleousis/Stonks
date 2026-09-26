@@ -9,7 +9,7 @@ from __future__ import annotations
 import importlib
 from datetime import date
 from pathlib import Path
-from typing import cast, get_args
+from typing import Any, cast, get_args
 
 import typer
 from rich.console import Console
@@ -1100,10 +1100,12 @@ def _lab_suite(
     *,
     mcpt: bool,
     walk_forward: bool,
+    registers: bool = False,
 ) -> list[str]:
     """Survival test ids for ``stonks lab run``: ``--tests``, else
-    ``--preset``, else ``quick`` (the registry's ``resolve_suite``), plus
-    ``mcpt`` / ``walk_forward`` when their flags are set."""
+    ``--preset``, else ``promotion`` when registering and ``quick``
+    otherwise (the registry's ``resolve_suite``), plus ``mcpt`` /
+    ``walk_forward`` when their flags are set."""
     from stonks.lab.survival.registry import resolve_suite, survival_test_names
 
     explicit = _parse_tickers(tests)
@@ -1111,11 +1113,50 @@ def _lab_suite(
     unknown = [t for t in explicit if t not in known]
     if unknown:
         raise typer.BadParameter(f"unknown tests {unknown}; choose from {known}")
-    suite = resolve_suite(explicit, preset=preset, default="quick")
+    default = "promotion" if registers else "quick"
+    suite = resolve_suite(explicit, preset=preset, default=default)
     for flag, test_id in ((mcpt, "mcpt"), (walk_forward, "walk_forward")):
         if flag and test_id not in suite:
             suite.append(test_id)
     return suite
+
+
+def _parse_test_options(values: list[str] | None) -> dict[str, dict[str, Any]] | None:
+    """``--test-option TEST.OPTION=VALUE`` (repeatable) as
+    ``{test: {option: value}}``. VALUE is JSON when it parses (numbers,
+    booleans, lists, null), else a plain string. The lab request validates
+    names and values against each test's options."""
+    import json
+
+    out: dict[str, dict[str, Any]] = {}
+    for raw in values or []:
+        key, sep, text = raw.partition("=")
+        test, dot, option = key.strip().partition(".")
+        if not (sep and dot and test and option):
+            raise typer.BadParameter(
+                f"expected TEST.OPTION=VALUE (e.g. oos.min_trades=0), got {raw!r}",
+                param_hint="--test-option",
+            )
+        try:
+            value: Any = json.loads(text)
+        except json.JSONDecodeError:
+            value = text
+        out.setdefault(test, {})[option.strip()] = value
+    return out or None
+
+
+_TEST_OPTION = typer.Option(
+    None,
+    "--test-option",
+    help="survival-test option TEST.OPTION=VALUE, repeatable "
+    "(e.g. oos.mode=sharpe, pbo.max_pbo=0.3, mc_trades.n_paths=2000); "
+    "VALUE is JSON or a string",
+)
+_BENCHMARK = typer.Option(
+    None,
+    "--benchmark",
+    help="auto|EW|<ticker>|none; default [lab] benchmark",
+)
 
 
 def _validated_strategy(strategy: str, params: str) -> tuple[type, dict]:
@@ -1230,8 +1271,11 @@ def lab_run(
         False,
         "--register-if-passes",
         "--register",
-        help="register the strategy in shadow only if every survival test passes",
+        help="register the strategy in shadow only if every survival test passes "
+        "(default suite: promotion)",
     ),
+    test_option: list[str] | None = _TEST_OPTION,
+    benchmark: str | None = _BENCHMARK,
     json_out: str | None = typer.Option(None, "--json-out", help="write the result as JSON"),
 ) -> None:
     """Tune a strategy on the train window, then run the survival suite.
@@ -1239,7 +1283,8 @@ def lab_run(
     Every run is pre-registered in the trial ledger (with --hypothesis /
     --premortem). Transaction costs come from [backtest.costs] unless
     --cost-model says otherwise; walk-forward defaults from
-    [lab.walk_forward]; tuning workers from [lab.parallel].
+    [lab.walk_forward]; tuning workers from [lab.parallel]; the benchmark
+    from [lab] benchmark. --test-option tunes any survival test.
     """
     import json
 
@@ -1264,7 +1309,9 @@ def lab_run(
         preset,
         mcpt=mcpt or mcpt_retune,
         walk_forward=walk_forward,
+        registers=register_if_passes,
     )
+    test_options = _parse_test_options(test_option)
 
     settings = _settings()
     universe = _parse_tickers(tickers) or list(settings.production.universe)
@@ -1314,6 +1361,8 @@ def lab_run(
             cost_model=_cost_model_option(cost_model),  # type: ignore[arg-type]
             hypothesis=hypothesis,
             premortem=premortem,
+            test_options=test_options,
+            benchmark=benchmark,
         )
     except ValueError as exc:  # pydantic ValidationError is a ValueError
         raise typer.BadParameter(str(exc)) from None
@@ -1349,6 +1398,13 @@ def lab_run(
         f"[{result.n_trials_run} trials, {result.n_trials_class} for this class]"
     )
     console.print(table)
+    if execution.benchmark is not None:
+        s = execution.benchmark.stats
+        console.print(
+            f"vs {execution.benchmark.curve.name} (validation): "
+            f"excess CAGR {s.excess_cagr:+.2%}, IR {s.information_ratio:.2f}, "
+            f"beta {s.beta:.2f}, alpha t {s.alpha_tstat:.2f}"
+        )
     colour = "green" if result.verdict == "pass" else "red"
     console.print(f"[{colour}]verdict: {result.verdict}[/{colour}]")
     if register_if_passes:
@@ -1380,6 +1436,7 @@ def lab_run(
                 for rep in result.survival_reports
             ],
             "registered_id": registered_id,
+            "benchmark": execution.view().benchmark,
         }
         Path(json_out).write_text(json.dumps(to_jsonable(doc), indent=2, sort_keys=True))
 
@@ -1429,6 +1486,8 @@ def lab_sweep(
     workers: int | None = typer.Option(
         None, "--workers", min=0, help="processes; default [lab.parallel] (0 = all cores)"
     ),
+    test_option: list[str] | None = _TEST_OPTION,
+    benchmark: str | None = _BENCHMARK,
     csv_out: str | None = typer.Option(None, "--csv-out", help="write the summary as CSV"),
     json_out: str | None = typer.Option(None, "--json-out", help="write the summary as JSON"),
 ) -> None:
@@ -1463,22 +1522,27 @@ def lab_sweep(
         raise typer.BadParameter(str(exc), param_hint="--strategies") from None
     if not tasks:
         raise typer.BadParameter("no strategies left to sweep", param_hint="--strategies")
-    request = LabRunRequest(
-        strategy=StrategyRef(class_path=tasks[0].class_path),
-        universe=basket,
-        start=start_d,
-        end=end_d,
-        interval=bar_interval.code,
-        train_ratio=train_ratio,
-        tuner=tuner,  # type: ignore[arg-type]
-        grid_size=grid_size,
-        budget=budget,
-        seed=seed,
-        objective=objective,  # type: ignore[arg-type]
-        survival_tests=suite,
-        walk_forward=settings.lab.walk_forward if "walk_forward" in suite else None,
-        cost_model=_cost_model_option(cost_model),  # type: ignore[arg-type]
-    )
+    try:
+        request = LabRunRequest(
+            strategy=StrategyRef(class_path=tasks[0].class_path),
+            universe=basket,
+            start=start_d,
+            end=end_d,
+            interval=bar_interval.code,
+            train_ratio=train_ratio,
+            tuner=tuner,  # type: ignore[arg-type]
+            grid_size=grid_size,
+            budget=budget,
+            seed=seed,
+            objective=objective,  # type: ignore[arg-type]
+            survival_tests=suite,
+            walk_forward=settings.lab.walk_forward if "walk_forward" in suite else None,
+            cost_model=_cost_model_option(cost_model),  # type: ignore[arg-type]
+            test_options=_parse_test_options(test_option),
+            benchmark=benchmark,
+        )
+    except ValueError as exc:  # pydantic ValidationError is a ValueError
+        raise typer.BadParameter(str(exc)) from None
     parallel = _parallel_settings(settings, workers)
     console.print(
         f"sweeping {len(tasks)} lab runs ({len({t.strategy_id for t in tasks})} strategies, "
