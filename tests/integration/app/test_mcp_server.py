@@ -123,6 +123,9 @@ READ_TOOLS = {
     "tca_summary",
     "trade_journal",
     "order_tca",
+    "list_portfolios",
+    "list_trading_modes",
+    "list_subscriptions",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
@@ -152,6 +155,8 @@ GUARDED_TOOLS = {
     "disable_draft",
     "sync_connection",
     "engage_kill_switch",
+    "subscribe",
+    "update_subscription",
 }
 
 
