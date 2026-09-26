@@ -228,6 +228,7 @@ def test_real_pnl_series(client):
     assert len(rows) == 1  # the seeded tick wrote one snapshot
     assert rows[0]["total_value"] > 0
     assert rows[0]["daily_return"] is None
+    assert rows[0]["days_elapsed"] is None  # first row: nothing before it
     assert rows[0]["drawdown"] == 0.0
     assert client.get("/api/pnl", params={"since": "2999-01-01"}).json()["rows"] == []
 

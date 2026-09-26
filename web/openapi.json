@@ -2405,6 +2405,17 @@
             "title": "Day",
             "type": "string"
           },
+          "days_elapsed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Elapsed"
+          },
           "drawdown": {
             "title": "Drawdown",
             "type": "number"

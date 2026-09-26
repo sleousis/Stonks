@@ -21,8 +21,11 @@ from stonks.production.pnl import PnlRow, load_pnl
 class PnlRowView(BaseModel):
     day: date
     total_value: float
+    #: ``None`` on the first row and across gaps longer than a long weekend.
     daily_change: float | None
     daily_return: float | None
+    #: Calendar days since the previous row.
+    days_elapsed: int | None = None
     cumulative_return: float | None
     #: <= 0, relative to the running peak since inception.
     drawdown: float
@@ -196,6 +199,7 @@ def _pnl_view(row: PnlRow) -> PnlRowView:
         total_value=float(row.total_value),
         daily_change=finite(row.daily_change),
         daily_return=finite(row.daily_return),
+        days_elapsed=row.days_elapsed,
         cumulative_return=finite(row.cumulative_return),
         drawdown=finite(row.drawdown) or 0.0,
     )
