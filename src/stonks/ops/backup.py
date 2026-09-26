@@ -34,6 +34,7 @@ four methods.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import platform
@@ -42,6 +43,7 @@ import shutil
 import sqlite3
 import subprocess
 import tempfile
+import time
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable
@@ -228,7 +230,12 @@ def create_backup(
             shutil.copytree(
                 paths.artifacts, staging / ARTIFACTS, ignore=shutil.ignore_patterns("*.tmp")
             )
-            artifacts = {"files": sum(1 for p in (staging / ARTIFACTS).rglob("*") if p.is_file())}
+            artifacts = {
+                "files": sum(1 for p in (staging / ARTIFACTS).rglob("*") if p.is_file()),
+                "unreadable_json": _settle_json(paths.artifacts, staging / ARTIFACTS),
+            }
+            if artifacts["unreadable_json"]:
+                log.warning("backup.artifacts.unreadable_json", files=artifacts["unreadable_json"])
         manifest = {
             "format": FORMAT_VERSION,
             "id": backup_id,
@@ -315,6 +322,39 @@ def _backup_lake(paths: DataPaths, dst: Path, lake: DuckDBLake | None) -> dict[s
         finally:
             reader.close()
     return _lake_facts(dst)
+
+
+def _settle_json(
+    src_root: Path, dst_root: Path, *, attempts: int = 3, delay: float = 0.2
+) -> list[str]:
+    """Re-copy JSON files that do not parse in the copy.
+
+    The registry rewrites ``meta.json`` in place (status changes), so a
+    copy can catch it half-written. Each unparsable copy is re-copied up to
+    ``attempts`` times; files still unparsable (broken at the source too)
+    are returned as relative paths for the manifest."""
+    pending = [p for p in sorted(dst_root.rglob("*.json")) if not _parses(p)]
+    for _ in range(attempts):
+        if not pending:
+            break
+        time.sleep(delay)
+        still = []
+        for copy in pending:
+            source = src_root / copy.relative_to(dst_root)
+            with contextlib.suppress(OSError):
+                shutil.copyfile(source, copy)
+            if not _parses(copy):
+                still.append(copy)
+        pending = still
+    return [p.relative_to(dst_root).as_posix() for p in pending]
+
+
+def _parses(path: Path) -> bool:
+    try:
+        json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return True
 
 
 def _bar_backend(con: duckdb.DuckDBPyConnection, database: str) -> str:

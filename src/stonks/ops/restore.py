@@ -18,6 +18,7 @@ restore replaces files underneath them.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 from dataclasses import dataclass, field
@@ -80,28 +81,26 @@ def restore_backup(
         )
     stamp = (now or datetime.now(UTC)).strftime("%Y%m%dT%H%M%SZ")
     result = RestoreResult(backup=backup, target=target)
-    for path in occupied:
-        aside = path.with_name(f"{path.name}.pre-restore-{stamp}")
-        path.rename(aside)
-        result.moved_aside.append(aside)
-
-    if manifest.get("state"):
-        _place_file(backup / STATE_FILE, target.state)
-    if manifest.get("lake"):
-        _place_file(backup / LAKE_FILE, target.lake)
-        if (backup / LAKE_BARS).is_dir():
-            _place_tree(backup / LAKE_BARS, target.bars_root)
-    if manifest.get("artifacts"):
-        _place_tree(backup / ARTIFACTS, target.artifacts)
-
-    with DuckDBLake(target.lake) as lake:
-        before = set(lake.applied_migrations()) if manifest.get("lake") else set()
-        lake.migrate()
-        result.lake_migrations_applied = sorted(set(lake.applied_migrations()) - before)
-    with SqliteState(target.state) as state:
-        before = set(state.applied_migrations())
-        state.migrate()
-        result.state_migrations_applied = sorted(set(state.applied_migrations()) - before)
+    moved: list[tuple[Path, Path]] = []
+    try:
+        for path in occupied:
+            aside = _aside_name(path, target, stamp)
+            path.rename(aside)
+            moved.append((path, aside))
+        _place_all(backup, manifest, target)
+        with DuckDBLake(target.lake) as lake:
+            before = set(lake.applied_migrations()) if manifest.get("lake") else set()
+            lake.migrate()
+            result.lake_migrations_applied = sorted(set(lake.applied_migrations()) - before)
+        with SqliteState(target.state) as state:
+            before = set(state.applied_migrations())
+            state.migrate()
+            result.state_migrations_applied = sorted(set(state.applied_migrations()) - before)
+    except Exception as exc:
+        untouched = set(occupied) - {original for original, _ in moved}
+        _roll_back(target, moved, untouched)
+        raise RestoreError(f"restore failed and was rolled back: {exc}") from exc
+    result.moved_aside = [aside for _, aside in moved]
     _log.info(
         "restore.done",
         backup=str(backup),
@@ -133,6 +132,17 @@ def occupied_paths(target: DataPaths) -> list[Path]:
     return out
 
 
+def _aside_name(path: Path, target: DataPaths, stamp: str) -> Path:
+    """``<name>.pre-restore-<stamp>``, keeping a database's WAL companions
+    paired with it (SQLite looks for ``<db>-wal``, DuckDB for ``<db>.wal``),
+    so the set-aside copy still opens with its uncheckpointed writes."""
+    for db in (target.state, target.lake):
+        if path != db and path.name.startswith(db.name) and path.parent == db.parent:
+            suffix = path.name[len(db.name) :]
+            return path.with_name(f"{db.name}.pre-restore-{stamp}{suffix}")
+    return path.with_name(f"{path.name}.pre-restore-{stamp}")
+
+
 def _check_schema(name: str, facts: dict | None, migrations_dir: Path) -> None:
     if not facts or not facts.get("schema_versions"):
         return
@@ -143,6 +153,42 @@ def _check_schema(name: str, facts: dict | None, migrations_dir: Path) -> None:
             f"the backup's {name} schema (migration {newest}) is newer than this code "
             f"(migration {known}); restore with the version of Stonks that made it"
         )
+
+
+def _place_all(backup: Path, manifest: dict, target: DataPaths) -> None:
+    if manifest.get("state"):
+        _place_file(backup / STATE_FILE, target.state)
+    if manifest.get("lake"):
+        _place_file(backup / LAKE_FILE, target.lake)
+        if (backup / LAKE_BARS).is_dir():
+            _place_tree(backup / LAKE_BARS, target.bars_root)
+    if manifest.get("artifacts"):
+        _place_tree(backup / ARTIFACTS, target.artifacts)
+
+
+def _roll_back(target: DataPaths, moved: list[tuple[Path, Path]], untouched: set[Path]) -> None:
+    """Undo a failed restore: remove what the restore placed (and temp
+    copies), never the ``untouched`` original data it had not yet moved
+    aside, then move the set-aside data back."""
+    placed = [p for p in occupied_paths(target) if p not in untouched]
+    for path in [*placed, *_restoring(target)]:
+        with contextlib.suppress(OSError):
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+    for original, aside in reversed(moved):
+        with contextlib.suppress(OSError):
+            aside.rename(original)
+
+
+def _restoring(target: DataPaths) -> list[Path]:
+    paths = (target.lake, target.bars_root, target.state, target.artifacts)
+    return [
+        p.with_name(p.name + ".restoring")
+        for p in paths
+        if p.with_name(p.name + ".restoring").exists()
+    ]
 
 
 def _place_file(src: Path, dst: Path) -> None:

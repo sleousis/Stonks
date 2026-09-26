@@ -270,6 +270,92 @@ def test_restore_force_moves_existing_data_aside(tmp_path):
     assert _bar_count(aside_lake) == 37  # the replaced data is kept, not deleted
 
 
+def test_force_restore_keeps_wal_files_paired_with_their_database(tmp_path):
+    src = _seed(tmp_path / "data")
+    backup = create_backup(src, tmp_path / "backups")
+    target = _seed(tmp_path / "target")
+    (target.state.parent / "state.sqlite-wal").write_bytes(b"wal")
+    (target.lake.parent / "lake.duckdb.wal").write_bytes(b"wal")
+    result = restore_backup(backup, target, force=True)
+    names = {p.name for p in result.moved_aside}
+    [state_aside] = [n for n in names if n.startswith("state.sqlite.pre") and n.endswith("Z")]
+    [lake_aside] = [n for n in names if n.startswith("lake.duckdb.pre") and n.endswith("Z")]
+    # SQLite finds a WAL at "<db>-wal", DuckDB at "<db>.wal".
+    assert f"{state_aside}-wal" in names
+    assert f"{lake_aside}.wal" in names
+    assert not (target.state.parent / "state.sqlite-wal").exists()
+
+
+def test_force_restore_rolls_back_when_moving_aside_fails(tmp_path, monkeypatch):
+    src = _seed(tmp_path / "data")
+    backup = create_backup(src, tmp_path / "backups")
+    target = _seed(tmp_path / "target")
+    with DuckDBLake(target.lake) as lake:
+        lake.upsert_bars(_bars("ZZZ.US", n=2), Interval.DAY_1)
+    real_rename = Path.rename
+
+    def rename(self, dst):
+        if self.name == "state.sqlite":  # e.g. held open by a running process
+            raise PermissionError("in use")
+        return real_rename(self, dst)
+
+    monkeypatch.setattr(Path, "rename", rename)
+    with pytest.raises(RestoreError, match="in use"):
+        restore_backup(backup, target, force=True)
+    monkeypatch.setattr(Path, "rename", real_rename)
+    assert _bar_count(target.lake) == 37
+    # Data not yet moved aside when the failure hit is left alone.
+    with SqliteState(target.state) as state:
+        assert state.count_rows("tick_runs") == 1
+    assert (target.artifacts / "strat-1" / "meta.json").exists()
+    assert not list(target.lake.parent.glob("*.pre-restore-*"))
+
+
+def test_force_restore_rolls_back_when_copying_fails(tmp_path, monkeypatch):
+    import stonks.ops.restore as restore_module
+
+    src = _seed(tmp_path / "data", backend="parquet")
+    backup = create_backup(src, tmp_path / "backups")
+    target = _seed(tmp_path / "target")
+    with DuckDBLake(target.lake) as lake:
+        lake.upsert_bars(_bars("ZZZ.US", n=2), Interval.DAY_1)
+
+    def boom(src_dir, dst_dir):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(restore_module, "_place_tree", boom)
+    with pytest.raises(RestoreError, match="disk full"):
+        restore_backup(backup, target, force=True)
+    assert _bar_count(target.lake) == 37
+    assert (target.artifacts / "strat-1" / "meta.json").exists()
+    assert not list(target.lake.parent.glob("*.pre-restore-*"))
+    assert not list(target.lake.parent.glob("*.restoring"))
+
+
+def test_artifact_json_torn_during_copy_is_recopied(tmp_path):
+    from stonks.ops.backup import _settle_json
+
+    src = tmp_path / "src"
+    dst = tmp_path / "dst"
+    (src / "s1").mkdir(parents=True)
+    (dst / "s1").mkdir(parents=True)
+    (src / "s1" / "meta.json").write_text('{"status": "active"}')
+    (dst / "s1" / "meta.json").write_text('{"status": "ac')  # torn mid-write
+    assert _settle_json(src, dst) == []
+    assert json.loads((dst / "s1" / "meta.json").read_text()) == {"status": "active"}
+    (src / "s1" / "meta.json").write_text("not json")
+    (dst / "s1" / "meta.json").write_text("not json")
+    assert _settle_json(src, dst, attempts=2, delay=0) == ["s1/meta.json"]
+
+
+def test_unreadable_artifact_json_is_recorded_not_fatal(tmp_path):
+    src = _seed(tmp_path / "data")
+    (src.artifacts / "strat-1" / "params.json").write_text("{broken")
+    backup = create_backup(src, tmp_path / "backups")
+    manifest = json.loads((backup / "manifest.json").read_text())
+    assert manifest["artifacts"]["unreadable_json"] == ["strat-1/params.json"]
+
+
 def test_restore_refuses_a_corrupt_backup(tmp_path):
     src = _seed(tmp_path / "data")
     backup = create_backup(src, tmp_path / "backups")
