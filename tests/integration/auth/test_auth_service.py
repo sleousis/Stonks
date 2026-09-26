@@ -462,3 +462,66 @@ def test_enrolment_needs_the_encryption_key(db, monkeypatch):
     info = svc.session(svc.login("alice@example.com", PASSWORD).session.token, unsafe=False)
     with pytest.raises(AuthNotConfigured):
         svc.enrol_start(info)
+
+
+# ---- review fixes: second-factor lockout, email case ----------------------------
+
+
+def test_password_success_does_not_reset_second_factor_failures(svc, db, clock):
+    """A stolen password must not buy unlimited TOTP guesses: logging in
+    again with the right password keeps the second-factor failure count."""
+    add_user(db, "alice@example.com")
+    enrol(svc, "alice@example.com", clock)
+    for round_ in range(3):
+        info = svc.session(
+            svc.login("alice@example.com", PASSWORD, ip=f"10.1.0.{round_}").session.token,
+            unsafe=False,
+        )
+        for _ in range(2):
+            try:
+                svc.verify_mfa(info, code="000000", ip=f"10.1.0.{round_}")
+            except TooManyAttempts:
+                return
+            except InvalidCredentials:
+                pass
+    info = svc.session(svc.login("alice@example.com", PASSWORD).session.token, unsafe=False)
+    with pytest.raises(TooManyAttempts):
+        svc.verify_mfa(info, code="000000")
+
+
+def test_second_factor_success_resets_its_failures(svc, db, clock):
+    add_user(db, "alice@example.com")
+    _, secret, _ = enrol(svc, "alice@example.com", clock)
+    info = svc.session(svc.login("alice@example.com", PASSWORD).session.token, unsafe=False)
+    for _ in range(4):
+        with pytest.raises(InvalidCredentials):
+            svc.verify_mfa(info, code="000000")
+    clock.advance(seconds=30)
+    svc.verify_mfa(info, code=pyotp.TOTP(secret).at(clock()))
+    info = svc.session(svc.login("alice@example.com", PASSWORD).session.token, unsafe=False)
+    for _ in range(4):
+        with pytest.raises(InvalidCredentials):
+            svc.verify_mfa(info, code="000000")
+
+
+def test_email_is_normalised_on_create_and_lookup(svc, db):
+    admin = session_principal(DEFAULT_OWNER_ID, Role.ADMIN)
+    info = svc.create_user(
+        admin,
+        email="  Alice@Example.COM ",
+        display_name="Alice",
+        role=Role.TRADER,
+        password=PASSWORD,
+    )
+    assert info.user.email == "alice@example.com"
+    assert svc.login("ALICE@example.com", PASSWORD).next_step == "enrol"
+    with pytest.raises(ConflictError):
+        svc.create_user(
+            admin, email="alice@EXAMPLE.com", display_name="A2", role=Role.TRADER, password=PASSWORD
+        )
+
+
+def test_bootstrap_and_reset_normalise_email(svc, db):
+    user = svc.bootstrap_admin("Owner@Example.com", PASSWORD)
+    assert user.email == "owner@example.com"
+    assert svc.set_password_by_email("OWNER@example.com", PASSWORD + "!").id == user.id
