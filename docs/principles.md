@@ -42,11 +42,11 @@ Enforced: `OutOfSampleTest` gates on PSR ≥ 0.95 with a minimum trade count (BL
 
 **P9. Train and test windows are separated by an embargo at least as long as the label horizon.**
 Why: overlapping labels and serially correlated features leak across a boundary with no gap (López de Prado, *AFML* ch. 7; Chan, *Machine Trading*).
-Enforced: `LabDataset.embargo_bars` skips that many trading bars between the train and validation windows (`[lab] embargo_bars`, `stonks lab run --embargo-bars`, the API's `embargo_bars`), raised per strategy to its `label_horizon_bars` (`LabDataset.for_strategy`). A wrapper reports the larger of its own and its inner strategy's label horizon and required history (RS-02). Walk-forward folds and walk-forward MCPT use the same embargo (BL-20).
+Enforced: `LabDataset.embargo_bars` skips that many trading bars between the train and validation windows (`[lab] embargo_bars`, `stonks lab run --embargo-bars`, the API's `embargo_bars`), raised per strategy to its `label_horizon_bars` (`LabDataset.for_strategy`). A wrapper reports the larger of its own and its inner strategy's label horizon and required history (RS-02). Walk-forward folds and walk-forward MCPT use the same embargo (BL-20). `LabDataset` refuses a `train_ratio` outside 0 to 1 and any window that leaves no validation data.
 
 **P10. Walk-forward is the default evidence for promotion.**
 Why: optimising over one split is close to worthless. Only the stitched out-of-sample segments count (Davey; Kaufman).
-Enforced: the `promotion` preset, the default suite of every registering lab run (API, MCP and CLI), runs `walk_forward`. It requires walk-forward efficiency ≥ 0.5 (`[lab.walk_forward] min_wfe`) and hands its stitched out-of-sample segments to `mc_trades` (BL-20). The go-live gate's `promotion_preset` check wants a stored report for every test of that preset.
+Enforced: the `promotion` preset, the default suite of every registering lab run (API, MCP and CLI), runs `walk_forward`. It requires walk-forward efficiency ≥ 0.5 (`[lab.walk_forward] min_wfe`) and hands its stitched out-of-sample segments to `mc_trades` (BL-20). The go-live gate's `promotion_preset` check wants a stored report for every test of that preset. A walk-forward run with no finite fold score fails.
 
 **P11. Judge strategies on trades, not bars.**
 Why: trade-level win rate, payoff, expectancy and the order of trades decide survival. A profit factor computed from per-bar returns is a different number (Davey; Ehlers and Way).
@@ -204,7 +204,7 @@ Enforced: `lab/parallel.py` is the one process pool for tuners, folds, permutati
 
 **P46. Every lab result can be reproduced.**
 Why: a verdict you can't rerun can't be trusted or debugged (Slatkin; Strimpel; López de Prado).
-Enforced: today `RandomTuner` is seeded (`lab/tuning/random.py:19-25`). BL-06 records the git SHA, a config hash, a data fingerprint and the seeds.
+Enforced: today `RandomTuner` is seeded (`lab/tuning/random.py:19-25`). BL-06 records the git SHA, a config hash, a data fingerprint and the seeds. The data fingerprint hashes open, high, low, close, adjusted close and volume, 550 days of warm-up history, and every split and dividend row.
 
 **P47. Third-party libraries sit behind our seams, and statistics use numpy and scipy.**
 Why: vendor types must not leak (CLAUDE.md). The ADIA Lab reference code shows that PSR, DSR and PBO need nothing heavier.

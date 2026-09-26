@@ -93,6 +93,23 @@ Presets (`--preset`):
 
 `--tests a,b,c` picks tests by id instead. `--test-option` passes options to one test.
 
+No evidence is never a pass:
+
+- An empty suite fails.
+- `benchmark_relative`, `runs_test`, `cross_instrument`, `vs_random`, `walk_forward`, `walk_forward_mcpt` and `mcpt` fail with "insufficient data" when they have no trades, too few bars, too few tickers or runs, or no finite score.
+- `benchmark_relative` needs at least one trade, 20 bars and some tracking error.
+- `cross_instrument` fails with fewer than `min_tickers` names. The promotion preset adds 3 held-out tickers from the lake.
+- `vs_random` needs at least half of its noise runs, and never fewer than 5.
+- `event_study` counts only entries with a forward return at the holding horizon.
+
+Other rules:
+
+- `perturbation` compares per-bar returns, not equity levels. The level correlation is still reported.
+- `drift` ignores NaN feature values and reports their share as `nan_share`.
+- IC standard errors keep gaps in the date calendar.
+- The suite runs `walk_forward` first, so `mc_trades` always scores the stitched trades. Reports keep the order you asked for.
+- The trial matrix is indexed by date.
+
 ## Run sequence
 
 ```mermaid
