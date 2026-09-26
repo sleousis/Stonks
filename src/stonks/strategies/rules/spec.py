@@ -125,6 +125,29 @@ class DonchianLowIndicator(_Indicator):
     period: int = Field(ge=1, le=MAX_PERIOD)
 
 
+class EfficiencyRatioIndicator(_Indicator):
+    """Kaufman efficiency ratio of closes over ``period`` bars (0..1)."""
+
+    kind: Literal["efficiency_ratio"]
+    period: int = Field(default=10, ge=1, le=MAX_PERIOD)
+
+
+class KamaIndicator(_Indicator):
+    """Kaufman adaptive moving average of closes: efficiency ratio over
+    ``period`` bars, smoothing between ``fast`` and ``slow`` EMA spans."""
+
+    kind: Literal["kama"]
+    period: int = Field(default=10, ge=1, le=MAX_PERIOD)
+    fast: int = Field(default=2, ge=1, le=MAX_PERIOD)
+    slow: int = Field(default=30, ge=2, le=MAX_PERIOD)
+
+    @model_validator(mode="after")
+    def _fast_below_slow(self) -> KamaIndicator:
+        if self.fast >= self.slow:
+            raise ValueError(f"kama fast ({self.fast}) must be below slow ({self.slow})")
+        return self
+
+
 Indicator = Annotated[
     CloseIndicator
     | VolumeIndicator
@@ -135,7 +158,9 @@ Indicator = Annotated[
     | ZScoreIndicator
     | AtrIndicator
     | DonchianHighIndicator
-    | DonchianLowIndicator,
+    | DonchianLowIndicator
+    | EfficiencyRatioIndicator
+    | KamaIndicator,
     Field(discriminator="kind"),
 ]
 
@@ -151,6 +176,8 @@ INDICATOR_KINDS: tuple[str, ...] = (
     "atr",
     "donchian_high",
     "donchian_low",
+    "efficiency_ratio",
+    "kama",
 )
 
 
@@ -232,10 +259,31 @@ class Sizing(_Strict):
 
 
 class RiskExits(_Strict):
-    """Percentage exits evaluated on closes against the entry reference."""
+    """Exits evaluated on closes.
+
+    ``stop_loss_pct`` and ``take_profit_pct`` compare with the entry price.
+    The trailing stops (Carver, *Leveraged Trading*) sit below the highest
+    close since entry and never move down:
+
+    - ``trailing_stop_vol_multiple`` x annualised volatility of close
+      returns x price (Carver uses 0.5);
+    - ``trailing_stop_atr_multiple`` x the average true range.
+
+    Both read the last ``trailing_stop_period`` bars. When both are set the
+    tighter one wins."""
 
     stop_loss_pct: float | None = Field(default=None, gt=0.0, lt=1.0)
     take_profit_pct: float | None = Field(default=None, gt=0.0, le=100.0)
+    trailing_stop_vol_multiple: float | None = Field(default=None, ge=0.25, le=3.0)
+    trailing_stop_atr_multiple: float | None = Field(default=None, ge=1.0, le=6.0)
+    trailing_stop_period: int = Field(default=20, ge=2, le=MAX_PERIOD)
+
+    @property
+    def has_trailing_stop(self) -> bool:
+        return (
+            self.trailing_stop_vol_multiple is not None
+            or self.trailing_stop_atr_multiple is not None
+        )
 
 
 class RuleSpec(_Strict):
