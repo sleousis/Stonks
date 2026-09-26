@@ -107,6 +107,16 @@ def test_backtest_result_nulls_non_finite_fields():
     assert BacktestResult.model_validate(doc).trade_stats.win_rate is None
 
 
+def test_golive_views_null_non_finite_values():
+    from stonks.app.golive import GoLiveCheckView, PromotionChecklistView
+
+    check = GoLiveCheckView(name="min_days", passed=False, value=3.0, limit=INF, detail="")
+    assert _strict(check)["limit"] is None
+    checklist = PromotionChecklistView(dsr=NAN, pbo=0.1, excess_cagr=-INF)
+    doc = _strict(checklist)
+    assert doc["dsr"] is None and doc["excess_cagr"] is None and doc["pbo"] == 0.1
+
+
 def test_lab_run_view_nulls_non_finite_metrics_and_benchmark():
     view = LabRunView(
         class_path="m:C",

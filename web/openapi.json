@@ -134,6 +134,19 @@
       },
       "BacktestRequest": {
         "properties": {
+          "benchmark": {
+            "anyOf": [
+              {
+                "description": "auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark",
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark"
+          },
           "cost_model": {
             "anyOf": [
               {
@@ -219,6 +232,23 @@
       },
       "BacktestResult": {
         "properties": {
+          "benchmark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BenchmarkStatsView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "benchmark_equity": {
+            "items": {
+              "$ref": "#/components/schemas/EquityPoint"
+            },
+            "title": "Benchmark Equity",
+            "type": "array"
+          },
           "cagr": {
             "anyOf": [
               {
@@ -554,6 +584,212 @@
         "title": "BarView",
         "type": "object"
       },
+      "BenchmarkStatsView": {
+        "description": "A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``).\nRatios are ``None`` when not finite.",
+        "properties": {
+          "alpha_annual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alpha Annual"
+          },
+          "alpha_tstat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alpha Tstat"
+          },
+          "benchmark_cagr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark Cagr"
+          },
+          "benchmark_max_dd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark Max Dd"
+          },
+          "benchmark_sharpe": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark Sharpe"
+          },
+          "beta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Beta"
+          },
+          "correlation": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation"
+          },
+          "down_capture": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Down Capture"
+          },
+          "excess_cagr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excess Cagr"
+          },
+          "excluded": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Excluded",
+            "type": "array"
+          },
+          "information_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Information Ratio"
+          },
+          "members": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "n_obs": {
+            "title": "N Obs",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "r2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "R2"
+          },
+          "residual_sharpe": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Residual Sharpe"
+          },
+          "spec": {
+            "title": "Spec",
+            "type": "string"
+          },
+          "tracking_error": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracking Error"
+          },
+          "up_capture": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Up Capture"
+          }
+        },
+        "required": [
+          "name",
+          "spec",
+          "n_obs",
+          "benchmark_cagr",
+          "excess_cagr",
+          "benchmark_sharpe",
+          "benchmark_max_dd",
+          "beta",
+          "alpha_annual",
+          "alpha_tstat",
+          "r2",
+          "residual_sharpe",
+          "tracking_error",
+          "information_ratio",
+          "up_capture",
+          "down_capture",
+          "correlation"
+        ],
+        "title": "BenchmarkStatsView",
+        "type": "object"
+      },
       "BrokerAccountView": {
         "properties": {
           "buying_power": {
@@ -872,6 +1108,19 @@
       "DraftBacktestRequest": {
         "description": "A :class:`~stonks.app.lab.BacktestRequest` without the strategy\n(the draft is the strategy).",
         "properties": {
+          "benchmark": {
+            "anyOf": [
+              {
+                "description": "auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark",
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark"
+          },
           "cost_model": {
             "anyOf": [
               {
@@ -995,6 +1244,19 @@
       "DraftLabRunRequest": {
         "description": "A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A\nrule draft's spec is fixed (it has no tunable parameters); a code\ndraft's class is tuned over its parameter space. Registering\n(``register_strategy`` always, ``register_if_passes`` only on a pass)\nlinks the new strategy to the draft.",
         "properties": {
+          "benchmark": {
+            "anyOf": [
+              {
+                "description": "auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark",
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark"
+          },
           "budget": {
             "default": 20,
             "maximum": 1000.0,
@@ -1019,6 +1281,19 @@
               }
             ],
             "title": "Cost Model"
+          },
+          "embargo_bars": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embargo Bars"
           },
           "end": {
             "format": "date",
@@ -1149,6 +1424,41 @@
               }
             ],
             "title": "Survival Tests"
+          },
+          "test_options": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "propertyNames": {
+                  "enum": [
+                    "benchmark_relative",
+                    "cost_stress",
+                    "cross_instrument",
+                    "deflated_sharpe",
+                    "drift",
+                    "mc_trades",
+                    "mcpt",
+                    "oos",
+                    "pbo",
+                    "period_stability",
+                    "permutation",
+                    "perturbation",
+                    "plateau",
+                    "runs_test",
+                    "walk_forward",
+                    "walk_forward_mcpt"
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test Options"
           },
           "train_ratio": {
             "default": 0.7,
@@ -1365,7 +1675,13 @@
               "max_drawdown",
               "max_drift",
               "min_trades",
-              "survival"
+              "survival",
+              "within_mc_band",
+              "quit_rule",
+              "promotion_preset",
+              "nonzero_costs",
+              "hypothesis_recorded",
+              "backtest_min_trades"
             ],
             "title": "Name",
             "type": "string"
@@ -1400,6 +1716,11 @@
         "additionalProperties": false,
         "description": "Limits a paper-trading period must meet before ``stonks golive check``\npasses (``[golive]``). The gate only reports; promotion stays a human\naction. Every limit is strict about missing data: a period with no\nsnapshots, no fills or no backtest expectation fails.",
         "properties": {
+          "incubation": {
+            "default": true,
+            "title": "Incubation",
+            "type": "boolean"
+          },
           "max_drawdown": {
             "default": 0.15,
             "exclusiveMinimum": 0.0,
@@ -1413,21 +1734,68 @@
             "title": "Max Drift",
             "type": "number"
           },
+          "min_backtest_trades": {
+            "default": 30,
+            "minimum": 1.0,
+            "title": "Min Backtest Trades",
+            "type": "integer"
+          },
           "min_days": {
-            "default": 20,
+            "default": 63,
             "minimum": 1.0,
             "title": "Min Days",
             "type": "integer"
           },
+          "min_hypothesis_chars": {
+            "default": 20,
+            "minimum": 1.0,
+            "title": "Min Hypothesis Chars",
+            "type": "integer"
+          },
           "min_trades": {
-            "default": 5,
+            "default": 20,
             "minimum": 1.0,
             "title": "Min Trades",
             "type": "integer"
           },
+          "min_trl_alpha": {
+            "default": 0.05,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Min Trl Alpha",
+            "type": "number"
+          },
+          "min_trl_cap_days": {
+            "default": 252,
+            "minimum": 1.0,
+            "title": "Min Trl Cap Days",
+            "type": "integer"
+          },
+          "periods_per_year": {
+            "default": 252.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Periods Per Year",
+            "type": "number"
+          },
+          "promotion_preset": {
+            "default": "promotion",
+            "title": "Promotion Preset",
+            "type": "string"
+          },
+          "quit_drawdown_multiple": {
+            "default": 1.5,
+            "minimum": 1.0,
+            "title": "Quit Drawdown Multiple",
+            "type": "number"
+          },
           "require_all_survival_passed": {
             "default": true,
             "title": "Require All Survival Passed",
+            "type": "boolean"
+          },
+          "use_min_trl": {
+            "default": true,
+            "title": "Use Min Trl",
             "type": "boolean"
           }
         },
@@ -1436,6 +1804,10 @@
       },
       "GoLiveReport": {
         "properties": {
+          "checklist": {
+            "$ref": "#/components/schemas/PromotionChecklistView",
+            "default": {}
+          },
           "checks": {
             "items": {
               "$ref": "#/components/schemas/GoLiveCheckView"
@@ -2079,6 +2451,19 @@
       "LabRunRequest": {
         "description": "Tunes the class the ``strategy`` ref points at (its ``params`` are\nignored: the tuner searches the class's parameter space).",
         "properties": {
+          "benchmark": {
+            "anyOf": [
+              {
+                "description": "auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark",
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark"
+          },
           "budget": {
             "default": 20,
             "maximum": 1000.0,
@@ -2103,6 +2488,19 @@
               }
             ],
             "title": "Cost Model"
+          },
+          "embargo_bars": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embargo Bars"
           },
           "end": {
             "format": "date",
@@ -2237,6 +2635,41 @@
             ],
             "title": "Survival Tests"
           },
+          "test_options": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "propertyNames": {
+                  "enum": [
+                    "benchmark_relative",
+                    "cost_stress",
+                    "cross_instrument",
+                    "deflated_sharpe",
+                    "drift",
+                    "mc_trades",
+                    "mcpt",
+                    "oos",
+                    "pbo",
+                    "period_stability",
+                    "permutation",
+                    "perturbation",
+                    "plateau",
+                    "runs_test",
+                    "walk_forward",
+                    "walk_forward_mcpt"
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test Options"
+          },
           "train_ratio": {
             "default": 0.7,
             "exclusiveMaximum": 1.0,
@@ -2283,6 +2716,16 @@
       },
       "LabRunView": {
         "properties": {
+          "benchmark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BenchmarkStatsView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "best_params": {
             "additionalProperties": true,
             "title": "Best Params",
@@ -2410,16 +2853,24 @@
             "type": "string"
           },
           "n_permutations": {
-            "default": 50,
+            "default": 200,
             "maximum": 1000.0,
             "minimum": 1.0,
             "title": "N Permutations",
             "type": "integer"
           },
           "retune": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "const": "auto",
+                "type": "string"
+              }
+            ],
             "default": false,
-            "title": "Retune",
-            "type": "boolean"
+            "title": "Retune"
           },
           "seed": {
             "anyOf": [
@@ -3361,6 +3812,79 @@
           "status"
         ],
         "title": "ProblemDetails",
+        "type": "object"
+      },
+      "PromotionChecklistView": {
+        "description": "What a reviewer reads before promoting; it doesn't change the\nverdict. ``None`` for anything not recorded.",
+        "properties": {
+          "dsr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dsr"
+          },
+          "excess_cagr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excess Cagr"
+          },
+          "hypothesis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hypothesis"
+          },
+          "n_trials_class": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Trials Class"
+          },
+          "pbo": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pbo"
+          },
+          "premortem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premortem"
+          }
+        },
+        "title": "PromotionChecklistView",
         "type": "object"
       },
       "RiskAdjustmentView": {
@@ -4678,32 +5202,81 @@
         "description": "Trade-level statistics of a backtest (``backtest.trades.TradeStats``).\nWin/loss figures are over closed round trips; ``None`` marks an\nunbounded ratio (no losing trades).",
         "properties": {
           "avg_bars_held": {
-            "title": "Avg Bars Held",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Bars Held"
           },
           "avg_loss": {
-            "title": "Avg Loss",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Loss"
           },
           "avg_win": {
-            "title": "Avg Win",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Win"
           },
           "cost_drag_annual": {
-            "title": "Cost Drag Annual",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Drag Annual"
           },
           "costs_paid": {
-            "title": "Costs Paid",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Costs Paid"
           },
           "expectancy": {
-            "title": "Expectancy",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expectancy"
           },
           "exposure": {
-            "title": "Exposure",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exposure"
           },
           "n_open": {
             "title": "N Open",
@@ -4736,12 +5309,26 @@
             "title": "Trade Profit Factor"
           },
           "turnover_annual": {
-            "title": "Turnover Annual",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turnover Annual"
           },
           "win_rate": {
-            "title": "Win Rate",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Win Rate"
           }
         },
         "required": [
@@ -4804,8 +5391,15 @@
             "type": "number"
           },
           "return_pct": {
-            "title": "Return Pct",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Pct"
           },
           "ticker": {
             "title": "Ticker",
@@ -4889,6 +5483,55 @@
             "title": "Anchored",
             "type": "boolean"
           },
+          "matrix": {
+            "default": false,
+            "title": "Matrix",
+            "type": "boolean"
+          },
+          "matrix_min_pass_share": {
+            "default": 0.6666666666666666,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Matrix Min Pass Share",
+            "type": "number"
+          },
+          "matrix_test_bars": {
+            "default": [
+              126,
+              252
+            ],
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "title": "Matrix Test Bars",
+            "type": "array"
+          },
+          "matrix_train_bars": {
+            "default": [
+              504,
+              756,
+              1008
+            ],
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "title": "Matrix Train Bars",
+            "type": "array"
+          },
+          "max_workers": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Workers"
+          },
           "metric": {
             "default": "sharpe",
             "enum": [
@@ -4911,11 +5554,37 @@
             "title": "Min Positive Share",
             "type": "number"
           },
+          "min_wfe": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 0.5,
+            "title": "Min Wfe"
+          },
           "n_splits": {
             "default": 4,
             "minimum": 1.0,
             "title": "N Splits",
             "type": "integer"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 0,
+            "title": "Seed"
           },
           "test_days": {
             "anyOf": [
