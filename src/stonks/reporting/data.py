@@ -17,6 +17,7 @@ from stonks.core.protocols import SurvivalReport
 from stonks.production.golive import GoLiveCheck, PaperPeriod, gate_checks, load_paper_period
 from stonks.production.pnl import PnlRow, load_pnl
 from stonks.registry.store import StrategyHandle, StrategyRegistry
+from stonks.reporting.tearsheet import TearSheet
 from stonks.store.state import SqliteState
 
 RECENT_LIMIT = 50
@@ -67,6 +68,8 @@ class ReportData:
     strategies: list[StrategyPanel]
     unknown_strategy_ids: list[str] = field(default_factory=list)
     policy: GoLivePolicy = field(default_factory=GoLivePolicy)
+    #: Backtests to show as tear sheets (strategy vs benchmark).
+    tear_sheets: list[TearSheet] = field(default_factory=list)
 
 
 def build_report(
@@ -76,6 +79,7 @@ def build_report(
     strategy_ids: Sequence[str] | None = None,
     since: date | None = None,
     now: datetime | None = None,
+    tear_sheets: Sequence[TearSheet] = (),
 ) -> ReportData:
     handles = registry.list_all()
     unknown: list[str] = []
@@ -103,6 +107,7 @@ def build_report(
         strategies=panels,
         unknown_strategy_ids=unknown,
         policy=policy,
+        tear_sheets=list(tear_sheets),
     )
 
 

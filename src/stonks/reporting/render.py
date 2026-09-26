@@ -11,49 +11,21 @@ and themes itself via ``prefers-color-scheme``.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Sequence
-from html import escape
+from collections.abc import Sequence
 from string import Template
-from typing import Any
 
 from stonks.production.golive import GoLiveCheck
 from stonks.reporting.charts import line_chart
 from stonks.reporting.data import ReportData, StrategyPanel
-
-
-def _e(value: Any) -> str:
-    return escape(str(value), quote=True)
-
-
-def _pct(x: float | None) -> str:
-    return "-" if x is None else f"{x:+.2%}"
-
-
-def _money(x: float | None) -> str:
-    return "-" if x is None else f"{x:,.2f}"
-
-
-def _num(x: Any) -> str:
-    if isinstance(x, float):
-        return f"{x:,.4g}"
-    return str(x)
-
-
-def _table(headers: Sequence[str], rows: Iterable[Sequence[str]], empty: str) -> str:
-    """``rows`` cells must already be escaped HTML fragments."""
-    body = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in row) + "</tr>" for row in rows)
-    if not body:
-        return f'<p class="muted">{_e(empty)}</p>'
-    head = "".join(f"<th>{_e(h)}</th>" for h in headers)
-    return f'<div class="scroll"><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
-
-
-def _badge(ok: bool, yes: str = "PASS", no: str = "FAIL") -> str:
-    return f'<span class="badge {"ok" if ok else "bad"}">{_e(yes if ok else no)}</span>'
-
-
-def _tile(label: str, value: str) -> str:
-    return f'<div class="tile"><div class="label">{_e(label)}</div><div class="value">{_e(value)}</div></div>'
+from stonks.reporting.html import CSS as _CSS
+from stonks.reporting.html import badge as _badge
+from stonks.reporting.html import e as _e
+from stonks.reporting.html import money as _money
+from stonks.reporting.html import num as _num
+from stonks.reporting.html import pct as _pct
+from stonks.reporting.html import table as _table
+from stonks.reporting.html import tile as _tile
+from stonks.reporting.tearsheet import render_tear_sheet
 
 
 def _portfolio_section(data: ReportData) -> str:
@@ -225,6 +197,14 @@ def _strategies_section(data: ReportData) -> str:
     return "".join(parts)
 
 
+def _tear_sheets_section(data: ReportData) -> str:
+    if not data.tear_sheets:
+        return ""
+    return "<h2 class='group'>Backtests</h2>" + "".join(
+        render_tear_sheet(sheet) for sheet in data.tear_sheets
+    )
+
+
 _PAGE = Template(
     """<!doctype html>
 <html lang="en">
@@ -242,54 +222,12 @@ $portfolio
 $positions
 $orders
 $strategies
+$tear_sheets
 </main>
 </body>
 </html>
 """
 )
-
-_CSS = """
-:root{--bg:#f7f7f5;--panel:#fff;--fg:#1d1f23;--muted:#61656d;--border:#dfe1e5;
---s1:#2563eb;--s2:#d97706;--neg:#dc2626;--ok:#15803d;--bad:#b91c1c;--grid:#e8e9ec}
-@media (prefers-color-scheme: dark){:root{--bg:#121417;--panel:#1b1e23;--fg:#e6e7ea;
---muted:#9aa0aa;--border:#2c3038;--s1:#60a5fa;--s2:#fbbf24;--neg:#f87171;--ok:#4ade80;
---bad:#f87171;--grid:#2a2e35}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);
-font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-header,main{max-width:1000px;margin:0 auto;padding:16px}
-h1{margin:8px 0 0;font-size:24px}h2{font-size:18px;margin:0 0 8px}
-h2.group{margin:24px 0 8px}h3{font-size:14px;margin:16px 0 6px;color:var(--muted)}
-section{background:var(--panel);border:1px solid var(--border);border-radius:8px;
-padding:16px;margin:12px 0}
-.muted{color:var(--muted)}.warn{color:var(--bad)}
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
-.tile{border:1px solid var(--border);border-radius:6px;padding:8px}
-.tile .label{color:var(--muted);font-size:12px}.tile .value{font-size:18px;
-font-variant-numeric:tabular-nums}
-.scroll{overflow-x:auto}
-table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
-th,td{text-align:left;padding:4px 8px;border-bottom:1px solid var(--border);
-vertical-align:top;overflow-wrap:anywhere}
-th{color:var(--muted);font-weight:600}
-.badge{display:inline-block;padding:0 6px;border-radius:4px;font-size:12px;font-weight:600;
-border:1px solid currentColor}
-.badge.ok{color:var(--ok)}.badge.bad{color:var(--bad)}.badge.status-active{color:var(--ok)}
-.badge.status-shadow{color:var(--s2)}.badge.status-retired{color:var(--muted)}
-svg.chart{width:100%;height:220px;display:block}
-.chart .grid{stroke:var(--grid);stroke-width:1}
-.chart .axis{fill:var(--muted);font-size:11px}
-.chart .line{fill:none;stroke-width:2;vector-effect:non-scaling-stroke}
-.chart .line.s1{stroke:var(--s1)}.chart .line.s2{stroke:var(--s2);stroke-dasharray:6 4}
-.chart .line.neg{stroke:var(--neg)}.chart .area.neg{fill:var(--neg);opacity:.15;stroke:none}
-.chart .dot.s1{fill:var(--s1)}.chart .dot.s2{fill:var(--s2)}.chart .dot.neg{fill:var(--neg)}
-.legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-top:4px}
-.legend .key::before{content:"";display:inline-block;width:12px;height:3px;margin-right:6px;
-vertical-align:middle;background:var(--s1)}
-.legend .key.s2::before{background:var(--s2)}
-.nodata{color:var(--muted);padding:24px;text-align:center;border:1px dashed var(--border);
-border-radius:6px}
-"""
 
 
 def render_html(data: ReportData) -> str:
@@ -303,4 +241,5 @@ def render_html(data: ReportData) -> str:
         positions=_positions_section(data),
         orders=_orders_section(data),
         strategies=_strategies_section(data),
+        tear_sheets=_tear_sheets_section(data),
     )
