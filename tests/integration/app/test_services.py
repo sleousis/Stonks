@@ -156,7 +156,7 @@ def test_catalog_lists_example_strategies_with_parameter_specs(services):
     classes = {c.class_path: c for c in services.catalog.strategies()}
     bah = classes["stonks.strategies.examples.buy_and_hold:BuyAndHold"]
     assert bah.name == "buy_and_hold"
-    assert bah.source == "examples"
+    assert bah.source == "builtin"
     assert {p.name for p in bah.parameters} == {"ticker", "allocation"}
     assert "stonks.strategies.examples.momentum:Momentum" in classes
 
@@ -513,16 +513,14 @@ def test_class_list_source_skips_modules_that_do_not_exist_yet():
     assert [c.__name__ for c in src.discover()] == ["MacroRegimeFilter"]
 
 
-def test_default_catalog_offers_macro_regime_quality_value_and_rule_strategy_slot():
-    from stonks.app.services import RULE_STRATEGY_CLASS_PATH, default_strategy_sources
+def test_default_catalog_offers_macro_regime_quality_value_and_rule_strategy():
+    from stonks.app.services import default_strategy_sources
 
     catalog = CatalogService(sources=default_strategy_sources())
     paths = {c.class_path for c in catalog.strategies()}
     assert "stonks.strategies.macro_regime:MacroRegimeFilter" in paths
     assert "stonks.strategies.examples.quality_value:QualityValue" in paths
-    assert RULE_STRATEGY_CLASS_PATH == "stonks.strategies.rule_based:RuleStrategy"
-    sources = default_strategy_sources()
-    assert any(RULE_STRATEGY_CLASS_PATH in getattr(s, "class_paths", ()) for s in sources)
+    assert "stonks.strategies.rule_based:RuleStrategy" in paths
 
 
 def test_registered_strategy_class_resolves_outside_the_catalog(settings, seeded):

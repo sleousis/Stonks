@@ -65,6 +65,19 @@ class PackageStrategySource:
         return found
 
 
+class LabCatalogSource:
+    """The lab's strategy catalog (:func:`stonks.lab.catalog.strategy_catalog`,
+    what ``stonks lab run`` resolves names from), so the CLI and the API
+    offer the same built-in strategies from one list."""
+
+    name = "builtin"
+
+    def discover(self) -> list[type]:
+        from stonks.lab.catalog import strategy_catalog
+
+        return list(strategy_catalog().values())
+
+
 class ClassListStrategySource:
     """Explicitly listed ``module:Class`` paths. A path whose module does
     not exist (yet) is skipped quietly, so a source can name a class that

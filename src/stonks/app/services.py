@@ -4,18 +4,13 @@ one JobRunner. Transports build it once and call into it."""
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from pydantic import BaseModel
 
 from stonks.app.brokers import BrokerConnector, BrokerService
-from stonks.app.catalog import (
-    CatalogService,
-    ClassListStrategySource,
-    PackageStrategySource,
-    StrategySource,
-)
+from stonks.app.catalog import CatalogService, LabCatalogSource, StrategySource
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError
 from stonks.app.ingest import IngestService
@@ -28,23 +23,18 @@ from stonks.app.pagination import Page
 from stonks.app.portfolio import PortfolioService
 from stonks.app.strategies import StrategyService
 from stonks.app.stream_tokens import IssuedStreamToken, StreamTokenSigner
+from stonks.app.studio import RuleStrategySource, StudioService, user_strategies_dir
 from stonks.app.ticks import TickService
+from stonks.app.user_strategies import UserStrategyFinder, install, uninstall
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.app.services")
 
 
-#: The Strategy Studio's declarative strategy; drafts are backtested as this
-#: class with params ``{"spec": {...}}``. Offered once the module exists.
-RULE_STRATEGY_CLASS_PATH = "stonks.strategies.rule_based:RuleStrategy"
-
-
 def default_strategy_sources() -> list[StrategySource]:
-    return [
-        PackageStrategySource("stonks.strategies.examples", name="examples"),
-        ClassListStrategySource("wrappers", ["stonks.strategies.macro_regime:MacroRegimeFilter"]),
-        ClassListStrategySource("studio", [RULE_STRATEGY_CLASS_PATH]),
-    ]
+    """The lab's catalog (examples + ``MacroRegimeFilter``, the same list
+    ``stonks lab run`` resolves from) plus the Studio's ``RuleStrategy``."""
+    return [LabCatalogSource(), RuleStrategySource()]
 
 
 def _configured_secrets(context: AppContext) -> list[str]:
@@ -139,6 +129,8 @@ class Services:
     lab: LabService
     operations: OperationsService
     brokers: BrokerService
+    studio: StudioService
+    _user_finder: UserStrategyFinder | None = field(default=None, repr=False)
 
     @classmethod
     def create(
@@ -161,6 +153,7 @@ class Services:
         )
         strategies = StrategyService(context, catalog)
         orders = OrdersService(context)
+        lab = LabService(context, strategies, runner)
         return cls(
             context=context,
             runner=runner,
@@ -174,20 +167,31 @@ class Services:
             orders=orders,
             ingest=IngestService(context, runner),
             ticks=TickService(context, orders, runner),
-            lab=LabService(context, strategies, runner),
+            lab=lab,
             operations=OperationsService(context),
             brokers=BrokerService(
                 context, connector=broker_connector, secrets=lambda: _configured_secrets(context)
             ),
+            # Wired here (not lazily) so the studio job kinds are registered
+            # before recover_interrupted() and the first request.
+            studio=StudioService(context, lab, runner),
         )
 
     def start(self) -> None:
-        """Migrate both stores and fail jobs a previous process left behind."""
+        """Migrate both stores, fail jobs a previous process left behind and,
+        when ``api.allow_code_strategies`` is on, let registered code
+        strategies be imported by class path (see ``app.user_strategies``)."""
         self.context.start()
         recovered = self.runner.store.recover_interrupted()
         if recovered:
             _log.warning("jobs.recovered_interrupted", count=recovered)
+        settings = self.context.settings
+        if settings.api.allow_code_strategies and self._user_finder is None:
+            self._user_finder = install(user_strategies_dir(settings))
 
     def shutdown(self, wait: bool = True) -> None:
         self.runner.shutdown(wait=wait)
+        if self._user_finder is not None:
+            uninstall(self._user_finder)
+            self._user_finder = None
         self.context.close()

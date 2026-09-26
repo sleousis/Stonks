@@ -35,11 +35,11 @@ single trusted user on a trusted machine. The guard rails are:
   backtested, lab-run or registered.
 
 Registered code strategies have class paths under
-``stonks_user_strategies``; a fresh process can't import them (the
-directory is not importable), so the Ranker skips them with a warning
-unless code strategies are enabled and a loader hook resolves them
-through :meth:`StudioService.user_strategy_class` (not wired into the
-registry yet).
+``stonks_user_strategies``; the directory is not importable, so a fresh
+process resolves them only through the ``sys.meta_path`` hook in
+:mod:`stonks.app.user_strategies`, which ``Services.start`` installs while
+code strategies are enabled. Otherwise the Ranker skips them with a
+warning.
 """
 
 from __future__ import annotations

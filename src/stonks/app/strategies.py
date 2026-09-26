@@ -152,18 +152,24 @@ class StrategyService:
             class_path=h.class_path,
             status=h.status,  # type: ignore[arg-type]
             params=to_jsonable(h.params),
-            applicable_asset_classes=list(_applicable_classes(h.class_path)),
+            applicable_asset_classes=list(_applicable_classes(h.class_path, h.params)),
             created_at=h.created_at,
             updated_at=h.updated_at,
         )
 
 
-def _applicable_classes(class_path: str) -> tuple[str, ...]:
+def _applicable_classes(class_path: str, params: dict[str, Any]) -> tuple[str, ...]:
+    """What the strategy actually trades: built from its params when it can
+    be (``RuleStrategy`` takes them from its spec's universe, a
+    ``MacroRegimeFilter`` from its inner strategy), else the class attribute."""
     import importlib
 
     try:
         module_name, cls_name = class_path.split(":", 1)
         cls = getattr(importlib.import_module(module_name), cls_name)
-        return tuple(getattr(cls, "applicable_asset_classes", ("equity",)))
     except Exception:
         return ("equity",)
+    try:
+        return tuple(cls(dict(params)).applicable_asset_classes)
+    except Exception:
+        return tuple(getattr(cls, "applicable_asset_classes", ("equity",)))

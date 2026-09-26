@@ -14,7 +14,7 @@ from stonks.app.errors import ValidationError
 from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.app.serialize import finite, to_jsonable
 from stonks.app.strategies import StrategyRef, StrategyService, SurvivalReportView
-from stonks.backtest.costs import CostModelSettings
+from stonks.backtest.costs import CostModel, CostModelSettings
 from stonks.backtest.engine import BacktestConfig, Backtester
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.interval import Interval
@@ -92,7 +92,8 @@ class BacktestRequest(_WindowRequest):
     slippage_bps: float = Field(default=0.0, ge=0)
     fee_per_trade: float = Field(default=0.0, ge=0)
     #: A preset from ``GET /api/lab/cost-models``; replaces the flat
-    #: ``slippage_bps`` / ``fee_per_trade`` (set one or the other).
+    #: ``slippage_bps`` / ``fee_per_trade`` (set one or the other). With
+    #: neither, the configured ``[backtest.costs]`` apply.
     cost_model: CostModelName | None = None
 
     @model_validator(mode="after")
@@ -200,11 +201,7 @@ class LabService:
             portfolio=Portfolio(cash=request.initial_cash, positions={}),
             slippage_bps=request.slippage_bps,
             fee_per_trade=request.fee_per_trade,
-            cost_model=(
-                None
-                if request.cost_model is None
-                else _COST_MODELS[request.cost_model][1]().build()
-            ),
+            cost_model=self._cost_model(request),
         )
         config = BacktestConfig(
             start=request.start,
@@ -233,6 +230,15 @@ class LabService:
                 for ts, v in zip(report.equity_dates, report.equity_curve, strict=True)
             ],
         )
+
+    def _cost_model(self, request: BacktestRequest) -> CostModel | None:
+        """A named preset, else flat slippage / fee when given, else the
+        configured ``[backtest.costs]`` (zero costs unless configured)."""
+        if request.cost_model is not None:
+            return _COST_MODELS[request.cost_model][1]().build()
+        if request.slippage_bps or request.fee_per_trade:
+            return None
+        return self._ctx.settings.backtest.costs.build()
 
     def cost_models(self) -> list[CostModelPreset]:
         return [
@@ -274,6 +280,7 @@ class LabService:
                 end=request.end,
                 train_ratio=request.train_ratio,
                 interval=interval,
+                costs=self._ctx.settings.backtest.costs,
             )
             result = runner.run(cls, dataset)
 
