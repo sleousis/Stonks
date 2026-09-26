@@ -83,6 +83,11 @@
       flex: none;
     }
   }
+
+  .scope {
+    display: grid;
+    font-size: var(--text-sm);
+  }
 }
 
 .tokens {

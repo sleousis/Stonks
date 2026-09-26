@@ -183,9 +183,10 @@
               @for (s of scopes(); track s.value) {
                 <label class="check">
                   <input type="checkbox" [formControlName]="s.value" />
-                  <span
-                    ><strong>{{ s.label }}</strong> <span class="muted">{{ s.help }}</span></span
-                  >
+                  <span class="scope">
+                    <strong>{{ s.label }}</strong>
+                    <span class="muted">{{ s.help }}</span>
+                  </span>
                 </label>
               }
             </fieldset>

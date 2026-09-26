@@ -1,7 +1,8 @@
 # Trader console (web UI)
 
-The Angular app in `web/` is the trader console: dashboard, strategies, studio,
-lab, data, orders, shadow, go-live, health and settings. It talks only to the
+The Angular app in `web/` is the trader console: sign-in, a simple home,
+profile, admin users, and the advanced pages (dashboard, strategies, studio,
+lab, data, orders, shadow, go-live, health and settings). It talks only to the
 REST API (`src/stonks/api/`) through a client generated from the checked-in
 contract `web/openapi.json`.
 
@@ -27,10 +28,11 @@ serves it at `/` with single-page fallback (`[api].ui_dist`), so one process
 serves both. The dev server origin (`http://localhost:4200`) is the API's
 `[api].ui_origin` for CORS, although the proxy makes CORS unnecessary in dev.
 
-Every call needs a credential. Sign in, or enter a token in **Settings** (kept
-in `sessionStorage` for that tab only). For local UI work, start the API with
+Every call needs a credential. Sign in, or paste an API token (on the sign-in
+page under "Use an API token instead", or in **Settings**; kept in
+`sessionStorage` for that tab only). For local UI work, start the API with
 `STONKS_PROFILE=dev` so reads from 127.0.0.1 work without signing in. See
-`docs/security.md`.
+`docs/security.md` and [Sign-in and the trader home](#sign-in-and-the-trader-home).
 
 | Command | What it does |
 |---|---|
@@ -74,7 +76,8 @@ web/src/
       <domain>.service.ts     portfolio, ticks, health, strategies, lab, market,
                               orders, shadow, ingest, studio, system, jobs-api
     core/                     cross-cutting services
-      auth/                   AuthTokenService (sessionStorage only)
+      auth/                   AuthTokenService (sessionStorage only), SessionService,
+                              session interceptor, guards, StepUpService + dialog, qr.ts
       commands/               CommandRegistry (palette commands), ShortcutsService (keys)
       help/                   glossary.ts: one-line help for every metric
       http/                   ApiError + problem-details mapping, interceptors
@@ -537,6 +540,56 @@ all reserve at least 9.5rem (an error with a one-line message and a 44px
 retry button), so a failed load no longer pushes the page down when it
 replaces its skeleton. Still pass `rows` sized like the content it stands
 for.
+
+## Sign-in and the trader home
+
+```mermaid
+flowchart LR
+  L[Email + password] -->|first login| E[Scan QR, enter code] --> R[Recovery codes, shown once] --> P[Alerts on this device?] --> H[Home]
+  L -->|later logins| V[App code or recovery code] --> H
+```
+
+- **Routes.** `app.config.ts` wraps `app.routes.ts` with `protectRoutes()`, so
+  every page gets `authGuard` unless it has `data: { public: true }`.
+  `data: { bare: true }` shows a page without the app frame (sign-in).
+  `/admin/users` also has `adminGuard`. Home is `/`; the dashboard is
+  `/dashboard`. The nav keeps Home, Profile (and Users for admins) on top and
+  folds the rest under **Advanced** (closed for traders and viewers, open for
+  admins, tokens and dev mode, remembered per browser).
+- **Session.** `SessionService` asks `GET /api/auth/me` once (with the tab's
+  API token when there is one, as the server prefers it). Statuses:
+  `signed-in`, `mfa-pending`, `open` (no one signed in but reads work: dev
+  profile, pages behave as before), `signed-out`, `unreachable`.
+- **Session interceptor** (`core/auth/session.interceptor.ts`, after the
+  error interceptor): adds `X-CSRF-Token` (from the sign-in response, else the
+  `stonks_csrf` cookie) to unsafe same-origin calls that ride on the cookie;
+  401 `mfa_required` goes to the code screen; a 401 after being signed in
+  goes to sign-in with `?next=`; 403 `step_up_required` opens the step-up
+  prompt and retries once. `ApiError.code` holds the auth code from the
+  detail and `message` says it plainly.
+- **Step-up.** Any action that needs a fresh code just calls the API: the
+  interceptor asks when needed. A page that knows beforehand (turning on auto)
+  calls `await inject(StepUpService).ensure('Turn on auto for X.')` first.
+  API tokens cannot step up; the prompt says to sign in instead.
+- **QR codes** are drawn in the browser by `uqr` (pinned), behind
+  `core/auth/qr.ts`. The secret never leaves the page.
+- **Home** (`pages/home/`): my portfolio (value, today's change, biggest
+  holdings; admins get totals across traders instead, never holdings),
+  today's signals (the feed's `signal` items from the last 24 hours), and my
+  strategies with an on/off switch and a notify, paper or auto switch. Auto
+  stays disabled with the reason until 20 paper days and the server's other
+  checks pass, then asks for the step-up and a typed confirm.
+  `api/subscriptions.service.ts` calls the planned `/api/subscriptions`
+  routes with `HttpClient`; until the server has them the card says "Coming
+  soon".
+- **Profile** (`pages/profile/`): password, new recovery codes and API
+  tokens (a new token is shown once). **Settings** adds alert settings per
+  type and channel and quiet hours next to the push opt-in.
+- **Users** (`pages/admin-users/`): add a person, change role, disable or
+  enable, reset their authenticator.
+
+Checked at 375px in Chromium: no sideways scroll and 44px targets on sign-in,
+set-up, home (trader and admin), profile, settings and users.
 
 ## Security
 
