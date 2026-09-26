@@ -47,6 +47,7 @@
 .grid-2 > .field,
 .stack > .field {
   min-width: 0;
+  align-content: start;
 }
 
 .stack {

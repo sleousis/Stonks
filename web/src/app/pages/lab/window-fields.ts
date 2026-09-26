@@ -110,6 +110,10 @@ import type { FormErrors, WindowForm } from './lab-requests';
         grid-column: auto;
       }
     }
+    .field {
+      align-content: start;
+      min-width: 0;
+    }
     input[type='date'] {
       min-width: 0;
     }

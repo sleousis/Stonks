@@ -99,6 +99,7 @@ describe('LabRunResultView', () => {
     ]);
     expect(rows[1].classList).toContain('failed');
     expect(rows[1].textContent).toContain('Positive share');
+    expect(rows[0].textContent).toContain('Out-of-sample score');
     expect(rows[1].textContent).toContain('25.00%');
     expect(rows[1].textContent).toContain('1 of 4 folds positive.');
     expect(rows[2].textContent).toContain('0.02');

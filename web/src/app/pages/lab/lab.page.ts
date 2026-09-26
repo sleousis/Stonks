@@ -2,10 +2,12 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  type ElementRef,
   computed,
   inject,
   resource,
   signal,
+  viewChild,
 } from '@angular/core';
 
 import { JobsApiService } from '../../api/jobs-api.service';
@@ -20,6 +22,7 @@ import type {
 import { SystemService } from '../../api/system.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { type JobHandle, JobsService, isTerminal } from '../../core/jobs/jobs.service';
+import { formatPercent } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
 import { PctPipe } from '../../shared/format.pipes';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
@@ -95,6 +98,7 @@ export class LabPage {
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly mode = signal<LabKind>('backtest');
+  private readonly resultPanel = viewChild<ElementRef<HTMLElement>>('resultPanel');
 
   // Reference data --------------------------------------------------------
   protected readonly classes = resource({ loader: () => this.system.strategyClasses() });
@@ -125,7 +129,14 @@ export class LabPage {
     { key: 'kind', label: 'Kind', value: (j) => kindLabel(j.kind) },
     { key: 'strategy', label: 'Strategy', value: (j) => jobStrategy(j) },
     { key: 'status', label: 'Status' },
-    { key: 'progress', label: 'Progress', format: 'percent', mobile: 'hide' },
+    {
+      key: 'progress',
+      label: 'Progress',
+      value: (j) => formatPercent(j.progress, { digits: 0 }),
+      align: 'end',
+      sortable: false,
+      mobile: 'hide',
+    },
     { key: 'actions', label: 'Actions', sortable: false, align: 'end' },
   ];
   protected readonly jobKey = (j: Job) => j.id;
@@ -191,6 +202,7 @@ export class LabPage {
   /** Follow a job from the history table (running or finished). */
   protected open(job: Job): void {
     void this.follow(job.id, job.kind as LabKind, jobStrategy(job));
+    this.revealResult();
   }
 
   protected async cancel(jobId: string, kind: string, label: string): Promise<void> {
@@ -239,7 +251,19 @@ export class LabPage {
     }
     this.toasts.success(`${verb} of ${label}.`);
     this.history.reload();
-    await this.follow(job.id, kind, label);
+    const following = this.follow(job.id, kind, label);
+    this.revealResult();
+    await following;
+  }
+
+  /** On one-column layouts the result sits below the form: bring it into view. */
+  private revealResult(): void {
+    const el = this.resultPanel()?.nativeElement;
+    if (!el?.scrollIntoView) return;
+    const top = el.getBoundingClientRect().top;
+    if (top >= 0 && top < window.innerHeight * 0.6) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
   }
 
   private async follow(jobId: string, kind: LabKind, label: string): Promise<void> {

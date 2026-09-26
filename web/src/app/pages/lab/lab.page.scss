@@ -43,30 +43,42 @@
   }
 
   @include bp.phone {
+    padding: 0;
+
     button {
-      min-height: calc(var(--touch-min) - 6px);
+      min-height: var(--touch-min);
     }
   }
 
   @include bp.coarse {
+    padding: 0;
+
     button {
-      min-height: calc(var(--touch-min) - 6px);
+      min-height: var(--touch-min);
     }
   }
 }
 
-// The result panel follows the form on desktop so results stay in view.
-.result-panel {
-  align-self: start;
+// Form on the left; result and history stacked on the right from desktop.
+.lab-layout {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
 
   @include bp.from-desktop {
-    position: sticky;
-    top: var(--space-4);
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
   }
 }
 
-.form-panel {
-  align-self: start;
+.side {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.result-panel {
+  scroll-margin-top: var(--space-4);
 }
 
 .head-meta {
@@ -83,6 +95,10 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface-2);
+}
+
+.job:last-child {
+  margin-bottom: 0;
 }
 
 .job-head {
@@ -145,7 +161,7 @@ progress {
 
 .row-actions {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
   gap: var(--space-2);
 }

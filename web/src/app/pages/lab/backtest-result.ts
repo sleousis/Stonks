@@ -83,7 +83,7 @@ export function chartTime(timestamp: string, interval: string): string {
     }
     @include bp.from-tablet {
       .tiles {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
       }
     }
     .none {

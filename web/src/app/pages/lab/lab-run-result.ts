@@ -18,6 +18,17 @@ export function formatMetric(key: string, value: number | null): string {
   return formatNumber(value, { digits: Number.isInteger(value) ? 0 : 3 });
 }
 
+const METRIC_LABELS: Record<string, string> = {
+  is_score: 'In-sample score',
+  oos_score: 'Out-of-sample score',
+  p_value: 'p-value',
+  n_splits: 'Folds',
+};
+
+export function metricLabel(key: string): string {
+  return METRIC_LABELS[key] ?? humanize(key);
+}
+
 export function testLabel(id: string): string {
   return SURVIVAL_TESTS.find((t) => t.id === id)?.label ?? humanize(id);
 }
@@ -43,7 +54,7 @@ function paramText(v: unknown): string {
         [detail]="passedText()"
         [detailTone]="r.verdict === 'pass' ? 'gain' : 'loss'"
       />
-      <app-stat-tile label="Best score" [value]="score()" [detail]="r.class_path" />
+      <app-stat-tile label="Best score" [value]="score()" [detail]="className()" />
     </div>
 
     @if (r.registered_strategy_id; as id) {
@@ -176,6 +187,7 @@ function paramText(v: unknown): string {
 export class LabRunResultView {
   readonly result = input.required<LabRunView>();
 
+  protected readonly className = computed(() => this.result().class_path.split(':').at(-1) ?? null);
   protected readonly score = computed(() => formatNumber(this.result().best_score, { digits: 3 }));
 
   protected readonly passedText = computed(() => {
@@ -200,7 +212,7 @@ export class LabRunResultView {
       notes: r.notes,
       metrics: Object.entries(r.metrics).map(([key, value]) => ({
         key,
-        label: humanize(key),
+        label: metricLabel(key),
         value: formatMetric(key, value),
       })),
     })),
