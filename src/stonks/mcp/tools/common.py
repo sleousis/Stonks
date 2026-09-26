@@ -129,6 +129,24 @@ SurvivalPreset = Annotated[
         "promotion when registering, else quick)"
     ),
 ]
+TestOptions = Annotated[
+    dict[str, dict[str, Any]] | None,
+    Field(
+        description="options per survival test id, validated by each test (422 on an unknown "
+        'test or option), e.g. {"oos": {"mode": "sharpe", "min_trades": 0}, '
+        '"deflated_sharpe": {"min_dsr": 0.9}, "pbo": {"max_pbo": 0.3}, '
+        '"mc_trades": {"n_paths": 2000}, "cost_stress": {"stress_multiplier": 3}}; '
+        "each test must be in the suite"
+    ),
+]
+Benchmark = Annotated[
+    str | None,
+    Field(
+        max_length=32,
+        description="benchmark to compare against: auto (SPY.US when priced, else EW), EW "
+        "(equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark",
+    ),
+]
 Hypothesis = Annotated[
     str | None,
     Field(

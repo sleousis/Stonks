@@ -14,6 +14,7 @@ from stonks.mcp.tools.common import (
     JOB,
     JOB_OPEN_WORLD,
     READ,
+    Benchmark,
     CostModelName,
     Hypothesis,
     IsoDate,
@@ -25,6 +26,7 @@ from stonks.mcp.tools.common import (
     RegisterStrategy,
     SurvivalPreset,
     SurvivalTestName,
+    TestOptions,
     Tickers,
     ToolContext,
     TunerName,
@@ -128,6 +130,7 @@ def register(t: ToolContext) -> None:
                 "slippage_bps/fee_per_trade. Neither: the configured [backtest.costs]"
             ),
         ] = None,
+        benchmark: Benchmark = None,
     ) -> dict[str, Any]:
         """Queue a backtest of one strategy over a universe and date window.
         Returns the job; use wait_for_job to get the metrics and equity curve.
@@ -145,6 +148,7 @@ def register(t: ToolContext) -> None:
                 "slippage_bps": slippage_bps,
                 "fee_per_trade": fee_per_trade,
                 "cost_model": cost_model,
+                "benchmark": benchmark,
             }
         )
         return await t.post("/api/lab/backtests", body)
@@ -180,6 +184,8 @@ def register(t: ToolContext) -> None:
             McptOptions | None,
             Field(description="permutation (MCPT) settings; add 'permutation' to survival_tests"),
         ] = None,
+        test_options: TestOptions = None,
+        benchmark: Benchmark = None,
     ) -> dict[str, Any]:
         """Queue a lab run: tune a strategy class, fit, run the survival suite and
         give a pass/fail verdict. Returns the job; use wait_for_job for the result.
@@ -207,6 +213,8 @@ def register(t: ToolContext) -> None:
                 "premortem": premortem,
                 "walk_forward": walk_forward.body() if walk_forward else None,
                 "mcpt": mcpt.body() if mcpt else None,
+                "test_options": test_options,
+                "benchmark": benchmark,
             }
         )
         return await queue_lab_run(t, "/api/lab/runs", body, confirm)
