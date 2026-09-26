@@ -128,7 +128,7 @@ def _global_breaker(path) -> int:
             reason="dd",
             actor="service:tick",
             scope="global",
-            on=date.today(),
+            on=datetime.now(UTC).date(),
         )
     return halt.id
 
