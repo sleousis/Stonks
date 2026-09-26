@@ -41,6 +41,7 @@ import pandas as pd
 
 from stonks.backtest.benchmark import normalize_spec
 from stonks.logging import get_logger
+from stonks.strategies.base import strategy_data_tickers
 
 Severity = Literal["error", "warning"]
 
@@ -146,11 +147,37 @@ def run_preflight(
     _quality(lake, universe, start, end, interval, add)
     _membership(lake, universe, start, end, universe_id, add)
     _costs_and_benchmark(lake, dataset, universe, add)
+    _references(lake, dataset, strategy, universe, add)
 
     report = PreflightReport(issues)
     for issue in report.issues:
         _log.info("lab.preflight.issue", code=issue.code, severity=issue.severity)
     return report
+
+
+def _references(lake: Any, dataset: Any, strategy: Any, universe: list[str], add: Any) -> None:
+    """Warn when a ticker the strategy reads but does not trade (RS-01) has
+    no bars in the window: the strategy then runs blind or never acts."""
+    refs = [
+        t
+        for t in dict.fromkeys(
+            [*getattr(dataset, "reference_tickers", ()), *strategy_data_tickers(strategy)]
+        )
+        if t not in universe
+    ]
+    if not refs:
+        return
+    start, end, interval = dataset.start, dataset.end, dataset.interval
+    cov = lake.bar_coverage(refs, interval, start, end)
+    covered = set(cov[cov["n_window"] > 0]["ticker"]) if not cov.empty else set()
+    missing = [t for t in refs if t not in covered]
+    if missing:
+        add(
+            "missing_reference_data",
+            f"the strategy reads {_names(missing)} but they have no {interval} bars between "
+            f"{start} and {end}: ingest them, or the strategy runs without its reference",
+            tickers=missing,
+        )
 
 
 def _coverage(
@@ -277,6 +304,14 @@ def _membership(
         )
     else:
         members = lake.members_between(universe_id, start, end)
+        never = [t for t in universe if t not in set(members)]
+        if never:
+            add(
+                "not_members",
+                f"{len(never)} tickers are never members of {universe_id!r} during the window, "
+                f"so the backtest never trades them (point-in-time membership): {_names(never)}",
+                tickers=never,
+            )
         gap = [t for t in members if t not in set(universe)]
         if gap:
             add(

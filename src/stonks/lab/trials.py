@@ -281,8 +281,23 @@ def trials_from_tuning(tuned: Any) -> tuple[list[TrialRecord], TrialMatrix | Non
         )
     matrix = None
     if outcomes is not None and any(getattr(o, "returns", None) is not None for o in outcomes):
-        matrix = build_trial_matrix([getattr(o, "returns", None) for o in outcomes])
+        matrix = build_trial_matrix([_dated_returns(o) for o in outcomes])
     return records, matrix
+
+
+def _dated_returns(outcome: Any) -> Any:
+    """An outcome's returns as a dated ``pd.Series`` when it carries a
+    matching ``index`` (RS-40: the matrix is indexed by date, so trials
+    covering different bars line up), else the bare returns."""
+    returns = getattr(outcome, "returns", None)
+    index = getattr(outcome, "index", None)
+    if returns is None or index is None or isinstance(returns, pd.Series):
+        return returns
+    values = np.asarray(returns, dtype=float).ravel()
+    stamps = pd.to_datetime(np.asarray(index))
+    if len(stamps) != values.size:
+        return returns
+    return pd.Series(values, index=stamps)
 
 
 def build_trial_matrix(returns: Sequence[Any]) -> TrialMatrix:

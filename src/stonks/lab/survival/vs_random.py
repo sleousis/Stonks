@@ -26,7 +26,9 @@ clearly more in the real bars than it finds in noise shaped like them.
   (0.95) quantile of the noise best scores (below the ``1 - quantile``
   quantile for a ``minimize`` objective) **and** the real OOS score beats
   the median noise OOS score. ``p_value`` is the +1-smoothed share of
-  noise bests at least as good as the real one.
+  noise bests at least as good as the real one. A noise run that fails
+  scores NaN and is left out, but fewer than ``max(5, k/2)`` usable noise
+  runs fail the test for insufficient data (RS-25).
 
 Parallelism: the ``k + 1`` runs are tasks on the lab pool
 (``lab.parallel.run_tasks``); a task's inner tuner runs in-process there
@@ -52,7 +54,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.lab.backtesting import run_backtest
-from stonks.lab.dataset import scoring_window
+from stonks.lab.dataset import data_tickers, scoring_window
 from stonks.lab.parallel import PortableLake, planned_workers, run_tasks, task_seeds
 from stonks.lab.survival.base import TuningSetup
 from stonks.lab.survival.permutation import (
@@ -148,7 +150,7 @@ def _score(run: _Run, seed: int | None) -> tuple[float, float]:
         else:
             bars = bootstrap_noise_bars(run.history, run.train_end, block=run.block, seed=seed)
         with _modified_lake(
-            run.source.lake, run.context.universe, bars, run.interval, run.coarser
+            run.source.lake, data_tickers(run.context), bars, run.interval, run.coarser
         ) as lake:
             dataset = dataclasses.replace(run.context, lake=lake)
             strategy, tuned = tune_and_fit(run.strategy_cls, dataset, run.setup, run.fixed)
@@ -216,7 +218,7 @@ class VsRandomTest:
             )
         state = _Run(
             context=dataclasses.replace(context, lake=None),
-            source=PortableLake(context.lake, context.universe),
+            source=PortableLake(context.lake, data_tickers(context)),
             strategy_cls=type(strategy),
             fixed=setup.retune_fixed_params(strategy),
             setup=setup,
@@ -254,8 +256,10 @@ class VsRandomTest:
             "real_oos": real_oos,
         }
         span = f"objective={getattr(objective, 'name', '?')}; oos={opts.oos_metric}"
-        if bests.size < 2 or oos.size < 2 or not math.isfinite(real_best):
-            note = f"insufficient data: {bests.size} of {opts.k} noise runs scored"
+        # RS-25: a noise quantile from a handful of surviving runs is no bar
+        need = max(5, math.ceil(opts.k / 2))
+        if bests.size < need or oos.size < need or not math.isfinite(real_best):
+            note = f"insufficient data: {bests.size} of {opts.k} noise runs scored ({need} needed)"
             if not math.isfinite(real_best):
                 note = "the real tune failed"
             return SurvivalReport(self.id, False, metrics, f"{note}; {span}")

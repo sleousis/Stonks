@@ -4,15 +4,18 @@ single-ticker ``decide``."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
 from datetime import date, datetime, time
 from typing import Any
 
 import pandas as pd
 
 from stonks.core.interval import Interval
-from stonks.core.types import Order, Portfolio
-from stonks.strategies._common import BarCache, LakeBarCaches, as_datetime, iso
+from stonks.strategies._common import (  # noqa: F401 - re-exported
+    BarCache,
+    LakeBarCaches,
+    as_datetime,
+    long_only_decide,
+)
 
 
 def train_bars(
@@ -45,38 +48,3 @@ def train_bars(
     if bars is None or bars.empty:
         raise ValueError(f"no bars for {ticker!r} in the training window")
     return bars.reset_index(drop=True)
-
-
-def long_only_decide(
-    strategy_id: str,
-    target: str,
-    allocation: float,
-    my_picks: Sequence[tuple[float, str]],
-    portfolio: Portfolio,
-    prices: Mapping[str, float],
-    as_of: Any,
-) -> list[Order]:
-    """Buy ``allocation`` of cash when picked and flat; sell everything when
-    not picked and holding."""
-    price = prices.get(target)
-    holding = portfolio.positions.get(target, 0.0)
-    picked = any(t == target for _, t in my_picks)
-    if picked and price and price > 0 and holding <= 0 and portfolio.cash > 0:
-        qty = portfolio.cash * float(allocation) / price
-        if qty <= 0:
-            return []
-        side, quantity = "buy", qty
-    elif not picked and holding > 0:
-        side, quantity = "sell", holding
-    else:
-        return []
-    return [
-        Order(
-            client_id=f"{strategy_id}:{side}:{target}:{iso(as_of)}",
-            ticker=target,
-            side=side,
-            quantity=quantity,
-            order_type="market",
-            strategy_id=strategy_id,
-        )
-    ]

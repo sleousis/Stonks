@@ -243,6 +243,13 @@ class FlagPennantStrategy(SingleTickerLongFlat):
     alpha_family = "trend"
     premise = "trend"
     label_horizon_bars = 10
+    required_history_bars = 30
+
+    def param_metadata(self) -> dict[str, int]:
+        p = self.params
+        return {
+            "required_history_bars": 2 * int(p["order"]) + 6,
+        }
 
     @classmethod
     def parameter_spec(cls):

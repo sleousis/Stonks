@@ -30,7 +30,8 @@ hook: whatever it raises stops the run, pending tasks are cancelled and
 the exception propagates.
 
 Lake access from workers goes through a :class:`LakeSnapshot`: a
-universe- and window-scoped DuckDB file built once per run in a temp
+ticker- and window-scoped DuckDB file (the universe plus every ticker the
+strategy reads, see ``lab.dataset.data_tickers``) built once per run in a temp
 directory, opened ``read_only`` by each worker (one connection per
 worker), so workers never contend with the API or ingest for the lake's
 write lock, and the data behind the run cannot change under it. A
@@ -423,18 +424,24 @@ class DatasetSpec:
 
 
 @contextmanager
-def dataset_snapshot(dataset: Any) -> Iterator[Any]:
+def dataset_snapshot(dataset: Any, extra_tickers: Sequence[str] = ()) -> Iterator[Any]:
     """Yield what to ship to workers for ``dataset``: a :class:`DatasetSpec`
-    over a fresh :class:`LakeSnapshot` (universe, bars up to
-    ``dataset.end``) when ``dataset`` is a dataclass holding a
-    ``DuckDBLake``; ``dataset`` itself otherwise. The snapshot is deleted
-    on exit, so leave the block only after the pool has shut down."""
+    over a fresh :class:`LakeSnapshot` (bars up to ``dataset.end``) when
+    ``dataset`` is a dataclass holding a ``DuckDBLake``; ``dataset`` itself
+    otherwise. The snapshot holds ``lab.dataset.data_tickers(dataset)``
+    (universe, reference tickers, benchmark) plus ``extra_tickers`` (for
+    example a strategy's ``data_tickers()``), so a pooled run reads the
+    same data as the serial one (RS-01). The snapshot is deleted on exit,
+    so leave the block only after the pool has shut down."""
     lake = getattr(dataset, "lake", None)
     if not (dataclasses.is_dataclass(dataset) and isinstance(lake, DuckDBLake)):
         yield dataset
         return
+    from stonks.lab.dataset import data_tickers
+
     end = getattr(dataset, "end", None)
-    with LakeSnapshot.build(lake, list(dataset.universe), end=end) as snapshot:
+    tickers = data_tickers(dataset, extra_tickers)
+    with LakeSnapshot.build(lake, tickers, end=end) as snapshot:
         yield DatasetSpec(dataclasses.replace(dataset, lake=None), snapshot.path)
 
 

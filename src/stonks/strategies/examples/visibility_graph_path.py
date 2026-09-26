@@ -45,6 +45,13 @@ class VisibilityGraphPathStrategy(SingleTickerLongFlat):
     alpha_family = "trend"
     premise = "trend"
     label_horizon_bars = 12
+    required_history_bars = 12
+
+    def param_metadata(self) -> dict[str, int]:
+        p = self.params
+        return {
+            "required_history_bars": int(p["lookback"]),
+        }
 
     @classmethod
     def parameter_spec(cls):

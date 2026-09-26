@@ -31,7 +31,10 @@ def test_exchange_sessions_periods():
     assert EXCHANGE_SESSIONS.periods_per_year(Interval.DAY_1) == 252
     assert EXCHANGE_SESSIONS.periods_per_year(Interval.DAY_3) == pytest.approx(84)
     assert EXCHANGE_SESSIONS.periods_per_year(Interval.MIN_5) == pytest.approx(252 * 78)
-    assert EXCHANGE_SESSIONS.periods_per_year(Interval.HOUR_1) == pytest.approx(252 * 6.5)
+    # whole bars per session (RS-16): 7 hourly bars, 2 four-hour bars
+    assert EXCHANGE_SESSIONS.periods_per_year(Interval.HOUR_1) == pytest.approx(252 * 7)
+    assert EXCHANGE_SESSIONS.periods_per_year(Interval.HOUR_4) == pytest.approx(504)
+    assert EXCHANGE_SESSIONS.periods_per_year(Interval.MIN_30) == pytest.approx(252 * 13)
     # bars longer than the session still count once per session
     assert EXCHANGE_SESSIONS.periods_per_year(Interval.HOUR_12) == pytest.approx(252)
 

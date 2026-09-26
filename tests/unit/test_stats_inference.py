@@ -174,3 +174,21 @@ def test_stats_package_imports_nothing_from_stonks():
         src = path.read_text()
         assert "from stonks" not in src.replace("from stonks.stats", ""), path.name
         assert "import stonks" not in src.replace("import stonks.stats", ""), path.name
+
+
+def test_pbo_skips_splits_where_one_half_has_no_usable_trial():
+    """Every trial scores -inf in one half: those splits have no in-sample
+    winner (or no out-of-sample ranking) and must not count either way."""
+    rng = np.random.default_rng(0)
+    m = rng.normal(0.0, 0.01, size=(200, 5))
+    m[:100, :] = np.nan  # blocks 0 and 1 of 4
+    res = cscv(m, n_blocks=4)
+    assert res.n_combinations == 4  # C(4, 2) = 6 minus the two degenerate splits
+    assert 0.0 <= res.pbo <= 1.0
+
+
+def test_pbo_is_nan_when_no_split_is_usable():
+    m = np.full((40, 3), np.nan)
+    res = cscv(m, n_blocks=4)
+    assert res.n_combinations == 0
+    assert math.isnan(res.pbo) and math.isnan(res.p_loss)

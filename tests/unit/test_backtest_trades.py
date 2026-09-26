@@ -323,3 +323,77 @@ def test_with_trades_on_no_fills_keeps_zero_stats():
     assert report.trade_stats.n_trades == 0
     assert report.trade_stats.turnover_annual == 0.0
     assert report.fitness == 0.0
+
+
+# ---- RS-04: lots pair by ticker within the one portfolio --------------------------
+
+
+def test_sell_under_another_key_closes_the_open_lot():
+    """Pipeline mode: the owner of a ticker can change between buy and sell."""
+    trades = build_round_trips(
+        [_fill("buy", 10, 100.0, 0, strategy="0"), _fill("sell", 10, 110.0, 2, strategy="1")],
+        timeline=DAYS,
+        marks={"X.US": 90.0},
+    )
+    (t,) = trades
+    assert not t.is_open
+    assert t.pnl == pytest.approx(100.0)
+    assert t.strategy_key == "0"  # the lot keeps the buyer as its label
+
+
+def test_risk_rule_sell_with_a_date_prefixed_client_id_closes_the_lot():
+    sell = Fill("2026-01-05:max_holding:X.US:sell", "X.US", 10.0, 95.0, 0.0, DAYS[3], "sell")
+    trades = build_round_trips([_fill("buy", 10, 100.0, 0), sell], timeline=DAYS)
+    (t,) = trades
+    assert not t.is_open and t.pnl == pytest.approx(-50.0)
+
+
+def test_a_sell_closes_its_own_key_first_then_any_other_lot():
+    fills = [
+        _fill("buy", 10, 100.0, 0, strategy="0"),
+        _fill("buy", 5, 101.0, 1, strategy="1"),
+        _fill("sell", 8, 110.0, 2, strategy="1"),
+    ]
+    trades = build_round_trips(fills, timeline=DAYS, marks={"X.US": 110.0})
+    closed = _closed(trades)
+    assert [(t.strategy_key, t.qty) for t in closed] == [("1", 5), ("0", 3)]
+    (open_lot,) = [t for t in trades if t.is_open]
+    assert (open_lot.strategy_key, open_lot.qty) == ("0", 7)
+
+
+def test_single_bar_timeline_with_fills():
+    fills = [_fill("buy", 10, 100.0, 0), _fill("sell", 10, 101.0, 0, tag="b")]
+    (t,) = build_round_trips(fills, timeline=DAYS[:1])
+    assert not t.is_open and t.bars_held == 0 and t.pnl == pytest.approx(10.0)
+
+
+def test_split_and_dividend_on_one_bar_with_two_strategy_keys():
+    split = CorporateActionRecord(DAYS[2], "X.US", "split", 2.0, 15.0, 30.0, 0.0)
+    div = CorporateActionRecord(DAYS[2], "X.US", "dividend", 1.0, 30.0, 30.0, 30.0)
+    fills = [
+        _fill("buy", 10, 100.0, 0, strategy="0"),
+        _fill("buy", 5, 100.0, 1, strategy="1"),
+        _fill("sell", 30, 55.0, 3, strategy="1"),
+    ]
+    trades = build_round_trips(fills, timeline=DAYS, corporate_actions=[split, div])
+    assert all(not t.is_open for t in trades)
+    assert sum(t.qty for t in trades) == pytest.approx(30.0)
+    # 1500 cost, 30 * 55 proceeds, 30 dividend
+    assert sum(t.pnl for t in trades) == pytest.approx(30 * 55.0 - 1500.0 + 30.0)
+
+
+def test_fitness_turnover_uses_the_calendar_sessions_per_year():
+    """RS-32: a 24/7 (crypto) curve has 365 trading days a year, not 252."""
+    dates = [T0 + timedelta(days=i) for i in range(6)]
+    curve = [100.0, 101.0, 100.5, 102.0, 101.0, 103.0]
+    fills = [
+        Fill("0:a", "X.US", 10.0, 100.0, 0.0, dates[0], "buy"),
+        Fill("0:b", "X.US", 10.0, 101.0, 0.0, dates[2], "sell"),
+    ]
+    for sessions in (252.0, 365.0):
+        base = compute_report("s", dates, curve, periods_per_year=365, sessions_per_year=sessions)
+        report = with_trades(base, fills)
+        turnover_daily = report.trade_stats.turnover_annual / sessions
+        assert turnover_daily > 0.125  # above the floor, so the divisor matters
+        expected = base.sharpe * math.sqrt(abs(base.cagr) / turnover_daily)
+        assert report.fitness == pytest.approx(expected)

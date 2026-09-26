@@ -18,6 +18,16 @@ embargo is ``max(embargo_bars, label_horizon_bars)``; ``for_strategy``
 returns the dataset with it applied, and :func:`scoring_window` is what
 validation-style survival tests call.
 
+Data tickers (RS-01)
+--------------------
+``reference_tickers`` are tickers a strategy reads but never trades: a
+reference market, an index filter, a regime condition's ticker.
+``for_strategy`` adds the strategy's ``data_tickers()``. :func:`data_tickers`
+is the universe plus these plus the benchmark ticker, and it is what every
+worker snapshot and every permuted or perturbed lake copies, so a run gives
+the same answer on any worker count and a modified lake never silently
+drops a reference.
+
 Bars are converted to calendar days through the exchange-session calendar
 (``backtest.calendar.EXCHANGE_SESSIONS``: 252 sessions a year): the bars
 become sessions, the sessions become calendar days at the yearly average
@@ -31,12 +41,15 @@ from __future__ import annotations
 
 import dataclasses
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any, Literal
 
+from stonks.backtest.benchmark import AUTO_BENCHMARK_TICKER, normalize_spec
 from stonks.backtest.calendar import EXCHANGE_SESSIONS
 from stonks.core.interval import Interval
+from stonks.strategies.base import strategy_data_tickers
 
 if TYPE_CHECKING:  # pragma: no cover
     from stonks.backtest.costs import CostModelSettings
@@ -100,6 +113,9 @@ class LabDataset:
     #: an empty ``universe`` the lab resolves its members over the window
     #: (``lab.universe_data``); the preflight checks membership against it.
     universe_id: str | None = None
+    #: Tickers the strategy reads but never trades (see the module doc).
+    #: ``for_strategy`` fills it from the strategy's ``data_tickers()``.
+    reference_tickers: tuple[str, ...] = ()
     #: Stitched walk-forward OOS backtest, set by the walk-forward test for
     #: the tests after it (``mc_trades``). Never copied by ``replace``.
     stitched_oos_report: BacktestReport | None = field(
@@ -107,6 +123,11 @@ class LabDataset:
     )
 
     def __post_init__(self) -> None:
+        # RS-17: both windows must be non-empty and in order.
+        if not 0.0 < self.train_ratio < 1.0:
+            raise ValueError(f"train_ratio must lie in (0, 1), got {self.train_ratio}")
+        if self.end <= self.start:
+            raise ValueError(f"end {self.end} must be after start {self.start}")
         if self.embargo_bars < 0:
             raise ValueError(f"embargo_bars must be >= 0, got {self.embargo_bars}")
         if self.train_end is not None and not (self.start <= self.train_end < self.end):
@@ -118,6 +139,11 @@ class LabDataset:
             raise ValueError(
                 f"an embargo of {self.embargo_bars} bars after {self.train_window[1]} "
                 f"leaves no validation window before {self.end}"
+            )
+        if self.val_window[0] > self.end:
+            raise ValueError(
+                f"the window {self.start}..{self.end} is too short for train_ratio "
+                f"{self.train_ratio}: it leaves no validation window"
             )
 
     @property
@@ -146,12 +172,25 @@ class LabDataset:
         return max(self.embargo_bars, horizon)
 
     def for_strategy(self, strategy: Any) -> LabDataset:
-        """This dataset with the embargo ``strategy`` needs (itself when
-        the configured embargo already covers its label horizon)."""
+        """This dataset with the embargo ``strategy`` needs and its data
+        tickers added to ``reference_tickers`` (itself when neither
+        changes anything)."""
         embargo = self.effective_embargo_bars(strategy)
-        if embargo == self.embargo_bars:
+        refs = self.with_references(strategy_data_tickers(strategy)).reference_tickers
+        if embargo == self.embargo_bars and refs == self.reference_tickers:
             return self
-        return dataclasses.replace(self, embargo_bars=embargo)
+        return dataclasses.replace(self, embargo_bars=embargo, reference_tickers=refs)
+
+    def with_references(self, tickers: Iterable[str]) -> LabDataset:
+        """This dataset with ``tickers`` added to ``reference_tickers``
+        (universe members are left out, order is kept)."""
+        members = set(self.universe)
+        refs = tuple(
+            dict.fromkeys([*self.reference_tickers, *(t for t in tickers if t not in members)])
+        )
+        if refs == self.reference_tickers:
+            return self
+        return dataclasses.replace(self, reference_tickers=refs)
 
     def prices_on(self, as_of: date) -> dict[str, float]:
         df = self.lake.sql(
@@ -159,6 +198,26 @@ class LabDataset:
             [list(self.universe), as_of],
         )
         return {row.ticker: float(row.close) for row in df.itertuples(index=False)}
+
+
+def data_tickers(context: Any, extra: Iterable[str] = ()) -> list[str]:
+    """Every ticker whose data a run on ``context`` reads: the universe,
+    then ``reference_tickers``, ``extra`` and the benchmark ticker
+    (``"auto"`` names :data:`~stonks.backtest.benchmark.AUTO_BENCHMARK_TICKER`,
+    ``"EW"`` and ``"none"`` name none). Works on any context with a
+    ``universe``. A ticker with no bars in the lake is harmless: copies
+    simply hold nothing for it."""
+    tickers = [
+        *context.universe,
+        *getattr(context, "reference_tickers", ()),
+        *extra,
+    ]
+    bench = normalize_spec(getattr(context, "benchmark", None))
+    if bench == "auto":
+        tickers.append(AUTO_BENCHMARK_TICKER)
+    elif bench not in (None, "ew"):
+        tickers.append(bench)
+    return list(dict.fromkeys(str(t) for t in tickers if t))
 
 
 def scoring_window(context: Any, strategy: Any, window: ScoringWindow = "val") -> tuple[date, date]:

@@ -36,6 +36,13 @@ class MACrossoverStrategy(SingleTickerLongFlat):
     alpha_family = "trend"
     premise = "trend"
     label_horizon_bars = 20
+    required_history_bars = 30
+
+    def param_metadata(self) -> dict[str, int]:
+        p = self.params
+        return {
+            "required_history_bars": int(p["slow"]),
+        }
 
     def __init__(self, params: Any) -> None:
         super().__init__(params)
@@ -50,14 +57,15 @@ class MACrossoverStrategy(SingleTickerLongFlat):
                 name="fast",
                 kind="int",
                 default=10,
-                bounds=(2, 50),
+                # below slow's range, so every tuner corner is valid (RS-29)
+                bounds=(2, 25),
                 description="Fast SMA length in bars; must be smaller than slow.",
             ),
             ParameterSpec(
                 name="slow",
                 kind="int",
                 default=30,
-                bounds=(10, 200),
+                bounds=(26, 200),
                 description="Slow SMA length in bars.",
             ),
             *common_specs("BTC-USD.CC"),

@@ -88,8 +88,13 @@ SUITE_PRESETS: dict[str, tuple[str, ...]] = {
 #: Options a preset gives its tests (``test id -> options``); a request's
 #: own options for a test are applied over them. The promotion MCPT runs
 #: 200 permutations and re-tunes only strategies with a non-trivial fit.
+#: Its cross-instrument test adds held-out tickers from the lake so a small
+#: universe still has enough names to be judged (RS-24).
 PRESET_OPTIONS: dict[str, dict[str, dict[str, Any]]] = {
-    "promotion": {"mcpt": {"n_permutations": 200, "retune": "auto"}},
+    "promotion": {
+        "mcpt": {"n_permutations": 200, "retune": "auto"},
+        "cross_instrument": {"held_out_auto": 3},
+    },
 }
 
 

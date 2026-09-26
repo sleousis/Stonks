@@ -20,10 +20,11 @@ When the regime can't be judged (no data, too little history, or the
 latest observation published more than ``max_staleness_days`` ago) ``when_unknown``
 decides.
 
-Persistence: the wrapper's params carry the inner strategy's class path
-and fully-resolved params, so the registry round-trips it through
-``MacroRegimeFilter.load``; the inner strategy also saves itself into an
-``inner/`` sub-directory so fitted state survives.
+Persistence and the inner-strategy plumbing come from
+:class:`~stonks.strategies._wrapping.InnerStrategyWrapper`: the params carry
+the inner strategy's class path and fully-resolved params, and the inner
+strategy saves itself into an ``inner/`` sub-directory so fitted state
+survives.
 
 Known limit: the lake keeps the latest vintage of each observation, so a
 later revision of an old data point is seen as if it had been published
@@ -32,22 +33,19 @@ originally.
 
 from __future__ import annotations
 
-import importlib
-import json
 import weakref
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
-from pathlib import Path
-from typing import Any, get_args
+from typing import Any
 
 from stonks.core.params import ParameterSpec
-from stonks.core.protocols import Strategy
-from stonks.core.types import AssetClass, Features, Order, Portfolio
-from stonks.strategies._common import as_datetime, iso
-from stonks.strategies.base import BaseStrategy
+from stonks.core.types import Features, Order, Portfolio
+from stonks.strategies._common import as_datetime, sell_all_longs
+from stonks.strategies._wrapping import InnerStrategyWrapper, inner_param_specs
+from stonks.strategies._wrapping import import_strategy_class as _import_strategy_class
 
-_INNER_DIR = "inner"
+__all__ = ["MacroRegimeFilter", "_import_strategy_class", "load_macro_observations", "macro_signal"]
 
 
 @dataclass
@@ -56,35 +54,19 @@ class _LakeState:
     regimes: dict[date, tuple[bool, float | None]] = field(default_factory=dict)
 
 
-class MacroRegimeFilter(BaseStrategy):
+class MacroRegimeFilter(InnerStrategyWrapper):
     id = "macro_regime_filter"
+    id_suffix = "macro"
     hypothesis = (
         "Risk assets do badly when the economy turns down, and macro "
         "series such as unemployment show the turn. Standing aside then "
         "cuts drawdowns. Adds no alpha of its own and macro data is slow."
     )
-    # Instances mirror their inner strategy; the class default admits all.
-    applicable_asset_classes: tuple[AssetClass, ...] = get_args(AssetClass)
 
     @classmethod
     def parameter_spec(cls):
         return [
-            ParameterSpec(
-                name="inner_class_path",
-                kind="categorical",
-                default="stonks.strategies.examples.momentum:Momentum",
-                bounds=None,
-                tunable=False,
-                description="'module:Class' of the wrapped strategy.",
-            ),
-            ParameterSpec(
-                name="inner_params",
-                kind="categorical",
-                default={},
-                bounds=None,
-                tunable=False,
-                description="Params of the wrapped strategy (a mapping).",
-            ),
+            *inner_param_specs(),
             ParameterSpec(
                 name="country_iso",
                 kind="categorical",
@@ -178,29 +160,10 @@ class MacroRegimeFilter(BaseStrategy):
 
     def __init__(self, params: Any) -> None:
         super().__init__(params)
-        inner_params = self.params["inner_params"]
-        if not isinstance(inner_params, Mapping):
-            raise ValueError(f"inner_params must be a mapping, got {type(inner_params).__name__}")
-        inner_cls = _import_strategy_class(self.params["inner_class_path"])
-        self._inner: Strategy = inner_cls(dict(inner_params))
-        self._adopt_inner()
         # Per lake (weakly held, so the lab's permuted / perturbed copies
         # never share state): the macro series and the regime per day. The
         # last lake seen lets ``decide`` (which gets no lake) judge a day.
         self._lakes: weakref.WeakKeyDictionary[Any, _LakeState] = weakref.WeakKeyDictionary()
-        self._last_lake: weakref.ref | None = None
-
-    def _adopt_inner(self) -> None:
-        inner = self._inner
-        self.params["inner_params"] = dict(getattr(inner, "params", self.params["inner_params"]))
-        self.id = f"{getattr(inner, 'id', 'strategy')}_macro"
-        self.applicable_asset_classes = tuple(
-            getattr(inner, "applicable_asset_classes", ("equity",))
-        )
-
-    @property
-    def inner(self) -> Strategy:
-        return self._inner
 
     # ---- regime -------------------------------------------------------------
 
@@ -262,9 +225,6 @@ class MacroRegimeFilter(BaseStrategy):
 
     # ---- Strategy Protocol ---------------------------------------------------
 
-    def fit(self, dataset: Any) -> None:
-        self._inner.fit(dataset)
-
     def extract_features(self, ticker: str, as_of: Any, lake: Any) -> Features:
         inner = self._inner.extract_features(ticker, as_of, lake)
         values = dict(inner.values)
@@ -293,51 +253,7 @@ class MacroRegimeFilter(BaseStrategy):
             return self._inner.decide(my_picks, portfolio, prices, as_of)
         if self.params["risk_off_exit"] == "inner":
             return [o for o in self._inner.decide([], portfolio, prices, as_of) if o.side == "sell"]
-        return [
-            Order(
-                client_id=f"{self.id}:sell:{ticker}:{iso(as_of)}",
-                ticker=ticker,
-                side="sell",
-                quantity=qty,
-                order_type="market",
-                strategy_id=self.id,
-            )
-            for ticker, qty in portfolio.positions.items()
-            if qty > 0
-        ]
-
-    # ---- persistence -----------------------------------------------------------
-
-    def save(self, path: Path) -> None:
-        super().save(path)
-        self._inner.save(Path(path) / _INNER_DIR)
-
-    @classmethod
-    def load(cls, path: Path) -> MacroRegimeFilter:
-        path = Path(path)
-        params = json.loads((path / "params.json").read_text())
-        instance = cls(params)
-        inner_dir = path / _INNER_DIR
-        if inner_dir.is_dir():
-            inner_cls = _import_strategy_class(params["inner_class_path"])
-            instance._inner = inner_cls.load(inner_dir)
-            instance._adopt_inner()
-        return instance
-
-
-def _import_strategy_class(class_path: Any) -> type:
-    if not isinstance(class_path, str) or ":" not in class_path:
-        raise ValueError(f"inner_class_path must be 'module:Class', got {class_path!r}")
-    module_name, cls_name = class_path.split(":", 1)
-    try:
-        module = importlib.import_module(module_name)
-    except ImportError as exc:
-        raise ValueError(f"inner_class_path {class_path!r}: cannot import module") from exc
-    cls = getattr(module, cls_name, None)
-    required = ("parameter_spec", "estimate_return", "decide", "save", "load")
-    if not isinstance(cls, type) or not all(hasattr(cls, a) for a in required):
-        raise ValueError(f"inner_class_path {class_path!r} is not a Strategy class")
-    return cls
+        return sell_all_longs(self.id, portfolio, as_of)
 
 
 # ---- point-in-time macro loaders (shared with the regime conditions) --------------

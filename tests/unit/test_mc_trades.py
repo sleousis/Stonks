@@ -159,3 +159,21 @@ def test_contributions_are_pnl_over_equity_before_entry():
         ),
     )
     np.testing.assert_allclose(trade_contributions(report), [0.1, -60.0 / 1100.0])
+
+
+def test_overlapping_trades_each_count_against_the_equity_before_their_entry():
+    import dataclasses
+
+    dates = [date(2025, 1, d) for d in (1, 2, 3, 6, 7)]
+    curve = [1000.0, 1000.0, 1100.0, 1200.0, 1200.0]
+    report = dataclasses.replace(
+        compute_report("s", dates, curve),
+        trades=(
+            # two trades open over the same days (two tickers held at once)
+            _trip(datetime(2025, 1, 2, 14, 30), 40.0),
+            _trip(datetime(2025, 1, 2, 14, 30), 60.0),
+            # a third entered while both are still open
+            _trip(datetime(2025, 1, 3, 14, 30), -20.0),
+        ),
+    )
+    np.testing.assert_allclose(trade_contributions(report), [0.04, 0.06, -20.0 / 1000.0])

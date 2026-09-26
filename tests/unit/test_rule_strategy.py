@@ -240,6 +240,52 @@ def test_stop_loss_and_take_profit_on_closes():
     assert [(o.side, o.ticker) for o in orders] == [("sell", "B")]
 
 
+def _reloaded(strategy, tmp_path):
+    strategy.save(tmp_path)
+    return RuleStrategy.load(tmp_path)
+
+
+def test_stop_loss_fires_after_save_and_reload(tmp_path):
+    """RS-13: production builds a fresh instance each tick, so the entry
+    reference must come from the bars, not from memory."""
+    frame = _frame([5] * 5 + [20] * 5 + [18])
+    lake = SampleLake({"H": frame})
+    s = RuleStrategy({"spec": _spec(risk={"stop_loss_pct": 0.1})})
+    entry_bar = _ts(frame, 5)
+    assert s.estimate_return("H", entry_bar, lake) is not None
+    (buy,) = s.decide([(1.0, "H")], Portfolio(cash=100.0), _prices(H=20), entry_bar)
+    fresh = _reloaded(s, tmp_path)
+    now = _ts(frame, 10)
+    score = fresh.estimate_return("H", now, lake)
+    assert score is not None  # still passes entry: only the stop can sell
+    held = Portfolio(cash=0.0, positions={"H": buy.quantity})
+    orders = fresh.decide([(score, "H")], held, _prices(H=18), now)
+    assert [(o.side, o.ticker) for o in orders] == [("sell", "H")]
+
+
+def test_trailing_stop_fires_after_save_and_reload(tmp_path):
+    frame = _frame([5] * 5 + [20, 22, 24, 26, 28, 30, 25])
+    lake = SampleLake({"H": frame})
+    spec = _spec(risk={"trailing_stop_atr_multiple": 1.0, "trailing_stop_period": 3})
+    fresh = _reloaded(RuleStrategy({"spec": spec}), tmp_path)
+    now = _ts(frame, len(frame) - 1)
+    score = fresh.estimate_return("H", now, lake)
+    assert score is not None
+    held = Portfolio(cash=0.0, positions={"H": 1.0})
+    orders = fresh.decide([(score, "H")], held, _prices(H=25), now)
+    assert [(o.side, o.ticker) for o in orders] == [("sell", "H")]
+
+
+def test_reloaded_instance_keeps_a_position_above_its_stop(tmp_path):
+    frame = _frame([5] * 5 + [20] * 5 + [19])
+    lake = SampleLake({"H": frame})
+    fresh = _reloaded(RuleStrategy({"spec": _spec(risk={"stop_loss_pct": 0.1})}), tmp_path)
+    now = _ts(frame, 10)
+    score = fresh.estimate_return("H", now, lake)
+    held = Portfolio(cash=0.0, positions={"H": 1.0})
+    assert fresh.decide([(score, "H")], held, _prices(H=19), now) == []
+
+
 def test_client_ids_are_unique_and_deterministic():
     s = RuleStrategy({"spec": _spec()})
     orders = s.decide([(2.0, "A"), (1.0, "B")], Portfolio(cash=100.0), _prices(A=1, B=1), AS_OF)
@@ -275,13 +321,17 @@ def test_bound_class_carries_spec_as_default_but_saves_as_rule_strategy(tmp_path
 
 @pytest.mark.parametrize("name", sorted(TEMPLATES))
 def test_templates_run_on_sample_data(name):
-    lake = SampleLake({"S1": synthetic_bars(300, seed=1), "S2": synthetic_bars(300, seed=2)})
+    tickers = [f"S{i}" for i in range(1, 11)]
+    lake = SampleLake({t: synthetic_bars(300, seed=i) for i, t in enumerate(tickers, 1)})
     s = RuleStrategy({"spec": TEMPLATES[name].spec})
     stamps = synthetic_bars(300, seed=1)["timestamp"]
-    for ts in stamps.iloc[-60:]:
-        for ticker in ("S1", "S2"):
-            r = s.estimate_return(ticker, ts.to_pydatetime(), lake)
-            assert r is None or r > 0
+    scores = [
+        s.estimate_return(ticker, ts.to_pydatetime(), lake) for ts in stamps for ticker in tickers
+    ]
+    assert all(r is None or r > 0 for r in scores)
+    # RS-38: the rules were really evaluated (indicators warmed up) on the
+    # last bar, so an all-None run means "no entry", not "nothing computed"
+    assert set(s._evals) == set(tickers)
 
 
 def test_stale_exit_evaluation_never_leaks_into_decide():

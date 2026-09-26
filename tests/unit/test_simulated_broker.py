@@ -285,3 +285,67 @@ def test_rejected_orders_have_no_reference_price(broker):
     broker.set_prices({}, as_of=date(2026, 4, 1))
     assert broker.place_order(_order("a")) is None
     assert broker.reference_price("a") is None
+
+
+# ---- review 18.1 edge cases ---------------------------------------------------
+
+
+def test_trades_carry_the_bars_per_year_of_the_interval_and_asset_class():
+    """RS-19: the cost model annualises volatility per interval and class."""
+    from stonks.core.interval import Interval
+
+    model = _RecordingModel()
+    broker = SimulatedBroker(Portfolio(cash=10_000.0, positions={}), cost_model=model)
+    broker.set_asset_classes({"BTC-USD.CC": "crypto"})
+    broker.set_interval(Interval.HOUR_1)
+    broker.set_prices({"BTC-USD.CC": 100.0, "AAPL.US": 100.0}, as_of=date(2026, 4, 1))
+    broker.place_order(_order("c1", ticker="BTC-USD.CC", qty=1.0))
+    broker.place_order(_order("c2", ticker="AAPL.US", qty=1.0))
+    btc, aapl = model.trades[0], model.trades[-1]
+    assert btc.periods_per_year == pytest.approx(365 * 24)
+    assert aapl.periods_per_year == pytest.approx(252 * 7)
+
+
+def test_an_unaffordable_flat_fee_is_no_monotonicity_warning(capsys):
+    """RS-33: a fee above cash is a plain rejection, not a broken model."""
+    model = CostModelSettings(default=AssetClassCosts(fee_flat=50.0)).build()
+    broker = SimulatedBroker(Portfolio(cash=10.0, positions={}), cost_model=model)
+    broker.set_prices({"AAPL.US": 100.0}, as_of=date(2026, 4, 1))
+    assert broker.place_order(_order("c1", qty=1.0)) is None
+    assert "cost_model_not_monotone" not in capsys.readouterr().out
+
+
+def test_a_flat_fee_is_charged_on_every_child_order():
+    """A carried remainder is a new order at the broker, so it pays the
+    flat fee again (per child, as a real broker charges per execution)."""
+    from stonks.backtest.fills import ExecutionSettings, FillModelSettings
+
+    broker = SimulatedBroker.from_execution(
+        Portfolio(cash=1e6, positions={}),
+        ExecutionSettings(fill=FillModelSettings(max_participation=0.1)),
+        cost_model=CostModelSettings(default=AssetClassCosts(fee_flat=1.0)).build(),
+    )
+    for day, cid in ((1, "c1"), (2, "c1~2")):
+        broker.set_prices({"AAPL.US": 10.0}, as_of=date(2026, 4, day), volumes={"AAPL.US": 100.0})
+        broker.place_order(_order(cid, qty=20.0 if day == 1 else broker.unfilled_quantity("c1")))
+    assert [f.fee for f in broker.fills] == pytest.approx([1.0, 1.0])
+    assert [f.quantity for f in broker.fills] == pytest.approx([10.0, 10.0])
+
+
+def test_a_sell_whose_fee_exceeds_its_proceeds_can_take_cash_below_zero():
+    """The fee is charged even when it is larger than the sale's proceeds;
+    the ledger records it rather than hiding it."""
+    model = CostModelSettings(default=AssetClassCosts(fee_flat=50.0)).build()
+    broker = SimulatedBroker(Portfolio(cash=0.0, positions={"AAPL.US": 1.0}), cost_model=model)
+    broker.set_prices({"AAPL.US": 10.0}, as_of=date(2026, 4, 1))
+    fill = broker.place_order(_order("s1", side="sell", qty=1.0))
+    assert fill is not None and fill.fee == pytest.approx(50.0)
+    assert broker.fetch_portfolio().cash == pytest.approx(10.0 - 50.0)
+
+
+def test_float_dust_in_a_sell_closes_the_whole_position():
+    broker = SimulatedBroker(Portfolio(cash=0.0, positions={"AAPL.US": 0.3}))
+    broker.set_prices({"AAPL.US": 10.0}, as_of=date(2026, 4, 1))
+    fill = broker.place_order(_order("s1", side="sell", qty=0.1 + 0.2))
+    assert fill is not None
+    assert broker.fetch_portfolio().positions.get("AAPL.US", 0.0) == pytest.approx(0.0, abs=1e-12)

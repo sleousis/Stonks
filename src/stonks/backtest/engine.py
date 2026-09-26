@@ -74,10 +74,32 @@ runs the same pipeline as the production tick
 are combined by the constructor (``strategy_weights`` in strategy order,
 equal by default), diffed into orders with the no-trade buffer and passed
 through every registered risk rule when ``BacktestConfig.risk`` is set, with
-a ``RiskContext`` from the engine's own equity curve and daily history. The
-history a decision sees ends at its bar (daily) or the day before
-(intraday), never later. Strategies are keyed ``"0"``, ``"1"``, ... by
+a ``RiskContext`` from the engine's own equity curve, daily history and
+the entry date of each held position (from the broker's fills, so
+``max_holding`` works in a backtest). The history a decision sees ends at
+its bar (daily) or the day before (intraday), never later. That history is
+adjusted with the vendor's ``adj_close``, which already folds in splits and
+dividends after the decision, so each slice is rebased to the raw close of
+its last bar (RS-15): ATRs and volatilities come out in the units of the
+shares the decision trades, as if adjusted on the decision day. A rule's order
+carries a date-keyed client id, so the engine adds the bar time to it: two
+forced exits on one intraday day stay two orders. Strategies are keyed ``"0"``, ``"1"``, ... by
 position; each decision's target book is kept in ``target_books``.
+
+Strategy calls run inside ``strategies._common.decision_interval(interval)``,
+so a strategy sees a bar of any interval only once it has closed at the
+decision (RS-03): a daily bar stays hidden during its own session in an
+intraday run, on 24/7 markets too.
+
+Point-in-time membership (RS-05, P14)
+-------------------------------------
+With ``BacktestConfig.universe_id`` set, the engine reads that universe's
+``universe_membership`` spans once and, on every decision bar, asks the
+strategies (or the pipeline) only about the tickers that are members on
+that day. Buys of any other ticker are dropped, and a holding that is no
+longer a member is sold in full (client id ``universe:<bar>:<ticker>:sell``).
+A universe ticker with no span in that universe never trades. Without a
+``universe_id`` every universe ticker trades on every bar, as before.
 
 Annualization
 -------------
@@ -97,6 +119,7 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
+from stonks.backtest.calendar import calendar_for_universe
 from stonks.backtest.corporate_actions import (
     CorporateActionRecord,
     CorporateActionSchedule,
@@ -150,6 +173,9 @@ class BacktestConfig:
     risk: RiskPolicy | None = None
     #: Daily bars of history a pipeline decision may read.
     history_bars: int = 260
+    #: Stored universe whose membership spans gate trading (see the module
+    #: doc); ``None`` trades every universe ticker on every bar.
+    universe_id: str | None = None
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.dividend_withholding_rate <= 1.0:
@@ -205,6 +231,8 @@ class Backtester:
         self._attribution: dict[str, dict[str, float]] = {}
         self._fill_owner: dict[str, tuple[int, str]] = {}
         self._fill_seq = 0
+        self._membership: dict[str, list[tuple[date, date | None]]] | None = None
+        self._raw_closes: dict[str, dict[date, float]] = {}
         #: The target book of every pipeline decision, by bar.
         self.target_books: dict[datetime, TargetBook] = {}
         #: The close each order was decided at, by client id (TCA, BL-32:
@@ -222,6 +250,10 @@ class Backtester:
         self._asset_classes = asset_classes
         self._history = self._load_history(bars_by_ts)
         self._broker.set_asset_classes(asset_classes)
+        self._membership = self._load_membership()
+        set_interval = getattr(self._broker, "set_interval", None)
+        if callable(set_interval):
+            set_interval(self._config.interval)
         schedule = CorporateActionSchedule(
             self._corporate_actions.load(list(self._config.universe))
         )
@@ -276,6 +308,7 @@ class Backtester:
             equity_curve,
             periods_per_year=periods_per_year(self._config.interval, set(asset_classes.values())),
             corporate_actions=applied,
+            sessions_per_year=calendar_for_universe(set(asset_classes.values())).sessions_per_year,
         )
 
     # ---- internals ----------------------------------------------------------
@@ -424,11 +457,83 @@ class Backtester:
         return child
 
     def _decide(self, as_of: datetime, prices: dict[str, float]) -> list[Order]:
-        if self._config.construction_settings is not None:
-            return self._decide_with_pipeline(as_of, prices)
-        return self._decide_per_strategy(as_of, prices)
+        # RS-03: strategies see a bar only once it has closed at this
+        # decision, so they must know the decision bar's length.
+        from stonks.strategies._common import decision_interval
 
-    def _decide_per_strategy(self, as_of: datetime, prices: dict[str, float]) -> list[Order]:
+        with decision_interval(self._config.interval):
+            return self._decide_at(as_of, prices)
+
+    def _decide_at(self, as_of: datetime, prices: dict[str, float]) -> list[Order]:
+        members = self._members_on(as_of)
+        tradable = [t for t in self._config.universe if members is None or t in members]
+        if self._config.construction_settings is not None:
+            orders = self._decide_with_pipeline(as_of, prices, tradable)
+        else:
+            orders = self._decide_per_strategy(as_of, prices, tradable)
+        return orders if members is None else self._enforce_membership(orders, members, as_of)
+
+    # ---- point-in-time membership (RS-05) -------------------------------------
+
+    def _load_membership(self) -> dict[str, list[tuple[date, date | None]]] | None:
+        """``ticker -> [(start, end)]`` spans of ``config.universe_id`` for
+        the universe tickers (``end`` is the first day out, ``None`` open);
+        ``None`` when no universe id is set."""
+        universe_id = self._config.universe_id
+        if universe_id is None:
+            return None
+        spans: dict[str, list[tuple[date, date | None]]] = {}
+        reader = getattr(self._lake, "get_universe_membership", None)
+        if not callable(reader):
+            _log.warning("universe_membership_unavailable", universe_id=universe_id)
+            return spans
+        frame = reader(universe_id, list(self._config.universe))
+        for row in frame.itertuples(index=False):
+            end = None if pd.isna(row.end_date) else _as_date(row.end_date)
+            spans.setdefault(str(row.ticker), []).append((_as_date(row.start_date), end))
+        if not spans:
+            _log.warning("universe_membership_empty", universe_id=universe_id)
+        return spans
+
+    def _members_on(self, as_of: datetime) -> set[str] | None:
+        if self._membership is None:
+            return None
+        day = as_of.date() if isinstance(as_of, datetime) else as_of
+        return {
+            ticker
+            for ticker, spans in self._membership.items()
+            if any(start <= day and (end is None or day < end) for start, end in spans)
+        }
+
+    def _enforce_membership(
+        self, orders: list[Order], members: set[str], as_of: datetime
+    ) -> list[Order]:
+        """Drop buys of non-members and sell every holding that left."""
+        kept = [o for o in orders if o.side != "buy" or o.ticker in members]
+        selling: dict[str, float] = {}
+        for o in kept:
+            if o.side == "sell":
+                selling[o.ticker] = selling.get(o.ticker, 0.0) + o.quantity
+        portfolio = self._broker.fetch_portfolio()
+        for ticker, qty in sorted(portfolio.positions.items()):
+            rest = qty - selling.get(ticker, 0.0)
+            if ticker in members or rest <= 1e-12:
+                continue
+            kept.append(
+                Order(
+                    client_id=f"universe:{as_of.isoformat()}:{ticker}:sell",
+                    ticker=ticker,
+                    side="sell",
+                    quantity=rest,
+                    order_type="market",
+                    strategy_id="universe",
+                )
+            )
+        return kept
+
+    def _decide_per_strategy(
+        self, as_of: datetime, prices: dict[str, float], tradable: Sequence[str]
+    ) -> list[Order]:
         """Picks and orders are keyed by the strategy's *position* in the
         engine, not its class-level ``id``, so two instances of one class
         (different params) keep separate picks; each order's ``client_id``
@@ -436,7 +541,7 @@ class Backtester:
         can't drop one instance's order as a duplicate of the other's."""
         picks_by_strategy: list[list[tuple[float, str]]] = [[] for _ in self._strategies]
         for index, strategy in enumerate(self._strategies):
-            for ticker in self._config.universe:
+            for ticker in tradable:
                 r = strategy.estimate_return(ticker, as_of, self._lake)
                 if r is not None and r > self._config.threshold:
                     picks_by_strategy[index].append((r, ticker))
@@ -454,7 +559,9 @@ class Backtester:
 
     # ---- construction pipeline (BL-12) --------------------------------------
 
-    def _decide_with_pipeline(self, as_of: datetime, prices: dict[str, float]) -> list[Order]:
+    def _decide_with_pipeline(
+        self, as_of: datetime, prices: dict[str, float], tradable: Sequence[str]
+    ) -> list[Order]:
         """The production pipeline over this bar's signals; see the module doc."""
         from stonks.portfolio.pipeline import (
             PORTFOLIO_STRATEGY,
@@ -463,6 +570,7 @@ class Backtester:
             build_orders,
             vols_from_history,
         )
+        from stonks.production.risk import entry_dates_from_fills
         from stonks.production.rules import RiskContext
 
         construction = self._config.construction_settings
@@ -471,7 +579,7 @@ class Backtester:
         signals: dict[str, dict[str, float]] = {}
         for key, strategy in zip(keys, self._strategies, strict=True):
             scores: dict[str, float] = {}
-            for ticker in self._config.universe:
+            for ticker in tradable:
                 r = strategy.estimate_return(ticker, as_of, self._lake)
                 if r is not None and r > self._config.threshold:
                     scores[ticker] = r
@@ -495,6 +603,10 @@ class Backtester:
                 policy=policy,
                 history=history,
                 equity_curve=[(ts.date(), value) for ts, value in self._equity],
+                entry_dates=entry_dates_from_fills(
+                    (f.ticker, f.side, f.quantity, as_datetime(f.filled_at).date())
+                    for f in getattr(self._broker, "fills", ())
+                ),
             )
         book = BookInput(
             portfolio=portfolio,
@@ -518,7 +630,11 @@ class Backtester:
         )
         self.target_books[as_of] = result.target_book
         self._attribution = {**self._attribution, **result.attribution}
-        return list(result.orders)
+        stamp = as_of.isoformat()
+        return [
+            o if stamp in o.client_id else replace(o, client_id=f"{o.client_id}@{stamp}")
+            for o in result.orders
+        ]
 
     def _exit_owner(self, positions: Mapping[str, float]) -> str | None:
         """The strategy behind the most recent fill on a held ticker."""
@@ -535,12 +651,28 @@ class Backtester:
 
         end = max(bars_by_ts).date()
         days = len({ts.date() for ts in bars_by_ts})
-        return load_history(
+        history = load_history(
             self._lake,
             list(self._config.universe),
             end,
             bars=self._config.history_bars + days,
         )
+        self._raw_closes = self._load_raw_closes(end)
+        return history
+
+    def _load_raw_closes(self, end: date) -> dict[str, dict[date, float]]:
+        """Unadjusted daily closes up to ``end``, per ticker, for rebasing
+        the pipeline history (see the module doc)."""
+        frame = self._lake.sql(
+            "SELECT ticker, timestamp, close FROM bars"
+            " WHERE ticker = ANY(?) AND interval = '1d' AND timestamp < ?",
+            [list(self._config.universe), day_start(end + timedelta(days=1))],
+        )
+        out: dict[str, dict[date, float]] = {}
+        for row in frame.itertuples(index=False):
+            if row.close is not None and not pd.isna(row.close) and row.close > 0:
+                out.setdefault(str(row.ticker), {})[_as_date(row.timestamp)] = float(row.close)
+        return out
 
     def _history_until(self, as_of: datetime) -> dict[str, pd.DataFrame]:
         """History a decision at ``as_of`` may see: daily bars dated on or
@@ -555,7 +687,25 @@ class Backtester:
         for ticker, frame in self._history.items():
             visible = frame.loc[:cutoff].tail(self._config.history_bars)
             if not visible.empty:
-                out[ticker] = visible
+                out[ticker] = self._rebased(ticker, visible)
+        return out
+
+    def _rebased(self, ticker: str, frame: pd.DataFrame) -> pd.DataFrame:
+        """``frame`` scaled so its last close is that day's raw close: any
+        split or dividend after the slice drops out (RS-15)."""
+        raw = self._raw_closes.get(ticker, {}).get(_as_date(frame.index[-1]))
+        last = frame["close"].iloc[-1] if "close" in frame else None
+        if raw is None or last is None or pd.isna(last) or last <= 0:
+            return frame
+        factor = raw / float(last)
+        if abs(factor - 1.0) <= 1e-12:
+            return frame
+        out = frame.copy()
+        for col in ("open", "high", "low", "close", "adj_close"):
+            if col in out:
+                out[col] = out[col] * factor
+        if "volume" in out:
+            out["volume"] = out["volume"] / factor
         return out
 
 
@@ -569,3 +719,12 @@ def _float(value) -> float | None:
 
 def _to_window_bounds(start, end) -> tuple[datetime, datetime]:
     return day_start(start), day_end(end)
+
+
+def _as_date(value) -> date:
+    """A membership date from DuckDB / pandas as a plain ``date``."""
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return pd.Timestamp(value).date()
