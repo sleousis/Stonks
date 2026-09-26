@@ -172,13 +172,17 @@ class _LakeBars(BaseStrategy):
 
 class FutureReturnSignal(_LakeBars):
     """Planted look-ahead: the score IS the forward return from the next
-    open over ``horizon`` bars (``open[t+1+h] / open[t+1] - 1``)."""
+    open over ``horizon`` bars (``open[t+1+h] / open[t+1] - 1``), minus
+    ``threshold`` (so it is a pick only above the threshold)."""
 
     id = "future_return_fake"
 
     @classmethod
     def parameter_spec(cls):
-        return [ParameterSpec(name="horizon", kind="int", default=1, bounds=(1, 60))]
+        return [
+            ParameterSpec(name="horizon", kind="int", default=1, bounds=(1, 60)),
+            ParameterSpec(name="threshold", kind="float", default=0.0, bounds=(0.0, 0.2)),
+        ]
 
     def estimate_return(self, ticker: str, as_of: Any, lake: Any) -> float | None:
         frame, i = self.position(ticker, as_of, lake)
@@ -186,7 +190,7 @@ class FutureReturnSignal(_LakeBars):
         if i is None or i + 1 + h >= len(frame):
             return None
         opens = frame["open"].to_numpy()
-        return float(opens[i + 1 + h] / opens[i + 1] - 1.0)
+        return float(opens[i + 1 + h] / opens[i + 1] - 1.0) - float(self.params["threshold"])
 
 
 class NextGapSignal(_LakeBars):
@@ -230,8 +234,8 @@ class StaticSignal(_LakeBars):
 
 
 class ClassSplitSignal(_LakeBars):
-    """Planted 20-bar look-ahead for tickers starting with ``EQ``, noise
-    for every other ticker."""
+    """Planted 20-bar look-ahead above 3% for tickers starting with ``EQ``
+    (entries precede big moves), noise for every other ticker."""
 
     id = "class_split_fake"
 
@@ -244,7 +248,7 @@ class ClassSplitSignal(_LakeBars):
         if i + 21 >= len(frame):
             return None
         opens = frame["open"].to_numpy()
-        return float(opens[i + 21] / opens[i + 1] - 1.0)
+        return float(opens[i + 21] / opens[i + 1] - 1.0) - 0.03
 
 
 class WeekdaySignal(_LakeBars):
