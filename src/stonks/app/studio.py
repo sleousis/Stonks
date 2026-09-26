@@ -133,6 +133,14 @@ class RuleStrategySource:
 # ---- models -----------------------------------------------------------------
 
 
+class StudioCapabilities(BaseModel):
+    """What this server lets the Studio do."""
+
+    #: ``[api] allow_code_strategies``: code drafts can be created, tested
+    #: and registered (otherwise those operations answer 403).
+    code_strategies: bool
+
+
 class RuleTemplateView(BaseModel):
     id: str
     title: str
@@ -275,6 +283,9 @@ class StudioService:
         runner.register(STUDIO_LAB_RUN_JOB, self._handle_lab_run, cancellable=True)
 
     # ---- reads -------------------------------------------------------------
+
+    def capabilities(self) -> StudioCapabilities:
+        return StudioCapabilities(code_strategies=self._ctx.settings.api.allow_code_strategies)
 
     def templates(self) -> list[RuleTemplateView]:
         return [
