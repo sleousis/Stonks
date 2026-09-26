@@ -72,6 +72,14 @@ The copy is checked per ticker and interval (row count and checksum) before the 
 | 011 | `defi_tvl` |
 | 012 | `lake_settings` |
 | 013 | `quarantined_bars`; `ingest_runs.quality_json` |
+| 014 | `statement_flags` (statement audit, BL-36) |
+| 015 | `universe_membership` (point-in-time universes, BL-37) |
+
+### Statement audit and universe membership
+
+`store/audit.py` runs accounting checks over the three statements in SQL. It flags a period when assets do not match liabilities plus equity, net income or cash differ between statements, gross profit does not match revenue minus cost of revenue, four quarters do not add up to the year, the filing date comes before the period end, or shares are negative. Flags land in `statement_flags`. The audit replaces the flags of the tickers it checks, so running it twice gives the same result. Statement rows are never changed. Readers skip error-flagged periods with `get_statements_as_of(..., exclude_flagged=True)`.
+
+`universe_membership` records which tickers were in a named universe and when. `end_date` is the first day a ticker is out, and an open span has no `end_date`. Delisted names keep their rows. Read it with `members_as_of(universe_id, date)` and `members_between(universe_id, start, end)`.
 
 `stonks db init` refuses a migration that would drop populated data (005 on an old lake) unless `STONKS_ALLOW_DESTRUCTIVE_MIGRATIONS=1`. Back up first.
 
