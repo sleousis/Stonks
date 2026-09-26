@@ -900,6 +900,7 @@
           "survival_tests": {
             "items": {
               "enum": [
+                "benchmark_relative",
                 "drift",
                 "mcpt",
                 "oos",
@@ -1898,6 +1899,7 @@
               {
                 "items": {
                   "enum": [
+                    "benchmark_relative",
                     "drift",
                     "mcpt",
                     "oos",
