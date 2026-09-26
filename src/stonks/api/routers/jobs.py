@@ -79,11 +79,12 @@ class StreamToken(BaseModel):
     operation_id="createStreamToken",
     dependencies=needs(Permission.READ),
 )
-def create_stream_token(job_id: str, services: ServicesDep) -> StreamToken:
+def create_stream_token(job_id: str, services: ServicesDep, principal: PrincipalDep) -> StreamToken:
     """A short-lived token (``api.stream_token_ttl_seconds``) that lets a
     client which cannot send the bearer header (browser ``EventSource``)
-    read this job's event stream, and nothing else."""
-    issued = services.jobs.stream_token(job_id)
+    read this job's event stream, and nothing else. It is tied to your
+    user and stops working if your account is disabled."""
+    issued = services.jobs.stream_token(job_id, principal)
     return StreamToken(
         token=issued.token,
         expires_at=issued.expires_at,

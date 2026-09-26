@@ -197,6 +197,21 @@ def test_stream_token_works_from_a_remote_peer(remote, client):
     assert _stream_status(remote, f"/api/jobs/{job['id']}/events?token={token}")[0] == 200
 
 
+def test_stream_token_dies_with_its_user(closed_client, settings):
+    """The token names the user who asked for it: once that person is
+    disabled (or signed out of everything) it stops opening the stream."""
+    from stonks.accounts import DEFAULT_OWNER_ID
+    from stonks.store.state import SqliteState
+
+    job = closed_client.post("/api/lab/backtests", json=_backtest_body(), headers=AUTH).json()
+    url = closed_client.post(f"/api/jobs/{job['id']}/stream-token", headers=AUTH).json()[
+        "events_url"
+    ]
+    with SqliteState(settings.state.path) as state:
+        state.execute("UPDATE users SET status = 'disabled' WHERE id = ?", [DEFAULT_OWNER_ID])
+    assert _stream_status(closed_client, url)[0] == 401
+
+
 def test_stream_token_for_unknown_job_is_404(client):
     assert client.post("/api/jobs/job_missing/stream-token", headers=AUTH).status_code == 404
 

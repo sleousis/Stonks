@@ -684,6 +684,12 @@ class AuthService:
 
     # ---- the signed-in user ----------------------------------------------------
 
+    def is_active_user(self, user_id: str) -> bool:
+        """True while ``user_id`` exists and is not disabled (stream tokens)."""
+        with self._state() as state:
+            rows = state.sql("SELECT status FROM users WHERE id = ?", [user_id])
+        return bool(rows) and rows[0]["status"] == "active"
+
     def me(self, principal: Principal) -> UserAuthInfo:
         with self._state() as state:
             user = UserRepository(state).get(principal.user_id)

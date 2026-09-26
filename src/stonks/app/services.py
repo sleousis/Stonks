@@ -121,15 +121,18 @@ class JobService:
             raise ConflictError(f"job {job_id} has no result; it is {job.status}{detail}")
         return model.model_validate(job.result)
 
-    def stream_token(self, job_id: str) -> IssuedStreamToken:
+    def stream_token(self, job_id: str, principal: Principal) -> IssuedStreamToken:
         """A short-lived token that authorizes reading this job's event
-        stream only (see :mod:`stonks.app.stream_tokens`)."""
+        stream only, for ``principal``'s user (see
+        :mod:`stonks.app.stream_tokens`)."""
+        require(principal, Permission.READ)
         self._store.get(job_id)  # NotFoundError for an unknown job
-        token = self._tokens.issue(job_id)
+        token = self._tokens.issue(job_id, principal.user_id)
         _log.info("job.stream_token_issued", job_id=job_id, expires_at=token.expires_at)
         return token
 
-    def verify_stream_token(self, job_id: str, token: str) -> bool:
+    def verify_stream_token(self, job_id: str, token: str) -> str | None:
+        """The user id the token was issued to, or ``None``."""
         return self._tokens.verify(token, job_id)
 
     def is_tracked(self, job_id: str) -> bool:

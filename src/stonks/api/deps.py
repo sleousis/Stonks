@@ -145,10 +145,12 @@ def authorize_stream(
         ),
     ] = None,
 ) -> None:
-    """Auth for a job's event stream: a valid stream token for *this* job,
-    or whatever :func:`authorize` accepts. A bad token is always 401."""
+    """Auth for a job's event stream: a valid stream token for *this* job
+    whose user is still active, or whatever :func:`authorize` accepts. A bad
+    token is always 401."""
     if token is not None:
-        if get_services(request).jobs.verify_stream_token(job_id, token):
+        user_id = get_services(request).jobs.verify_stream_token(job_id, token)
+        if user_id is not None and get_auth(request).is_active_user(user_id):
             return
         raise HTTPException(status_code=401, detail="invalid or expired stream token")
     authorize(request, creds)
