@@ -1,22 +1,36 @@
-"""Exhaustive grid search over the tunable part of a parameter space."""
+"""Grid search over the tunable part of a parameter space.
+
+Exhaustive when the grid fits in the budget; otherwise a seeded uniform
+sample of distinct grid points (so every axis is explored, not just the
+corner that ``itertools.product`` would visit first).
+"""
 
 from __future__ import annotations
 
 import math
+import random
 from typing import Any
 
 from stonks.core.params import ParamSpace
 from stonks.core.protocols import Objective, Strategy, TunerResult
 from stonks.lab.dataset import LabDataset
-from stonks.lab.tuning.base import expand_grid, merge_with_defaults
+from stonks.lab.tuning.base import (
+    expand_grid,
+    grid_axes,
+    grid_size_of,
+    merge_with_defaults,
+    sample_grid,
+)
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.lab.tuning.grid")
 
 
 class GridTuner:
-    def __init__(self, grid_size: int = 5) -> None:
+    def __init__(self, grid_size: int = 5, seed: int = 0) -> None:
         self._grid_size = grid_size
+        #: Only used when the grid is larger than the budget.
+        self._seed = seed
 
     def tune(
         self,
@@ -30,12 +44,24 @@ class GridTuner:
         best_params: dict[str, Any] | None = None
         best_score = -math.inf if objective.direction == "maximize" else math.inf
 
-        for trial, partial in enumerate(expand_grid(param_space, self._grid_size)):
-            if trial >= budget:
-                break
+        axes = grid_axes(param_space, self._grid_size)
+        total = grid_size_of(axes)
+        if total > budget:
+            _log.warning(
+                "grid.truncated",
+                grid_points=total,
+                budget=budget,
+                seed=self._seed,
+            )
+            candidates = sample_grid(axes, budget, random.Random(self._seed))
+        else:
+            candidates = list(expand_grid(param_space, self._grid_size))
+
+        for partial in candidates:
             params = merge_with_defaults(partial, param_space)
-            strategy = strategy_cls(params)
             try:
+                strategy = strategy_cls(params)
+                strategy.fit(dataset)  # same call LabRunner makes after tuning
                 score = objective.score(strategy, dataset)
             except Exception as exc:
                 _log.warning("grid.trial.failed", params=params, error=str(exc))
