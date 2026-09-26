@@ -117,6 +117,27 @@ async def test_run_lab_passes_test_options_and_benchmark(mcp):
 
 
 @pytest.mark.anyio
+async def test_run_lab_passes_embargo_and_walk_forward_gates(mcp):
+    job = await call(
+        mcp,
+        "run_lab",
+        {
+            "class_path": MOMENTUM,
+            **WINDOW,
+            "budget": 1,
+            "survival_tests": ["walk_forward"],
+            "embargo_bars": 5,
+            "walk_forward": {"n_splits": 2, "min_wfe": 0.3, "matrix": False},
+        },
+    )
+    assert job["params"]["embargo_bars"] == 5
+    assert job["params"]["walk_forward"]["min_wfe"] == 0.3
+    await _wait(mcp, job)
+    err = await call_error(mcp, "run_lab", {"class_path": MOMENTUM, **WINDOW, "embargo_bars": 500})
+    assert "422" in err and "embargo" in err
+
+
+@pytest.mark.anyio
 async def test_run_lab_rejects_unknown_test_options(mcp):
     base = {"class_path": MOMENTUM, **WINDOW, "budget": 1, "survival_tests": ["oos"]}
     err = await call_error(mcp, "run_lab", {**base, "test_options": {"bogus": {"x": 1}}})

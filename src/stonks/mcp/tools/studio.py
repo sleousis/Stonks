@@ -23,6 +23,7 @@ from stonks.mcp.tools.common import (
     STATUS_HINTS,
     Benchmark,
     Confirm,
+    EmbargoBars,
     Hypothesis,
     IsoDate,
     LabCostModel,
@@ -205,6 +206,7 @@ def register(t: ToolContext) -> None:
         premortem: Premortem = None,
         test_options: TestOptions = None,
         benchmark: Benchmark = None,
+        embargo_bars: EmbargoBars = None,
     ) -> dict[str, Any]:
         """Queue tune -> fit -> survival suite for a draft (a rule draft's spec
         is fixed; a code draft is tuned). Returns the job; wait_for_job gives
@@ -231,6 +233,7 @@ def register(t: ToolContext) -> None:
                 "premortem": premortem,
                 "test_options": test_options,
                 "benchmark": benchmark,
+                "embargo_bars": embargo_bars,
             }
         )
         return await queue_lab_run(t, draft_path(draft_id, "lab-runs"), body, confirm, HINTS)

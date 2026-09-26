@@ -16,6 +16,7 @@ from stonks.mcp.tools.common import (
     READ,
     Benchmark,
     CostModelName,
+    EmbargoBars,
     Hypothesis,
     IsoDate,
     LabCostModel,
@@ -77,6 +78,12 @@ class WalkForwardOptions(_Options):
         default=None, description="share of folds that must score above 0 (0..1)"
     )
     min_mean_score: float | None = Field(default=None, description="mean fold score floor")
+    min_wfe: float | None = Field(
+        default=None, description="walk-forward efficiency gate, OOS / IS return (default 0.5)"
+    )
+    matrix: bool | None = Field(
+        default=None, description="also run the train x test matrix (default false)"
+    )
 
 
 class McptOptions(_Options):
@@ -188,6 +195,7 @@ def register(t: ToolContext) -> None:
         ] = None,
         test_options: TestOptions = None,
         benchmark: Benchmark = None,
+        embargo_bars: EmbargoBars = None,
     ) -> dict[str, Any]:
         """Queue a lab run: tune a strategy class, fit, run the survival suite and
         give a pass/fail verdict. Returns the job; use wait_for_job for the result.
@@ -217,6 +225,7 @@ def register(t: ToolContext) -> None:
                 "mcpt": mcpt.body() if mcpt else None,
                 "test_options": test_options,
                 "benchmark": benchmark,
+                "embargo_bars": embargo_bars,
             }
         )
         return await queue_lab_run(t, "/api/lab/runs", body, confirm)

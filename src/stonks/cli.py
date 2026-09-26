@@ -1256,6 +1256,24 @@ def lab_run(
     wf_anchored: bool | None = typer.Option(
         None, "--wf-anchored/--wf-rolling", help="default [lab.walk_forward].anchored"
     ),
+    wf_min_wfe: float | None = typer.Option(
+        None,
+        "--wf-min-wfe",
+        min=0.0,
+        max=1.0,
+        help="walk-forward efficiency gate; default [lab.walk_forward].min_wfe",
+    ),
+    wf_matrix: bool | None = typer.Option(
+        None,
+        "--wf-matrix/--no-wf-matrix",
+        help="also run the train x test matrix; default [lab.walk_forward].matrix",
+    ),
+    embargo_bars: int | None = typer.Option(
+        None,
+        "--embargo-bars",
+        min=0,
+        help="bars between train and validation windows; default [lab] embargo_bars",
+    ),
     cost_model: str = typer.Option(
         "config",
         "--cost-model",
@@ -1339,6 +1357,8 @@ def lab_run(
             "n_splits": wf_splits,
             "test_days": wf_test_days,
             "anchored": wf_anchored,
+            "min_wfe": wf_min_wfe,
+            "matrix": wf_matrix,
         }.items()
         if v is not None
     }
@@ -1371,6 +1391,7 @@ def lab_run(
             premortem=premortem,
             test_options=test_options,
             benchmark=benchmark,
+            embargo_bars=embargo_bars,
         )
     except ValueError as exc:  # pydantic ValidationError is a ValueError
         raise typer.BadParameter(str(exc)) from None

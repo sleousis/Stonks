@@ -88,6 +88,10 @@ fee_bps = 1.0
 # universe), "EW", a ticker such as "QQQ.US", or "none". `--benchmark` and the
 # API's `benchmark` field override it.
 benchmark = "auto"
+# Trading bars skipped between the train and the validation window (BL-20):
+# serially correlated features and labels can't leak across it. A strategy's
+# label_horizon_bars raises it per run. `--embargo-bars` / `embargo_bars` override.
+embargo_bars = 0
 
 [lab.walk_forward]
 # Defaults for `stonks lab run --walk-forward` (CLI flags override).
@@ -98,6 +102,8 @@ anchored = false
 metric = "sharpe"
 min_positive_share = 0.5
 min_mean_score = 0.0
+min_wfe = 0.5                      # walk-forward efficiency gate (OOS / IS return)
+matrix = false                     # also run the train x test matrix (--wf-matrix)
 
 [lab.parallel]
 # Worker processes for tuning trials and `stonks lab sweep` (one spawn pool,

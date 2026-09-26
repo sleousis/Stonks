@@ -253,6 +253,34 @@ def test_benchmark_none_turns_it_off(runner, lab_env):
     assert _result(out)["benchmark"] is None
 
 
+def test_embargo_bars_move_the_validation_window(runner, lab_env):
+    starts = []
+    for bars in ("0", "5"):
+        out = lab_env / f"embargo_{bars}.json"
+        r = _run(runner, "momentum", *UNIVERSE, *WINDOW, *FAST, "--tests", "oos",
+                 "--embargo-bars", bars, "--json-out", str(out))  # fmt: skip
+        assert r.exit_code == 0, r.output
+    for run in _lab_runs(lab_env):
+        starts.append(json.loads(run["manifest_json"])["dataset"]["val_window"][0])
+    assert starts[0] < starts[1]
+
+
+def test_embargo_that_leaves_no_validation_window_is_a_usage_error(runner, lab_env):
+    r = runner.invoke(app, ["lab", "run", "momentum", *UNIVERSE, *WINDOW, "--embargo-bars", "500"])
+    assert r.exit_code == 2, r.output
+    assert "embargo" in r.output
+
+
+def test_walk_forward_wfe_and_matrix_flags(runner, lab_env):
+    out = lab_env / "result.json"
+    r = _run(runner, "momentum", *UNIVERSE, *WINDOW, *FAST, "--tests", "walk_forward",
+             "--wf-min-wfe", "1.0", "--wf-matrix", "--json-out", str(out))  # fmt: skip
+    assert r.exit_code == 0, r.output
+    (wf,) = _result(out)["survival_reports"]
+    assert "< 1.0" in wf["notes"]  # the WFE gate at the flag's value
+    assert "matrix" in wf["notes"] or "matrix_cells" in wf["metrics"]
+
+
 def test_register_defaults_to_the_promotion_preset():
     from stonks.cli import _lab_suite
     from stonks.lab.survival.registry import resolve_preset

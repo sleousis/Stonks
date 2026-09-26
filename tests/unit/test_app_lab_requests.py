@@ -182,6 +182,34 @@ def test_benchmark_option_defaults_to_config():
     assert _req(benchmark="none").benchmark == "none"
 
 
+# ---- W2.4: embargo, walk-forward fields, scoring windows ------------------------
+
+
+def test_embargo_bars_defaults_to_config_and_is_checked_against_the_window():
+    assert _req().embargo_bars is None
+    assert _req(embargo_bars=5).embargo_bars == 5
+    with pytest.raises(ValidationError, match="embargo"):
+        _req(embargo_bars=500)  # no validation window left in five months
+    with pytest.raises(ValidationError):
+        _req(embargo_bars=-1)
+
+
+def test_walk_forward_takes_the_new_fields():
+    req = _req(
+        survival_tests=["walk_forward"],
+        walk_forward={"min_wfe": None, "matrix": True, "matrix_min_pass_share": 0.5},
+    )
+    assert req.walk_forward.min_wfe is None and req.walk_forward.matrix is True
+
+
+@pytest.mark.parametrize("test_id", ["perturbation", "runs_test", "period_stability"])
+def test_scoring_window_options(test_id):
+    req = _req(survival_tests=[test_id], test_options={test_id: {"window": "full"}})
+    assert req.survival_options(test_id) == {"window": "full"}
+    with pytest.raises(ValidationError, match="window"):
+        _req(survival_tests=[test_id], test_options={test_id: {"window": "train"}})
+
+
 # ---- preset options: the promotion preset's MCPT --------------------------------
 
 

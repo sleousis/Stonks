@@ -147,6 +147,15 @@ Benchmark = Annotated[
         "(equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark",
     ),
 ]
+EmbargoBars = Annotated[
+    int | None,
+    Field(
+        ge=0,
+        le=10_000,
+        description="trading bars skipped between the train and validation windows "
+        "(a strategy's label horizon raises it); default [lab] embargo_bars",
+    ),
+]
 Hypothesis = Annotated[
     str | None,
     Field(

@@ -339,6 +339,9 @@ class LabSettings(BaseModel):
     #: (SPY.US when the lake prices it, else the equal-weight universe),
     #: ``EW``, a ticker such as ``QQQ.US``, or ``none``. Requests override it.
     benchmark: str = Field(default="auto", max_length=32)
+    #: Trading bars skipped between the train and the validation window
+    #: (BL-20, P9); a strategy's ``label_horizon_bars`` raises it per run.
+    embargo_bars: int = Field(default=0, ge=0)
     walk_forward: WalkForwardConfig = WalkForwardConfig()
     #: ``[lab.parallel]``: worker processes for tuning trials and sweeps
     #: (``max_workers = 0``: every core; 1: in-process) and BLAS threads each.

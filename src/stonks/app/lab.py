@@ -343,6 +343,10 @@ class LabRunOptions(BaseModel):
     #: Benchmark for the run's backtests (``benchmark_relative``, the
     #: result's ``benchmark``); default ``[lab] benchmark``.
     benchmark: BenchmarkSpec | None = None
+    #: Trading bars skipped between the train and validation windows
+    #: (BL-20); a strategy's ``label_horizon_bars`` raises it. Default
+    #: ``[lab] embargo_bars``.
+    embargo_bars: int | None = Field(default=None, ge=0, le=10_000)
     #: Always register the fitted strategy (status ``shadow``) with its
     #: reports, whatever the verdict.
     register_strategy: bool = False
@@ -421,6 +425,30 @@ class LabRunOptions(BaseModel):
 class LabRunRequest(_WindowRequest, LabRunOptions):
     """Tunes the class the ``strategy`` ref points at (its ``params`` are
     ignored: the tuner searches the class's parameter space)."""
+
+    @model_validator(mode="after")
+    def _embargo_fits_the_window(self) -> Self:
+        check_embargo(self, self.embargo_bars)
+        return self
+
+
+def check_embargo(window: Any, embargo_bars: int | None) -> None:
+    """Raise ``ValueError`` when ``embargo_bars`` leaves ``window`` (start,
+    end, train_ratio, interval) no validation window."""
+    if not embargo_bars:
+        return
+    try:
+        interval = Interval.parse(window.interval)
+    except (ValueError, TypeError):
+        return  # reported by the interval check
+    LabDataset(
+        lake=None,  # type: ignore[arg-type]
+        start=window.start,
+        end=window.end,
+        train_ratio=window.train_ratio,
+        interval=interval,
+        embargo_bars=embargo_bars,
+    )
 
 
 class LabRunView(BaseModel):
@@ -539,6 +567,9 @@ def execute_lab_run(
         interval=interval,
         costs=lab_costs(settings, request.cost_model),
         benchmark=lab_benchmark(settings, request.benchmark),
+        embargo_bars=(
+            request.embargo_bars if request.embargo_bars is not None else settings.lab.embargo_bars
+        ),
     )
     result = runner.run(
         cls,
