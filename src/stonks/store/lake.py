@@ -25,22 +25,40 @@ from stonks.logging import get_logger
 MIGRATIONS_DIR = Path(__file__).parent / "migrations_duckdb"
 
 # Env var that lets an operator opt into a destructive migration
-# (``DROP TABLE``) against a table that currently holds rows. The default
-# is to refuse — losing committed data must be an explicit choice, not
-# something a routine ``stonks db init`` does silently.
+# (``DROP TABLE`` / ``ALTER TABLE ... DROP COLUMN``) against data that
+# currently exists. The default is to refuse — losing committed data must
+# be an explicit choice, not something a routine ``stonks db init`` does
+# silently.
 _DESTRUCTIVE_OPT_IN_ENV = "STONKS_ALLOW_DESTRUCTIVE_MIGRATIONS"
+_IDENT = r"[A-Za-z_][A-Za-z0-9_]*"
 _DROP_TABLE_RE = re.compile(
-    r"\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*;",
+    rf"\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?({_IDENT})\b",
     re.IGNORECASE,
 )
-# (migration file stem, table) pairs whose ``DROP TABLE`` is known to be
-# data-preserving because the same migration copies every row elsewhere
-# first. Shipped migrations can't be edited, so the destructive-drop guard
-# can't infer this from the SQL; it trusts this list instead. Keyed by the
-# full file stem (not just the version) so a different file that happens to
-# reuse a number isn't waved through.
+_DROP_COLUMN_RE = re.compile(
+    rf"\bALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?({_IDENT})\s+"
+    rf"DROP\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?({_IDENT})\b",
+    re.IGNORECASE,
+)
+_SQL_LINE_COMMENT_RE = re.compile(r"--[^\n]*")
+# (migration file stem, target) pairs whose drop is known to be
+# data-preserving because the same migration copies the data elsewhere
+# first. ``target`` is a table name for DROP TABLE, ``table.column`` for
+# DROP COLUMN. Shipped migrations can't be edited, and the guard only sees
+# the pre-migration state, so it can't infer this from the SQL; it trusts
+# this list instead. Keyed by the full file stem (not just the version) so
+# a different file that happens to reuse a number isn't waved through.
+#
+# Shipped column drops that are deliberately NOT listed: 005 drops
+# tickers.{beta, short_percent, insider_ownership_percent,
+# institutional_ownership_percent, employee_count, esg_score} without
+# copying the values, so a lake holding them must opt in. A fresh
+# ``db init`` is unaffected because those tables are empty at that point.
 _DATA_PRESERVING_DROPS: frozenset[tuple[str, str]] = frozenset(
     {
+        # 003 INSERTs every prices row into bars (interval='1d') and then
+        # recreates prices as a view over bars.
+        ("003_intraday_bars", "prices"),
         # Rebuilds insider_transactions with a NULL-safe natural key; rows
         # are staged in a temp table and copied back (only exact natural-key
         # duplicates collapse, last-inserted wins).
@@ -293,36 +311,54 @@ class DuckDBLake:
                 raise
 
     def _guard_destructive_drops(self, sql: str, *, version: int, name: str, log: Any) -> None:
-        """Refuse to apply a migration whose ``DROP TABLE`` step would
-        delete a table that currently holds rows, unless the operator
-        explicitly opts in via ``STONKS_ALLOW_DESTRUCTIVE_MIGRATIONS=1``.
+        """Refuse to apply a migration whose ``DROP TABLE`` (incl.
+        ``CASCADE``) or ``ALTER TABLE ... DROP COLUMN`` step would delete
+        existing data, unless the operator explicitly opts in via
+        ``STONKS_ALLOW_DESTRUCTIVE_MIGRATIONS=1``.
 
-        Empty / non-existent tables are dropped silently — this guard
-        only fires when real data would be lost. Each affected table
-        produces one structured WARNING log line so operators can see
-        exactly what they'd lose before opting in.
+        Empty / non-existent tables and all-NULL / non-existent columns
+        are dropped silently, as are the drops listed in
+        ``_DATA_PRESERVING_DROPS`` — this guard only fires when real data
+        would be lost. Each affected target produces one structured
+        WARNING log line so operators can see exactly what they'd lose
+        before opting in. ``--`` comments are ignored.
         """
+        sql = _SQL_LINE_COMMENT_RE.sub("", sql)
         existing = set(self.tables())
         opt_in = os.environ.get(_DESTRUCTIVE_OPT_IN_ENV, "").lower() in {"1", "true", "yes"}
-        for match in _DROP_TABLE_RE.finditer(sql):
-            target = match.group(1)
-            if target not in existing or (name, target) in _DATA_PRESERVING_DROPS:
-                continue
-            row_count = int(self.con.execute(f"SELECT COUNT(*) FROM {target}").fetchone()[0])
-            if row_count == 0:
-                continue
+
+        def check(target: str, what: str, count_sql: str, unit: str) -> None:
+            if (name, target) in _DATA_PRESERVING_DROPS:
+                return
+            count = int(self.con.execute(count_sql).fetchone()[0])
+            if count == 0:
+                return
             log.warning(
                 "lake.migrate.destructive_drop",
                 migration_version=version,
                 table=target,
-                rows=row_count,
+                rows=count,
                 opt_in_env=_DESTRUCTIVE_OPT_IN_ENV,
             )
             if not opt_in:
                 raise RuntimeError(
-                    f"migration {version:03d} would DROP TABLE {target} which holds "
-                    f"{row_count} row(s); set {_DESTRUCTIVE_OPT_IN_ENV}=1 to confirm "
+                    f"migration {version:03d} would {what} {target} which holds "
+                    f"{count} {unit}; set {_DESTRUCTIVE_OPT_IN_ENV}=1 to confirm "
                     f"that the data is expendable, then re-run."
+                )
+
+        for match in _DROP_TABLE_RE.finditer(sql):
+            table = match.group(1)
+            if table in existing:
+                check(table, "DROP TABLE", f"SELECT COUNT(*) FROM {table}", "row(s)")
+        for match in _DROP_COLUMN_RE.finditer(sql):
+            table, column = match.group(1), match.group(2)
+            if table in existing and column in self._column_types(table):
+                check(
+                    f"{table}.{column}",
+                    "DROP COLUMN",
+                    f"SELECT COUNT({column}) FROM {table}",
+                    "non-NULL value(s)",
                 )
 
     def applied_migrations(self) -> list[int]:
