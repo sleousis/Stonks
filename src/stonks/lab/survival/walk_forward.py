@@ -438,7 +438,8 @@ def _summarize(results: Sequence[FoldResult], cfg: WalkForwardConfig, strategy_i
     oos_scores = [float(getattr(r.oos_report, cfg.metric)) for r in results]
     is_scores = [r.best_score for r in results]
     finite = [s for s in oos_scores if math.isfinite(s)]
-    mean_oos = sum(finite) / len(finite) if finite else 0.0
+    # RS-34: no finite fold score is no evidence; NaN fails the mean gate
+    mean_oos = sum(finite) / len(finite) if finite else float("nan")
     positive_share = sum(1 for s in oos_scores if s > 0) / len(oos_scores)
     finite_is = [s for s in is_scores if math.isfinite(s)]
 
@@ -466,7 +467,7 @@ def _summarize(results: Sequence[FoldResult], cfg: WalkForwardConfig, strategy_i
     failures = []
     if positive_share < cfg.min_positive_share:
         failures.append(f"positive_share {positive_share:.2f} < {cfg.min_positive_share}")
-    if mean_oos < cfg.min_mean_score:
+    if not mean_oos >= cfg.min_mean_score:
         failures.append(f"oos_score_mean {mean_oos:.3f} < {cfg.min_mean_score}")
     if cfg.min_wfe is not None and not wfe >= cfg.min_wfe:
         reason = "undefined (in-sample return <= 0)" if math.isnan(wfe) else f"{wfe:.2f}"
@@ -479,6 +480,9 @@ def _summarize(results: Sequence[FoldResult], cfg: WalkForwardConfig, strategy_i
 
 class WalkForwardTest:
     id = "walk_forward"
+    #: Leaves ``stitched_oos_report`` on the dataset (``SurvivalSuite`` runs
+    #: it before the tests that read it).
+    publishes_to_dataset = True
 
     def __init__(
         self, config: WalkForwardConfig | None = None, tuning: TuningSetup | None = None
@@ -498,7 +502,17 @@ class WalkForwardTest:
                 "WalkForwardTest needs a tuning setup: pass tuning=... or run it under LabRunner"
             )
         cfg = self._cfg
-        folds = cfg.folds_for(context, strategy)
+        try:
+            folds = cfg.folds_for(context, strategy)
+        except ValueError as exc:
+            # RS-26: a dataset too short for the folds is a failing report,
+            # not a crashed lab run
+            return SurvivalReport(
+                test_id=self.id,
+                passed=False,
+                metrics={"n_folds": 0.0},
+                notes=f"insufficient data: {exc}",
+            )
         cells = cfg.matrix_cells(context, strategy) if cfg.matrix else []
         tasks = list(folds) + [f for _, _, cell_folds in cells for f in cell_folds]
         results = run_folds(

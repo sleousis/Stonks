@@ -192,7 +192,8 @@ def test_resolve_suite_prefers_explicit_tests_over_preset():
 
 def test_preset_options_are_valid_for_their_tests():
     assert registry.preset_options("promotion") == {
-        "mcpt": {"n_permutations": 200, "retune": "auto"}
+        "mcpt": {"n_permutations": 200, "retune": "auto"},
+        "cross_instrument": {"held_out_auto": 3},
     }
     assert registry.preset_options("quick") == {}
     for name in registry.preset_names():

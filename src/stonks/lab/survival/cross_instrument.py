@@ -19,9 +19,13 @@ when:
 - the total P&L is positive and no ticker holds more than
   ``max_pnl_share`` of it.
 
-Fewer than ``min_tickers`` tickers is "n/a": the test passes with a note,
-as the spec asks (there is nothing to be consistent across). With enough
-tickers but no trade in any of them the test fails for insufficient data.
+Fewer than ``min_tickers`` tickers fails for insufficient data (RS-24):
+there is nothing to be consistent across, and a pass would let every
+single-ticker strategy skip the P4 check. The ``promotion`` preset sets
+``held_out_auto`` to ``min_tickers``, so a small universe is topped up
+with held-out tickers of the same class from the lake. With enough
+tickers but no trade in any of them the test also fails for insufficient
+data.
 
 The per-ticker backtests run on the lab process pool (``lab.parallel``
 via ``_reruns``); nothing is random, so the report does not depend on
@@ -90,8 +94,8 @@ class CrossInstrumentTest:
             "n_held_out": float(len(held_out)),
         }
         if len(tickers) < opts.min_tickers:
-            notes.insert(0, f"n/a: {len(tickers)} tickers, {opts.min_tickers} needed")
-            return SurvivalReport(self.id, True, metrics, "; ".join(notes))
+            notes.insert(0, f"insufficient data: {len(tickers)} tickers, {opts.min_tickers} needed")
+            return SurvivalReport(self.id, False, metrics, "; ".join(notes))
 
         _log.info("cross_instrument.start", tickers=len(tickers), held_out=len(held_out))
         base_params = dict(getattr(strategy, "params", None) or {})

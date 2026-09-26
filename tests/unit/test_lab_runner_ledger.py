@@ -134,7 +134,7 @@ def test_result_carries_trial_data_without_a_ledger():
 
 def test_run_writes_trials_and_pre_registration(ledger):
     tuner = _Tuner(n=4, ledger=ledger)
-    result = _runner(tuner, ledger=ledger).run(
+    result = _runner(tuner, tests=[_BindRunTest()], ledger=ledger).run(
         BuyAndHold, _ds(), hypothesis="markets rise", premortem="survivorship"
     )
     # The pre-registration row existed before the tuner ran.
@@ -290,3 +290,31 @@ def test_a_ledger_failure_while_recording_an_error_keeps_the_original_exception(
     ledger.finish_run = _broken
     with pytest.raises(RuntimeError, match="exploded"):
         _runner(_Boom(), ledger=ledger).run(BuyAndHold, _ds())
+
+
+# ---- RS-39 and RS-40 ----------------------------------------------------------------------
+
+
+def test_an_empty_suite_is_never_a_pass():
+    result = _runner(_Tuner(n=2)).run(BuyAndHold, _ds())
+    assert result.survival_reports == []
+    assert result.verdict == "fail"
+
+
+def test_trial_matrix_keeps_the_trial_dates():
+    from stonks.core.protocols import TrialOutcome
+    from stonks.lab.trials import trials_from_tuning
+
+    idx = pd.date_range("2024-03-01", periods=5, freq="D").values
+    late = pd.date_range("2024-03-03", periods=5, freq="D").values
+    outcomes = [
+        TrialOutcome({"a": 1}, 0.5, returns=np.arange(5.0), index=idx),
+        TrialOutcome({"a": 2}, 0.1, returns=np.arange(5.0) + 10, index=late),
+    ]
+    tuned = _Tuned({"a": 1}, 0.5, [({"a": 1}, 0.5), ({"a": 2}, 0.1)], outcomes)
+    _, matrix = trials_from_tuning(tuned)
+    assert np.issubdtype(matrix.index.dtype, np.datetime64)
+    assert len(matrix.index) == 7  # outer join on dates, not positions
+    assert matrix.index[0] == idx[0] and matrix.index[-1] == late[-1]
+    assert np.isnan(matrix.values[0, 1])  # trial 2 starts two days later
+    assert matrix.values[2, 1] == 10.0

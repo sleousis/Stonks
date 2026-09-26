@@ -20,7 +20,6 @@ def _ds(lake, costs=None):
         universe=["UP.US"],
         start=date(2025, 10, 1),
         end=date(2026, 4, 1),
-        train_ratio=1.0,
         costs=costs,
     )
 
@@ -43,7 +42,8 @@ def test_configured_costs_reduce_returns(lake_trending):
     assert r_paid.final_return < r_free.final_return - 0.01  # the $100 fee alone is 1%
     # objectives score through the same path
     obj = FinalReturnObjective()
-    assert obj.score(BuyAndHold({"ticker": "UP.US"}), paid) == pytest.approx(r_paid.final_return)
+    r_train = run_backtest(BuyAndHold({"ticker": "UP.US"}), paid, paid.train_window)
+    assert obj.score(BuyAndHold({"ticker": "UP.US"}), paid) == pytest.approx(r_train.final_return)
 
 
 def test_costs_survive_dataset_copies(lake_trending):

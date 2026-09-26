@@ -301,3 +301,86 @@ def test_mc_trades_after_walk_forward_scores_the_stitched_trades(lake_trending):
     WalkForwardTest(WalkForwardConfig(n_splits=2, test_days=30), setup).run(strategy, ds)
     report = MonteCarloTradesTest(min_trades=1).run(strategy, ds)
     assert "stitched walk-forward OOS" in report.notes
+
+
+def test_mc_trades_listed_before_walk_forward_still_scores_the_stitched_trades(lake_trending):
+    from stonks.lab.survival.base import SurvivalSuite
+    from stonks.lab.survival.mc_trades import MonteCarloTradesTest
+
+    ds = _ds(lake_trending)
+    setup = TuningSetup(GridTuner(grid_size=2), SharpeObjective(), budget=4)
+    suite = SurvivalSuite(
+        [
+            MonteCarloTradesTest(min_trades=1),
+            WalkForwardTest(WalkForwardConfig(n_splits=2, test_days=30), setup),
+        ]
+    )
+    mc, walk = suite.run(Momentum({"lookback_days": 10}), ds)
+    assert (mc.test_id, walk.test_id) == ("mc_trades", "walk_forward")  # order kept
+    assert "stitched walk-forward OOS" in mc.notes
+
+
+# ---- edge cases (RS-26, RS-34) ------------------------------------------------------------
+
+
+def test_no_finite_fold_score_fails_even_with_lenient_gates(lake_trending, monkeypatch):
+    real = wf.run_backtest
+
+    def nan_score(strategy, dataset, window, lake=None):
+        report = real(strategy, dataset, window, lake)
+        return dataclasses.replace(report, sharpe=float("nan"))
+
+    monkeypatch.setattr(wf, "run_backtest", nan_score)
+    setup = TuningSetup(_RecordingTuner(), SharpeObjective(), budget=1)
+    cfg = WalkForwardConfig(n_splits=2, test_days=30, min_positive_share=0.0, min_wfe=None)
+    report = WalkForwardTest(cfg, setup).run(_Idle({}), _ds(lake_trending))
+    assert math.isnan(report.metrics["oos_score_mean"])
+    assert report.passed is False
+    assert "oos_score_mean" in report.notes
+
+
+def test_all_folds_without_trades_fail(lake_trending):
+    setup = TuningSetup(_RecordingTuner(), SharpeObjective(), budget=1)
+    report = WalkForwardTest(WalkForwardConfig(n_splits=2, test_days=30), setup).run(
+        _Idle({}), _ds(lake_trending)
+    )
+    assert report.passed is False
+    assert report.metrics["positive_share"] == 0.0
+
+
+def test_a_dataset_too_short_for_the_folds_fails_without_crashing(lake_trending):
+    setup = TuningSetup(_RecordingTuner(), SharpeObjective(), budget=1)
+    cfg = WalkForwardConfig(n_splits=10, test_days=60)
+    report = WalkForwardTest(cfg, setup).run(_Idle({}), _ds(lake_trending))
+    assert report.passed is False
+    assert "insufficient data" in report.notes
+    assert report.metrics["n_folds"] == 0.0
+
+
+def test_the_permutation_variant_survives_a_short_dataset(lake_trending):
+    from stonks.lab.survival.walk_forward_permutation import (
+        WalkForwardPermutationConfig,
+        WalkForwardPermutationTest,
+    )
+
+    setup = TuningSetup(_RecordingTuner(), SharpeObjective(), budget=1)
+    cfg = WalkForwardPermutationConfig(
+        walk_forward=WalkForwardConfig(n_splits=10, test_days=60), n_permutations=2
+    )
+    test = WalkForwardPermutationTest(cfg, tuning=setup)
+    report = test.run(_Idle({}), _ds(lake_trending))
+    assert report.passed is False
+    assert "insufficient data" in report.notes
+
+
+def test_a_crypto_fold_with_no_bars_is_a_failing_fold_not_a_crash(lake_trending):
+    ds = LabDataset(
+        lake=lake_trending,
+        universe=["NOBARS.CC"],
+        start=date(2025, 10, 1),
+        end=date(2026, 4, 1),
+        train_ratio=0.6,
+    )
+    setup = TuningSetup(_RecordingTuner(), SharpeObjective(), budget=1)
+    report = WalkForwardTest(WalkForwardConfig(n_splits=2, test_days=30), setup).run(_Idle({}), ds)
+    assert report.passed is False

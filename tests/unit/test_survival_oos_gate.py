@@ -160,3 +160,41 @@ def test_registry_builds_with_options_and_rejects_bad_ones():
 def test_positional_legacy_constructor_still_works():
     test = OutOfSampleTest(0.7, -0.2)
     assert test.min_sharpe == 0.7 and test.max_drawdown_limit == -0.2
+
+
+# ---- edge cases ---------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("mode", ["psr", "sharpe"])
+def test_a_two_bar_validation_window_fails_for_insufficient_data(mode):
+    report = OutOfSampleTest(mode=mode, min_trades=0).evaluate(_report([0.05]))
+    assert report.passed is False
+    assert "insufficient data" in report.notes
+    assert report.metrics["n_bars"] == 1.0
+    assert math.isnan(report.metrics["psr0"])
+
+
+def _with_returns(report: BacktestReport, returns) -> object:
+    """A duck-typed report whose ``returns`` hold ``returns`` (NaN included)."""
+    from types import SimpleNamespace
+
+    fields = {f.name: getattr(report, f.name) for f in dataclasses.fields(report)}
+    return SimpleNamespace(**{**fields, "returns": list(returns)})
+
+
+def test_nan_returns_are_dropped_not_propagated():
+    clean = _returns(3.0, 500)
+    gappy = _with_returns(_report(clean), [*clean[:100], float("nan"), *clean[100:], float("nan")])
+    report = OutOfSampleTest().evaluate(gappy)
+    base = OutOfSampleTest().evaluate(_report(clean))
+    assert report.metrics["n_bars"] == 500.0
+    assert report.metrics["psr0"] == pytest.approx(base.metrics["psr0"])
+    assert math.isfinite(report.metrics["sharpe_ci_low"])
+    assert math.isfinite(report.metrics["sharpe_ci_high"])
+
+
+def test_all_nan_returns_fail():
+    nan = float("nan")
+    report = OutOfSampleTest().evaluate(_with_returns(_report([0.01] * 50), [nan] * 50))
+    assert report.passed is False
+    assert "insufficient data" in report.notes

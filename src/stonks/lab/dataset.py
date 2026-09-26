@@ -123,6 +123,11 @@ class LabDataset:
     )
 
     def __post_init__(self) -> None:
+        # RS-17: both windows must be non-empty and in order.
+        if not 0.0 < self.train_ratio < 1.0:
+            raise ValueError(f"train_ratio must lie in (0, 1), got {self.train_ratio}")
+        if self.end <= self.start:
+            raise ValueError(f"end {self.end} must be after start {self.start}")
         if self.embargo_bars < 0:
             raise ValueError(f"embargo_bars must be >= 0, got {self.embargo_bars}")
         if self.train_end is not None and not (self.start <= self.train_end < self.end):
@@ -134,6 +139,11 @@ class LabDataset:
             raise ValueError(
                 f"an embargo of {self.embargo_bars} bars after {self.train_window[1]} "
                 f"leaves no validation window before {self.end}"
+            )
+        if self.val_window[0] > self.end:
+            raise ValueError(
+                f"the window {self.start}..{self.end} is too short for train_ratio "
+                f"{self.train_ratio}: it leaves no validation window"
             )
 
     @property

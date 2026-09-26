@@ -27,6 +27,7 @@ correlation and only destroys time structure.
 from __future__ import annotations
 
 import dataclasses
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -186,7 +187,11 @@ def _apply_permutation(
 
 # ---- MCPT survival test ----------------------------------------------------
 
-_METRICS = ("profit_factor", "sharpe", "final_return", "cagr")
+_METRICS = ("profit_factor", "bar_profit_factor", "sharpe", "final_return", "cagr")
+#: Option names that read a differently named report field (RS-35: the
+#: ``profit_factor`` option reads ``bar_profit_factor``, not the
+#: deprecated report alias).
+_REPORT_FIELD = {"profit_factor": "bar_profit_factor"}
 
 
 class MonteCarloPermutationTest:
@@ -313,6 +318,19 @@ class MonteCarloPermutationTest:
             )
 
         real_score = scorer.score_real()
+        if math.isnan(real_score):
+            # a NaN real score beats nothing; without this guard every
+            # comparison is False and p would be 1/(n+1), a pass
+            return SurvivalReport(
+                test_id=self.id,
+                passed=False,
+                metrics={
+                    "p_value": 1.0,
+                    "real_score": real_score,
+                    "n_permutations": float(self._n),
+                },
+                notes=f"mode={mode}; insufficient data: the real run has no score (NaN)",
+            )
         perm_scores = permuted_scores(scorer, self._n, self._seed, self._max_workers)
         minimize = retune and setup.objective.direction == "minimize"
         p_value = permutation_p_value(real_score, perm_scores, minimize=minimize)
@@ -355,7 +373,8 @@ class BacktestScore:
     window: tuple[date, date]
 
     def __call__(self, strategy: Strategy, dataset: Any) -> float:
-        return float(getattr(run_backtest(strategy, dataset, self.window), self.metric))
+        report = run_backtest(strategy, dataset, self.window)
+        return float(getattr(report, _REPORT_FIELD.get(self.metric, self.metric)))
 
 
 @dataclass(frozen=True)
