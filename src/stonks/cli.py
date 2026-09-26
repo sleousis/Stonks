@@ -905,5 +905,39 @@ def pnl(
 log = get_logger("stonks.cli")
 
 
+# ---- REST API server --------------------------------------------------------
+
+
+@app.command("serve")
+def serve(
+    host: str | None = typer.Option(None, "--host", help="bind address; default [api].host"),
+    port: int | None = typer.Option(None, "--port", help="bind port; default [api].port"),
+    reload: bool = typer.Option(False, "--reload", help="auto-reload on code changes (dev)"),
+) -> None:
+    """Run the REST API (and the built UI from web/dist, if present) with uvicorn.
+
+    Binds 127.0.0.1 by default. Mutating routes need STONKS_API_TOKEN.
+    """
+    import uvicorn
+
+    settings = _settings()
+    bind_host = host or settings.api.host
+    bind_port = port or settings.api.port
+    if settings.api.token is None:
+        console.print(
+            "[yellow]STONKS_API_TOKEN is not set: mutating routes will return 503[/yellow]"
+        )
+    if bind_host not in ("127.0.0.1", "localhost", "::1"):
+        log.warning("serve.non_loopback_bind", host=bind_host)
+    uvicorn.run(
+        "stonks.api.server:app_factory",
+        factory=True,
+        host=bind_host,
+        port=bind_port,
+        reload=reload,
+        log_config=None,
+    )
+
+
 if __name__ == "__main__":
     app()
