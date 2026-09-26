@@ -275,6 +275,7 @@ flowchart LR
 - Resume the kill switch with `POST /api/halts/{id}/resume` and the text `RESUME TRADING`. Clear other halts with `POST /api/halts/{id}/clear` and a reason.
 - Every action writes an `audit_log` row. Every clear also writes a `risk_reset` row in `status_changes`.
 - A trip sends a `risk` notification to the portfolio owner, or to the admins for a global halt.
+- A halt on a broker portfolio also stops its paper account.
 - MCP can list halts and turn the kill switch on (with `confirm=true`). It cannot resume.
 
 ### Quit rule
@@ -292,6 +293,43 @@ Before a real book decides, the tick applies the splits and cash dividends of it
 - Events on or before a portfolio's last snapshot at the upgrade count as done.
 
 Model books still apply the events between their last snapshot and the tick.
+
+## Signals and automation modes
+
+Each tick scores every active strategy once for everyone, and shadow strategies too when model books run. After the model books move, the tick stores what each strategy said:
+
+- `signals`: one row per strategy and ticker, with the score, its rank and its weight in the model book.
+- `signal_events`: what changed (`entry`, `exit`, `increase`, `decrease`) with a plain reason. A strategy can give its own reason through an `explain(ticker, as_of, lake)` method.
+
+A strategy with a model book signals what its book did. One without signals new and dropped tickers. With `[production] model_books = "all"` every active strategy gets a model book. A same-day rerun writes nothing twice.
+
+Strategies that set `parallel_scoring = True` are scored in worker processes over a read-only copy of the lake. `[production] scoring_workers` sets the processes (0 means every core) and `parallel_min_estimates` (default 2000) is the smallest job worth a pool. Other strategies are scored in the tick's own process.
+
+With `[production] books_from_subscriptions = true` the tick trades one book per portfolio from its subscriptions:
+
+| Mode | What the tick does |
+|------|--------------------|
+| notify | Sends the day's signal events to the outbox. Places nothing. |
+| paper | Trades a simulated account. A broker portfolio gets its own paper account (`<id>_paper`), so paper money never reaches the real one. |
+| auto | Trades the portfolio's connected broker account. |
+
+```mermaid
+flowchart LR
+  S[signal phase] --> N[notify: outbox]
+  S --> P[paper: simulated account]
+  S --> A[auto: broker account]
+  P --> R[(portfolio_runs)]
+  A --> R
+  A -->|broker error| X[auto paused]
+```
+
+- Client ids carry the portfolio, so two portfolios never share one.
+- Every book writes one `portfolio_runs` row per tick: mode, status, counts, any halt, and its paper and auto subscriptions.
+- Paper days for the auto gate come from `portfolio_runs`: days that finished without an error or a risk breach, after the last breach and after the last switch to notify. The subscriptions view shows the same count.
+- Auto needs 20 paper days, an active strategy, a healthy connection that can trade, no halt, and a fresh second factor.
+- A broker error pauses the portfolio's auto subscriptions with a `paused_reason`, writes an audit row and tells the owner. A plain rejection pauses nothing. Resume by switching back to auto, which runs the checklist again.
+- Owner risk limits (`users.risk_policy_json`) tighten every portfolio the owner has. They can only make limits stricter.
+- The flag is off by default. Strategies promoted after the accounts migration have no subscription, so turning it on stops them trading until someone subscribes a portfolio to them.
 
 ## Model books (shadow mode)
 
