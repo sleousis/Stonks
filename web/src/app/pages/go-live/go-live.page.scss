@@ -1,0 +1,140 @@
+@use 'breakpoints' as bp;
+
+.picker {
+  display: grid;
+  gap: var(--space-3);
+
+  .field {
+    max-width: 28rem;
+  }
+
+  select {
+    width: 100%;
+  }
+
+  @include bp.from-tablet {
+    grid-template-columns: minmax(16rem, 28rem) minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-5);
+  }
+}
+
+.selected {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+
+.selected-class {
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.selected-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+
+  @include bp.phone {
+    min-height: var(--touch-min);
+  }
+
+  @include bp.coarse {
+    min-height: var(--touch-min);
+  }
+}
+
+.unavailable {
+  display: grid;
+  gap: var(--space-3);
+
+  p {
+    color: var(--color-ink-2);
+    max-width: 70ch;
+  }
+}
+
+.checks-title {
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-ink-2);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.checks {
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-2);
+  list-style: none;
+
+  li {
+    display: grid;
+    gap: 2px;
+    padding: var(--space-2) 0;
+    border-top: 1px solid var(--color-border);
+
+    &:first-child {
+      border-top: 0;
+    }
+
+    @include bp.from-tablet {
+      grid-template-columns: 9rem minmax(0, 1fr);
+      gap: var(--space-3);
+      align-items: baseline;
+    }
+  }
+}
+
+.check-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.check-detail {
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+}
+
+.aside {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.facts {
+  margin: 0;
+  padding: var(--space-1) var(--space-4) var(--space-3);
+
+  > div {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-3);
+    min-height: var(--row-h);
+    padding: var(--space-1) 0;
+    border-top: 1px solid var(--color-border);
+
+    &:first-child {
+      border-top: 0;
+    }
+  }
+
+  dt {
+    color: var(--color-ink-2);
+    font-size: var(--text-sm);
+  }
+
+  dd {
+    margin: 0;
+    text-align: right;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+}
