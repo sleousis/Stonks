@@ -113,3 +113,22 @@ def test_validate_params_uses_defaults_for_missing_tunable():
         ParameterSpec(name="b", kind="int", default=2, bounds=(0, 10)),
     ]
     validate_params({"a": 5}, space)  # should not raise; b is just missing
+
+
+def test_numpy_scalars_are_accepted():
+    # tuners and grids built with numpy hand over np.int64 / np.float64
+    import numpy as np
+
+    space = [
+        ParameterSpec(name="n", kind="int", default=1, bounds=(0, 10)),
+        ParameterSpec(name="x", kind="float", default=0.5, bounds=(0.0, 1.0)),
+        ParameterSpec(name="flag", kind="bool", default=False),
+    ]
+    validate_params({"n": np.int64(5), "x": np.float64(0.25), "flag": np.bool_(True)}, space)
+    validate_params({"x": np.int32(1)}, space)
+    with pytest.raises(ValueError, match="expected int"):
+        validate_params({"n": np.float64(5.0)}, space)
+    with pytest.raises(ValueError, match="expected int"):
+        validate_params({"n": np.bool_(True)}, space)
+    with pytest.raises(ValueError, match="out of bounds"):
+        validate_params({"n": np.int64(11)}, space)
