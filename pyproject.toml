@@ -21,6 +21,7 @@ dependencies = [
     "httpx2>=2.13.1",
     "scikit-learn>=1.9.1",
     "scipy>=1.14",
+    "cryptography>=50.0.1",
 ]
 
 [project.scripts]

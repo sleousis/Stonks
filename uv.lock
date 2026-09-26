@@ -1712,6 +1712,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "alpaca-py" },
+    { name = "cryptography" },
     { name = "duckdb" },
     { name = "fastapi" },
     { name = "httpx2" },
@@ -1741,6 +1742,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "alpaca-py", specifier = ">=0.44.0" },
+    { name = "cryptography", specifier = ">=50.0.1" },
     { name = "duckdb", specifier = ">=1.1" },
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "httpx2", specifier = ">=2.13.1" },
