@@ -45,6 +45,7 @@ from datetime import UTC, date, datetime
 
 import numpy as np
 
+from stonks.backtest.calendar import calendar_for
 from stonks.backtest.costs import CostModel, FixedCostModel, Trade, TradeCost
 from stonks.backtest.fills import (
     BarQuote,
@@ -54,6 +55,7 @@ from stonks.backtest.fills import (
     MarketStats,
     MarketStatsSpec,
 )
+from stonks.core.interval import Interval
 from stonks.core.types import AssetClass, Fill, Order, Portfolio
 from stonks.logging import get_logger
 
@@ -62,6 +64,8 @@ _log = get_logger("stonks.backtest.simulated_broker")
 # Bisection steps when scaling a buy under a non-linear cost model; 2**-50
 # of the requested quantity is far below any meaningful share fraction.
 _SCALE_ITERATIONS = 50
+#: Relative excess of a sell over the holding that is float dust.
+_DUST = 1e-9
 _NO_STATS = MarketStats()
 
 
@@ -96,6 +100,9 @@ class SimulatedBroker:
         self._unfilled: dict[str, float] = {}
         #: (settlement date, proceeds) of sales not yet settled.
         self._unsettled: list[tuple[np.datetime64, float]] = []
+        #: The bar interval (``set_interval``) and one bar's length in days.
+        self._interval: Interval | None = None
+        self._bar_days: float | None = None
 
     @classmethod
     def from_execution(
@@ -134,6 +141,13 @@ class SimulatedBroker:
         self._stats = dict(stats or {})
         self._as_of = as_of
         self._settle(as_of)
+
+    def set_interval(self, interval: Interval | None) -> None:
+        """The backtest's bar interval: the fill model's gap guard reads one
+        bar's length, and the cost model annualises volatility with the bars
+        per year of the interval on each asset class's calendar (RS-19)."""
+        self._interval = interval
+        self._bar_days = None if interval is None else interval.seconds / 86_400.0
 
     def set_asset_classes(self, asset_classes: Mapping[str, AssetClass]) -> None:
         """Ticker -> asset class for the cost model; unmapped tickers are equity."""
@@ -218,6 +232,10 @@ class SimulatedBroker:
                 )
         else:  # sell
             held = self._portfolio.positions.get(order.ticker, 0.0)
+            if 0 < held < quantity <= held * (1 + _DUST):
+                # float dust (0.1 + 0.2 > 0.3): sell exactly what is held
+                quantity = held
+                cost = self._cost(order, price, quantity)
             if held < quantity:
                 self._unfilled[order.client_id] = 0.0
                 _log.debug(
@@ -282,6 +300,7 @@ class SimulatedBroker:
             volume=self._volumes.get(ticker),
             adv=self._stats.get(ticker, _NO_STATS).adv,
             gap_days=gap,
+            bar_days=self._bar_days,
         )
 
     def _cost(self, order: Order, price: float, quantity: float) -> TradeCost:
@@ -297,8 +316,15 @@ class SimulatedBroker:
                 adv=stats.adv,
                 sigma_daily=stats.sigma_daily,
                 half_spread_bps=stats.half_spread_bps,
+                periods_per_year=self._periods_per_year(order.ticker),
             )
         )
+
+    def _periods_per_year(self, ticker: str) -> float | None:
+        if self._interval is None:
+            return None
+        asset_class = self._asset_classes.get(ticker, "equity")
+        return calendar_for(asset_class).periods_per_year(self._interval)
 
     def _affordable(
         self, order: Order, price: float, requested: float, cost: TradeCost
@@ -318,6 +344,8 @@ class SimulatedBroker:
             return q * c.fill_price + c.fee <= cash
 
         lo = max(0.0, (cash - cost.fee) / cost.fill_price)
+        if lo <= 0:
+            return 0.0, cost  # even the fee is unaffordable (RS-33)
         lo_cost = self._cost(order, price, lo) if lo > 0 else cost
         if lo > 0 and lo_cost == cost:
             return lo, cost  # constant costs: the closed form is exact

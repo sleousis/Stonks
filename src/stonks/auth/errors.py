@@ -36,9 +36,18 @@ class InvalidCredentials(AuthError):
 
 
 class MfaRequired(AuthError):
-    """The session passed the password step but not the second factor."""
+    """The session passed the password step but not the second factor.
+    ``next_step`` tells the client which screen to show: ``enrol`` (set up
+    the authenticator) or ``verify`` (enter a code)."""
 
     code = "mfa_required"
+
+    def __init__(self, message: str = "", *, next_step: str | None = None) -> None:
+        super().__init__(message)
+        self.next_step = next_step
+
+    def problem_extensions(self) -> dict[str, str]:
+        return {"next_step": self.next_step} if self.next_step else {}
 
 
 class PermissionDenied(AuthError):

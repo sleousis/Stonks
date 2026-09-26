@@ -184,6 +184,7 @@ class HarmonicXABCDStrategy(SingleTickerLongFlat):
     alpha_family = "reversion"
     premise = "mean_reversion"
     label_horizon_bars = 10
+    required_history_bars = 5
 
     @classmethod
     def parameter_spec(cls):

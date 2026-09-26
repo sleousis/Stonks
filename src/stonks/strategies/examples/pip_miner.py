@@ -125,6 +125,15 @@ class PIPMinerStrategy(BaseStrategy):
     alpha_family = "data_driven"
     premise = "none"
     label_horizon_bars = 6
+    required_history_bars = 24
+
+    def param_metadata(self) -> dict[str, int]:
+        p = self.params
+        return {
+            "label_horizon_bars": int(p["hold"]),
+            "required_history_bars": int(p["lookback"]),
+        }
+
     applicable_asset_classes = ("crypto", "equity")
 
     @classmethod

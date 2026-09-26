@@ -20,20 +20,21 @@ def lake(tmp_path):
 
 def test_spec_bounds_and_defaults():
     specs = {s.name: s for s in MACrossoverStrategy.parameter_spec()}
-    assert (specs["fast"].default, specs["fast"].bounds) == (10, (2, 50))
-    assert (specs["slow"].default, specs["slow"].bounds) == (30, (10, 200))
+    assert (specs["fast"].default, specs["fast"].bounds) == (10, (2, 25))
+    assert (specs["slow"].default, specs["slow"].bounds) == (30, (26, 200))
 
 
 def test_fast_must_be_below_slow():
-    with pytest.raises(ValueError, match=r"fast.*slow"):
-        MACrossoverStrategy({"fast": 20, "slow": 20})
-    with pytest.raises(ValueError, match=r"fast.*slow"):
-        MACrossoverStrategy({"fast": 40, "slow": 15})
+    # RS-29: the bounds no longer overlap, so no tunable corner is invalid
+    with pytest.raises(ValueError, match="fast"):
+        MACrossoverStrategy({"fast": 40, "slow": 30})
+    with pytest.raises(ValueError, match="slow"):
+        MACrossoverStrategy({"fast": 10, "slow": 15})
 
 
 def test_flat_in_downtrend_long_in_uptrend(lake):
     lk, frame = lake
-    s = MACrossoverStrategy({"ticker": "X.CC", "fast": 3, "slow": 10})
+    s = MACrossoverStrategy({"ticker": "X.CC", "fast": 3, "slow": 26})
     assert s.estimate_return("X.CC", as_of(frame, 35), lk) is None
     r = s.estimate_return("X.CC", as_of(frame, 75), lk)
     assert r is not None and r > 0
@@ -44,6 +45,6 @@ def test_flat_in_downtrend_long_in_uptrend(lake):
 
 def test_needs_slow_bars(lake):
     lk, frame = lake
-    s = MACrossoverStrategy({"ticker": "X.CC", "fast": 3, "slow": 10})
-    assert s.extract_features("X.CC", as_of(frame, 8), lk).values == {}
-    assert s.extract_features("X.CC", as_of(frame, 9), lk).values != {}
+    s = MACrossoverStrategy({"ticker": "X.CC", "fast": 3, "slow": 26})
+    assert s.extract_features("X.CC", as_of(frame, 24), lk).values == {}
+    assert s.extract_features("X.CC", as_of(frame, 25), lk).values != {}

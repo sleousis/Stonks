@@ -204,6 +204,13 @@ def test_webhook_is_validated_stored_and_never_returned_in_full(state, alice_sco
         "https://10.0.0.5/hook",
         "https://localhost/x",
         "ftp://x",
+        # AS-05: numeric shorthand for loopback and link-local.
+        "https://127.1/x",
+        "https://2130706433/x",
+        "https://0x7f000001/x",
+        "https://0x7f.1/x",
+        "https://[::ffff:127.0.0.1]/x",
+        "https://169.254.169.254/latest",
     ):
         with pytest.raises(AccountsError):
             service.set_webhook(state, alice_scope, bad)

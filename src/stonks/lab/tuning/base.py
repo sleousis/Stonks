@@ -20,6 +20,7 @@ from stonks.lab.parallel import (
     run_tasks,
 )
 from stonks.logging import get_logger
+from stonks.strategies.base import strategy_data_tickers
 
 if TYPE_CHECKING:  # pragma: no cover
     from stonks.lab.survival.base import TuningSetup
@@ -210,7 +211,8 @@ def evaluate_candidates(
         probe = _TrialState(strategy_cls, worker_objective, _without_lake(dataset), log_prefix)
         problem = _unpicklable(probe, tasks[0])
         if problem is None:
-            with dataset_snapshot(dataset) as shipped:
+            extra = _candidate_data_tickers(strategy_cls, candidates)
+            with dataset_snapshot(dataset, extra) as shipped:
                 return run_tasks(
                     _run_trial,
                     tasks,
@@ -256,6 +258,21 @@ def _run_trial(state: _TrialState, task: tuple[int, Params]) -> TrialOutcome:
         _log.warning(f"{state.log_prefix}.trial.failed", trial=index, params=params, error=str(exc))
         return TrialOutcome.failed(params, str(exc))
     return outcome.with_params(params)
+
+
+def _candidate_data_tickers(
+    strategy_cls: type[Strategy], candidates: Sequence[Params]
+) -> list[str]:
+    """Every ticker any candidate reads but does not trade (RS-01), so the
+    worker snapshot holds what the serial run would read. A candidate that
+    cannot be built is skipped here: its trial fails on its own."""
+    out: dict[str, None] = {}
+    for params in candidates:
+        try:
+            out.update(dict.fromkeys(strategy_data_tickers(strategy_cls(dict(params)))))
+        except Exception:  # the trial itself reports the failure
+            continue
+    return list(out)
 
 
 def _without_lake(dataset: Any) -> Any:

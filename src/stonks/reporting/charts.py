@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Callable, Sequence
-from datetime import date
+from datetime import UTC, date, datetime
 from html import escape
 
 Series = tuple[str, Sequence[tuple[date, float]], str]  # (label, points, css class)
@@ -28,6 +28,20 @@ def _fmt_default(v: float) -> str:
     return f"{v:,.2f}"
 
 
+def _moment(d: date) -> datetime:
+    """``d`` as a naive UTC datetime (a date is its midnight), so dates and
+    datetimes share one time axis."""
+    if not isinstance(d, datetime):
+        return datetime(d.year, d.month, d.day)
+    if d.tzinfo is not None:
+        return d.astimezone(UTC).replace(tzinfo=None)
+    return d
+
+
+def _label(d: datetime) -> str:
+    return d.date().isoformat() if d.time() == datetime.min.time() else d.isoformat(sep=" ")
+
+
 def line_chart(
     series: Sequence[Series],
     *,
@@ -38,7 +52,11 @@ def line_chart(
     """One or more series on shared axes. ``area`` fills down to the top of
     the plot (used for drawdown, whose values are <= 0)."""
     finite = [
-        (label, [(d, float(v)) for d, v in pts if v is not None and math.isfinite(v)], cls)
+        (
+            label,
+            [(_moment(d), float(v)) for d, v in pts if v is not None and math.isfinite(v)],
+            cls,
+        )
         for label, pts, cls in series
     ]
     finite = [s for s in finite if s[1]]
@@ -54,14 +72,15 @@ def line_chart(
     if hi == lo:
         pad = abs(hi) * 0.05 or 1.0
         lo, hi = lo - pad, hi + pad
-    span_days = (d1 - d0).days or 1
+    span_seconds = (d1 - d0).total_seconds() or 1.0
     plot_w = _W - _PAD_L - _PAD_R
     plot_h = _H - _PAD_T - _PAD_B
 
-    def x(d: date) -> float:
+    def x(d: datetime) -> float:
+        # seconds, not days, so intraday points spread out (RS-21)
         if d1 == d0:
             return _PAD_L + plot_w / 2
-        return _PAD_L + plot_w * (d - d0).days / span_days
+        return _PAD_L + plot_w * (d - d0).total_seconds() / span_seconds
 
     def y(v: float) -> float:
         return _PAD_T + plot_h * (hi - v) / (hi - lo)
@@ -80,9 +99,9 @@ def line_chart(
             f"{escape(fmt(val))}</text>"
         )
     parts.append(
-        f'<text class="axis" x="{_PAD_L}" y="{_H - 6}">{escape(d0.isoformat())}</text>'
+        f'<text class="axis" x="{_PAD_L}" y="{_H - 6}">{escape(_label(d0))}</text>'
         f'<text class="axis" x="{_W - _PAD_R}" y="{_H - 6}" text-anchor="end">'
-        f"{escape(d1.isoformat())}</text>"
+        f"{escape(_label(d1))}</text>"
     )
     for label, pts, cls in finite:
         coords = " ".join(f"{x(d):.1f},{y(v):.1f}" for d, v in pts)

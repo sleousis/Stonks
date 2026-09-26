@@ -46,13 +46,16 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_jobs`](#list_jobs) | read | no |
 | [`list_orders`](#list_orders) | read | no |
 | [`list_portfolio_snapshots`](#list_portfolio_snapshots) | read | no |
+| [`list_portfolios`](#list_portfolios) | read | no |
 | [`list_shadow_decisions`](#list_shadow_decisions) | read | no |
 | [`list_shadow_pnl`](#list_shadow_pnl) | read | no |
 | [`list_sources`](#list_sources) | read | no |
 | [`list_statement_flags`](#list_statement_flags) | read | no |
 | [`list_strategies`](#list_strategies) | read | no |
 | [`list_studio_templates`](#list_studio_templates) | read | no |
+| [`list_subscriptions`](#list_subscriptions) | read | no |
 | [`list_ticks`](#list_ticks) | read | no |
+| [`list_trading_modes`](#list_trading_modes) | read | no |
 | [`list_universes`](#list_universes) | read | no |
 | [`order_tca`](#order_tca) | read | no |
 | [`promote_strategy`](#promote_strategy) | guarded | yes |
@@ -66,10 +69,12 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`run_tick`](#run_tick) | guarded | yes |
 | [`search_instruments`](#search_instruments) | read | no |
 | [`shadow_strategy`](#shadow_strategy) | guarded | yes |
+| [`subscribe`](#subscribe) | guarded | yes |
 | [`sync_connection`](#sync_connection) | guarded | yes |
 | [`tca_summary`](#tca_summary) | read | no |
 | [`trade_journal`](#trade_journal) | read | no |
 | [`update_draft`](#update_draft) | job | no |
+| [`update_subscription`](#update_subscription) | guarded | yes |
 | [`validate_draft`](#validate_draft) | job | no |
 | [`validate_rule_spec`](#validate_rule_spec) | read | no |
 | [`wait_for_job`](#wait_for_job) | read | no |
@@ -394,6 +399,14 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
 
+### `list_portfolios`
+
+Your portfolios, oldest first, each marked paper or live.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
 ### `list_shadow_decisions`
 
 Virtual orders shadow strategies placed (never sent to a broker), newest first.
@@ -467,6 +480,16 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
 
+### `list_subscriptions`
+
+Your subscriptions: strategy, portfolio, mode (notify, paper,
+auto), whether it is on, the paper-day count and what still blocks
+auto.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
 ### `list_ticks`
 
 Production tick runs, newest first. Summaries show the global
@@ -479,6 +502,16 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `status` | string \| null | no | `null` |  |
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
+
+### `list_trading_modes`
+
+For each of your portfolios: paper or live money, and the broker
+(simulated ledger, the configured Alpaca account, or a linked
+connection).
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
 
 ### `list_universes`
 
@@ -970,6 +1003,20 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 | `reason` | string \| null | no | `null` | why (logged in the audit trail); required for demotions and overrides |
 
+### `subscribe`
+
+Follow a strategy in notify or paper mode. Without confirm=true
+returns a preview and changes nothing.
+
+Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `strategy_id` | string | yes |  |  |
+| `mode` | "notify" \| "paper" | no | `"notify"` | notify: signals only; paper: simulated orders on one of your portfolios |
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (needed for paper) |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
 ### `sync_connection`
 
 Sync one of your connections now: read balances, positions and
@@ -981,6 +1028,22 @@ Safety: writes, destructive, idempotent, open world. Needs confirm: **yes**.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `connection_id` | string | yes |  |  |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
+### `update_subscription`
+
+Turn one of your subscriptions on or off, or move it between
+notify and paper. Auto is refused here (it needs the web app).
+Without confirm=true returns a preview and changes nothing.
+
+Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `subscription_id` | string | yes |  |  |
+| `enabled` | boolean \| null | no | `null` |  |
+| `mode` | "notify" \| "paper" \| "auto" \| null | no | `null` | notify or paper; auto is switched on in the web app (second factor) |
+| `reason` | string \| null | no | `null` | audited |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
 ## Resources

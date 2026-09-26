@@ -12,7 +12,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import BaseModel
 
-from stonks.api.deps import PageDep, PrincipalDep, ServicesDep, needs
+from stonks.api.deps import OptionalPrincipalDep, PageDep, PrincipalDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.app.jobs import Job, JobStatus
 from stonks.app.pagination import Page
@@ -41,16 +41,21 @@ class JobEvent(BaseModel):
 @router.get("", response_model=Page[Job], operation_id="listJobs")
 def list_jobs(
     services: ServicesDep,
+    principal: OptionalPrincipalDep,
     page: PageDep,
     status: JobStatus | None = None,
     kind: str | None = None,
 ) -> Page[Job]:
-    return services.jobs.list(status=status, kind=kind, limit=page.limit, offset=page.offset)
+    """Your jobs, newest first. Admins see every job."""
+    return services.jobs.list(
+        principal, status=status, kind=kind, limit=page.limit, offset=page.offset
+    )
 
 
 @router.get("/{job_id}", response_model=Job, operation_id="getJob")
-def get_job(job_id: str, services: ServicesDep) -> Job:
-    return services.jobs.get(job_id)
+def get_job(job_id: str, services: ServicesDep, principal: OptionalPrincipalDep) -> Job:
+    """One of your jobs (another user's job is a 404; admins see all)."""
+    return services.jobs.get(job_id, principal)
 
 
 @router.post(
@@ -62,7 +67,8 @@ def get_job(job_id: str, services: ServicesDep) -> Job:
 def cancel_job(job_id: str, services: ServicesDep, principal: PrincipalDep) -> Job:
     """Cancel a queued job, or ask a running lab run to stop at its next
     trial (it ends ``cancelled``). Other running jobs cannot be interrupted
-    (409). Ticks, ingests and backups need an admin."""
+    (409). Ticks, ingests and backups need an admin. Another user's job
+    is a 404 (admins may cancel any job)."""
     return services.jobs.cancel(job_id, principal)
 
 
@@ -92,10 +98,12 @@ def create_stream_token(job_id: str, services: ServicesDep, principal: Principal
     )
 
 
-def _existing_job(job_id: str, services: ServicesDep) -> Job:
+def _existing_job(job_id: str, request: Request, services: ServicesDep) -> Job:
     # Resolved before the stream starts so an unknown id is a normal 404
-    # instead of an error in the middle of a 200 event stream.
-    return services.jobs.get(job_id)
+    # instead of an error in the middle of a 200 event stream. A bearer
+    # caller must own the job (or be an admin); a stream token was only
+    # issued to someone who could see it.
+    return services.jobs.get(job_id, getattr(request.state, "principal", None))
 
 
 @events_router.get(

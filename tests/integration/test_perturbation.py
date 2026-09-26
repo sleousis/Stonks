@@ -134,3 +134,46 @@ def test_perturbed_lake_carries_statements_dividends_and_instruments(lake_trendi
     assert noisy
     # universe is only UP.US: one instrument row, its statement and dividend
     assert set(noisy.values()) == {(1, 1, 1)}
+
+
+class _Coin(BaseStrategy):
+    """Holds UP.US on bars whose close has an even fourth decimal: any noise
+    reshuffles the trades, but every run's equity still rises."""
+
+    id = "coin_fake"
+
+    def estimate_return(self, ticker, as_of, lake):
+        bars = lake.get_bars(ticker, Interval.DAY_1, start=FIRST_DAY, end=as_of)
+        if bars.empty:
+            return None
+        return 1.0 if int(float(bars["close"].iloc[-1]) * 1e4) % 2 == 0 else None
+
+    def decide(self, my_picks, portfolio, prices, as_of):
+        from stonks.core.types import Order
+
+        held = portfolio.positions.get("UP.US", 0.0)
+        if my_picks and held <= 0:
+            qty = portfolio.cash / prices["UP.US"] * 0.99
+            return [Order(f"coin:buy:{as_of}", "UP.US", "buy", qty, "market")]
+        if not my_picks and held > 0:
+            return [Order(f"coin:sell:{as_of}", "UP.US", "sell", held, "market")]
+        return []
+
+
+def test_rs10_different_trades_on_a_rising_curve_fail(lake_trending):
+    report = PerturbationTest(noise_sigmas=[0.01], min_correlation=0.8, seed=3).run(
+        _Coin({}), _dataset(lake_trending)
+    )
+    # the equity levels still move together, the per-bar returns do not
+    assert report.metrics["level_correlation_min"] > 0.8
+    assert report.metrics["correlation_min"] < 0.8
+    assert not report.passed
+
+
+def test_rs10_zero_noise_only_passes_with_perfect_correlation(lake_trending):
+    report = PerturbationTest(noise_sigmas=(0.0,), seed=3).run(
+        BuyAndHold({"ticker": "UP.US"}), _dataset(lake_trending)
+    )
+    assert report.passed
+    assert report.metrics["correlation_min"] == 1.0
+    assert report.metrics["levels_tested"] == 1.0

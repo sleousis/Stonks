@@ -7,12 +7,15 @@ window, trade the next test window — beats the same process run on noise.
   :class:`~stonks.lab.survival.walk_forward.WalkForwardTest` run with the
   runner's tuning setup.
 - **Null:** the same walk-forward run on ``n_permutations`` lakes in which
-  every bar after the first fold's training window is permuted
+  every bar from the first fold's test window on is permuted
   (:func:`~stonks.lab.survival.permutation.permute_bars_together`, one
-  shared ordering for the universe). Bars up to the end of the first
-  training window stay real, so the first fold tunes on true history and
-  only what walk-forward trades on, and re-tunes on later, is noise. Bars
-  after the dataset end are dropped.
+  shared ordering for the universe). Bars up to the start of the first
+  test window stay real: the first training window and the embargo gap
+  after it. So the first fold tunes on true history and only what
+  walk-forward trades on, and re-tunes on later, is noise. Bars after the
+  dataset end are dropped.
+- **No evidence fails:** a dataset too short for the folds, or a real run
+  with no finite OOS score, fails with "insufficient data".
 - **p-value:** ``(count(null >= real) + 1) / (n_permutations + 1)``; the
   test passes when ``p_value <= max_p_value``.
 
@@ -95,8 +98,21 @@ class WalkForwardPermutationTest:
                 "pass tuning=... or run it under LabRunner"
             )
         cfg = self._cfg
-        folds = cfg.walk_forward.folds_for(context, strategy)
-        # permutable = everything after the first fold's training window
+        try:
+            folds = cfg.walk_forward.folds_for(context, strategy)
+        except ValueError as exc:  # RS-26: too short a dataset fails, never crashes
+            return SurvivalReport(
+                test_id=self.id,
+                passed=False,
+                metrics={
+                    "p_value": 1.0,
+                    "n_permutations": float(cfg.n_permutations),
+                    "n_folds": 0.0,
+                },
+                notes=f"insufficient data: {exc}",
+            )
+        # permutable = every bar from the first test window on (the
+        # embargo gap before it stays real, like the training window)
         window = (folds[0].test_start, context.end)
         _log.info(
             "walk_forward_mcpt.start",
@@ -121,6 +137,18 @@ class WalkForwardPermutationTest:
             )
 
         real_score = scorer.score_real()
+        if not np.isfinite(real_score):
+            return SurvivalReport(
+                test_id=self.id,
+                passed=False,
+                metrics={
+                    "p_value": 1.0,
+                    "real_score": float(real_score),
+                    "n_permutations": float(cfg.n_permutations),
+                    "n_folds": float(len(folds)),
+                },
+                notes="insufficient data: the real walk-forward run has no finite OOS score",
+            )
         perm = permuted_scores(scorer, cfg.n_permutations, cfg.seed, cfg.max_workers)
         p_value = permutation_p_value(real_score, perm)
         arr = np.asarray(perm, dtype=float)

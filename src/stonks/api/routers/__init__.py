@@ -23,6 +23,7 @@ from stonks.api.routers import (
     orders,
     pnl,
     portfolio,
+    portfolios,
     risk,
     schedule,
     shadow,
@@ -39,6 +40,8 @@ from stonks.api.routers import (
 #: Routers mounted behind the auth dependency.
 API_ROUTERS: list[APIRouter] = [
     portfolio.router,
+    portfolios.router,
+    portfolios.subscriptions_router,
     strategies.router,
     golive.router,
     market.router,

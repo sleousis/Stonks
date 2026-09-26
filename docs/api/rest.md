@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [connections](#connections-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [tca](#tca-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints)
+Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [connections](#connections-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tca](#tca-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints)
 
 ## alerts endpoints
 
@@ -51,8 +51,12 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| POST | `/api/backups` | Start Backup | `risk.global` |  | [Job](#job) |
-| GET | `/api/backups/jobs/{job_id}/result` | Get Backup Result | `risk.global` |  | [BackupResultView](#backupresultview) |
+| GET | `/api/backups` | List Backups | `operations.run` |  | list[[BackupView](#backupview)] |
+| POST | `/api/backups` | Start Backup | `operations.run` |  | [Job](#job) |
+| GET | `/api/backups/jobs/{job_id}/result` | Get Backup Result | `operations.run` |  | [BackupResultView](#backupresultview) |
+| GET | `/api/backups/restores/{job_id}/result` | Get Restore Result | `operations.run` |  | [RestoreResultView](#restoreresultview) |
+| POST | `/api/backups/{backup_id}/restore` | Restore Backup | `backups.restore` | [RestoreRequest](#restorerequest) | [Job](#job) |
+| POST | `/api/backups/{backup_id}/verify` | Verify Backup | `operations.run` |  | [VerifyView](#verifyview) |
 
 ## brokers endpoints
 
@@ -155,7 +159,7 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | GET | `/api/notifications/preferences` | Get Preferences | sign-in |  | [PreferencesView](#preferencesview) |
 | PUT | `/api/notifications/preferences` | Update Preferences | `notifications.manage` | [PreferencesUpdate](#preferencesupdate) | [PreferencesView](#preferencesview) |
 | PUT | `/api/notifications/quiet-hours` | Set Quiet Hours | `notifications.manage` | [QuietHoursUpdate](#quiethoursupdate) | [PreferencesView](#preferencesview) |
-| POST | `/api/notifications/read` | Mark Read | `notifications.manage` | [MarkReadRequest](#markreadrequest) | [MarkReadView](#markreadview) |
+| POST | `/api/notifications/read` | Mark Read | `data.read` | [MarkReadRequest](#markreadrequest) | [MarkReadView](#markreadview) |
 | PUT | `/api/notifications/webhook` | Set Webhook | `notifications.manage` | [WebhookUpdate](#webhookupdate) | [PreferencesView](#preferencesview) |
 
 ## orders endpoints
@@ -178,6 +182,8 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | GET | `/api/portfolio` | Get Portfolio | sign-in |  | [PortfolioView](#portfolioview) |
 | GET | `/api/portfolio/snapshots` | List Snapshots | sign-in |  | [Page_SnapshotView_](#page_snapshotview_) |
 | GET | `/api/portfolio/totals` | Get Totals | `portfolio.totals` |  | [PortfolioTotalsView](#portfoliototalsview) |
+| GET | `/api/portfolios` | List Portfolios | `data.read` |  | list[[PortfolioSummaryView](#portfoliosummaryview)] |
+| GET | `/api/portfolios/trading-modes` | List Trading Modes | `data.read` |  | list[[TradingModeView](#tradingmodeview)] |
 
 ## push endpoints
 
@@ -253,6 +259,14 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | GET | `/api/studio/schema` | Schema | sign-in |  | object |
 | POST | `/api/studio/spec/validate` | Validate Spec | `lab.run` | [SpecValidateRequest](#specvalidaterequest) | [DraftValidation](#draftvalidation) |
 | GET | `/api/studio/templates` | Templates | sign-in |  | list[[RuleTemplateView](#ruletemplateview)] |
+
+## subscriptions endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/subscriptions` | List Subscriptions | `data.read` |  | list[[SubscriptionView](#subscriptionview)] |
+| POST | `/api/subscriptions` | Subscribe | `portfolio.trade` | [SubscribeRequest](#subscriberequest) | [SubscriptionView](#subscriptionview) |
+| PATCH | `/api/subscriptions/{subscription_id}` | Update Subscription | `portfolio.trade` | [SubscriptionUpdate](#subscriptionupdate) | [SubscriptionView](#subscriptionview) |
 
 ## tca endpoints
 
@@ -387,6 +401,14 @@ Fee and spread for one asset class.
 | `backup_id` | string | yes |  |
 | `pruned` | list[string] | yes |  |
 
+### BackupView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `created_at` | date-time | yes |  |
+| `id` | string | yes |  |
+| `size_bytes` | integer | yes |  |
+
 ### BarSeries
 
 | Field | Type | Required | Description |
@@ -442,6 +464,14 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `credentials_configured` | boolean | yes |  |
 | `kind` | "simulated" \| "alpaca" | yes |  |
 | `paper` | boolean | yes |  |
+
+### ChannelDefaultView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `channel` | string | yes |  |
+| `default_enabled` | boolean | yes |  |
+| `fallback` | boolean | yes |  |
 
 ### CircuitBreakerSettings
 
@@ -559,6 +589,7 @@ Settings for ``AssetClassCostModel``. Zero costs by default; ``CostModelSettings
 | `id` | string | yes |  |
 | `kind` | "rule" \| "code" | yes |  |
 | `name` | string | yes |  |
+| `owner_id` | string \| null | no |  |
 | `registered_strategy_id` | string \| null | yes |  |
 | `source_code` | string \| null | yes |  |
 | `spec` | object | yes |  |
@@ -960,6 +991,7 @@ An index constituent history as CSV (``date,ticker,action`` with ``add``, ``remo
 | `id` | string | yes |  |
 | `kind` | string | yes |  |
 | `message` | string \| null | no |  |
+| `owner_id` | string \| null | no |  |
 | `params` | object | yes |  |
 | `progress` | number | yes |  |
 | `result` | any | no |  |
@@ -1135,6 +1167,15 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `next_open` | date-time | yes |  |
 | `timestamp` | date-time | yes |  |
 
+### MarketSessionsView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `calendar` | string | yes |  |
+| `is_open` | boolean | yes |  |
+| `next` | [SessionTimesView](#sessiontimesview) | yes |  |
+| `today` | [SessionTimesView](#sessiontimesview) \| null | yes |  |
+
 ### MaxHoldingSettings
 
 | Field | Type | Required | Description |
@@ -1148,7 +1189,7 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `max_p_value` | number | no |  |
-| `metric` | "profit_factor" \| "sharpe" \| "final_return" \| "cagr" | no |  |
+| `metric` | "profit_factor" \| "bar_profit_factor" \| "sharpe" \| "final_return" \| "cagr" | no |  |
 | `n_permutations` | integer | no |  |
 | `retune` | boolean \| "auto" | no |  |
 | `seed` | integer \| null | no |  |
@@ -1400,6 +1441,20 @@ One row per day. ``strategy_id`` is ``None`` for the real portfolio and a shadow
 | `expires_at` | date-time | yes |  |
 | `url` | string | yes |  |
 
+### PortfolioSummaryView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `base_currency` | string | yes |  |
+| `broker_connection_id` | string \| null | yes |  |
+| `created_at` | date-time | yes |  |
+| `id` | string | yes |  |
+| `initial_cash` | number \| null | yes |  |
+| `kind` | "simulated" \| "broker" | yes |  |
+| `name` | string | yes |  |
+| `status` | "active" \| "paused" \| "archived" | yes |  |
+| `trading` | "paper" \| "live" | yes |  |
+
 ### PortfolioSyncView
 
 | Field | Type | Required | Description |
@@ -1481,6 +1536,7 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers and n
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `channel_defaults` | list[[ChannelDefaultView](#channeldefaultview)] | no |  |
 | `channels` | list[string] | yes |  |
 | `preferences` | list[[PreferenceItem](#preferenceitem)] | yes |  |
 | `quiet_end` | string \| null | yes |  |
@@ -1518,10 +1574,13 @@ The BL-37 data preflight of a lab run. A run only starts with no errors, so a re
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `blockers` | list[string] \| null | no |  |
+| `code` | string \| null | no |  |
 | `detail` | string \| null | no |  |
 | `errors` | list[object] \| null | no |  |
 | `failing_checks` | list[[FailingCheck](#failingcheck)] \| null | no |  |
 | `instance` | string \| null | no |  |
+| `next_step` | string \| null | no |  |
 | `status` | integer | yes |  |
 | `title` | string | yes |  |
 | `type` | string | no |  |
@@ -1599,6 +1658,22 @@ The browser's ``PushSubscription.toJSON()`` plus its user agent.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `recovery_codes` | list[string] | yes |  |
+
+### RestoreRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `confirmation` | string | yes |  |
+
+### RestoreResultView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `backup_id` | string | yes |  |
+| `data_dir` | string | yes |  |
+| `lake_migrations_applied` | list[integer] | yes |  |
+| `next_steps` | list[string] | yes |  |
+| `state_migrations_applied` | list[integer] | yes |  |
 
 ### ResumeRequest
 
@@ -1690,6 +1765,7 @@ Type: "viewer" \| "trader" \| "admin"
 | `backend` | string | yes |  |
 | `hosted` | boolean | yes |  |
 | `jobs` | list[[ScheduledJobView](#scheduledjobview)] | yes |  |
+| `market` | [MarketSessionsView](#marketsessionsview) \| null | no |  |
 | `recent` | list[[ScheduledRunView](#scheduledrunview)] | yes |  |
 
 ### ScheduledJobView
@@ -1724,6 +1800,15 @@ Type: "viewer" \| "trader" \| "admin"
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `max_weight_per_sector` | number \| null | no |  |
+
+### SessionTimesView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `close` | date-time | yes |  |
+| `date` | date | yes |  |
+| `open` | date-time | yes |  |
+| `pre_open` | date-time | yes |  |
 
 ### ShadowDecisionView
 
@@ -1989,6 +2074,42 @@ What this server lets the Studio do.
 |-------|------|----------|-------------|
 | `code_strategies` | boolean | yes |  |
 
+### SubscribeRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `mode` | "notify" \| "paper" \| "auto" | no |  |
+| `portfolio_id` | string \| null | no |  |
+| `strategy_id` | string | yes |  |
+| `weight` | number | no |  |
+
+### SubscriptionUpdate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `enabled` | boolean \| null | no |  |
+| `mode` | "notify" \| "paper" \| "auto" \| null | no |  |
+| `reason` | string \| null | no |  |
+
+### SubscriptionView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `auto_blockers` | list[string] | yes |  |
+| `auto_enabled_at` | date-time \| null | yes |  |
+| `created_at` | date-time | yes |  |
+| `enabled` | boolean | yes |  |
+| `id` | string | yes |  |
+| `mode` | "notify" \| "paper" \| "auto" | yes |  |
+| `paper_days_completed` | integer | yes |  |
+| `paper_days_required` | integer | yes |  |
+| `paused_reason` | string \| null | yes |  |
+| `portfolio_id` | string \| null | yes |  |
+| `strategy_id` | string | yes |  |
+| `strategy_status` | string \| null | yes |  |
+| `updated_at` | date-time | yes |  |
+| `weight` | number | yes |  |
+
 ### SurvivalPresetInfo
 
 | Field | Type | Required | Description |
@@ -2249,6 +2370,18 @@ One round trip (a lot, or part of one, from buy to sell or to the end).
 | `return_pct` | number \| null | yes |  |
 | `ticker` | string | yes |  |
 
+### TradingModeView
+
+Whether a portfolio trades paper or live money, and through what.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `broker` | "simulated" \| "alpaca" \| "connection" | yes | simulated (the Stonks ledger), alpaca (the configured account, default portfolio only) or connection (a linked broker account, synced read-only). |
+| `detail` | string | yes |  |
+| `name` | string | yes |  |
+| `portfolio_id` | string | yes |  |
+| `trading` | "paper" \| "live" | yes | paper: simulated fills or a paper broker account. live: real money. |
+
 ### UniverseCreate
 
 | Field | Type | Required | Description |
@@ -2348,6 +2481,14 @@ Smoke-run on these lake tickers (sample data when empty), over the last ``bars``
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `public_key` | string \| null | yes |  |
+
+### VerifyView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `backup_id` | string | yes |  |
+| `ok` | boolean | yes |  |
+| `problems` | list[string] | yes |  |
 
 ### WalkForwardConfig
 

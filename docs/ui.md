@@ -396,8 +396,18 @@ Tickers open `/data?instrument=<id>`.
 - Refresh, Ensure data and Back up now return a job. Pages follow it with
   `JobsService.track()` and show `<app-job-progress>`.
 - Run now on a tick job needs the job name typed, like a tick.
-- The backup list shows backup jobs the server ran (`GET /api/jobs?kind=backup`).
-  The API has no route for backups made from the command line.
+- The backup list comes from `GET /api/backups`: every backup on disk,
+  also those made from the command line, with its size. Verify is
+  `POST /api/backups/{id}/verify`. Restore is
+  `POST /api/backups/{id}/restore` with `{"confirmation": "RESTORE <id>"}`
+  and a fresh second factor. It returns a job. The restore is staged: the
+  server restores into a new folder and never touches the live data. The
+  job result (`GET /api/backups/restores/{job_id}/result`) says where the
+  data went and how to switch to it.
+- `GET /api/schedule` also returns `market`: the calendar, `is_open`, and
+  `today` and `next` sessions, each with `pre_open` (30 minutes before the
+  open), `open` and `close` in UTC. `today` is null on days the market is
+  closed.
 
 ## Install and notifications (PWA)
 
@@ -599,8 +609,11 @@ flowchart LR
   `stonks_csrf` cookie) to unsafe same-origin calls that ride on the cookie;
   401 `mfa_required` goes to the code screen; a 401 after being signed in
   goes to sign-in with `?next=`; 403 `step_up_required` opens the step-up
-  prompt and retries once. `ApiError.code` holds the auth code from the
-  detail and `message` says it plainly.
+  prompt and retries once. `ApiError.code` holds the auth code. Every
+  problem response now has a machine `code` field (`not_found`,
+  `step_up_required`, `mfa_required`, `auto_blocked`, ...), so read it
+  instead of parsing `detail`. A 401 `mfa_required` also has `next_step`:
+  `enrol` or `verify`.
 - **Step-up.** Any action that needs a fresh code just calls the API: the
   interceptor asks when needed. A page that knows beforehand (turning on auto)
   calls `await inject(StepUpService).ensure('Turn on auto for X.')` first.
@@ -613,12 +626,24 @@ flowchart LR
   strategies with an on/off switch and a notify, paper or auto switch. Auto
   stays disabled with the reason until 20 paper days and the server's other
   checks pass, then asks for the step-up and a typed confirm.
-  `api/subscriptions.service.ts` calls the planned `/api/subscriptions`
-  routes with `HttpClient`; until the server has them the card says "Coming
-  soon".
+  The server routes exist now: `GET /api/subscriptions` (each row has
+  `paper_days_completed`, `paper_days_required`, `auto_blockers` and
+  `paused_reason`), `POST /api/subscriptions` and
+  `PATCH /api/subscriptions/{id}` with `{enabled?, mode?, reason?}`. Auto
+  answers 403 `step_up_required` without a fresh second factor, and 409
+  `auto_blocked` with `blockers` while the checklist fails.
+  `GET /api/portfolios` lists your portfolios, and
+  `GET /api/portfolios/trading-modes` says for each one whether it trades
+  paper or live money and through which broker.
 - **Profile** (`pages/profile/`): password, new recovery codes and API
   tokens (a new token is shown once). **Settings** adds alert settings per
   type and channel and quiet hours next to the push opt-in.
+  `GET /api/notifications/preferences` has `channel_defaults`: whether each
+  channel is on when you never set it, and whether it stands in for push.
+- **Owners.** Jobs and Studio drafts record `owner_id`. A trader sees only
+  their own jobs and drafts (others are 404). Admins see all of them.
+  `GET /api/alerts` shows only your alerts (admins also see the admin
+  audience).
 - **Users** (`pages/admin-users/`): add a person, change role, disable or
   enable, reset their authenticator.
 

@@ -31,7 +31,8 @@ equity) and pooled (``"all"``). Every asset class with at least
 ``min_events`` events must show a positive excess at the holding horizon
 with ``p <= alpha``; when no single class has that many, the pooled
 events are judged instead. Fewer than ``min_events`` events in total fails
-with a note. Scores are computed per ticker on the lab process pool
+with a note. Only events with a forward return at the holding horizon count
+toward ``min_events`` (RS-27): an entry in the last ``h`` bars has none. Scores are computed per ticker on the lab process pool
 (``lab.parallel`` via ``lab.signal_eval``); the bootstrap is seeded per
 group and horizon, so the report does not depend on ``max_workers``.
 """
@@ -341,13 +342,21 @@ class EventStudyTest:
         )
         metrics = result.metrics()
         span = f"window {window[0]}..{window[1]}; holding {result.holding_bars} bars"
-        if result.n_events < opts.min_events:
-            note = f"fewer than {opts.min_events} events ({result.n_events}); {span}"
-            return SurvivalReport(self.id, False, metrics, note)
         h = result.holding_bars
+        # RS-27: only events with a forward return at the holding horizon
+        # count (an entry in the last h bars has none)
+        pooled = result.group("all")
+        n_scored = pooled.at(h).n_events if pooled is not None else 0
+        metrics["n_events_scored"] = float(n_scored)
+        if n_scored < opts.min_events:
+            note = (
+                f"fewer than {opts.min_events} events with a {h}-bar forward return "
+                f"({n_scored} of {result.n_events} entries); {span}"
+            )
+            return SurvivalReport(self.id, False, metrics, note)
         classes = [g for g in result.groups if g.asset_class != "all"]
-        judged = [g for g in classes if g.n_events >= opts.min_events]
-        thin = [g.asset_class for g in classes if g.n_events < opts.min_events]
+        judged = [g for g in classes if g.at(h).n_events >= opts.min_events]
+        thin = [g.asset_class for g in classes if g.at(h).n_events < opts.min_events]
         if not judged:
             judged = [g for g in result.groups if g.asset_class == "all"]
         failed = [g for g in judged if not (g.at(h).excess > 0 and g.at(h).p_value <= opts.alpha)]

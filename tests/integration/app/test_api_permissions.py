@@ -93,6 +93,8 @@ def test_openapi_lists_the_permission_per_route(app):
         "strategy.promote"
     )
     assert paths["/api/ticks"]["post"]["x-permission"] == "operations.run"
+    # AS-15: a backup is an operation.
+    assert paths["/api/backups"]["post"]["x-permission"] == "operations.run"
     assert "x-permission" not in paths["/api/auth/login"]["post"]
 
 

@@ -11,6 +11,8 @@ from pydantic import BaseModel
 
 from stonks.app.context import AppContext
 from stonks.app.pagination import Page
+from stonks.auth.policy import Permission, allowed, require
+from stonks.auth.principal import Principal
 from stonks.notify import NotificationLevel
 
 
@@ -29,10 +31,23 @@ class AlertService:
         self._ctx = context
 
     def list(
-        self, *, level: NotificationLevel | None = None, limit: int, offset: int
+        self,
+        principal: Principal,
+        *,
+        level: NotificationLevel | None = None,
+        limit: int,
+        offset: int,
     ) -> Page[AlertView]:
-        clause = " WHERE level = ?" if level else ""
-        params: list[Any] = [level] if level else []
+        require(principal, Permission.READ)
+        if principal.scope.is_service:
+            clause, params = " WHERE 1 = 1", []
+        elif allowed(principal, Permission.OPERATIONS_RUN):
+            clause, params = " WHERE (user_id = ? OR user_id IS NULL)", [principal.user_id]
+        else:
+            clause, params = " WHERE user_id = ?", [principal.user_id]
+        if level:
+            clause += " AND level = ?"
+            params.append(level)
         with self._ctx.state() as state:
             total = int(state.sql(f"SELECT COUNT(*) FROM alerts{clause}", params)[0][0])
             rows = state.sql(

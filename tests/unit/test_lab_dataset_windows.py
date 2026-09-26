@@ -1,4 +1,4 @@
-"""LabDataset windows: ratio split by default, explicit train_end override."""
+"""RS-17: a LabDataset never has an empty or inverted validation window."""
 
 from __future__ import annotations
 
@@ -9,25 +9,37 @@ import pytest
 from stonks.lab.dataset import LabDataset
 
 
-def test_explicit_train_end_overrides_the_ratio_split():
-    ds = LabDataset(
-        lake=None,
-        start=date(2024, 1, 1),
-        end=date(2024, 12, 31),
-        train_ratio=0.7,
-        train_end=date(2024, 3, 31),
-    )
-    assert ds.train_window == (date(2024, 1, 1), date(2024, 3, 31))
-    assert ds.val_window == (date(2024, 4, 1), date(2024, 12, 31))
+def _ds(**kw) -> LabDataset:
+    base = {
+        "lake": None,
+        "universe": ["A.US"],
+        "start": date(2024, 1, 1),
+        "end": date(2024, 12, 31),
+    }
+    return LabDataset(**{**base, **kw})  # type: ignore[arg-type]
 
 
-def test_ratio_split_when_train_end_is_unset():
-    ds = LabDataset(lake=None, start=date(2024, 1, 1), end=date(2024, 1, 11), train_ratio=0.5)
-    assert ds.train_window == (date(2024, 1, 1), date(2024, 1, 6))
-    assert ds.val_window == (date(2024, 1, 7), date(2024, 1, 11))
+@pytest.mark.parametrize("ratio", [0.0, 1.0, 1.5, -0.2])
+def test_train_ratio_outside_the_open_unit_interval_raises(ratio):
+    with pytest.raises(ValueError, match="train_ratio"):
+        _ds(train_ratio=ratio)
 
 
-@pytest.mark.parametrize("train_end", [date(2023, 12, 31), date(2024, 12, 31)])
-def test_train_end_must_leave_a_nonempty_train_and_val_window(train_end):
+def test_a_two_day_window_raises():
+    with pytest.raises(ValueError, match="validation window"):
+        _ds(start=date(2024, 1, 1), end=date(2024, 1, 2))
+
+
+def test_end_before_start_raises():
     with pytest.raises(ValueError):
-        LabDataset(lake=None, start=date(2024, 1, 1), end=date(2024, 12, 31), train_end=train_end)
+        _ds(start=date(2024, 2, 1), end=date(2024, 1, 1))
+
+
+def test_a_valid_split_keeps_both_windows_non_empty():
+    ds = _ds(train_ratio=0.7)
+    assert ds.start <= ds.train_window[1] < ds.val_window[0] <= ds.end
+
+
+def test_explicit_train_end_still_works():
+    ds = _ds(train_end=date(2024, 12, 30))
+    assert ds.val_window == (date(2024, 12, 31), date(2024, 12, 31))

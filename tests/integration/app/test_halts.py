@@ -20,7 +20,7 @@ from stonks.app.halts import (
     KillSwitchRequest,
     ResumeRequest,
 )
-from stonks.auth import Principal, StepUpRequired
+from stonks.auth import PermissionDenied, Principal, StepUpRequired
 from stonks.auth.principal import ROLE_SCOPES
 from stonks.production.halts import trip_halt
 from stonks.store.state import SqliteState
@@ -63,12 +63,12 @@ def test_an_admin_engages_the_global_kill_switch_and_it_is_audited(halts, people
 
 
 def test_only_an_admin_can_stop_everyone(halts, people):
-    with pytest.raises(ValidationError, match="admin"):
+    with pytest.raises(PermissionDenied, match="admin"):
         halts.engage_kill(people["trader"], KillSwitchRequest(scope="global", reason="r"))
 
 
 def test_a_viewer_cannot_use_the_kill_switch(halts, people):
-    with pytest.raises(ValidationError, match="trade"):
+    with pytest.raises(PermissionDenied, match="trade"):
         halts.engage_kill(people["viewer"], KillSwitchRequest(scope="user", reason="r"))
 
 
@@ -106,7 +106,7 @@ def test_resume_needs_the_typed_confirmation(halts, people, settings):
 
 def test_a_trader_cannot_resume_the_global_switch(halts, people):
     view = halts.engage_kill(people["owner"], KillSwitchRequest(scope="global", reason="panic"))
-    with pytest.raises(ValidationError, match="admin"):
+    with pytest.raises(PermissionDenied, match="admin"):
         halts.resume_kill(
             people["trader"], view.id, ResumeRequest(confirmation=RESUME_PHRASE, reason="r")
         )

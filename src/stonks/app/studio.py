@@ -75,9 +75,11 @@ from stonks.app.lab import (
     LabService,
     check_embargo,
 )
+from stonks.app.ownership import check_owner, owner_filter
 from stonks.app.pagination import Page
 from stonks.app.serialize import to_jsonable
 from stonks.app.strategies import StrategyRef, StrategyStatus, change_status
+from stonks.auth.principal import Principal
 from stonks.config import Settings
 from stonks.core.interval import Interval
 from stonks.core.params import validate_params
@@ -190,6 +192,8 @@ class Draft(BaseModel):
     strategy_status: StrategyStatus | None
     created_at: str
     updated_at: str
+    #: Who made it. Only the owner and admins see or change a draft.
+    owner_id: str | None = None
 
 
 class ValidationIssue(BaseModel):
@@ -292,30 +296,37 @@ class StudioService:
 
     # ---- drafts CRUD -------------------------------------------------------
 
-    def list_drafts(self, *, limit: int, offset: int) -> Page[Draft]:
+    def list_drafts(
+        self, *, limit: int, offset: int, principal: Principal | None = None
+    ) -> Page[Draft]:
+        """The caller's drafts, newest first (admins: every draft)."""
+        owner = owner_filter(principal)
+        clause, params = (" WHERE owner_id = ?", [owner]) if owner is not None else ("", [])
         with self._ctx.state() as state:
-            total = int(state.sql("SELECT COUNT(*) FROM strategy_drafts")[0][0])
+            total = int(state.sql(f"SELECT COUNT(*) FROM strategy_drafts{clause}", params)[0][0])
             rows = state.sql(
-                "SELECT * FROM strategy_drafts ORDER BY created_at DESC, rowid DESC "
+                f"SELECT * FROM strategy_drafts{clause} ORDER BY created_at DESC, rowid DESC "
                 "LIMIT ? OFFSET ?",
-                [limit, offset],
+                [*params, limit, offset],
             )
             items = [self._view(state, row) for row in rows]
         return Page[Draft](items=items, total=total, limit=limit, offset=offset)
 
-    def get_draft(self, draft_id: str) -> Draft:
+    def get_draft(self, draft_id: str, principal: Principal | None = None) -> Draft:
+        """One draft; another user's draft is ``NotFoundError`` (admins see all)."""
         with self._ctx.state() as state:
             row = self._row(state, draft_id)
+            check_owner(row["owner_id"], principal, f"no draft with id {draft_id!r}")
             return self._view(state, row)
 
-    def create_draft(self, body: DraftCreate) -> Draft:
+    def create_draft(self, body: DraftCreate, *, owner_id: str | None = None) -> Draft:
         self._guard(body.kind)
         draft_id = f"draft_{uuid.uuid4().hex[:12]}"
         now = _now()
         with self._ctx.state() as state:
             state.execute(
                 "INSERT INTO strategy_drafts (id, name, kind, spec_json, source_code, status, "
-                "created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?)",
+                "created_at, updated_at, owner_id) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?)",
                 [
                     draft_id,
                     body.name,
@@ -324,6 +335,7 @@ class StudioService:
                     body.source_code,
                     now,
                     now,
+                    owner_id,
                 ],
             )
         _log.info("studio.draft_created", draft_id=draft_id, kind=body.kind)
@@ -393,13 +405,17 @@ class StudioService:
 
     # ---- backtest + lab run ------------------------------------------------
 
-    def submit_backtest(self, draft_id: str, request: DraftBacktestRequest) -> Job:
+    def submit_backtest(
+        self, draft_id: str, request: DraftBacktestRequest, *, owner_id: str | None = None
+    ) -> Job:
         draft = self.get_draft(draft_id)
         _parse_interval(request.interval)
         if draft.kind == "rule":
             spec = _valid_spec(draft.spec)
             ref = StrategyRef(class_path=RULE_STRATEGY_CLASS_PATH, params={"spec": spec})
-            return self._lab.submit_backtest(BacktestRequest(strategy=ref, **request.model_dump()))
+            return self._lab.submit_backtest(
+                BacktestRequest(strategy=ref, **request.model_dump()), owner_id=owner_id
+            )
         loaded = self._checked_code(draft)
         return self._runner.submit(
             STUDIO_BACKTEST_JOB,
@@ -410,9 +426,12 @@ class StudioService:
                 "params": draft.spec,
                 "request": request.model_dump(mode="json"),
             },
+            owner_id=owner_id,
         )
 
-    def submit_lab_run(self, draft_id: str, request: DraftLabRunRequest) -> Job:
+    def submit_lab_run(
+        self, draft_id: str, request: DraftLabRunRequest, *, owner_id: str | None = None
+    ) -> Job:
         draft = self.get_draft(draft_id)
         _parse_interval(request.interval)
         if request.registers and draft.status == "registered":
@@ -429,7 +448,7 @@ class StudioService:
         else:
             loaded = self._checked_code(draft)
             params |= {"module": loaded.module_name, "path": loaded.path.name}
-        return self._runner.submit(STUDIO_LAB_RUN_JOB, params)
+        return self._runner.submit(STUDIO_LAB_RUN_JOB, params, owner_id=owner_id)
 
     # ---- registration + lifecycle -----------------------------------------
 
@@ -539,6 +558,7 @@ class StudioService:
             status=row["status"],
             registered_strategy_id=sid,
             strategy_status=status,
+            owner_id=row["owner_id"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )

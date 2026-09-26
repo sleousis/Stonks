@@ -8,14 +8,19 @@ check actually connects.
 
 from __future__ import annotations
 
+import threading
+import time
 from collections.abc import Callable, Iterable
 from datetime import datetime
 from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel
 
+from stonks.accounts import DEFAULT_PORTFOLIO_ID, NotFound, owned_portfolio
 from stonks.app.context import AppContext
-from stonks.app.errors import ConflictError
+from stonks.app.errors import ConflictError, NotFoundError
+from stonks.auth.policy import Permission, require
+from stonks.auth.principal import Principal
 from stonks.config import Settings
 from stonks.ingest.redact import redact_secrets
 from stonks.logging import get_logger
@@ -33,6 +38,10 @@ class AccountSource(Protocol):
 
 #: Builds a connected Alpaca broker from settings (injectable for tests).
 BrokerConnector = Callable[[Settings], AccountSource]
+
+#: Seconds a status answer is reused, so polling never burns the owner's
+#: Alpaca rate limit.
+STATUS_CACHE_SECONDS = 30.0
 
 
 class BrokerInfo(BaseModel):
@@ -85,10 +94,14 @@ class BrokerService:
         *,
         connector: BrokerConnector | None = None,
         secrets: Callable[[], Iterable[str]] = tuple,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._ctx = context
         self._connect = connector or _connect_alpaca
         self._secrets = secrets
+        self._clock = clock
+        self._cache: tuple[float, AlpacaStatus] | None = None
+        self._lock = threading.Lock()
 
     def info(self) -> BrokerInfo:
         b = self._ctx.settings.brokers
@@ -99,13 +112,34 @@ class BrokerService:
             credentials_configured=bool(b.alpaca.api_key and b.alpaca.secret_key),
         )
 
-    def alpaca_status(self) -> AlpacaStatus:
+    def alpaca_status(self, principal: Principal) -> AlpacaStatus:
         """Connect and read the account and market clock (read-only calls).
-        ``ConflictError`` unless ``[brokers].kind`` is ``alpaca``."""
-        settings = self._ctx.settings
-        cfg = settings.brokers
+
+        The configured Alpaca account backs the default portfolio, so only
+        that portfolio's owner may read it (``NotFoundError`` for anyone
+        else, admins included). Answers are reused for
+        :data:`STATUS_CACHE_SECONDS`. ``ConflictError`` unless
+        ``[brokers].kind`` is ``alpaca``."""
+        require(principal, Permission.READ)
+        with self._ctx.state() as state:
+            try:
+                owned_portfolio(state, principal.scope, DEFAULT_PORTFOLIO_ID)
+            except NotFound:
+                raise NotFoundError("no broker account of yours is configured") from None
+        cfg = self._ctx.settings.brokers
         if cfg.kind != "alpaca":
             raise ConflictError(f"the configured broker is {cfg.kind!r}, not 'alpaca'")
+        with self._lock:
+            now = self._clock()
+            if self._cache is not None and now - self._cache[0] < STATUS_CACHE_SECONDS:
+                return self._cache[1]
+            status = self._alpaca_status()
+            self._cache = (self._clock(), status)
+            return status
+
+    def _alpaca_status(self) -> AlpacaStatus:
+        settings = self._ctx.settings
+        cfg = settings.brokers
         paper = cfg.alpaca.paper
         if not (cfg.alpaca.api_key and cfg.alpaca.secret_key):
             return AlpacaStatus(

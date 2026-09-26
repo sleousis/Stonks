@@ -20,6 +20,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from stonks.accounts import Scope
 from stonks.app.services import Services
 from stonks.auth import (
+    ApiScope,
     AuthService,
     NotAuthenticated,
     Permission,
@@ -28,6 +29,7 @@ from stonks.auth import (
     SessionInfo,
     require,
 )
+from stonks.auth.policy import POLICY
 from stonks.config import ApiConfig
 
 _bearer = HTTPBearer(
@@ -73,7 +75,9 @@ def get_auth(request: Request) -> AuthService:
 AuthDep = Annotated[AuthService, Depends(get_auth)]
 
 
-def _client_ip(request: Request) -> str | None:
+def client_ip(request: Request) -> str | None:
+    """The peer address (already the real client behind a trusted proxy:
+    ``stonks serve`` applies ``X-Forwarded-For`` from those only)."""
     return request.client.host if request.client else None
 
 
@@ -116,11 +120,23 @@ def authorize(
     """
     cfg = get_api_config(request)
     safe = request.method in _SAFE_METHODS
-    if safe and cfg.open_reads_on_loopback and _is_loopback(_client_ip(request)):
+    if safe and cfg.open_reads_on_loopback and _is_loopback(client_ip(request)):
         return
     principal = _resolve(request, creds)
-    if not safe and not principal.can_write:
+    if not safe and not principal.can_write and not _route_allows_readers(request):
         raise PermissionDenied("this credential is read-only")
+
+
+def _route_allows_readers(request: Request) -> bool:
+    """True when the matched route declares a permission a read-only
+    credential may hold (``data.read``: stream tokens, marking your feed
+    read). That route's own check then decides."""
+    route = request.scope.get("route")
+    dependant = getattr(route, "dependant", None)
+    if dependant is None:
+        return False
+    permission = _declared_permission(dependant)
+    return permission is not None and ApiScope.READ in POLICY[permission].scopes
 
 
 def require_token(
@@ -166,6 +182,21 @@ def current_principal(
 
 
 PrincipalDep = Annotated[Principal, Depends(current_principal)]
+
+
+def optional_principal(
+    request: Request,
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+) -> Principal | None:
+    """The caller, or ``None`` for a credential-less loopback read that
+    :func:`authorize` let through (``open_reads_on_loopback``, dev only).
+    Routes over "global, attributed" rows (jobs, drafts) scope by it."""
+    if creds is None and not request.cookies.get(SESSION_COOKIE):
+        return getattr(request.state, "principal", None)
+    return _resolve(request, creds)
+
+
+OptionalPrincipalDep = Annotated[Principal | None, Depends(optional_principal)]
 
 
 def current_scope(principal: PrincipalDep) -> Scope:
@@ -223,22 +254,24 @@ def permission_of(call: object) -> Permission | None:
     return getattr(call, _PERMISSION_ATTR, None)
 
 
+def _declared_permission(dependant: Any) -> Permission | None:
+    """The permission a route's dependency tree declares with :func:`needs`."""
+    for dep in dependant.dependencies:
+        perm = permission_of(dep.call) or _declared_permission(dep)
+        if perm is not None:
+            return perm
+    return None
+
+
 def route_permissions(routes: Iterable[Any]) -> list[tuple[str, str, Permission]]:
     """``(method, path, permission)`` for every route that declares one,
     through included routers."""
     from fastapi.routing import APIRoute
 
-    def found(dependant: Any) -> Permission | None:
-        for dep in dependant.dependencies:
-            perm = permission_of(dep.call) or found(dep)
-            if perm is not None:
-                return perm
-        return None
-
     out: list[tuple[str, str, Permission]] = []
     for route in routes:
         if isinstance(route, APIRoute):
-            perm = found(route.dependant)
+            perm = _declared_permission(route.dependant)
             if perm is not None:
                 out.extend((m, route.path, perm) for m in sorted(route.methods))
         elif hasattr(route, "original_router"):

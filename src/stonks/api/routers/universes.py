@@ -4,7 +4,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, Response
 
-from stonks.api.deps import ServicesDep, require_permission
+from stonks.api.deps import OptionalPrincipalDep, PrincipalDep, ServicesDep, require_permission
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.api.routers._jobs_common import JOB_CREATED, accepted
 from stonks.app.jobs import Job
@@ -66,17 +66,21 @@ def import_index_history(body: IndexHistoryImport, services: ServicesDep) -> Ind
     response_model=UniverseRefreshView,
     operation_id="getUniverseRefreshResult",
 )
-def get_refresh_result(job_id: str, services: ServicesDep) -> UniverseRefreshView:
+def get_refresh_result(
+    job_id: str, services: ServicesDep, principal: OptionalPrincipalDep
+) -> UniverseRefreshView:
     """The result of a succeeded refresh job (409 until it has succeeded)."""
-    return services.jobs.typed_result(job_id, UNIVERSE_REFRESH_JOB, UniverseRefreshView)
+    return services.jobs.typed_result(job_id, UNIVERSE_REFRESH_JOB, UniverseRefreshView, principal)
 
 
 @router.get(
     "/ensure/{job_id}/result", response_model=EnsureReport, operation_id="getUniverseEnsureResult"
 )
-def get_ensure_result(job_id: str, services: ServicesDep) -> EnsureReport:
+def get_ensure_result(
+    job_id: str, services: ServicesDep, principal: OptionalPrincipalDep
+) -> EnsureReport:
     """The result of a succeeded ensure-data job (409 until it has succeeded)."""
-    return services.jobs.typed_result(job_id, UNIVERSE_ENSURE_JOB, EnsureReport)
+    return services.jobs.typed_result(job_id, UNIVERSE_ENSURE_JOB, EnsureReport, principal)
 
 
 @router.get("/{universe_id}", response_model=UniverseView, operation_id="getUniverse")
@@ -108,18 +112,29 @@ def get_members(
 @router.post(
     "/{universe_id}/refresh", **JOB_CREATED, operation_id="refreshUniverse", dependencies=_lab
 )
-def refresh_universe(universe_id: str, services: ServicesDep, response: Response) -> Job:
+def refresh_universe(
+    universe_id: str, services: ServicesDep, principal: PrincipalDep, response: Response
+) -> Job:
     """Queue a refresh that rebuilds the universe's membership; poll
     ``/api/jobs/{id}`` or stream its events."""
-    return accepted(services.universes.submit_refresh(universe_id), response)
+    return accepted(
+        services.universes.submit_refresh(universe_id, owner_id=principal.user_id), response
+    )
 
 
 @router.post(
     "/{universe_id}/ensure", **JOB_CREATED, operation_id="ensureUniverseData", dependencies=_lab
 )
 def ensure_data(
-    universe_id: str, body: EnsureDataRequest, services: ServicesDep, response: Response
+    universe_id: str,
+    body: EnsureDataRequest,
+    services: ServicesDep,
+    principal: PrincipalDep,
+    response: Response,
 ) -> Job:
     """Queue a job that fetches the missing bars of every member over the
     window, delisted names included."""
-    return accepted(services.universes.submit_ensure(universe_id, body), response)
+    return accepted(
+        services.universes.submit_ensure(universe_id, body, owner_id=principal.user_id),
+        response,
+    )

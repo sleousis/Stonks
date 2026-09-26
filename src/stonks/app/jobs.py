@@ -90,6 +90,9 @@ class Job(BaseModel):
     created_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    #: Who queued it (``null`` for the scheduler and other services). Only
+    #: the owner and admins see a job.
+    owner_id: str | None = None
 
     @property
     def is_terminal(self) -> bool:
@@ -107,13 +110,13 @@ class JobStore:
 
     # ---- writes ------------------------------------------------------------
 
-    def create(self, kind: str, params: dict[str, Any]) -> Job:
+    def create(self, kind: str, params: dict[str, Any], *, owner_id: str | None = None) -> Job:
         job_id = f"job_{uuid.uuid4().hex}"
         with self._state() as s:
             s.execute(
-                "INSERT INTO jobs (id, kind, params_json, status, progress, created_at) "
-                "VALUES (?, ?, ?, 'queued', 0, ?)",
-                [job_id, kind, json.dumps(to_jsonable(params), sort_keys=True), _now()],
+                "INSERT INTO jobs (id, kind, params_json, status, progress, created_at, owner_id) "
+                "VALUES (?, ?, ?, 'queued', 0, ?, ?)",
+                [job_id, kind, json.dumps(to_jsonable(params), sort_keys=True), _now(), owner_id],
             )
         return self.get(job_id)
 
@@ -185,16 +188,34 @@ class JobStore:
             raise NotFoundError(f"no job with id {job_id!r}")
         return _row_to_job(rows[0])
 
+    def pending(self, kinds: Iterable[str]) -> list[Job]:
+        """Queued or running jobs of ``kinds``, oldest first."""
+        wanted = sorted(set(kinds))
+        if not wanted:
+            return []
+        marks = ", ".join("?" * len(wanted))
+        with self._state() as s:
+            rows = s.sql(
+                f"SELECT * FROM jobs WHERE kind IN ({marks}) AND status IN ('queued', 'running')"
+                " ORDER BY created_at, rowid",
+                wanted,
+            )
+        return [_row_to_job(r) for r in rows]
+
     def list(
         self,
         *,
         status: str | None = None,
         kind: str | None = None,
+        owner_id: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> Page[Job]:
         where: list[str] = []
         params: list[Any] = []
+        if owner_id is not None:
+            where.append("owner_id = ?")
+            params.append(owner_id)
         if status is not None:
             where.append("status = ?")
             params.append(status)
@@ -259,6 +280,7 @@ class _Registration:
     handler: JobHandler
     lock: str | None
     cancellable: bool
+    operation: bool
 
 
 #: Back-off between retries of a job-row write that hit a SQLite error
@@ -303,14 +325,21 @@ class JobRunner:
         *,
         lock: str | None = None,
         cancellable: bool = False,
+        operation: bool | None = None,
     ) -> None:
         """Register ``handler`` for ``kind``. Jobs sharing a ``lock`` name
         run one at a time on that lock's own worker (e.g. every lake writer
         uses ``"lake_write"``). ``cancellable`` handlers call
-        :meth:`JobContext.check_cancelled`, so a running job can be stopped."""
+        :meth:`JobContext.check_cancelled`, so a running job can be stopped.
+        ``operation`` marks operator jobs (ticks, ingests, backups) whose
+        cancel needs an admin; it defaults to "holds a lock lane", and
+        research jobs on a lane (universe refresh) pass ``False``."""
         with self._guard:
             self._handlers[kind] = _Registration(
-                handler=handler, lock=lock, cancellable=cancellable
+                handler=handler,
+                lock=lock,
+                cancellable=cancellable,
+                operation=lock is not None if operation is None else operation,
             )
             if lock is not None and lock not in self._lanes:
                 self._lanes[lock] = ThreadPoolExecutor(
@@ -321,13 +350,13 @@ class JobRunner:
     def kinds(self) -> list[str]:
         return sorted(self._handlers)
 
-    def submit(self, kind: str, params: dict[str, Any]) -> Job:
+    def submit(self, kind: str, params: dict[str, Any], *, owner_id: str | None = None) -> Job:
         if self._stopping.is_set():
             raise ConflictError("job runner is shutting down")
         reg = self._handlers.get(kind)
         if reg is None:
             raise ValidationError(f"unknown job kind {kind!r}; known: {self.kinds}")
-        job = self._store.create(kind, params)
+        job = self._store.create(kind, params, owner_id=owner_id)
         ctx = JobContext(job_id=job.id, _store=self._store)
         executor = self._executor if reg.lock is None else self._lanes[reg.lock]
         try:
@@ -344,11 +373,40 @@ class JobRunner:
         _log.info("job.submitted", job_id=job.id, kind=kind, lane=reg.lock or "general")
         return job
 
-    def is_operation(self, kind: str) -> bool:
-        """True for operator jobs (ticks, ingests, backups): the kinds that
-        hold a lock lane. Lab kinds share the general pool."""
+    def run_in_lane[T](self, lane: str, fn: Callable[[], T], *, timeout: float = 30.0) -> T:
+        """Run a short write ``fn`` on ``lane``'s worker and wait for it, so
+        it never overlaps the lane's jobs (e.g. a universe delete beside a
+        refresh on ``lake_write``). ``ConflictError`` when the lane stays
+        busy for ``timeout`` seconds; the write is then dropped, never run
+        later. Errors raised by ``fn`` propagate."""
+        if self._stopping.is_set():
+            raise ConflictError("job runner is shutting down")
+        with self._guard:
+            executor = self._lanes.get(lane)
+            if executor is None:
+                executor = self._lanes[lane] = ThreadPoolExecutor(
+                    max_workers=1, thread_name_prefix=f"stonks-job-{lane}"
+                )
+        future = executor.submit(fn)
+        try:
+            return future.result(timeout=timeout)
+        except FutureTimeout:
+            if future.cancel():
+                raise ConflictError(
+                    f"the {lane} lane is busy with a running job; try again shortly"
+                ) from None
+            return future.result()  # it started just now: let it finish
+
+    def lane(self, kind: str) -> str | None:
+        """The lock lane ``kind`` runs on, or ``None`` for the general pool."""
         reg = self._handlers.get(kind)
-        return reg is not None and reg.lock is not None
+        return reg.lock if reg is not None else None
+
+    def is_operation(self, kind: str) -> bool:
+        """True for operator jobs (ticks, ingests, backups), whose cancel
+        needs an admin (see :meth:`register`)."""
+        reg = self._handlers.get(kind)
+        return reg is not None and reg.operation
 
     def cancel(self, job_id: str) -> Job:
         """Cancel a queued job, or request cancellation of a running job whose
@@ -558,6 +616,7 @@ def _row_to_job(row: Any) -> Job:
         created_at=datetime.fromisoformat(row["created_at"]),
         started_at=_parse_ts(row["started_at"]),
         finished_at=_parse_ts(row["finished_at"]),
+        owner_id=row["owner_id"],
     )
 
 

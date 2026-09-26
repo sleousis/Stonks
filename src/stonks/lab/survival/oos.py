@@ -3,7 +3,9 @@
 The default gate is statistical: the probabilistic Sharpe ratio
 ``PSR(0) = P(true SR > 0)`` of the per-bar validation returns, with their
 measured skew, kurtosis and lag-1 autocorrelation, must reach ``min_psr``,
-and the trade ledger must hold at least ``min_trades`` closed trades. A
+and the trade ledger must hold at least ``min_trades`` closed trades. The
+PSR and MinTRL variance is taken at the observed Sharpe (``stats.sharpe``),
+so negative skew and fat tails lower the PSR and lengthen the MinTRL. A
 six-month window at Sharpe 0.5 can't be told apart from zero, so a flat
 Sharpe bar treats short and long windows alike (principle P8).
 

@@ -46,6 +46,7 @@ from stonks.lab.trials import (
 from stonks.lab.tuning.base import tune_and_fit
 from stonks.lab.universe_data import prepare_dataset
 from stonks.logging import get_logger
+from stonks.strategies.base import strategy_data_tickers
 
 _log = get_logger("stonks.lab.runner")
 
@@ -59,6 +60,25 @@ def costs_are_zero(costs: Any) -> bool:
         return False
     classes = [costs.default, *getattr(costs, "asset_classes", {}).values()]
     return not any(c.fee_flat or c.half_spread_bps or c.fee_bps for c in classes)
+
+
+def with_strategy_references(
+    dataset: Any, strategy_cls: type[Strategy], params: Mapping[str, Any] | None = None
+) -> Any:
+    """``dataset`` with the tickers ``strategy_cls(params)`` reads but does
+    not trade added to its ``reference_tickers`` (RS-01), so the preflight
+    checks them and every snapshot and modified lake copies them. Unchanged
+    when the dataset has no such field or the strategy can't be built here
+    (tuning then reports the error)."""
+    with_references = getattr(dataset, "with_references", None)
+    if not callable(with_references):
+        return dataset
+    try:
+        strategy = strategy_cls(dict(params or {}))
+    except Exception as exc:  # the tuner builds it again and reports the error
+        _log.info("lab.references.unavailable", error=str(exc))
+        return dataset
+    return with_references(strategy_data_tickers(strategy))
 
 
 def suite_dataset(dataset: Any, strategy: Strategy) -> Any:
@@ -175,6 +195,7 @@ class LabRunner:
         dataset, ensured = prepare_dataset(
             dataset, ensurer=self._data_ensurer, strategy=strategy_cls
         )
+        dataset = with_strategy_references(dataset, strategy_cls, fixed_params)
         preflight, preflight_record = self._run_preflight(strategy_cls, dataset, class_path)
         seeds = collect_seeds(self._tuner, self._suite.tests)
         manifest = self._manifest(dataset, seeds)
@@ -276,7 +297,8 @@ class LabRunner:
                 bind_run(ctx)
 
         reports = self._suite.run(strategy, suite_dataset(dataset, strategy))
-        verdict = "pass" if all(r.passed for r in reports) else "fail"
+        # RS-39: an empty suite tested nothing, so it can't pass
+        verdict = "pass" if reports and all(r.passed for r in reports) else "fail"
 
         _log.info(
             "lab.survival.done",

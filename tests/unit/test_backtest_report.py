@@ -38,9 +38,11 @@ def test_periods_per_year_daily_is_252():
 
 
 def test_periods_per_year_intraday_uses_equity_session():
-    # 6.5-hour US regular session → 78 five-minute bars, 6.5 hourly bars/day
+    # 6.5-hour US regular session → 78 five-minute bars, and 7 hourly bars a
+    # day (the last one covers the final half hour; RS-16)
     assert periods_per_year(Interval.MIN_5) == pytest.approx(252 * 78)
-    assert periods_per_year(Interval.HOUR_1) == pytest.approx(252 * 6.5)
+    assert periods_per_year(Interval.HOUR_1) == pytest.approx(252 * 7)
+    assert periods_per_year(Interval.HOUR_4) == pytest.approx(504)
     # bars longer than the session still count as one bar per trading day
     assert periods_per_year(Interval.HOUR_12) == pytest.approx(252)
 

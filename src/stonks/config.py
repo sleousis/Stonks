@@ -40,11 +40,15 @@ UNIVERSE_ID_PATTERN = r"^[a-z0-9][a-z0-9_.-]{0,63}$"
 
 
 class EodhdSourceConfig(BaseModel):
+    # A raw str assigned later (tests, scripts) still becomes a SecretStr.
+    model_config = ConfigDict(validate_assignment=True)
+
     base_url: str = "https://eodhd.com/api"
     timeout_seconds: int = 30
     max_retries: int = 3
     retry_backoff_seconds: float = 1.0
-    api_key: str | None = None
+    #: From ``EODHD_API_KEY``; a SecretStr so it never shows in a repr.
+    api_key: SecretStr | None = None
 
 
 class YahooSourceConfig(BaseModel):
@@ -494,18 +498,67 @@ class Settings(BaseSettings):
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
 
 
-def configured_secrets(settings: Settings) -> list[str]:
-    """Every credential value the settings hold, for scrubbing text before it
-    is logged, persisted or returned."""
-    alpaca = settings.brokers.alpaca
-    values = [
-        settings.sources.eodhd.api_key,
-        settings.api.token.get_secret_value() if settings.api.token else None,
-        alpaca.api_key.get_secret_value() if alpaca.api_key else None,
-        alpaca.secret_key.get_secret_value() if alpaca.secret_key else None,
-        settings.notify.webhook.url,
-    ]
-    return [v for v in values if v]
+#: Secrets read straight from the environment by blocks that keep their own
+#: settings (notify channels, broker connections, metrics, encryption keys).
+ENV_ONLY_SECRETS: tuple[str, ...] = (
+    "STONKS_SECRET_KEYS",
+    "STONKS_METRICS_TOKEN",
+    "STONKS_SMTP_PASSWORD",
+    "STONKS_VAPID_PRIVATE_KEY",
+    "STONKS_SNAPTRADE_CONSUMER_KEY",
+    "STONKS_API_TOKEN",
+    "EODHD_API_KEY",
+    "ALPACA_API_KEY",
+    "ALPACA_SECRET_KEY",
+)
+
+
+def secret_value(value: SecretStr | str | None) -> str | None:
+    """The plain text of a secret setting (a raw str is accepted too)."""
+    if isinstance(value, SecretStr):
+        return value.get_secret_value()
+    return value
+
+
+def _walk_secrets(obj: object, out: list[str]) -> None:
+    if isinstance(obj, SecretStr):
+        out.append(obj.get_secret_value())
+    elif isinstance(obj, BaseModel):
+        for name in type(obj).model_fields:
+            _walk_secrets(getattr(obj, name, None), out)
+    elif isinstance(obj, dict):
+        for item in obj.values():
+            _walk_secrets(item, out)
+    elif isinstance(obj, list | tuple):
+        for item in obj:
+            _walk_secrets(item, out)
+
+
+def configured_secrets(
+    settings: Settings, *, environ: Mapping[str, str] | None = None
+) -> list[str]:
+    """Every credential value the server holds, for scrubbing text before it
+    is logged, persisted or returned: each ``SecretStr`` in ``settings``, the
+    plain secrets (vendor key, global webhook URL) and :data:`ENV_ONLY_SECRETS`.
+    ``STONKS_SECRET_KEYS`` also adds each key of its ``id:key`` list."""
+    env = os.environ if environ is None else environ
+    values: list[str] = []
+    _walk_secrets(settings, values)
+    values.append(secret_value(settings.sources.eodhd.api_key) or "")
+    values.append(settings.notify.webhook.url or "")
+    for name in ENV_ONLY_SECRETS:
+        raw = env.get(name)
+        if not raw:
+            continue
+        values.append(raw)
+        if name == "STONKS_SECRET_KEYS":
+            for part in raw.split(","):
+                values.append(part.split(":", 1)[-1].strip())
+    out: list[str] = []
+    for value in values:
+        if value and len(value) >= 4 and value not in out:
+            out.append(value)
+    return out
 
 
 def load_settings(config_path: Path | None = None) -> Settings:

@@ -153,3 +153,24 @@ def test_date_objects_are_accepted(lake):
     _bars(lake, "B.US", DAYS[:2], [10, 12])
     curve = benchmark_curve(lake, "B.US", [d.date() for d in DAYS[:2]])
     assert curve.values == pytest.approx([1.0, 1.2])
+
+
+# ---- review 18.1 edge cases ----------------------------------------------------------
+
+
+def test_auto_on_a_crypto_universe_is_its_equal_weight(lake):
+    """No SPY.US in a crypto lake: "auto" is the equal-weight crypto book,
+    marked on every 24/7 timestamp."""
+    hours = [datetime(2024, 6, 1) + timedelta(days=i) for i in range(7)]  # Sat..Fri
+    _bars(lake, "BTC-USD.CC", hours, [100, 110, 120, 130, 140, 150, 160])
+    _bars(lake, "ETH-USD.CC", hours, [10, 10, 10, 10, 10, 10, 10])
+    curve = benchmark_curve(lake, "auto", hours, universe=["BTC-USD.CC", "ETH-USD.CC"])
+    assert curve is not None and curve.name == "EW"
+    assert curve.members == ("BTC-USD.CC", "ETH-USD.CC")
+    assert curve.values[-1] == pytest.approx(0.5 * 1.6 + 0.5 * 1.0)
+
+
+def test_a_named_ticker_with_only_stale_pre_window_bars_gives_no_curve(lake):
+    old = [DAYS[0] - timedelta(days=30 + i) for i in range(3)][::-1]
+    _bars(lake, "OLD.US", old, [10, 11, 12])
+    assert benchmark_curve(lake, "OLD.US", DAYS) is None

@@ -49,7 +49,7 @@ from stonks.portfolio.base import ConstructionInput, get_constructor
 from stonks.portfolio.constructors import diversification_multiplier
 from stonks.portfolio.orders import orders_from_targets
 from stonks.portfolio.signals import estimate_forecast_scalar
-from stonks.strategies._common import BarCache, LakeBarCaches
+from stonks.strategies._common import BarCache, LakeBarCaches, visible_cutoff
 from stonks.strategies.base import BaseStrategy
 from stonks.strategies.examples._cross_section import (
     is_fresh,
@@ -228,7 +228,10 @@ class ForecastTrendStrategy(BaseStrategy):
 
     def _min_bars(self) -> int:
         """Bars needed before any forecast is made."""
-        return max(1, int(self.required_history_bars))
+        return max(1, int(type(self).required_history_bars))
+
+    def param_metadata(self) -> dict[str, int]:
+        return {"required_history_bars": self._min_bars()}
 
     def _signed_forecast(self, bars: pd.DataFrame, asset_class: str) -> float | None:
         """The capped forecast at the last of ``bars`` (adjusted daily bars
@@ -298,7 +301,9 @@ class ForecastTrendStrategy(BaseStrategy):
     def _bars(self, cache: BarCache, ticker: str, cutoff: Any) -> pd.DataFrame:
         n = self._history_bars()
         if n is None:
-            return cache.bars_between(ticker, Interval.DAY_1, _HISTORY_START, cutoff)
+            # an explicit range: apply the visibility rule here (RS-03)
+            end = visible_cutoff(cutoff, Interval.DAY_1)
+            return cache.bars_between(ticker, Interval.DAY_1, _HISTORY_START, end)
         return cache.last_n_bars(ticker, Interval.DAY_1, cutoff, n)
 
     def _evaluate(self, ticker: str, cutoff: Any, lake: Any) -> _Row | None:

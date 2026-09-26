@@ -95,6 +95,26 @@ def test_rejects_bad_options():
         build_survival_test("vs_random", {"block": 0})
 
 
+def test_mostly_failing_noise_runs_fail_the_test():
+    # RS-25: 8 of 10 noise tunes raised (NaN); a threshold from 2 values
+    # is no evidence, even though the real run beats both
+    test = _test()
+    nan = float("nan")
+    results = [(2.0, 1.0), (0.1, 0.0), (0.2, 0.1), *[(nan, nan)] * 8]
+    report = test._verdict(results, SharpeObjective(), None)
+    assert not report.passed
+    assert "insufficient data" in report.notes
+    assert report.metrics["n_noise_ok"] == 2
+
+
+def test_half_of_the_noise_runs_are_enough():
+    test = _test()
+    nan = float("nan")
+    ok = [(0.1 * i, 0.0) for i in range(5)]
+    report = test._verdict([(2.0, 1.0), *ok, *[(nan, nan)] * 5], SharpeObjective(), None)
+    assert report.passed, report.notes
+
+
 def _history(n: int = 60, n_before: int = 10, seed: int = 0):
     rng = np.random.default_rng(seed)
     ts = pd.bdate_range("2024-01-01", periods=n)
