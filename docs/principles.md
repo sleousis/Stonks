@@ -54,7 +54,7 @@ Enforced: `backtest/trades.py` keeps the trade ledger (BL-02). A backtest trades
 
 **P12. No look-ahead, ever.**
 Why: one leaked bar or one early statement invalidates the whole result (McKinney; Graham and Dodd, via Gray and Carlisle's point-in-time rules; Hamilton, who warns that smoothed regime probabilities use future data).
-Enforced: today fills happen at the next bar's open (`backtest/engine.py:11-24`), statements are read by `filing_date`, and macro data carries publication lags. BL-49 adds a point-in-time lake proxy, plus a test that plants a future bar for every catalogued strategy.
+Enforced: today fills happen at the next bar's open (`backtest/engine.py:11-24`), statements are read by `filing_date`, and macro data carries publication lags. BL-49 adds a point-in-time lake proxy, plus a test that plants a future bar for every catalogued strategy. A strategy sees a bar only after it closes (`strategies._common.visible_cutoff`), and the catalogue-wide planted-future-bar test (`tests/unit/test_strategy_lookahead.py`) covers intraday decisions against daily reads (RS-03).
 
 **P13. Signals and returns use split- and dividend-adjusted prices.**
 Why: a 4:1 split looks like a 75% crash and ignored dividends understate total return, so both corrupt signals and equity curves (Chan; Clenow; Wilcox and Crittenden).
@@ -94,7 +94,7 @@ Enforced: today impact is `impact_bps·sqrt(q/volume)` with no volatility term a
 
 **P21. The backtest fills orders the way we trade live.**
 Why: a backtest filled at the open and a live order filled at some intraday price measure different things (Johnson).
-Enforced: today the backtest fills at the next open, but the simulated tick fills at the latest close (`production/tick.py:450-456`). Roadmap 8.2 (in progress) brings cost-model parity. BL-32 records any remaining convention gap in TCA. Alpaca auction orders are deferred because the owner does not want Alpaca yet.
+Enforced: today the backtest fills at the next open, but the simulated tick fills at the latest close (`production/tick.py:450-456`). Roadmap 8.2 (in progress) brings cost-model parity. BL-32 records any remaining convention gap in TCA. Alpaca auction orders are deferred because the owner does not want Alpaca yet. `RuleStrategy` rebuilds its stop and take-profit reference from the bars, so these exits also fire in the tick (RS-13).
 
 **P22. Every order records what it was supposed to cost and what it did cost.**
 Why: you can't calibrate a cost model you never measure (Kissell; Bacidore; Perold's implementation shortfall).

@@ -86,6 +86,11 @@ carries a date-keyed client id, so the engine adds the bar time to it: two
 forced exits on one intraday day stay two orders. Strategies are keyed ``"0"``, ``"1"``, ... by
 position; each decision's target book is kept in ``target_books``.
 
+Strategy calls run inside ``strategies._common.decision_interval(interval)``,
+so a strategy sees a bar of any interval only once it has closed at the
+decision (RS-03): a daily bar stays hidden during its own session in an
+intraday run, on 24/7 markets too.
+
 Point-in-time membership (RS-05, P14)
 -------------------------------------
 With ``BacktestConfig.universe_id`` set, the engine reads that universe's
@@ -452,6 +457,14 @@ class Backtester:
         return child
 
     def _decide(self, as_of: datetime, prices: dict[str, float]) -> list[Order]:
+        # RS-03: strategies see a bar only once it has closed at this
+        # decision, so they must know the decision bar's length.
+        from stonks.strategies._common import decision_interval
+
+        with decision_interval(self._config.interval):
+            return self._decide_at(as_of, prices)
+
+    def _decide_at(self, as_of: datetime, prices: dict[str, float]) -> list[Order]:
         members = self._members_on(as_of)
         tradable = [t for t in self._config.universe if members is None or t in members]
         if self._config.construction_settings is not None:

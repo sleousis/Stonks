@@ -49,6 +49,9 @@ class Strategy(Protocol):
 - `ParameterSpec(tunable=False)` marks params the tuner must leave alone.
 - Feature knobs (lookbacks, smoothing) are normal parameters, so tuning covers them.
 - Strategies also declare `applicable_asset_classes` and metadata (hypothesis, family, label horizon, required history).
+- A strategy sees a bar only after it closes. In an intraday run a daily bar stays hidden during its own session. The engine declares its bar length with `strategies._common.decision_interval`.
+- `label_horizon_bars` and `required_history_bars` follow the params, so the embargo covers the horizon the tuner picked.
+- `RegimeFilter` clamps `k` to its number of conditions. `ma_crossover` tunes `fast` from 2 to 25 and `slow` from 26 to 200, so every corner of a tunable space constructs.
 - A strategy that reads a ticker it does not trade (a reference market, an index filter, a regime condition) names it in `data_tickers()`. Wrappers add their inner strategy's data tickers, label horizon and required history to their own.
 
 ## Tuners and objectives
