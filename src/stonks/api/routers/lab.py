@@ -11,6 +11,7 @@ from stonks.app.lab import (
     LAB_RUN_JOB,
     BacktestRequest,
     BacktestResult,
+    CostModelPreset,
     LabRunRequest,
     LabRunView,
 )
@@ -46,3 +47,9 @@ def get_backtest_result(job_id: str, services: ServicesDep) -> BacktestResult:
 def get_lab_run_result(job_id: str, services: ServicesDep) -> LabRunView:
     """The result of a succeeded lab-run job (409 until it has succeeded)."""
     return services.jobs.typed_result(job_id, LAB_RUN_JOB, LabRunView)
+
+
+@router.get("/cost-models", response_model=list[CostModelPreset], operation_id="listCostModels")
+def list_cost_models(services: ServicesDep) -> list[CostModelPreset]:
+    """Transaction-cost presets a backtest request can name in ``cost_model``."""
+    return services.lab.cost_models()

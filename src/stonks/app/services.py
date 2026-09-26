@@ -9,6 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from stonks.app.brokers import BrokerConnector, BrokerService
 from stonks.app.catalog import (
     CatalogService,
     ClassListStrategySource,
@@ -21,6 +22,7 @@ from stonks.app.ingest import IngestService
 from stonks.app.jobs import Job, JobRunner, JobStore
 from stonks.app.lab import LabService
 from stonks.app.market import MarketDataService
+from stonks.app.operations import OperationsService
 from stonks.app.orders import OrdersService
 from stonks.app.pagination import Page
 from stonks.app.portfolio import PortfolioService
@@ -135,6 +137,8 @@ class Services:
     ingest: IngestService
     ticks: TickService
     lab: LabService
+    operations: OperationsService
+    brokers: BrokerService
 
     @classmethod
     def create(
@@ -142,6 +146,7 @@ class Services:
         context: AppContext,
         *,
         strategy_sources: Sequence[StrategySource] | None = None,
+        broker_connector: BrokerConnector | None = None,
     ) -> Services:
         settings = context.settings
         runner = JobRunner(
@@ -170,6 +175,10 @@ class Services:
             ingest=IngestService(context, runner),
             ticks=TickService(context, orders, runner),
             lab=LabService(context, strategies, runner),
+            operations=OperationsService(context),
+            brokers=BrokerService(
+                context, connector=broker_connector, secrets=lambda: _configured_secrets(context)
+            ),
         )
 
     def start(self) -> None:

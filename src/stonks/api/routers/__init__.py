@@ -6,6 +6,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from stonks.api.routers import (
+    brokers,
     catalog,
     health,
     ingest,
@@ -13,7 +14,10 @@ from stonks.api.routers import (
     lab,
     market,
     orders,
+    pnl,
     portfolio,
+    risk,
+    shadow,
     sources,
     strategies,
     ticks,
@@ -31,6 +35,11 @@ API_ROUTERS: list[APIRouter] = [
     catalog.router,
     jobs.router,
     sources.router,
+    risk.router,
+    shadow.router,
+    pnl.router,
+    health.report_router,
+    brokers.router,
 ]
 
 #: Routers that run their own auth dependency instead of :func:`authorize`
