@@ -210,6 +210,29 @@ def test_artifact_meta_lands_in_meta_json(ledger, tmp_path):
     assert "config_hash" in meta["manifest"]
 
 
+def _result(reports):
+    from stonks.lab.runner import LabRunResult
+
+    return LabRunResult(
+        strategy_cls=BuyAndHold,
+        best_params={},
+        best_score=0.0,
+        strategy=BuyAndHold({"ticker": "X.US"}),
+        survival_reports=reports,
+        verdict="pass",
+    )
+
+
+def test_artifact_meta_carries_the_signal_ic_estimate():
+    ic = SurvivalReport("signal_ic", True, {"ic_estimate": 0.031, "ic_horizon": 5.0}, "")
+    meta = _result([SurvivalReport("oos", True, {}, ""), ic]).artifact_meta
+    assert meta["ic_estimate"] == pytest.approx(0.031) and meta["ic_horizon"] == 5
+    # n/a (small universe) or no signal_ic test: no estimate recorded
+    na = SurvivalReport("signal_ic", True, {"n_tickers": 2.0}, "n/a")
+    assert "ic_estimate" not in _result([na]).artifact_meta
+    assert "ic_estimate" not in _result([]).artifact_meta
+
+
 def test_plain_tuner_result_still_works(ledger):
     class _Plain:
         def tune(self, strategy_cls, param_space, objective, dataset, budget):

@@ -579,6 +579,8 @@ def execute_lab_run(
             costs=lab_costs(settings, request.cost_model),
             benchmark=lab_benchmark(settings, request.benchmark),
             embargo_bars=settings.lab.embargo_bars if embargo is None else embargo,
+            execution=settings.backtest.execution,
+            construction=settings.backtest.construction,
         )
     except ValueError as exc:  # e.g. [lab] embargo_bars leaves no validation window
         raise ValidationError(str(exc)) from None
@@ -649,11 +651,14 @@ def backtest_report(
             strategy=getattr(strategy, "id", type(strategy).__name__),
             hint="results ignore fees, spread and impact; pass a cost model",
         )
+    execution = settings.backtest.execution
     broker = SimulatedBroker(
         portfolio=Portfolio(cash=request.initial_cash, positions={}),
         slippage_bps=request.slippage_bps,
         fee_per_trade=request.fee_per_trade,
         cost_model=cost_model,
+        fill_model=execution.fill_model(),
+        settlement_days=execution.settlement_days,
     )
     config = BacktestConfig(
         start=request.start,
@@ -662,6 +667,7 @@ def backtest_report(
         interval=interval,
         threshold=request.threshold,
         rebalance_every_bars=request.rebalance_every_bars,
+        construction=settings.backtest.construction,
     )
     report = Backtester(strategies=[strategy], broker=broker, lake=lake, config=config).run()
     report = with_trades(report, broker.fills, reference_price=broker.reference_price)

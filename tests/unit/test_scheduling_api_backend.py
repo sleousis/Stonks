@@ -146,6 +146,31 @@ def test_backend_resolution():
         build_executor(SchedulerConfig(backend="api"), {})
 
 
+def test_trusted_hosts_can_come_from_the_environment():
+    env = {"STONKS_API_URL": "http://api:8000", "STONKS_API_TOKEN": TOKEN}
+    with pytest.raises(ValueError, match="plain http"):
+        build_executor(SchedulerConfig(), env)
+    ex = build_executor(SchedulerConfig(), {**env, "STONKS_API_TRUSTED_HOSTS": "api, other"})
+    assert isinstance(ex, ApiExecutor)
+    ex.close()
+
+
+def test_compose_runs_the_scheduler_loop_against_the_api():
+    from pathlib import Path
+
+    import yaml
+
+    compose = yaml.safe_load(
+        (Path(__file__).parents[2] / "deploy" / "compose.yaml").read_text(encoding="utf-8")
+    )
+    scheduler = compose["services"]["scheduler"]
+    assert scheduler["command"][-1] == "run"
+    env = scheduler["environment"]
+    assert env["STONKS_API_URL"] == "http://api:8000"
+    assert env["STONKS_API_TRUSTED_HOSTS"] == "api"
+    assert env["STONKS_DATA_DIR"] == "/data"
+
+
 # ---- actions ----------------------------------------------------------------------------
 
 

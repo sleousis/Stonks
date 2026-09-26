@@ -42,7 +42,7 @@ from stonks.execution.orders import make_client_id
 from stonks.logging import get_logger
 from stonks.production.corporate_actions import apply_corporate_actions
 from stonks.production.prices import drop_stale_buys, held_tickers
-from stonks.production.risk import apply_risk
+from stonks.production.risk import RiskContext, apply_risk, model_book_risk_context
 from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
 
@@ -88,6 +88,7 @@ def evaluate_shadow_strategies(
     corporate_actions: CorporateActions | None = None,
     strategies: Callable[[str], Strategy] | None = None,
     statuses: Sequence[str] = ("shadow",),
+    risk_context: RiskContext | None = None,
 ) -> list[ShadowOutcome]:
     """``buyable`` restricts buys to tickers with a fresh close (default:
     any ticker in ``prices``). ``volumes`` (of each priced bar) feed the
@@ -96,7 +97,9 @@ def evaluate_shadow_strategies(
     decides, exactly as for the real portfolio (and persisted with its
     new snapshot, so once). ``strategies(sid)`` returns the instance that
     decides (default: loaded from the registry); ``statuses`` are the
-    registry statuses that keep a model book."""
+    registry statuses that keep a model book. ``risk_context`` (history and
+    sectors, from ``build_risk_context``) lets the rules that need history
+    run; each model book gets its own equity curve and entry dates."""
     fresh = set(prices) if buyable is None else set(buyable)
     picks_by_strategy: dict[str, list[tuple[float, str]]] = {}
     for r, sid, ticker in ranked:
@@ -121,6 +124,7 @@ def evaluate_shadow_strategies(
                 volumes or {},
                 corporate_actions or CorporateActions(),
                 strategies or registry.load,
+                risk_context,
             )
         except Exception as exc:
             log.warning("shadow.failed", error=str(exc), error_type=type(exc).__name__)
@@ -147,6 +151,7 @@ def _evaluate_one(
     volumes: Mapping[str, float],
     corporate_actions: CorporateActions,
     strategies: Callable[[str], Strategy],
+    risk_context: RiskContext | None = None,
 ) -> ShadowOutcome:
     latest = state.sql(
         "SELECT as_of FROM shadow_portfolio_snapshots WHERE strategy_id = ? AND as_of >= ? "
@@ -184,6 +189,11 @@ def _evaluate_one(
             fee_per_trade=settings.fee_per_trade,
             cost_model=settings.costs,
             volumes=volumes,
+            context=(
+                model_book_risk_context(risk_context, state, strategy_id, portfolio, as_of)
+                if risk_context is not None
+                else None
+            ),
         )
         orders = [
             replace(
@@ -194,7 +204,7 @@ def _evaluate_one(
                     as_of=as_of, strategy_id=strategy_id, ticker=o.ticker, side=o.side
                 ),
             )
-            for o in risk_result.orders
+            for o in _one_per_side(risk_result.orders)
         ]
 
     # Always an in-memory simulated broker: shadow must never reach a real
@@ -252,6 +262,19 @@ def _evaluate_one(
         fills=sum(1 for _, f in results if f is not None),
         total_value=total_value,
     )
+
+
+def _one_per_side(orders: Sequence[Order]) -> list[Order]:
+    """One order per (ticker, side), quantities summed: a model book keys
+    its decisions by strategy, day, ticker and side, so a rule's top-up
+    (e.g. a max_holding forced sell next to the strategy's own partial
+    sell) must join the strategy's order, not collide with it."""
+    merged: dict[tuple[str, str], Order] = {}
+    for o in orders:
+        key = (o.ticker, o.side)
+        prev = merged.get(key)
+        merged[key] = o if prev is None else replace(prev, quantity=prev.quantity + o.quantity)
+    return list(merged.values())
 
 
 def _load_virtual_portfolio(

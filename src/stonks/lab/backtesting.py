@@ -24,6 +24,7 @@ from stonks.backtest.benchmark import (
     with_benchmark,
 )
 from stonks.backtest.engine import BacktestConfig, Backtester
+from stonks.backtest.fills import ExecutionSettings
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.backtest.trades import with_trades
 from stonks.core.interval import Interval
@@ -50,6 +51,19 @@ def backtest_config(
         universe=list(dataset.universe),
         interval=getattr(dataset, "interval", Interval.DAY_1),
         threshold=0.0,
+        construction=getattr(dataset, "construction", None),
+    )
+
+
+def lab_broker(dataset: Any) -> SimulatedBroker:
+    """The simulated broker of every lab backtest on ``dataset``: its cost
+    model and execution settings (fill model, settlement)."""
+    costs = getattr(dataset, "costs", None)
+    execution = getattr(dataset, "execution", None) or ExecutionSettings()
+    return SimulatedBroker.from_execution(
+        Portfolio(cash=LAB_INITIAL_CASH, positions={}),
+        execution,
+        cost_model=costs.build() if costs is not None else None,
     )
 
 
@@ -84,11 +98,7 @@ def run_backtest_with_fills(
     """:func:`run_backtest` plus every fill the simulated broker made, in
     fill order — for tests that look at trades rather than the equity
     curve (e.g. the trade-level runs test)."""
-    costs = getattr(dataset, "costs", None)
-    broker = SimulatedBroker(
-        portfolio=Portfolio(cash=LAB_INITIAL_CASH, positions={}),
-        cost_model=costs.build() if costs is not None else None,
-    )
+    broker = lab_broker(dataset)
     lake = lake if lake is not None else dataset.lake
     config = backtest_config(dataset, window)
     report = Backtester(strategies=[strategy], broker=broker, lake=lake, config=config).run()

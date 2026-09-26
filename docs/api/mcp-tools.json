@@ -283,6 +283,68 @@
     },
     {
       "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Stop new orders at once. Without confirm=true returns a preview\nand changes nothing. Resuming is done in the console or the CLI with\na typed confirmation.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "flatten": {
+            "default": false,
+            "description": "stop buys only; sells and exits still go through",
+            "title": "Flatten",
+            "type": "boolean"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "reason": {
+            "description": "audited",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "scope": {
+            "description": "global: every portfolio (admins only); user: all of yours; portfolio: one of yours (give portfolio_id)",
+            "enum": [
+              "global",
+              "user",
+              "portfolio"
+            ],
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "reason"
+        ],
+        "title": "engage_kill_switchArguments",
+        "type": "object"
+      },
+      "name": "engage_kill_switch",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
         "destructive": false,
         "idempotent": true,
         "open_world": false,
@@ -1126,6 +1188,28 @@
         "type": "object"
       },
       "name": "list_fills",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Halts you can see, newest first: the kill switch, circuit-breaker\ntrips (month loss, week loss, latched drawdown) and the operational\nhalt. By default only those in force today.",
+      "input_schema": {
+        "properties": {
+          "include_cleared": {
+            "default": false,
+            "title": "Include Cleared",
+            "type": "boolean"
+          }
+        },
+        "title": "list_haltsArguments",
+        "type": "object"
+      },
+      "name": "list_halts",
       "needs_confirm": false
     },
     {

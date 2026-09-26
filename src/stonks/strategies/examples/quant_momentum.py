@@ -95,6 +95,9 @@ class QuantMomentum(BaseStrategy):
     alpha_family = "trend"
     premise = "trend"
     label_horizon_bars = 63
+    # C[t-252] needs 252 bars before today's: 253 closes. The skipped month
+    # lies inside that window, so it adds nothing (the backlog's 273 counted
+    # it twice), and Barroso vol scaling (126 bars) is not implemented.
     required_history_bars = 253
 
     def __init__(self, params: Any) -> None:

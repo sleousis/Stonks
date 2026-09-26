@@ -21,6 +21,7 @@ from stonks.ingest.sources.registry import (
     SourceConfigError,
     build_source,
 )
+from stonks.ingest.wiring import build_ingest_pipeline
 
 INGEST_JOB = "ingest"
 
@@ -126,7 +127,7 @@ class IngestService:
         self._validate(request)
         source = self._ctx.build_source(request.source)
         with self._ctx.lake() as lake:
-            pipeline = IngestPipeline(source=source, lake=lake)
+            pipeline = build_ingest_pipeline(self._ctx.settings, source, lake)
             tickers = list(request.tickers)
             if not tickers and request.exchange:
                 tickers = source.list_tickers(request.exchange)

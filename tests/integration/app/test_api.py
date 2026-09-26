@@ -82,7 +82,13 @@ def _operations(app):
 
 
 def test_every_mutating_route_requires_token(app, client):
-    mutating = [(m, p) for m, p, _ in _operations(app) if m not in {"GET", "HEAD", "OPTIONS"}]
+    # Sign-in and sign-out check their own credentials (tests/.../test_api_auth.py).
+    public = {"/api/auth/login", "/api/auth/logout"}
+    mutating = [
+        (m, p)
+        for m, p, _ in _operations(app)
+        if m not in {"GET", "HEAD", "OPTIONS"} and p not in public
+    ]
     assert len(mutating) >= 8
     for method, path in mutating:
         url = path.replace("{strategy_id}", "bah_shadow").replace("{job_id}", "job_x")

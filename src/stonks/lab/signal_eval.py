@@ -613,9 +613,10 @@ def _parse_ints(raw: str) -> tuple[int, ...]:
     return tuple(int(x) for x in raw.split(",") if x.strip())
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None, *, prog: str | None = None) -> int:
+    """``prog`` names the command in usage messages (``stonks lab ic``)."""
     parser = argparse.ArgumentParser(
-        prog="python -m stonks.lab.signal_eval",
+        prog=prog or "python -m stonks.lab.signal_eval",
         description="Signal IC analysis (and optionally an event study) of a strategy.",
     )
     parser.add_argument("--strategy", required=True, help="catalog id, class name or module:Class")

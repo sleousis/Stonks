@@ -81,3 +81,55 @@ def test_default_runtime_is_simulated_and_needs_no_keys(monkeypatch):
     monkeypatch.delenv("ALPACA_SECRET_KEY", raising=False)
     runtime = build_tick_runtime(Settings(), ["A.US"])
     assert runtime.settings.broker_kind == "simulated"
+
+
+# ---- W2.1: construction, model books, books from subscriptions ----------------
+
+
+def test_construction_and_model_books_reach_the_tick_settings():
+    settings = Settings(
+        production={
+            "construction": {"method": "equal_weight_top_n", "buffer_fraction": 0.2},
+            "model_books": "all",
+        }
+    )
+    built = build_tick_settings(settings, ["A.US"])
+    assert built.construction.method == "equal_weight_top_n"
+    assert built.construction.buffer_fraction == 0.2
+    assert built.model_books == "all"
+
+
+def test_defaults_keep_todays_single_book():
+    p = Settings().production
+    assert p.construction.method == "single_winner"
+    assert p.model_books == "shadow"
+    assert p.books_from_subscriptions is False
+
+
+def test_unknown_constructor_fails_at_load_time():
+    with pytest.raises(ValueError, match="unknown portfolio constructor"):
+        Settings(production={"construction": {"method": "nope"}})
+
+
+def test_the_plan_comes_from_subscriptions_only_when_switched_on(tmp_path, monkeypatch):
+    from stonks.production import settings_builder
+    from stonks.store.state import SqliteState
+
+    state = SqliteState(tmp_path / "state.sqlite")
+    state.migrate()
+    try:
+        assert build_tick_runtime(Settings(), ["A.US"]).plan_for(state) is None
+        seen = {}
+
+        def fake_load(st, tick_settings):
+            seen["args"] = (st, tick_settings)
+            return "plan"
+
+        monkeypatch.setattr(settings_builder, "load_tick_plan", fake_load)
+        runtime = build_tick_runtime(
+            Settings(production={"books_from_subscriptions": True}), ["A.US"]
+        )
+        assert runtime.plan_for(state) == "plan"
+        assert seen["args"] == (state, runtime.settings)
+    finally:
+        state.close()

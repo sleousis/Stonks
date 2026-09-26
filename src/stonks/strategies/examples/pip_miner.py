@@ -117,6 +117,14 @@ def _martin(rets: np.ndarray) -> float:
 
 class PIPMinerStrategy(BaseStrategy):
     id = "pip_miner"
+    hypothesis = (
+        "Some price shapes, found by clustering past patterns, are "
+        "followed by better returns than others. The edge is purely "
+        "statistical and fails when the clusters were fitted noise."
+    )
+    alpha_family = "data_driven"
+    premise = "none"
+    label_horizon_bars = 6
     applicable_asset_classes = ("crypto", "equity")
 
     @classmethod

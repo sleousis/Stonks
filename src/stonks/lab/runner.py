@@ -19,6 +19,7 @@ tickers first gets that universe's members over the window, and with a
 from __future__ import annotations
 
 import dataclasses
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -99,13 +100,31 @@ class LabRunResult:
     def artifact_meta(self) -> dict[str, Any]:
         """Lab provenance for the registered artifact's ``meta.json``
         (``ArtifactBundle(meta=...)`` or ``registry.artifact.update_meta``)."""
-        return {
+        meta: dict[str, Any] = {
             "lab_run_id": self.run_id,
             "n_trials_total": self.n_trials_class,
             "hypothesis": self.hypothesis,
             "premortem": self.premortem,
             "manifest": self.manifest,
         }
+        meta.update(self.ic_meta)
+        return meta
+
+    @property
+    def ic_meta(self) -> dict[str, Any]:
+        """``ic_estimate`` (and its horizon) from the ``signal_ic`` report,
+        for BL-08's alpha normalisation; empty when the run had none."""
+        for report in self.survival_reports:
+            if report.test_id != "signal_ic":
+                continue
+            estimate = report.metrics.get("ic_estimate")
+            if estimate is None or not math.isfinite(estimate):
+                return {}
+            return {
+                "ic_estimate": float(estimate),
+                "ic_horizon": int(report.metrics.get("ic_horizon") or 0),
+            }
+        return {}
 
 
 class LabRunner:

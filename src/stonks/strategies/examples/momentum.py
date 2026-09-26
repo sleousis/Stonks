@@ -1,9 +1,19 @@
 """Momentum — a technical-indicator reference strategy.
 
-Computes the N-day trailing return and estimates expected forward return to
-be that same value (a crude but standard proxy for momentum). Decide logic:
-buy the top-ranked ticker with available cash; sell any existing holdings
+Computes the trailing return over ``lookback_days`` bars that end
+``skip_days`` bars ago, and estimates expected forward return to be that
+same value (a crude but standard proxy for momentum). Decide logic: buy
+the top-ranked ticker with available cash; sell any existing holdings
 that no longer appear in the current ranking.
+
+Defaults (BL-43): a six-month lookback that skips the last month. Chan
+finds momentum at 3 to 12 months, and one month is the short-term
+reversal horizon, so Gray and Vogel skip it. The old default (20 bars, no
+skip) sat right on that reversal horizon.
+
+Old param sets: a param set that sets ``lookback_days`` but not
+``skip_days`` (every set saved before BL-43) keeps its original meaning,
+``skip_days=0``.
 """
 
 from __future__ import annotations
@@ -21,8 +31,20 @@ from stonks.strategies.base import BaseStrategy
 
 class Momentum(BaseStrategy):
     id = "momentum"
+    hypothesis = (
+        "Stocks that rose most over the last six months, skipping the last "
+        "month, keep rising for a few months: investors under-react to news "
+        "and then herd. Losers are the late sellers. Fails in sharp "
+        "reversals such as bear-market rebounds."
+    )
+    alpha_family = "trend"
+    premise = "trend"
+    label_horizon_bars = 21
 
     def __init__(self, params: Any) -> None:
+        params = dict(params)
+        if "lookback_days" in params and "skip_days" not in params:
+            params["skip_days"] = 0  # a pre-BL-43 param set: no skip
         super().__init__(params)
         # A backtest calls estimate_return for every ticker on every bar;
         # the per-instance, per-lake bar cache reads each ticker's history
@@ -35,9 +57,21 @@ class Momentum(BaseStrategy):
             ParameterSpec(
                 name="lookback_days",
                 kind="int",
-                default=20,
+                default=126,
+                # Tuning range: 63-252 is the momentum horizon; 5 is kept
+                # as the floor so param sets saved before BL-43 still load.
                 bounds=(5, 252),
-                description="Lookback window for trailing return.",
+                description="Lookback window for trailing return, in bars.",
+            ),
+            ParameterSpec(
+                name="skip_days",
+                kind="int",
+                default=21,
+                bounds=(0, 63),
+                # Fixed, not tuned (P4): the skip month is the literature's
+                # choice, and tuning it adds a parameter to overfit.
+                tunable=False,
+                description="Most recent bars left out of the window (the reversal month).",
             ),
             ParameterSpec(
                 name="threshold",
@@ -123,15 +157,16 @@ class Momentum(BaseStrategy):
         if lake is None:
             return None
         lookback = int(self.params["lookback_days"])
+        skip = int(self.params["skip_days"])
         # Daily bars dated on or before ``as_of``'s calendar day are visible
         # (a daily bar's timestamp is its session date); nothing later.
         cutoff = datetime.combine(as_datetime(as_of).date(), time.max)
         closes = self._bar_caches.for_lake(lake).last_n_closes(
-            ticker, Interval.DAY_1, cutoff, lookback + 1
+            ticker, Interval.DAY_1, cutoff, lookback + skip + 1
         )
-        if len(closes) < lookback + 1:
+        if len(closes) < lookback + skip + 1:
             return None
-        past, now = closes[0], closes[-1]
+        past, now = closes[0], closes[-1 - skip]
         if past <= 0:
             return None
         return float(now / past - 1.0)

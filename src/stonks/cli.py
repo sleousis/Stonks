@@ -17,7 +17,7 @@ from rich.table import Table
 
 from stonks.config import Settings, load_settings
 from stonks.core.types import AssetClass
-from stonks.ingest.pipeline import IngestPipeline, IngestRunResult
+from stonks.ingest.pipeline import IngestRunResult
 from stonks.ingest.sources.base import DataSource, DataSourceError
 from stonks.ingest.sources.eodhd import (
     EODHD_DEFAULT_MACRO_INDICATOR,
@@ -32,8 +32,10 @@ from stonks.ingest.sources.registry import (
     SourceConfigError,
     build_source,
 )
+from stonks.ingest.wiring import build_ingest_pipeline
 from stonks.logging import configure_logging, get_logger
 from stonks.notify import notifier_from_settings
+from stonks.ops.commands import app as ops_app
 from stonks.production.settings_builder import build_tick_runtime
 from stonks.production.tick import BackdatedTickError, run_tick
 from stonks.registry.store import StrategyRegistry
@@ -88,6 +90,25 @@ registry_app = typer.Typer(help="Strategy registry operations")
 app.add_typer(db_app, name="db")
 app.add_typer(ingest_app, name="ingest")
 app.add_typer(registry_app, name="registry")
+app.add_typer(ops_app, name="backup")
+
+
+@app.command(
+    "schedule",
+    context_settings={
+        "allow_extra_args": True,
+        "ignore_unknown_options": True,
+        "help_option_names": [],
+    },
+    add_help_option=False,
+)
+def schedule(ctx: typer.Context) -> None:
+    """Built-in scheduler: run | next | runs | run-now JOB | check | metrics
+    (``stonks schedule --help`` for options; ``[scheduler]`` in the config)."""
+    from stonks.scheduling.__main__ import main as schedule_main
+
+    raise typer.Exit(code=schedule_main(list(ctx.args), prog="stonks schedule"))
+
 
 console = Console()
 
@@ -305,7 +326,7 @@ def ingest_prices(
         since_d = date.fromisoformat(since) if since else None
         until_d = date.fromisoformat(until) if until else None
 
-        pipeline = IngestPipeline(source=source, lake=lake)
+        pipeline = build_ingest_pipeline(settings, source, lake)
         result = pipeline.run_prices(ticker_list, since=since_d, until=until_d)
 
     _print_result(result)
@@ -357,7 +378,7 @@ def ingest_fundamentals(
 
     with _open_lake(settings.lake.path) as lake:
         lake.migrate()
-        pipeline = IngestPipeline(source=source, lake=lake)
+        pipeline = build_ingest_pipeline(settings, source, lake)
         result = pipeline.run_fundamentals(ticker_list)
 
     _print_result(result)
@@ -410,7 +431,7 @@ def ingest_metadata(
         if not ticker_list:
             raise typer.BadParameter("provide --tickers or --asset-class")
 
-        pipeline = IngestPipeline(source=source, lake=lake)
+        pipeline = build_ingest_pipeline(settings, source, lake)
         result = pipeline.run_metadata(ticker_list)
 
     _print_result(result)
@@ -445,7 +466,7 @@ def ingest_intraday(
         ticker_list = _parse_tickers(tickers)
         since_d = date.fromisoformat(since) if since else None
         until_d = date.fromisoformat(until) if until else None
-        pipeline = IngestPipeline(source=source, lake=lake)
+        pipeline = build_ingest_pipeline(settings, source, lake)
         result = pipeline.run_intraday_bars(ticker_list, parsed, since=since_d, until=until_d)
 
     _print_result(result)
@@ -504,7 +525,7 @@ def ingest_macro(
 
     with _open_lake(settings.lake.path) as lake:
         lake.migrate()
-        pipeline = IngestPipeline(source=source, lake=lake)
+        pipeline = build_ingest_pipeline(settings, source, lake)
         result = pipeline.run_macro_indicators(
             countries=country_list,
             indicators=indicator_list,
@@ -549,7 +570,7 @@ def ingest_tvl(
 
     with _open_lake(settings.lake.path) as lake:
         lake.migrate()
-        pipeline = IngestPipeline(source=source, lake=lake)
+        pipeline = build_ingest_pipeline(settings, source, lake)
         result = pipeline.run_defi_tvl(chain_list, since=since_d)
 
     _print_result(result)
@@ -616,7 +637,7 @@ def ingest_all_intervals(
     with _open_lake(settings.lake.path) as lake:
         lake.migrate()
         ticker_list = _parse_tickers(tickers)
-        pipeline = IngestPipeline(source=source, lake=lake)
+        pipeline = build_ingest_pipeline(settings, source, lake)
 
         # 1. daily — uses the existing EOD endpoint; full history by default.
         console.print("[bold]→ fetching 1d[/bold]")
@@ -921,6 +942,7 @@ def tick(
                     dry_run=dry_run,
                     notifier=runtime.notifier,
                     broker_factory=runtime.broker_factory,
+                    plan=runtime.plan_for(state),
                 )
             except BackdatedTickError as exc:
                 console.print(f"[red]{exc}[/red]")
@@ -1073,6 +1095,25 @@ def serve(
 
 lab_app = typer.Typer(help="Strategy lab: tune, fit and run survival tests")
 app.add_typer(lab_app, name="lab")
+
+
+@lab_app.command(
+    "ic",
+    context_settings={
+        "allow_extra_args": True,
+        "ignore_unknown_options": True,
+        "help_option_names": [],
+    },
+    add_help_option=False,
+)
+def lab_ic(ctx: typer.Context) -> None:
+    """Signal IC (and with --events an event study) of a strategy (BL-33/34):
+    --strategy ID --tickers A,B [--params JSON --start --end --horizons 1,5,20
+    --events --json F --html F]; ``stonks lab ic --help`` for all options."""
+    from stonks.lab import signal_eval
+
+    raise typer.Exit(code=signal_eval.main(list(ctx.args), prog="stonks lab ic"))
+
 
 _LAB_TUNERS = ("grid", "random")
 _LAB_OBJECTIVES = ("sharpe", "cagr", "final_return")

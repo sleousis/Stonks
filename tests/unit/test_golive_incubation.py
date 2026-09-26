@@ -151,7 +151,8 @@ def test_on_track_incubation_passes_every_check(env):
         assert c.value is not None and c.limit is not None, c.name
 
 
-def test_nothing_recorded_fails_every_incubation_check(env):
+def test_nothing_recorded_fails_every_incubation_check(env, monkeypatch):
+    monkeypatch.setattr(BuyAndHold, "hypothesis", "")
     sid = _seed(env, reports=[], points=[], fills=0, meta=False)
     report = _evaluate(env, sid)
     failed = {c.name for c in report.failures}
@@ -332,7 +333,8 @@ def test_missing_cost_record_fails(env):
     assert check.value is None
 
 
-def test_missing_hypothesis_fails(env):
+def test_missing_hypothesis_fails(env, monkeypatch):
+    monkeypatch.setattr(BuyAndHold, "hypothesis", "")
     sid = _seed(env, hypothesis=None)
     check = _check(_evaluate(env, sid), "hypothesis_recorded")
     assert not check.passed
@@ -392,7 +394,8 @@ def test_report_carries_the_checklist_fields(env):
     }
 
 
-def test_checklist_fields_are_none_when_absent(env):
+def test_checklist_fields_are_none_when_absent(env, monkeypatch):
+    monkeypatch.setattr(BuyAndHold, "hypothesis", "")
     sid = _seed(env, meta=False)
     checklist = _evaluate(env, sid).checklist
     assert set(checklist) == {

@@ -7,7 +7,8 @@ Bars held are the context history's bars dated after the entry date, up
 to ``as_of``; the history is about a year long, so older positions count
 as held for at least that many bars. The forced sell tops up any sell the
 strategies already proposed to the whole position, gets the client id
-``make_client_id(as_of, "risk.max_holding", ticker, "sell")`` and no
+``make_client_id(as_of, "risk.max_holding", ticker, "sell")`` (with the
+book's ``portfolio_id`` for a non-default portfolio) and no
 strategy id, and takes the tick id the other orders share. Buys of an
 expiring ticker are dropped in the same tick, so the tick doesn't sell and
 buy the same name. Shorts are not expired (no buy-to-cover here).
@@ -100,6 +101,7 @@ class MaxHolding(RiskRule):
                     strategy_id=CLIENT_ID_SOURCE,
                     ticker=ticker,
                     side="sell",
+                    portfolio_id=ctx.portfolio_id,
                 ),
                 ticker=ticker,
                 side="sell",

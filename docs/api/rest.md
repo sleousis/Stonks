@@ -16,7 +16,7 @@ Auth: reads (`GET`) are open to loopback clients by default
 (`[api].open_reads_on_loopback`). Every other method needs
 `Authorization: Bearer $STONKS_API_TOKEN`.
 
-Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [connections](#connections-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [ticks](#ticks-endpoints)
+Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [connections](#connections-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [ticks](#ticks-endpoints)
 
 ## alerts endpoints
 
@@ -29,6 +29,22 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#broke
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
 | GET | `/api/auth/check` | Check Auth | token, or open on loopback |  | [AuthCheck](#authcheck) |
+| POST | `/api/auth/login` | Login | none | [LoginRequest](#loginrequest) | [LoginView](#loginview) |
+| POST | `/api/auth/logout` | Logout | none |  |  |
+| GET | `/api/auth/me` | Me | token, or open on loopback |  | [MeView](#meview) |
+| POST | `/api/auth/mfa/enrol` | Start Enrolment | none |  | [EnrolStartView](#enrolstartview) |
+| POST | `/api/auth/mfa/enrol/confirm` | Confirm Enrolment | none | [MfaCodeRequest](#mfacoderequest) | [MfaView](#mfaview) |
+| POST | `/api/auth/mfa/verify` | Verify Mfa | none | [MfaCodeRequest](#mfacoderequest) | [MfaView](#mfaview) |
+| POST | `/api/auth/password` | Change Password | bearer token | [PasswordChangeRequest](#passwordchangerequest) |  |
+| POST | `/api/auth/recovery-codes` | Regenerate Recovery Codes | bearer token |  | [RecoveryCodesView](#recoverycodesview) |
+| GET | `/api/auth/tokens` | List Tokens | token, or open on loopback |  | list[[TokenView](#tokenview)] |
+| POST | `/api/auth/tokens` | Create Token | bearer token | [TokenCreateRequest](#tokencreaterequest) | [TokenCreatedView](#tokencreatedview) |
+| DELETE | `/api/auth/tokens/{token_id}` | Revoke Token | bearer token |  |  |
+| GET | `/api/auth/users` | List Users | token, or open on loopback |  | list[[UserView](#userview)] |
+| POST | `/api/auth/users` | Create User | bearer token | [UserCreateRequest](#usercreaterequest) | [UserView](#userview) |
+| PATCH | `/api/auth/users/{user_id}` | Update User | bearer token | [UserUpdateRequest](#userupdaterequest) | [UserView](#userview) |
+| DELETE | `/api/auth/users/{user_id}/mfa` | Reset User Mfa | bearer token |  |  |
+| POST | `/api/auth/users/{user_id}/password` | Reset User Password | bearer token | [PasswordResetRequest](#passwordresetrequest) |  |
 
 ## brokers endpoints
 
@@ -59,6 +75,16 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#broke
 | GET | `/api/connections/{connection_id}/accounts` | List Accounts | token, or open on loopback |  | list[[stonks__app__connections__BrokerAccountView](#stonks__app__connections__brokeraccountview)] |
 | POST | `/api/connections/{connection_id}/link` | Link Account | bearer token | [LinkAccountRequest](#linkaccountrequest) | [LinkResultView](#linkresultview) |
 | POST | `/api/connections/{connection_id}/sync` | Sync Connection | bearer token |  | [SyncResultView](#syncresultview) |
+
+## halts endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/halts` | List Halts | token, or open on loopback |  | list[[HaltView](#haltview)] |
+| POST | `/api/halts/kill` | Engage Kill Switch | bearer token | [KillSwitchRequest](#killswitchrequest) | [HaltView](#haltview) |
+| GET | `/api/halts/{halt_id}` | Get Halt | token, or open on loopback |  | [HaltView](#haltview) |
+| POST | `/api/halts/{halt_id}/clear` | Clear Halt | bearer token | [ClearHaltRequest](#clearhaltrequest) | [HaltView](#haltview) |
+| POST | `/api/halts/{halt_id}/resume` | Resume Kill Switch | bearer token | [ResumeRequest](#resumerequest) | [HaltView](#haltview) |
 
 ## health endpoints
 
@@ -239,6 +265,12 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#broke
 | `error` | string \| null | no |  |
 | `paper` | boolean | yes |  |
 
+### ApiScope
+
+What a credential may do. A token never exceeds its user's role.
+
+Type: "read" \| "trade" \| "lab" \| "admin"
+
 ### AssetClassCosts
 
 Fee and spread for one asset class.
@@ -357,6 +389,22 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `credentials_configured` | boolean | yes |  |
 | `kind` | "simulated" \| "alpaca" | yes |  |
 | `paper` | boolean | yes |  |
+
+### CircuitBreakerSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cooldown` | "rest_of_month" \| "none" | no |  |
+| `max_drawdown_halt` | number \| null | no |  |
+| `max_month_loss` | number \| null | no |  |
+| `max_week_loss` | number \| null | no |  |
+| `week_sessions` | integer | no |  |
+
+### ClearHaltRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `reason` | string | yes |  |
 
 ### ConnectWithKeysRequest
 
@@ -526,6 +574,19 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `smoke` | [SmokeCheck](#smokecheck) \| null | no |  |
 | `valid` | boolean | yes |  |
 
+### DrawdownScalingSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `schedule` | list[list[any]] \| null | no |  |
+
+### EnrolStartView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `otpauth_uri` | string | yes |  |
+| `secret` | string | yes |  |
+
 ### EquityPoint
 
 | Field | Type | Required | Description |
@@ -608,6 +669,25 @@ Limits a paper-trading period must meet before ``stonks golive check`` passes (`
 | `source` | "shadow" \| "portfolio" \| "none" | yes |  |
 | `status` | string | yes |  |
 | `strategy_id` | string | yes |  |
+
+### HaltView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `active` | boolean | yes |  |
+| `clear_reason` | string \| null | yes |  |
+| `cleared_at` | string \| null | yes |  |
+| `cleared_by` | string \| null | yes |  |
+| `expires_on` | date \| null | yes |  |
+| `halt` | "buys" \| "all" | yes |  |
+| `id` | integer | yes |  |
+| `kind` | "month_loss" \| "week_loss" \| "drawdown" \| "operational" \| "kill" | yes |  |
+| `portfolio_id` | string \| null | yes |  |
+| `reason` | string | yes |  |
+| `scope` | "global" \| "user" \| "portfolio" | yes |  |
+| `tripped_at` | string | yes |  |
+| `tripped_by` | string | yes |  |
+| `user_id` | string \| null | yes |  |
 
 ### Health
 
@@ -762,6 +842,15 @@ One ``data:`` payload of the job event stream.
 | `reason` | "timeout" \| "untracked" \| null | no |  |
 | `status` | "queued" \| "running" \| "succeeded" \| "failed" \| "cancelled" | yes |  |
 
+### KillSwitchRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `flatten` | boolean | no |  |
+| `portfolio_id` | string \| null | no |  |
+| `reason` | string | yes |  |
+| `scope` | "global" \| "user" \| "portfolio" | yes |  |
+
 ### LabRunRequest
 
 Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the tuner searches the class's parameter space).
@@ -823,6 +912,30 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `external_account_id` | string | yes |  |
 | `portfolio_id` | string | yes |  |
 
+### LiquiditySettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_amihud` | number \| null | no |  |
+| `max_pct_adv` | number \| null | no |  |
+| `min_median_dollar_volume` | number \| null | no |  |
+
+### LoginRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `email` | string | yes |  |
+| `password` | string | yes |  |
+
+### LoginView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `csrf_token` | string | yes |  |
+| `display_name` | string | yes |  |
+| `next_step` | "enrol" \| "verify" | yes |  |
+| `user_id` | string | yes |  |
+
 ### MarkReadRequest
 
 | Field | Type | Required | Description |
@@ -845,6 +958,12 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `next_open` | date-time | yes |  |
 | `timestamp` | date-time | yes |  |
 
+### MaxHoldingSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_holding_bars` | integer \| null | no |  |
+
 ### McptOptions
 
 Monte-Carlo permutation test settings (survival test ``permutation``).
@@ -856,6 +975,41 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `n_permutations` | integer | no |  |
 | `retune` | boolean \| "auto" | no |  |
 | `seed` | integer \| null | no |  |
+
+### MeView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `display_name` | string | yes |  |
+| `email` | string \| null | yes |  |
+| `mfa_enrolled` | boolean | yes |  |
+| `mfa_fresh` | boolean | yes |  |
+| `role` | [Role](#role) | yes |  |
+| `scopes` | list[[ApiScope](#apiscope)] | yes |  |
+| `user_id` | string | yes |  |
+| `via` | "session" \| "token" \| "legacy" \| "cli" \| "scheduler" | yes |  |
+
+### MfaCodeRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `code` | string \| null | no |  |
+| `recovery_code` | string \| null | no |  |
+
+### MfaView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `csrf_token` | string \| null | no |  |
+| `method` | "totp" \| "recovery_code" | yes |  |
+| `recovery_codes` | list[string] \| null | no |  |
+| `recovery_codes_left` | integer | yes |  |
+
+### OperationalHaltSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_bar_age_days` | integer \| null | no |  |
 
 ### OrderView
 
@@ -1003,6 +1157,19 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `name` | string | yes |  |
 | `tunable` | boolean | yes |  |
 
+### PasswordChangeRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `current_password` | string | yes |  |
+| `new_password` | string | yes |  |
+
+### PasswordResetRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `new_password` | string | yes |  |
+
 ### PnlRowView
 
 | Field | Type | Required | Description |
@@ -1059,6 +1226,13 @@ One row per day. ``strategy_id`` is ``None`` for the real portfolio and a shadow
 | `tick_id` | string \| null | yes |  |
 | `total_value` | number | yes |  |
 | `unrealized_pnl` | number | no | Sum of the positions' unrealized_pnl (priced, known cost). |
+
+### PortfolioVolSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `shock_cap` | number \| null | no |  |
+| `vol_cap` | number \| null | no |  |
 
 ### PositionView
 
@@ -1188,6 +1362,19 @@ The browser's ``PushSubscription.toJSON()`` plus its user agent.
 | `end` | string \| null | no |  |
 | `start` | string \| null | no |  |
 
+### RecoveryCodesView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `recovery_codes` | list[string] | yes |  |
+
+### ResumeRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `confirmation` | string | yes |  |
+| `reason` | string | yes |  |
+
 ### RiskAdjustmentView
 
 One order the risk policy clipped or dropped.
@@ -1201,6 +1388,14 @@ One order the risk policy clipped or dropped.
 | `side` | string | yes |  |
 | `ticker` | string | yes |  |
 
+### RiskPerPositionSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `atr_multiple` | number | no |  |
+| `max_risk` | number \| null | no |  |
+| `max_var` | number \| null | no |  |
+
 ### RiskPolicy
 
 Portfolio construction limits applied between ``strategy.decide`` and the broker (``[production.risk]``). Defaults are permissive, so an unconfigured install trades exactly what the strategy asks for.
@@ -1213,6 +1408,24 @@ Portfolio construction limits applied between ``strategy.decide`` and the broker
 | `max_weight_per_asset_class` | dict[str, number] | no |  |
 | `max_weight_per_ticker` | number | no |  |
 | `min_order_notional` | number | no |  |
+| `rules` | [RuleSettings](#rulesettings) | no |  |
+
+### Role
+
+Type: "viewer" \| "trader" \| "admin"
+
+### RuleSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `circuit_breaker` | [CircuitBreakerSettings](#circuitbreakersettings) | no |  |
+| `drawdown_scaling` | [DrawdownScalingSettings](#drawdownscalingsettings) | no |  |
+| `liquidity` | [LiquiditySettings](#liquiditysettings) | no |  |
+| `max_holding` | [MaxHoldingSettings](#maxholdingsettings) | no |  |
+| `operational_halt` | [OperationalHaltSettings](#operationalhaltsettings) | no |  |
+| `portfolio_vol` | [PortfolioVolSettings](#portfoliovolsettings) | no |  |
+| `risk_per_position` | [RiskPerPositionSettings](#riskperpositionsettings) | no |  |
+| `sector_cap` | [SectorCapSettings](#sectorcapsettings) | no |  |
 
 ### RuleTemplateView
 
@@ -1273,6 +1486,12 @@ Portfolio construction limits applied between ``strategy.decide`` and the broker
 | `scheduled_for` | date-time | yes |  |
 | `started_at` | date-time | yes |  |
 | `status` | string | yes |  |
+
+### SectorCapSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_weight_per_sector` | number \| null | no |  |
 
 ### ShadowDecisionView
 
@@ -1581,6 +1800,33 @@ What this server lets the Studio do.
 | `winner_expected_return` | number \| null | no |  |
 | `winner_strategy_id` | string \| null | no |  |
 
+### TokenCreateRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `expires_in_days` | integer \| null | no |  |
+| `name` | string | yes |  |
+| `scopes` | list[[ApiScope](#apiscope)] | yes |  |
+
+### TokenCreatedView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `info` | [TokenView](#tokenview) | yes |  |
+| `token` | string | yes |  |
+
+### TokenView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `created_at` | string | yes |  |
+| `expires_at` | string \| null | yes |  |
+| `id` | string | yes |  |
+| `last_used_at` | string \| null | yes |  |
+| `name` | string | yes |  |
+| `revoked_at` | string \| null | yes |  |
+| `scopes` | list[[ApiScope](#apiscope)] | yes |  |
+
 ### TradeStatsView
 
 Trade-level statistics of a backtest (``backtest.trades.TradeStats``). Win/loss figures are over closed round trips; ``None`` marks an unbounded ratio (no losing trades).
@@ -1618,6 +1864,37 @@ One round trip (a lot, or part of one, from buy to sell or to the end).
 | `qty` | number | yes |  |
 | `return_pct` | number \| null | yes |  |
 | `ticker` | string | yes |  |
+
+### UserCreateRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `display_name` | string | yes |  |
+| `email` | string | yes |  |
+| `password` | string | yes |  |
+| `role` | [Role](#role) | yes |  |
+
+### UserUpdateRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `role` | [Role](#role) \| null | no |  |
+| `status` | "active" \| "disabled" \| null | no |  |
+
+### UserView
+
+Identity and status only. Admins never see holdings here.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `created_at` | string | yes |  |
+| `display_name` | string | yes |  |
+| `email` | string \| null | yes |  |
+| `id` | string | yes |  |
+| `last_login_at` | string \| null | yes |  |
+| `mfa_enrolled` | boolean | yes |  |
+| `role` | [Role](#role) | yes |  |
+| `status` | "active" \| "disabled" | yes |  |
 
 ### ValidateRequest
 

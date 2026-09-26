@@ -57,6 +57,13 @@ export type AlpacaStatus = {
 };
 
 /**
+ * ApiScope
+ *
+ * What a credential may do. A token never exceeds its user's role.
+ */
+export type ApiScope = 'read' | 'trade' | 'lab' | 'admin';
+
+/**
  * AssetClassCosts
  *
  * Fee and spread for one asset class.
@@ -398,6 +405,42 @@ export type BrokerInfo = {
      * Paper
      */
     paper: boolean;
+};
+
+/**
+ * CircuitBreakerSettings
+ */
+export type CircuitBreakerSettings = {
+    /**
+     * Cooldown
+     */
+    cooldown?: 'rest_of_month' | 'none';
+    /**
+     * Max Drawdown Halt
+     */
+    max_drawdown_halt?: number | null;
+    /**
+     * Max Month Loss
+     */
+    max_month_loss?: number | null;
+    /**
+     * Max Week Loss
+     */
+    max_week_loss?: number | null;
+    /**
+     * Week Sessions
+     */
+    week_sessions?: number;
+};
+
+/**
+ * ClearHaltRequest
+ */
+export type ClearHaltRequest = {
+    /**
+     * Reason
+     */
+    reason: string;
 };
 
 /**
@@ -865,6 +908,33 @@ export type DraftValidation = {
 };
 
 /**
+ * DrawdownScalingSettings
+ */
+export type DrawdownScalingSettings = {
+    /**
+     * Schedule
+     */
+    schedule?: Array<[
+        number,
+        number
+    ]> | null;
+};
+
+/**
+ * EnrolStartView
+ */
+export type EnrolStartView = {
+    /**
+     * Otpauth Uri
+     */
+    otpauth_uri: string;
+    /**
+     * Secret
+     */
+    secret: string;
+};
+
+/**
  * EquityPoint
  */
 export type EquityPoint = {
@@ -1087,6 +1157,68 @@ export type GoLiveReport = {
      * Strategy Id
      */
     strategy_id: string;
+};
+
+/**
+ * HaltView
+ */
+export type HaltView = {
+    /**
+     * Active
+     */
+    active: boolean;
+    /**
+     * Clear Reason
+     */
+    clear_reason: string | null;
+    /**
+     * Cleared At
+     */
+    cleared_at: string | null;
+    /**
+     * Cleared By
+     */
+    cleared_by: string | null;
+    /**
+     * Expires On
+     */
+    expires_on: string | null;
+    /**
+     * Halt
+     */
+    halt: 'buys' | 'all';
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Kind
+     */
+    kind: 'month_loss' | 'week_loss' | 'drawdown' | 'operational' | 'kill';
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string | null;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Scope
+     */
+    scope: 'global' | 'user' | 'portfolio';
+    /**
+     * Tripped At
+     */
+    tripped_at: string;
+    /**
+     * Tripped By
+     */
+    tripped_by: string;
+    /**
+     * User Id
+     */
+    user_id: string | null;
 };
 
 /**
@@ -1504,6 +1636,28 @@ export type JobEvent = {
 };
 
 /**
+ * KillSwitchRequest
+ */
+export type KillSwitchRequest = {
+    /**
+     * Flatten
+     */
+    flatten?: boolean;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id?: string | null;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Scope
+     */
+    scope: 'global' | 'user' | 'portfolio';
+};
+
+/**
  * LabRunRequest
  *
  * Tunes the class the ``strategy`` ref points at (its ``params`` are
@@ -1681,6 +1835,60 @@ export type LinkResultView = {
 };
 
 /**
+ * LiquiditySettings
+ */
+export type LiquiditySettings = {
+    /**
+     * Max Amihud
+     */
+    max_amihud?: number | null;
+    /**
+     * Max Pct Adv
+     */
+    max_pct_adv?: number | null;
+    /**
+     * Min Median Dollar Volume
+     */
+    min_median_dollar_volume?: number | null;
+};
+
+/**
+ * LoginRequest
+ */
+export type LoginRequest = {
+    /**
+     * Email
+     */
+    email: string;
+    /**
+     * Password
+     */
+    password: string;
+};
+
+/**
+ * LoginView
+ */
+export type LoginView = {
+    /**
+     * Csrf Token
+     */
+    csrf_token: string;
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Next Step
+     */
+    next_step: 'enrol' | 'verify';
+    /**
+     * User Id
+     */
+    user_id: string;
+};
+
+/**
  * MarkReadRequest
  */
 export type MarkReadRequest = {
@@ -1727,6 +1935,16 @@ export type MarketClockView = {
 };
 
 /**
+ * MaxHoldingSettings
+ */
+export type MaxHoldingSettings = {
+    /**
+     * Max Holding Bars
+     */
+    max_holding_bars?: number | null;
+};
+
+/**
  * McptOptions
  *
  * Monte-Carlo permutation test settings (survival test ``permutation``).
@@ -1752,6 +1970,87 @@ export type McptOptions = {
      * Seed
      */
     seed?: number | null;
+};
+
+/**
+ * MeView
+ */
+export type MeView = {
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Email
+     */
+    email: string | null;
+    /**
+     * Mfa Enrolled
+     */
+    mfa_enrolled: boolean;
+    /**
+     * Mfa Fresh
+     */
+    mfa_fresh: boolean;
+    role: Role;
+    /**
+     * Scopes
+     */
+    scopes: Array<ApiScope>;
+    /**
+     * User Id
+     */
+    user_id: string;
+    /**
+     * Via
+     */
+    via: 'session' | 'token' | 'legacy' | 'cli' | 'scheduler';
+};
+
+/**
+ * MfaCodeRequest
+ */
+export type MfaCodeRequest = {
+    /**
+     * Code
+     */
+    code?: string | null;
+    /**
+     * Recovery Code
+     */
+    recovery_code?: string | null;
+};
+
+/**
+ * MfaView
+ */
+export type MfaView = {
+    /**
+     * Csrf Token
+     */
+    csrf_token?: string | null;
+    /**
+     * Method
+     */
+    method: 'totp' | 'recovery_code';
+    /**
+     * Recovery Codes
+     */
+    recovery_codes?: Array<string> | null;
+    /**
+     * Recovery Codes Left
+     */
+    recovery_codes_left: number;
+};
+
+/**
+ * OperationalHaltSettings
+ */
+export type OperationalHaltSettings = {
+    /**
+     * Max Bar Age Days
+     */
+    max_bar_age_days?: number | null;
 };
 
 /**
@@ -2129,6 +2428,30 @@ export type ParameterInfo = {
 };
 
 /**
+ * PasswordChangeRequest
+ */
+export type PasswordChangeRequest = {
+    /**
+     * Current Password
+     */
+    current_password: string;
+    /**
+     * New Password
+     */
+    new_password: string;
+};
+
+/**
+ * PasswordResetRequest
+ */
+export type PasswordResetRequest = {
+    /**
+     * New Password
+     */
+    new_password: string;
+};
+
+/**
  * PnlRowView
  */
 export type PnlRowView = {
@@ -2285,6 +2608,20 @@ export type PortfolioView = {
      * Sum of the positions' unrealized_pnl (priced, known cost).
      */
     unrealized_pnl?: number;
+};
+
+/**
+ * PortfolioVolSettings
+ */
+export type PortfolioVolSettings = {
+    /**
+     * Shock Cap
+     */
+    shock_cap?: number | null;
+    /**
+     * Vol Cap
+     */
+    vol_cap?: number | null;
 };
 
 /**
@@ -2612,6 +2949,30 @@ export type QuietHoursUpdate = {
 };
 
 /**
+ * RecoveryCodesView
+ */
+export type RecoveryCodesView = {
+    /**
+     * Recovery Codes
+     */
+    recovery_codes: Array<string>;
+};
+
+/**
+ * ResumeRequest
+ */
+export type ResumeRequest = {
+    /**
+     * Confirmation
+     */
+    confirmation: string;
+    /**
+     * Reason
+     */
+    reason: string;
+};
+
+/**
  * RiskAdjustmentView
  *
  * One order the risk policy clipped or dropped.
@@ -2641,6 +3002,24 @@ export type RiskAdjustmentView = {
      * Ticker
      */
     ticker: string;
+};
+
+/**
+ * RiskPerPositionSettings
+ */
+export type RiskPerPositionSettings = {
+    /**
+     * Atr Multiple
+     */
+    atr_multiple?: number;
+    /**
+     * Max Risk
+     */
+    max_risk?: number | null;
+    /**
+     * Max Var
+     */
+    max_var?: number | null;
 };
 
 /**
@@ -2681,6 +3060,26 @@ export type RiskPolicy = {
      * Min Order Notional
      */
     min_order_notional?: number;
+    rules?: RuleSettings;
+};
+
+/**
+ * Role
+ */
+export type Role = 'viewer' | 'trader' | 'admin';
+
+/**
+ * RuleSettings
+ */
+export type RuleSettings = {
+    circuit_breaker?: CircuitBreakerSettings;
+    drawdown_scaling?: DrawdownScalingSettings;
+    liquidity?: LiquiditySettings;
+    max_holding?: MaxHoldingSettings;
+    operational_halt?: OperationalHaltSettings;
+    portfolio_vol?: PortfolioVolSettings;
+    risk_per_position?: RiskPerPositionSettings;
+    sector_cap?: SectorCapSettings;
 };
 
 /**
@@ -2841,6 +3240,16 @@ export type ScheduledRunView = {
      * Status
      */
     status: string;
+};
+
+/**
+ * SectorCapSettings
+ */
+export type SectorCapSettings = {
+    /**
+     * Max Weight Per Sector
+     */
+    max_weight_per_sector?: number | null;
 };
 
 /**
@@ -3674,6 +4083,69 @@ export type TickSummary = {
 };
 
 /**
+ * TokenCreateRequest
+ */
+export type TokenCreateRequest = {
+    /**
+     * Expires In Days
+     */
+    expires_in_days?: number | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Scopes
+     */
+    scopes: Array<ApiScope>;
+};
+
+/**
+ * TokenCreatedView
+ */
+export type TokenCreatedView = {
+    info: TokenView;
+    /**
+     * Token
+     */
+    token: string;
+};
+
+/**
+ * TokenView
+ */
+export type TokenView = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Expires At
+     */
+    expires_at: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Last Used At
+     */
+    last_used_at: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Revoked At
+     */
+    revoked_at: string | null;
+    /**
+     * Scopes
+     */
+    scopes: Array<ApiScope>;
+};
+
+/**
  * TradeStatsView
  *
  * Trade-level statistics of a backtest (``backtest.trades.TradeStats``).
@@ -3785,6 +4257,73 @@ export type TradeView = {
      * Ticker
      */
     ticker: string;
+};
+
+/**
+ * UserCreateRequest
+ */
+export type UserCreateRequest = {
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Email
+     */
+    email: string;
+    /**
+     * Password
+     */
+    password: string;
+    role: Role;
+};
+
+/**
+ * UserUpdateRequest
+ */
+export type UserUpdateRequest = {
+    role?: Role | null;
+    /**
+     * Status
+     */
+    status?: 'active' | 'disabled' | null;
+};
+
+/**
+ * UserView
+ *
+ * Identity and status only. Admins never see holdings here.
+ */
+export type UserView = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Email
+     */
+    email: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Last Login At
+     */
+    last_login_at: string | null;
+    /**
+     * Mfa Enrolled
+     */
+    mfa_enrolled: boolean;
+    role: Role;
+    /**
+     * Status
+     */
+    status: 'active' | 'disabled';
 };
 
 /**
@@ -4089,6 +4628,10 @@ export type CheckAuthErrors = {
      */
     401: ProblemDetails;
     /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
      * Not Found
      */
     404: ProblemDetails;
@@ -4100,6 +4643,10 @@ export type CheckAuthErrors = {
      * Unprocessable Content
      */
     422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
     /**
      * Service Unavailable
      */
@@ -4116,6 +4663,814 @@ export type CheckAuthResponses = {
 };
 
 export type CheckAuthResponse = CheckAuthResponses[keyof CheckAuthResponses];
+
+export type LoginData = {
+    body: LoginRequest;
+    path?: never;
+    query?: never;
+    url: '/api/auth/login';
+};
+
+export type LoginErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type LoginError = LoginErrors[keyof LoginErrors];
+
+export type LoginResponses = {
+    /**
+     * Successful Response
+     */
+    200: LoginView;
+};
+
+export type LoginResponse = LoginResponses[keyof LoginResponses];
+
+export type LogoutData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/auth/logout';
+};
+
+export type LogoutErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type LogoutError = LogoutErrors[keyof LogoutErrors];
+
+export type LogoutResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type LogoutResponse = LogoutResponses[keyof LogoutResponses];
+
+export type GetMeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/auth/me';
+};
+
+export type GetMeErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetMeError = GetMeErrors[keyof GetMeErrors];
+
+export type GetMeResponses = {
+    /**
+     * Successful Response
+     */
+    200: MeView;
+};
+
+export type GetMeResponse = GetMeResponses[keyof GetMeResponses];
+
+export type StartMfaEnrolmentData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/auth/mfa/enrol';
+};
+
+export type StartMfaEnrolmentErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type StartMfaEnrolmentError = StartMfaEnrolmentErrors[keyof StartMfaEnrolmentErrors];
+
+export type StartMfaEnrolmentResponses = {
+    /**
+     * Successful Response
+     */
+    200: EnrolStartView;
+};
+
+export type StartMfaEnrolmentResponse = StartMfaEnrolmentResponses[keyof StartMfaEnrolmentResponses];
+
+export type ConfirmMfaEnrolmentData = {
+    body: MfaCodeRequest;
+    path?: never;
+    query?: never;
+    url: '/api/auth/mfa/enrol/confirm';
+};
+
+export type ConfirmMfaEnrolmentErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ConfirmMfaEnrolmentError = ConfirmMfaEnrolmentErrors[keyof ConfirmMfaEnrolmentErrors];
+
+export type ConfirmMfaEnrolmentResponses = {
+    /**
+     * Successful Response
+     */
+    200: MfaView;
+};
+
+export type ConfirmMfaEnrolmentResponse = ConfirmMfaEnrolmentResponses[keyof ConfirmMfaEnrolmentResponses];
+
+export type VerifyMfaData = {
+    body: MfaCodeRequest;
+    path?: never;
+    query?: never;
+    url: '/api/auth/mfa/verify';
+};
+
+export type VerifyMfaErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type VerifyMfaError = VerifyMfaErrors[keyof VerifyMfaErrors];
+
+export type VerifyMfaResponses = {
+    /**
+     * Successful Response
+     */
+    200: MfaView;
+};
+
+export type VerifyMfaResponse = VerifyMfaResponses[keyof VerifyMfaResponses];
+
+export type ChangePasswordData = {
+    body: PasswordChangeRequest;
+    path?: never;
+    query?: never;
+    url: '/api/auth/password';
+};
+
+export type ChangePasswordErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ChangePasswordError = ChangePasswordErrors[keyof ChangePasswordErrors];
+
+export type ChangePasswordResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type ChangePasswordResponse = ChangePasswordResponses[keyof ChangePasswordResponses];
+
+export type RegenerateRecoveryCodesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/auth/recovery-codes';
+};
+
+export type RegenerateRecoveryCodesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RegenerateRecoveryCodesError = RegenerateRecoveryCodesErrors[keyof RegenerateRecoveryCodesErrors];
+
+export type RegenerateRecoveryCodesResponses = {
+    /**
+     * Successful Response
+     */
+    200: RecoveryCodesView;
+};
+
+export type RegenerateRecoveryCodesResponse = RegenerateRecoveryCodesResponses[keyof RegenerateRecoveryCodesResponses];
+
+export type ListApiTokensData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/auth/tokens';
+};
+
+export type ListApiTokensErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListApiTokensError = ListApiTokensErrors[keyof ListApiTokensErrors];
+
+export type ListApiTokensResponses = {
+    /**
+     * Response Listapitokens
+     *
+     * Successful Response
+     */
+    200: Array<TokenView>;
+};
+
+export type ListApiTokensResponse = ListApiTokensResponses[keyof ListApiTokensResponses];
+
+export type CreateApiTokenData = {
+    body: TokenCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/api/auth/tokens';
+};
+
+export type CreateApiTokenErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CreateApiTokenError = CreateApiTokenErrors[keyof CreateApiTokenErrors];
+
+export type CreateApiTokenResponses = {
+    /**
+     * Successful Response
+     */
+    201: TokenCreatedView;
+};
+
+export type CreateApiTokenResponse = CreateApiTokenResponses[keyof CreateApiTokenResponses];
+
+export type RevokeApiTokenData = {
+    body?: never;
+    path: {
+        /**
+         * Token Id
+         */
+        token_id: string;
+    };
+    query?: never;
+    url: '/api/auth/tokens/{token_id}';
+};
+
+export type RevokeApiTokenErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RevokeApiTokenError = RevokeApiTokenErrors[keyof RevokeApiTokenErrors];
+
+export type RevokeApiTokenResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type RevokeApiTokenResponse = RevokeApiTokenResponses[keyof RevokeApiTokenResponses];
+
+export type ListUsersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/auth/users';
+};
+
+export type ListUsersErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListUsersError = ListUsersErrors[keyof ListUsersErrors];
+
+export type ListUsersResponses = {
+    /**
+     * Response Listusers
+     *
+     * Successful Response
+     */
+    200: Array<UserView>;
+};
+
+export type ListUsersResponse = ListUsersResponses[keyof ListUsersResponses];
+
+export type CreateUserData = {
+    body: UserCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/api/auth/users';
+};
+
+export type CreateUserErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CreateUserError = CreateUserErrors[keyof CreateUserErrors];
+
+export type CreateUserResponses = {
+    /**
+     * Successful Response
+     */
+    201: UserView;
+};
+
+export type CreateUserResponse = CreateUserResponses[keyof CreateUserResponses];
+
+export type UpdateUserData = {
+    body: UserUpdateRequest;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/api/auth/users/{user_id}';
+};
+
+export type UpdateUserErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type UpdateUserError = UpdateUserErrors[keyof UpdateUserErrors];
+
+export type UpdateUserResponses = {
+    /**
+     * Successful Response
+     */
+    200: UserView;
+};
+
+export type UpdateUserResponse = UpdateUserResponses[keyof UpdateUserResponses];
+
+export type ResetUserMfaData = {
+    body?: never;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/api/auth/users/{user_id}/mfa';
+};
+
+export type ResetUserMfaErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ResetUserMfaError = ResetUserMfaErrors[keyof ResetUserMfaErrors];
+
+export type ResetUserMfaResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type ResetUserMfaResponse = ResetUserMfaResponses[keyof ResetUserMfaResponses];
+
+export type ResetUserPasswordData = {
+    body: PasswordResetRequest;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/api/auth/users/{user_id}/password';
+};
+
+export type ResetUserPasswordErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ResetUserPasswordError = ResetUserPasswordErrors[keyof ResetUserPasswordErrors];
+
+export type ResetUserPasswordResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type ResetUserPasswordResponse = ResetUserPasswordResponses[keyof ResetUserPasswordResponses];
 
 export type GetBrokerInfoData = {
     body?: never;
@@ -4783,6 +6138,235 @@ export type SyncConnectionResponses = {
 };
 
 export type SyncConnectionResponse = SyncConnectionResponses[keyof SyncConnectionResponses];
+
+export type ListHaltsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Include Cleared
+         *
+         * also cleared and expired halts
+         */
+        include_cleared?: boolean;
+    };
+    url: '/api/halts';
+};
+
+export type ListHaltsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListHaltsError = ListHaltsErrors[keyof ListHaltsErrors];
+
+export type ListHaltsResponses = {
+    /**
+     * Response Listhalts
+     *
+     * Successful Response
+     */
+    200: Array<HaltView>;
+};
+
+export type ListHaltsResponse = ListHaltsResponses[keyof ListHaltsResponses];
+
+export type EngageKillSwitchData = {
+    body: KillSwitchRequest;
+    path?: never;
+    query?: never;
+    url: '/api/halts/kill';
+};
+
+export type EngageKillSwitchErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type EngageKillSwitchError = EngageKillSwitchErrors[keyof EngageKillSwitchErrors];
+
+export type EngageKillSwitchResponses = {
+    /**
+     * Successful Response
+     */
+    201: HaltView;
+};
+
+export type EngageKillSwitchResponse = EngageKillSwitchResponses[keyof EngageKillSwitchResponses];
+
+export type GetHaltData = {
+    body?: never;
+    path: {
+        /**
+         * Halt Id
+         */
+        halt_id: number;
+    };
+    query?: never;
+    url: '/api/halts/{halt_id}';
+};
+
+export type GetHaltErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetHaltError = GetHaltErrors[keyof GetHaltErrors];
+
+export type GetHaltResponses = {
+    /**
+     * Successful Response
+     */
+    200: HaltView;
+};
+
+export type GetHaltResponse = GetHaltResponses[keyof GetHaltResponses];
+
+export type ClearHaltData = {
+    body: ClearHaltRequest;
+    path: {
+        /**
+         * Halt Id
+         */
+        halt_id: number;
+    };
+    query?: never;
+    url: '/api/halts/{halt_id}/clear';
+};
+
+export type ClearHaltErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ClearHaltError = ClearHaltErrors[keyof ClearHaltErrors];
+
+export type ClearHaltResponses = {
+    /**
+     * Successful Response
+     */
+    200: HaltView;
+};
+
+export type ClearHaltResponse = ClearHaltResponses[keyof ClearHaltResponses];
+
+export type ResumeKillSwitchData = {
+    body: ResumeRequest;
+    path: {
+        /**
+         * Halt Id
+         */
+        halt_id: number;
+    };
+    query?: never;
+    url: '/api/halts/{halt_id}/resume';
+};
+
+export type ResumeKillSwitchErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ResumeKillSwitchError = ResumeKillSwitchErrors[keyof ResumeKillSwitchErrors];
+
+export type ResumeKillSwitchResponses = {
+    /**
+     * Successful Response
+     */
+    200: HaltView;
+};
+
+export type ResumeKillSwitchResponse = ResumeKillSwitchResponses[keyof ResumeKillSwitchResponses];
 
 export type GetHealthData = {
     body?: never;

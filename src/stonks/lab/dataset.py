@@ -40,7 +40,9 @@ from stonks.core.interval import Interval
 
 if TYPE_CHECKING:  # pragma: no cover
     from stonks.backtest.costs import CostModelSettings
+    from stonks.backtest.fills import ExecutionSettings
     from stonks.backtest.report import BacktestReport
+    from stonks.portfolio.settings import ConstructionSettings
     from stonks.store.lake import DuckDBLake
 
 #: Which window a validation-style survival test scores.
@@ -88,6 +90,12 @@ class LabDataset:
     #: Benchmark spec every backtest on this dataset compares against
     #: (``backtest.benchmark``: ``"auto"``, ``"EW"``, a ticker, ``"none"``).
     benchmark: str = "auto"
+    #: Fill model and settlement of every backtest's simulated broker
+    #: (``[backtest.execution]``). ``None``: immediate fills, no settlement.
+    execution: ExecutionSettings | None = None
+    #: The production construction pipeline for every backtest
+    #: (``[backtest.construction]``). ``None``: each strategy decides alone.
+    construction: ConstructionSettings | None = None
     #: The stored universe this dataset was built from (roadmap 10.5). With
     #: an empty ``universe`` the lab resolves its members over the window
     #: (``lab.universe_data``); the preflight checks membership against it.

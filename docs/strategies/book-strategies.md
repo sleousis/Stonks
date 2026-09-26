@@ -392,3 +392,73 @@ Metadata: `alpha_family = "trend"`, `label_horizon_bars = 63`,
 - **File names.** The backlog's `time_series_momentum.py` and
   `features/trend_following.py` became `tsmom.py`, `features/forecast.py`
   and `features/trailing_stop.py`.
+
+## `RegimeFilter` (BL-42)
+
+`strategies/regime.py`, with the conditions in `features/regime_conditions.py`.
+Sources: Clenow and Faber (index below its long average), Elder (Triple
+Screen), Davey (bull and bear filter), Kindleberger and Lefevre (credit and
+panic signs).
+
+It wraps any strategy like the other wrappers (`inner_class_path`,
+`inner_params`). Each condition says "risk off", "risk on" or "can't tell"
+on a day, using only data dated on or before that day.
+
+| Condition | Risk off when |
+|-----------|---------------|
+| `macro` | A `macro_indicators` series (level or change) crosses a threshold, counted from its publication date. |
+| `price_trend` | A benchmark closes below its `sma`-bar average. An optional hysteresis band (up to 3%) stops flip-flopping. |
+| `realized_vol` | A benchmark's realised volatility is above its own `pct` quantile over `lookback_years`. |
+| `yield_curve` | Long minus short yield (`bond_yield_history`) is below `threshold`, so an inverted curve by default. |
+| `higher_timeframe` | A benchmark's close is below the EMA of its weekly closes. The weeks are built from daily bars, so the current week is partial. |
+
+Risk off when at least `k` of the n conditions trigger. Then `mode` decides:
+
+- `block_new_buys` (default): buys are dropped, sells pass, holdings stay.
+- `exit_all`: every long is sold.
+- `scale`: buys shrink to the share of conditions that did not trigger.
+
+Example params:
+
+```json
+{
+  "inner_class_path": "stonks.strategies.examples.quant_momentum:QuantMomentum",
+  "conditions": [
+    {"kind": "price_trend", "ticker": "SPY.US"},
+    {"kind": "realized_vol", "ticker": "SPY.US"},
+    {"kind": "yield_curve", "long_ticker": "US10Y.GBOND", "short_ticker": "US3M.GBOND"}
+  ],
+  "k": 2
+}
+```
+
+Tunable knobs: `k`, `trend_sma`, `trend_hysteresis`, `vol_window`,
+`vol_pct` and `htf_ema`. Each fills that field of every condition whose
+spec leaves it out. A new condition is one new module named
+`features/regime_<name>.py` with a `RegimeCondition` subclass. No list is
+edited.
+
+Deviations from the backlog: `yield_curve` reads `bond_yield_history`, not
+`macro_indicators`. A condition that can't be judged counts as not
+triggered unless `when_unknown` is `trigger`.
+
+## Legacy defaults (BL-43)
+
+- **`momentum`.** Lookback 126 bars that end 21 bars back (`skip_days`),
+  not 20 bars. Chan finds momentum at 3 to 12 months, and the last month
+  tends to reverse (Gray and Vogel skip it). A param set that sets
+  `lookback_days` but no `skip_days` (every one saved before) keeps
+  `skip_days = 0`. The `lookback_days` bounds stay 5 to 252 so old sets
+  load.
+- **Breakouts.** `donchian_breakout` and `trendline_breakout` default to
+  commodity, crypto and bond, with `BTC-USD.CC` as the ticker. Grimes finds
+  breakouts on single stocks no better than random. Add
+  `"asset_classes": ["equity"]` to run them on a stock. A saved equity
+  breakout still loads but needs that opt-in to keep trading.
+- **Rule DSL.** `risk.trailing_stop_vol_multiple` (0.25 to 3, Carver uses
+  0.5) and `risk.trailing_stop_atr_multiple` (1 to 6) put a trailing stop
+  below the best close since entry. The stop never moves down.
+  `trailing_stop_period` (20) sets the window. New indicators:
+  `efficiency_ratio` (Kaufman ER, default 10) and `kama` (10, 2, 30).
+- **Metadata.** Every catalogued strategy now states a hypothesis, and every
+  trading example an alpha family and a label horizon.

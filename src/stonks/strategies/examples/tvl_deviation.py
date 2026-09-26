@@ -120,6 +120,14 @@ def rolling_loglog_prediction(close: pd.Series, tvl: pd.Series, window: int) -> 
 
 class TVLDeviationStrategy(SingleTickerLongFlat):
     id = "tvl_deviation"
+    hypothesis = (
+        "A token's price tends to return to the level its chain's locked "
+        "value implies, since that value is what the token is used for. "
+        "Fails when the price and value relation shifts."
+    )
+    alpha_family = "reversion"
+    premise = "mean_reversion"
+    label_horizon_bars = 10
     applicable_asset_classes = ("crypto",)
 
     @classmethod

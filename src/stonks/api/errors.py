@@ -77,8 +77,13 @@ def problem(
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _app_error(request: Request, exc: AppError) -> JSONResponse:
-        status = next((code for cls, code in _STATUS_BY_ERROR if isinstance(exc, cls)), 400)
-        return problem(request, status, title=exc.title, detail=str(exc))
+        # Errors may carry their own status and headers (auth: 401/403/429).
+        status = next(
+            (code for cls, code in _STATUS_BY_ERROR if isinstance(exc, cls)),
+            getattr(exc, "http_status", 400),
+        )
+        headers = getattr(exc, "headers", None)
+        return problem(request, status, title=exc.title, detail=str(exc), headers=headers)
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
