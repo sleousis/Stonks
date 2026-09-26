@@ -17,12 +17,29 @@ Noise model: one standard-normal draw ``z`` per bar row (fixed by
 ``open/high/low/close/adj_close`` are all scaled by ``exp(sigma * z)``,
 so OHLC ordering is preserved and prices stay positive. Volume is left
 untouched.
+
+Window (BL-21): the baseline and every noisy run backtest the validation
+window (``window="val"``, the default: the embargoed window the tuner
+never saw, see ``lab.dataset.scoring_window``); ``window="full"`` scores
+the whole dataset as before. Noise covers every bar up to the window end,
+look-back history included.
+
+Noise levels run as ``lab.parallel.run_tasks`` tasks on ``max_workers``
+processes (default ``lab.parallel.default_max_workers()``; 1 runs them
+in-process). The noise draws are made once in this process, and each
+worker rebuilds the same perturbed lake from them, so the report is
+identical for any worker count provided the strategy's ``save``/``load``
+round-trip is exact.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import date
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -30,8 +47,9 @@ import pandas as pd
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.lab.backtesting import run_backtest
-from stonks.lab.dataset import LabDataset
+from stonks.lab.dataset import LabDataset, ScoringWindow, scoring_window
 from stonks.lab.lake_copy import copy_universe_lake
+from stonks.lab.parallel import PortableLake, PortableStrategy, run_tasks
 from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
 
@@ -48,29 +66,53 @@ class PerturbationTest:
         noise_sigmas: Sequence[float] = (0.0, 0.005, 0.01),
         min_correlation: float = 0.8,
         seed: int = 0,
+        window: ScoringWindow = "val",
+        max_workers: int | None = None,
     ) -> None:
+        if window not in ("val", "full"):
+            raise ValueError(f"window must be 'val' or 'full', got {window!r}")
+        if max_workers is not None and max_workers < 1:
+            raise ValueError("max_workers must be >= 1")
         self._sigmas = list(noise_sigmas)
         self._min_corr = min_correlation
         self._seed = seed
+        self._window: ScoringWindow = window
+        self._max_workers = max_workers
 
     def run(self, strategy: Strategy, context: LabDataset) -> SurvivalReport:
-        _log.info("perturbation.start", seed=self._seed, sigmas=self._sigmas)
-        baseline = list(run_backtest(strategy, context, context.full_window).equity_curve)
+        window = scoring_window(context, strategy, self._window)
+        _log.info(
+            "perturbation.start",
+            seed=self._seed,
+            sigmas=self._sigmas,
+            window=[str(w) for w in window],
+        )
+        baseline = list(run_backtest(strategy, context, window).equity_curve)
 
-        bars = _universe_bars(context)
+        bars = _universe_bars(context, window[1])
         z = np.random.default_rng(self._seed).standard_normal(len(bars))
-
-        correlations: list[float] = []
-        for sigma in self._sigmas:
-            if sigma == 0.0:
-                correlations.append(1.0)
-                continue
-            lake = _perturbed_lake(context, bars, z, sigma)
-            try:
-                report = run_backtest(strategy, context, context.full_window, lake=lake)
-            finally:
-                lake.close()
-            correlations.append(_pearson(baseline, list(report.equity_curve)))
+        noisy = [s for s in self._sigmas if s != 0.0]
+        curves = (
+            run_tasks(
+                _noisy_curve,
+                noisy,
+                payload=_NoiseRun(
+                    context=dataclasses.replace(context, lake=None),
+                    source=PortableLake(context.lake, context.universe),
+                    strategy=PortableStrategy(strategy),
+                    bars=bars,
+                    z=z,
+                    window=window,
+                ),
+                max_workers=self._max_workers,
+            )
+            if noisy
+            else []
+        )
+        by_sigma = dict(zip(noisy, curves, strict=True))
+        correlations = [
+            1.0 if sigma == 0.0 else _pearson(baseline, by_sigma[sigma]) for sigma in self._sigmas
+        ]
 
         mean_corr = sum(correlations) / len(correlations) if correlations else 0.0
         min_corr = min(correlations) if correlations else 0.0
@@ -81,14 +123,38 @@ class PerturbationTest:
         }
         passed = min_corr >= self._min_corr
         return SurvivalReport(
-            test_id=self.id, passed=passed, metrics=metrics, notes=f"seed={self._seed}"
+            test_id=self.id,
+            passed=passed,
+            metrics=metrics,
+            notes=f"seed={self._seed}; window={self._window}",
         )
 
 
-def _universe_bars(context: LabDataset) -> pd.DataFrame:
-    """Every bar (all intervals, all history up to the window end) for the
+@dataclass
+class _NoiseRun:
+    """Per-worker state of the noisy runs: the dataset (lake detached),
+    its universe tables, the strategy, the real bars and the noise draws."""
+
+    context: Any
+    source: PortableLake
+    strategy: PortableStrategy
+    bars: pd.DataFrame
+    z: np.ndarray
+    window: tuple[date, date]
+
+
+def _noisy_curve(run: _NoiseRun, sigma: float) -> list[float]:
+    lake = _perturbed_lake(run.source.lake, run.context.universe, run.bars, run.z, sigma)
+    try:
+        report = run_backtest(run.strategy.strategy, run.context, run.window, lake=lake)
+    finally:
+        lake.close()
+    return list(report.equity_curve)
+
+
+def _universe_bars(context: LabDataset, end: date) -> pd.DataFrame:
+    """Every bar (all intervals, all history up to ``end``) for the
     universe, in a deterministic row order so noise draws are stable."""
-    _, end = context.full_window
     return context.lake.sql(
         """
         SELECT ticker, timestamp, interval, open, high, low, close, adj_close, volume
@@ -101,9 +167,9 @@ def _universe_bars(context: LabDataset) -> pd.DataFrame:
 
 
 def _perturbed_lake(
-    context: LabDataset, bars: pd.DataFrame, z: np.ndarray, sigma: float
+    source: DuckDBLake, universe: Sequence[str], bars: pd.DataFrame, z: np.ndarray, sigma: float
 ) -> DuckDBLake:
-    lake = copy_universe_lake(context.lake, context.universe)
+    lake = copy_universe_lake(source, universe)
     if bars.empty:
         return lake
     noisy = bars.copy()

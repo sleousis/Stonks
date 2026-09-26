@@ -57,13 +57,28 @@ class _RecordingTuner:
         return TunerResult(best_params={}, best_score=float(len(self.datasets)), history=[])
 
 
-def test_each_fold_tunes_on_its_train_window_and_scores_its_test_window(lake_trending):
+def test_each_fold_tunes_on_its_train_window_and_scores_its_test_window(lake_trending, monkeypatch):
     ds = _ds(lake_trending)
     cfg = WalkForwardConfig(n_splits=3, test_days=20, train_days=60)
     folds = walk_forward_folds(ds.start, ds.end, n_splits=3, test_days=20, train_days=60)
     tuner = _RecordingTuner()
     _Recorder.as_ofs, _Recorder.fitted_on = [], []
+    from stonks.lab.survival import walk_forward as wf
 
+    windows: list = []
+    real_backtest = wf.run_backtest
+
+    def recording_backtest(strategy, dataset, window, lake=None):
+        windows.append(window)
+        if window[0] != dataset.start:  # the OOS run; the IS run starts at the fold start
+            return real_backtest(strategy, dataset, window, lake)
+        _Recorder.as_ofs, saved = [], _Recorder.as_ofs
+        try:
+            return real_backtest(strategy, dataset, window, lake)
+        finally:
+            _Recorder.as_ofs = saved
+
+    monkeypatch.setattr(wf, "run_backtest", recording_backtest)
     report = WalkForwardTest(cfg, TuningSetup(tuner, SharpeObjective(), budget=2)).run(
         _Recorder({}), ds
     )
@@ -71,6 +86,10 @@ def test_each_fold_tunes_on_its_train_window_and_scores_its_test_window(lake_tre
     assert [d.train_window for d in tuner.datasets] == [(f.train_start, f.train_end) for f in folds]
     assert [d.val_window for d in tuner.datasets] == [(f.test_start, f.test_end) for f in folds]
     assert _Recorder.fitted_on == tuner.datasets  # fitted on the fold, not the full dataset
+    # per fold: one in-sample backtest of the train window, one of the test window
+    assert windows == [
+        w for f in folds for w in ((f.train_start, f.train_end), (f.test_start, f.test_end))
+    ]
     # scored only inside the test windows, and inside every one of them
     in_test = [any(f.test_start <= a <= f.test_end for f in folds) for a in _Recorder.as_ofs]
     assert _Recorder.as_ofs and all(in_test)
@@ -123,7 +142,8 @@ def test_folds_keep_the_wrapped_inner_strategy_and_fixed_params(lake_trending, m
     real_backtest = wf.run_backtest
 
     def recording_backtest(strategy, dataset, window, lake=None):
-        scored.append(strategy)
+        if window[0] != dataset.start:  # OOS runs only; the IS run starts at the fold start
+            scored.append(strategy)
         return real_backtest(strategy, dataset, window, lake)
 
     monkeypatch.setattr(wf, "run_backtest", recording_backtest)
@@ -159,7 +179,8 @@ def test_params_pinned_on_the_runner_stay_pinned_in_every_fold(lake_trending, mo
     real_backtest = wf.run_backtest
 
     def recording_backtest(strategy, dataset, window, lake=None):
-        scored.append(strategy)
+        if window[0] != dataset.start:  # OOS runs only; the IS run starts at the fold start
+            scored.append(strategy)
         return real_backtest(strategy, dataset, window, lake)
 
     monkeypatch.setattr(wf, "run_backtest", recording_backtest)
