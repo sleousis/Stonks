@@ -707,6 +707,22 @@
             "title": "Progress",
             "type": "number"
           },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "timeout",
+                  "untracked"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason"
+          },
           "status": {
             "enum": [
               "queued",
@@ -2699,7 +2715,7 @@
     },
     "/api/jobs/{job_id}/events": {
       "get": {
-        "description": "Server-sent events with the job's status/progress until it finishes.\n\nThe stream ends when the job reaches a terminal status or the client\ndisconnects; the store is polled off the event loop.",
+        "description": "Server-sent events with the job's status/progress until it finishes.\n\nEvents: ``status`` on every change, then ``done`` when the job reaches\na terminal status, or ``end`` (with ``reason``) when the stream gives up\nfirst: after ``api.sse_max_stream_seconds``, or when no worker in this\nprocess tracks the job any more. The stream also ends when the client\ndisconnects; the store is polled off the event loop.",
         "operationId": "streamJobEvents",
         "parameters": [
           {

@@ -52,8 +52,11 @@ def create_app(
         try:
             yield
         finally:
-            # Don't block shutdown on a long lab run; anything still running
-            # is marked failed by recover_interrupted() on the next start.
+            # Queued jobs are cancelled and running lab runs asked to stop at
+            # their next trial. wait=False only returns early: the
+            # interpreter still joins running workers (ticks, ingests) at
+            # exit. Anything cut off by a hard kill is marked failed by
+            # recover_interrupted() on the next start.
             svc.shutdown(wait=False)
             _log.info("api.stopped")
 

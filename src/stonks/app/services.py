@@ -65,6 +65,10 @@ class JobService:
     def wait(self, job_id: str, timeout: float | None = None) -> Job:
         return self._runner.wait(job_id, timeout=timeout)
 
+    def is_tracked(self, job_id: str) -> bool:
+        """False once this process will never update the job again."""
+        return self._runner.is_tracked(job_id)
+
 
 @dataclass
 class Services:
