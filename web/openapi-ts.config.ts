@@ -5,9 +5,8 @@ import { defineConfig } from '@hey-api/openapi-ts';
 // contract (`uv run python -m stonks.api.openapi`). Never edit the output.
 export default defineConfig({
   input: './openapi.json',
-  output: {
-    path: './src/app/api/generated',
-    postProcess: ['prettier'],
-  },
+  // Raw generator output, no formatter pass (prettier/eslint ignore this
+  // folder), so `npm run api:check` is deterministic.
+  output: './src/app/api/generated',
   plugins: ['@hey-api/client-angular', '@hey-api/typescript', '@hey-api/sdk'],
 });

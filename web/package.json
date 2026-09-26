@@ -12,7 +12,7 @@
     "format": "prettier --write \"src/**/*.{ts,html,scss}\" \"*.{json,ts,js}\"",
     "format:check": "prettier --check \"src/**/*.{ts,html,scss}\"",
     "api:generate": "openapi-ts",
-    "api:check": "openapi-ts && git diff --exit-code -- src/app/api/generated"
+    "api:check": "node scripts/check-generated.mjs"
   },
   "private": true,
   "packageManager": "npm@11.4.2",
