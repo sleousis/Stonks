@@ -93,7 +93,7 @@ export type BacktestRequest = {
     /**
      * Cost Model
      */
-    cost_model?: 'zero' | 'realistic' | null;
+    cost_model?: 'zero' | 'realistic' | CostModelSettings | null;
     /**
      * End
      */
@@ -538,7 +538,7 @@ export type DraftLabRunRequest = {
     /**
      * Survival Tests
      */
-    survival_tests?: Array<'oos' | 'period_stability' | 'perturbation' | 'drift' | 'runs_test' | 'permutation' | 'walk_forward'>;
+    survival_tests?: Array<'drift' | 'mcpt' | 'oos' | 'period_stability' | 'permutation' | 'perturbation' | 'runs_test' | 'walk_forward' | 'walk_forward_mcpt'>;
     /**
      * Train Ratio
      */
@@ -1028,6 +1028,10 @@ export type LabRunRequest = {
      */
     budget?: number;
     /**
+     * Cost Model
+     */
+    cost_model?: 'zero' | 'realistic' | CostModelSettings | null;
+    /**
      * End
      */
     end: string;
@@ -1040,6 +1044,14 @@ export type LabRunRequest = {
      * Objective
      */
     objective?: 'sharpe' | 'cagr' | 'final_return';
+    /**
+     * Preset
+     */
+    preset?: 'promotion' | 'quick' | 'standard' | null;
+    /**
+     * Register If Passes
+     */
+    register_if_passes?: boolean;
     /**
      * Register Strategy
      */
@@ -1056,7 +1068,7 @@ export type LabRunRequest = {
     /**
      * Survival Tests
      */
-    survival_tests?: Array<'oos' | 'period_stability' | 'perturbation' | 'drift' | 'runs_test' | 'permutation' | 'walk_forward'>;
+    survival_tests?: Array<'drift' | 'mcpt' | 'oos' | 'period_stability' | 'permutation' | 'perturbation' | 'runs_test' | 'walk_forward' | 'walk_forward_mcpt'> | null;
     /**
      * Train Ratio
      */
