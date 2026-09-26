@@ -73,6 +73,8 @@ class ApiClient:
         transport: httpx2.AsyncBaseTransport | None = None,
     ) -> None:
         parts = urlsplit(base_url)
+        if parts.username or parts.password:
+            raise ValueError("credentials in api_url are not supported; use STONKS_API_TOKEN")
         if token and parts.scheme != "https" and not _is_loopback(parts.hostname):
             raise ValueError(
                 f"refusing to send STONKS_API_TOKEN over plain http to {parts.hostname!r}; "

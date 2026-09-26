@@ -158,6 +158,12 @@ def test_token_refused_over_plain_http_to_remote_host():
     ApiClient("http://203.0.113.7:8000", token=None)
 
 
+def test_credentials_in_api_url_are_refused():
+    # they would otherwise show up in logs and "not reachable" errors
+    with pytest.raises(ValueError, match="STONKS_API_TOKEN"):
+        ApiClient("http://user:pw@127.0.0.1:8000")
+
+
 def test_repr_hides_token():
     api = ApiClient(BASE, token=TOKEN)
     assert TOKEN not in repr(api)
