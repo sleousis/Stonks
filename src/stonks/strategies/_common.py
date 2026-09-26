@@ -15,13 +15,35 @@ quoted. The latest bar as of the cutoff is identical in both, so adjusted
 levels line up with the raw prices orders fill at. A ticker with no
 corporate-action data (and ``adj_close`` equal to ``close``) reads exactly
 the same in both bases.
+
+Bar visibility (RS-03)
+----------------------
+The engine calls a strategy with ``as_of`` = the start of the decision bar
+and decides at that bar's close. A bar of interval ``I`` stamped ``S`` is
+complete at ``S + I``, so a decision on a bar of length ``L`` may see it
+when ``S + I <= as_of + L`` (:func:`visible_cutoff`). The "as of" readers of
+:class:`BarCache` (``last_n_bars``, ``last_n_closes``, ``last_close``) apply
+this rule, so a daily bar stays hidden during its own session in an
+intraday run, and a 4h bar stays hidden inside a 1h run until it closes.
+
+``L`` comes from :func:`decision_interval` when the caller sets it (the
+backtest engine and the tick know their bar). Without it: an intraday read
+keeps every bar stamped on or before ``as_of`` (the bar the decision stands
+on), a daily or coarser read at a midnight ``as_of`` is a daily decision
+(``L`` = one day, the day's own bar counts), and at any other time of day
+only bars already closed at ``as_of`` count. The last case is conservative
+on 24/7 markets. The one blind spot is a 24/7 intraday run's midnight bar
+with no decision interval set, which reads like a daily decision.
 """
 
 from __future__ import annotations
 
 import math
 import weakref
-from datetime import datetime, timedelta
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from datetime import datetime, time, timedelta
 from typing import Any
 
 import numpy as np
@@ -33,7 +55,15 @@ from stonks.core.timeutil import as_datetime, iso
 from stonks.features.price_adjustment import SeriesAdjustment
 from stonks.store.corporate_actions import LakeCorporateActions
 
-__all__ = ["BarCache", "LakeBarCaches", "as_datetime", "get_last_n_bars", "iso"]
+__all__ = [
+    "BarCache",
+    "LakeBarCaches",
+    "as_datetime",
+    "decision_interval",
+    "get_last_n_bars",
+    "iso",
+    "visible_cutoff",
+]
 
 # Shortest regular session we plan for (US cash equities: 6.5 hours).
 # Markets that trade longer (futures, crypto) simply over-fetch a little.
@@ -43,6 +73,43 @@ _HOLIDAY_SLACK = timedelta(days=5)
 # How many times the window is doubled when it still holds too few bars
 # (long exchange closures, sparse data). 2**6 = 64x the initial estimate.
 _MAX_WIDENINGS = 6
+
+
+_DECISION_INTERVAL: ContextVar[Interval | None] = ContextVar(
+    "stonks_decision_interval", default=None
+)
+_ONE_DAY = timedelta(days=1)
+
+
+@contextmanager
+def decision_interval(interval: Interval | None) -> Iterator[None]:
+    """Declare the bar length of the decisions made inside the block (see
+    the module doc). The engine and the tick wrap their strategy calls in
+    it; ``None`` falls back to the midnight rule."""
+    token = _DECISION_INTERVAL.set(interval)
+    try:
+        yield
+    finally:
+        _DECISION_INTERVAL.reset(token)
+
+
+def visible_cutoff(as_of: Any, interval: Interval) -> datetime:
+    """The latest bar stamp of ``interval`` that is complete at a decision
+    on the bar starting at ``as_of``: ``as_of + L - I`` (see the module
+    doc). Months and years use calendar offsets."""
+    at = as_datetime(as_of)
+    known = _DECISION_INTERVAL.get()
+    if known is not None:
+        length = known.to_timedelta()
+    elif interval.is_intraday:
+        return at
+    else:
+        length = _ONE_DAY if at.time() == time.min else timedelta(0)
+    reach = at + length
+    if interval.unit in ("mo", "y"):
+        months = interval.amount * (12 if interval.unit == "y" else 1)
+        return (pd.Timestamp(reach) - pd.DateOffset(months=months)).to_pydatetime()
+    return reach - interval.to_timedelta()
 
 
 def _initial_span(interval: Interval, n: int) -> timedelta:
@@ -121,10 +188,16 @@ class _Series:
     """One ticker's full bar history at one interval, oldest first, with
     the back-adjustment factors from its corporate actions."""
 
-    __slots__ = ("adjustment", "closes", "frame", "timestamps")
+    __slots__ = ("adjustment", "closes", "frame", "interval", "timestamps")
 
-    def __init__(self, frame: pd.DataFrame, events: tuple[CorporateAction, ...] = ()) -> None:
+    def __init__(
+        self,
+        frame: pd.DataFrame,
+        events: tuple[CorporateAction, ...] = (),
+        interval: Interval = Interval.DAY_1,
+    ) -> None:
         self.frame = frame.reset_index(drop=True)
+        self.interval = interval
         self.adjustment = SeriesAdjustment.build(self.frame, events)
         if frame.empty:
             self.timestamps = np.array([], dtype="datetime64[us]")
@@ -137,6 +210,10 @@ class _Series:
         """Number of bars with ``timestamp <= as_of``."""
         cutoff = np.datetime64(as_datetime(as_of), "us")
         return int(np.searchsorted(self.timestamps, cutoff, side="right"))
+
+    def visible_end(self, as_of: Any) -> int:
+        """Number of bars complete at a decision on ``as_of`` (RS-03)."""
+        return self.end_index(visible_cutoff(as_of, self.interval))
 
     def rows(self, lo: int, hi: int, basis: PriceBasis) -> pd.DataFrame:
         """Rows ``lo:hi`` (a copy), adjusted as of row ``hi - 1`` unless raw."""
@@ -185,9 +262,9 @@ class BarCache:
             lake = self._lake()
             df = lake.get_bars(ticker, interval, start=_HISTORY_START, end=_HISTORY_END)
             if df is None or df.empty:
-                series = _Series(pd.DataFrame() if df is None else df)
+                series = _Series(pd.DataFrame() if df is None else df, interval=interval)
             else:
-                series = _Series(df, _ticker_events(lake, ticker))
+                series = _Series(df, _ticker_events(lake, ticker), interval)
             self._series[key] = series
         return series
 
@@ -200,12 +277,12 @@ class BarCache:
         *,
         basis: PriceBasis = "adjusted",
     ) -> pd.DataFrame:
-        """Same contract as :func:`get_last_n_bars`: the last ``n`` bars with
-        ``timestamp <= as_of``, oldest first, re-indexed ``0..len-1``."""
+        """The last ``n`` bars complete at a decision on ``as_of`` (see the
+        module doc), oldest first, re-indexed ``0..len-1``."""
         series = self._get(ticker, interval)
         if n <= 0 or series.frame.empty:
             return series.frame.iloc[0:0].copy()
-        end = series.end_index(as_of)
+        end = series.visible_end(as_of)
         return series.rows(max(0, end - n), end, basis)
 
     def last_n_closes(
@@ -221,17 +298,17 @@ class BarCache:
         series = self._get(ticker, interval)
         if n <= 0:
             return np.array([], dtype=float)
-        end = series.end_index(as_of)
+        end = series.visible_end(as_of)
         return series.close_slice(max(0, end - n), end, basis)
 
     def last_close(
         self, ticker: str, interval: Interval, as_of: Any
     ) -> tuple[datetime, float] | None:
-        """``(timestamp, close)`` of the latest bar with ``timestamp <= as_of``,
-        or ``None`` when there is none. The latest bar as of a cutoff is
-        never adjusted, so this is the raw quote in either basis."""
+        """``(timestamp, close)`` of the latest bar complete at a decision on
+        ``as_of``, or ``None`` when there is none. The latest bar as of a
+        cutoff is never adjusted, so this is the raw quote in either basis."""
         series = self._get(ticker, interval)
-        end = series.end_index(as_of)
+        end = series.visible_end(as_of)
         if end == 0:
             return None
         ts = pd.Timestamp(series.timestamps[end - 1]).to_pydatetime()
