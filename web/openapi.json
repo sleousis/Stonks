@@ -144,6 +144,9 @@
                 "type": "string"
               },
               {
+                "$ref": "#/components/schemas/CostModelSettings"
+              },
+              {
                 "type": "null"
               }
             ],
@@ -897,13 +900,15 @@
           "survival_tests": {
             "items": {
               "enum": [
+                "drift",
+                "mcpt",
                 "oos",
                 "period_stability",
-                "perturbation",
-                "drift",
-                "runs_test",
                 "permutation",
-                "walk_forward"
+                "perturbation",
+                "runs_test",
+                "walk_forward",
+                "walk_forward_mcpt"
               ],
               "type": "string"
             },
@@ -1663,6 +1668,24 @@
             "title": "Budget",
             "type": "integer"
           },
+          "cost_model": {
+            "anyOf": [
+              {
+                "enum": [
+                  "zero",
+                  "realistic"
+                ],
+                "type": "string"
+              },
+              {
+                "$ref": "#/components/schemas/CostModelSettings"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Model"
+          },
           "end": {
             "format": "date",
             "title": "End",
@@ -1693,6 +1716,27 @@
             "title": "Objective",
             "type": "string"
           },
+          "preset": {
+            "anyOf": [
+              {
+                "enum": [
+                  "promotion",
+                  "quick",
+                  "standard"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
+          },
+          "register_if_passes": {
+            "default": false,
+            "title": "Register If Passes",
+            "type": "boolean"
+          },
           "register_strategy": {
             "default": false,
             "title": "Register Strategy",
@@ -1712,21 +1756,30 @@
             "$ref": "#/components/schemas/StrategyRef"
           },
           "survival_tests": {
-            "items": {
-              "enum": [
-                "oos",
-                "period_stability",
-                "perturbation",
-                "drift",
-                "runs_test",
-                "permutation",
-                "walk_forward"
-              ],
-              "type": "string"
-            },
-            "minItems": 1,
-            "title": "Survival Tests",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "drift",
+                    "mcpt",
+                    "oos",
+                    "period_stability",
+                    "permutation",
+                    "perturbation",
+                    "runs_test",
+                    "walk_forward",
+                    "walk_forward_mcpt"
+                  ],
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Survival Tests"
           },
           "train_ratio": {
             "default": 0.7,

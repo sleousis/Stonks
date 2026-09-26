@@ -101,7 +101,9 @@ def test_new_test_module_in_a_package_is_discovered_without_editing_a_list(tmp_p
     pkg = tmp_path / "dummy_survival_pkg"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
-    (pkg / "_helpers.py").write_text("class Hidden:\n    id = 'hidden'\n    def run(self, s, c): ...\n")
+    (pkg / "_helpers.py").write_text(
+        "class Hidden:\n    id = 'hidden'\n    def run(self, s, c): ...\n"
+    )
     (pkg / "coin_flip.py").write_text(
         textwrap.dedent(
             """

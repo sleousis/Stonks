@@ -5,9 +5,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import date, datetime
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, WithJsonSchema, model_validator
 
 from stonks.app.context import AppContext
 from stonks.app.errors import ValidationError
@@ -24,13 +24,13 @@ from stonks.lab.dataset import LabDataset
 from stonks.lab.objectives import CAGRObjective, FinalReturnObjective, SharpeObjective
 from stonks.lab.runner import LabRunner
 from stonks.lab.survival.base import SurvivalSuite
-from stonks.lab.survival.drift import DriftTest
-from stonks.lab.survival.oos import OutOfSampleTest
-from stonks.lab.survival.period_stability import PeriodStabilityTest
-from stonks.lab.survival.permutation import MonteCarloPermutationTest
-from stonks.lab.survival.perturbation import PerturbationTest
-from stonks.lab.survival.runs_test import RunsTestSurvivalTest
-from stonks.lab.survival.walk_forward import WalkForwardConfig, WalkForwardTest
+from stonks.lab.survival.registry import (
+    build_survival_test,
+    preset_names,
+    resolve_suite,
+    survival_test_names,
+)
+from stonks.lab.survival.walk_forward import WalkForwardConfig
 from stonks.lab.tuning.grid import GridTuner
 from stonks.lab.tuning.random import RandomTuner
 from stonks.logging import get_logger
@@ -40,26 +40,49 @@ LAB_RUN_JOB = "lab_run"
 
 TunerName = Literal["grid", "random"]
 ObjectiveName = Literal["sharpe", "cagr", "final_return"]
-SurvivalTestName = Literal[
-    "oos", "period_stability", "perturbation", "drift", "runs_test", "permutation", "walk_forward"
-]
 CostModelName = Literal["zero", "realistic"]
+
+#: API names kept from before the survival-test registry (BL-10).
+_LEGACY_TEST_NAMES: dict[str, str] = {"permutation": "mcpt"}
+
+
+def _accepted_test_names() -> list[str]:
+    return sorted({*survival_test_names(), *_LEGACY_TEST_NAMES})
+
+
+def _check_test_name(name: str) -> str:
+    if name not in _LEGACY_TEST_NAMES and name not in survival_test_names():
+        raise ValueError(f"unknown survival test {name!r}; choose from {_accepted_test_names()}")
+    return name
+
+
+def _check_preset(name: str) -> str:
+    if name not in preset_names():
+        raise ValueError(f"unknown survival preset {name!r}; choose from {preset_names()}")
+    return name
+
+
+#: A survival test id from ``stonks.lab.survival.registry`` (plus the legacy
+#: ``permutation`` alias of ``mcpt``), validated against the registry.
+SurvivalTestName = Annotated[
+    str,
+    AfterValidator(_check_test_name),
+    WithJsonSchema({"type": "string", "enum": _accepted_test_names()}),
+]
+#: A named suite from ``SUITE_PRESETS`` (``quick``, ``standard``, ``promotion``).
+SurvivalPresetName = Annotated[
+    str,
+    AfterValidator(_check_preset),
+    WithJsonSchema({"type": "string", "enum": preset_names()}),
+]
+#: A cost preset name (``GET /api/lab/cost-models``) or explicit settings.
+CostModelOption = CostModelName | CostModelSettings
 
 _OBJECTIVES: dict[str, Callable[[], Objective]] = {
     "sharpe": SharpeObjective,
     "cagr": CAGRObjective,
     "final_return": FinalReturnObjective,
 }
-_SURVIVAL_TESTS: dict[str, Callable[[], SurvivalTest]] = {
-    "oos": OutOfSampleTest,
-    "period_stability": PeriodStabilityTest,
-    "perturbation": PerturbationTest,
-    "drift": DriftTest,
-    "runs_test": RunsTestSurvivalTest,
-    "permutation": MonteCarloPermutationTest,
-    "walk_forward": WalkForwardTest,
-}
-
 _COST_MODELS: dict[str, tuple[str, Callable[[], CostModelSettings]]] = {
     "zero": ("No fees, spread or impact.", CostModelSettings),
     "realistic": (
@@ -94,10 +117,10 @@ class BacktestRequest(_WindowRequest):
     rebalance_every_bars: int = Field(default=1, ge=1)
     slippage_bps: float = Field(default=0.0, ge=0)
     fee_per_trade: float = Field(default=0.0, ge=0)
-    #: A preset from ``GET /api/lab/cost-models``; replaces the flat
-    #: ``slippage_bps`` / ``fee_per_trade`` (set one or the other). With
-    #: neither, the configured ``[backtest.costs]`` apply.
-    cost_model: CostModelName | None = None
+    #: A preset from ``GET /api/lab/cost-models`` or explicit cost-model
+    #: settings; replaces the flat ``slippage_bps`` / ``fee_per_trade`` (set
+    #: one or the other). With neither, the configured ``[backtest.costs]`` apply.
+    cost_model: CostModelOption | None = None
 
     @model_validator(mode="after")
     def _one_cost_source(self) -> Self:
@@ -153,21 +176,45 @@ class LabRunRequest(_WindowRequest):
     budget: int = Field(default=20, ge=1, le=1_000)
     seed: int = 0
     objective: ObjectiveName = "sharpe"
-    survival_tests: list[SurvivalTestName] = Field(
-        default_factory=lambda: ["oos", "period_stability"], min_length=1
-    )
+    #: Survival test ids to run, in order. When omitted, ``preset`` decides.
+    survival_tests: list[SurvivalTestName] | None = Field(default=None, min_length=1)
+    #: A named suite used when ``survival_tests`` is omitted. Without either,
+    #: registering runs use ``promotion`` and other runs ``quick``.
+    preset: SurvivalPresetName | None = None
     #: Settings for the ``walk_forward`` survival test (defaults when omitted).
     walk_forward: WalkForwardConfig | None = None
-    #: Settings for the ``permutation`` (MCPT) survival test.
+    #: Settings for the ``mcpt`` (alias ``permutation``) survival test.
     mcpt: McptOptions | None = None
-    #: Register the fitted strategy (status ``shadow``) with its reports.
+    #: Always register the fitted strategy (status ``shadow``) with its
+    #: reports, whatever the verdict.
     register_strategy: bool = False
+    #: Register the fitted strategy only when every survival test passes.
+    register_if_passes: bool = False
+    #: A preset from ``GET /api/lab/cost-models`` or explicit cost-model
+    #: settings for every backtest of the run; default ``[backtest.costs]``.
+    cost_model: CostModelOption | None = None
+
+    @property
+    def registers(self) -> bool:
+        return self.register_strategy or self.register_if_passes
+
+    def suite(self) -> list[str]:
+        """Survival test ids to run: explicit tests (legacy names mapped),
+        else ``preset``, else ``promotion`` when registering, else ``quick``."""
+        tests = [_LEGACY_TEST_NAMES.get(t, t) for t in self.survival_tests or []]
+        default = "promotion" if self.registers else "quick"
+        return resolve_suite(tests, preset=self.preset, default=default)
 
     @model_validator(mode="after")
-    def _options_need_their_test(self) -> Self:
-        if self.walk_forward is not None and "walk_forward" not in self.survival_tests:
+    def _check_options(self) -> Self:
+        if self.register_strategy and self.register_if_passes:
+            raise ValueError("set register_strategy (always) or register_if_passes, not both")
+        if self.walk_forward is None and self.mcpt is None:
+            return self
+        suite = self.suite()
+        if self.walk_forward is not None and "walk_forward" not in suite:
             raise ValueError("walk_forward options given: add 'walk_forward' to survival_tests")
-        if self.mcpt is not None and "permutation" not in self.survival_tests:
+        if self.mcpt is not None and "mcpt" not in suite:
             raise ValueError("mcpt options given: add 'permutation' to survival_tests")
         return self
 
@@ -238,7 +285,7 @@ class LabService:
         """A named preset, else flat slippage / fee when given, else the
         configured ``[backtest.costs]`` (zero costs unless configured)."""
         if request.cost_model is not None:
-            return _COST_MODELS[request.cost_model][1]().build()
+            return _cost_settings(request.cost_model).build()
         if request.slippage_bps or request.fee_per_trade:
             return None
         return self._ctx.settings.backtest.costs.build()
@@ -270,18 +317,23 @@ class LabService:
     ) -> LabRunView:
         """The one lab-run code path (API, MCP and Strategy Studio): tunes
         ``cls`` (``request.strategy`` is not resolved here), applies the
-        configured ``[backtest.costs]``, defaults walk-forward options from
-        ``[lab.walk_forward]`` and, with ``progress``, honours cancellation
-        between trials and survival tests. ``register`` replaces the plain
-        registry registration (e.g. the studio links the draft too)."""
+        request's ``cost_model`` (else the configured ``[backtest.costs]``),
+        builds the suite from the survival-test registry, defaults
+        walk-forward options from ``[lab.walk_forward]`` and, with
+        ``progress``, honours cancellation between trials and survival
+        tests. ``register`` replaces the plain registry registration (e.g.
+        the studio links the draft too); with ``register_if_passes`` neither
+        runs on a failed verdict."""
         interval = _parse_interval(request.interval)
         tuner: Tuner = (
             GridTuner(seed=request.seed) if request.tuner == "grid" else RandomTuner(request.seed)
         )
         objective: Objective = _OBJECTIVES[request.objective]()
         tests: list[SurvivalTest] = [
-            _survival_test(t, request, self._ctx.settings.lab.walk_forward)
-            for t in request.survival_tests
+            build_survival_test(
+                name, _test_options(name, request, self._ctx.settings.lab.walk_forward)
+            )
+            for name in request.suite()
         ]
         if progress is not None:
             objective = _CancellableObjective(objective, progress)
@@ -302,12 +354,18 @@ class LabService:
                 end=request.end,
                 train_ratio=request.train_ratio,
                 interval=interval,
-                costs=self._ctx.settings.backtest.costs,
+                costs=(
+                    _cost_settings(request.cost_model)
+                    if request.cost_model is not None
+                    else self._ctx.settings.backtest.costs
+                ),
             )
             result = runner.run(cls, dataset)
 
         registered: str | None = None
-        if request.register_strategy:
+        if request.register_if_passes and result.verdict != "pass":
+            _log.info("lab.not_registered", reason="verdict", verdict=result.verdict)
+        elif request.registers:
             if progress is not None:
                 progress.progress(0.95, "registering")
             if register is not None:
@@ -376,15 +434,22 @@ class _CancellableTest:
         return self._inner.run(strategy, context)
 
 
-def _survival_test(
+def _test_options(
     name: str, request: LabRunRequest, walk_forward_default: WalkForwardConfig
-) -> SurvivalTest:
-    """Request options win; walk-forward otherwise uses ``[lab.walk_forward]``."""
+) -> dict[str, Any] | None:
+    """Registry options for test ``name``: request options win; walk-forward
+    otherwise uses ``[lab.walk_forward]``; other tests use their defaults."""
     if name == "walk_forward":
-        return WalkForwardTest(config=request.walk_forward or walk_forward_default)
-    if name == "permutation" and request.mcpt is not None:
-        return MonteCarloPermutationTest(**request.mcpt.model_dump())
-    return _SURVIVAL_TESTS[name]()
+        return {"config": request.walk_forward or walk_forward_default}
+    if name == "mcpt" and request.mcpt is not None:
+        return request.mcpt.model_dump()
+    return None
+
+
+def _cost_settings(option: CostModelName | CostModelSettings) -> CostModelSettings:
+    if isinstance(option, CostModelSettings):
+        return option
+    return _COST_MODELS[option][1]()
 
 
 def _parse_interval(code: str) -> Interval:
