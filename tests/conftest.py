@@ -54,3 +54,16 @@ def _isolate_environment(request: pytest.FixtureRequest, monkeypatch: pytest.Mon
     # (Patched on the module, not through STONKS_LAB_MAX_WORKERS, which the
     # isolation above must strip like every STONKS_ variable.)
     monkeypatch.setattr("stonks.lab.parallel.default_max_workers", lambda: 1)
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Browser journeys (``e2e``) run only when the marker expression names
+    them (``-m e2e``), so the default run stays fast and needs no browser."""
+    if "e2e" in (config.option.markexpr or ""):
+        return
+    selected, deselected = [], []
+    for item in items:
+        (deselected if item.get_closest_marker("e2e") else selected).append(item)
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+        items[:] = selected
