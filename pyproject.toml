@@ -27,6 +27,7 @@ dependencies = [
     "pywebpush>=2.5.0",
     "argon2-cffi>=25.1.0",
     "pyotp>=2.10.0",
+    "cvxpy>=1.9.3",
 ]
 
 [project.scripts]

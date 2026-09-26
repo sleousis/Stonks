@@ -48,6 +48,33 @@ flowchart TD
 2. **Portfolio phase.** `run_tick` takes a `TickPlan`. The default plan, which `stonks tick`, the API and the scheduler use today, is one book: `pf_default` over every active strategy. `load_tick_plan` can build one book per active portfolio with enabled `paper` or `auto` subscriptions, but no entry point calls it yet. Each book runs `portfolio.pipeline.build_orders` (constructor, orders, risk), then its broker. Each book fails on its own without stopping the others.
 3. **Model books and hooks.** Shadow strategies trade their virtual portfolios (`shadow_decisions`, `shadow_portfolio_snapshots`). Then `tick`-stage hooks run. The notification hook is a placeholder: it only logs the signals of `notify` subscriptions and does not write the outbox yet.
 
+## Optimising constructors
+
+Three constructors size a book from a covariance matrix instead of one volatility per name. Pick one with `[production.construction].method`. Every other key in that table is a knob of the constructor.
+
+```mermaid
+flowchart LR
+  S[Top scores] --> C[Covariance up to as_of]
+  C --> H[hrp]
+  C --> E[erc]
+  C --> M[mean_variance_costs]
+  H --> W[Cap weights, report ENB]
+  E --> W
+  M --> W
+```
+
+| Method | What it does |
+|---|---|
+| `hrp` | Hierarchical risk parity. Clusters names by correlation, then splits weight between clusters in inverse proportion to their variance. Never inverts the matrix. |
+| `erc` | Equal risk contribution. Every name adds the same share of portfolio risk. `budget = "score"` gives better scores more risk. |
+| `mean_variance_costs` | Maximises expected return minus risk minus trading costs, with an optional turnover cap. Expected return is `ic * sigma * score`. Uses cvxpy behind the `QpSolver` seam. |
+
+- **Shared knobs.** `top_n` (20), `max_weight` (1.0), `estimator` (`ledoit_wolf`), `lookback` (252 bars), `min_observations` (60). All three are long-only by default and never go above `max_gross`.
+- **Covariance.** `portfolio/covariance.py` has four estimators: `sample`, `ledoit_wolf`, `ewma` (lambda 0.94) and `denoised` (Marchenko-Pastur). Every estimate is made positive definite, so duplicate or near-duplicate names don't break the maths.
+- **Short or missing history.** Only rows up to the decision date are used. A name with fewer than `min_observations` rows falls back to its own volatility with no correlation. A name with neither is left out.
+- **Costs.** `spread_cost` is paid on every trade. Square-root impact is added when the input carries daily volumes. If the turnover cap can't be met (the book already breaks a limit), that one decision drops the cap and says so in the target book's `meta`.
+- **Effective number of bets.** `portfolio/diversification.py` counts independent bets over principal components (principle P33). Ten names that move together count as about one. Each of the three constructors puts it in `meta["enb"]`.
+
 ## Brokers
 
 | `[brokers].kind` | Behaviour |
