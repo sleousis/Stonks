@@ -149,9 +149,7 @@ class LabDataset:
         return {row.ticker: float(row.close) for row in df.itertuples(index=False)}
 
 
-def scoring_window(
-    context: Any, strategy: Any, window: ScoringWindow = "val"
-) -> tuple[date, date]:
+def scoring_window(context: Any, strategy: Any, window: ScoringWindow = "val") -> tuple[date, date]:
     """The window a validation-style survival test backtests: the
     validation window embargoed for ``strategy`` (``"val"``, the default;
     never any bar the tuner saw), or the whole dataset (``"full"``, the

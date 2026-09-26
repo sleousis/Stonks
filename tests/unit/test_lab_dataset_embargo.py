@@ -59,9 +59,7 @@ def test_calendar_conversion_goes_through_the_bar_interval():
 
 def test_embargo_that_swallows_the_validation_window_is_rejected():
     with pytest.raises(ValueError, match="embargo"):
-        LabDataset(
-            lake=None, start=START, end=END, train_end=date(2024, 12, 20), embargo_bars=20
-        )
+        LabDataset(lake=None, start=START, end=END, train_end=date(2024, 12, 20), embargo_bars=20)
 
 
 def test_negative_embargo_is_rejected():
@@ -78,9 +76,10 @@ def test_label_horizon_wins_over_a_smaller_embargo():
     ds = LabDataset(lake=None, start=START, end=END, train_end=date(2024, 6, 28), embargo_bars=3)
     assert ds.effective_embargo_bars(_Labelled(10)) == 10
     assert ds.for_strategy(_Labelled(10)).embargo_bars == 10
-    assert ds.for_strategy(_Labelled(10)).val_window == dataclasses.replace(
-        ds, embargo_bars=10
-    ).val_window
+    assert (
+        ds.for_strategy(_Labelled(10)).val_window
+        == dataclasses.replace(ds, embargo_bars=10).val_window
+    )
     # a larger embargo is kept; no horizon at all is a horizon of 0
     assert ds.effective_embargo_bars(_Labelled(2)) == 3
     assert ds.effective_embargo_bars(object()) == 3

@@ -97,3 +97,70 @@ def test_config_lays_its_folds_over_a_dataset():
 def test_config_rejects_bad_values(kwargs):
     with pytest.raises(pydantic.ValidationError):
         WalkForwardConfig(**kwargs)
+
+
+# ---- embargo (BL-20) -------------------------------------------------------------
+
+
+def test_embargo_leaves_a_gap_before_every_test_window_and_keeps_the_test_windows():
+    plain = walk_forward_folds(START, END, n_splits=3, test_days=30, train_days=90)
+    gapped = walk_forward_folds(
+        START, END, n_splits=3, test_days=30, train_days=90, embargo_days=10
+    )
+    assert [(f.test_start, f.test_end) for f in gapped] == [
+        (f.test_start, f.test_end) for f in plain
+    ]
+    for f in gapped:
+        assert f.train_end + timedelta(days=11) == f.test_start  # 10 embargo days in between
+        assert (f.train_end - f.train_start).days + 1 == 90
+
+
+def test_default_train_length_still_starts_the_first_fold_at_the_dataset_start():
+    folds = walk_forward_folds(START, END, n_splits=2, test_days=100, embargo_days=7)
+    assert folds[0].train_start == START
+    assert folds[0].train_end + timedelta(days=8) == folds[0].test_start
+    lengths = {(f.train_end - f.train_start).days for f in folds}
+    assert len(lengths) == 1
+
+
+def test_an_embargo_that_eats_the_train_window_raises():
+    with pytest.raises(ValueError, match="embargo"):
+        walk_forward_folds(START, END, n_splits=1, test_days=300, embargo_days=70)
+
+
+def test_config_takes_the_embargo_from_the_dataset_and_the_label_horizon():
+    from stonks.core.interval import Interval
+    from stonks.lab.dataset import embargo_calendar_days
+
+    class _Labelled:
+        label_horizon_bars = 10
+
+    ds = LabDataset(lake=None, start=START, end=END, train_ratio=0.7, embargo_bars=2)
+    cfg = WalkForwardConfig(n_splits=3, test_days=30)
+    gap = embargo_calendar_days(2, Interval.DAY_1)
+    assert all(f.train_end + timedelta(days=1 + gap) == f.test_start for f in cfg.folds_for(ds))
+    wide = embargo_calendar_days(10, Interval.DAY_1)
+    folds = cfg.folds_for(ds, _Labelled())
+    assert all(f.train_end + timedelta(days=1 + wide) == f.test_start for f in folds)
+
+
+def test_matrix_cells_skip_the_cells_that_do_not_fit():
+    ds = LabDataset(lake=None, start=START, end=END, train_ratio=0.7)
+    cfg = WalkForwardConfig(
+        n_splits=2, matrix=True, matrix_train_bars=(60, 1000), matrix_test_bars=(20, 40)
+    )
+    cells = cfg.matrix_cells(ds)
+    assert [(tb, sb) for tb, sb, _ in cells] == [(60, 20), (60, 40)]
+    for _, _, folds in cells:
+        _check_common(folds, 2)
+
+
+def test_new_config_defaults():
+    cfg = WalkForwardConfig()
+    assert cfg.min_wfe == 0.5
+    assert cfg.matrix is False
+    assert cfg.matrix_train_bars == (504, 756, 1008)
+    assert cfg.matrix_test_bars == (126, 252)
+    assert cfg.max_workers is None
+    with pytest.raises(pydantic.ValidationError):
+        WalkForwardConfig(min_wfe=1.5)
