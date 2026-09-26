@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from stonks.mcp.guards import live_trading_state, status_change_preview
+from stonks.mcp.guards import draft_preview, live_trading_state, status_change_preview
 
 STRATEGY = {
     "id": "s1",
@@ -68,3 +68,58 @@ def test_status_change_preview_describes_transition_and_reports():
 def test_status_change_preview_flags_noop():
     preview = status_change_preview({**STRATEGY, "status": "active"}, "active")
     assert any("already" in w for w in preview["warnings"])
+
+
+DRAFT = {
+    "id": "d1",
+    "name": "trend",
+    "kind": "rule",
+    "spec": {"version": 1},
+    "source_code": None,
+    "status": "draft",
+    "registered_strategy_id": None,
+    "strategy_status": None,
+}
+REGISTERED = {**DRAFT, "status": "registered", "registered_strategy_id": "s1"}
+
+
+def test_register_preview_lands_in_shadow():
+    preview = draft_preview(DRAFT, "register", None)
+    assert preview["preview"] is True and preview["applied"] is False
+    assert preview["action"] == "register"
+    assert preview["new_status"] == "shadow"
+    assert preview["draft"]["id"] == "d1"
+    assert "confirm=true" in preview["next_step"]
+    assert not any("already" in w for w in preview["warnings"])
+
+
+def test_register_preview_flags_already_registered():
+    preview = draft_preview(REGISTERED, "register", None)
+    assert any("already registered as s1" in w for w in preview["warnings"])
+
+
+@pytest.mark.parametrize("action", ["enable", "disable"])
+def test_enable_disable_preview_needs_registration(action):
+    preview = draft_preview(DRAFT, action, None)
+    assert any("not registered" in w for w in preview["warnings"])
+    assert preview["strategy"] is None
+
+
+def test_enable_preview_carries_strategy_survival_and_warnings():
+    preview = draft_preview(REGISTERED, "enable", STRATEGY)
+    assert preview["new_status"] == "active"
+    assert preview["strategy"]["current_status"] == "shadow"
+    assert preview["strategy"]["survival"] == {"passed": ["oos"], "failed": ["drift"]}
+    assert any("drift" in w for w in preview["warnings"])
+    assert any("traded" in w for w in preview["warnings"])
+
+
+def test_disable_preview_moves_to_shadow():
+    preview = draft_preview(REGISTERED, "disable", {**STRATEGY, "status": "active"})
+    assert preview["new_status"] == "shadow"
+    assert preview["strategy"]["current_status"] == "active"
+
+
+def test_draft_preview_never_echoes_source_code():
+    code = {**REGISTERED, "kind": "code", "source_code": "import os"}
+    assert "import os" not in str(draft_preview(code, "register", None))

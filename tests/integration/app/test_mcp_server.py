@@ -106,15 +106,39 @@ READ_TOOLS = {
     "get_broker",
     "list_sources",
     "list_cost_models",
+    "list_studio_templates",
+    "get_rule_schema",
+    "validate_rule_spec",
+    "list_drafts",
+    "get_draft",
 }
-JOB_TOOLS = {"run_backtest", "run_lab", "run_ingest"}
-GUARDED_TOOLS = {"promote_strategy", "retire_strategy", "shadow_strategy", "run_tick"}
+# Not destructive: queue research jobs, or create / smoke-check a draft.
+JOB_TOOLS = {
+    "run_backtest",
+    "run_lab",
+    "run_ingest",
+    "create_draft",
+    "validate_draft",
+    "backtest_draft",
+    "lab_run_draft",
+}
+# Overwrite a draft's fields; no confirm (a draft is never traded).
+EDIT_TOOLS = {"update_draft"}
+GUARDED_TOOLS = {
+    "promote_strategy",
+    "retire_strategy",
+    "shadow_strategy",
+    "run_tick",
+    "register_draft",
+    "enable_draft",
+    "disable_draft",
+}
 
 
 @pytest.mark.anyio
 async def test_tool_list_and_annotations(mcp):
     tools = {t.name: t for t in (await mcp.list_tools()).tools}
-    assert set(tools) == READ_TOOLS | JOB_TOOLS | GUARDED_TOOLS
+    assert set(tools) == READ_TOOLS | JOB_TOOLS | EDIT_TOOLS | GUARDED_TOOLS
     for name, tool in tools.items():
         assert tool.description, name
         ann = tool.annotations
@@ -125,6 +149,8 @@ async def test_tool_list_and_annotations(mcp):
             assert ann.read_only_hint is False, name
         if name in JOB_TOOLS:
             assert ann.destructive_hint is False, name
+        if name in EDIT_TOOLS:
+            assert ann.destructive_hint is True and ann.idempotent_hint is True, name
         if name in GUARDED_TOOLS:
             assert ann.destructive_hint is True, name
             props = tool.input_schema["properties"]

@@ -60,7 +60,7 @@ class ApiClient:
     """Typed-enough wrapper: ``get``/``post`` return decoded JSON.
 
     The bearer token is sent when configured (reads need it too when the
-    server has ``open_reads_on_loopback`` off). ``post`` refuses to send a
+    server has ``open_reads_on_loopback`` off). ``post``/``patch`` refuse to send a
     request without one, since every mutating route requires it.
     """
 
@@ -105,12 +105,19 @@ class ApiClient:
         return await self._request("GET", path, params=clean)
 
     async def post(self, path: str, body: dict[str, Any] | None = None) -> Any:
+        self._require_token()
+        return await self._request("POST", path, json=body if body is not None else {})
+
+    async def patch(self, path: str, body: dict[str, Any]) -> Any:
+        self._require_token()
+        return await self._request("PATCH", path, json=body)
+
+    def _require_token(self) -> None:
         if not self.has_token:
             raise ApiError(
                 "STONKS_API_TOKEN is not set: write and job tools need the same token "
                 "`stonks serve` was started with"
             )
-        return await self._request("POST", path, json=body if body is not None else {})
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         try:

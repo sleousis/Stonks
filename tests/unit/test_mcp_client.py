@@ -65,6 +65,33 @@ async def test_post_without_token_fails_before_sending():
 
 
 @pytest.mark.anyio
+async def test_patch_sends_json_with_token():
+    seen = {}
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen["method"] = request.method
+        seen["auth"] = request.headers.get("authorization")
+        seen["body"] = json.loads(request.content)
+        return httpx2.Response(200, json={"id": "d1"})
+
+    assert await _client(handler).patch("/api/studio/drafts/d1", {"name": "x"}) == {"id": "d1"}
+    assert seen == {"method": "PATCH", "auth": f"Bearer {TOKEN}", "body": {"name": "x"}}
+
+
+@pytest.mark.anyio
+async def test_patch_without_token_fails_before_sending():
+    calls = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        calls.append(request)
+        return httpx2.Response(200, json={})
+
+    with pytest.raises(ApiError, match="STONKS_API_TOKEN"):
+        await _client(handler, token=None).patch("/api/studio/drafts/d1", {})
+    assert calls == []
+
+
+@pytest.mark.anyio
 async def test_get_without_token_sends_no_auth_header():
     seen = {}
 

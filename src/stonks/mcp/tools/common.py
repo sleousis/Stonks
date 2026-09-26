@@ -5,7 +5,7 @@ parameterless read routes."""
 # No ``from __future__ import annotations``: tool signatures use closure
 # values inside ``Annotated`` metadata, which must be evaluated at def time.
 
-from collections.abc import Awaitable, Iterable
+from collections.abc import Awaitable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date
 from typing import Annotated, Any, Literal
@@ -68,6 +68,10 @@ SurvivalTestName = Literal[
 ]
 
 
+#: HTTP status -> explanation prefixed to the API's error message.
+Hints = Mapping[int, str]
+
+
 def seg(value: str) -> str:
     """Path-safe id (see :func:`segment`), as a tool error when invalid.
     Every id interpolated into a URL goes through this."""
@@ -100,20 +104,29 @@ class ToolContext:
     api: ApiClient
     max_wait_seconds: float = 600.0
 
-    async def call(self, awaitable: Awaitable[Any]) -> Any:
+    async def call(self, awaitable: Awaitable[Any], hints: Hints | None = None) -> Any:
+        """``hints`` maps an HTTP status to a sentence put in front of the
+        API's own message (e.g. why a 403 happened)."""
         try:
             return await awaitable
         except ApiError as exc:
-            raise ToolError(self.api.redact(str(exc))) from None
+            message = str(exc)
+            if hints and exc.status in hints:
+                message = f"{hints[exc.status]}. {message}"
+            raise ToolError(self.api.redact(message)) from None
 
-    async def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
-        return await self.call(self.api.get(path, params))
+    async def get(
+        self, path: str, params: dict[str, Any] | None = None, *, hints: Hints | None = None
+    ) -> Any:
+        return await self.call(self.api.get(path, params), hints)
 
-    async def post(self, path: str, body: dict[str, Any] | None = None) -> Any:
-        return await self.call(self.api.post(path, body))
+    async def post(
+        self, path: str, body: dict[str, Any] | None = None, *, hints: Hints | None = None
+    ) -> Any:
+        return await self.call(self.api.post(path, body), hints)
 
-    async def patch(self, path: str, body: dict[str, Any]) -> Any:
-        return await self.call(self.api.patch(path, body))
+    async def patch(self, path: str, body: dict[str, Any], *, hints: Hints | None = None) -> Any:
+        return await self.call(self.api.patch(path, body), hints)
 
 
 # --- declarative parameterless reads ------------------------------------------------

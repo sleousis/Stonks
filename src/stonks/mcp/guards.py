@@ -58,3 +58,55 @@ def status_change_preview(strategy: dict[str, Any], new_status: str) -> dict[str
         "warnings": warnings,
         "next_step": CONFIRM_HINT,
     }
+
+
+DraftAction = Literal["register", "enable", "disable"]
+
+#: Registry status each Studio draft action leads to.
+DRAFT_TARGET_STATUS: dict[str, str] = {
+    "register": "shadow",
+    "enable": "active",
+    "disable": "shadow",
+}
+
+_DRAFT_FIELDS = ("id", "name", "kind", "status", "registered_strategy_id", "strategy_status")
+
+
+def draft_preview(
+    draft: dict[str, Any], action: DraftAction, strategy: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Preview of registering, enabling or disabling a Studio draft.
+
+    ``strategy`` is the registered strategy (with survival reports) for
+    enable / disable, ``None`` when the draft is not registered. Source
+    code is never echoed.
+    """
+    target = DRAFT_TARGET_STATUS[action]
+    registered_as = draft.get("registered_strategy_id")
+    warnings: list[str] = []
+    strategy_preview: dict[str, Any] | None = None
+    if action == "register":
+        if registered_as:
+            warnings.append(f"draft is already registered as {registered_as}; applying fails")
+        warnings.append(
+            "registering creates a strategy in shadow: evaluated on a virtual portfolio, "
+            "never traded until enabled"
+        )
+    elif not registered_as:
+        warnings.append("draft is not registered; register it first (applying fails)")
+    elif strategy is not None:
+        full = status_change_preview(strategy, target)
+        warnings.extend(full["warnings"])
+        strategy_preview = {
+            k: full[k] for k in ("strategy_id", "class_path", "current_status", "survival")
+        }
+    return {
+        "preview": True,
+        "applied": False,
+        "action": action,
+        "draft": {k: draft.get(k) for k in _DRAFT_FIELDS},
+        "new_status": target,
+        "strategy": strategy_preview,
+        "warnings": warnings,
+        "next_step": CONFIRM_HINT,
+    }
