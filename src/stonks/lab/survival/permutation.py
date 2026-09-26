@@ -28,8 +28,9 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import date
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 import pandas as pd
@@ -38,6 +39,7 @@ from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.lab.backtesting import run_backtest
 from stonks.lab.lake_copy import copy_universe_lake
+from stonks.lab.parallel import LakeHandle, StrategyHandle, run_tasks
 from stonks.lab.survival.base import TuningSetup
 from stonks.lab.tuning.base import tune_and_fit
 from stonks.logging import get_logger
@@ -204,6 +206,12 @@ class MonteCarloPermutationTest:
     The p-value is the +1-smoothed fraction of permuted scores at least as
     good as the real one; the test passes when ``p_value <= max_p_value``.
 
+    Permutations run on a process pool of ``max_workers`` (default
+    ``lab.parallel.default_max_workers()``; 1 runs them in-process). Every
+    permutation's seed is drawn from ``seed`` up front, so the report is
+    bit-identical for any worker count, provided the strategy's
+    ``save``/``load`` round-trip is exact (workers get a reloaded copy).
+
     In the default mode the same strategy instance is scored on every
     lake; strategies that cache lake reads must key the cache by lake
     (as ``Momentum`` does).
@@ -219,6 +227,7 @@ class MonteCarloPermutationTest:
         retune: bool = False,
         seed: int | None = 17,
         tuning: TuningSetup | None = None,
+        max_workers: int | None = None,
     ) -> None:
         if n_permutations < 1:
             raise ValueError("n_permutations must be >= 1")
@@ -226,6 +235,8 @@ class MonteCarloPermutationTest:
             raise ValueError("max_p_value must be in (0, 1]")
         if metric not in _METRICS:
             raise ValueError(f"unsupported metric {metric!r}")
+        if max_workers is not None and max_workers < 1:
+            raise ValueError("max_workers must be >= 1")
         self._n = n_permutations
         self._max_p = max_p_value
         self._metric = metric
@@ -233,6 +244,7 @@ class MonteCarloPermutationTest:
         self._seed = seed
         self._tuning = tuning
         self._bound: TuningSetup | None = None
+        self._max_workers = max_workers
 
     def bind_tuning(self, setup: TuningSetup) -> None:
         """Receive the runner's tuning setup (used when ``tuning`` is unset)."""
@@ -245,66 +257,33 @@ class MonteCarloPermutationTest:
                 "MCPT retune=True needs a tuning setup: pass tuning=... or run it under LabRunner"
             )
         window = context.train_window if self._retune else context.val_window
-        interval = getattr(context, "interval", Interval.DAY_1)
         mode = "retune" if self._retune else "oos"
         _log.info(
             "mcpt.start", mode=mode, seed=self._seed, n=self._n, window=[str(w) for w in window]
         )
-
-        history = _history_bars(context, interval, window)
-        if not any(len(bars) > n_before for bars, n_before in history.values()):
+        if self._retune:
+            # re-tunes keep e.g. a wrapper's inner strategy and any pinned params
+            evaluate: Evaluator = RetuneScore(setup, setup.retune_fixed_params(strategy))
+        else:
+            evaluate = BacktestScore(self._metric, window)
+        scorer = PermutationScorer.build(strategy, context, window, evaluate)
+        if scorer is None:
             return SurvivalReport(
                 test_id=self.id,
                 passed=False,
                 metrics={"p_value": 1.0, "real_score": 0.0, "n_permutations": float(self._n)},
                 notes=f"mode={mode}; no bars in the scored window for the universe; test skipped",
             )
-        coarser = _coarser_intervals(context, interval)
-        # re-tunes keep e.g. a wrapper's inner strategy and any pinned params
-        fixed = setup.retune_fixed_params(strategy) if self._retune else {}
 
-        def score(bars_by_ticker: dict[str, pd.DataFrame]) -> float:
-            with _modified_lake(context, bars_by_ticker, interval, coarser) as lake:
-                dataset = dataclasses.replace(context, lake=lake)
-                if self._retune:
-                    _, tuned = tune_and_fit(type(strategy), dataset, setup, fixed)
-                    return float(tuned.best_score)
-                report = run_backtest(strategy, dataset, window)
-                return float(getattr(report, self._metric))
-
-        real_score = score({t: bars for t, (bars, _) in history.items()})
+        real_score = scorer.score_real()
+        perm_scores = permuted_scores(scorer, self._n, self._seed, self._max_workers)
         minimize = self._retune and setup.objective.direction == "minimize"
-
-        master_rng = np.random.default_rng(self._seed)
-        perm_scores: list[float] = []
-        at_least_as_good = 0
-        for _ in range(self._n):
-            # The permutation keeps each ticker's first ``start_index + 1``
-            # rows: exactly its ``n_before`` pre-window bars (the first
-            # window bar when there is no earlier history, as the path needs
-            # an anchor). One shared ordering for the whole universe keeps
-            # cross-asset correlation intact.
-            permuted = permute_bars_together(
-                {
-                    ticker: (bars, max(n_before - 1, 0))
-                    for ticker, (bars, n_before) in history.items()
-                },
-                seed=int(master_rng.integers(0, 2**31 - 1)),
-            )
-            perm_score = score(permuted)
-            perm_scores.append(perm_score)
-            if (perm_score <= real_score) if minimize else (perm_score >= real_score):
-                at_least_as_good += 1
-
-        # +1 numerator/denominator — conservative p-value estimator.
-        p_value = (at_least_as_good + 1) / (self._n + 1)
-        passed = p_value <= self._max_p
-
+        p_value = permutation_p_value(real_score, perm_scores, minimize=minimize)
         arr = np.asarray(perm_scores, dtype=float)
         metric = setup.objective.name if self._retune else self._metric
         return SurvivalReport(
             test_id=self.id,
-            passed=passed,
+            passed=p_value <= self._max_p,
             metrics={
                 "p_value": float(p_value),
                 "real_score": float(real_score),
@@ -314,6 +293,132 @@ class MonteCarloPermutationTest:
             },
             notes=f"mode={mode}; metric={metric}; seed={self._seed}",
         )
+
+
+# ---- shared permutation machinery ------------------------------------------
+#
+# Used by the MCPT above and the walk-forward permutation test: an
+# ``Evaluator`` turns (strategy, dataset on a modified lake) into a score; a
+# ``PermutationScorer`` builds that lake from real or permuted bars; and
+# ``permuted_scores`` fans the permutations out over ``lab.parallel``.
+
+
+class Evaluator(Protocol):
+    """Scores a strategy on a dataset whose lake holds real or permuted
+    bars. Must be picklable (it is shipped to worker processes)."""
+
+    def __call__(self, strategy: Strategy, dataset: Any) -> float: ...
+
+
+@dataclass(frozen=True)
+class BacktestScore:
+    """One backtest of the given (already fitted) strategy over ``window``."""
+
+    metric: str
+    window: tuple[date, date]
+
+    def __call__(self, strategy: Strategy, dataset: Any) -> float:
+        return float(getattr(run_backtest(strategy, dataset, self.window), self.metric))
+
+
+@dataclass(frozen=True)
+class RetuneScore:
+    """The tuner's best score after re-running tune → fit on the dataset."""
+
+    setup: TuningSetup
+    fixed: Mapping[str, Any]
+
+    def __call__(self, strategy: Strategy, dataset: Any) -> float:
+        _, tuned = tune_and_fit(type(strategy), dataset, self.setup, dict(self.fixed))
+        return float(tuned.best_score)
+
+
+@dataclass
+class PermutationScorer:
+    """Everything needed to score one set of bars; the per-worker state of
+    a permutation run. ``history`` maps ticker -> (bars up to the window
+    end, number of those bars before the window start): the permutable
+    bars are exactly the ones from the window start on."""
+
+    context: Any  # the dataset, lake detached (``source`` carries it)
+    source: LakeHandle
+    strategy: StrategyHandle
+    evaluate: Evaluator
+    interval: Interval
+    coarser: list[Interval]
+    history: dict[str, tuple[pd.DataFrame, int]]
+
+    @classmethod
+    def build(
+        cls, strategy: Strategy, context: Any, window: tuple[date, date], evaluate: Evaluator
+    ) -> PermutationScorer | None:
+        """``None`` when the universe has no bars in ``window``."""
+        interval = getattr(context, "interval", Interval.DAY_1)
+        history = _history_bars(context, interval, window)
+        if not any(len(bars) > n_before for bars, n_before in history.values()):
+            return None
+        return cls(
+            context=dataclasses.replace(context, lake=None),
+            source=LakeHandle(context.lake, context.universe),
+            strategy=StrategyHandle(strategy),
+            evaluate=evaluate,
+            interval=interval,
+            coarser=_coarser_intervals(context, interval),
+            history=history,
+        )
+
+    def score_real(self) -> float:
+        return self.score({t: bars for t, (bars, _) in self.history.items()})
+
+    def score_permutation(self, seed: int) -> float:
+        # The permutation keeps each ticker's first ``start_index + 1`` rows:
+        # exactly its ``n_before`` pre-window bars (the first window bar when
+        # there is no earlier history, as the path needs an anchor). One
+        # shared ordering for the whole universe keeps cross-asset
+        # correlation intact.
+        permuted = permute_bars_together(
+            {t: (bars, max(n_before - 1, 0)) for t, (bars, n_before) in self.history.items()},
+            seed=seed,
+        )
+        return self.score(permuted)
+
+    def score(self, bars_by_ticker: dict[str, pd.DataFrame]) -> float:
+        with _modified_lake(
+            self.source.lake, self.context.universe, bars_by_ticker, self.interval, self.coarser
+        ) as lake:
+            dataset = dataclasses.replace(self.context, lake=lake)
+            return self.evaluate(self.strategy.strategy, dataset)
+
+
+def permutation_seeds(n: int, seed: int | None) -> list[int]:
+    """The per-permutation seeds, drawn up front so results never depend
+    on how permutations are spread over workers."""
+    master_rng = np.random.default_rng(seed)
+    return [int(master_rng.integers(0, 2**31 - 1)) for _ in range(n)]
+
+
+def permuted_scores(
+    scorer: PermutationScorer, n: int, seed: int | None, max_workers: int | None
+) -> list[float]:
+    """Scores of ``n`` permutations, in seed order, on ``max_workers``
+    processes (see ``lab.parallel``)."""
+    return run_tasks(
+        _score_permutation,
+        permutation_seeds(n, seed),
+        payload=scorer,
+        max_workers=max_workers,
+    )
+
+
+def _score_permutation(scorer: PermutationScorer, seed: int) -> float:
+    return scorer.score_permutation(seed)
+
+
+def permutation_p_value(real: float, permuted: list[float], *, minimize: bool = False) -> float:
+    """+1-smoothed share of permuted scores at least as good as ``real``:
+    ``(count + 1) / (n + 1)`` — a conservative estimator."""
+    at_least_as_good = sum(1 for s in permuted if (s <= real if minimize else s >= real))
+    return (at_least_as_good + 1) / (len(permuted) + 1)
 
 
 def _history_bars(
@@ -349,12 +454,13 @@ def _coarser_intervals(context: Any, interval: Interval) -> list[Interval]:
 
 
 def _modified_lake(
-    context: Any,
+    source: DuckDBLake,
+    universe: list[str],
     bars_by_ticker: dict[str, pd.DataFrame],
     interval: Interval,
     coarser: list[Interval],
 ) -> DuckDBLake:
-    lake = copy_universe_lake(context.lake, context.universe)
+    lake = copy_universe_lake(source, universe)
     try:
         for ticker, bars in bars_by_ticker.items():
             if bars.empty:
