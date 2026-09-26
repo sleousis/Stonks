@@ -33,6 +33,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { BacktestFormView } from './backtest-form';
 import { BacktestResultView } from './backtest-result';
+import { suiteTests } from './lab-requests';
 import { LabRunFormView } from './lab-run-form';
 import { LabRunResultView } from './lab-run-result';
 import { type StrategyPreset, presetFromStrategy } from './strategy-preset';
@@ -206,15 +207,20 @@ export class LabPage {
 
   async startLabRun(request: LabRunRequest): Promise<void> {
     const name = shortName(request.strategy.class_path);
-    const tests = request.survival_tests?.length ?? 0;
-    const register = !!request.register_strategy;
+    const always = !!request.register_strategy;
+    const register = always || !!request.register_if_passes;
+    const suite = request.preset
+      ? `the ${request.preset} suite (${suiteTests({ suite: request.preset, tests: [] }).length} tests)`
+      : `${request.survival_tests?.length ?? 0} survival tests`;
     const ok = await this.confirm.confirm({
       title: `Start a lab run of ${name}?`,
       message:
-        `${request.tuner ?? 'random'} search, ${request.budget ?? 20} trials, then ${tests} survival test${tests === 1 ? '' : 's'}.` +
-        (register
+        `${request.tuner ?? 'random'} search, ${request.budget ?? 20} trials, then ${suite}.` +
+        (always
           ? ' The fitted strategy is registered in shadow when the run finishes, whatever the verdict.'
-          : ''),
+          : register
+            ? ' The fitted strategy is registered in shadow only if every test passes.'
+            : ''),
       confirmLabel: register ? 'Start and register' : 'Start lab run',
       typedConfirmation: register ? name : undefined,
     });

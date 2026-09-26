@@ -192,7 +192,15 @@ describe('LabPage', () => {
     expect(el.textContent).toContain('Enter at least one ticker.');
   });
 
-  it('starts a lab run with walk-forward options and shows survival rows', async () => {
+  function pickSuite(label: string): void {
+    const suite = [...el.querySelectorAll<HTMLLabelElement>('#lab-panel-lab_run label.suite')].find(
+      (l) => l.querySelector('.suite-name')!.textContent!.trim() === label,
+    )!;
+    suite.querySelector('input')!.click();
+    fixture.detectChanges();
+  }
+
+  async function openLabRunForm(): Promise<void> {
     await settle();
     el.querySelector<HTMLButtonElement>('#lab-tab-lab_run')!.click();
     fixture.detectChanges();
@@ -200,25 +208,83 @@ describe('LabPage', () => {
       `#lab-panel-lab_run input[value="${MOMENTUM.class_path}"]`,
     )!.click();
     input('#lr-tickers', 'SPY.US');
-    const wf = [...el.querySelectorAll<HTMLLabelElement>('#lab-panel-lab_run label.check')].find(
-      (l) => l.textContent!.includes('Walk-forward'),
-    )!;
-    wf.querySelector('input')!.click();
-    fixture.detectChanges();
-    input('#lr-wf-splits', '3');
-    jobStatus['new-lr'] = job({ id: 'new-lr', kind: 'lab_run', status: 'succeeded' });
+  }
+
+  function submitLabRun(): void {
     el.querySelector<HTMLButtonElement>('#lab-panel-lab_run button[type="submit"]')!.click();
+    fixture.detectChanges();
+  }
+
+  it('starts a standard-preset run with walk-forward and advanced test options', async () => {
+    await openLabRunForm();
+    pickSuite('Standard');
+    expect(el.querySelector('#lab-panel-lab_run .suite.chosen')?.textContent).toContain(
+      'walk-forward',
+    );
+    input('#lr-wf-splits', '3');
+
+    // An out-of-range option blocks the run and shows its error next to the field.
+    input('#lr-opt-deflated_sharpe-min_dsr', '0.5');
+    submitLabRun();
+    await settle(2);
+    expect(posted).toEqual([]);
+    const details = el.querySelector<HTMLDetailsElement>('#lab-panel-lab_run details.advanced')!;
+    expect(details.open).toBe(true);
+    expect(el.querySelector('#lr-opt-deflated_sharpe-min_dsr-hint')?.textContent).toContain(
+      'Must be at least 0.8 and at most 0.99.',
+    );
+
+    input('#lr-opt-deflated_sharpe-min_dsr', '0.9');
+    jobStatus['new-lr'] = job({ id: 'new-lr', kind: 'lab_run', status: 'succeeded' });
+    submitLabRun();
     await settle(12);
 
     expect(posted[0]).toMatchObject({
       url: '/api/lab/runs',
       body: {
-        survival_tests: ['oos', 'period_stability', 'walk_forward'],
-        walk_forward: { n_splits: 3, anchored: false, metric: 'sharpe' },
-        register_strategy: false,
+        preset: 'standard',
+        walk_forward: { n_splits: 3, metric: 'sharpe' },
+        test_options: { deflated_sharpe: { min_dsr: 0.9 } },
       },
     });
+    const body = posted[0].body as Record<string, unknown>;
+    expect(body['survival_tests']).toBeUndefined();
+    expect(body['register_strategy']).toBeUndefined();
     expect(el.querySelectorAll('app-lab-run-result .test').length).toBe(3);
+  });
+
+  it('registers only if the run passes, and asks for a hypothesis first', async () => {
+    await openLabRunForm();
+    const register = [...el.querySelectorAll<HTMLLabelElement>('#lab-panel-lab_run label.check')]
+      .find((l) => l.textContent!.includes('Register the fitted strategy'))!
+      .querySelector('input')!;
+    register.click();
+    fixture.detectChanges();
+    // Registering switches the quick suite to promotion, as the API does.
+    expect(el.querySelector('#lab-panel-lab_run .suite.chosen .suite-name')?.textContent).toContain(
+      'Promotion',
+    );
+
+    submitLabRun();
+    await settle(2);
+    expect(posted).toEqual([]);
+    expect(el.textContent).toContain('Say why it should make money before registering it.');
+
+    const hypothesis = el.querySelector<HTMLTextAreaElement>('#lr-hypothesis')!;
+    hypothesis.value = 'Slow money chases recent winners for months.';
+    hypothesis.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    jobStatus['new-lr'] = job({ id: 'new-lr', kind: 'lab_run', status: 'succeeded' });
+    submitLabRun();
+    await settle(12);
+
+    expect(confirmed).toEqual(['Start a lab run of Momentum?']);
+    expect(posted[0].body).toMatchObject({
+      preset: 'promotion',
+      register_if_passes: true,
+      hypothesis: 'Slow money chases recent winners for months.',
+    });
+    expect((posted[0].body as Record<string, unknown>)['register_strategy']).toBeUndefined();
   });
 
   it('opens a finished job from history and cancels a running lab run', async () => {
