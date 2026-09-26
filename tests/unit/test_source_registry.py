@@ -38,7 +38,7 @@ def test_default_toml_declares_yahoo_section():
 
 
 def test_source_ids():
-    assert SOURCE_IDS == ("eodhd", "yahoo")
+    assert SOURCE_IDS == ("eodhd", "yahoo", "defillama")
 
 
 def test_build_eodhd_requires_api_key():

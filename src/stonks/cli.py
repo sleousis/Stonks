@@ -513,6 +513,48 @@ def ingest_macro(
     _print_result(result)
 
 
+@ingest_app.command("tvl")
+def ingest_tvl(
+    chains: str = typer.Option(
+        ...,
+        "--chains",
+        help="comma-separated chain names, e.g. ethereum,solana (case-insensitive)",
+    ),
+    since: str | None = typer.Option(
+        None,
+        "--since",
+        help="earliest observation date (YYYY-MM-DD); omit for the full history",
+        callback=_validate_iso_date,
+    ),
+    source_id: str = typer.Option(
+        "defillama",
+        "--source",
+        help=f"data source ({'|'.join(SOURCE_IDS)}); TVL is served by defillama",
+        callback=_validate_source,
+    ),
+) -> None:
+    """Pull daily DeFi total value locked per chain into ``defi_tvl``.
+
+    Each chain is one unit in the ``ingest_runs`` row (an unknown chain
+    soft-fails without blocking the rest). Re-running is idempotent.
+    """
+    from stonks.ingest.sources.defillama import normalize_chain
+
+    chain_list = [normalize_chain(c) for c in _parse_tickers(chains)]
+    if not chain_list:
+        raise typer.BadParameter("--chains requires at least one chain name")
+    settings = _settings()
+    source = _build_source(settings, source_id)
+    since_d = date.fromisoformat(since) if since else None
+
+    with _open_lake(settings.lake.path) as lake:
+        lake.migrate()
+        pipeline = IngestPipeline(source=source, lake=lake)
+        result = pipeline.run_defi_tvl(chain_list, since=since_d)
+
+    _print_result(result)
+
+
 @ingest_app.command("aggregate")
 def ingest_aggregate(
     tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),

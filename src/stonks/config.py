@@ -38,9 +38,18 @@ class YahooSourceConfig(BaseModel):
     min_request_interval_seconds: float = 0.5
 
 
+class DefiLlamaSourceConfig(BaseModel):
+    # Free public API, no key. Serves DeFi TVL only (``stonks ingest tvl``).
+    base_url: str = "https://api.llama.fi"
+    timeout_seconds: int = 30
+    max_retries: int = 3
+    retry_backoff_seconds: float = 1.0
+
+
 class SourcesConfig(BaseModel):
     eodhd: EodhdSourceConfig = EodhdSourceConfig()
     yahoo: YahooSourceConfig = YahooSourceConfig()
+    defillama: DefiLlamaSourceConfig = DefiLlamaSourceConfig()
 
 
 def _env_secret(name: str) -> SecretStr | None:
