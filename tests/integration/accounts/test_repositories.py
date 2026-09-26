@@ -128,6 +128,13 @@ def test_scope_actor_strings(alice):
     assert Scope.service("scheduler").is_service
 
 
+def test_scope_kind_and_id_must_agree():
+    with pytest.raises(ValueError):
+        Scope(user_id="usr_x", role=Role.ADMIN, kind="service")
+    with pytest.raises(ValueError):
+        Scope(user_id="svc_scheduler", role=Role.ADMIN)
+
+
 def test_owned_portfolio_returns_own_row(state, alice, portfolios):
     pf = portfolios.create(alice, name="Mine")
     assert owned_portfolio(state, alice, pf.id) == pf

@@ -29,6 +29,13 @@ class Scope:
     role: Role
     kind: UserKind = "human"
 
+    def __post_init__(self) -> None:
+        # A service scope reaches every book; it must never be mistaken for
+        # (or built from) a person's id.
+        if (self.kind == "service") != self.user_id.startswith(_SERVICE_PREFIX):
+            raise ValueError(f"inconsistent scope: kind={self.kind!r}, user_id={self.user_id!r}")
+        object.__setattr__(self, "role", Role(self.role))
+
     @classmethod
     def for_user(cls, user: User) -> Scope:
         return cls(user_id=user.id, role=user.role, kind=user.kind)
