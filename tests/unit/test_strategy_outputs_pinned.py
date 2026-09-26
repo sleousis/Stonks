@@ -210,4 +210,4 @@ if __name__ == "__main__":  # pragma: no cover - golden regeneration
             GOLDEN.write_text(json.dumps(compute_outputs(lake), indent=1, sort_keys=True))
         finally:
             lake.close()
-    print(f"wrote {GOLDEN}")
+    print(f"wrote {GOLDEN}")  # noqa: T201 - a regeneration script run by hand

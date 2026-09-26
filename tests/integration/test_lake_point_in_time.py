@@ -12,7 +12,7 @@ import pytest
 from stonks.store.lake import DuckDBLake
 
 
-@pytest.fixture()
+@pytest.fixture
 def lake(tmp_path):
     db = DuckDBLake(tmp_path / "lake.duckdb")
     db.migrate()
@@ -128,7 +128,7 @@ def test_statement_history_of_unknown_ticker_is_empty_with_columns(lake):
 # ---- macro -------------------------------------------------------------------
 
 
-@pytest.fixture()
+@pytest.fixture
 def macro_lake(lake):
     lake.upsert_macro_indicators(
         pd.DataFrame(

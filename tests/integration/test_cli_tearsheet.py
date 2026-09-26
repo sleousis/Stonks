@@ -89,7 +89,7 @@ def test_backtest_job_tear_sheet_reruns_the_job_request(runner, env):
 
 
 @pytest.mark.parametrize(
-    "args,needle",
+    ("args", "needle"),
     [
         (["--backtest", "buy_and_hold", "--tickers", "UP.US"], "--start"),
         (["--backtest", "nope", *WINDOW, "--tickers", "UP.US"], "nope"),

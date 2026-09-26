@@ -9,7 +9,7 @@ the canonical EodhdFreeTierError so this file works on both subscription tiers.
 from __future__ import annotations
 
 import os
-from datetime import date, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -35,7 +35,7 @@ def source():
 
 
 def test_live_fetch_prices_aapl(source):
-    today = date.today()
+    today = datetime.now(UTC).date()
     # stay well inside the free-tier one-year window
     since = today - timedelta(days=14)
     until = today - timedelta(days=1)

@@ -141,7 +141,7 @@ async def test_validation_errors_are_listed():
             },
         )
 
-    with pytest.raises(ApiError, match="body.universe: too short"):
+    with pytest.raises(ApiError, match=r"body\.universe: too short"):
         await _client(handler).post("/api/lab/backtests", {})
 
 

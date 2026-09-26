@@ -25,9 +25,9 @@ def test_spec_bounds_and_defaults():
 
 
 def test_fast_must_be_below_slow():
-    with pytest.raises(ValueError, match="fast.*slow"):
+    with pytest.raises(ValueError, match=r"fast.*slow"):
         MACrossoverStrategy({"fast": 20, "slow": 20})
-    with pytest.raises(ValueError, match="fast.*slow"):
+    with pytest.raises(ValueError, match=r"fast.*slow"):
         MACrossoverStrategy({"fast": 40, "slow": 15})
 
 

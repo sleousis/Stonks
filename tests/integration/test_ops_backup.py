@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sqlite3
 import threading
@@ -163,7 +164,8 @@ def test_sqlite_snapshot_is_consistent_under_writes(tmp_path):
             k += 1
         con.close()
 
-    with sqlite3.connect(src.state) as con:
+    # sqlite3's context manager commits but does not close (TT-14).
+    with contextlib.closing(sqlite3.connect(src.state)) as con, con:
         con.execute("CREATE TABLE IF NOT EXISTS pairs (k INTEGER)")
     t = threading.Thread(target=writer)
     t.start()

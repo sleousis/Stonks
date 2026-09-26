@@ -68,7 +68,7 @@ class _Once:
     id = "once"
     applicable_asset_classes = ("equity",)
 
-    def __init__(self, orders: Sequence[Order], later: Mapping[int, Sequence[Order]] = {}) -> None:  # noqa: B006
+    def __init__(self, orders: Sequence[Order], later: Mapping[int, Sequence[Order]] = {}) -> None:
         self._orders = list(orders)
         self._later = dict(later)
         self._calls = 0

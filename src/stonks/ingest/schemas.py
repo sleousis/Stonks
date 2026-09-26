@@ -80,11 +80,11 @@ __all__ = [
     "OfficerRow",
     "RawPriceBar",
     "SecurityType",
-    "SymbolListing",
     "SegmentationRow",
     "SharesOutstandingRow",
-    "StockSplitRow",
     "StatementFrequency",
+    "StockSplitRow",
+    "SymbolListing",
     "TickerProfile",
     "TickerSnapshotRow",
 ]
