@@ -135,7 +135,7 @@ export class TicksPage {
 
   protected readonly pageSize = PAGE_SIZE;
   protected readonly statuses = TICK_STATUSES;
-  protected readonly status = signal('');
+  protected readonly status = signal<TickRun['status'] | ''>('');
   protected readonly offset = linkedSignal({ source: this.status, computation: () => 0 });
 
   protected readonly ticks = resource({
