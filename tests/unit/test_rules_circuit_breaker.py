@@ -67,7 +67,18 @@ def test_the_drawdown_halt_latches_after_a_recovery():
     [trip] = breaker_trips(curve, date(2025, 3, 3), only_dd)
     assert trip.kind == "drawdown" and trip.expires_on is None
     # after a reset the replay starts again from the reset day
-    assert breaker_trips(curve, date(2025, 3, 3), only_dd, drawdown_since=date(2025, 2, 4)) == []
+    since = {"drawdown": date(2025, 2, 3)}
+    assert breaker_trips(curve, date(2025, 3, 3), only_dd, since=since) == []
+
+
+def test_a_cleared_month_halt_trips_again_only_on_a_later_breach():
+    curve = _days(date(2025, 6, 2), [100.0, 93.0, 95.0, 96.0])
+    only_month = ON.model_copy(update={"max_week_loss": None, "max_drawdown_halt": None})
+    since = {"month_loss": date(2025, 6, 3)}
+    assert breaker_trips(curve, date(2025, 6, 5), only_month, since=since) == []
+    lower = [*curve, (date(2025, 6, 6), 92.0)]
+    [trip] = breaker_trips(lower, date(2025, 6, 6), only_month, since=since)
+    assert trip.kind == "month_loss"
 
 
 def test_next_month_start_rolls_the_year():

@@ -25,7 +25,7 @@ see and clear them. Off unless a limit is set.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Literal
@@ -89,11 +89,15 @@ def breaker_trips(
     as_of: date,
     settings: CircuitBreakerSettings,
     *,
-    drawdown_since: date | None = None,
+    since: Mapping[str, date] | None = None,
 ) -> list[BreakerTrip]:
     """The halts ``curve`` (``(day, value)``, today included) trips on
-    ``as_of``. ``drawdown_since`` restarts the drawdown replay (and its
-    peak) after a person cleared the latched halt."""
+    ``as_of``.
+
+    ``since`` maps a kind to the day a person last cleared it: only points
+    after that day can trip it again. The month base stays the month's
+    first snapshot; the drawdown replay (and its peak) restarts after it."""
+    since = since or {}
     points = _daily(curve, as_of)
     if not points:
         return []
@@ -105,9 +109,17 @@ def breaker_trips(
         i for i, (d, _) in enumerate(points) if (d.year, d.month) == (as_of.year, as_of.month)
     ]
     checked = in_month if sticky else in_month[-1:]
+
+    def after(kind: str) -> list[int]:
+        cut = since.get(kind)
+        return [i for i in checked if cut is None or points[i][0] > cut]
+
     if settings.max_month_loss is not None and in_month:
         base = points[in_month[0]][1]
-        worst = min((points[i][1] / base - 1 for i in checked), default=0.0) if base > 0 else 0.0
+        month_points = after("month_loss")
+        worst = (
+            min((points[i][1] / base - 1 for i in month_points), default=0.0) if base > 0 else 0.0
+        )
         if worst <= -settings.max_month_loss:
             trips.append(
                 BreakerTrip(
@@ -121,7 +133,7 @@ def breaker_trips(
         n = settings.week_sessions
         losses = [
             points[i][1] / points[max(i - n, 0)][1] - 1
-            for i in checked
+            for i in after("week_loss")
             if i > 0 and points[max(i - n, 0)][1] > 0
         ]
         worst = min(losses, default=0.0)
@@ -136,8 +148,9 @@ def breaker_trips(
             )
     if settings.max_drawdown_halt is not None:
         peak, deepest = 0.0, 0.0
+        cut = since.get("drawdown")
         for day, value in points:
-            if drawdown_since is not None and day < drawdown_since:
+            if cut is not None and day <= cut:
                 continue
             peak = max(peak, value)
             if peak > 0:

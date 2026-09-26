@@ -148,7 +148,7 @@ def _target(
     if scope == "portfolio":
         if not portfolio_id:
             raise HaltError("a portfolio halt needs a portfolio_id")
-        return user_id, portfolio_id
+        return None, portfolio_id
     raise HaltError(f"unknown halt scope {scope!r}")
 
 

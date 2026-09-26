@@ -109,6 +109,11 @@ class TickHookContext:
     #: Per portfolio id, the summary fragment of its book.
     portfolios: Mapping[str, Mapping[str, Any]]
     notify_signals: Sequence[NotifySignal] = ()
+    #: The tick's settings (read by hooks with their own settings, e.g.
+    #: ``quit_rule``); ``None`` means each hook's defaults.
+    settings: Any = None
+    #: The tick's ``StrategyRegistry`` (for hooks that change a status).
+    registry: Any = None
 
 
 class PostTickHook(ABC):
@@ -131,6 +136,9 @@ class GateContext:
     portfolio_id: str
     owner_id: str | None
     dry_run: bool
+    #: The book's risk policy (``RiskPolicy`` with ``rules``); gates that
+    #: evaluate a rule (the circuit breaker) skip it when ``None``.
+    policy: Any = None
 
 
 @dataclass(frozen=True)
