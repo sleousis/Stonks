@@ -207,11 +207,16 @@ class Backtester:
         self._fill_seq = 0
         #: The target book of every pipeline decision, by bar.
         self.target_books: dict[datetime, TargetBook] = {}
+        #: The close each order was decided at, by client id (TCA, BL-32:
+        #: ``stonks.production.tca.backtest_shortfalls`` prices the fills
+        #: against it exactly as live orders are priced).
+        self.decision_prices: dict[str, float] = {}
 
     def run(self) -> BacktestReport:
         self._decided_at, self._roots, self._parts = {}, {}, {}
         self._equity, self._attribution, self._fill_owner, self._fill_seq = [], {}, {}, 0
         self.target_books = {}
+        self.decision_prices = {}
         spec = getattr(self._broker, "market_stats_spec", None)
         bars_by_ts, asset_classes = self._load_bars(spec)
         self._asset_classes = asset_classes
@@ -249,6 +254,9 @@ class Backtester:
             ):
                 pending = self._decide(as_of, marks)
                 self._decided_at = {order.client_id: as_of for order in pending}
+                for order in pending:
+                    if order.ticker in marks:
+                        self.decision_prices.setdefault(order.client_id, marks[order.ticker])
                 bars_since_rebalance = 1
             else:
                 bars_since_rebalance += 1
