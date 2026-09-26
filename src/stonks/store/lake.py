@@ -263,6 +263,7 @@ class DuckDBLake:
         # timestamps from EODHD) aren't silently shifted into the host's
         # local time when they land in naive-TIMESTAMP columns.
         self._con.execute("SET TimeZone = 'UTC'")
+        self._column_type_cache: dict[str, dict[str, str]] = {}
 
     def __enter__(self) -> DuckDBLake:
         return self
@@ -309,6 +310,9 @@ class DuckDBLake:
             except Exception:
                 self.con.execute("ROLLBACK")
                 raise
+            finally:
+                # The migration may have reshaped any table.
+                self._column_type_cache.clear()
 
     def _guard_destructive_drops(self, sql: str, *, version: int, name: str, log: Any) -> None:
         """Refuse to apply a migration whose ``DROP TABLE`` (incl.
@@ -503,9 +507,15 @@ class DuckDBLake:
                 adj_close = EXCLUDED.adj_close,
                 volume = EXCLUDED.volume
         """
-        before = self.count_rows("bars")
-        self.con.execute(sql, [target.code, ticker, source.code])
-        return int(self.count_rows("bars") - before)
+        # Net new rows, counted over just this ticker's target slice rather
+        # than the whole bars table (the INSERT's own row count would also
+        # include ON CONFLICT updates).
+        count_sql = "SELECT COUNT(*) FROM bars WHERE ticker = ? AND interval = ?"
+        with self.transaction():
+            before = int(self.con.execute(count_sql, [ticker, target.code]).fetchone()[0])
+            self.con.execute(sql, [target.code, ticker, source.code])
+            after = int(self.con.execute(count_sql, [ticker, target.code]).fetchone()[0])
+        return after - before
 
     # ---- prices (back-compat shim over daily bars) -------------------------
 
@@ -613,12 +623,21 @@ class DuckDBLake:
         return len(df)
 
     def _column_types(self, table: str) -> dict[str, str]:
-        rows = self.con.execute(
-            "SELECT column_name, data_type FROM information_schema.columns "
-            "WHERE table_schema='main' AND table_name = ?",
-            [table],
-        ).fetchall()
-        return {row[0]: row[1] for row in rows}
+        """``{column → declared type}`` for ``table``, cached per table.
+
+        The schema only changes through ``migrate()``, which clears the
+        cache after every migration it applies.
+        """
+        cached = self._column_type_cache.get(table)
+        if cached is None:
+            rows = self.con.execute(
+                "SELECT column_name, data_type FROM information_schema.columns "
+                "WHERE table_schema='main' AND table_name = ?",
+                [table],
+            ).fetchall()
+            cached = {row[0]: row[1] for row in rows}
+            self._column_type_cache[table] = cached
+        return cached
 
     def get_income_statement(self, ticker: str) -> pd.DataFrame:
         return self._get_statement("income_statement", ticker)
@@ -1222,6 +1241,9 @@ class DuckDBLake:
 
         cols = list(cols)
         identity_eq = " AND ".join(f"_in.{c} = latest.{c}" for c in identity_cols)
+        # Only rank history for identities present in the batch; the rest
+        # of the table can't match the LEFT JOIN below anyway.
+        in_batch = " AND ".join(f"_in.{c} = {table}.{c}" for c in identity_cols)
         # NULL-drift suppression (I10): a vendor briefly returning NULL for
         # a previously-known value is *not* a change worth recording — that
         # would bloat the time series with vendor flakiness, not real
@@ -1257,6 +1279,7 @@ class DuckDBLake:
                                    ORDER BY {snapshot_col} DESC
                                ) AS _rn
                           FROM {table}
+                         WHERE EXISTS (SELECT 1 FROM _in WHERE {in_batch})
                     ),
                     latest AS (
                         SELECT * FROM ranked WHERE _rn = 1
