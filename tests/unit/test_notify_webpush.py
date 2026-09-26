@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import base64
 import json
+from urllib.parse import urlsplit
 
 import pytest
 import requests
@@ -202,7 +203,8 @@ def test_redact_scrubs_endpoint_keys_and_private_key(settings, keys):
     clean = channel.redact(text, _target())
     assert "DEVICE-SECRET-TOKEN" not in clean
     assert keys.private_key not in clean
-    assert "fcm.googleapis.com" in clean  # host is fine, it's not secret
+    # The host is not secret, so it stays; parse it rather than substring-match.
+    assert urlsplit(clean.split()[0]).hostname == "fcm.googleapis.com"
 
 
 def test_payload_carries_the_app_icon():

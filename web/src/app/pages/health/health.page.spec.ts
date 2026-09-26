@@ -8,7 +8,12 @@ import { HealthPage } from './health.page';
 
 const REPORT: HealthReportView = {
   checked_at: '2026-09-26T12:00:00Z',
-  thresholds: {},
+  thresholds: {
+    max_bar_age_days: 4,
+    stuck_tick_minutes: 30,
+    stuck_ingest_minutes: 120,
+    ingest_failure_lookback_hours: 24,
+  },
   healthy: false,
   checks: [
     { name: 'freshness:AAPL.US', ok: true, detail: 'latest bar 2026-09-25 (1d old, max 4d)' },
@@ -95,6 +100,9 @@ describe('HealthPage', () => {
     });
     expect(el.querySelector('.overall')!.getAttribute('data-level')).toBe('critical');
     expect(el.textContent).toContain('running > 30m: t9');
+    expect(el.querySelector('.check-limit')?.textContent).toContain(
+      'Stuck when running over 30 min',
+    );
   });
 
   it('is good when every check passes', async () => {

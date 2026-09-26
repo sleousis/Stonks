@@ -54,6 +54,28 @@ export const METRIC_KEYS = [
   'psi',
   'runs_test',
   'permutation',
+  // Added with Phase 9 (trade stats, benchmark, overfitting evidence)
+  'ulcer_index',
+  'drawdown_duration',
+  'payoff_ratio',
+  'holding_time',
+  'cost_drag',
+  'excess_cagr',
+  'capture_ratio',
+  'benchmark',
+  'trials',
+  'wfe',
+  'mc_drawdown_band',
+  'risk_of_ruin',
+  'cost_stress',
+  'break_even_costs',
+  'plateau',
+  'cross_instrument',
+  'benchmark_relative',
+  'embargo',
+  'hypothesis',
+  'premortem',
+  'label_horizon',
 ] as const;
 
 export type MetricKey = (typeof METRIC_KEYS)[number];
@@ -105,7 +127,7 @@ export const GLOSSARY: Record<MetricKey, GlossaryEntry> = {
     term: 'Probabilistic Sharpe ratio',
     short:
       'The chance the true Sharpe ratio is above zero, given how long and how lopsided the record is.',
-    aliases: ['Probabilistic Sharpe', 'PSR', 'psr'],
+    aliases: ['Probabilistic Sharpe', 'PSR', 'psr', 'psr0'],
   },
   sortino: {
     term: 'Sortino ratio',
@@ -143,7 +165,7 @@ export const GLOSSARY: Record<MetricKey, GlossaryEntry> = {
   expected_shortfall: {
     term: 'Expected shortfall (ES)',
     short: 'The average loss on the days that are worse than VaR. Also called CVaR.',
-    aliases: ['ES', 'CVaR', 'Conditional VaR', 'es_95', 'cvar'],
+    aliases: ['ES', 'CVaR', 'Conditional VaR', 'es_95', 'cvar', 'ES 95%'],
   },
   profit_factor: {
     term: 'Profit factor',
@@ -164,9 +186,10 @@ export const GLOSSARY: Record<MetricKey, GlossaryEntry> = {
     term: 'Trades',
     short:
       'Number of round trips (buy then sell). Few trades make every other figure less certain.',
-    aliases: ['Trade count', 'n_trades'],
+    aliases: ['Trade count', 'n_trades', 'trade_count'],
   },
   turnover: {
+    aliases: ['turnover_annual', 'Turnover per year'],
     term: 'Turnover',
     short: 'How much of the portfolio is bought and sold per year. More turnover means more costs.',
   },
@@ -187,7 +210,7 @@ export const GLOSSARY: Record<MetricKey, GlossaryEntry> = {
   alpha: {
     term: 'Alpha',
     short: 'Return the market does not explain: what is left after accounting for beta.',
-    aliases: ['Jensen alpha'],
+    aliases: ['Jensen alpha', 'alpha_annual', 'Alpha per year'],
   },
   beta: {
     term: 'Beta',
@@ -265,6 +288,127 @@ export const GLOSSARY: Record<MetricKey, GlossaryEntry> = {
     term: 'Monte Carlo permutation test (MCPT)',
     short: 'Shuffles the price history many times and checks the real result beats most shuffles.',
     aliases: ['MCPT', 'Monte Carlo permutation', 'Permutation test'],
+  },
+  ulcer_index: {
+    term: 'Ulcer index',
+    short: 'Pain from drawdowns: how deep and how long value sat below its peak. Lower is calmer.',
+    aliases: ['Ulcer', 'ulcer'],
+  },
+  drawdown_duration: {
+    term: 'Drawdown duration',
+    short: 'The longest stretch, in bars, spent below a previous peak before recovering.',
+    aliases: ['Longest drawdown', 'max_dd_duration_bars', 'Max drawdown duration'],
+  },
+  payoff_ratio: {
+    term: 'Payoff ratio',
+    short: 'The average winning trade divided by the average losing trade.',
+    aliases: ['Payoff', 'Win/loss ratio'],
+  },
+  holding_time: {
+    term: 'Holding time',
+    short: 'How many bars a trade stays open on average.',
+    aliases: ['Avg holding time', 'avg_bars_held', 'Average holding time'],
+  },
+  cost_drag: {
+    term: 'Cost drag',
+    short: 'Return lost to fees, spread and market impact each year.',
+    aliases: ['cost_drag_annual', 'Cost drag per year', 'Costs'],
+  },
+  excess_cagr: {
+    term: 'Excess CAGR',
+    short:
+      "Yearly growth above the benchmark's. Positive means it beat simply holding the benchmark.",
+    aliases: ['Excess return'],
+  },
+  capture_ratio: {
+    term: 'Capture ratio',
+    short:
+      "Up capture: share of the benchmark's rises it caught. Down capture: share of its falls. Want high up, low down.",
+    aliases: ['Up capture', 'Down capture', 'up_capture', 'down_capture', 'Capture'],
+  },
+  benchmark: {
+    term: 'Benchmark',
+    short:
+      'What the result is compared with: an index such as SPY, the equal-weight universe (EW), or nothing.',
+    aliases: ['Benchmark comparison'],
+  },
+  trials: {
+    term: 'Trials',
+    short:
+      'Parameter sets tried. The more tried, the likelier a good score is luck, so it is always shown.',
+    aliases: [
+      'n_trials',
+      'n_trials_run',
+      'n_trials_class',
+      'trials_class',
+      'Trials this run',
+      'Trials of this class',
+    ],
+  },
+  wfe: {
+    term: 'Walk-forward efficiency (WFE)',
+    short:
+      'Out-of-sample result divided by in-sample result. Near 1 holds up; under 0.5 mostly fitted noise.',
+    aliases: ['WFE', 'Walk-forward efficiency'],
+  },
+  mc_drawdown_band: {
+    term: 'Monte Carlo drawdown band',
+    short:
+      "The drawdown range seen when the backtest's trades are reshuffled thousands of times; p95 is a bad but plausible case.",
+    aliases: ['p95_max_dd', 'median_max_dd', 'MC drawdown', 'mc_trades', 'Monte Carlo trades'],
+  },
+  risk_of_ruin: {
+    term: 'Risk of ruin',
+    short: 'Share of reshuffled trade paths that hit the ruin drawdown (40% by default).',
+    aliases: ['Ruin'],
+  },
+  cost_stress: {
+    term: 'Cost stress',
+    short: 'Re-runs the backtest at two and three times the costs to see if the edge survives.',
+    aliases: ['Cost stress test'],
+  },
+  break_even_costs: {
+    term: 'Break-even cost multiple',
+    short: "How many times today's costs the strategy can pay before it stops making money.",
+    aliases: ['break_even_multiple', 'Break even'],
+  },
+  plateau: {
+    term: 'Plateau',
+    short:
+      'Checks that nearby parameter values also work, so the best result is a plateau, not a lone spike.',
+    aliases: ['Parameter plateau'],
+  },
+  cross_instrument: {
+    term: 'Cross-instrument',
+    short:
+      'Runs the same strategy on each ticker and on held-out ones; an edge should not live in one name.',
+    aliases: ['Cross instrument'],
+  },
+  benchmark_relative: {
+    term: 'Benchmark-relative test',
+    short: 'Passes only if the strategy beats its benchmark on information ratio and excess CAGR.',
+    aliases: ['Benchmark relative'],
+  },
+  embargo: {
+    term: 'Embargo',
+    short: 'Bars skipped between the tuning and testing windows so information cannot leak across.',
+    aliases: ['Embargo bars', 'embargo_bars'],
+  },
+  hypothesis: {
+    term: 'Hypothesis',
+    short:
+      'Why the strategy should make money and who loses it to you. Written before the first test.',
+    aliases: ['Research hypothesis'],
+  },
+  premortem: {
+    term: 'Premortem',
+    short: 'How you expect the strategy to fail, written before it does, so you know when to stop.',
+    aliases: ['Pre-mortem'],
+  },
+  label_horizon: {
+    term: 'Horizon',
+    short: "How many bars ahead the strategy's signal looks; the embargo is at least this long.",
+    aliases: ['label_horizon_bars', 'Label horizon'],
   },
 };
 

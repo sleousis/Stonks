@@ -194,3 +194,127 @@ dd {
     font-weight: var(--weight-medium);
   }
 }
+
+// Research card ------------------------------------------------------------
+.research {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.research-label {
+  color: var(--color-ink-3);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+blockquote {
+  margin: var(--space-1) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-brass);
+  background: var(--color-surface-2);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  max-width: 70ch;
+  overflow-wrap: anywhere;
+}
+
+.facts.compact {
+  padding: 0;
+
+  @include bp.from-tablet {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-5);
+
+    > div:nth-child(2) {
+      border-top: 0;
+    }
+  }
+}
+
+// Status history timeline --------------------------------------------------
+.timeline {
+  display: grid;
+  margin: 0;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  list-style: none;
+
+  li {
+    position: relative;
+    display: grid;
+    grid-template-columns: 12px minmax(0, 1fr);
+    gap: var(--space-3);
+    padding-bottom: var(--space-4);
+
+    // The rail between dots.
+    &::before {
+      content: '';
+      position: absolute;
+      left: 5px;
+      top: 16px;
+      bottom: 0;
+      width: 2px;
+      background: var(--color-border);
+    }
+
+    &:last-child {
+      padding-bottom: 0;
+
+      &::before {
+        display: none;
+      }
+    }
+  }
+
+  .dot {
+    width: 12px;
+    height: 12px;
+    margin-top: 4px;
+    border: 2px solid var(--color-ink-3);
+    border-radius: 50%;
+    background: var(--color-surface);
+  }
+
+  li:first-child .dot {
+    border-color: var(--color-brass);
+    background: var(--color-brass);
+  }
+
+  li.override .dot {
+    border-color: var(--color-warn);
+  }
+}
+
+.entry {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.entry-head,
+.entry-meta,
+.move {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.entry-head {
+  justify-content: space-between;
+}
+
+.arrow {
+  color: var(--color-ink-3);
+}
+
+.kind {
+  font-weight: var(--weight-medium);
+}
+
+.reason {
+  overflow-wrap: anywhere;
+}
+
+.entry-meta {
+  color: var(--color-ink-3);
+  font-size: var(--text-xs);
+}

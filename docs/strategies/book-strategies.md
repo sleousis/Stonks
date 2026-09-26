@@ -1,5 +1,11 @@
-# Book strategies: momentum, Stocks on the Move and trend following
-# Book strategies: Quantitative Momentum, Stocks on the Move and Quantitative Value
+# Book strategies
+
+Two families from the book backlog: three cross-sectional equity strategies
+(this first part) and cross-asset trend following
+([below](#cross-asset-trend-following-bl-40)). The full strategy list is in
+[README.md](README.md).
+
+## Cross-sectional equity: Quantitative Momentum, Stocks on the Move and Quantitative Value
 
 Three cross-sectional equity strategies from the book backlog
 (`docs/research/book-lessons.md`, BL-38, BL-39 and BL-41). All rank a whole
@@ -364,8 +370,7 @@ Metadata: `alpha_family = "trend"`, `label_horizon_bars = 63`,
 - **Forecast scalars.** Carver's fixed table is the default. He fitted it
   to real, trending prices; on a driftless random walk it gives a mean
   |forecast| of about 8.2, not 10. The backlog's pooled re-estimate in the
-  lab (across instruments) is not built, because `lab/` is outside this
-  change. `scalar_mode = "estimate"` estimates per ticker instead.
+  lab (across instruments) is not built. `scalar_mode = "estimate"` estimates per ticker instead.
 - **FDM.** Fixed at 1.1 by default, Carver's value for four EWMAC speeds
   whose neighbours correlate near 0.9. The estimate mode uses the ticker's
   own rule history, not a pooled one.
@@ -382,8 +387,8 @@ Metadata: `alpha_family = "trend"`, `label_horizon_bars = 63`,
 - **TrailingStopWrapper.** A trade already open on the replay window's
   first bar is treated as entered there, so its high-water mark (and its
   stop) can be lower than a full replay's. It is not in the lab catalog
-  yet, because the wrapper list lives in `lab/catalog.py`, outside this
-  change; name it by class path.
+  (`_WRAPPERS` in `lab/catalog.py` does not list it), so `stonks lab run`
+  cannot name it yet; wrap a strategy with it in code.
 - **File names.** The backlog's `time_series_momentum.py` and
   `features/trend_following.py` became `tsmom.py`, `features/forecast.py`
   and `features/trailing_stop.py`.

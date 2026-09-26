@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CancelJobData, CancelJobErrors, CancelJobResponses, CheckAuthData, CheckAuthErrors, CheckAuthResponses, CreateDraftData, CreateDraftErrors, CreateDraftResponses, CreateStreamTokenData, CreateStreamTokenErrors, CreateStreamTokenResponses, DeleteDraftData, DeleteDraftErrors, DeleteDraftResponses, DisableDraftData, DisableDraftErrors, DisableDraftResponses, EnableDraftData, EnableDraftErrors, EnableDraftResponses, GetAlpacaStatusData, GetAlpacaStatusErrors, GetAlpacaStatusResponses, GetBacktestResultData, GetBacktestResultErrors, GetBacktestResultResponses, GetBarsData, GetBarsErrors, GetBarsResponses, GetBrokerInfoData, GetBrokerInfoErrors, GetBrokerInfoResponses, GetDraftData, GetDraftErrors, GetDraftResponses, GetGoLiveReportData, GetGoLiveReportErrors, GetGoLiveReportResponses, GetHealthData, GetHealthReportData, GetHealthReportErrors, GetHealthReportResponses, GetHealthResponses, GetIngestResultData, GetIngestResultErrors, GetIngestResultResponses, GetJobData, GetJobErrors, GetJobResponses, GetLabRunResultData, GetLabRunResultErrors, GetLabRunResultResponses, GetPnlData, GetPnlErrors, GetPnlResponses, GetPortfolioData, GetPortfolioErrors, GetPortfolioResponses, GetRiskPolicyData, GetRiskPolicyErrors, GetRiskPolicyResponses, GetRuleSpecSchemaData, GetRuleSpecSchemaErrors, GetRuleSpecSchemaResponses, GetShadowPnlData, GetShadowPnlErrors, GetShadowPnlResponses, GetStrategyData, GetStrategyErrors, GetStrategyHistoryData, GetStrategyHistoryErrors, GetStrategyHistoryResponses, GetStrategyResponses, GetStrategySummaryData, GetStrategySummaryErrors, GetStrategySummaryResponses, GetStudioCapabilitiesData, GetStudioCapabilitiesErrors, GetStudioCapabilitiesResponses, GetTickData, GetTickErrors, GetTickResponses, GetTickResultData, GetTickResultErrors, GetTickResultResponses, ListAlertsData, ListAlertsErrors, ListAlertsResponses, ListAssetClassesData, ListAssetClassesErrors, ListAssetClassesResponses, ListCostModelsData, ListCostModelsErrors, ListCostModelsResponses, ListCoverageData, ListCoverageErrors, ListCoverageResponses, ListDataSourcesData, ListDataSourcesErrors, ListDataSourcesResponses, ListDraftsData, ListDraftsErrors, ListDraftsResponses, ListFillsData, ListFillsErrors, ListFillsResponses, ListIngestRunsData, ListIngestRunsErrors, ListIngestRunsResponses, ListInstrumentsData, ListInstrumentsErrors, ListInstrumentsResponses, ListIntervalsData, ListIntervalsErrors, ListIntervalsResponses, ListJobsData, ListJobsErrors, ListJobsResponses, ListOrdersData, ListOrdersErrors, ListOrdersResponses, ListPortfolioSnapshotsData, ListPortfolioSnapshotsErrors, ListPortfolioSnapshotsResponses, ListShadowDecisionsData, ListShadowDecisionsErrors, ListShadowDecisionsResponses, ListShadowPnlData, ListShadowPnlErrors, ListShadowPnlResponses, ListStrategiesData, ListStrategiesErrors, ListStrategiesResponses, ListStrategyClassesData, ListStrategyClassesErrors, ListStrategyClassesResponses, ListStudioTemplatesData, ListStudioTemplatesErrors, ListStudioTemplatesResponses, ListTicksData, ListTicksErrors, ListTicksResponses, PromoteStrategyData, PromoteStrategyErrors, PromoteStrategyResponses, RegisterDraftData, RegisterDraftErrors, RegisterDraftResponses, RetireStrategyData, RetireStrategyErrors, RetireStrategyResponses, ShadowStrategyData, ShadowStrategyErrors, ShadowStrategyResponses, StartBacktestData, StartBacktestErrors, StartBacktestResponses, StartDraftBacktestData, StartDraftBacktestErrors, StartDraftBacktestResponses, StartDraftLabRunData, StartDraftLabRunErrors, StartDraftLabRunResponses, StartIngestData, StartIngestErrors, StartIngestResponses, StartLabRunData, StartLabRunErrors, StartLabRunResponses, StartTickData, StartTickErrors, StartTickResponses, StreamJobEventsData, StreamJobEventsErrors, StreamJobEventsResponses, UpdateDraftData, UpdateDraftErrors, UpdateDraftResponses, ValidateDraftData, ValidateDraftErrors, ValidateDraftResponses, ValidateRuleSpecData, ValidateRuleSpecErrors, ValidateRuleSpecResponses } from './types.gen';
+import type { CancelJobData, CancelJobErrors, CancelJobResponses, CheckAuthData, CheckAuthErrors, CheckAuthResponses, CompleteConnectionPortalData, CompleteConnectionPortalErrors, CompleteConnectionPortalResponses, ConnectWithKeysData, ConnectWithKeysErrors, ConnectWithKeysResponses, CreateDraftData, CreateDraftErrors, CreateDraftResponses, CreatePushSubscriptionData, CreatePushSubscriptionErrors, CreatePushSubscriptionResponses, CreateStreamTokenData, CreateStreamTokenErrors, CreateStreamTokenResponses, DeleteConnectionData, DeleteConnectionErrors, DeleteConnectionResponses, DeleteDraftData, DeleteDraftErrors, DeleteDraftResponses, DeletePushSubscriptionData, DeletePushSubscriptionErrors, DeletePushSubscriptionResponses, DisableDraftData, DisableDraftErrors, DisableDraftResponses, EnableDraftData, EnableDraftErrors, EnableDraftResponses, GetAlpacaStatusData, GetAlpacaStatusErrors, GetAlpacaStatusResponses, GetBacktestResultData, GetBacktestResultErrors, GetBacktestResultResponses, GetBarsData, GetBarsErrors, GetBarsResponses, GetBrokerInfoData, GetBrokerInfoErrors, GetBrokerInfoResponses, GetConnectionData, GetConnectionErrors, GetConnectionResponses, GetDraftData, GetDraftErrors, GetDraftResponses, GetGoLiveReportData, GetGoLiveReportErrors, GetGoLiveReportResponses, GetHealthData, GetHealthReportData, GetHealthReportErrors, GetHealthReportResponses, GetHealthResponses, GetIngestResultData, GetIngestResultErrors, GetIngestResultResponses, GetJobData, GetJobErrors, GetJobResponses, GetLabRunResultData, GetLabRunResultErrors, GetLabRunResultResponses, GetLivenessData, GetLivenessErrors, GetLivenessResponses, GetNotificationPreferencesData, GetNotificationPreferencesErrors, GetNotificationPreferencesResponses, GetPnlData, GetPnlErrors, GetPnlResponses, GetPortfolioData, GetPortfolioErrors, GetPortfolioResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetRiskPolicyData, GetRiskPolicyErrors, GetRiskPolicyResponses, GetRuleSpecSchemaData, GetRuleSpecSchemaErrors, GetRuleSpecSchemaResponses, GetScheduleData, GetScheduleErrors, GetScheduleResponses, GetShadowPnlData, GetShadowPnlErrors, GetShadowPnlResponses, GetSignalIcResultData, GetSignalIcResultErrors, GetSignalIcResultResponses, GetStrategyData, GetStrategyErrors, GetStrategyHistoryData, GetStrategyHistoryErrors, GetStrategyHistoryResponses, GetStrategyResponses, GetStrategySummaryData, GetStrategySummaryErrors, GetStrategySummaryResponses, GetStudioCapabilitiesData, GetStudioCapabilitiesErrors, GetStudioCapabilitiesResponses, GetTickData, GetTickErrors, GetTickResponses, GetTickResultData, GetTickResultErrors, GetTickResultResponses, GetVapidKeyData, GetVapidKeyErrors, GetVapidKeyResponses, LinkConnectionAccountData, LinkConnectionAccountErrors, LinkConnectionAccountResponses, ListAlertsData, ListAlertsErrors, ListAlertsResponses, ListAssetClassesData, ListAssetClassesErrors, ListAssetClassesResponses, ListConnectionAccountsData, ListConnectionAccountsErrors, ListConnectionAccountsResponses, ListConnectionsData, ListConnectionsErrors, ListConnectionsResponses, ListCostModelsData, ListCostModelsErrors, ListCostModelsResponses, ListCoverageData, ListCoverageErrors, ListCoverageResponses, ListDataSourcesData, ListDataSourcesErrors, ListDataSourcesResponses, ListDraftsData, ListDraftsErrors, ListDraftsResponses, ListFillsData, ListFillsErrors, ListFillsResponses, ListIngestRunsData, ListIngestRunsErrors, ListIngestRunsResponses, ListInstrumentsData, ListInstrumentsErrors, ListInstrumentsResponses, ListIntervalsData, ListIntervalsErrors, ListIntervalsResponses, ListJobsData, ListJobsErrors, ListJobsResponses, ListNotificationsData, ListNotificationsErrors, ListNotificationsResponses, ListOrdersData, ListOrdersErrors, ListOrdersResponses, ListPortfolioSnapshotsData, ListPortfolioSnapshotsErrors, ListPortfolioSnapshotsResponses, ListProvidersData, ListProvidersErrors, ListProvidersResponses, ListPushSubscriptionsData, ListPushSubscriptionsErrors, ListPushSubscriptionsResponses, ListShadowDecisionsData, ListShadowDecisionsErrors, ListShadowDecisionsResponses, ListShadowPnlData, ListShadowPnlErrors, ListShadowPnlResponses, ListStrategiesData, ListStrategiesErrors, ListStrategiesResponses, ListStrategyClassesData, ListStrategyClassesErrors, ListStrategyClassesResponses, ListStudioTemplatesData, ListStudioTemplatesErrors, ListStudioTemplatesResponses, ListTicksData, ListTicksErrors, ListTicksResponses, MarkNotificationsReadData, MarkNotificationsReadErrors, MarkNotificationsReadResponses, PromoteStrategyData, PromoteStrategyErrors, PromoteStrategyResponses, RegisterDraftData, RegisterDraftErrors, RegisterDraftResponses, RetireStrategyData, RetireStrategyErrors, RetireStrategyResponses, RunScheduledJobNowData, RunScheduledJobNowErrors, RunScheduledJobNowResponses, SetNotificationWebhookData, SetNotificationWebhookErrors, SetNotificationWebhookResponses, SetQuietHoursData, SetQuietHoursErrors, SetQuietHoursResponses, ShadowStrategyData, ShadowStrategyErrors, ShadowStrategyResponses, StartBacktestData, StartBacktestErrors, StartBacktestResponses, StartConnectionPortalData, StartConnectionPortalErrors, StartConnectionPortalResponses, StartDraftBacktestData, StartDraftBacktestErrors, StartDraftBacktestResponses, StartDraftLabRunData, StartDraftLabRunErrors, StartDraftLabRunResponses, StartIngestData, StartIngestErrors, StartIngestResponses, StartLabRunData, StartLabRunErrors, StartLabRunResponses, StartSignalIcData, StartSignalIcErrors, StartSignalIcResponses, StartTickData, StartTickErrors, StartTickResponses, StreamJobEventsData, StreamJobEventsErrors, StreamJobEventsResponses, SyncConnectionData, SyncConnectionErrors, SyncConnectionResponses, UpdateDraftData, UpdateDraftErrors, UpdateDraftResponses, UpdateNotificationPreferencesData, UpdateNotificationPreferencesErrors, UpdateNotificationPreferencesResponses, ValidateDraftData, ValidateDraftErrors, ValidateDraftResponses, ValidateRuleSpecData, ValidateRuleSpecErrors, ValidateRuleSpecResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -93,9 +93,148 @@ export const listStrategyClasses = <ThrowOnError extends boolean = false>(option
 });
 
 /**
+ * List Connections
+ *
+ * The caller's connections, oldest first.
+ */
+export const listConnections = <ThrowOnError extends boolean = false>(options?: Options<ListConnectionsData, ThrowOnError>): RequestResult<ListConnectionsResponses, ListConnectionsErrors, ThrowOnError> => (options?.client ?? client).get<ListConnectionsResponses, ListConnectionsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/connections',
+    ...options
+});
+
+/**
+ * Complete Portal
+ *
+ * Finish a hosted-login connection: checks the one-time ``state`` and
+ * lists the accounts the user linked at the provider.
+ */
+export const completeConnectionPortal = <ThrowOnError extends boolean = false>(options: Options<CompleteConnectionPortalData, ThrowOnError>): RequestResult<CompleteConnectionPortalResponses, CompleteConnectionPortalErrors, ThrowOnError> => (options.client ?? client).get<CompleteConnectionPortalResponses, CompleteConnectionPortalErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/connections/callback',
+    ...options
+});
+
+/**
+ * Connect With Keys
+ *
+ * Connect with API keys. The keys are checked against the provider
+ * first (refused keys are never stored), then sealed at rest; they are
+ * never returned or logged. New accounts get a broker portfolio each.
+ */
+export const connectWithKeys = <ThrowOnError extends boolean = false>(options: Options<ConnectWithKeysData, ThrowOnError>): RequestResult<ConnectWithKeysResponses, ConnectWithKeysErrors, ThrowOnError> => (options.client ?? client).post<ConnectWithKeysResponses, ConnectWithKeysErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/connections/keys',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Start Portal
+ *
+ * Start a hosted-login connection: returns the one-time provider URL.
+ * The provider redirects to ``redirect_uri`` with ``connection_id`` and
+ * ``state``; pass both to ``GET /api/connections/callback``.
+ */
+export const startConnectionPortal = <ThrowOnError extends boolean = false>(options: Options<StartConnectionPortalData, ThrowOnError>): RequestResult<StartConnectionPortalResponses, StartConnectionPortalErrors, ThrowOnError> => (options.client ?? client).post<StartConnectionPortalResponses, StartConnectionPortalErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/connections/portal',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List Providers
+ *
+ * Providers an admin enabled (``[connections].enabled_providers``) and
+ * configured; nothing else can be connected.
+ */
+export const listProviders = <ThrowOnError extends boolean = false>(options?: Options<ListProvidersData, ThrowOnError>): RequestResult<ListProvidersResponses, ListProvidersErrors, ThrowOnError> => (options?.client ?? client).get<ListProvidersResponses, ListProvidersErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/connections/providers',
+    ...options
+});
+
+/**
+ * Delete Connection
+ *
+ * Remove the connection, its credentials, accounts and activities.
+ * Linked portfolios are archived (their snapshots stay).
+ */
+export const deleteConnection = <ThrowOnError extends boolean = false>(options: Options<DeleteConnectionData, ThrowOnError>): RequestResult<DeleteConnectionResponses, DeleteConnectionErrors, ThrowOnError> => (options.client ?? client).delete<DeleteConnectionResponses, DeleteConnectionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/connections/{connection_id}',
+    ...options
+});
+
+/**
+ * Get Connection
+ */
+export const getConnection = <ThrowOnError extends boolean = false>(options: Options<GetConnectionData, ThrowOnError>): RequestResult<GetConnectionResponses, GetConnectionErrors, ThrowOnError> => (options.client ?? client).get<GetConnectionResponses, GetConnectionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/connections/{connection_id}',
+    ...options
+});
+
+/**
+ * List Accounts
+ *
+ * External accounts seen on the connection, with the linked portfolio.
+ */
+export const listConnectionAccounts = <ThrowOnError extends boolean = false>(options: Options<ListConnectionAccountsData, ThrowOnError>): RequestResult<ListConnectionAccountsResponses, ListConnectionAccountsErrors, ThrowOnError> => (options.client ?? client).get<ListConnectionAccountsResponses, ListConnectionAccountsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/connections/{connection_id}/accounts',
+    ...options
+});
+
+/**
+ * Link Account
+ *
+ * Link an external account to one of your broker portfolios (a new one
+ * when ``portfolio_id`` is omitted).
+ */
+export const linkConnectionAccount = <ThrowOnError extends boolean = false>(options: Options<LinkConnectionAccountData, ThrowOnError>): RequestResult<LinkConnectionAccountResponses, LinkConnectionAccountErrors, ThrowOnError> => (options.client ?? client).post<LinkConnectionAccountResponses, LinkConnectionAccountErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/connections/{connection_id}/link',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Sync Connection
+ *
+ * Sync now (read-only at the provider). A provider failure is a 200
+ * with ``status = "error"``; the connection records it and backs off.
+ */
+export const syncConnection = <ThrowOnError extends boolean = false>(options: Options<SyncConnectionData, ThrowOnError>): RequestResult<SyncConnectionResponses, SyncConnectionErrors, ThrowOnError> => (options.client ?? client).post<SyncConnectionResponses, SyncConnectionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/connections/{connection_id}/sync',
+    ...options
+});
+
+/**
  * Liveness probe
  */
 export const getHealth = <ThrowOnError extends boolean = false>(options?: Options<GetHealthData, ThrowOnError>): RequestResult<GetHealthResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetHealthResponses, unknown, ThrowOnError>({ url: '/api/health', ...options });
+
+/**
+ * Liveness probe (process and hosted scheduler)
+ */
+export const getLiveness = <ThrowOnError extends boolean = false>(options?: Options<GetLivenessData, ThrowOnError>): RequestResult<GetLivenessResponses, GetLivenessErrors, ThrowOnError> => (options?.client ?? client).get<GetLivenessResponses, GetLivenessErrors, ThrowOnError>({ url: '/api/health/live', ...options });
+
+/**
+ * Readiness probe (state migrated, lake present)
+ */
+export const getReadiness = <ThrowOnError extends boolean = false>(options?: Options<GetReadinessData, ThrowOnError>): RequestResult<GetReadinessResponses, GetReadinessErrors, ThrowOnError> => (options?.client ?? client).get<GetReadinessResponses, GetReadinessErrors, ThrowOnError>({ url: '/api/health/ready', ...options });
 
 /**
  * Health Report
@@ -271,6 +410,35 @@ export const getLabRunResult = <ThrowOnError extends boolean = false>(options: O
 });
 
 /**
+ * Start Signal Ic
+ *
+ * Queue a signal IC analysis of a strategy's ``estimate_return`` (mean
+ * IC, ICIR, HAC t-stat, decay, quantile spread, turnover); fetch it from
+ * ``GET /api/lab/signal-ic/{job_id}/result`` once it succeeds. Universes
+ * under 10 tickers come back ``n/a``.
+ */
+export const startSignalIc = <ThrowOnError extends boolean = false>(options: Options<StartSignalIcData, ThrowOnError>): RequestResult<StartSignalIcResponses, StartSignalIcErrors, ThrowOnError> => (options.client ?? client).post<StartSignalIcResponses, StartSignalIcErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/lab/signal-ic',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get Signal Ic Result
+ *
+ * The result of a succeeded signal IC job (409 until it has succeeded).
+ */
+export const getSignalIcResult = <ThrowOnError extends boolean = false>(options: Options<GetSignalIcResultData, ThrowOnError>): RequestResult<GetSignalIcResultResponses, GetSignalIcResultErrors, ThrowOnError> => (options.client ?? client).get<GetSignalIcResultResponses, GetSignalIcResultErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/lab/signal-ic/{job_id}/result',
+    ...options
+});
+
+/**
  * Get Bars
  *
  * Bars in ``[start, end]``; the most recent ``limit`` when truncated.
@@ -299,6 +467,87 @@ export const listInstruments = <ThrowOnError extends boolean = false>(options?: 
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/market/instruments',
     ...options
+});
+
+/**
+ * List Notifications
+ *
+ * Your in-app feed, newest first, with the unread count.
+ */
+export const listNotifications = <ThrowOnError extends boolean = false>(options?: Options<ListNotificationsData, ThrowOnError>): RequestResult<ListNotificationsResponses, ListNotificationsErrors, ThrowOnError> => (options?.client ?? client).get<ListNotificationsResponses, ListNotificationsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/notifications',
+    ...options
+});
+
+/**
+ * Get Preferences
+ */
+export const getNotificationPreferences = <ThrowOnError extends boolean = false>(options?: Options<GetNotificationPreferencesData, ThrowOnError>): RequestResult<GetNotificationPreferencesResponses, GetNotificationPreferencesErrors, ThrowOnError> => (options?.client ?? client).get<GetNotificationPreferencesResponses, GetNotificationPreferencesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/notifications/preferences',
+    ...options
+});
+
+/**
+ * Update Preferences
+ *
+ * Set per-category (and optionally per-strategy) channel switches.
+ */
+export const updateNotificationPreferences = <ThrowOnError extends boolean = false>(options: Options<UpdateNotificationPreferencesData, ThrowOnError>): RequestResult<UpdateNotificationPreferencesResponses, UpdateNotificationPreferencesErrors, ThrowOnError> => (options.client ?? client).put<UpdateNotificationPreferencesResponses, UpdateNotificationPreferencesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/notifications/preferences',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Set Quiet Hours
+ *
+ * Hold low and normal urgency deliveries for a morning digest; high
+ * urgency (halts, failed auto orders) always goes.
+ */
+export const setQuietHours = <ThrowOnError extends boolean = false>(options: Options<SetQuietHoursData, ThrowOnError>): RequestResult<SetQuietHoursResponses, SetQuietHoursErrors, ThrowOnError> => (options.client ?? client).put<SetQuietHoursResponses, SetQuietHoursErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/notifications/quiet-hours',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Mark Read
+ *
+ * Mark notifications read (all of yours when ``ids`` is omitted).
+ */
+export const markNotificationsRead = <ThrowOnError extends boolean = false>(options: Options<MarkNotificationsReadData, ThrowOnError>): RequestResult<MarkNotificationsReadResponses, MarkNotificationsReadErrors, ThrowOnError> => (options.client ?? client).post<MarkNotificationsReadResponses, MarkNotificationsReadErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/notifications/read',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Set Webhook
+ *
+ * Your fallback webhook. Write-only: never shown back in full.
+ */
+export const setNotificationWebhook = <ThrowOnError extends boolean = false>(options: Options<SetNotificationWebhookData, ThrowOnError>): RequestResult<SetNotificationWebhookResponses, SetNotificationWebhookErrors, ThrowOnError> => (options.client ?? client).put<SetNotificationWebhookResponses, SetNotificationWebhookErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/notifications/webhook',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -352,6 +601,60 @@ export const listPortfolioSnapshots = <ThrowOnError extends boolean = false>(opt
 });
 
 /**
+ * Delete Push Subscription
+ *
+ * Unregister a browser by its endpoint (404 when it isn't yours).
+ */
+export const deletePushSubscription = <ThrowOnError extends boolean = false>(options: Options<DeletePushSubscriptionData, ThrowOnError>): RequestResult<DeletePushSubscriptionResponses, DeletePushSubscriptionErrors, ThrowOnError> => (options.client ?? client).delete<DeletePushSubscriptionResponses, DeletePushSubscriptionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/push/subscriptions',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List Push Subscriptions
+ *
+ * Your registered browsers and installed apps (no endpoints or keys).
+ */
+export const listPushSubscriptions = <ThrowOnError extends boolean = false>(options?: Options<ListPushSubscriptionsData, ThrowOnError>): RequestResult<ListPushSubscriptionsResponses, ListPushSubscriptionsErrors, ThrowOnError> => (options?.client ?? client).get<ListPushSubscriptionsResponses, ListPushSubscriptionsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/push/subscriptions',
+    ...options
+});
+
+/**
+ * Create Push Subscription
+ *
+ * Register this browser (``PushSubscription.toJSON()``). The endpoint
+ * must be a known push service; re-registering refreshes it in place.
+ */
+export const createPushSubscription = <ThrowOnError extends boolean = false>(options: Options<CreatePushSubscriptionData, ThrowOnError>): RequestResult<CreatePushSubscriptionResponses, CreatePushSubscriptionErrors, ThrowOnError> => (options.client ?? client).post<CreatePushSubscriptionResponses, CreatePushSubscriptionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/push/subscriptions',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Vapid Key
+ *
+ * The VAPID public key browsers subscribe with; null when this server
+ * can't send Web Push (the console then doesn't subscribe).
+ */
+export const getVapidKey = <ThrowOnError extends boolean = false>(options?: Options<GetVapidKeyData, ThrowOnError>): RequestResult<GetVapidKeyResponses, GetVapidKeyErrors, ThrowOnError> => (options?.client ?? client).get<GetVapidKeyResponses, GetVapidKeyErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/push/vapid-key',
+    ...options
+});
+
+/**
  * Get Risk Policy
  *
  * The ``[production.risk]`` limits applied between a strategy's orders
@@ -361,6 +664,33 @@ export const getRiskPolicy = <ThrowOnError extends boolean = false>(options?: Op
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/risk/policy',
     ...options
+});
+
+/**
+ * Get Schedule
+ *
+ * Scheduled jobs with their next fire, and the most recent runs.
+ */
+export const getSchedule = <ThrowOnError extends boolean = false>(options?: Options<GetScheduleData, ThrowOnError>): RequestResult<GetScheduleResponses, GetScheduleErrors, ThrowOnError> => (options?.client ?? client).get<GetScheduleResponses, GetScheduleErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/schedule',
+    ...options
+});
+
+/**
+ * Run Now
+ *
+ * Run a scheduled job now (a ``manual:`` run, audited). It runs in the
+ * background; its row shows up in ``GET /api/schedule``.
+ */
+export const runScheduledJobNow = <ThrowOnError extends boolean = false>(options: Options<RunScheduledJobNowData, ThrowOnError>): RequestResult<RunScheduledJobNowResponses, RunScheduledJobNowErrors, ThrowOnError> => (options.client ?? client).post<RunScheduledJobNowResponses, RunScheduledJobNowErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/schedule/{job}/run-now',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**

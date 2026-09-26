@@ -9,9 +9,11 @@ import {
   defaultBacktestForm,
   defaultLabRunForm,
   defaultWindow,
+  benchmarkValue,
   groupStrategies,
   labRunErrors,
   parseTickers,
+  suiteTests,
 } from './lab-requests';
 
 const TODAY = new Date(2026, 8, 26);
@@ -109,10 +111,22 @@ describe('lab requests', () => {
       );
       expect(backtestErrors(backtestForm(), MOMENTUM)).toEqual({});
     });
+
+    it('sends a chosen benchmark', () => {
+      expect(buildBacktestRequest(backtestForm({ benchmark: 'auto' }), MOMENTUM).benchmark).toBe(
+        'auto',
+      );
+      expect(buildBacktestRequest(backtestForm(), MOMENTUM)).not.toHaveProperty('benchmark');
+      const errors = backtestErrors(
+        backtestForm({ benchmark: 'ticker', benchmarkTicker: 'two words' }),
+        MOMENTUM,
+      );
+      expect(errors['benchmarkTicker']).toBe('One ticker, like QQQ.US.');
+    });
   });
 
   describe('lab run', () => {
-    it('builds the default request without walk-forward or MCPT options', () => {
+    it('sends a preset, not a test list, and no options by default', () => {
       expect(buildLabRunRequest(labForm())).toEqual({
         strategy: { class_path: MOMENTUM.class_path },
         universe: ['AAPL.US'],
@@ -124,44 +138,104 @@ describe('lab requests', () => {
         seed: 0,
         objective: 'sharpe',
         train_ratio: 0.7,
-        survival_tests: ['oos', 'period_stability'],
-        register_strategy: false,
+        preset: 'quick',
       });
+      expect(buildLabRunRequest(labForm({ suite: 'promotion' }))).toMatchObject({
+        preset: 'promotion',
+      });
+      expect(suiteTests({ suite: 'standard', tests: [] })).toContain('walk_forward');
     });
 
-    it('adds walk-forward and MCPT options only with their tests, in canonical order', () => {
+    it('sends a custom suite as survival_tests in canonical order', () => {
+      const body = buildLabRunRequest(
+        labForm({ suite: 'custom', tests: ['mcpt', 'oos', 'pbo', 'walk_forward'] }),
+      );
+      expect(body.preset).toBeUndefined();
+      expect(body.survival_tests).toEqual(['oos', 'walk_forward', 'pbo', 'mcpt']);
+    });
+
+    it('registers only if the tests pass unless told to always register', () => {
+      const ifPasses = buildLabRunRequest(
+        labForm({ register: true, hypothesis: '  Winners keep winning.  ', premortem: 'Chop.' }),
+      );
+      expect(ifPasses).toMatchObject({
+        register_if_passes: true,
+        hypothesis: 'Winners keep winning.',
+        premortem: 'Chop.',
+      });
+      expect(ifPasses.register_strategy).toBeUndefined();
+
+      const always = buildLabRunRequest(
+        labForm({ register: true, registerIfPasses: false, hypothesis: 'x' }),
+      );
+      expect(always.register_strategy).toBe(true);
+      expect(always.register_if_passes).toBeUndefined();
+
+      expect(labRunErrors(labForm({ register: true }))['hypothesis']).toBe(
+        'Say why it should make money before registering it.',
+      );
+      expect(labRunErrors(labForm({ register: false }))['hypothesis']).toBeUndefined();
+    });
+
+    it('sends the benchmark and embargo only when set', () => {
+      expect(buildLabRunRequest(labForm({ benchmark: 'EW', embargoBars: 5 }))).toMatchObject({
+        benchmark: 'EW',
+        embargo_bars: 5,
+      });
+      expect(
+        buildLabRunRequest(labForm({ benchmark: 'ticker', benchmarkTicker: ' qqq.us ' })).benchmark,
+      ).toBe('QQQ.US');
+      expect(buildLabRunRequest(labForm({ benchmark: 'none' })).benchmark).toBe('none');
+      expect(buildLabRunRequest(labForm({ benchmark: 'default' }))).not.toHaveProperty('benchmark');
+      expect(benchmarkValue({ benchmark: 'auto', benchmarkTicker: '' })).toBe('auto');
+      expect(labRunErrors(labForm({ benchmark: 'ticker' }))['benchmarkTicker']).toBe(
+        'Enter a ticker, e.g. QQQ.US.',
+      );
+      expect(labRunErrors(labForm({ embargoBars: -1 }))['embargoBars']).toBeDefined();
+    });
+
+    it('adds walk-forward and MCPT options only with their tests and only when set', () => {
       const body = buildLabRunRequest(
         labForm({
           tuner: 'grid',
           objective: 'cagr',
-          tests: ['permutation', 'oos', 'walk_forward'],
+          suite: 'custom',
+          tests: ['mcpt', 'oos', 'walk_forward'],
           wfSplits: 5,
           wfTestDays: 30,
           wfAnchored: true,
+          wfMinWfe: 0.6,
+          wfMatrix: true,
           mcptPermutations: 200,
           mcptMaxP: 0.01,
           mcptMetric: 'sharpe',
-          mcptRetune: true,
-          register: true,
+          mcptRetune: 'auto',
         }),
       );
-      expect(body.survival_tests).toEqual(['oos', 'walk_forward', 'permutation']);
       expect(body.walk_forward).toEqual({
         n_splits: 5,
         test_days: 30,
         anchored: true,
+        min_wfe: 0.6,
+        matrix: true,
         metric: 'cagr',
       });
       expect(body.mcpt).toEqual({
         n_permutations: 200,
         max_p_value: 0.01,
         metric: 'sharpe',
-        retune: true,
+        retune: 'auto',
       });
-      expect(body).toMatchObject({ tuner: 'grid', register_strategy: true });
+      expect(buildLabRunRequest(labForm({ suite: 'promotion', mcptRetune: 'no' })).mcpt).toEqual({
+        retune: false,
+      });
 
-      const evenFolds = buildLabRunRequest(labForm({ tests: ['walk_forward'] }));
-      expect(evenFolds.walk_forward).not.toHaveProperty('test_days');
+      // The preset keeps its own settings when nothing is changed.
+      const untouched = buildLabRunRequest(labForm({ suite: 'promotion' }));
+      expect(untouched).not.toHaveProperty('walk_forward');
+      expect(untouched).not.toHaveProperty('mcpt');
+      // Walk-forward settings are dropped when the suite does not run it.
+      expect(buildLabRunRequest(labForm({ wfSplits: 5 }))).not.toHaveProperty('walk_forward');
     });
 
     it('validates tuner and survival options', () => {
@@ -169,20 +243,60 @@ describe('lab requests', () => {
         labForm({
           budget: 0,
           trainRatio: 1,
-          tests: ['walk_forward', 'permutation'],
-          wfSplits: 0,
+          suite: 'custom',
+          tests: ['walk_forward', 'mcpt'],
+          wfSplits: 1,
           wfTestDays: 2.5,
+          wfMinWfe: -1,
           mcptPermutations: 5000,
           mcptMaxP: 0,
         }),
       );
       expect(Object.keys(errors).sort()).toEqual(
-        ['budget', 'mcptMaxP', 'mcptPermutations', 'trainRatio', 'wfSplits', 'wfTestDays'].sort(),
+        [
+          'budget',
+          'mcptMaxP',
+          'mcptPermutations',
+          'trainRatio',
+          'wfMinWfe',
+          'wfSplits',
+          'wfTestDays',
+        ].sort(),
       );
-      expect(labRunErrors(labForm({ tests: [] }))['tests']).toBe(
+      expect(labRunErrors(labForm({ suite: 'custom', tests: [] }))['tests']).toBe(
         'Pick at least one survival test.',
       );
       expect(labRunErrors(labForm())).toEqual({});
+    });
+
+    it('builds test_options per test from the advanced editor, with field errors', () => {
+      const form = labForm({
+        suite: 'promotion',
+        testOptions: {
+          pbo: { max_pbo: '0.3', n_blocks: '' },
+          cross_instrument: { held_out: 'qqq.us, iwm.us' },
+          deflated_sharpe: { include_prior_runs: 'false' },
+          // Not in the promotion suite: ignored.
+          drift: { max_psi: '0.5' },
+        },
+      });
+      expect(labRunErrors(form)).toEqual({});
+      expect(buildLabRunRequest(form).test_options).toEqual({
+        deflated_sharpe: { include_prior_runs: false },
+        pbo: { max_pbo: 0.3 },
+        cross_instrument: { held_out: ['QQQ.US', 'IWM.US'] },
+      });
+
+      const bad = labForm({
+        suite: 'promotion',
+        testOptions: { pbo: { n_blocks: '9', max_pbo: '2' }, mc_trades: { n_paths: 'lots' } },
+      });
+      expect(labRunErrors(bad)).toEqual({
+        'opt.pbo.n_blocks': 'Must be an even number.',
+        'opt.pbo.max_pbo': 'Must be at least 0 and at most 1.',
+        'opt.mc_trades.n_paths': 'Enter a number.',
+      });
+      expect(buildLabRunRequest(labForm()).test_options).toBeUndefined();
     });
   });
 

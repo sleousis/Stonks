@@ -76,7 +76,7 @@
     }
 
     @include bp.from-tablet {
-      grid-template-columns: 10rem 14rem minmax(0, 1fr);
+      grid-template-columns: 12rem 13rem minmax(0, 1fr);
       grid-template-areas:
         'head figures detail'
         'head figures measures';
@@ -109,10 +109,94 @@
   gap: var(--space-2);
 }
 
+.check-label {
+  font-weight: var(--weight-semibold);
+}
+
 .check-name {
+  flex-basis: 100%;
+  color: var(--color-ink-3);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--text-xs);
+}
+
+// Ready for a human ----------------------------------------------------------
+.ready {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  margin: var(--space-3) var(--space-4) 0;
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--color-gain);
+  border-radius: var(--radius-sm);
+  background: var(--color-gain-soft);
   font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
+}
+
+.ready-title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--color-gain);
+}
+
+// Promotion checklist -------------------------------------------------------
+.checklist {
+  display: grid;
+  gap: var(--space-2);
+  border-top: 1px solid var(--color-border);
+
+  h3 {
+    font-size: var(--text-md);
+  }
+}
+
+.checklist-lead {
+  font-size: var(--text-sm);
+}
+
+.checklist-grid {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  @include bp.from-tablet {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  > div {
+    display: grid;
+    align-content: start;
+    gap: 2px;
+    min-width: 0;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-2);
+  }
+
+  > div.text {
+    grid-column: 1 / -1;
+  }
+
+  dt {
+    color: var(--color-ink-3);
+    font-size: var(--text-xs);
+  }
+
+  dd {
+    margin: 0;
+    font-weight: var(--weight-medium);
+    overflow-wrap: anywhere;
+  }
+
+  .text dd {
+    font-weight: var(--weight-regular);
+    max-width: 70ch;
+  }
+
+  .missing dd {
+    color: var(--color-ink-3);
+  }
 }
 
 .check-figures {

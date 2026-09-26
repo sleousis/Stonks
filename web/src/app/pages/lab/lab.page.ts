@@ -27,12 +27,14 @@ import { type JobHandle, JobsService, isTerminal } from '../../core/jobs/jobs.se
 import { formatPercent } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
 import { PctPipe } from '../../shared/format.pipes';
+import { CliCommand } from '../../shared/ui/cli-command';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { BacktestFormView } from './backtest-form';
 import { BacktestResultView } from './backtest-result';
+import { defaultWindow, suiteTests } from './lab-requests';
 import { LabRunFormView } from './lab-run-form';
 import { LabRunResultView } from './lab-run-result';
 import { type StrategyPreset, presetFromStrategy } from './strategy-preset';
@@ -87,6 +89,7 @@ export function canCancel(kind: string, status: string | null | undefined): bool
     LabRunFormView,
     BacktestResultView,
     LabRunResultView,
+    CliCommand,
   ],
   templateUrl: './lab.page.html',
   styleUrl: './lab.page.scss',
@@ -177,6 +180,9 @@ export class LabPage {
     return !!f && !f.handle.done() && canCancel(f.kind, f.handle.status() ?? 'queued');
   });
 
+  /** No API route serves sweep results yet (roadmap 13.6): point at the CLI. */
+  protected readonly sweepCommand = sweepCommand();
+
   protected readonly kindLabel = kindLabel;
   protected readonly jobStrategy = jobStrategy;
   protected readonly canCancel = canCancel;
@@ -206,15 +212,20 @@ export class LabPage {
 
   async startLabRun(request: LabRunRequest): Promise<void> {
     const name = shortName(request.strategy.class_path);
-    const tests = request.survival_tests?.length ?? 0;
-    const register = !!request.register_strategy;
+    const always = !!request.register_strategy;
+    const register = always || !!request.register_if_passes;
+    const suite = request.preset
+      ? `the ${request.preset} suite (${suiteTests({ suite: request.preset, tests: [] }).length} tests)`
+      : `${request.survival_tests?.length ?? 0} survival tests`;
     const ok = await this.confirm.confirm({
       title: `Start a lab run of ${name}?`,
       message:
-        `${request.tuner ?? 'random'} search, ${request.budget ?? 20} trials, then ${tests} survival test${tests === 1 ? '' : 's'}.` +
-        (register
+        `${request.tuner ?? 'random'} search, ${request.budget ?? 20} trials, then ${suite}.` +
+        (always
           ? ' The fitted strategy is registered in shadow when the run finishes, whatever the verdict.'
-          : ''),
+          : register
+            ? ' The fitted strategy is registered in shadow only if every test passes.'
+            : ''),
       confirmLabel: register ? 'Start and register' : 'Start lab run',
       typedConfirmation: register ? name : undefined,
     });
@@ -316,6 +327,12 @@ export class LabPage {
       this.resultLoading.set(false);
     }
   }
+}
+
+/** A ready-to-run `stonks lab sweep` over the last year. */
+export function sweepCommand(today?: Date): string {
+  const { start, end } = defaultWindow(today);
+  return `stonks lab sweep --tickers SPY.US,QQQ.US,IWM.US --start ${start} --end ${end}`;
 }
 
 function shortName(classPath: string | null | undefined): string {

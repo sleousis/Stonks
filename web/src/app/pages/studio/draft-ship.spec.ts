@@ -6,6 +6,7 @@ import type { Draft } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { nextRequest, tick } from '../../../testing/http';
+import { answerDialog, dialogForm, goLiveReport } from '../../../testing/status-dialog';
 import { makeDraft } from '../../../testing/studio-fixtures';
 import { DraftShip } from './draft-ship';
 
@@ -85,20 +86,22 @@ describe('DraftShip', () => {
     // Saving failed, so no register request went out (verify() checks it).
   });
 
-  it('enables a shadow strategy with a typed confirmation', async () => {
+  it('enables a shadow strategy with a reason after the go-live check', async () => {
     setup(registered('shadow'));
     const toggle = el.querySelector('[role="switch"]') as HTMLButtonElement;
     expect(toggle.getAttribute('aria-checked')).toBe('false');
 
     toggle.click();
-    await tick();
-    expect(confirm).toHaveBeenCalledWith(
-      expect.objectContaining({
-        confirmLabel: 'Enable',
-        typedConfirmation: 'studio_rsi_dip_buyer',
-      }),
+    (await nextRequest(controller, '/api/strategies/studio_rsi_dip_buyer/golive')).flush(
+      goLiveReport('studio_rsi_dip_buyer', true),
     );
+    await tick(5);
+    fixture.detectChanges();
+    expect(dialogForm(el)?.textContent).toContain('Go-live check passed');
+    answerDialog(fixture, { reason: 'Shadow run looked right', typed: 'studio_rsi_dip_buyer' });
+
     const req = await nextRequest(controller, '/api/studio/drafts/draft_abc123/enable', 'POST');
+    expect(req.request.body).toEqual({ reason: 'Shadow run looked right', override: false });
     req.flush(registered('active'));
     await tick();
     expect(emitted.at(-1)?.strategy_status).toBe('active');
@@ -109,14 +112,15 @@ describe('DraftShip', () => {
     expect(el.textContent).toContain('Enabled');
   });
 
-  it('disables an active strategy back to shadow after a danger confirmation', async () => {
+  it('disables an active strategy back to shadow with a reason', async () => {
     setup(registered('active'));
     (el.querySelector('[role="switch"]') as HTMLButtonElement).click();
     await tick();
-    expect(confirm).toHaveBeenCalledWith(
-      expect.objectContaining({ confirmLabel: 'Disable', tone: 'danger' }),
-    );
+    fixture.detectChanges();
+    expect(dialogForm(el)?.querySelector('button.btn-danger')?.textContent).toContain('Disable');
+    answerDialog(fixture, { reason: 'Spread widened' });
     const req = await nextRequest(controller, '/api/studio/drafts/draft_abc123/disable', 'POST');
+    expect(req.request.body).toEqual({ reason: 'Spread widened', override: false });
     req.flush(registered('shadow'));
     await tick();
     expect(emitted.at(-1)?.strategy_status).toBe('shadow');

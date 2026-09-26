@@ -151,6 +151,16 @@
   overflow-wrap: anywhere;
 }
 
+.check-limit {
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  color: var(--color-ink-3);
+}
+
+.fresh-limit {
+  display: block;
+}
+
 .error-text {
   display: inline-block;
   min-width: 18ch;

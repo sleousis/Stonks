@@ -1,5 +1,5 @@
 {
-  "instructions": "Stonks research + trading system. Tools talk to the local REST API started\nwith `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs\nand ingests; follow up with wait_for_job. Status changes, draft\nregister/enable/disable and production ticks need confirm=true; call them\nfirst without it to get a preview and show it to the user before confirming.\nrun_tick is a dry run unless dry_run=false, and a real tick is refused unless\nthe API reports a paper/simulated broker. No tool can change broker settings\nor enable live trading.",
+  "instructions": "Stonks research + trading system. Tools talk to the local REST API started\nwith `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs,\nsignal IC analyses and ingests; follow up with wait_for_job. Status changes,\ndraft register/enable/disable, broker syncs and production ticks need\nconfirm=true; call them first without it to get a preview and show it to the\nuser before confirming.\nrun_tick is a dry run unless dry_run=false, and a real tick is refused unless\nthe API reports a paper/simulated broker. No tool can change broker settings\nor enable live trading.",
   "resource_templates": [],
   "resources": [
     {
@@ -384,6 +384,30 @@
         "type": "object"
       },
       "name": "get_catalog",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "External accounts on one of your connections, each with the\nportfolio that mirrors it (null when not linked).",
+      "input_schema": {
+        "properties": {
+          "connection_id": {
+            "title": "Connection Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "connection_id"
+        ],
+        "title": "get_connection_accountsArguments",
+        "type": "object"
+      },
+      "name": "get_connection_accounts",
       "needs_confirm": false
     },
     {
@@ -971,6 +995,22 @@
       },
       "name": "lab_run_draft",
       "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Your broker connections: provider, status, last sync and error.\nNever includes credentials.",
+      "input_schema": {
+        "properties": {},
+        "title": "list_connectionsArguments",
+        "type": "object"
+      },
+      "name": "list_connections",
+      "needs_confirm": false
     },
     {
       "annotations": {
@@ -2430,6 +2470,124 @@
     },
     {
       "annotations": {
+        "destructive": false,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Queue a signal IC analysis: does the strategy's estimate_return rank\nfuture returns across the universe? Reports mean IC, ICIR, HAC t-stat\nand quantile spread per horizon, plus turnover and the IC estimate.\nNeeds at least 10 tickers (else n/a). Returns the job; use wait_for_job\nfor the result. Research only: writes nothing.",
+      "input_schema": {
+        "properties": {
+          "class_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "catalog class path, e.g. pkg.mod:Class",
+            "title": "Class Path"
+          },
+          "end": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "every_bars": {
+            "default": 5,
+            "description": "score every N bars",
+            "minimum": 1,
+            "title": "Every Bars",
+            "type": "integer"
+          },
+          "horizons": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "forward-return horizons in bars; default [1, 5, 21]",
+            "title": "Horizons"
+          },
+          "interval": {
+            "default": "1d",
+            "title": "Interval",
+            "type": "string"
+          },
+          "n_quantiles": {
+            "default": 5,
+            "maximum": 20,
+            "minimum": 2,
+            "title": "N Quantiles",
+            "type": "integer"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "strategy params (with class_path)",
+            "title": "Params"
+          },
+          "start": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "registered strategy id (or use class_path)",
+            "title": "Strategy Id"
+          },
+          "universe": {
+            "description": "instrument ids",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Universe",
+            "type": "array"
+          }
+        },
+        "required": [
+          "universe",
+          "start",
+          "end"
+        ],
+        "title": "run_signal_icArguments",
+        "type": "object"
+      },
+      "name": "run_signal_ic",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
         "destructive": true,
         "idempotent": false,
         "open_world": false,
@@ -2616,6 +2774,36 @@
       "annotations": {
         "destructive": true,
         "idempotent": true,
+        "open_world": true,
+        "read_only": false
+      },
+      "description": "Sync one of your connections now: read balances, positions and\nactivity from the provider (read-only there) into the linked broker\nportfolios. Without confirm=true returns a preview and syncs nothing.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "connection_id": {
+            "title": "Connection Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "connection_id"
+        ],
+        "title": "sync_connectionArguments",
+        "type": "object"
+      },
+      "name": "sync_connection",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
         "open_world": false,
         "read_only": false
       },
@@ -2780,7 +2968,7 @@
         "open_world": false,
         "read_only": true
       },
-      "description": "Poll a job until it finishes or the timeout passes. Returns\n{\"timed_out\": bool, \"job\": {...}, \"result\": {...} | null}: once the job\nsucceeded, \"result\" is its typed result (BacktestResult, LabRunView,\ningest or tick result); otherwise null and the job carries its error.",
+      "description": "Poll a job until it finishes or the timeout passes. Returns\n{\"timed_out\": bool, \"job\": {...}, \"result\": {...} | null}: once the job\nsucceeded, \"result\" is its typed result (BacktestResult, LabRunView,\nSignalICView, ingest or tick result); otherwise null and the job carries its error.",
       "input_schema": {
         "properties": {
           "job_id": {

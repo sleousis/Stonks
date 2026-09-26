@@ -9,28 +9,36 @@ import {
 } from '@angular/core';
 
 import type { IntervalInfo, LabRunRequest, StrategyClassInfo } from '../../api/models';
+import { HelpTip } from '../../shared/ui/help-tip';
 import { paramFields, rangeText } from '../../shared/ui/param-form/param-spec';
+import { BenchmarkField } from './benchmark-field';
 import {
+  type BenchmarkForm,
   type LabRunForm,
+  PICKABLE_TESTS,
+  SUITES,
   SURVIVAL_TESTS,
+  type SuiteChoice,
   type SurvivalTestName,
   type WindowForm,
   buildLabRunRequest,
   defaultLabRunForm,
   labRunErrors,
+  suiteTests,
 } from './lab-requests';
 import { StrategyPicker } from './strategy-picker';
 import type { StrategyPreset } from './strategy-preset';
+import { TEST_OPTION_FIELDS, filledCount } from './test-options';
 import { WindowFields } from './window-fields';
 
 /**
- * Tune a strategy class, fit it and run the survival suite; emits the
+ * Tune a strategy class, fit it and run a survival suite; emits the
  * request body. The page confirms before starting when "register" is on.
  */
 @Component({
   selector: 'app-lab-run-form',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [StrategyPicker, WindowFields],
+  imports: [StrategyPicker, WindowFields, BenchmarkField, HelpTip],
   templateUrl: './lab-run-form.html',
   styleUrl: './lab-form.scss',
 })
@@ -42,7 +50,8 @@ export class LabRunFormView {
   readonly busy = input(false);
   readonly submitted = output<LabRunRequest>();
 
-  protected readonly tests = SURVIVAL_TESTS;
+  protected readonly suites = SUITES;
+  protected readonly pickable = PICKABLE_TESTS;
   protected readonly form = linkedSignal<StrategyPreset | null, LabRunForm>({
     source: this.preset,
     computation: (preset) => {
@@ -52,6 +61,8 @@ export class LabRunFormView {
     },
   });
   protected readonly tried = signal(false);
+  /** The advanced options panel; opened on submit when one of its fields is wrong. */
+  protected readonly optionsOpen = signal(false);
 
   protected readonly selected = computed(
     () => this.classes().find((c) => c.class_path === this.form().classPath) ?? null,
@@ -70,12 +81,36 @@ export class LabRunFormView {
   );
   protected readonly tunableCount = computed(() => this.space().filter((p) => p.tunable).length);
 
+  /** The tests this run will do, with their labels. */
+  protected readonly suiteTests = computed(() =>
+    suiteTests(this.form()).map((id) => SURVIVAL_TESTS.find((t) => t.id === id)!),
+  );
+  protected readonly suiteInfo = computed(() => SUITES.find((s) => s.id === this.form().suite)!);
+  protected readonly runs = (id: SurvivalTestName) => suiteTests(this.form()).includes(id);
+
+  /** Tests in the suite that take advanced options. */
+  protected readonly optionTests = computed(() =>
+    this.suiteTests()
+      .filter((t) => TEST_OPTION_FIELDS[t.id]?.length)
+      .map((t) => ({
+        ...t,
+        fields: TEST_OPTION_FIELDS[t.id],
+        filled: filledCount(this.form().testOptions, t.id),
+      })),
+  );
+  protected readonly optionsFilled = computed(() =>
+    this.optionTests().reduce((n, t) => n + t.filled, 0),
+  );
+
   private readonly allErrors = computed(() => labRunErrors(this.form()));
   protected readonly errors = computed(() => (this.tried() ? this.allErrors() : {}));
   protected readonly errorCount = computed(() => Object.keys(this.errors()).length);
+  protected readonly optionErrorCount = computed(
+    () => Object.keys(this.errors()).filter((k) => k.startsWith('opt.')).length,
+  );
   protected readonly has = (id: SurvivalTestName) => this.form().tests.includes(id);
 
-  protected patch(p: Partial<LabRunForm> | Partial<WindowForm>): void {
+  protected patch(p: Partial<LabRunForm> | Partial<WindowForm> | Partial<BenchmarkForm>): void {
     this.form.update((f) => ({ ...f, ...p }));
   }
 
@@ -84,8 +119,29 @@ export class LabRunFormView {
     this.patch({ [key]: n === null || Number.isNaN(n) ? null : n });
   }
 
-  protected setChoice<K extends 'tuner' | 'objective' | 'mcptMetric'>(key: K, value: string): void {
+  protected setChoice<K extends 'tuner' | 'objective' | 'mcptMetric' | 'mcptRetune'>(
+    key: K,
+    value: string,
+  ): void {
     this.patch({ [key]: value as LabRunForm[K] });
+  }
+
+  protected setSuite(suite: SuiteChoice): void {
+    // Starting a custom suite from the preset in view saves re-ticking its tests.
+    this.form.update((f) => ({
+      ...f,
+      suite,
+      tests: suite === 'custom' && f.suite !== 'custom' ? suiteTests(f) : f.tests,
+    }));
+  }
+
+  /** Registering runs default to the promotion suite, as the API does. */
+  protected setRegister(on: boolean): void {
+    this.form.update((f) => ({
+      ...f,
+      register: on,
+      suite: on && f.suite === 'quick' ? 'promotion' : f.suite,
+    }));
   }
 
   protected toggleTest(id: SurvivalTestName, on: boolean): void {
@@ -95,9 +151,30 @@ export class LabRunFormView {
     }));
   }
 
+  protected optionValue(test: string, key: string): string {
+    return this.form().testOptions[test]?.[key] ?? '';
+  }
+
+  protected setOption(test: string, key: string, value: string): void {
+    this.form.update((f) => ({
+      ...f,
+      testOptions: { ...f.testOptions, [test]: { ...f.testOptions[test], [key]: value } },
+    }));
+  }
+
+  protected clearOptions(test: string): void {
+    this.form.update((f) => {
+      const next = { ...f.testOptions };
+      delete next[test];
+      return { ...f, testOptions: next };
+    });
+  }
+
   protected submit(): void {
     this.tried.set(true);
-    if (Object.keys(this.allErrors()).length) return;
+    const errors = Object.keys(this.allErrors());
+    if (errors.some((k) => k.startsWith('opt.'))) this.optionsOpen.set(true);
+    if (errors.length) return;
     this.submitted.emit(buildLabRunRequest(this.form()));
   }
 }

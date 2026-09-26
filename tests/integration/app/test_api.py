@@ -351,14 +351,15 @@ def test_every_api_route_has_tags_and_response_model(app):
         assert path.startswith("/api/"), path
         assert op.get("tags"), (method, path)
         assert op.get("operationId"), (method, path)
-        ok = next(v for k, v in op["responses"].items() if k.startswith("2"))
+        code, ok = next((k, v) for k, v in op["responses"].items() if k.startswith("2"))
         content = ok.get("content", {})
         media = next(iter(content.values()), {}) if content else {}
-        assert media.get("schema") or media.get("itemSchema"), (method, path)
+        if code != "204":  # No Content: nothing to describe
+            assert media.get("schema") or media.get("itemSchema"), (method, path)
         for code, resp in op["responses"].items():
             if int(code) >= 400:
                 assert list(resp["content"]) == ["application/problem+json"], (method, path)
-        if path != "/api/health":
+        if path not in ("/api/health", "/api/health/live", "/api/health/ready"):
             assert "422" in op["responses"] or "404" in op["responses"], (method, path)
 
 

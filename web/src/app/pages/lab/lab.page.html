@@ -254,5 +254,24 @@
         </app-data-table>
       }
     </section>
+
+    <!-- Sweeps (CLI only until the API has a route) ------------------------->
+    <section class="panel" aria-labelledby="lab-sweep-title">
+      <div class="panel-head">
+        <h2 id="lab-sweep-title">Sweep every strategy</h2>
+      </div>
+      <div class="panel-body sweep">
+        <p>
+          A sweep runs every catalogued strategy through the lab on one basket of tickers and
+          summarises the verdicts side by side. Each run is counted in the trial ledger; nothing is
+          registered. The console cannot show sweep results yet, so run it from a terminal:
+        </p>
+        <app-cli-command [command]="sweepCommand" />
+        <p class="muted">
+          Add <code>--preset standard</code> for a stricter suite, <code>--strategies</code> to pick
+          a few, and <code>--csv-out sweep.csv</code> to keep the summary.
+        </p>
+      </div>
+    </section>
   </div>
 </div>

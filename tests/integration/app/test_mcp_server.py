@@ -112,12 +112,15 @@ READ_TOOLS = {
     "validate_rule_spec",
     "list_drafts",
     "get_draft",
+    "list_connections",
+    "get_connection_accounts",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
     "run_backtest",
     "run_lab",
     "run_ingest",
+    "run_signal_ic",
     "create_draft",
     "validate_draft",
     "backtest_draft",
@@ -133,6 +136,7 @@ GUARDED_TOOLS = {
     "register_draft",
     "enable_draft",
     "disable_draft",
+    "sync_connection",
 }
 
 

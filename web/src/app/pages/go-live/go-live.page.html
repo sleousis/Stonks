@@ -95,9 +95,24 @@
       <app-loading-state label="Running the go-live check" [rows]="6" />
     } @else {
       @let r = report.value();
+      @if (r.passed && r.status !== 'active') {
+        <div class="ready panel-body" role="status">
+          <p class="ready-title">Ready for a human to promote</p>
+          <p>
+            All {{ rows().length }} checks passed. Nothing promotes on its own: read the checklist
+            below, then promote it from the strategy page with a reason.
+          </p>
+          <a class="btn btn-primary" [routerLink]="['/strategies', r.strategy_id]"
+            >Review and promote</a
+          >
+        </div>
+      }
       <p class="summary panel-body">
         @if (r.passed) {
-          All {{ rows().length }} checks passed. Promotion stays a human action.
+          All {{ rows().length }} checks passed.
+          @if (r.status === 'active') {
+            It is already active.
+          }
         } @else {
           {{ failedCount() }} of {{ rows().length }} checks failed.
         }
@@ -116,8 +131,9 @@
         @for (c of rows(); track c.name) {
           <li [class.failed]="!c.passed">
             <div class="check-head">
-              <span class="check-name">{{ c.name }}</span>
+              <span class="check-label">{{ c.label }}</span>
               <app-status-pill [status]="c.passed ? 'pass' : 'fail'" />
+              <span class="check-name">{{ c.name }}</span>
             </div>
             @if (c.name !== 'status') {
               <dl class="check-figures">
@@ -136,6 +152,25 @@
           </li>
         }
       </ul>
+      <section class="checklist panel-body" aria-labelledby="checklist-title">
+        <h3 id="checklist-title">Promotion checklist</h3>
+        <p class="muted checklist-lead">
+          Evidence a reviewer reads before promoting. It does not change the verdict.
+        </p>
+        <dl class="checklist-grid">
+          @for (item of checklist(); track item.key) {
+            <div [class.text]="item.text" [class.missing]="!item.recorded">
+              <dt>
+                {{ item.label }}
+                @if (item.help) {
+                  <app-help-tip [term]="item.help" />
+                }
+              </dt>
+              <dd [class.num]="!item.text">{{ item.value }}</dd>
+            </div>
+          }
+        </dl>
+      </section>
       <div class="cli panel-body">
         <p>The same check on the command line exits with code 1 when any check fails.</p>
         <app-cli-command [command]="command()" />
