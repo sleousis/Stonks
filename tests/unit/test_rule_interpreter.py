@@ -185,7 +185,8 @@ def test_crosses_below_mirrors():
 
 def test_crosses_between_two_indicators():
     cond = _spec(
-        [{"id": "f", "kind": "close"}, {"id": "s", "kind": "volume"}], _cmp("f", "crosses_above", "s")
+        [{"id": "f", "kind": "close"}, {"id": "s", "kind": "volume"}],
+        _cmp("f", "crosses_above", "s"),
     ).entry
     assert evaluate(cond, _vals(f=(1, 3), s=(2, 2.5))) is True
     assert evaluate(cond, _vals(f=(3, 4), s=(2, 2.5))) is False

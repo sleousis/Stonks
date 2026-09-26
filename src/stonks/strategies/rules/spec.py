@@ -17,9 +17,15 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 from pydantic import ValidationError as PydanticValidationError
-from pydantic import model_validator
 
 from stonks.core.interval import Interval
 from stonks.core.types import AssetClass

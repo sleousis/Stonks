@@ -110,7 +110,7 @@ def required_bars(ind: object) -> int:
     """Bars needed for the indicator's value on the last bar to be warm."""
     if isinstance(ind, CloseIndicator | VolumeIndicator):
         return 1
-    period = int(getattr(ind, "period"))
+    period = int(ind.period)
     if isinstance(ind, EmaIndicator):
         return RECURSIVE_WARMUP * period
     if isinstance(ind, RsiIndicator):

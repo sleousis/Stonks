@@ -34,9 +34,7 @@ def window_size(spec: RuleSpec) -> int:
 
 
 def used_indicators(spec: RuleSpec) -> set[str]:
-    return (
-        referenced_indicators(spec.entry) | referenced_indicators(spec.exit) | {spec.rank.by}
-    )
+    return referenced_indicators(spec.entry) | referenced_indicators(spec.exit) | {spec.rank.by}
 
 
 def snapshot(spec: RuleSpec, bars: pd.DataFrame) -> dict[str, tuple[float, float]] | None:
