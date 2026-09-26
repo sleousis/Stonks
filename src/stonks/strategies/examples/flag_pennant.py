@@ -49,7 +49,9 @@ Deliberate deviations from the original:
   research measurement in the original; here it is the exit rule.
 - ``estimate_return`` uses the classic measured move (breakout close plus
   pole height) as its target; the original defined no target.
-- History is limited to the last ``60 * order + 200`` bars.
+- History is limited to the last ``60 * order + 200`` bars; a pattern whose
+  bars would slide out of that window before its hold ends is skipped, so a
+  trade never vanishes mid-life.
 """
 
 from __future__ import annotations
@@ -181,10 +183,17 @@ def replay_bull_flag(
     order: int,
     variant: str,
     hold_mult: float,
+    window_bars: int | None = None,
 ) -> FlagTrade | None:
     """Replay the bull flag rule bar by bar and return the trade live at the
     last bar, or ``None`` when flat. Only extremes confirmed at or before
-    each bar are consulted."""
+    each bar are consulted.
+
+    With ``window_bars`` (the size of the caller's sliding replay window), a
+    pattern is skipped when the bars it depends on (from the pole base's
+    rolling-window neighbourhood on) would leave that window before its hold
+    ends, so a trade never vanishes mid-life as the window slides.
+    """
     if variant not in VARIANTS:
         raise ValueError(f"variant must be one of {VARIANTS}, got {variant!r}")
     log_high = np.asarray(log_high, dtype=float)
@@ -216,9 +225,13 @@ def replay_bull_flag(
             found = _check_pips(logc, i, base, order, hold_mult)
         else:
             found = _check_trendline(log_high, log_low, logc, i, base, tip, hold_mult)
-        if found is not None:
-            trade = found
-            pending = None
+        if found is None:
+            continue
+        span = i - (found.base_index - order) + found.hold
+        if window_bars is not None and span > window_bars:
+            continue
+        trade = found
+        pending = None
     return trade
 
 
@@ -377,5 +390,6 @@ class FlagPennantStrategy(BaseStrategy):
             order,
             self.params["variant"],
             float(self.params["hold_mult"]),
+            window_bars=self.history_bars(),
         )
         return trade, logc

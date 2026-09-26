@@ -112,3 +112,35 @@ def test_fresh_instance_matches_a_warm_one(flag_lake):
     ]
     assert walked == fresh
     assert any(r is not None for r in walked)
+
+
+@pytest.mark.parametrize("variant", ["pips", "trendline"])
+def test_flag_longer_than_the_window_allows_is_skipped(variant):
+    # from the pole base's rolling-window neighbourhood (bar 10 - 8) to the
+    # end of the hold (64 + 14) the pattern spans 76 bars
+    hi, lo, c = _logs(knots_path(FLAG_KNOTS))
+    n = 65
+    assert replay_bull_flag(hi[:n], lo[:n], c[:n], ORDER, variant, 1.0, window_bars=70) is None
+    assert replay_bull_flag(hi[:n], lo[:n], c[:n], ORDER, variant, 1.0, window_bars=80) is not None
+
+
+@pytest.mark.parametrize("variant", ["pips", "trendline"])
+@pytest.mark.parametrize("window", [60, 70, 76, 90])
+def test_sliding_window_never_flickers(variant, window):
+    """As the replay window slides, a trade only appears on its entry bar and
+    only disappears when its hold ends."""
+    # 40-bar lead-in so the entry happens after the window starts sliding
+    hi, lo, c = _logs(knots_path([(0, 120.0)] + [(k + 40, p) for k, p in FLAG_KNOTS]))
+    prev = None
+    traded = False
+    for t in range(window - 1, len(c)):
+        sl = slice(t - window + 1, t + 1)
+        slid = replay_bull_flag(hi[sl], lo[sl], c[sl], ORDER, variant, 1.0, window_bars=window)
+        cur = None if slid is None else (slid.entry_index + t - window + 1, slid)
+        if t > window - 1 and cur is not None and (prev is None or prev[0] != cur[0]):
+            assert cur[0] == t, f"trade appeared mid-life at {t}"
+        if prev is not None and (cur is None or cur[0] != prev[0]):
+            assert t - prev[0] >= prev[1].hold, f"trade vanished early at {t}"
+        prev = cur
+        traded |= cur is not None
+    assert traded == (window >= 76)
