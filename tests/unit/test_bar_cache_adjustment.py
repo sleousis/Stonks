@@ -52,7 +52,8 @@ def lake(tmp_path):
 
 def _as_of(i: int) -> datetime:
     d = DAYS[i]
-    return datetime(d.year, d.month, d.day, 23, 59)
+    # a daily decision on day i (midnight stamp): that day's bar is complete
+    return datetime(d.year, d.month, d.day)
 
 
 def test_last_n_closes_is_adjusted_by_default_and_raw_on_request(lake):

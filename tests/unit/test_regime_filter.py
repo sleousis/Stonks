@@ -120,8 +120,8 @@ def test_bad_conditions_and_k_are_rejected():
         _filter([{"kind": "nope"}])
     with pytest.raises(ValueError, match="at least one"):
         _filter([])
-    with pytest.raises(ValueError, match="k=3"):
-        _filter(_fixed(True, True), k=3)
+    # RS-29: a k above the number of conditions is clamped, not rejected
+    assert _filter(_fixed(True, True), k=3).params["k"] == 2
 
 
 # ---- k of n --------------------------------------------------------------------------

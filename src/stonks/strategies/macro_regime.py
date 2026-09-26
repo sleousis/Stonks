@@ -41,7 +41,7 @@ from typing import Any
 
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
-from stonks.strategies._common import as_datetime, iso
+from stonks.strategies._common import as_datetime, sell_all_longs
 from stonks.strategies._wrapping import InnerStrategyWrapper, inner_param_specs
 from stonks.strategies._wrapping import import_strategy_class as _import_strategy_class
 
@@ -253,18 +253,7 @@ class MacroRegimeFilter(InnerStrategyWrapper):
             return self._inner.decide(my_picks, portfolio, prices, as_of)
         if self.params["risk_off_exit"] == "inner":
             return [o for o in self._inner.decide([], portfolio, prices, as_of) if o.side == "sell"]
-        return [
-            Order(
-                client_id=f"{self.id}:sell:{ticker}:{iso(as_of)}",
-                ticker=ticker,
-                side="sell",
-                quantity=qty,
-                order_type="market",
-                strategy_id=self.id,
-            )
-            for ticker, qty in portfolio.positions.items()
-            if qty > 0
-        ]
+        return sell_all_longs(self.id, portfolio, as_of)
 
 
 # ---- point-in-time macro loaders (shared with the regime conditions) --------------

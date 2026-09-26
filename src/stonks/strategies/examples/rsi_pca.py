@@ -55,8 +55,9 @@ from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
 from stonks.features.library import rsi
-from stonks.strategies._common import LakeBarCaches, as_datetime, iso
+from stonks.strategies._common import LakeBarCaches, long_only_decide
 from stonks.strategies.base import BaseStrategy
+from stonks.strategies.examples._nt888_common import train_bars
 
 
 class RSIPCAStrategy(BaseStrategy):
@@ -69,6 +70,14 @@ class RSIPCAStrategy(BaseStrategy):
     alpha_family = "data_driven"
     premise = "none"
     label_horizon_bars = 6
+    required_history_bars = 26
+
+    def param_metadata(self) -> dict[str, int]:
+        p = self.params
+        return {
+            "label_horizon_bars": max(int(p["lookahead"]), int(p["hold_bars"])),
+            "required_history_bars": int(p["rsi_period_max"]) + 1,
+        }
 
     @classmethod
     def parameter_spec(cls):
@@ -177,16 +186,9 @@ class RSIPCAStrategy(BaseStrategy):
     def fit(self, dataset) -> None:
         ticker = self.params["ticker"]
         interval = Interval.parse(self.params["interval"])
-        train_start, train_end = dataset.train_window
-
-        bars = dataset.lake.get_bars(
-            ticker,
-            interval,
-            start=as_datetime(train_start),
-            end=as_datetime(train_end),
-        )
-        if bars.empty:
-            raise ValueError(f"no bars for {ticker!r} in training window")
+        # RS-12: the adjusted basis the predictions use, and the whole last
+        # training day (intraday bars included), like the other nt888 fits.
+        bars = train_bars(dataset, ticker, interval, caches=self._bar_caches)
 
         closes = bars["close"].astype(float).reset_index(drop=True)
         periods = list(
@@ -275,38 +277,15 @@ class RSIPCAStrategy(BaseStrategy):
         prices: Mapping[str, float],
         as_of,
     ) -> list[Order]:
-        target = self.params["ticker"]
-        price = prices.get(target)
-        holding = portfolio.positions.get(target, 0.0)
-        orders: list[Order] = []
-
-        if my_picks and price and price > 0 and holding <= 0 and portfolio.cash > 0:
-            qty = (portfolio.cash * float(self.params["allocation"])) / price
-            if qty > 0:
-                orders.append(
-                    Order(
-                        client_id=f"{self.id}:buy:{target}:{iso(as_of)}",
-                        ticker=target,
-                        side="buy",
-                        quantity=qty,
-                        order_type="market",
-                        strategy_id=self.id,
-                    )
-                )
-            return orders
-
-        if not my_picks and holding > 0:
-            orders.append(
-                Order(
-                    client_id=f"{self.id}:sell:{target}:{iso(as_of)}",
-                    ticker=target,
-                    side="sell",
-                    quantity=holding,
-                    order_type="market",
-                    strategy_id=self.id,
-                )
-            )
-        return orders
+        return long_only_decide(
+            self.id,
+            self.params["ticker"],
+            float(self.params["allocation"]),
+            my_picks,
+            portfolio,
+            prices,
+            as_of,
+        )
 
     # ---- persistence -------------------------------------------------------
 

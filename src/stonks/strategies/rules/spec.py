@@ -285,6 +285,15 @@ class RiskExits(_Strict):
             or self.trailing_stop_atr_multiple is not None
         )
 
+    @property
+    def has_price_exit(self) -> bool:
+        """True when any exit compares with the entry price or its high."""
+        return (
+            self.stop_loss_pct is not None
+            or self.take_profit_pct is not None
+            or self.has_trailing_stop
+        )
+
 
 class RuleSpec(_Strict):
     version: Literal[1]

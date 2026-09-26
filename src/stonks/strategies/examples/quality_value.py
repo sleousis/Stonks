@@ -28,7 +28,7 @@ import math
 import weakref
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta
+from datetime import date, time, timedelta
 from typing import Any
 
 import numpy as np
@@ -376,15 +376,9 @@ class QualityValue(BaseStrategy):
         return hist.memo[key]
 
     def _price(self, lake: Any, ticker: str, as_of: Any, day: date) -> float | None:
-        # Daily bars are stamped at midnight but only complete at the
-        # session close. A daily as_of is read after that close, so the
-        # day's own bar counts; mid-session only bars stamped before the day
-        # starts, i.e. the previous completed session.
-        if _is_intraday(as_of):
-            cutoff = datetime.combine(day, time.min) - timedelta(microseconds=1)
-        else:
-            cutoff = datetime.combine(day, time.max)
-        last = self._bar_caches.for_lake(lake).last_close(ticker, Interval.DAY_1, cutoff)
+        # The cache shows only daily bars complete at this decision (RS-03):
+        # the day's own bar at a daily as_of, the previous session mid-session.
+        last = self._bar_caches.for_lake(lake).last_close(ticker, Interval.DAY_1, as_of)
         if last is None:
             return None
         ts, close = last

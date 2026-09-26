@@ -22,7 +22,7 @@ from typing import Any, ClassVar
 from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import AssetClass, Features, Order, Portfolio
-from stonks.strategies._common import BarCache, LakeBarCaches, iso
+from stonks.strategies._common import BarCache, LakeBarCaches, long_only_decide
 from stonks.strategies.base import BaseStrategy
 
 #: Floor for ``estimate_return`` while long, so a long signal always clears
@@ -111,34 +111,12 @@ class SingleTickerLongFlat(BaseStrategy):
         prices: Mapping[str, float],
         as_of: Any,
     ) -> list[Order]:
-        target = self.params["ticker"]
-        price = prices.get(target)
-        holding = portfolio.positions.get(target, 0.0)
-        picked = any(t == target for _, t in my_picks)
-
-        if picked and price and price > 0 and holding <= 0 and portfolio.cash > 0:
-            qty = portfolio.cash * float(self.params["allocation"]) / price
-            if qty <= 0:
-                return []
-            return [
-                Order(
-                    client_id=f"{self.id}:buy:{target}:{iso(as_of)}",
-                    ticker=target,
-                    side="buy",
-                    quantity=qty,
-                    order_type="market",
-                    strategy_id=self.id,
-                )
-            ]
-        if not picked and holding > 0:
-            return [
-                Order(
-                    client_id=f"{self.id}:sell:{target}:{iso(as_of)}",
-                    ticker=target,
-                    side="sell",
-                    quantity=holding,
-                    order_type="market",
-                    strategy_id=self.id,
-                )
-            ]
-        return []
+        return long_only_decide(
+            self.id,
+            self.params["ticker"],
+            float(self.params["allocation"]),
+            my_picks,
+            portfolio,
+            prices,
+            as_of,
+        )

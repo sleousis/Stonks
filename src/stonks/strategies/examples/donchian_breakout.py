@@ -33,7 +33,7 @@ import pandas as pd
 from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
-from stonks.strategies._common import LakeBarCaches, iso
+from stonks.strategies._common import LakeBarCaches, long_only_decide
 from stonks.strategies.base import BaseStrategy
 
 
@@ -49,6 +49,13 @@ class DonchianBreakout(BaseStrategy):
     alpha_family = "trend"
     premise = "trend"
     label_horizon_bars = 20
+    required_history_bars = 21
+
+    def param_metadata(self) -> dict[str, int]:
+        p = self.params
+        return {
+            "required_history_bars": int(p["lookback"]) + 1,
+        }
 
     def __init__(self, params: Any) -> None:
         super().__init__(params)
@@ -127,40 +134,15 @@ class DonchianBreakout(BaseStrategy):
         prices: Mapping[str, float],
         as_of,
     ) -> list[Order]:
-        target = self.params["ticker"]
-        price = prices.get(target)
-        holding = portfolio.positions.get(target, 0.0)
-        orders: list[Order] = []
-
-        # breakout up (in my_picks): buy if flat
-        if my_picks and price and price > 0 and holding <= 0 and portfolio.cash > 0:
-            qty = (portfolio.cash * float(self.params["allocation"])) / price
-            if qty > 0:
-                orders.append(
-                    Order(
-                        client_id=f"{self.id}:buy:{target}:{iso(as_of)}",
-                        ticker=target,
-                        side="buy",
-                        quantity=qty,
-                        order_type="market",
-                        strategy_id=self.id,
-                    )
-                )
-            return orders
-
-        # no breakout (picks empty): if we were holding, flatten.
-        if not my_picks and holding > 0:
-            orders.append(
-                Order(
-                    client_id=f"{self.id}:sell:{target}:{iso(as_of)}",
-                    ticker=target,
-                    side="sell",
-                    quantity=holding,
-                    order_type="market",
-                    strategy_id=self.id,
-                )
-            )
-        return orders
+        return long_only_decide(
+            self.id,
+            self.params["ticker"],
+            float(self.params["allocation"]),
+            my_picks,
+            portfolio,
+            prices,
+            as_of,
+        )
 
     # ---- internals ---------------------------------------------------------
 
@@ -173,21 +155,24 @@ class DonchianBreakout(BaseStrategy):
         interval = Interval.parse(self.params["interval"])
         lookback = int(self.params["lookback"])
 
-        # Extra bars beyond ``lookback`` let the forward-filled signal carry
-        # a breakout that happened a while ago.
-        closes = self._bar_caches.for_lake(lake).last_n_closes(
-            ticker, interval, as_of, lookback * 4 + 5
-        )
-        if len(closes) < lookback:
-            return None
-
-        s = pd.Series(closes)
-        upper = s.rolling(lookback - 1).max().shift(1)
-        lower = s.rolling(lookback - 1).min().shift(1)
-
-        sig_series = pd.Series(np.full(len(s), np.nan))
-        sig_series.loc[s > upper] = 1.0
-        sig_series.loc[s < lower] = -1.0
+        # The state only changes on a breakout, so the window grows until it
+        # holds the latest one (or the whole history): the answer is then the
+        # same as a replay from the first bar, whatever the window (RS-31).
+        cache = self._bar_caches.for_lake(lake)
+        n = lookback * 4 + 5
+        while True:
+            closes = cache.last_n_closes(ticker, interval, as_of, n)
+            if len(closes) < lookback:
+                return None
+            s = pd.Series(closes)
+            upper = s.rolling(lookback - 1).max().shift(1)
+            lower = s.rolling(lookback - 1).min().shift(1)
+            sig_series = pd.Series(np.full(len(s), np.nan))
+            sig_series.loc[s > upper] = 1.0
+            sig_series.loc[s < lower] = -1.0
+            if sig_series.notna().any() or len(closes) < n:
+                break
+            n *= 2
         sig_series = sig_series.ffill().fillna(0.0)
 
         last_upper = float(upper.iloc[-1]) if not pd.isna(upper.iloc[-1]) else float("nan")

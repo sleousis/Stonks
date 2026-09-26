@@ -96,6 +96,17 @@ class StocksOnTheMove(BaseStrategy):
     label_horizon_bars = 5
     required_history_bars = 200
 
+    def param_metadata(self) -> dict[str, int]:
+        p = self.params
+        return {
+            "required_history_bars": max(
+                int(p["lookback"]) + 1,
+                int(p["ma_filter"]),
+                int(p["atr_period"]) + 1,
+                int(p["index_ma"]) if p["index_ticker"] else 0,
+            ),
+        }
+
     def __init__(self, params: Any) -> None:
         super().__init__(params)
         self._bar_caches = LakeBarCaches()
