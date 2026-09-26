@@ -141,3 +141,28 @@ def test_bootstrap_block_covers_the_events_inside_one_horizon():
     assert event_block_length(5, n_events=10, n_bars=1000) == 1.0
     # never longer than the sample
     assert event_block_length(60, n_events=30, n_bars=40) == 30.0
+
+
+def test_events_without_a_forward_return_do_not_count(monkeypatch):
+    # RS-27: 40 entries, but only 10 have a holding-horizon forward return
+    # (the rest sit in the last h bars); 10 < min_events must fail
+    from stonks.lab.survival import event_study as es
+
+    h = 20
+    good = es.HorizonEvents(h, 10, 0.05, 0.0, 0.05, 0.01, 0.09, 0.001)
+    result = es.EventStudyResult(
+        strategy_id="x",
+        window=("2024-01-01", "2024-12-31"),
+        holding_bars=h,
+        holding_source="option",
+        alpha=0.05,
+        n_boot=100,
+        seed=1,
+        n_events=40,
+        groups=[es.EventGroup("all", 4, 40, [good]), es.EventGroup("equity", 4, 40, [good])],
+    )
+    monkeypatch.setattr(es, "event_study", lambda *a, **k: result)
+    monkeypatch.setattr(es, "scoring_window", lambda *a, **k: (None, None))
+    report = _test(min_events=30).run(object(), object())
+    assert not report.passed
+    assert "fewer than 30 events" in report.notes
