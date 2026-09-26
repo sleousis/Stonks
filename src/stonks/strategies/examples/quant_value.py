@@ -254,7 +254,7 @@ class QuantValue(BaseStrategy):
             }
         )
         self._memo = CrossSectionMemo()
-        self._annual: weakref.WeakKeyDictionary[Any, dict[tuple, list[dict]]]
+        self._annual: weakref.WeakKeyDictionary[Any, dict[tuple, Any]]
         self._annual = weakref.WeakKeyDictionary()
 
     @classmethod
@@ -511,14 +511,16 @@ class QuantValue(BaseStrategy):
         when present. Empty when the latest is older than ``oldest``."""
         hists = {t: self._pit._history(lake, t, ticker) for t in _TABLE_COLUMNS}
         masks = {t: h.visible(day) & (h.frequency == "A") for t, h in hists.items()}
-        key = (ticker, oldest, *(m.tobytes() for m in masks.values()))
-        try:
-            per_lake = self._annual.setdefault(lake, {})
-        except TypeError:
-            per_lake = {}
-        if key in per_lake:
-            return per_lake[key]
+        key = ("annual", ticker, *(m.tobytes() for m in masks.values()))
+        per_lake = self._per_lake(lake)
+        if key not in per_lake:
+            per_lake[key] = self._consecutive_years(hists, masks)
+        years = per_lake[key]
+        return years if years and years[-1]["_period_end"] >= oldest else []
 
+    def _consecutive_years(self, hists: Mapping[str, Any], masks: Mapping[str, Any]) -> list[dict]:
+        """The latest run of consecutive fiscal years among the masked rows,
+        each merged across the three statements and tagged ``_period_end``."""
         rows: dict[str, dict[date, dict]] = {}
         for table, hist in hists.items():
             cols = {c: hist.column(c) for c in _TABLE_COLUMNS[table]}
@@ -528,7 +530,7 @@ class QuantValue(BaseStrategy):
             }
         ends = sorted(set(rows["income_statement"]) & set(rows["balance_sheet"]))
         run: list[date] = []
-        if ends and ends[-1] >= oldest:
+        if ends:
             run = [ends[-1]]
             for pe in reversed(ends[:-1]):
                 gap = (run[0] - pe).days
@@ -536,16 +538,15 @@ class QuantValue(BaseStrategy):
                     break
                 run.insert(0, pe)
         run = run[-int(self.params["max_years"]) :]
-        years = [
+        return [
             {
                 **rows["cash_flow_statement"].get(pe, {}),
                 **rows["balance_sheet"][pe],
                 **rows["income_statement"][pe],
+                "_period_end": pe,
             }
             for pe in run
         ]
-        per_lake[key] = years
-        return years
 
     def _latest_balance(self, lake: Any, ticker: str, day: date, oldest: date) -> dict | None:
         """The newest visible balance sheet (quarterly or annual)."""
@@ -556,7 +557,17 @@ class QuantValue(BaseStrategy):
         i = int(idx[-1])  # rows are ordered by period end
         if hist.period_end[i] < oldest:
             return None
-        return {c: hist.column(c)[i] for c in _TABLE_COLUMNS["balance_sheet"]}
+        key = ("balance", ticker, i)
+        per_lake = self._per_lake(lake)
+        if key not in per_lake:
+            per_lake[key] = {c: hist.column(c)[i] for c in _TABLE_COLUMNS["balance_sheet"]}
+        return per_lake[key]
+
+    def _per_lake(self, lake: Any) -> dict:
+        try:
+            return self._annual.setdefault(lake, {})
+        except TypeError:  # a lake that can't be weakly referenced: no memo
+            return {}
 
 
 def _as_float(v: int | None) -> float | None:

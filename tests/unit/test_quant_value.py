@@ -4,7 +4,7 @@ formula modes. Every statement is visible only from its filing date."""
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pandas as pd
 import pytest
@@ -383,10 +383,15 @@ def test_a_statement_filed_after_as_of_is_invisible(tmp_path):
         years[-1] = {**years[-1], "ebit": 900.0, "operating_income": 900.0}
         filed = [date(fy + 1, 3, 1) for fy in FISCAL_YEARS[:-1]] + [date(2024, 7, 15)]
         _write_years(lake, "A.US", years, filed=filed)
-        s = QuantValue({})
+        # FY2022 must still count as fresh in mid-July 2024.
+        s = QuantValue({"max_statement_age_days": 700})
         before = s.extract_features("A.US", REBALANCE, lake).values
         assert before["years_used"] == 3
         assert before["ebit_tev"] == pytest.approx(100.0 / (1000.0 + 100.0 - 100.0))
+        # Filing dates have no time of day: mid-session on the filing day
+        # the report is not yet known.
+        midday = s.extract_features("A.US", datetime(2024, 7, 15, 12, 0), lake).values
+        assert midday["years_used"] == 3
         after = s.extract_features("A.US", date(2024, 7, 15), lake).values
         assert after["years_used"] == 4
         assert after["ebit_tev"] == pytest.approx(900.0 / 1000.0)
