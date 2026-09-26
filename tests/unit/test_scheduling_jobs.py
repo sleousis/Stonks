@@ -152,7 +152,6 @@ def test_extra_keys_forbidden():
         SchedulerConfig(catchup="none")
 
 
-
 def _run_ctx(settings, **params):
     from datetime import UTC, date, datetime
 
