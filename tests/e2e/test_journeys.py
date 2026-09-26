@@ -173,12 +173,14 @@ def test_lab_run_with_quick_preset_shows_results(browse, stack, viewport):
     v = browse(stack.trader)
     page = v.go("/lab")
     page.get_by_role("tab", name="Lab run").click()
-    page.get_by_role("radio", name=re.compile(r"^momentum\b")).check()
+    form = page.locator("#lab-panel-lab_run")
+    expect(form).to_be_visible()
+    form.get_by_role("radio", name=re.compile(r"^momentum\b")).check()
     page.locator("#lr-tickers").fill("AAA.US,BBB.US,CCC.US")
     start = stack.market_end.replace(year=stack.market_end.year - 1)
     page.locator("#lr-start").fill(start.isoformat())
     page.locator("#lr-end").fill(stack.market_end.isoformat())
-    page.get_by_role("radio", name=re.compile("^Quick")).check()
+    form.get_by_role("radio", name=re.compile("^Quick")).check()
     v.check_page("lab-run-form")
     page.get_by_role("button", name="Start lab run").click()
     page.locator("dialog[open]").get_by_role("button", name="Start lab run").click()
@@ -290,15 +292,31 @@ def wait_until_second_factor_is_stale(v: Visit) -> None:
     raise AssertionError("the second factor stayed fresh")
 
 
-def test_kill_switch_blocks_orders_until_resumed_with_a_fresh_code(browse, stack, viewport):
+@pytest.fixture
+def lift_halts_after(stack):
+    """A failed kill switch journey must not leave trading halted for the rest."""
+    yield
+    from datetime import UTC, datetime
+
+    from stonks.store.state import SqliteState
+
+    with SqliteState(stack.data_dir / "state.sqlite") as state:
+        state.execute(
+            "UPDATE risk_halts SET cleared_at = ?, cleared_by = 'test:e2e',"
+            " clear_reason = 'e2e cleanup' WHERE cleared_at IS NULL",
+            [datetime.now(UTC).isoformat()],
+        )
+
+
+def test_kill_switch_blocks_orders_until_resumed_with_a_fresh_code(
+    browse, stack, viewport, lift_halts_after
+):
     v = browse(stack.admin)
     page = v.go("/ops/halts")
     v.check_page("halts")
     page.get_by_label("Reason").fill(f"e2e kill switch drill ({viewport})")
     page.get_by_role("button", name="Engage kill switch").click()
-    confirm = page.get_by_role("dialog")
-    if confirm.count():
-        confirm.get_by_role("button", name=re.compile("Engage|Kill|Stop", re.I)).click()
+    page.locator("dialog[open]").get_by_role("button", name="Engage kill switch").click()
     strip = page.locator("app-session-strip .strip")
     expect(strip).not_to_have_attribute("data-tone", "calm")
     expect(page.get_by_role("region", name="Trading halted")).to_be_visible()
@@ -311,14 +329,15 @@ def test_kill_switch_blocks_orders_until_resumed_with_a_fresh_code(browse, stack
     wait_until_second_factor_is_stale(v)
     page = v.go("/ops/halts")
     page.get_by_role("button", name=re.compile("^Resume")).first.click()
-    dialog = page.get_by_role("dialog")
+    dialog = page.locator("dialog[open]")
+    expect(dialog).to_contain_text("Resume trading?")
     fill_status_dialog(dialog, "RESUME TRADING", "Drill over, trading again.")
-    dialog.get_by_role("button", name=re.compile("Resume", re.I)).click()
-    code = page.get_by_role("textbox", name=re.compile("code", re.I))
-    code.fill(stack.admin.code())
-    page.get_by_role("dialog").get_by_role(
-        "button", name=re.compile("Confirm|Continue|Verify", re.I)
-    ).click()
+    dialog.get_by_role("button", name="Resume trading").click()
+    step_up = page.locator(
+        "dialog[open]", has=page.get_by_role("heading", name="Confirm it is you")
+    )
+    step_up.get_by_label("Code from your authenticator app").fill(stack.admin.code())
+    step_up.get_by_role("button", name=re.compile("^(Confirm|Continue|Verify)")).click()
     expect(page.locator("main")).to_contain_text("Trading is not halted")
     expect(page.locator("app-session-strip .strip")).to_have_attribute("data-tone", "calm")
 
@@ -328,9 +347,7 @@ def test_admin_backs_up_now_and_lists_backups(browse, stack, viewport):
     page = v.go("/ops/schedule")
     v.check_page("schedule")
     page.get_by_role("button", name="Back up now").click()
-    confirm = page.get_by_role("dialog")
-    if confirm.count():
-        confirm.get_by_role("button", name=re.compile("Back up", re.I)).click()
+    page.locator("dialog[open]").get_by_role("button", name="Back up now").click()
     backups = page.locator("section", has=page.get_by_role("heading", name="Backups"))
     expect(backups).to_contain_text(re.compile("succeeded", re.I), timeout=120_000)
     v.check_page("schedule-backups")

@@ -67,10 +67,18 @@ def test_every_page_has_no_axe_violations(browse, stack, viewport):
     assert not found, "axe violations:\n" + "\n".join(f"{k}: {v}" for k, v in found.items())
 
 
-@pytest.mark.xfail(strict=True, reason=KNOWN_AXE[("/settings", "landmark-unique")])
-def test_settings_landmarks_are_unique(browse, stack, viewport):
-    visit = browse(stack.trader)
-    page = visit.go("/settings")
+@pytest.mark.parametrize(
+    ("path", "rule"),
+    [pytest.param(path, rule, id=f"{path}-{rule}") for path, rule in KNOWN_AXE],
+)
+def test_known_axe_violation_is_still_there(browse, stack, viewport, path, rule):
+    """Fails (xfail) while the app still has the violation; passes once fixed,
+    which is the cue to drop it from KNOWN_AXE. Some only show once a page
+    has table rows, so not strict."""
+    visit = browse(stack.admin)
+    page = visit.go(path)
     expect(page.get_by_role("heading", level=1)).to_be_visible()
     page.wait_for_load_state("networkidle")
-    assert not record_axe(page, "trader /settings (known)", viewport)
+    found = [v["id"] for v in record_axe(page, f"admin {path} (known)", viewport)]
+    if rule in found:
+        pytest.xfail(KNOWN_AXE[(path, rule)])

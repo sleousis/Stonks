@@ -61,7 +61,13 @@ KNOWN_NOISE: tuple[Refusal, ...] = (
 #: fix listed in docs/testing.md; a strict xfail keeps it visible until fixed.
 KNOWN_AXE: dict[tuple[str, str], str] = {
     ("/settings", "landmark-unique"): (
-        "A11Y-1: the Notifications panel on Settings is a second landmark with the same name"
+        "A11Y-1: the Notifications panel on Settings has the same name as the toast region"
+    ),
+    ("/universes", "landmark-unique"): (
+        "A11Y-2: the data table's scroll region repeats its panel's name (Stored universes)"
+    ),
+    ("/ops/halts", "landmark-unique"): (
+        "A11Y-2: the data table's scroll region repeats its panel's name (Active halts)"
     ),
 }
 
