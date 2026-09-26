@@ -224,36 +224,22 @@ class MacroRegimeFilter(BaseStrategy):
         return signal < threshold, signal
 
     def _signal(self, day: date, observations: list[tuple[date, date, float]]) -> float | None:
-        visible = [(avail, v) for _obs, avail, v in observations if avail <= day]
-        if not visible:
-            return None
-        # Staleness counts from publication, not from the (period-start)
-        # stamp: an annual value stamped Jan 1 is only public ~18 months on.
-        latest_avail, latest = visible[-1]
-        if (day - latest_avail).days > int(self.params["max_staleness_days"]):
-            return None
-        if self.params["transform"] == "level":
-            return latest
-        n = int(self.params["change_periods"])
-        if len(visible) <= n:
-            return None
-        return latest - visible[-1 - n][1]
+        return macro_signal(
+            day,
+            observations,
+            transform=self.params["transform"],
+            change_periods=int(self.params["change_periods"]),
+            max_staleness_days=int(self.params["max_staleness_days"]),
+        )
 
     def _load_observations(self, lake: Any) -> list[tuple[date, date, float]]:
-        """(observation_date, available_date, value) oldest first, NULLs dropped."""
-        df = lake.get_macro_series(
+        return load_macro_observations(
+            lake,
             self.params["country_iso"],
             self.params["indicator"],
             publication_lag_days=int(self.params["publication_lag_days"]),
-            stamped_at=self.params["observation_stamp"],
+            observation_stamp=self.params["observation_stamp"],
         )
-        return [
-            (obs, avail, float(v))
-            for obs, avail, v in zip(
-                df["observation_date"], df["available_date"], df["value"], strict=True
-            )
-            if v is not None and v == v  # drop NULL / NaN
-        ]
 
     def _state(self, lake: Any) -> _LakeState:
         """This lake's cached state; remembers it as the last lake seen. A
@@ -347,3 +333,56 @@ def _import_strategy_class(class_path: Any) -> type:
     if not isinstance(cls, type) or not all(hasattr(cls, a) for a in required):
         raise ValueError(f"inner_class_path {class_path!r} is not a Strategy class")
     return cls
+
+
+# ---- point-in-time macro loaders (shared with the regime conditions) --------------
+
+
+def load_macro_observations(
+    lake: Any,
+    country_iso: str,
+    indicator: str,
+    *,
+    publication_lag_days: int,
+    observation_stamp: str,
+) -> list[tuple[date, date, float]]:
+    """(observation_date, available_date, value) oldest first, NULLs dropped."""
+    df = lake.get_macro_series(
+        country_iso,
+        indicator,
+        publication_lag_days=publication_lag_days,
+        stamped_at=observation_stamp,
+    )
+    return [
+        (obs, avail, float(v))
+        for obs, avail, v in zip(
+            df["observation_date"], df["available_date"], df["value"], strict=True
+        )
+        if v is not None and v == v  # drop NULL / NaN
+    ]
+
+
+def macro_signal(
+    day: date,
+    observations: list[tuple[date, date, float]],
+    *,
+    transform: str,
+    change_periods: int,
+    max_staleness_days: int,
+) -> float | None:
+    """The latest level (or its change over ``change_periods``
+    observations) among observations already published on ``day``;
+    ``None`` when there are too few or the latest is stale."""
+    visible = [(avail, v) for _obs, avail, v in observations if avail <= day]
+    if not visible:
+        return None
+    # Staleness counts from publication, not from the (period-start)
+    # stamp: an annual value stamped Jan 1 is only public ~18 months on.
+    latest_avail, latest = visible[-1]
+    if (day - latest_avail).days > max_staleness_days:
+        return None
+    if transform == "level":
+        return latest
+    if len(visible) <= change_periods:
+        return None
+    return latest - visible[-1 - change_periods][1]

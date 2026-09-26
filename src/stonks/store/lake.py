@@ -1066,6 +1066,18 @@ class DuckDBLake:
         ).fetchdf()
         return _dates_to_python(df, ("date",))
 
+    def get_bond_yields(self, ticker: str, *, as_of: Any = None) -> pd.DataFrame:
+        """Yield history (``date, yield_to_maturity, clean_price``) for a
+        bond ``ticker``, oldest first. With ``as_of`` set, only rows dated
+        on or before its calendar day."""
+        sql = "SELECT date, yield_to_maturity, clean_price FROM bond_yield_history WHERE ticker = ?"
+        args: list[Any] = [ticker]
+        if as_of is not None:
+            sql += " AND date <= ?"
+            args.append(_as_calendar_date(as_of))
+        df = self.con.execute(sql + " ORDER BY date", args).fetchdf()
+        return _dates_to_python(df, ("date",))
+
     # ---- ingest_runs --------------------------------------------------------
 
     def open_ingest_run(self, source: str, kind: str) -> int:
