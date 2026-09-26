@@ -1,0 +1,35 @@
+# Caddy in front of `stonks serve` (Phase 14.2, 12.8).
+#
+# STONKS_DOMAIN decides where the certificate comes from:
+#   stonks.example.com         -> Let's Encrypt (public mode, ports 80/443 open)
+#   stonks.tailnet-x.ts.net    -> the host's Tailscale daemon (private mode)
+#   localhost                  -> Caddy's internal CA (local testing)
+
+# No ACME email is needed: Let's Encrypt accounts work without one.
+
+{$STONKS_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	reverse_proxy api:8000 {
+		# The API's TrustedHostMiddleware accepts loopback names plus
+		# [api].allowed_hosts. Caddy already only answers for STONKS_DOMAIN,
+		# so it presents the request to the API as "localhost".
+		header_up Host localhost
+		# Job event streams (SSE) must not be buffered.
+		flush_interval -1
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  input,
+  linkedSignal,
+  output,
+  signal,
+} from '@angular/core';
 
 import type { IntervalInfo, LabRunRequest, StrategyClassInfo } from '../../api/models';
 import { paramFields, rangeText } from '../../shared/ui/param-form/param-spec';
@@ -12,6 +20,7 @@ import {
   labRunErrors,
 } from './lab-requests';
 import { StrategyPicker } from './strategy-picker';
+import type { StrategyPreset } from './strategy-preset';
 import { WindowFields } from './window-fields';
 
 /**
@@ -28,11 +37,20 @@ import { WindowFields } from './window-fields';
 export class LabRunFormView {
   readonly classes = input.required<readonly StrategyClassInfo[]>();
   readonly intervals = input<readonly IntervalInfo[]>([]);
+  /** A registered strategy to re-run: its class (the tuner searches the parameters again). */
+  readonly preset = input<StrategyPreset | null>(null);
   readonly busy = input(false);
   readonly submitted = output<LabRunRequest>();
 
   protected readonly tests = SURVIVAL_TESTS;
-  protected readonly form = signal<LabRunForm>(defaultLabRunForm());
+  protected readonly form = linkedSignal<StrategyPreset | null, LabRunForm>({
+    source: this.preset,
+    computation: (preset) => {
+      const form = defaultLabRunForm();
+      const known = preset && this.classes().some((c) => c.class_path === preset.classPath);
+      return known ? { ...form, classPath: preset.classPath } : form;
+    },
+  });
   protected readonly tried = signal(false);
 
   protected readonly selected = computed(

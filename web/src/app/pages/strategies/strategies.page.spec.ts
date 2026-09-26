@@ -9,6 +9,7 @@ import { provideRouter } from '@angular/router';
 import type { Page, StrategySummary } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { nextRequest, tick } from '../../../testing/http';
+import { STRATEGY_METADATA } from '../../../testing/strategy-fixtures';
 import { StrategiesPage } from './strategies.page';
 
 function strategy(id: string, status: StrategySummary['status'], cls: string): StrategySummary {
@@ -20,6 +21,7 @@ function strategy(id: string, status: StrategySummary['status'], cls: string): S
     params: {},
     created_at: '2026-09-01T10:00:00Z',
     updated_at: '2026-09-20T10:00:00Z',
+    metadata: STRATEGY_METADATA,
   };
 }
 

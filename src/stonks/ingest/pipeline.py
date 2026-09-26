@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import dataclass, replace
+from datetime import UTC, date, datetime
 from functools import partial
 from typing import Any
 
@@ -22,6 +22,14 @@ import requests
 
 from stonks.core.interval import Interval
 from stonks.ingest.metadata_bundle import MetadataBundle
+from stonks.ingest.quality import (
+    BarQualityChecker,
+    RunQuality,
+    history_before,
+    quarantine_bars,
+    record_run_quality,
+    splits_frame,
+)
 from stonks.ingest.redact import format_exception
 from stonks.ingest.schemas import (
     DefiTvlRow,
@@ -32,6 +40,7 @@ from stonks.ingest.schemas import (
 )
 from stonks.ingest.sources.base import DataSource, DataSourceError
 from stonks.logging import get_logger
+from stonks.notify.base import Notification, Notifier
 from stonks.store.lake import DuckDBLake
 
 # Narrow per-ticker soft-fail surface (I1): vendor-class errors and
@@ -53,6 +62,8 @@ class IngestRunResult:
     status: str  # "ok" | "partial" | "error"
     tickers_ok: int
     tickers_failed: int
+    # Bar runs only: the quality summary stored on ``ingest_runs.quality_json``.
+    quality: dict[str, Any] | None = None
 
 
 class IngestPipeline:
@@ -63,11 +74,35 @@ class IngestPipeline:
     is closed as ``error`` and the exception re-raised. Operators never have
     to triage orphaned ``running`` rows by hand. The overall run is **not**
     atomic: units that succeeded before the failure stay committed.
+
+    Bar runs (:meth:`run_prices`, :meth:`run_intraday_bars`) also:
+
+    - validate each ticker's batch with ``quality`` (a default
+      :class:`BarQualityChecker` when omitted; disable it through its
+      config) and write rejected rows to ``quarantined_bars`` instead of
+      the bar store;
+    - retry a ticker whose primary fetch soft-fails on ``fallback`` (when
+      given), recording the supplier in the run's quality summary; the
+      ``ingest_runs`` row keeps the primary's id as its ``source``;
+    - store the run's quality summary on ``ingest_runs.quality_json`` and
+      send one warning through ``notifier`` when it breaches the
+      checker's alert thresholds.
     """
 
-    def __init__(self, source: DataSource, lake: DuckDBLake):
+    def __init__(
+        self,
+        source: DataSource,
+        lake: DuckDBLake,
+        *,
+        quality: BarQualityChecker | None = None,
+        fallback: DataSource | None = None,
+        notifier: Notifier | None = None,
+    ):
         self._source = source
         self._lake = lake
+        self._quality = quality if quality is not None else BarQualityChecker()
+        self._fallback = fallback
+        self._notifier = notifier
         self._log = get_logger("stonks.ingest.pipeline").bind(source=source.source_id)
 
     def run_prices(
@@ -76,12 +111,14 @@ class IngestPipeline:
         since: date | None = None,
         until: date | None = None,
     ) -> IngestRunResult:
-        return self._run_rows(
+        return self._run_bars(
             kind="prices",
             tickers=tickers,
-            fetch=lambda t: self._source.fetch_prices(t, since=since, until=until),
+            interval=Interval.DAY_1,
+            fetch=lambda src, t: src.fetch_prices(t, since=since, until=until),
             to_df=_prices_to_df,
             upsert=self._lake.upsert_prices,
+            as_of=until,
         )
 
     def run_intraday_bars(
@@ -91,12 +128,14 @@ class IngestPipeline:
         since: date | None = None,
         until: date | None = None,
     ) -> IngestRunResult:
-        return self._run_rows(
+        return self._run_bars(
             kind=f"intraday:{interval.code}",
             tickers=tickers,
-            fetch=lambda t: self._source.fetch_intraday_bars(t, interval, since, until),
+            interval=interval,
+            fetch=lambda src, t: src.fetch_intraday_bars(t, interval, since, until),
             to_df=_intraday_to_df,
             upsert=lambda df: self._lake.upsert_bars(df, interval=interval),
+            as_of=until,
         )
 
     def run_fundamentals(self, tickers: Sequence[str]) -> IngestRunResult:
@@ -243,25 +282,132 @@ class IngestPipeline:
                 self._lake.upsert_commodity_contract(_rows_to_df([bundle.commodity_contract]))
             self._lake.upsert_bond_yields(_rows_to_df(bundle.bond_yields))
 
-    def _run_rows(
+    def _run_bars(
         self,
         *,
         kind: str,
         tickers: Sequence[str],
-        fetch: Callable[[str], Iterable[Any]],
+        interval: Interval,
+        fetch: Callable[[DataSource, str], Iterable[Any]],
         to_df: Callable[[Iterable[Any]], pd.DataFrame],
         upsert: Callable[[pd.DataFrame], Any],
+        as_of: date | None,
     ) -> IngestRunResult:
-        """Row-stream flavour of :meth:`_run_units`: fetch → DataFrame → upsert."""
+        """Bar flavour of :meth:`_run_units`: fetch (with fallback) →
+        DataFrame → validate → upsert the clean rows, quarantine the rest."""
+        quality = RunQuality()
+        run: dict[str, int] = {}
+        stale_ref = as_of or datetime.now(UTC).date()
 
         def ingest(ticker: str) -> dict[str, Any]:
-            rows = list(fetch(ticker))
-            upsert(to_df(rows))
-            return {"rows": len(rows)}
+            rows, supplier = self._fetch_with_fallback(fetch, ticker)
+            if supplier != self._source.source_id:
+                quality.supplied_by[ticker] = supplier
+            frame = to_df(rows)
+            clean, quarantined = self._validate(
+                frame, ticker, interval, stale_ref, run["id"], supplier, quality
+            )
+            upsert(clean)
+            return {"rows": len(rows), "quarantined": quarantined, "supplied_by": supplier}
 
-        return self._run_units(
-            kind=kind,
-            units=[({"ticker": t}, partial(ingest, t)) for t in tickers],
+        try:
+            result = self._run_units(
+                kind=kind,
+                units=[({"ticker": t}, partial(ingest, t)) for t in tickers],
+                on_open=lambda run_id: run.__setitem__("id", run_id),
+            )
+        except BaseException:
+            if "id" in run:
+                record_run_quality(self._lake, run["id"], quality)
+            raise
+        record_run_quality(self._lake, result.run_id, quality)
+        summary = quality.to_dict()
+        self._alert(result, summary, quality.breaches(self._quality.config))
+        return replace(result, quality=summary)
+
+    def _fetch_with_fallback(
+        self, fetch: Callable[[DataSource, str], Iterable[Any]], ticker: str
+    ) -> tuple[list[Any], str]:
+        """Rows for ``ticker`` and the id of the source that supplied them.
+        A soft-fail on the primary is retried once on the fallback; if both
+        fail, one :class:`DataSourceError` carries both errors."""
+        try:
+            return list(fetch(self._source, ticker)), self._source.source_id
+        except _SOFT_FAIL_EXCEPTIONS as exc:
+            if self._fallback is None:
+                raise
+            primary_error = format_exception(exc)
+        fallback_id = self._fallback.source_id
+        self._log.warning(
+            "ticker.fallback", ticker=ticker, fallback=fallback_id, error=primary_error
+        )
+        try:
+            return list(fetch(self._fallback, ticker)), fallback_id
+        except _SOFT_FAIL_EXCEPTIONS as exc:
+            raise DataSourceError(
+                f"{self._source.source_id}: {primary_error}; "
+                f"fallback {fallback_id}: {format_exception(exc)}"
+            ) from exc
+
+    def _validate(
+        self,
+        frame: pd.DataFrame,
+        ticker: str,
+        interval: Interval,
+        as_of: date,
+        run_id: int,
+        supplier: str,
+        quality: RunQuality,
+    ) -> tuple[pd.DataFrame, int]:
+        """Split ``frame`` into the rows to store and the number sent to
+        quarantine. Daily frames carry ``date``; the checker and the
+        quarantine table work on ``timestamp``."""
+        if frame.empty or not self._quality.config.enabled:
+            quality.bars_checked += len(frame)
+            return frame, 0
+        if "timestamp" in frame.columns:
+            timed = frame
+        else:
+            timed = frame.assign(timestamp=pd.to_datetime(frame["date"]))
+        first = pd.Timestamp(timed["timestamp"].min()).to_pydatetime()
+        history = history_before(
+            self._lake, ticker, interval, first, self._quality.config.history_bars
+        )
+        batch = self._quality.check(
+            timed,
+            interval=interval,
+            history=history,
+            splits=splits_frame(self._lake, [ticker]),
+            as_of=as_of,
+            asset_class=self._lake.get_asset_classes([ticker]).get(ticker),
+        )
+        quality.add(len(frame), batch)
+        rejected = batch.rejected_mask.to_numpy(dtype=bool)
+        if rejected.any():
+            bad = timed[rejected].assign(reasons=batch.reasons[rejected])
+            quarantine_bars(self._lake, bad, run_id=run_id, interval=interval, source=supplier)
+        return frame[~rejected], int(rejected.sum())
+
+    def _alert(self, result: IngestRunResult, summary: dict[str, Any], breaches: list[str]) -> None:
+        if not breaches or self._notifier is None:
+            return
+        self._notifier.notify(
+            Notification(
+                level="warning",
+                title=f"Ingest data quality: {result.kind}",
+                message="; ".join(breaches),
+                fields={
+                    "run_id": result.run_id,
+                    "source": self._source.source_id,
+                    "kind": result.kind,
+                    "bars_checked": summary["bars_checked"],
+                    "bars_quarantined": summary["bars_quarantined"],
+                    "reasons": summary["reasons"],
+                    "warnings": summary["warnings"],
+                    "warned_tickers": summary["warned_tickers"],
+                    "supplied_by": summary["supplied_by"],
+                },
+            )
         )
 
     def _run_units(
@@ -270,6 +416,7 @@ class IngestPipeline:
         kind: str,
         units: Iterable[tuple[dict[str, Any], Callable[[], dict[str, Any]]]],
         event: str = "ticker",
+        on_open: Callable[[int], None] | None = None,
     ) -> IngestRunResult:
         """Run each ``(log_context, work)`` unit under one ``ingest_runs`` row.
 
@@ -279,6 +426,8 @@ class IngestPipeline:
         Error text is credential-scrubbed before it is logged or stored.
         """
         run_id = self._lake.open_ingest_run(source=self._source.source_id, kind=kind)
+        if on_open is not None:
+            on_open(run_id)
         log = self._log.bind(run_id=run_id, kind=kind)
 
         ok = 0

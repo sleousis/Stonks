@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
@@ -21,6 +23,15 @@ import pandas as pd
 from stonks.core.interval import Interval
 from stonks.core.timeutil import day_end, day_start
 from stonks.logging import get_logger
+from stonks.store.bars import (
+    BAR_COLUMNS,
+    BAR_KEY,
+    BarBackend,
+    BarStore,
+    DuckDBTableBarStore,
+    ParquetBarStore,
+    checksums,
+)
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations_duckdb"
 
@@ -67,18 +78,43 @@ _DATA_PRESERVING_DROPS: frozenset[tuple[str, str]] = frozenset(
 )
 
 _PRICE_COLS = ("ticker", "date", "open", "high", "low", "close", "adj_close", "volume")
-_BAR_COLS = (
-    "ticker",
-    "timestamp",
-    "interval",
-    "open",
-    "high",
-    "low",
-    "close",
-    "adj_close",
-    "volume",
+_BAR_COLS = BAR_COLUMNS
+_BAR_PK: tuple[str, ...] = BAR_KEY
+# The ``bars`` table as migration 003 creates it; used to rebuild it when a
+# lake moves its bars back from Parquet. MUST match 003_intraday_bars.sql.
+_BARS_TABLE_DDL = """
+CREATE TABLE {name} (
+    ticker    VARCHAR   NOT NULL,
+    timestamp TIMESTAMP NOT NULL,
+    interval  VARCHAR   NOT NULL,
+    open      DOUBLE,
+    high      DOUBLE,
+    low       DOUBLE,
+    close     DOUBLE,
+    adj_close DOUBLE,
+    volume    BIGINT,
+    PRIMARY KEY (ticker, timestamp, interval)
 )
-_BAR_PK: tuple[str, ...] = ("ticker", "timestamp", "interval")
+"""
+_BAR_BACKEND_KEY = "bars_backend"
+_MIGRATE_HINT = (
+    "run `python -m stonks.store.bars_migrate` (or DuckDBLake.migrate_bars_to_parquet / "
+    "migrate_bars_to_duckdb) to move the bars first"
+)
+
+
+@dataclass(frozen=True)
+class BarsMigrationReport:
+    """What a bar-store migration moved: ``series`` (ticker, interval)
+    pairs, ``rows`` bars, ``files`` Parquet partition files involved."""
+
+    backend: BarBackend
+    series: int
+    rows: int
+    files: int
+    seconds: float
+
+
 # Wide column lists for each financial-statement table (migration 008).
 # Source of truth is the SQL migration; if the two diverge an upsert will
 # raise on the missing/extra column at INSERT time, which is loud enough.
@@ -282,6 +318,21 @@ def _as_calendar_date(value: Any) -> date:
     raise TypeError(f"expected a date or datetime, got {type(value).__name__}")
 
 
+def _verify_checksums(
+    expected: dict[tuple[str, str], tuple[int, int]],
+    got: dict[tuple[str, str], tuple[int, int]],
+) -> None:
+    """Raise when two bar stores disagree on any (ticker, interval)."""
+    if expected == got:
+        return
+    bad = sorted(k for k in expected.keys() | got.keys() if expected.get(k) != got.get(k))
+    shown = ", ".join(f"{t}@{i}" for t, i in bad[:5])
+    raise RuntimeError(
+        f"bar-store migration checksum mismatch on {len(bad)} series ({shown}"
+        f"{', ...' if len(bad) > 5 else ''}); nothing was switched"
+    )
+
+
 def _dates_to_python(df: pd.DataFrame, cols: tuple[str, ...]) -> pd.DataFrame:
     """DuckDB hands DATE columns to pandas as timestamps; callers compare
     them with ``datetime.date``, so convert (NULL stays ``None``)."""
@@ -296,15 +347,48 @@ def _dates_to_python(df: pd.DataFrame, cols: tuple[str, ...]) -> pd.DataFrame:
 
 
 class DuckDBLake:
-    def __init__(self, path: str | Path):
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        read_only: bool = False,
+        bar_backend: BarBackend | None = None,
+    ):
+        """Open (read-write by default) the lake at ``path``.
+
+        ``read_only=True`` opens an existing file without taking DuckDB's
+        exclusive write lock, so any number of processes can read it at
+        once (lab worker processes on a snapshot); every write raises. A
+        missing file then raises instead of being created.
+
+        Bars live in a :class:`~stonks.store.bars.BarStore`: the ``bars``
+        table (``"duckdb"``) or Parquet partitions under ``<lake dir>/bars``
+        (``"parquet"``). The lake records which one it uses
+        (``lake_settings``), so callers normally pass no ``bar_backend``.
+        Passing one asserts it: a fresh or bar-less lake adopts it, while a
+        lake whose bars sit in the other store raises and points at
+        ``python -m stonks.store.bars_migrate``. Either way the ``bars``
+        relation (a view over the files for Parquet) and the ``prices``
+        view keep working in SQL."""
         self._path = Path(path)
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._con: duckdb.DuckDBPyConnection | None = duckdb.connect(str(self._path))
+        self.read_only = read_only
+        if not read_only:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._con: duckdb.DuckDBPyConnection | None = duckdb.connect(
+            str(self._path), read_only=read_only
+        )
         # Pin the session to UTC so tz-aware inputs (e.g. UTC intraday
         # timestamps from EODHD) aren't silently shifted into the host's
         # local time when they land in naive-TIMESTAMP columns.
         self._con.execute("SET TimeZone = 'UTC'")
         self._column_type_cache: dict[str, dict[str, str]] = {}
+        self._requested_bar_backend = bar_backend
+        try:
+            self._bars: BarStore = self._open_bar_store()
+            self._reconcile_bar_backend()
+        except BaseException:
+            self.close()
+            raise
 
     def __enter__(self) -> DuckDBLake:
         return self
@@ -322,6 +406,212 @@ class DuckDBLake:
         if self._con is None:
             raise RuntimeError("DuckDBLake connection is closed")
         return self._con
+
+    def export_database(self, target: str | Path, *, bar_backend: BarBackend | None = None) -> None:
+        """Write every table and view of this lake to a new standalone
+        DuckDB file at ``target`` (which must not exist), then release it.
+
+        Used to materialise a lab snapshot (typically from an in-memory,
+        universe-scoped copy) that worker processes open read-only.
+
+        The copy's bars go to ``bar_backend`` (default: this lake's). For
+        ``"parquet"`` they land under ``<target dir>/bars``: partitions of a
+        Parquet lake are hard-linked or copied, table bars are written out."""
+        target = Path(target)
+        if target.exists():
+            raise FileExistsError(target)
+        backend = bar_backend or self.bar_backend
+        target_root = target.parent / "bars"
+        if backend == "parquet" and target_root.exists():
+            raise FileExistsError(target_root)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        source = self.con.execute("SELECT current_database()").fetchone()[0]
+        alias = "_stonks_export"
+        path_sql = str(target).replace("'", "''")
+        self.con.execute(f"ATTACH '{path_sql}' AS {alias}")
+        try:
+            self.con.execute(f'COPY FROM DATABASE "{source}" TO {alias}')
+            if backend == "parquet":
+                self.con.execute(f"DROP TABLE IF EXISTS {alias}.bars")
+                self.con.execute(
+                    f"INSERT OR REPLACE INTO {alias}.lake_settings VALUES (?, 'parquet')",
+                    [_BAR_BACKEND_KEY],
+                )
+            elif self.bar_backend == "parquet":
+                self.con.execute(_BARS_TABLE_DDL.format(name=f"{alias}.bars"))
+                self.con.execute(f"INSERT INTO {alias}.bars SELECT * FROM bars")
+                self.con.execute(
+                    f"DELETE FROM {alias}.lake_settings WHERE key = ?", [_BAR_BACKEND_KEY]
+                )
+        finally:
+            self.con.execute(f"DETACH {alias}")
+        if backend == "parquet":
+            if isinstance(self._bars, ParquetBarStore):
+                self._bars.export_partitions(target_root)
+            else:
+                copy = ParquetBarStore(target_root, self.con)
+                copy.ensure_layout()
+                self._copy_table_bars(copy)
+
+    # ---- bar store ------------------------------------------------------------
+
+    @property
+    def bar_backend(self) -> BarBackend:
+        """Which store holds this lake's bars (``"duckdb"`` or ``"parquet"``)."""
+        return self._bars.backend
+
+    @property
+    def bar_store(self) -> BarStore:
+        return self._bars
+
+    @property
+    def bars_root(self) -> Path:
+        """Where the Parquet bar store keeps (or would keep) its files."""
+        return self._path.parent / "bars"
+
+    def migrate_bars_to_parquet(self) -> BarsMigrationReport:
+        """Copy every bar from the ``bars`` table into Parquet partitions
+        under :attr:`bars_root`, verify row counts and checksums per
+        (ticker, interval), then switch this lake to the Parquet store and
+        drop the table. On a mismatch nothing is switched and the table is
+        kept; files already written stay (a re-run overwrites them)."""
+        if self.bar_backend == "parquet":
+            raise RuntimeError("the lake's bars are already in Parquet")
+        self._require_parquet_capable()
+        if "bars" not in self._base_tables():
+            raise RuntimeError("the lake is not migrated yet; call migrate() first")
+        started = time.perf_counter()
+        store = ParquetBarStore(self.bars_root, self.con)
+        store.ensure_layout()
+        self._copy_table_bars(store)
+        expected = checksums(self.con, "SELECT * FROM main.bars")
+        _verify_checksums(expected, store.series_checksums())
+        self._switch_to_parquet(store)
+        return BarsMigrationReport(
+            backend="parquet",
+            series=len(expected),
+            rows=sum(n for n, _ in expected.values()),
+            files=len(store.files()),
+            seconds=round(time.perf_counter() - started, 3),
+        )
+
+    def migrate_bars_to_duckdb(self) -> BarsMigrationReport:
+        """The reverse of :meth:`migrate_bars_to_parquet`: rebuild the
+        ``bars`` table from the Parquet files, verify, and switch back. The
+        Parquet files are left in place (delete :attr:`bars_root` by hand
+        once satisfied)."""
+        if not isinstance(self._bars, ParquetBarStore):
+            raise RuntimeError("the lake's bars are already in the DuckDB table")
+        if self.read_only:
+            raise duckdb.InvalidInputException("a read-only lake cannot switch bar stores")
+        started = time.perf_counter()
+        store = self._bars
+        expected = store.series_checksums()
+        # The session's ``bars`` view would shadow the new table.
+        self.con.execute("DROP VIEW IF EXISTS temp.main.bars")
+        try:
+            with self.transaction():
+                self.con.execute(_BARS_TABLE_DDL.format(name="main.bars"))
+                self.con.execute(
+                    f"INSERT INTO main.bars SELECT {', '.join(BAR_COLUMNS)} "
+                    f"FROM ({store.view_sql()})"
+                )
+                _verify_checksums(expected, checksums(self.con, "SELECT * FROM main.bars"))
+                self.con.execute("DELETE FROM lake_settings WHERE key = ?", [_BAR_BACKEND_KEY])
+        except BaseException:
+            self._install_bar_view(store)
+            raise
+        self._column_type_cache.pop("bars", None)
+        self._bars = DuckDBTableBarStore(self)
+        return BarsMigrationReport(
+            backend="duckdb",
+            series=len(expected),
+            rows=sum(n for n, _ in expected.values()),
+            files=len(store.files()),
+            seconds=round(time.perf_counter() - started, 3),
+        )
+
+    def _open_bar_store(self) -> BarStore:
+        if self._persisted_bar_backend() == "parquet":
+            store = ParquetBarStore(self.bars_root, self.con, read_only=self.read_only)
+            self._install_bar_view(store)
+            return store
+        return DuckDBTableBarStore(self)
+
+    def _persisted_bar_backend(self) -> BarBackend:
+        if "lake_settings" not in self._base_tables():
+            return "duckdb"
+        row = self.con.execute(
+            "SELECT value FROM lake_settings WHERE key = ?", [_BAR_BACKEND_KEY]
+        ).fetchone()
+        value = row[0] if row else "duckdb"
+        if value not in ("duckdb", "parquet"):
+            raise ValueError(f"lake_settings.{_BAR_BACKEND_KEY} holds unknown value {value!r}")
+        return value
+
+    def _reconcile_bar_backend(self) -> None:
+        """Apply the ``bar_backend`` the caller asked for, if any (see
+        ``__init__``). Deferred until ``migrate()`` on an unmigrated lake."""
+        wanted = self._requested_bar_backend
+        if wanted is None or wanted == self.bar_backend:
+            return
+        if wanted == "duckdb":
+            raise RuntimeError(
+                "this lake keeps its bars in Parquet; call migrate_bars_to_duckdb() "
+                "or run `python -m stonks.store.bars_migrate --to duckdb` first"
+            )
+        self._require_parquet_capable()
+        tables = self._base_tables()
+        if "bars" not in tables or "lake_settings" not in tables:
+            return  # not migrated yet: migrate() calls back
+        held = int(self.con.execute("SELECT COUNT(*) FROM main.bars").fetchone()[0])
+        if held:
+            raise RuntimeError(
+                f"this lake holds {held} bars in its DuckDB table but Parquet was requested; "
+                + _MIGRATE_HINT
+            )
+        store = ParquetBarStore(self.bars_root, self.con)
+        store.ensure_layout()
+        self._switch_to_parquet(store)
+
+    def _require_parquet_capable(self) -> None:
+        if str(self._path) == ":memory:":
+            raise ValueError("an in-memory lake cannot keep its bars in Parquet")
+        if self.read_only:
+            raise duckdb.InvalidInputException("a read-only lake cannot switch bar stores")
+
+    def _switch_to_parquet(self, store: ParquetBarStore) -> None:
+        with self.transaction():
+            self.con.execute("DROP TABLE main.bars")
+            self.con.execute(
+                "INSERT OR REPLACE INTO lake_settings VALUES (?, 'parquet')", [_BAR_BACKEND_KEY]
+            )
+        self._column_type_cache.pop("bars", None)
+        self._bars = store
+        self._install_bar_view(store)
+
+    def _install_bar_view(self, store: ParquetBarStore) -> None:
+        """Expose the Parquet bars as a session-local ``bars`` view, so SQL
+        written against the table (and the ``prices`` view) runs unchanged."""
+        self.con.execute(f"CREATE OR REPLACE TEMP VIEW bars AS {store.view_sql()}")
+
+    def _copy_table_bars(self, store: ParquetBarStore) -> None:
+        """Write every row of the ``bars`` table into ``store``, one
+        (interval, ticker) series at a time."""
+        series = self.con.execute(
+            "SELECT DISTINCT interval, ticker FROM main.bars ORDER BY ALL"
+        ).fetchall()
+        for interval, ticker in series:
+            t = ticker.replace("'", "''")
+            i = interval.replace("'", "''")
+            store.upsert_query(f"SELECT * FROM main.bars WHERE ticker = '{t}' AND interval = '{i}'")
+
+    def _base_tables(self) -> set[str]:
+        rows = self.con.execute(
+            "SELECT table_name FROM duckdb_tables() "
+            "WHERE database_name = current_database() AND schema_name = 'main'"
+        ).fetchall()
+        return {r[0] for r in rows}
 
     # ---- schema / migrations ------------------------------------------------
 
@@ -354,6 +644,7 @@ class DuckDBLake:
             finally:
                 # The migration may have reshaped any table.
                 self._column_type_cache.clear()
+        self._reconcile_bar_backend()
 
     def _guard_destructive_drops(self, sql: str, *, version: int, name: str, log: Any) -> None:
         """Refuse to apply a migration whose ``DROP TABLE`` (incl.
@@ -469,14 +760,16 @@ class DuckDBLake:
         Expects columns ``ticker, timestamp, open, high, low, close,
         adj_close, volume``. The ``interval`` dimension is injected from
         the argument (not read from the frame) so callers can't silently
-        mix granularities inside one batch.
+        mix granularities inside one batch. Last write wins per
+        ``(ticker, timestamp, interval)``, in whichever bar store the lake
+        uses.
         """
         if df.empty:
             return 0
         required = ("ticker", "timestamp", "open", "high", "low", "close", "adj_close", "volume")
         frame = df[list(required)].copy()
         frame["interval"] = interval.code
-        return self._upsert(frame, table="bars", cols=_BAR_COLS, pk=_BAR_PK)
+        return self._bars.upsert(frame[list(_BAR_COLS)])
 
     def get_bars(
         self,
@@ -486,15 +779,7 @@ class DuckDBLake:
         end: Any,
     ) -> pd.DataFrame:
         """Fetch bars at the given interval inside a ``[start, end]`` window."""
-        return self.con.execute(
-            """
-            SELECT ticker, timestamp, open, high, low, close, adj_close, volume
-              FROM bars
-             WHERE ticker = ? AND interval = ? AND timestamp BETWEEN ? AND ?
-             ORDER BY timestamp
-            """,
-            [ticker, interval.code, start, end],
-        ).fetchdf()
+        return self._bars.get(ticker, interval, start, end)
 
     def aggregate_bars(
         self,
@@ -503,60 +788,20 @@ class DuckDBLake:
         target: Interval,
     ) -> int:
         """Derive ``target``-interval bars for ``ticker`` by time-bucketing
-        the already-stored ``source`` bars. Idempotent via the bars-table
-        PK; re-running overwrites the target bars with the current
-        aggregation of source bars.
+        the already-stored ``source`` bars (open = first, close = last,
+        high = max, low = min, volume = sum; ``adj_close`` tracks close,
+        as there is no per-bucket corporate-actions adjustment). Idempotent:
+        re-running overwrites the target bars with the current aggregation
+        of source bars. Returns the net number of new target rows.
 
         Target must be a strictly coarser interval than source (the whole
-        point of aggregation is upsampling duration). Any prior target
-        bars for this ticker fall under the ON CONFLICT path.
+        point of aggregation is upsampling duration).
         """
         if target.seconds <= source.seconds:
             raise ValueError(
                 f"target interval {target.code} must be coarser than source {source.code}"
             )
-        # DuckDB's time_bucket(interval, ts) aligns on the interval origin.
-        # OHLCV aggregation within each bucket:
-        #   open  = first (earliest timestamp)
-        #   close = last  (latest timestamp)
-        #   high  = max, low = min
-        #   volume = sum
-        # adj_close tracks close (we don't have per-bucket corporate-actions
-        # adjustment here; closing price is the best we can do).
-        sql = f"""
-            INSERT INTO bars (
-                ticker, timestamp, interval,
-                open, high, low, close, adj_close, volume)
-            SELECT
-                ticker,
-                time_bucket({target.duckdb_interval}, timestamp) AS bucket,
-                ? AS interval,
-                arg_min(open, timestamp) AS open,
-                max(high) AS high,
-                min(low) AS low,
-                arg_max(close, timestamp) AS close,
-                arg_max(close, timestamp) AS adj_close,
-                sum(volume) AS volume
-              FROM bars
-             WHERE ticker = ? AND interval = ?
-             GROUP BY ticker, bucket
-            ON CONFLICT (ticker, timestamp, interval) DO UPDATE SET
-                open = EXCLUDED.open,
-                high = EXCLUDED.high,
-                low = EXCLUDED.low,
-                close = EXCLUDED.close,
-                adj_close = EXCLUDED.adj_close,
-                volume = EXCLUDED.volume
-        """
-        # Net new rows, counted over just this ticker's target slice rather
-        # than the whole bars table (the INSERT's own row count would also
-        # include ON CONFLICT updates).
-        count_sql = "SELECT COUNT(*) FROM bars WHERE ticker = ? AND interval = ?"
-        with self.transaction():
-            before = int(self.con.execute(count_sql, [ticker, target.code]).fetchone()[0])
-            self.con.execute(sql, [target.code, ticker, source.code])
-            after = int(self.con.execute(count_sql, [ticker, target.code]).fetchone()[0])
-        return after - before
+        return self._bars.aggregate(ticker, source, target)
 
     # ---- prices (back-compat shim over daily bars) -------------------------
 

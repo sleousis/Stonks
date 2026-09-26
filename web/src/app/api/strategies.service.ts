@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 
 import { unwrap } from './api-call';
 import {
+  getGoLiveReport,
   getStrategy,
   listStrategies,
   promoteStrategy,
@@ -25,6 +26,13 @@ export class StrategiesService {
 
   get(strategyId: string) {
     return unwrap(getStrategy({ path: { strategy_id: strategyId } }));
+  }
+
+  /** The go-live gate's checks of the strategy's paper period (reports only). */
+  golive(strategyId: string, since?: string) {
+    return unwrap(
+      getGoLiveReport({ path: { strategy_id: strategyId }, query: since ? { since } : undefined }),
+    );
   }
 
   promote(strategyId: string) {

@@ -91,6 +91,13 @@ def test_unfitted_strategy_abstains(lake):
 # ---- fit ------------------------------------------------------------------------------
 
 
+def test_fit_reads_training_bars_through_the_strategy_bar_cache(lake):
+    s = _strategy()
+    assert len(s._bar_caches) == 0
+    s.fit(_dataset(lake))
+    assert len(s._bar_caches) == 1  # roadmap 11.7: one fetch shared with predictions
+
+
 def test_fit_picks_the_best_martin_cluster(lake):
     s = _strategy()
     s.fit(_dataset(lake))

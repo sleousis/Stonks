@@ -13,6 +13,7 @@ from stonks.production.tick import TickSettings, run_tick
 from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
+from tests.fixtures.governance import seed_status
 
 AS_OF = date(2026, 3, 20)
 
@@ -41,7 +42,7 @@ def tick_env(tmp_path, lake_trending):
         BuyAndHold({"ticker": "UP.US", "allocation": 1.0}),
         reports=[SurvivalReport(test_id="oos", passed=True, metrics={})],
     )
-    registry.set_status(sid, "active")
+    seed_status(registry, sid, "active")
     yield lake_trending, state, registry
     state.close()
 

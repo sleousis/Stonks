@@ -1,6 +1,12 @@
 [lake]
 path = "data/lake.duckdb"
 
+# Bar store: "duckdb" (table in the lake file) or "parquet" (partitioned
+# files under <lake dir>/bars, readable while `stonks serve` runs). Switch with
+# `uv run python -m stonks.store.bars_migrate` (see docs/architecture.md).
+[lake.bars]
+backend = "duckdb"
+
 [state]
 path = "data/state.sqlite"
 
@@ -22,6 +28,9 @@ max_price_staleness_days = 7
 # Evaluate shadow strategies each tick against their own virtual portfolios
 # (written to shadow_decisions / shadow_portfolio_snapshots; never traded).
 shadow_enabled = true
+# Fraction of each cash dividend withheld as tax in the tick and shadow
+# books (0 = credited in full; e.g. 0.15 for a treaty withholding rate).
+dividend_withholding_rate = 0.0
 
 [production.risk]
 # Risk layer between strategy.decide and the broker. Sells are never blocked.
@@ -43,21 +52,46 @@ stuck_ingest_minutes = 180
 ingest_failure_lookback_hours = 24
 
 [backtest.costs]
-# Transaction costs for lab backtests (`stonks lab run`). All zero = no costs.
-# Production can build the same model via settings.backtest.costs.build().
+# Transaction costs for lab runs, backtests and simulated tick fills
+# (BL-13: realistic by default, the values of CostModelSettings.realistic()).
+# A run with all-zero costs logs a `zero_costs` warning; ask for it explicitly
+# (`stonks lab run --cost-model zero`, API `cost_model: "zero"`).
 # Square-root-law impact in bps of an order the size of the whole bar, capped.
-impact_bps = 0.0
+impact_bps = 100.0
 max_impact_bps = 500.0
 
 [backtest.costs.default]
 # Fallback for asset classes not listed under [backtest.costs.asset_classes.*].
 fee_flat = 0.0
-half_spread_bps = 0.0
-fee_bps = 0.0
+half_spread_bps = 2.0
+fee_bps = 0.5
 
-# [backtest.costs.asset_classes.crypto]
-# half_spread_bps = 5.0
-# fee_bps = 10.0
+[backtest.costs.asset_classes.equity]
+half_spread_bps = 2.0
+fee_bps = 0.5
+
+[backtest.costs.asset_classes.crypto]
+half_spread_bps = 5.0
+fee_bps = 10.0
+
+[backtest.costs.asset_classes.commodity]
+half_spread_bps = 3.0
+fee_flat = 1.0
+
+[backtest.costs.asset_classes.bond]
+half_spread_bps = 5.0
+fee_bps = 1.0
+
+[lab]
+# Benchmark every lab backtest, API backtest and tear sheet is compared
+# against: "auto" (SPY.US when the lake prices it, else the equal-weight
+# universe), "EW", a ticker such as "QQQ.US", or "none". `--benchmark` and the
+# API's `benchmark` field override it.
+benchmark = "auto"
+# Trading bars skipped between the train and the validation window (BL-20):
+# serially correlated features and labels can't leak across it. A strategy's
+# label_horizon_bars raises it per run. `--embargo-bars` / `embargo_bars` override.
+embargo_bars = 0
 
 [lab.walk_forward]
 # Defaults for `stonks lab run --walk-forward` (CLI flags override).
@@ -68,6 +102,16 @@ anchored = false
 metric = "sharpe"
 min_positive_share = 0.5
 min_mean_score = 0.0
+min_wfe = 0.5                      # walk-forward efficiency gate (OOS / IS return)
+matrix = false                     # also run the train x test matrix (--wf-matrix)
+
+[lab.parallel]
+# Worker processes for tuning trials and `stonks lab sweep` (one spawn pool,
+# lab/parallel.py). 0 = every core (capped at 32), 1 = in-process. Results do
+# not depend on the worker count. `stonks lab run --workers N` overrides.
+max_workers = 0
+# BLAS/OpenMP threads per worker (the pool is the parallelism).
+blas_threads = 1
 
 [notify]
 # Backends: "log" (structlog), "webhook" (JSON POST) and/or "store" (the
@@ -134,11 +178,23 @@ ui_dist = "web/dist"
 # `stonks golive check <id>` limits for a paper-trading period (shadow P&L for
 # shadow strategies, the real simulated portfolio for active ones). Missing
 # data fails a check. The gate never promotes; `stonks registry promote` does.
-min_days = 20
+min_days = 63                     # at least MinTRL of the oos Sharpe when incubation is on
 max_drawdown = 0.15               # deepest allowed drawdown, positive fraction
 max_drift = 0.10                  # max |paper return - backtest-expected return|
-min_trades = 5
+min_trades = 20
 require_all_survival_passed = true
+# Incubation grade (BL-25): adds within_mc_band, quit_rule, promotion_preset,
+# nonzero_costs, hypothesis_recorded and backtest_min_trades. false keeps the
+# six checks above.
+incubation = true
+use_min_trl = true                # min_days = max(min_days, MinTRL of the oos Sharpe)
+min_trl_cap_days = 252
+min_trl_alpha = 0.05              # the track record must reach PSR >= 1 - alpha
+periods_per_year = 252            # de-annualises the oos Sharpe for MinTRL
+quit_drawdown_multiple = 1.5      # quit beyond 1.5x the backtest drawdown (or MC p95)
+promotion_preset = "promotion"    # every test of this preset needs a stored report
+min_backtest_trades = 30
+min_hypothesis_chars = 20
 
 [mcp]
 # `stonks mcp` talks to the running REST API (`stonks serve`); it never opens

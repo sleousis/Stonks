@@ -1,4 +1,12 @@
-"""Alerting seam (roadmap 2.5): ``Notifier`` ABC plus log, webhook and store backends."""
+"""Alerting seam (roadmap 2.5) and per-user notifications (roadmap 15.6).
+
+- ``Notifier`` ABC plus log, webhook and store backends: global alerts.
+- :class:`NotificationRouter` -> ``notification_outbox`` -> :class:`DeliveryWorker`
+  -> channels (``webpush``, ``email``, ``webhook``, ``log``) for per-user
+  delivery with preferences, quiet hours, dedupe and retries.
+- :mod:`stonks.notify.service`: scoped functions for the API routes.
+- :func:`notify_signal`: what the signal phase calls.
+"""
 
 from __future__ import annotations
 
@@ -14,12 +22,39 @@ from stonks.notify.base import (
     Notifier,
     redact_url,
 )
+from stonks.notify.bridge import OutboxNotifier
+from stonks.notify.channels import Channel, DeliveryResult, build_channels, register_channel
+from stonks.notify.events import Audience, Event, Message
 from stonks.notify.log import LogNotifier
+from stonks.notify.router import (
+    NotificationRouter,
+    PublishResult,
+    SignalNotice,
+    notify_signal,
+    notify_signals,
+)
+from stonks.notify.settings import NotifySettings
 from stonks.notify.store import StoreNotifier
 from stonks.notify.webhook import WebhookNotifier
+from stonks.notify.worker import DeliveryWorker
 
 __all__ = [
+    "Audience",
+    "Channel",
     "CompositeNotifier",
+    "DeliveryResult",
+    "DeliveryWorker",
+    "Event",
+    "Message",
+    "NotificationRouter",
+    "NotifySettings",
+    "OutboxNotifier",
+    "PublishResult",
+    "SignalNotice",
+    "build_channels",
+    "notify_signal",
+    "notify_signals",
+    "register_channel",
     "LogNotifier",
     "Notification",
     "NotificationLevel",

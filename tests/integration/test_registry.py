@@ -15,6 +15,7 @@ from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
 from stonks.strategies.examples.momentum import Momentum
+from tests.fixtures.governance import seed_status
 
 
 @pytest.fixture
@@ -54,8 +55,8 @@ def test_list_active_filters_out_shadow_and_retired(registry):
     shadow_id = reg.register(BuyAndHold({"ticker": "B.US"}), reports=_sample_reports())
     retired_id = reg.register(BuyAndHold({"ticker": "C.US"}), reports=_sample_reports())
 
-    reg.set_status(active_id, "active")
-    reg.set_status(retired_id, "retired")
+    seed_status(reg, active_id, "active")
+    seed_status(reg, retired_id, "retired")
 
     active = {h.id for h in reg.list_active()}
     assert active == {active_id}
@@ -89,7 +90,7 @@ def test_set_status_rejects_unknown_value(registry):
     reg, _, _ = registry
     sid = reg.register(BuyAndHold({"ticker": "AAPL.US"}), reports=_sample_reports())
     with pytest.raises(ValueError):
-        reg.set_status(sid, "zombie")
+        seed_status(reg, sid, "zombie")
 
 
 def test_register_writes_artifact_directory(registry):
@@ -190,7 +191,7 @@ def test_register_duplicate_id_raises_without_touching_existing_artifact(registr
 def test_set_status_unknown_id_raises_key_error(registry):
     reg, _, _ = registry
     with pytest.raises(KeyError):
-        reg.set_status("does_not_exist", "active")
+        seed_status(reg, "does_not_exist", "active")
 
 
 def test_load_falls_back_to_constructor_when_class_has_no_load(registry):

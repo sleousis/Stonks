@@ -91,9 +91,13 @@ export type AuthCheck = {
  */
 export type BacktestRequest = {
     /**
+     * Benchmark
+     */
+    benchmark?: string | null;
+    /**
      * Cost Model
      */
-    cost_model?: 'zero' | 'realistic' | null;
+    cost_model?: 'zero' | 'realistic' | CostModelSettings | null;
     /**
      * End
      */
@@ -137,10 +141,23 @@ export type BacktestRequest = {
  * BacktestResult
  */
 export type BacktestResult = {
+    benchmark?: BenchmarkStatsView | null;
+    /**
+     * Benchmark Equity
+     */
+    benchmark_equity?: Array<EquityPoint>;
     /**
      * Cagr
      */
     cagr: number | null;
+    /**
+     * Calmar
+     */
+    calmar?: number | null;
+    /**
+     * Drawdown
+     */
+    drawdown?: Array<EquityPoint>;
     /**
      * End
      */
@@ -150,13 +167,29 @@ export type BacktestResult = {
      */
     equity: Array<EquityPoint>;
     /**
+     * Es 95
+     */
+    es_95?: number | null;
+    /**
      * Final Return
      */
     final_return: number | null;
     /**
+     * Fitness
+     */
+    fitness?: number | null;
+    /**
      * Interval
      */
     interval: string;
+    /**
+     * Kurtosis
+     */
+    kurtosis?: number | null;
+    /**
+     * Max Dd Duration Bars
+     */
+    max_dd_duration_bars?: number;
     /**
      * Max Drawdown
      */
@@ -170,6 +203,14 @@ export type BacktestResult = {
      */
     sharpe: number | null;
     /**
+     * Skew
+     */
+    skew?: number | null;
+    /**
+     * Sortino
+     */
+    sortino?: number | null;
+    /**
      * Start
      */
     start: string;
@@ -177,6 +218,23 @@ export type BacktestResult = {
      * Strategy Id
      */
     strategy_id: string;
+    /**
+     * Trade Count
+     */
+    trade_count?: number;
+    trade_stats?: TradeStatsView | null;
+    /**
+     * Trades
+     */
+    trades?: Array<TradeView>;
+    /**
+     * Ulcer Index
+     */
+    ulcer_index?: number | null;
+    /**
+     * Var 95
+     */
+    var_95?: number | null;
 };
 
 /**
@@ -233,6 +291,91 @@ export type BarView = {
      * Volume
      */
     volume: number | null;
+};
+
+/**
+ * BenchmarkStatsView
+ *
+ * A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``).
+ * Ratios are ``None`` when not finite.
+ */
+export type BenchmarkStatsView = {
+    /**
+     * Alpha Annual
+     */
+    alpha_annual: number | null;
+    /**
+     * Alpha Tstat
+     */
+    alpha_tstat: number | null;
+    /**
+     * Benchmark Cagr
+     */
+    benchmark_cagr: number | null;
+    /**
+     * Benchmark Max Dd
+     */
+    benchmark_max_dd: number | null;
+    /**
+     * Benchmark Sharpe
+     */
+    benchmark_sharpe: number | null;
+    /**
+     * Beta
+     */
+    beta: number | null;
+    /**
+     * Correlation
+     */
+    correlation: number | null;
+    /**
+     * Down Capture
+     */
+    down_capture: number | null;
+    /**
+     * Excess Cagr
+     */
+    excess_cagr: number | null;
+    /**
+     * Excluded
+     */
+    excluded?: Array<string>;
+    /**
+     * Information Ratio
+     */
+    information_ratio: number | null;
+    /**
+     * Members
+     */
+    members?: Array<string>;
+    /**
+     * N Obs
+     */
+    n_obs: number;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * R2
+     */
+    r2: number | null;
+    /**
+     * Residual Sharpe
+     */
+    residual_sharpe: number | null;
+    /**
+     * Spec
+     */
+    spec: string;
+    /**
+     * Tracking Error
+     */
+    tracking_error: number | null;
+    /**
+     * Up Capture
+     */
+    up_capture: number | null;
 };
 
 /**
@@ -318,6 +461,10 @@ export type CostModelPreset = {
  */
 export type CostModelSettings = {
     /**
+     * Adv Window
+     */
+    adv_window?: number;
+    /**
      * Asset Classes
      */
     asset_classes?: {
@@ -325,13 +472,38 @@ export type CostModelSettings = {
     };
     default?: AssetClassCosts;
     /**
+     * Half Spread Model
+     */
+    half_spread_model?: 'class' | 'corwin_schultz' | 'abdi_ranaldo';
+    /**
      * Impact Bps
      */
     impact_bps?: number;
     /**
+     * Impact Gamma
+     */
+    impact_gamma?: number;
+    /**
+     * Impact Model
+     */
+    impact_model?: 'sqrt' | 'sqrt_vol' | 'istar';
+    istar?: IStarSettings;
+    /**
+     * Max Half Spread Bps
+     */
+    max_half_spread_bps?: number;
+    /**
      * Max Impact Bps
      */
     max_impact_bps?: number;
+    /**
+     * Spread Window
+     */
+    spread_window?: number;
+    /**
+     * Vol Window
+     */
+    vol_window?: number;
 };
 
 /**
@@ -438,6 +610,14 @@ export type Draft = {
  */
 export type DraftBacktestRequest = {
     /**
+     * Benchmark
+     */
+    benchmark?: string | null;
+    /**
+     * Cost Model
+     */
+    cost_model?: 'zero' | 'realistic' | CostModelSettings | null;
+    /**
      * End
      */
     end: string;
@@ -504,25 +684,60 @@ export type DraftCreate = {
  *
  * A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A
  * rule draft's spec is fixed (it has no tunable parameters); a code
- * draft's class is tuned over its parameter space.
+ * draft's class is tuned over its parameter space. Registering
+ * (``register_strategy`` always, ``register_if_passes`` only on a pass)
+ * links the new strategy to the draft.
  */
 export type DraftLabRunRequest = {
+    /**
+     * Benchmark
+     */
+    benchmark?: string | null;
     /**
      * Budget
      */
     budget?: number;
     /**
+     * Cost Model
+     */
+    cost_model?: 'zero' | 'realistic' | CostModelSettings | null;
+    /**
+     * Embargo Bars
+     */
+    embargo_bars?: number | null;
+    /**
      * End
      */
     end: string;
     /**
+     * Grid Size
+     */
+    grid_size?: number;
+    /**
+     * Hypothesis
+     */
+    hypothesis?: string | null;
+    /**
      * Interval
      */
     interval?: string;
+    mcpt?: McptOptions | null;
     /**
      * Objective
      */
     objective?: 'sharpe' | 'cagr' | 'final_return';
+    /**
+     * Premortem
+     */
+    premortem?: string | null;
+    /**
+     * Preset
+     */
+    preset?: 'promotion' | 'quick' | 'standard' | null;
+    /**
+     * Register If Passes
+     */
+    register_if_passes?: boolean;
     /**
      * Register Strategy
      */
@@ -538,7 +753,15 @@ export type DraftLabRunRequest = {
     /**
      * Survival Tests
      */
-    survival_tests?: Array<'oos' | 'period_stability' | 'perturbation' | 'drift' | 'runs_test' | 'permutation' | 'walk_forward'>;
+    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'runs_test' | 'signal_ic' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
+    /**
+     * Test Options
+     */
+    test_options?: {
+        [key: string]: {
+            [key: string]: unknown;
+        };
+    } | null;
     /**
      * Train Ratio
      */
@@ -551,6 +774,7 @@ export type DraftLabRunRequest = {
      * Universe
      */
     universe: Array<string>;
+    walk_forward?: WalkForwardConfig | null;
 };
 
 /**
@@ -641,6 +865,127 @@ export type FillView = {
 };
 
 /**
+ * GoLiveCheckView
+ */
+export type GoLiveCheckView = {
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Limit
+     */
+    limit: number | null;
+    /**
+     * Name
+     */
+    name: 'status' | 'min_days' | 'max_drawdown' | 'max_drift' | 'min_trades' | 'survival' | 'within_mc_band' | 'quit_rule' | 'promotion_preset' | 'nonzero_costs' | 'hypothesis_recorded' | 'backtest_min_trades';
+    /**
+     * Passed
+     */
+    passed: boolean;
+    /**
+     * Value
+     */
+    value: number | null;
+};
+
+/**
+ * GoLivePolicy
+ *
+ * Limits a paper-trading period must meet before ``stonks golive check``
+ * passes (``[golive]``). The gate only reports; promotion stays a human
+ * action. Every limit is strict about missing data: a period with no
+ * snapshots, no fills or no backtest expectation fails.
+ */
+export type GoLivePolicy = {
+    /**
+     * Incubation
+     */
+    incubation?: boolean;
+    /**
+     * Max Drawdown
+     */
+    max_drawdown?: number;
+    /**
+     * Max Drift
+     */
+    max_drift?: number;
+    /**
+     * Min Backtest Trades
+     */
+    min_backtest_trades?: number;
+    /**
+     * Min Days
+     */
+    min_days?: number;
+    /**
+     * Min Hypothesis Chars
+     */
+    min_hypothesis_chars?: number;
+    /**
+     * Min Trades
+     */
+    min_trades?: number;
+    /**
+     * Min Trl Alpha
+     */
+    min_trl_alpha?: number;
+    /**
+     * Min Trl Cap Days
+     */
+    min_trl_cap_days?: number;
+    /**
+     * Periods Per Year
+     */
+    periods_per_year?: number;
+    /**
+     * Promotion Preset
+     */
+    promotion_preset?: string;
+    /**
+     * Quit Drawdown Multiple
+     */
+    quit_drawdown_multiple?: number;
+    /**
+     * Require All Survival Passed
+     */
+    require_all_survival_passed?: boolean;
+    /**
+     * Use Min Trl
+     */
+    use_min_trl?: boolean;
+};
+
+/**
+ * GoLiveReport
+ */
+export type GoLiveReport = {
+    checklist?: PromotionChecklistView;
+    /**
+     * Checks
+     */
+    checks: Array<GoLiveCheckView>;
+    /**
+     * Passed
+     */
+    passed: boolean;
+    policy: GoLivePolicy;
+    /**
+     * Source
+     */
+    source: 'shadow' | 'portfolio' | 'none';
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string;
+};
+
+/**
  * Health
  */
 export type Health = {
@@ -673,6 +1018,30 @@ export type HealthCheckView = {
 };
 
 /**
+ * HealthConfig
+ *
+ * Thresholds for ``stonks health`` (``[production.health]``).
+ */
+export type HealthConfig = {
+    /**
+     * Ingest Failure Lookback Hours
+     */
+    ingest_failure_lookback_hours?: number;
+    /**
+     * Max Bar Age Days
+     */
+    max_bar_age_days?: number;
+    /**
+     * Stuck Ingest Minutes
+     */
+    stuck_ingest_minutes?: number;
+    /**
+     * Stuck Tick Minutes
+     */
+    stuck_tick_minutes?: number;
+};
+
+/**
  * HealthReportView
  */
 export type HealthReportView = {
@@ -688,6 +1057,46 @@ export type HealthReportView = {
      * Healthy
      */
     healthy: boolean;
+    thresholds: HealthConfig;
+};
+
+/**
+ * IStarSettings
+ *
+ * Kissell's I-Star parameters: ``I = a1 (Q/ADV)^a2 sigma^a3`` bps, with
+ * a temporary part ``b1 I pov^a4`` and a permanent part ``(1 - b1) I``.
+ * The defaults are Kissell's published US-equity estimates, **not
+ * calibrated** for this system; treat them as a starting point.
+ */
+export type IStarSettings = {
+    /**
+     * A1
+     */
+    a1?: number;
+    /**
+     * A2
+     */
+    a2?: number;
+    /**
+     * A3
+     */
+    a3?: number;
+    /**
+     * A4
+     */
+    a4?: number;
+    /**
+     * B1
+     */
+    b1?: number;
+    /**
+     * Periods Per Year
+     */
+    periods_per_year?: number;
+    /**
+     * Pov
+     */
+    pov?: number;
 };
 
 /**
@@ -940,13 +1349,33 @@ export type JobEvent = {
  */
 export type LabRunRequest = {
     /**
+     * Benchmark
+     */
+    benchmark?: string | null;
+    /**
      * Budget
      */
     budget?: number;
     /**
+     * Cost Model
+     */
+    cost_model?: 'zero' | 'realistic' | CostModelSettings | null;
+    /**
+     * Embargo Bars
+     */
+    embargo_bars?: number | null;
+    /**
      * End
      */
     end: string;
+    /**
+     * Grid Size
+     */
+    grid_size?: number;
+    /**
+     * Hypothesis
+     */
+    hypothesis?: string | null;
     /**
      * Interval
      */
@@ -956,6 +1385,18 @@ export type LabRunRequest = {
      * Objective
      */
     objective?: 'sharpe' | 'cagr' | 'final_return';
+    /**
+     * Premortem
+     */
+    premortem?: string | null;
+    /**
+     * Preset
+     */
+    preset?: 'promotion' | 'quick' | 'standard' | null;
+    /**
+     * Register If Passes
+     */
+    register_if_passes?: boolean;
     /**
      * Register Strategy
      */
@@ -972,7 +1413,15 @@ export type LabRunRequest = {
     /**
      * Survival Tests
      */
-    survival_tests?: Array<'oos' | 'period_stability' | 'perturbation' | 'drift' | 'runs_test' | 'permutation' | 'walk_forward'>;
+    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'runs_test' | 'signal_ic' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
+    /**
+     * Test Options
+     */
+    test_options?: {
+        [key: string]: {
+            [key: string]: unknown;
+        };
+    } | null;
     /**
      * Train Ratio
      */
@@ -992,6 +1441,7 @@ export type LabRunRequest = {
  * LabRunView
  */
 export type LabRunView = {
+    benchmark?: BenchmarkStatsView | null;
     /**
      * Best Params
      */
@@ -1007,9 +1457,21 @@ export type LabRunView = {
      */
     class_path: string;
     /**
+     * N Trials Class
+     */
+    n_trials_class?: number;
+    /**
+     * N Trials Run
+     */
+    n_trials_run?: number;
+    /**
      * Registered Strategy Id
      */
     registered_strategy_id: string | null;
+    /**
+     * Run Id
+     */
+    run_id?: string;
     /**
      * Survival Reports
      */
@@ -1063,7 +1525,7 @@ export type McptOptions = {
     /**
      * Retune
      */
-    retune?: boolean;
+    retune?: boolean | 'auto';
     /**
      * Seed
      */
@@ -1106,6 +1568,10 @@ export type OrderView = {
      * Status
      */
     status: string;
+    /**
+     * Status Reason
+     */
+    status_reason?: string | null;
     /**
      * Strategy Id
      */
@@ -1636,6 +2102,39 @@ export type ProblemDetails = {
 };
 
 /**
+ * PromotionChecklistView
+ *
+ * What a reviewer reads before promoting; it doesn't change the
+ * verdict. ``None`` for anything not recorded.
+ */
+export type PromotionChecklistView = {
+    /**
+     * Dsr
+     */
+    dsr?: number | null;
+    /**
+     * Excess Cagr
+     */
+    excess_cagr?: number | null;
+    /**
+     * Hypothesis
+     */
+    hypothesis?: string | null;
+    /**
+     * N Trials Class
+     */
+    n_trials_class?: number | null;
+    /**
+     * Pbo
+     */
+    pbo?: number | null;
+    /**
+     * Premortem
+     */
+    premortem?: string | null;
+};
+
+/**
  * RiskAdjustmentView
  *
  * One order the risk policy clipped or dropped.
@@ -1922,6 +2421,79 @@ export type SpecValidateRequest = {
 };
 
 /**
+ * StatusChangeRequest
+ *
+ * Body of a status-change route (promote / retire / shadow, Studio
+ * enable / disable). Demotions need ``reason``; a promotion without a
+ * passing go-live check needs ``override`` plus a ``reason`` of at least
+ * 20 characters.
+ */
+export type StatusChangeRequest = {
+    /**
+     * Actor
+     */
+    actor?: string | null;
+    /**
+     * Override
+     */
+    override?: boolean;
+    /**
+     * Reason
+     */
+    reason?: string | null;
+};
+
+/**
+ * StatusChangeView
+ *
+ * One audited status change or intervention (BL-24).
+ */
+export type StatusChangeView = {
+    /**
+     * Actor
+     */
+    actor: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * From Status
+     */
+    from_status: string | null;
+    /**
+     * Golive Passed
+     */
+    golive_passed: boolean | null;
+    /**
+     * Golive Report
+     */
+    golive_report: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Override
+     */
+    override: boolean;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * To Status
+     */
+    to_status: string | null;
+};
+
+/**
  * StrategyClassInfo
  */
 export type StrategyClassInfo = {
@@ -1971,6 +2543,7 @@ export type StrategyDetail = {
      * Id
      */
     id: string;
+    metadata: StrategyMetadataView;
     /**
      * Params
      */
@@ -1982,6 +2555,10 @@ export type StrategyDetail = {
      */
     status: 'active' | 'shadow' | 'retired';
     /**
+     * Status History
+     */
+    status_history: Array<StatusChangeView>;
+    /**
      * Survival Reports
      */
     survival_reports: Array<SurvivalReportView>;
@@ -1989,6 +2566,34 @@ export type StrategyDetail = {
      * Updated At
      */
     updated_at: string;
+};
+
+/**
+ * StrategyMetadataView
+ *
+ * The strategy's hypothesis card and capability hooks (BL-26).
+ */
+export type StrategyMetadataView = {
+    /**
+     * Alpha Family
+     */
+    alpha_family: 'trend' | 'reversion' | 'carry' | 'value' | 'quality' | 'growth' | 'sentiment' | 'data_driven' | 'benchmark' | 'other';
+    /**
+     * Hypothesis
+     */
+    hypothesis: string;
+    /**
+     * Label Horizon Bars
+     */
+    label_horizon_bars: number;
+    /**
+     * Premise
+     */
+    premise: 'trend' | 'mean_reversion' | 'none';
+    /**
+     * Required History Bars
+     */
+    required_history_bars: number;
 };
 
 /**
@@ -2061,6 +2666,7 @@ export type StrategySummary = {
      * Id
      */
     id: string;
+    metadata: StrategyMetadataView;
     /**
      * Params
      */
@@ -2093,6 +2699,18 @@ export type StreamToken = {
      * Token
      */
     token: string;
+};
+
+/**
+ * StudioCapabilities
+ *
+ * What this server lets the Studio do.
+ */
+export type StudioCapabilities = {
+    /**
+     * Code Strategies
+     */
+    code_strategies: boolean;
 };
 
 /**
@@ -2246,6 +2864,10 @@ export type TickSummary = {
      */
     error_type?: string | null;
     /**
+     * Exit Strategy Id
+     */
+    exit_strategy_id?: string | null;
+    /**
      * Fills
      */
     fills?: number | null;
@@ -2270,6 +2892,10 @@ export type TickSummary = {
      */
     shadow_error?: string | null;
     /**
+     * Stale Buys Dropped
+     */
+    stale_buys_dropped?: Array<string>;
+    /**
      * Winner Expected Return
      */
     winner_expected_return?: number | null;
@@ -2278,6 +2904,120 @@ export type TickSummary = {
      */
     winner_strategy_id?: string | null;
     [key: string]: unknown;
+};
+
+/**
+ * TradeStatsView
+ *
+ * Trade-level statistics of a backtest (``backtest.trades.TradeStats``).
+ * Win/loss figures are over closed round trips; ``None`` marks an
+ * unbounded ratio (no losing trades).
+ */
+export type TradeStatsView = {
+    /**
+     * Avg Bars Held
+     */
+    avg_bars_held: number | null;
+    /**
+     * Avg Loss
+     */
+    avg_loss: number | null;
+    /**
+     * Avg Win
+     */
+    avg_win: number | null;
+    /**
+     * Cost Drag Annual
+     */
+    cost_drag_annual: number | null;
+    /**
+     * Costs Paid
+     */
+    costs_paid: number | null;
+    /**
+     * Expectancy
+     */
+    expectancy: number | null;
+    /**
+     * Exposure
+     */
+    exposure: number | null;
+    /**
+     * N Open
+     */
+    n_open: number;
+    /**
+     * N Trades
+     */
+    n_trades: number;
+    /**
+     * Payoff Ratio
+     */
+    payoff_ratio: number | null;
+    /**
+     * Trade Profit Factor
+     */
+    trade_profit_factor: number | null;
+    /**
+     * Turnover Annual
+     */
+    turnover_annual: number | null;
+    /**
+     * Win Rate
+     */
+    win_rate: number | null;
+};
+
+/**
+ * TradeView
+ *
+ * One round trip (a lot, or part of one, from buy to sell or to the end).
+ */
+export type TradeView = {
+    /**
+     * Bars Held
+     */
+    bars_held: number;
+    /**
+     * Entry Px
+     */
+    entry_px: number;
+    /**
+     * Entry Ts
+     */
+    entry_ts: string;
+    /**
+     * Exit Px
+     */
+    exit_px: number;
+    /**
+     * Exit Ts
+     */
+    exit_ts: string;
+    /**
+     * Fees
+     */
+    fees: number;
+    /**
+     * Is Open
+     */
+    is_open: boolean;
+    /**
+     * Pnl
+     */
+    pnl: number;
+    /**
+     * Qty
+     */
+    qty: number;
+    /**
+     * Return Pct
+     */
+    return_pct: number | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
 };
 
 /**
@@ -2328,6 +3068,26 @@ export type WalkForwardConfig = {
      */
     anchored?: boolean;
     /**
+     * Matrix
+     */
+    matrix?: boolean;
+    /**
+     * Matrix Min Pass Share
+     */
+    matrix_min_pass_share?: number;
+    /**
+     * Matrix Test Bars
+     */
+    matrix_test_bars?: Array<number>;
+    /**
+     * Matrix Train Bars
+     */
+    matrix_train_bars?: Array<number>;
+    /**
+     * Max Workers
+     */
+    max_workers?: number | null;
+    /**
      * Metric
      */
     metric?: 'sharpe' | 'cagr' | 'final_return';
@@ -2340,9 +3100,17 @@ export type WalkForwardConfig = {
      */
     min_positive_share?: number;
     /**
+     * Min Wfe
+     */
+    min_wfe?: number | null;
+    /**
      * N Splits
      */
     n_splits?: number;
+    /**
+     * Seed
+     */
+    seed?: number | null;
     /**
      * Test Days
      */
@@ -4057,6 +4825,12 @@ export type ListStrategiesData = {
          */
         status?: 'active' | 'shadow' | 'retired' | null;
         /**
+         * Q
+         *
+         * case-insensitive substring of the id or class path
+         */
+        q?: string | null;
+        /**
          * Limit
          *
          * page size
@@ -4191,8 +4965,110 @@ export type GetStrategyResponses = {
 
 export type GetStrategyResponse = GetStrategyResponses[keyof GetStrategyResponses];
 
-export type PromoteStrategyData = {
+export type GetGoLiveReportData = {
     body?: never;
+    path: {
+        /**
+         * Strategy Id
+         */
+        strategy_id: string;
+    };
+    query?: {
+        /**
+         * Since
+         */
+        since?: string | null;
+    };
+    url: '/api/strategies/{strategy_id}/golive';
+};
+
+export type GetGoLiveReportErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetGoLiveReportError = GetGoLiveReportErrors[keyof GetGoLiveReportErrors];
+
+export type GetGoLiveReportResponses = {
+    /**
+     * Successful Response
+     */
+    200: GoLiveReport;
+};
+
+export type GetGoLiveReportResponse = GetGoLiveReportResponses[keyof GetGoLiveReportResponses];
+
+export type GetStrategyHistoryData = {
+    body?: never;
+    path: {
+        /**
+         * Strategy Id
+         */
+        strategy_id: string;
+    };
+    query?: never;
+    url: '/api/strategies/{strategy_id}/history';
+};
+
+export type GetStrategyHistoryErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetStrategyHistoryError = GetStrategyHistoryErrors[keyof GetStrategyHistoryErrors];
+
+export type GetStrategyHistoryResponses = {
+    /**
+     * Response Getstrategyhistory
+     *
+     * Successful Response
+     */
+    200: Array<StatusChangeView>;
+};
+
+export type GetStrategyHistoryResponse = GetStrategyHistoryResponses[keyof GetStrategyHistoryResponses];
+
+export type PromoteStrategyData = {
+    /**
+     * Body
+     */
+    body?: StatusChangeRequest | null;
     path: {
         /**
          * Strategy Id
@@ -4238,7 +5114,10 @@ export type PromoteStrategyResponses = {
 export type PromoteStrategyResponse = PromoteStrategyResponses[keyof PromoteStrategyResponses];
 
 export type RetireStrategyData = {
-    body?: never;
+    /**
+     * Body
+     */
+    body?: StatusChangeRequest | null;
     path: {
         /**
          * Strategy Id
@@ -4284,7 +5163,10 @@ export type RetireStrategyResponses = {
 export type RetireStrategyResponse = RetireStrategyResponses[keyof RetireStrategyResponses];
 
 export type ShadowStrategyData = {
-    body?: never;
+    /**
+     * Body
+     */
+    body?: StatusChangeRequest | null;
     path: {
         /**
          * Strategy Id
@@ -4328,6 +5210,51 @@ export type ShadowStrategyResponses = {
 };
 
 export type ShadowStrategyResponse = ShadowStrategyResponses[keyof ShadowStrategyResponses];
+
+export type GetStudioCapabilitiesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/studio/capabilities';
+};
+
+export type GetStudioCapabilitiesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Code strategies are disabled
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetStudioCapabilitiesError = GetStudioCapabilitiesErrors[keyof GetStudioCapabilitiesErrors];
+
+export type GetStudioCapabilitiesResponses = {
+    /**
+     * Successful Response
+     */
+    200: StudioCapabilities;
+};
+
+export type GetStudioCapabilitiesResponse = GetStudioCapabilitiesResponses[keyof GetStudioCapabilitiesResponses];
 
 export type ListDraftsData = {
     body?: never;
@@ -4631,7 +5558,10 @@ export type StartDraftBacktestResponses = {
 export type StartDraftBacktestResponse = StartDraftBacktestResponses[keyof StartDraftBacktestResponses];
 
 export type DisableDraftData = {
-    body?: never;
+    /**
+     * Body
+     */
+    body?: StatusChangeRequest | null;
     path: {
         /**
          * Draft Id
@@ -4681,7 +5611,10 @@ export type DisableDraftResponses = {
 export type DisableDraftResponse = DisableDraftResponses[keyof DisableDraftResponses];
 
 export type EnableDraftData = {
-    body?: never;
+    /**
+     * Body
+     */
+    body?: StatusChangeRequest | null;
     path: {
         /**
          * Draft Id

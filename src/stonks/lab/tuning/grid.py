@@ -3,18 +3,23 @@
 Exhaustive when the grid fits in the budget; otherwise a seeded uniform
 sample of distinct grid points (so every axis is explored, not just the
 corner that ``itertools.product`` would visit first).
+
+Candidates are fixed up front, then evaluated through the
+``lab.parallel`` pool (see ``lab.tuning.base.evaluate_candidates``); the
+result is identical for any worker count.
 """
 
 from __future__ import annotations
 
-import math
 import random
-from typing import Any
 
 from stonks.core.params import ParamSpace
 from stonks.core.protocols import Objective, Strategy, TunerResult
 from stonks.lab.dataset import LabDataset
+from stonks.lab.parallel import ParallelSettings
 from stonks.lab.tuning.base import (
+    best_of,
+    evaluate_candidates,
     expand_grid,
     grid_axes,
     grid_size_of,
@@ -27,10 +32,15 @@ _log = get_logger("stonks.lab.tuning.grid")
 
 
 class GridTuner:
-    def __init__(self, grid_size: int = 5, seed: int = 0) -> None:
+    def __init__(
+        self, grid_size: int = 5, seed: int = 0, parallel: ParallelSettings | None = None
+    ) -> None:
         self._grid_size = grid_size
-        #: Only used when the grid is larger than the budget.
+        #: Picks the sample when the grid is larger than the budget, and
+        #: roots the per-trial seeds.
         self._seed = seed
+        #: Default: every core (``ParallelSettings()``).
+        self._parallel = parallel or ParallelSettings()
 
     def tune(
         self,
@@ -40,10 +50,6 @@ class GridTuner:
         dataset: LabDataset,
         budget: int,
     ) -> TunerResult:
-        history: list[tuple[dict[str, Any], float]] = []
-        best_params: dict[str, Any] | None = None
-        best_score = -math.inf if objective.direction == "maximize" else math.inf
-
         axes = grid_axes(param_space, self._grid_size)
         total = grid_size_of(axes)
         if total > budget:
@@ -57,29 +63,19 @@ class GridTuner:
         else:
             candidates = list(expand_grid(param_space, self._grid_size))
 
-        for partial in candidates:
-            params = merge_with_defaults(partial, param_space)
-            try:
-                strategy = strategy_cls(params)
-                strategy.fit(dataset)  # same call LabRunner makes after tuning
-                score = objective.score(strategy, dataset)
-            except Exception as exc:
-                _log.warning("grid.trial.failed", params=params, error=str(exc))
-                history.append((params, float("nan")))
-                continue
-            history.append((params, score))
-            if _better(score, best_score, objective.direction):
-                best_score = score
-                best_params = params
-
-        if best_params is None:  # nothing evaluated
-            best_params = merge_with_defaults({}, param_space)
-            best_score = 0.0
-
-        return TunerResult(best_params=best_params, best_score=best_score, history=history)
-
-
-def _better(candidate: float, incumbent: float, direction: str) -> bool:
-    if direction == "maximize":
-        return candidate > incumbent
-    return candidate < incumbent
+        trials = evaluate_candidates(
+            strategy_cls,
+            [merge_with_defaults(c, param_space) for c in candidates],
+            objective,
+            dataset,
+            parallel=self._parallel,
+            root_seed=self._seed,
+            log_prefix="grid",
+        )
+        best_params, best_score = best_of(trials, objective.direction, param_space)
+        return TunerResult(
+            best_params=best_params,
+            best_score=best_score,
+            history=[(t.params, t.score) for t in trials],
+            trials=trials,
+        )

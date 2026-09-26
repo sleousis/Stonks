@@ -122,6 +122,12 @@ def _lab(**kw) -> DraftLabRunRequest:
     return DraftLabRunRequest(**base | kw)
 
 
+def test_draft_lab_run_checks_the_embargo_against_its_window():
+    assert _lab(embargo_bars=5).embargo_bars == 5
+    with pytest.raises(ValueError, match="embargo"):
+        _lab(embargo_bars=500)
+
+
 # ---- catalog-ish reads ------------------------------------------------------
 
 
@@ -287,9 +293,16 @@ def test_register_enable_disable(svc, studio):
     with pytest.raises(ConflictError):
         studio.register_draft(draft.id)
 
-    assert studio.enable(draft.id).strategy_status == "active"
+    # enabling is a promotion: same go-live rule as StrategyService (BL-24)
+    with pytest.raises(ConflictError, match="go-live"):
+        studio.enable(draft.id)
+    reason = "studio test override: no paper period here"
+    assert studio.enable(draft.id, override=True, reason=reason).strategy_status == "active"
     assert svc.strategies.get(sid).status == "active"
-    assert studio.disable(draft.id).strategy_status == "shadow"
+    with pytest.raises(ValidationError, match="reason"):
+        studio.disable(draft.id)
+    assert studio.disable(draft.id, reason="back to paper").strategy_status == "shadow"
+    assert [c.actor for c in svc.strategies.history(sid)] == ["studio", "studio"]
 
     # editing the draft later never changes the registered snapshot
     studio.update_draft(draft.id, DraftUpdate(spec=SMA))

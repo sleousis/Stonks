@@ -24,6 +24,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_rule_schema`](#get_rule_schema) | read | no |
 | [`get_shadow_pnl`](#get_shadow_pnl) | read | no |
 | [`get_strategy`](#get_strategy) | read | no |
+| [`get_strategy_history`](#get_strategy_history) | read | no |
 | [`get_tick`](#get_tick) | read | no |
 | [`health`](#health) | read | no |
 | [`lab_run_draft`](#lab_run_draft) | guarded | yes |
@@ -189,6 +190,17 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `strategy_id` | string | yes |  |  |
 
+### `get_strategy_history`
+
+A strategy's audited status changes (actor, reason, override, go-live
+result), oldest first.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `strategy_id` | string | yes |  |  |
+
 ### `get_tick`
 
 One production tick run with the orders it placed.
@@ -329,13 +341,15 @@ No inputs.
 
 ### `list_strategies`
 
-Registered strategies (id, class, params, status), optionally by status.
+Registered strategies (id, class, params, status), optionally by status
+or a search term.
 
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `status` | "active" \| "shadow" \| "retired" \| null | no | `null` |  |
+| `q` | string \| null | no | `null` | case-insensitive substring of the id or class path |
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
 
@@ -420,6 +434,8 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 | `rebalance_every_bars` | integer | no | `1` |  |
 | `slippage_bps` | number | no | `0.0` |  |
 | `fee_per_trade` | number | no | `0.0` |  |
+| `cost_model` | "zero" \| "realistic" \| null | no | `null` | transaction-cost preset (see list_cost_models); default [backtest.costs] |
+| `benchmark` | string \| null | no | `null` | benchmark to compare against: auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark |
 
 ### `create_draft`
 
@@ -459,6 +475,7 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 | `slippage_bps` | number | no | `0.0` |  |
 | `fee_per_trade` | number | no | `0.0` |  |
 | `cost_model` | "zero" \| "realistic" \| null | no | `null` | transaction-cost preset (see list_cost_models); replaces slippage_bps/fee_per_trade. Neither: the configured [backtest.costs] |
+| `benchmark` | string \| null | no | `null` | benchmark to compare against: auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark |
 
 ### `run_ingest`
 
@@ -511,7 +528,7 @@ Need `confirm=true` to act. Without it they return a preview and change nothing.
 ### `disable_draft`
 
 Move a registered draft's strategy back to shadow (stops trading it).
-Without confirm=true returns a preview and changes nothing.
+Needs a reason. Without confirm=true returns a preview and changes nothing.
 
 Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 
@@ -519,12 +536,14 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 |-------|------|----------|---------|-------------|
 | `draft_id` | string | yes |  |  |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+| `reason` | string \| null | no | `null` | why (logged in the audit trail); required for demotions and overrides |
 
 ### `enable_draft`
 
 Promote a registered draft's strategy to active so production ticks rank
-and trade it. Without confirm=true returns a preview (survival results,
-warnings) and changes nothing.
+and trade it. Same go-live gate as promote_strategy (override=true needs a
+reason of at least 20 characters). Without confirm=true returns a preview
+(survival results, warnings) and changes nothing.
 
 Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 
@@ -532,13 +551,16 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 |-------|------|----------|---------|-------------|
 | `draft_id` | string | yes |  |  |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+| `reason` | string \| null | no | `null` | why (logged in the audit trail); required for demotions and overrides |
+| `override` | boolean | no | `false` | promote without a passing go-live check; needs a reason of at least 20 characters |
 
 ### `lab_run_draft`
 
 Queue tune -> fit -> survival suite for a draft (a rule draft's spec
 is fixed; a code draft is tuned). Returns the job; wait_for_job gives
-the verdict and survival reports. With register_strategy=true it needs
-confirm=true (preview otherwise), like register_draft.
+the verdict and survival reports. Registering (register_strategy, or
+register_if_passes for a passing run only) needs confirm=true
+(preview otherwise), like register_draft.
 
 Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **yes**.
 
@@ -555,14 +577,24 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 | `train_ratio` | number | no | `0.7` |  |
 | `interval` | string | no | `"1d"` |  |
 | `seed` | integer | no | `0` |  |
-| `register_strategy` | boolean | no | `false` | register the result in shadow status (needs confirm=true) |
-| `confirm` | boolean | no | `false` | must be true with register_strategy=true; otherwise a preview |
+| `register_strategy` | boolean | no | `false` | register the result in shadow status whatever the verdict (needs confirm=true) |
+| `register_if_passes` | boolean | no | `false` | register the result in shadow only if every survival test passes (needs confirm=true) |
+| `confirm` | boolean | no | `false` | must be true with register_strategy / register_if_passes; otherwise a preview |
+| `preset` | "quick" \| "standard" \| "promotion" \| null | no | `null` | named survival suite when survival_tests is omitted (default: promotion when registering, else quick) |
+| `cost_model` | "zero" \| "realistic" \| null | no | `null` | transaction-cost preset (see list_cost_models); default [backtest.costs] |
+| `hypothesis` | string \| null | no | `null` | the edge and who pays for it; recorded before tuning (trial ledger) |
+| `premortem` | string \| null | no | `null` | how the strategy is expected to fail; recorded |
+| `test_options` | object \| null | no | `null` | options per survival test id, validated by each test (422 on an unknown test or option), e.g. {"oos": {"mode": "sharpe", "min_trades": 0}, "deflated_sharpe": {"min_dsr": 0.9}, "pbo": {"max_pbo": 0.3}, "mc_trades": {"n_paths": 2000}, "cost_stress": {"stress_multiplier": 3}}; each test must be in the suite |
+| `benchmark` | string \| null | no | `null` | benchmark to compare against: auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark |
+| `embargo_bars` | integer \| null | no | `null` | trading bars skipped between the train and validation windows (a strategy's label horizon raises it); default [lab] embargo_bars |
 
 ### `promote_strategy`
 
 Promote a strategy to active so production ticks rank and trade it.
-Without confirm=true returns a preview (current status, survival
-results, warnings) and changes nothing.
+Needs a passing go-live check, or override=true with a reason of at
+least 20 characters; the change is audited. Without confirm=true
+returns a preview (current status, survival results, warnings) and
+changes nothing.
 
 Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 
@@ -570,6 +602,8 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 |-------|------|----------|---------|-------------|
 | `strategy_id` | string | yes |  |  |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+| `reason` | string \| null | no | `null` | why (logged in the audit trail); required for demotions and overrides |
+| `override` | boolean | no | `false` | promote without a passing go-live check; needs a reason of at least 20 characters |
 
 ### `register_draft`
 
@@ -586,7 +620,7 @@ Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes*
 ### `retire_strategy`
 
 Retire a strategy: it stops being ranked or evaluated.
-Without confirm=true returns a preview and changes nothing.
+Needs a reason. Without confirm=true returns a preview and changes nothing.
 
 Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 
@@ -594,12 +628,15 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 |-------|------|----------|---------|-------------|
 | `strategy_id` | string | yes |  |  |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+| `reason` | string \| null | no | `null` | why (logged in the audit trail); required for demotions and overrides |
 
 ### `run_lab`
 
 Queue a lab run: tune a strategy class, fit, run the survival suite and
 give a pass/fail verdict. Returns the job; use wait_for_job for the result.
-With register_strategy=true it needs confirm=true (preview otherwise).
+Every run and trial is recorded in the trial ledger (with the hypothesis).
+Registering (register_strategy, or register_if_passes to register only a
+passing run) needs confirm=true (preview otherwise).
 
 Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **yes**.
 
@@ -616,10 +653,18 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 | `train_ratio` | number | no | `0.7` |  |
 | `interval` | string | no | `"1d"` |  |
 | `seed` | integer | no | `0` |  |
-| `register_strategy` | boolean | no | `false` | register the result in shadow status (needs confirm=true) |
-| `confirm` | boolean | no | `false` | must be true with register_strategy=true; otherwise a preview |
+| `register_strategy` | boolean | no | `false` | register the result in shadow status whatever the verdict (needs confirm=true) |
+| `register_if_passes` | boolean | no | `false` | register the result in shadow only if every survival test passes (needs confirm=true) |
+| `confirm` | boolean | no | `false` | must be true with register_strategy / register_if_passes; otherwise a preview |
+| `preset` | "quick" \| "standard" \| "promotion" \| null | no | `null` | named survival suite when survival_tests is omitted (default: promotion when registering, else quick) |
+| `cost_model` | "zero" \| "realistic" \| null | no | `null` | transaction-cost preset (see list_cost_models); default [backtest.costs] |
+| `hypothesis` | string \| null | no | `null` | the edge and who pays for it; recorded before tuning (trial ledger) |
+| `premortem` | string \| null | no | `null` | how the strategy is expected to fail; recorded |
 | `walk_forward` | any \| null | no | `null` | walk_forward test settings; add 'walk_forward' to survival_tests |
 | `mcpt` | any \| null | no | `null` | permutation (MCPT) settings; add 'permutation' to survival_tests |
+| `test_options` | object \| null | no | `null` | options per survival test id, validated by each test (422 on an unknown test or option), e.g. {"oos": {"mode": "sharpe", "min_trades": 0}, "deflated_sharpe": {"min_dsr": 0.9}, "pbo": {"max_pbo": 0.3}, "mc_trades": {"n_paths": 2000}, "cost_stress": {"stress_multiplier": 3}}; each test must be in the suite |
+| `benchmark` | string \| null | no | `null` | benchmark to compare against: auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark |
+| `embargo_bars` | integer \| null | no | `null` | trading bars skipped between the train and validation windows (a strategy's label horizon raises it); default [lab] embargo_bars |
 
 ### `run_tick`
 
@@ -641,7 +686,7 @@ Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes*
 ### `shadow_strategy`
 
 Move a strategy to shadow: evaluated on a virtual portfolio, never traded.
-Without confirm=true returns a preview and changes nothing.
+Needs a reason. Without confirm=true returns a preview and changes nothing.
 
 Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 
@@ -649,6 +694,7 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 |-------|------|----------|---------|-------------|
 | `strategy_id` | string | yes |  |  |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+| `reason` | string \| null | no | `null` | why (logged in the audit trail); required for demotions and overrides |
 
 ## Resources
 

@@ -8,11 +8,14 @@ strategy; both sides only know the Protocol.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
+
+import numpy as np
 
 from stonks.core.params import Params, ParamSpace
 from stonks.core.types import Features, Fill, Order, Portfolio
@@ -65,11 +68,68 @@ class Objective(Protocol):
     def score(self, strategy: Strategy, dataset: Any) -> float: ...
 
 
+@dataclass(frozen=True, eq=False)
+class TrialOutcome:
+    """One tuning trial: the params tried, the objective's score and, when
+    the objective provides them, the per-bar returns behind that score
+    (``index`` holds their bar timestamps as ``datetime64[ns]``).
+
+    A failed trial has ``status="failed"``, a NaN score and no returns.
+    Equality is by value, NaN equal to NaN, so reruns can be compared."""
+
+    params: Params
+    score: float
+    returns: np.ndarray | None = None
+    index: np.ndarray | None = None
+    status: Literal["ok", "failed"] = "ok"
+    error: str | None = None
+
+    @property
+    def n_bars(self) -> int:
+        return 0 if self.returns is None else len(self.returns)
+
+    @classmethod
+    def failed(cls, params: Params, error: str) -> TrialOutcome:
+        return cls(params=params, score=float("nan"), status="failed", error=error)
+
+    def with_params(self, params: Params) -> TrialOutcome:
+        return replace(self, params=params)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, TrialOutcome):
+            return NotImplemented
+        return (
+            dict(self.params) == dict(other.params)
+            and _same_float(self.score, other.score)
+            and self.status == other.status
+            and self.error == other.error
+            and _same_array(self.returns, other.returns)
+            and _same_array(self.index, other.index)
+        )
+
+    __hash__ = None  # type: ignore[assignment]  # mutable payload (arrays)
+
+
+def _same_float(a: float, b: float) -> bool:
+    return a == b or (math.isnan(a) and math.isnan(b))
+
+
+def _same_array(a: np.ndarray | None, b: np.ndarray | None) -> bool:
+    if a is None or b is None:
+        return a is None and b is None
+    if a.dtype.kind == "f" and b.dtype.kind == "f":
+        return bool(np.array_equal(a, b, equal_nan=True))
+    return bool(np.array_equal(a, b))
+
+
 @dataclass(frozen=True)
 class TunerResult:
     best_params: Params
     best_score: float
     history: list[tuple[Params, float]]
+    #: Every trial in ``history`` order, when the tuner records outcomes
+    #: (``GridTuner`` / ``RandomTuner`` do); ``None`` for tuners that don't.
+    trials: list[TrialOutcome] | None = None
 
 
 @runtime_checkable

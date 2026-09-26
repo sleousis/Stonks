@@ -10,6 +10,7 @@ from stonks.core.protocols import SurvivalReport
 from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
+from tests.fixtures.governance import seed_status
 
 
 @pytest.fixture
@@ -49,7 +50,7 @@ def _seed_registry(cli_env):
         reports = [SurvivalReport(test_id="oos", passed=True, metrics={"sharpe_oos": 1.0})]
         a = reg.register(BuyAndHold({"ticker": "AAPL.US"}), reports=reports)
         b = reg.register(BuyAndHold({"ticker": "MSFT.US"}), reports=reports)
-        reg.set_status(a, "active")
+        seed_status(reg, a, "active")
     finally:
         state.close()
     return a, b
@@ -84,17 +85,20 @@ def test_registry_show_prints_params_and_reports(runner, cli_env):
     assert "oos" in result.output
 
 
-def test_registry_promote_and_retire(runner, cli_env):
+def test_registry_promote_and_retire_are_governed(runner, cli_env):
+    """BL-24: promote needs a passing go-live check (or an override with a
+    reason) and retire needs a reason. Without those the change is refused
+    and the status stays put."""
     runner.invoke(app, ["db", "init"])
     _, b = _seed_registry(cli_env)
     r1 = runner.invoke(app, ["registry", "promote", b])
-    assert r1.exit_code == 0, r1.output
-    r2 = runner.invoke(app, ["registry", "list", "--status", "active"])
+    assert r1.exit_code != 0
+    r2 = runner.invoke(app, ["registry", "list", "--status", "shadow"])
     assert b in r2.output
     r3 = runner.invoke(app, ["registry", "retire", b])
-    assert r3.exit_code == 0, r3.output
+    assert r3.exit_code != 0
     r4 = runner.invoke(app, ["registry", "list", "--status", "retired"])
-    assert b in r4.output
+    assert b not in r4.output
 
 
 @pytest.mark.parametrize("command", ["promote", "retire"])
@@ -123,3 +127,63 @@ def test_registry_list_asset_class_filter(runner, cli_env):
     assert crypto_only.exit_code == 0, crypto_only.output
     assert a not in crypto_only.output
     assert b not in crypto_only.output
+
+
+# ---- governance flags (W1.6) -------------------------------------------------
+
+OVERRIDE_REASON = "owner override: incubation cut short for the demo"
+
+
+def test_refused_promotion_lists_failing_golive_checks(runner, cli_env):
+    runner.invoke(app, ["db", "init"])
+    _, b = _seed_registry(cli_env)
+    result = runner.invoke(app, ["registry", "promote", b])
+    assert result.exit_code == 1, result.output
+    assert "refused" in result.output.lower()
+    assert "min_days" in result.output  # each failing go-live check is listed
+    assert "Traceback" not in result.output
+    assert result.exception is None or isinstance(result.exception, SystemExit)
+
+
+def test_promote_with_override_and_reason_is_logged(runner, cli_env):
+    runner.invoke(app, ["db", "init"])
+    _, b = _seed_registry(cli_env)
+    result = runner.invoke(
+        app, ["registry", "promote", b, "--override", "--reason", OVERRIDE_REASON]
+    )
+    assert result.exit_code == 0, result.output
+    assert "active" in result.output
+    history = runner.invoke(app, ["registry", "history", b])
+    assert history.exit_code == 0, history.output
+    assert "override" in history.output.lower()
+    assert "shadow" in history.output and "active" in history.output
+
+
+def test_short_override_reason_is_a_friendly_error(runner, cli_env):
+    runner.invoke(app, ["db", "init"])
+    _, b = _seed_registry(cli_env)
+    result = runner.invoke(app, ["registry", "promote", b, "--override", "--reason", "short"])
+    assert result.exit_code == 1, result.output
+    assert "20" in result.output
+    assert result.exception is None or isinstance(result.exception, SystemExit)
+
+
+@pytest.mark.parametrize(("command", "status"), [("retire", "retired"), ("shadow", "shadow")])
+def test_demotions_take_a_reason(runner, cli_env, command, status):
+    runner.invoke(app, ["db", "init"])
+    a, _ = _seed_registry(cli_env)  # a is active
+    missing = runner.invoke(app, ["registry", command, a])
+    assert missing.exit_code == 1, missing.output
+    assert "reason" in missing.output
+    ok = runner.invoke(app, ["registry", command, a, "--reason", "edge decayed"])
+    assert ok.exit_code == 0, ok.output
+    listed = runner.invoke(app, ["registry", "list", "--status", status])
+    assert a in listed.output
+
+
+def test_history_of_unknown_strategy_errors(runner, cli_env):
+    runner.invoke(app, ["db", "init"])
+    _seed_registry(cli_env)
+    result = runner.invoke(app, ["registry", "history", "nope"])
+    assert result.exit_code == 1
+    assert "no strategy with id" in result.output

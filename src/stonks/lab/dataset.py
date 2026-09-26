@@ -1,18 +1,68 @@
 """LabDataset — the view over the lake that a tuner / survival test / backtest
 operates against. Defines universe, full window, and train/val split.
+
+Embargo (BL-20, principle P9)
+-----------------------------
+``embargo_bars`` trading bars separate the train window from the validation
+window: ``val_window`` starts that many bars after ``train_end``, so
+serially correlated features and labels that span bars cannot leak across
+the boundary. The train window itself never moves (the tuner and ``fit``
+see the same data as without an embargo); the bars in the gap are scored
+by nobody.
+
+A strategy whose labels look ``label_horizon_bars`` bars ahead needs an
+embargo at least that long: the labels of the last train bars read prices
+inside the gap, never inside the validation window (this is the purge of
+López de Prado's purged k-fold, done by construction). The effective
+embargo is ``max(embargo_bars, label_horizon_bars)``; ``for_strategy``
+returns the dataset with it applied, and :func:`scoring_window` is what
+validation-style survival tests call.
+
+Bars are converted to calendar days through the exchange-session calendar
+(``backtest.calendar.EXCHANGE_SESSIONS``: 252 sessions a year): the bars
+become sessions, the sessions become calendar days at the yearly average
+of 365.25 / 252 (weekends and holidays included), plus a three-day pad so
+a short embargo can never fall entirely on a weekend. The conversion is
+deliberately conservative: a 24/7 (crypto) universe gets a longer gap in
+bars than asked, never a shorter one.
 """
 
 from __future__ import annotations
 
+import dataclasses
+import math
 from dataclasses import dataclass, field
 from datetime import date, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal
 
+from stonks.backtest.calendar import EXCHANGE_SESSIONS
 from stonks.core.interval import Interval
 
 if TYPE_CHECKING:  # pragma: no cover
     from stonks.backtest.costs import CostModelSettings
+    from stonks.backtest.report import BacktestReport
     from stonks.store.lake import DuckDBLake
+
+#: Which window a validation-style survival test scores.
+ScoringWindow = Literal["val", "full"]
+
+_DAYS_PER_YEAR = 365.25
+#: Calendar days added to any non-zero embargo (a weekend plus one).
+_EMBARGO_PAD_DAYS = 3
+
+
+def embargo_calendar_days(bars: int, interval: Interval) -> int:
+    """Calendar days that hold at least ``bars`` bars of ``interval`` on
+    the exchange-session calendar (see the module doc); 0 for no bars."""
+    if bars < 0:
+        raise ValueError(f"embargo bars must be >= 0, got {bars}")
+    if bars == 0:
+        return 0
+    sessions_per_year = EXCHANGE_SESSIONS.sessions_per_year
+    sessions = math.ceil(
+        round(bars * sessions_per_year / EXCHANGE_SESSIONS.periods_per_year(interval), 9)
+    )
+    return math.ceil(round(sessions * _DAYS_PER_YEAR / sessions_per_year, 9)) + _EMBARGO_PAD_DAYS
 
 
 @dataclass
@@ -31,12 +81,31 @@ class LabDataset:
     #: Transaction costs for every backtest on this dataset (the CLI fills
     #: it from ``[backtest.costs]``). ``None`` means zero costs.
     costs: CostModelSettings | None = None
+    #: Trading bars skipped between the train and the validation window
+    #: (see the module doc). 0 keeps the validation window starting the
+    #: day after ``train_end``.
+    embargo_bars: int = 0
+    #: Benchmark spec every backtest on this dataset compares against
+    #: (``backtest.benchmark``: ``"auto"``, ``"EW"``, a ticker, ``"none"``).
+    benchmark: str = "auto"
+    #: Stitched walk-forward OOS backtest, set by the walk-forward test for
+    #: the tests after it (``mc_trades``). Never copied by ``replace``.
+    stitched_oos_report: BacktestReport | None = field(
+        default=None, init=False, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
+        if self.embargo_bars < 0:
+            raise ValueError(f"embargo_bars must be >= 0, got {self.embargo_bars}")
         if self.train_end is not None and not (self.start <= self.train_end < self.end):
             raise ValueError(
                 f"train_end {self.train_end} must fall in [{self.start}, {self.end}) "
                 "so both the train and the validation window are non-empty"
+            )
+        if self.embargo_bars > 0 and self.val_window[0] > self.end:
+            raise ValueError(
+                f"an embargo of {self.embargo_bars} bars after {self.train_window[1]} "
+                f"leaves no validation window before {self.end}"
             )
 
     @property
@@ -50,12 +119,27 @@ class LabDataset:
     @property
     def val_window(self) -> tuple[date, date]:
         _, train_end = self.train_window
-        start = train_end + timedelta(days=1)
+        gap = embargo_calendar_days(self.embargo_bars, self.interval)
+        start = train_end + timedelta(days=1 + gap)
         return start, self.end
 
     @property
     def full_window(self) -> tuple[date, date]:
         return self.start, self.end
+
+    def effective_embargo_bars(self, strategy: Any) -> int:
+        """``max(embargo_bars, strategy.label_horizon_bars)`` (0 when the
+        strategy declares no label horizon)."""
+        horizon = int(getattr(strategy, "label_horizon_bars", 0) or 0)
+        return max(self.embargo_bars, horizon)
+
+    def for_strategy(self, strategy: Any) -> LabDataset:
+        """This dataset with the embargo ``strategy`` needs (itself when
+        the configured embargo already covers its label horizon)."""
+        embargo = self.effective_embargo_bars(strategy)
+        if embargo == self.embargo_bars:
+            return self
+        return dataclasses.replace(self, embargo_bars=embargo)
 
     def prices_on(self, as_of: date) -> dict[str, float]:
         df = self.lake.sql(
@@ -63,3 +147,19 @@ class LabDataset:
             [list(self.universe), as_of],
         )
         return {row.ticker: float(row.close) for row in df.itertuples(index=False)}
+
+
+def scoring_window(context: Any, strategy: Any, window: ScoringWindow = "val") -> tuple[date, date]:
+    """The window a validation-style survival test backtests: the
+    validation window embargoed for ``strategy`` (``"val"``, the default;
+    never any bar the tuner saw), or the whole dataset (``"full"``, the
+    pre-BL-21 behaviour). Works on any context with ``val_window`` /
+    ``full_window``; ``for_strategy`` is used when present."""
+    if window == "full":
+        return context.full_window
+    if window != "val":
+        raise ValueError(f"window must be 'val' or 'full', got {window!r}")
+    for_strategy = getattr(context, "for_strategy", None)
+    if callable(for_strategy):
+        context = for_strategy(strategy)
+    return context.val_window

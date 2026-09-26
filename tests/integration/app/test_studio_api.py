@@ -162,11 +162,12 @@ def test_backtest_register_enable_disable_flow(client):
     again = client.post(f"/api/studio/drafts/{draft['id']}/register", headers=AUTH)
     assert again.status_code == 409
 
-    on = client.post(f"/api/studio/drafts/{draft['id']}/enable", headers=AUTH).json()
-    assert on["strategy_status"] == "active"
-    assert client.get(f"/api/strategies/{sid}").json()["status"] == "active"
-    off = client.post(f"/api/studio/drafts/{draft['id']}/disable", headers=AUTH).json()
-    assert off["strategy_status"] == "shadow"
+    # enabling is a promotion, gated by go-live (BL-24): refused without a
+    # paper period and no override in the body
+    on = client.post(f"/api/studio/drafts/{draft['id']}/enable", headers=AUTH)
+    assert on.status_code == 409
+    assert "go-live" in on.json()["detail"]
+    assert client.get(f"/api/strategies/{sid}").json()["status"] == "shadow"
 
 
 def test_lab_run_route(client):

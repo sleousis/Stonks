@@ -11,6 +11,7 @@ from stonks.production.tick import TickSettings, run_tick
 from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
+from tests.fixtures.governance import seed_status
 
 
 @pytest.fixture
@@ -19,7 +20,8 @@ def tick_env(tmp_path, lake_trending):
     state.migrate()
     registry = StrategyRegistry(state=state, artifacts_dir=tmp_path / "artifacts")
 
-    registry.set_status(
+    seed_status(
+        registry,
         registry.register(
             BuyAndHold({"ticker": "UP.US", "allocation": 1.0}),
             reports=[SurvivalReport(test_id="oos", passed=True, metrics={"sharpe_oos": 1.0})],

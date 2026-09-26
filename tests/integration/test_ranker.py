@@ -15,6 +15,7 @@ from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
 from stonks.strategies.examples.momentum import Momentum
+from tests.fixtures.governance import seed_status
 
 
 class CrossClassBuyAndHold(BuyAndHold):
@@ -39,8 +40,8 @@ def seeded_registry(tmp_path, lake_trending):
         reports=[SurvivalReport(test_id="oos", passed=True, metrics={"sharpe_oos": 0.5})],
     )
     # Mark both active
-    registry.set_status(bh_id, "active")
-    registry.set_status(mom_id, "active")
+    seed_status(registry, bh_id, "active")
+    seed_status(registry, mom_id, "active")
 
     yield registry, lake_trending, [bh_id, mom_id]
     state.close()
@@ -123,7 +124,7 @@ def test_ranker_skips_tickers_outside_strategy_applicable_classes(tmp_path, lake
             BuyAndHold({"ticker": "UP.US", "allocation": 1.0}),
             reports=[SurvivalReport(test_id="oos", passed=True, metrics={"sharpe_oos": 1.0})],
         )
-        registry.set_status(bh_id, "active")
+        seed_status(registry, bh_id, "active")
 
         ranker = Ranker(
             registry=registry,
@@ -155,7 +156,7 @@ def test_ranker_skips_tickers_without_instrument_row(tmp_path, lake_trending, ca
             BuyAndHold({"ticker": "UP.US", "allocation": 1.0}),
             reports=[SurvivalReport(test_id="oos", passed=True, metrics={"sharpe_oos": 1.0})],
         )
-        registry.set_status(bh_id, "active")
+        seed_status(registry, bh_id, "active")
 
         ranker = Ranker(
             registry=registry,
@@ -202,7 +203,7 @@ def test_ranker_includes_tickers_when_strategy_lists_their_class(tmp_path, lake_
             CrossClassBuyAndHold({"ticker": "UP.US", "allocation": 1.0}),
             reports=[SurvivalReport(test_id="oos", passed=True, metrics={"sharpe_oos": 1.0})],
         )
-        registry.set_status(sid, "active")
+        seed_status(registry, sid, "active")
 
         ranker = Ranker(
             registry=registry,
@@ -240,7 +241,7 @@ def test_ranker_skips_strategy_whose_load_fails(seeded_registry, capsys):
 
 def test_ranker_ranks_only_the_requested_status(seeded_registry):
     registry, lake, (bh_id, mom_id) = seeded_registry
-    registry.set_status(mom_id, "shadow")
+    seed_status(registry, mom_id, "shadow")
 
     active = Ranker(registry=registry, lake=lake, universe=["UP.US"], threshold=0.0)
     shadow = Ranker(

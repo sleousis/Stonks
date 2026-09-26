@@ -135,22 +135,25 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [brokers](#broke
 | GET | `/api/strategies` | List Strategies | token, or open on loopback |  | [Page_StrategySummary_](#page_strategysummary_) |
 | GET | `/api/strategies/summary` | Strategy Summary | token, or open on loopback |  | [StrategyStatusCounts](#strategystatuscounts) |
 | GET | `/api/strategies/{strategy_id}` | Get Strategy | token, or open on loopback |  | [StrategyDetail](#strategydetail) |
-| POST | `/api/strategies/{strategy_id}/promote` | Promote | bearer token |  | [StrategyDetail](#strategydetail) |
-| POST | `/api/strategies/{strategy_id}/retire` | Retire | bearer token |  | [StrategyDetail](#strategydetail) |
-| POST | `/api/strategies/{strategy_id}/shadow` | Shadow | bearer token |  | [StrategyDetail](#strategydetail) |
+| GET | `/api/strategies/{strategy_id}/golive` | Get Golive | token, or open on loopback |  | [GoLiveReport](#golivereport) |
+| GET | `/api/strategies/{strategy_id}/history` | Get Strategy History | token, or open on loopback |  | list[[StatusChangeView](#statuschangeview)] |
+| POST | `/api/strategies/{strategy_id}/promote` | Promote | bearer token | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
+| POST | `/api/strategies/{strategy_id}/retire` | Retire | bearer token | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
+| POST | `/api/strategies/{strategy_id}/shadow` | Shadow | bearer token | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
 
 ## studio endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
+| GET | `/api/studio/capabilities` | Capabilities | token, or open on loopback |  | [StudioCapabilities](#studiocapabilities) |
 | GET | `/api/studio/drafts` | List Drafts | token, or open on loopback |  | [Page_Draft_](#page_draft_) |
 | POST | `/api/studio/drafts` | Create Draft | bearer token | [DraftCreate](#draftcreate) | [Draft](#draft) |
 | GET | `/api/studio/drafts/{draft_id}` | Get Draft | token, or open on loopback |  | [Draft](#draft) |
 | PATCH | `/api/studio/drafts/{draft_id}` | Update Draft | bearer token | [DraftUpdate](#draftupdate) | [Draft](#draft) |
 | DELETE | `/api/studio/drafts/{draft_id}` | Delete Draft | bearer token |  | [Draft](#draft) |
 | POST | `/api/studio/drafts/{draft_id}/backtests` | Start Backtest | bearer token | [DraftBacktestRequest](#draftbacktestrequest) | [Job](#job) |
-| POST | `/api/studio/drafts/{draft_id}/disable` | Disable Draft | bearer token |  | [Draft](#draft) |
-| POST | `/api/studio/drafts/{draft_id}/enable` | Enable Draft | bearer token |  | [Draft](#draft) |
+| POST | `/api/studio/drafts/{draft_id}/disable` | Disable Draft | bearer token | [StatusChangeRequest](#statuschangerequest) \| null | [Draft](#draft) |
+| POST | `/api/studio/drafts/{draft_id}/enable` | Enable Draft | bearer token | [StatusChangeRequest](#statuschangerequest) \| null | [Draft](#draft) |
 | POST | `/api/studio/drafts/{draft_id}/lab-runs` | Start Lab Run | bearer token | [DraftLabRunRequest](#draftlabrunrequest) | [Job](#job) |
 | POST | `/api/studio/drafts/{draft_id}/register` | Register Draft | bearer token |  | [Draft](#draft) |
 | POST | `/api/studio/drafts/{draft_id}/validate` | Validate Draft | bearer token | [ValidateRequest](#validaterequest) \| null | [DraftValidation](#draftvalidation) |
@@ -210,7 +213,8 @@ Fee and spread for one asset class.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `cost_model` | "zero" \| "realistic" \| null | no |  |
+| `benchmark` | string \| null | no |  |
+| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `end` | date | yes |  |
 | `fee_per_trade` | number | no |  |
 | `initial_cash` | number | no |  |
@@ -226,16 +230,31 @@ Fee and spread for one asset class.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `benchmark` | [BenchmarkStatsView](#benchmarkstatsview) \| null | no |  |
+| `benchmark_equity` | list[[EquityPoint](#equitypoint)] | no |  |
 | `cagr` | number \| null | yes |  |
+| `calmar` | number \| null | no |  |
+| `drawdown` | list[[EquityPoint](#equitypoint)] | no |  |
 | `end` | date | yes |  |
 | `equity` | list[[EquityPoint](#equitypoint)] | yes |  |
+| `es_95` | number \| null | no |  |
 | `final_return` | number \| null | yes |  |
+| `fitness` | number \| null | no |  |
 | `interval` | string | yes |  |
+| `kurtosis` | number \| null | no |  |
+| `max_dd_duration_bars` | integer | no |  |
 | `max_drawdown` | number \| null | yes |  |
 | `profit_factor` | number \| null | yes |  |
 | `sharpe` | number \| null | yes |  |
+| `skew` | number \| null | no |  |
+| `sortino` | number \| null | no |  |
 | `start` | date | yes |  |
 | `strategy_id` | string | yes |  |
+| `trade_count` | integer | no |  |
+| `trade_stats` | [TradeStatsView](#tradestatsview) \| null | no |  |
+| `trades` | list[[TradeView](#tradeview)] | no |  |
+| `ulcer_index` | number \| null | no |  |
+| `var_95` | number \| null | no |  |
 
 ### BarSeries
 
@@ -257,6 +276,32 @@ Fee and spread for one asset class.
 | `open` | number \| null | yes |  |
 | `timestamp` | date-time | yes |  |
 | `volume` | number \| null | yes |  |
+
+### BenchmarkStatsView
+
+A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios are ``None`` when not finite.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `alpha_annual` | number \| null | yes |  |
+| `alpha_tstat` | number \| null | yes |  |
+| `benchmark_cagr` | number \| null | yes |  |
+| `benchmark_max_dd` | number \| null | yes |  |
+| `benchmark_sharpe` | number \| null | yes |  |
+| `beta` | number \| null | yes |  |
+| `correlation` | number \| null | yes |  |
+| `down_capture` | number \| null | yes |  |
+| `excess_cagr` | number \| null | yes |  |
+| `excluded` | list[string] | no |  |
+| `information_ratio` | number \| null | yes |  |
+| `members` | list[string] | no |  |
+| `n_obs` | integer | yes |  |
+| `name` | string | yes |  |
+| `r2` | number \| null | yes |  |
+| `residual_sharpe` | number \| null | yes |  |
+| `spec` | string | yes |  |
+| `tracking_error` | number \| null | yes |  |
+| `up_capture` | number \| null | yes |  |
 
 ### BrokerAccountView
 
@@ -294,10 +339,18 @@ Settings for ``AssetClassCostModel``. Zero costs by default; ``CostModelSettings
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `adv_window` | integer | no |  |
 | `asset_classes` | dict[str, [AssetClassCosts](#assetclasscosts)] | no |  |
 | `default` | [AssetClassCosts](#assetclasscosts) | no |  |
+| `half_spread_model` | "class" \| "corwin_schultz" \| "abdi_ranaldo" | no |  |
 | `impact_bps` | number | no |  |
+| `impact_gamma` | number | no |  |
+| `impact_model` | "sqrt" \| "sqrt_vol" \| "istar" | no |  |
+| `istar` | [IStarSettings](#istarsettings) | no |  |
+| `max_half_spread_bps` | number | no |  |
 | `max_impact_bps` | number | no |  |
+| `spread_window` | integer | no |  |
+| `vol_window` | integer | no |  |
 
 ### CoverageRow
 
@@ -339,6 +392,8 @@ A :class:`~stonks.app.lab.BacktestRequest` without the strategy (the draft is th
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `benchmark` | string \| null | no |  |
+| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `end` | date | yes |  |
 | `fee_per_trade` | number | no |  |
 | `initial_cash` | number | no |  |
@@ -360,21 +415,32 @@ A :class:`~stonks.app.lab.BacktestRequest` without the strategy (the draft is th
 
 ### DraftLabRunRequest
 
-A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's spec is fixed (it has no tunable parameters); a code draft's class is tuned over its parameter space.
+A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's spec is fixed (it has no tunable parameters); a code draft's class is tuned over its parameter space. Registering (``register_strategy`` always, ``register_if_passes`` only on a pass) links the new strategy to the draft.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `benchmark` | string \| null | no |  |
 | `budget` | integer | no |  |
+| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
+| `embargo_bars` | integer \| null | no |  |
 | `end` | date | yes |  |
+| `grid_size` | integer | no |  |
+| `hypothesis` | string \| null | no |  |
 | `interval` | string | no |  |
+| `mcpt` | [McptOptions](#mcptoptions) \| null | no |  |
 | `objective` | "sharpe" \| "cagr" \| "final_return" | no |  |
+| `premortem` | string \| null | no |  |
+| `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |
+| `register_if_passes` | boolean | no |  |
 | `register_strategy` | boolean | no |  |
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
-| `survival_tests` | list["oos" \| "period_stability" \| "perturbation" \| "drift" \| "runs_test" \| "permutation" \| "walk_forward"] | no |  |
+| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "signal_ic" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
+| `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" | no |  |
 | `universe` | list[string] | yes |  |
+| `walk_forward` | [WalkForwardConfig](#walkforwardconfig) \| null | no |  |
 
 ### DraftUpdate
 
@@ -412,6 +478,49 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `tick_id` | string \| null | yes |  |
 | `ticker` | string | yes |  |
 
+### GoLiveCheckView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `detail` | string | yes |  |
+| `limit` | number \| null | yes |  |
+| `name` | "status" \| "min_days" \| "max_drawdown" \| "max_drift" \| "min_trades" \| "survival" \| "within_mc_band" \| "quit_rule" \| "promotion_preset" \| "nonzero_costs" \| "hypothesis_recorded" \| "backtest_min_trades" | yes |  |
+| `passed` | boolean | yes |  |
+| `value` | number \| null | yes |  |
+
+### GoLivePolicy
+
+Limits a paper-trading period must meet before ``stonks golive check`` passes (``[golive]``). The gate only reports; promotion stays a human action. Every limit is strict about missing data: a period with no snapshots, no fills or no backtest expectation fails.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `incubation` | boolean | no |  |
+| `max_drawdown` | number | no |  |
+| `max_drift` | number | no |  |
+| `min_backtest_trades` | integer | no |  |
+| `min_days` | integer | no |  |
+| `min_hypothesis_chars` | integer | no |  |
+| `min_trades` | integer | no |  |
+| `min_trl_alpha` | number | no |  |
+| `min_trl_cap_days` | integer | no |  |
+| `periods_per_year` | number | no |  |
+| `promotion_preset` | string | no |  |
+| `quit_drawdown_multiple` | number | no |  |
+| `require_all_survival_passed` | boolean | no |  |
+| `use_min_trl` | boolean | no |  |
+
+### GoLiveReport
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `checklist` | [PromotionChecklistView](#promotionchecklistview) | no |  |
+| `checks` | list[[GoLiveCheckView](#golivecheckview)] | yes |  |
+| `passed` | boolean | yes |  |
+| `policy` | [GoLivePolicy](#golivepolicy) | yes |  |
+| `source` | "shadow" \| "portfolio" \| "none" | yes |  |
+| `status` | string | yes |  |
+| `strategy_id` | string | yes |  |
+
 ### Health
 
 | Field | Type | Required | Description |
@@ -427,6 +536,17 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `name` | string | yes |  |
 | `ok` | boolean | yes |  |
 
+### HealthConfig
+
+Thresholds for ``stonks health`` (``[production.health]``).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `ingest_failure_lookback_hours` | integer | no |  |
+| `max_bar_age_days` | integer | no |  |
+| `stuck_ingest_minutes` | integer | no |  |
+| `stuck_tick_minutes` | integer | no |  |
+
 ### HealthReportView
 
 | Field | Type | Required | Description |
@@ -434,6 +554,21 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `checked_at` | date-time | yes |  |
 | `checks` | list[[HealthCheckView](#healthcheckview)] | yes |  |
 | `healthy` | boolean | yes |  |
+| `thresholds` | [HealthConfig](#healthconfig) | yes |  |
+
+### IStarSettings
+
+Kissell's I-Star parameters: ``I = a1 (Q/ADV)^a2 sigma^a3`` bps, with a temporary part ``b1 I pov^a4`` and a permanent part ``(1 - b1) I``. The defaults are Kissell's published US-equity estimates, **not calibrated** for this system; treat them as a starting point.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `a1` | number | no |  |
+| `a2` | number | no |  |
+| `a3` | number | no |  |
+| `a4` | number | no |  |
+| `b1` | number | no |  |
+| `periods_per_year` | number | no |  |
+| `pov` | number | no |  |
 
 ### IngestRequest
 
@@ -527,16 +662,25 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `benchmark` | string \| null | no |  |
 | `budget` | integer | no |  |
+| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
+| `embargo_bars` | integer \| null | no |  |
 | `end` | date | yes |  |
+| `grid_size` | integer | no |  |
+| `hypothesis` | string \| null | no |  |
 | `interval` | string | no |  |
 | `mcpt` | [McptOptions](#mcptoptions) \| null | no |  |
 | `objective` | "sharpe" \| "cagr" \| "final_return" | no |  |
+| `premortem` | string \| null | no |  |
+| `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |
+| `register_if_passes` | boolean | no |  |
 | `register_strategy` | boolean | no |  |
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
 | `strategy` | [StrategyRef](#strategyref) | yes |  |
-| `survival_tests` | list["oos" \| "period_stability" \| "perturbation" \| "drift" \| "runs_test" \| "permutation" \| "walk_forward"] | no |  |
+| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "signal_ic" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
+| `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" | no |  |
 | `universe` | list[string] | yes |  |
@@ -546,10 +690,14 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `benchmark` | [BenchmarkStatsView](#benchmarkstatsview) \| null | no |  |
 | `best_params` | object | yes |  |
 | `best_score` | number \| null | yes |  |
 | `class_path` | string | yes |  |
+| `n_trials_class` | integer | no |  |
+| `n_trials_run` | integer | no |  |
 | `registered_strategy_id` | string \| null | yes |  |
+| `run_id` | string | no |  |
 | `survival_reports` | list[[SurvivalReportView](#survivalreportview)] | yes |  |
 | `verdict` | "pass" \| "fail" | yes |  |
 
@@ -571,7 +719,7 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `max_p_value` | number | no |  |
 | `metric` | "profit_factor" \| "sharpe" \| "final_return" \| "cagr" | no |  |
 | `n_permutations` | integer | no |  |
-| `retune` | boolean | no |  |
+| `retune` | boolean \| "auto" | no |  |
 | `seed` | integer \| null | no |  |
 
 ### OrderView
@@ -586,6 +734,7 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `quantity` | number | yes |  |
 | `side` | string | yes |  |
 | `status` | string | yes |  |
+| `status_reason` | string \| null | no |  |
 | `strategy_id` | string \| null | yes |  |
 | `tick_id` | string \| null | yes |  |
 | `ticker` | string | yes |  |
@@ -782,6 +931,19 @@ One row per day. ``strategy_id`` is ``None`` for the real portfolio and a shadow
 | `title` | string | yes |  |
 | `type` | string | no |  |
 
+### PromotionChecklistView
+
+What a reviewer reads before promoting; it doesn't change the verdict. ``None`` for anything not recorded.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `dsr` | number \| null | no |  |
+| `excess_cagr` | number \| null | no |  |
+| `hypothesis` | string \| null | no |  |
+| `n_trials_class` | integer \| null | no |  |
+| `pbo` | number \| null | no |  |
+| `premortem` | string \| null | no |  |
+
 ### RiskAdjustmentView
 
 One order the risk policy clipped or dropped.
@@ -886,6 +1048,33 @@ How one shadow strategy was evaluated during the tick.
 |-------|------|----------|-------------|
 | `spec` | object | yes |  |
 
+### StatusChangeRequest
+
+Body of a status-change route (promote / retire / shadow, Studio enable / disable). Demotions need ``reason``; a promotion without a passing go-live check needs ``override`` plus a ``reason`` of at least 20 characters.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `actor` | string \| null | no |  |
+| `override` | boolean | no |  |
+| `reason` | string \| null | no |  |
+
+### StatusChangeView
+
+One audited status change or intervention (BL-24).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `actor` | string | yes |  |
+| `created_at` | string | yes |  |
+| `from_status` | string \| null | yes |  |
+| `golive_passed` | boolean \| null | yes |  |
+| `golive_report` | object \| null | yes |  |
+| `id` | integer | yes |  |
+| `kind` | string | yes |  |
+| `override` | boolean | yes |  |
+| `reason` | string | yes |  |
+| `to_status` | string \| null | yes |  |
+
 ### StrategyClassInfo
 
 | Field | Type | Required | Description |
@@ -905,10 +1094,24 @@ How one shadow strategy was evaluated during the tick.
 | `class_path` | string | yes |  |
 | `created_at` | string | yes |  |
 | `id` | string | yes |  |
+| `metadata` | [StrategyMetadataView](#strategymetadataview) | yes |  |
 | `params` | object | yes |  |
 | `status` | "active" \| "shadow" \| "retired" | yes |  |
+| `status_history` | list[[StatusChangeView](#statuschangeview)] | yes |  |
 | `survival_reports` | list[[SurvivalReportView](#survivalreportview)] | yes |  |
 | `updated_at` | string | yes |  |
+
+### StrategyMetadataView
+
+The strategy's hypothesis card and capability hooks (BL-26).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `alpha_family` | "trend" \| "reversion" \| "carry" \| "value" \| "quality" \| "growth" \| "sentiment" \| "data_driven" \| "benchmark" \| "other" | yes |  |
+| `hypothesis` | string | yes |  |
+| `label_horizon_bars` | integer | yes |  |
+| `premise` | "trend" \| "mean_reversion" \| "none" | yes |  |
+| `required_history_bars` | integer | yes |  |
 
 ### StrategyRef
 
@@ -939,6 +1142,7 @@ How many registered strategies are in each lifecycle status.
 | `class_path` | string | yes |  |
 | `created_at` | string | yes |  |
 | `id` | string | yes |  |
+| `metadata` | [StrategyMetadataView](#strategymetadataview) | yes |  |
 | `params` | object | yes |  |
 | `status` | "active" \| "shadow" \| "retired" | yes |  |
 | `updated_at` | string | yes |  |
@@ -950,6 +1154,14 @@ How many registered strategies are in each lifecycle status.
 | `events_url` | string | yes |  |
 | `expires_at` | date-time | yes |  |
 | `token` | string | yes |  |
+
+### StudioCapabilities
+
+What this server lets the Studio do.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `code_strategies` | boolean | yes |  |
 
 ### SurvivalReportView
 
@@ -1009,14 +1221,54 @@ How many registered strategies are in each lifecycle status.
 |-------|------|----------|-------------|
 | `error` | string \| null | no |  |
 | `error_type` | string \| null | no |  |
+| `exit_strategy_id` | string \| null | no |  |
 | `fills` | integer \| null | no |  |
 | `orders_placed` | integer \| null | no |  |
 | `reason` | string \| null | no |  |
 | `risk_adjustments` | list[[RiskAdjustmentView](#riskadjustmentview)] | no |  |
 | `shadow` | list[[ShadowOutcomeView](#shadowoutcomeview)] | no |  |
 | `shadow_error` | string \| null | no |  |
+| `stale_buys_dropped` | list[string] | no |  |
 | `winner_expected_return` | number \| null | no |  |
 | `winner_strategy_id` | string \| null | no |  |
+
+### TradeStatsView
+
+Trade-level statistics of a backtest (``backtest.trades.TradeStats``). Win/loss figures are over closed round trips; ``None`` marks an unbounded ratio (no losing trades).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `avg_bars_held` | number \| null | yes |  |
+| `avg_loss` | number \| null | yes |  |
+| `avg_win` | number \| null | yes |  |
+| `cost_drag_annual` | number \| null | yes |  |
+| `costs_paid` | number \| null | yes |  |
+| `expectancy` | number \| null | yes |  |
+| `exposure` | number \| null | yes |  |
+| `n_open` | integer | yes |  |
+| `n_trades` | integer | yes |  |
+| `payoff_ratio` | number \| null | yes |  |
+| `trade_profit_factor` | number \| null | yes |  |
+| `turnover_annual` | number \| null | yes |  |
+| `win_rate` | number \| null | yes |  |
+
+### TradeView
+
+One round trip (a lot, or part of one, from buy to sell or to the end).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `bars_held` | integer | yes |  |
+| `entry_px` | number | yes |  |
+| `entry_ts` | date-time | yes |  |
+| `exit_px` | number | yes |  |
+| `exit_ts` | date-time | yes |  |
+| `fees` | number | yes |  |
+| `is_open` | boolean | yes |  |
+| `pnl` | number | yes |  |
+| `qty` | number | yes |  |
+| `return_pct` | number \| null | yes |  |
+| `ticker` | string | yes |  |
 
 ### ValidateRequest
 
@@ -1042,9 +1294,16 @@ Walk-forward settings. ``test_days=None`` splits the dataset's validation window
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `anchored` | boolean | no |  |
+| `matrix` | boolean | no |  |
+| `matrix_min_pass_share` | number | no |  |
+| `matrix_test_bars` | list[integer] | no |  |
+| `matrix_train_bars` | list[integer] | no |  |
+| `max_workers` | integer \| null | no |  |
 | `metric` | "sharpe" \| "cagr" \| "final_return" | no |  |
 | `min_mean_score` | number | no |  |
 | `min_positive_share` | number | no |  |
+| `min_wfe` | number \| null | no |  |
 | `n_splits` | integer | no |  |
+| `seed` | integer \| null | no |  |
 | `test_days` | integer \| null | no |  |
 | `train_days` | integer \| null | no |  |

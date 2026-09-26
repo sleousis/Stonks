@@ -12,6 +12,7 @@ from stonks.core.protocols import SurvivalReport
 from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
+from tests.fixtures.governance import seed_status
 
 TICK_ID = "tick-seed"
 
@@ -35,7 +36,7 @@ def register(
 ) -> str:
     strategy = BuyAndHold(params or {"ticker": "UP.US", "allocation": 1.0})
     sid = registry.register(strategy, reports=list(reports), strategy_id=strategy_id)
-    registry.set_status(sid, status)
+    seed_status(registry, sid, status)
     return sid
 
 

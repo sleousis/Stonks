@@ -18,8 +18,14 @@ from tests.paper_seed import (
     seed_shadow,
 )
 
+#: The legacy gate: these tests cover the six original checks.
 POLICY = GoLivePolicy(
-    min_days=20, max_drawdown=0.15, max_drift=0.05, min_trades=5, require_all_survival_passed=True
+    min_days=20,
+    max_drawdown=0.15,
+    max_drift=0.05,
+    min_trades=5,
+    require_all_survival_passed=True,
+    incubation=False,
 )
 
 
@@ -42,6 +48,18 @@ def _check(report, name):
 
 def test_golive_policy_defaults_and_bounds():
     assert Settings().golive == GoLivePolicy()
+    p = GoLivePolicy()
+    assert (p.min_days, p.min_trades) == (63, 20)
+    assert p.incubation is True
+    assert p.use_min_trl is True
+    assert (p.min_trl_cap_days, p.min_trl_alpha, p.periods_per_year) == (252, 0.05, 252.0)
+    assert p.quit_drawdown_multiple == 1.5
+    assert p.promotion_preset == "promotion"
+    assert (p.min_backtest_trades, p.min_hypothesis_chars) == (30, 20)
+    with pytest.raises(ValidationError):
+        GoLivePolicy(quit_drawdown_multiple=0.5)
+    with pytest.raises(ValidationError):
+        GoLivePolicy(min_trl_alpha=1.0)
     with pytest.raises(ValidationError):
         GoLivePolicy(min_days=0)
     with pytest.raises(ValidationError):

@@ -59,9 +59,8 @@ describe('orderStatusView', () => {
       ticker: 'AAPL.US',
     };
     expect(orderReason(base)).toBeNull();
-    expect(orderReason({ ...base, status_reason: 'market closed' } as OrderView)).toBe(
-      'market closed',
-    );
+    expect(orderReason({ ...base, status_reason: null })).toBeNull();
+    expect(orderReason({ ...base, status_reason: 'market closed' })).toBe('market closed');
   });
 });
 

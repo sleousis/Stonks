@@ -85,6 +85,7 @@ READ_TOOLS = {
     "list_portfolio_snapshots",
     "list_strategies",
     "get_strategy",
+    "get_strategy_history",
     "search_instruments",
     "get_bars",
     "get_coverage",
@@ -447,10 +448,11 @@ async def test_status_change_previews_without_confirm(mcp, seeded, tool, target)
     assert preview["new_status"] == target
     assert (await call(mcp, "get_strategy", {"strategy_id": sid}))["status"] == "shadow"
 
-    applied = await call(mcp, tool, {"strategy_id": sid, "confirm": True})
-    assert applied["applied"] is True
-    assert applied["previous_status"] == "shadow"
-    assert applied["strategy"]["status"] == target
+    # Applying goes through the governed service (BL-24): promote needs a
+    # passing go-live check, retire a reason; neither is available here.
+    err = await call_error(mcp, tool, {"strategy_id": sid, "confirm": True})
+    assert "go-live" in err or "reason" in err
+    assert (await call(mcp, "get_strategy", {"strategy_id": sid}))["status"] == "shadow"
 
 
 @pytest.mark.anyio
@@ -459,8 +461,9 @@ async def test_shadow_strategy_guarded(mcp, seeded):
     preview = await call(mcp, "shadow_strategy", {"strategy_id": sid})
     assert preview["new_status"] == "shadow"
     assert (await call(mcp, "get_strategy", {"strategy_id": sid}))["status"] == "active"
-    await call(mcp, "shadow_strategy", {"strategy_id": sid, "confirm": True})
-    assert (await call(mcp, "get_strategy", {"strategy_id": sid}))["status"] == "shadow"
+    err = await call_error(mcp, "shadow_strategy", {"strategy_id": sid, "confirm": True})
+    assert "reason" in err
+    assert (await call(mcp, "get_strategy", {"strategy_id": sid}))["status"] == "active"
 
 
 @pytest.mark.anyio

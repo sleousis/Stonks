@@ -74,9 +74,11 @@ def test_lab_run_tunes_and_reports_a_verdict(runner, lab_env):
     doc = _result(out)
     assert doc["strategy"] == "stonks.strategies.examples.momentum:Momentum"
     assert set(doc["best_params"]) >= {"lookback_days", "threshold", "allocation"}
-    assert [rep["test_id"] for rep in doc["survival_reports"]] == ["oos"]
+    # no --tests / --preset: the registry's "quick" preset
+    assert [rep["test_id"] for rep in doc["survival_reports"]] == ["oos", "period_stability"]
     assert doc["verdict"] in ("pass", "fail")
     assert doc["registered_id"] is None
+    assert doc["run_id"] and doc["n_trials_run"] == 4
 
 
 def test_params_pin_values_and_walk_forward_defaults_come_from_config(runner, lab_env):
@@ -145,6 +147,12 @@ def test_mcpt_options(runner, lab_env, flag, mode):
     assert f"mode={mode}" in mcpt["notes"]
 
 
+#: Buy-and-hold never closes a trade, so the default PSR gate (BL-16: >= 20
+#: closed trades) fails it. Registration tests run ``oos`` with the legacy
+#: flat-Sharpe rule instead, through the survival-test options.
+LEGACY_OOS = ["--test-option", "oos.mode=sharpe", "--test-option", "oos.min_trades=0"]
+
+
 def test_register_puts_a_passing_wrapped_strategy_in_shadow(runner, lab_env):
     params = {
         "inner_class_path": "stonks.strategies.examples.buy_and_hold:BuyAndHold",
@@ -158,6 +166,9 @@ def test_register_puts_a_passing_wrapped_strategy_in_shadow(runner, lab_env):
         *UNIVERSE,
         *WINDOW,
         *FAST,
+        "--tests",
+        "oos",
+        *LEGACY_OOS,
         "--register",
     )
     assert r.exit_code == 0, r.output
@@ -179,7 +190,9 @@ def test_register_skips_a_failing_strategy(runner, lab_env):
         *UNIVERSE,
         *WINDOW,
         *FAST,
-        "--register",
+        "--tests",
+        "oos",
+        "--register-if-passes",
     )
     assert r.exit_code == 0, r.output
     assert "fail" in r.output
@@ -196,9 +209,219 @@ def test_register_skips_a_failing_strategy(runner, lab_env):
         (["momentum", *WINDOW], "--tickers"),
         (["momentum", *UNIVERSE, *WINDOW, "--tuner", "bayes"], "--tuner"),
         (["momentum", *UNIVERSE, *WINDOW, "--mcpt", "--mcpt-retune"], "--mcpt"),
+        (["momentum", *UNIVERSE, *WINDOW, "--tests", "bogus"], "unknown tests"),
+        (["momentum", *UNIVERSE, *WINDOW, "--preset", "huge"], "--preset"),
+        (["momentum", *UNIVERSE, *WINDOW, "--cost-model", "free"], "--cost-model"),
+        (["momentum", *UNIVERSE, *WINDOW, "--test-option", "oos"], "TEST.OPTION=VALUE"),
+        (["momentum", *UNIVERSE, *WINDOW, "--test-option", "bogus.x=1"], "bogus"),
+        (["momentum", *UNIVERSE, *WINDOW, "--test-option", "oos.nope=1"], "nope"),
+        (["momentum", *UNIVERSE, *WINDOW, "--test-option", "oos.min_trades=-1"], "min_trades"),
+        (["momentum", *UNIVERSE, *WINDOW, "--test-option", "pbo.max_pbo=0.3"], "pbo"),
     ],
 )
 def test_bad_input_is_a_usage_error(runner, lab_env, args, needle):
     r = runner.invoke(app, ["lab", "run", *args])
     assert r.exit_code == 2, r.output
     assert needle in r.output
+
+
+def test_test_options_reach_the_survival_test(runner, lab_env):
+    out = lab_env / "result.json"
+    args = ["buy_and_hold", "--params", '{"ticker": "UP.US"}', *UNIVERSE, *WINDOW, *FAST]
+    r = _run(runner, *args, "--tests", "oos", *LEGACY_OOS, "--json-out", str(out))
+    assert r.exit_code == 0, r.output
+    (rep,) = _result(out)["survival_reports"]
+    assert rep["passed"], rep["notes"]  # 0 trades pass once min_trades=0
+
+
+@pytest.mark.parametrize("flag,name", [([], "EW"), (["--benchmark", "UP.US"], "UP.US")])
+def test_benchmark_reaches_the_result(runner, lab_env, flag, name):
+    out = lab_env / "result.json"
+    r = _run(runner, "momentum", *UNIVERSE, *WINDOW, *FAST, "--tests", "oos", *flag,
+             "--json-out", str(out))  # fmt: skip
+    assert r.exit_code == 0, r.output
+    bench = _result(out)["benchmark"]
+    assert bench["name"] == name  # "auto" falls back to EW: the lake has no SPY.US
+    assert "excess_cagr" in bench
+
+
+def test_benchmark_none_turns_it_off(runner, lab_env):
+    out = lab_env / "result.json"
+    r = _run(runner, "momentum", *UNIVERSE, *WINDOW, *FAST, "--tests", "oos",
+             "--benchmark", "none", "--json-out", str(out))  # fmt: skip
+    assert r.exit_code == 0, r.output
+    assert _result(out)["benchmark"] is None
+
+
+def test_embargo_bars_move_the_validation_window(runner, lab_env):
+    starts = []
+    for bars in ("0", "5"):
+        out = lab_env / f"embargo_{bars}.json"
+        r = _run(runner, "momentum", *UNIVERSE, *WINDOW, *FAST, "--tests", "oos",
+                 "--embargo-bars", bars, "--json-out", str(out))  # fmt: skip
+        assert r.exit_code == 0, r.output
+    for run in _lab_runs(lab_env):
+        starts.append(json.loads(run["manifest_json"])["dataset"]["val_window"][0])
+    assert starts[0] < starts[1]
+
+
+def test_embargo_that_leaves_no_validation_window_is_a_usage_error(runner, lab_env):
+    r = runner.invoke(app, ["lab", "run", "momentum", *UNIVERSE, *WINDOW, "--embargo-bars", "500"])
+    assert r.exit_code == 2, r.output
+    assert "embargo" in r.output
+
+
+def test_configured_embargo_that_leaves_no_validation_window_is_a_usage_error(runner, lab_env):
+    cfg = lab_env / "config" / "default.toml"
+    cfg.write_text(cfg.read_text() + "\n\n[lab]\nembargo_bars = 500\n")
+    r = runner.invoke(app, ["lab", "run", "momentum", *UNIVERSE, *WINDOW, *FAST, "--tests", "oos"])
+    assert r.exit_code == 2, r.output
+    assert "embargo" in r.output
+
+
+def test_walk_forward_wfe_and_matrix_flags(runner, lab_env):
+    out = lab_env / "result.json"
+    r = _run(runner, "momentum", *UNIVERSE, *WINDOW, *FAST, "--tests", "walk_forward",
+             "--wf-min-wfe", "1.0", "--wf-matrix", "--json-out", str(out))  # fmt: skip
+    assert r.exit_code == 0, r.output
+    (wf,) = _result(out)["survival_reports"]
+    assert "< 1.0" in wf["notes"]  # the WFE gate at the flag's value
+    assert "matrix" in wf["notes"] or "matrix_cells" in wf["metrics"]
+
+
+def test_register_defaults_to_the_promotion_preset():
+    from stonks.cli import _lab_suite
+    from stonks.lab.survival.registry import resolve_preset
+
+    plain = _lab_suite(None, None, mcpt=False, walk_forward=False)
+    registering = _lab_suite(None, None, mcpt=False, walk_forward=False, registers=True)
+    assert plain == resolve_preset("quick")
+    assert registering == resolve_preset("promotion")
+    assert _lab_suite("oos", None, mcpt=False, walk_forward=False, registers=True) == ["oos"]
+
+
+# ---- Integration 1: ledger, presets, workers, costs --------------------------
+
+
+def _lab_runs(env):
+    with SqliteState(env / "data" / "state.sqlite") as state:
+        return state.sql("SELECT * FROM lab_runs ORDER BY started_at")
+
+
+def test_hypothesis_and_premortem_are_pre_registered(runner, lab_env):
+    out = lab_env / "result.json"
+    r = _run(
+        runner,
+        "momentum",
+        *UNIVERSE,
+        *WINDOW,
+        *FAST,
+        "--tests",
+        "oos",
+        "--hypothesis",
+        "trend persists",
+        "--premortem",
+        "chop",
+        "--json-out",
+        str(out),
+    )
+    assert r.exit_code == 0, r.output
+    (run,) = _lab_runs(lab_env)
+    assert run["id"] == _result(out)["run_id"]
+    assert (run["hypothesis"], run["premortem"]) == ("trend persists", "chop")
+    assert run["verdict"] in ("pass", "fail")
+
+
+def test_preset_selects_the_registry_suite(runner, lab_env):
+    from stonks.lab.survival.registry import resolve_preset
+
+    out = lab_env / "result.json"
+    r = _run(
+        runner,
+        "momentum",
+        *UNIVERSE,
+        *WINDOW,
+        *FAST,
+        "--preset",
+        "standard",
+        "--json-out",
+        str(out),
+    )
+    assert r.exit_code == 0, r.output
+    ids = [rep["test_id"] for rep in _result(out)["survival_reports"]]
+    assert ids == resolve_preset("standard")
+
+
+def test_workers_do_not_change_the_result(runner, lab_env):
+    docs = []
+    for workers in ("1", "2"):
+        out = lab_env / f"result_{workers}.json"
+        r = _run(
+            runner,
+            "momentum",
+            *UNIVERSE,
+            *WINDOW,
+            *FAST,
+            "--tests",
+            "oos",
+            "--workers",
+            workers,
+            "--json-out",
+            str(out),
+        )
+        assert r.exit_code == 0, r.output
+        docs.append(_result(out))
+    one, two = docs
+    assert one["best_params"] == two["best_params"]
+    assert one["best_score"] == two["best_score"]
+    assert one["survival_reports"] == two["survival_reports"]
+
+
+def test_registered_strategy_meta_has_lab_provenance(runner, lab_env):
+    params = {"ticker": "UP.US"}
+    r = _run(
+        runner,
+        "buy_and_hold",
+        "--params",
+        json.dumps(params),
+        *UNIVERSE,
+        *WINDOW,
+        *FAST,
+        "--tests",
+        "oos",
+        *LEGACY_OOS,
+        "--register-if-passes",
+        "--hypothesis",
+        "drift up",
+    )
+    assert r.exit_code == 0, r.output
+    ((handle, _),) = _registered(lab_env)
+    meta = json.loads((handle.artifact_path / "meta.json").read_text())
+    (run,) = _lab_runs(lab_env)
+    assert meta["lab_run_id"] == run["id"]
+    assert meta["hypothesis"] == "drift up"
+
+
+def test_cost_model_zero_differs_from_the_realistic_default(runner, lab_env):
+    scores = {}
+    for model in ("zero", "config"):
+        out = lab_env / f"{model}.json"
+        r = _run(
+            runner,
+            "momentum",
+            *UNIVERSE,
+            *WINDOW,
+            *FAST,
+            "--tests",
+            "oos",
+            "--cost-model",
+            model,
+            "--json-out",
+            str(out),
+        )
+        assert r.exit_code == 0, r.output
+        scores[model] = _result(out)["best_score"]
+    assert scores["zero"] != scores["config"]
+    runs = _lab_runs(lab_env)
+    costs = [json.loads(r["manifest_json"])["costs"] for r in runs]
+    assert costs[0] != costs[1]

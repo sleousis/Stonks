@@ -14,14 +14,17 @@
             [class.hide-phone]="col.mobile === 'hide'"
             [attr.aria-sort]="ariaSort(col)"
           >
-            @if (sortable(col)) {
-              <button type="button" class="sort" (click)="toggleSort(col)">
+            <span class="th-inner">
+              @if (sortable(col)) {
+                <button type="button" class="sort" (click)="toggleSort(col)">
+                  <span>{{ col.label }}</span>
+                  <span class="arrow" aria-hidden="true" [attr.data-dir]="ariaSort(col)"></span>
+                </button>
+              } @else {
                 <span>{{ col.label }}</span>
-                <span class="arrow" aria-hidden="true" [attr.data-dir]="ariaSort(col)"></span>
-              </button>
-            } @else {
-              {{ col.label }}
-            }
+              }
+              <app-help-tip [term]="helpTerm(col)" />
+            </span>
           </th>
         }
       </tr>

@@ -98,9 +98,12 @@ def test_strategy_detail_has_params_and_reports(services, seeded):
 
 
 def test_strategy_status_changes(services, seeded):
-    assert services.strategies.promote(seeded["shadow_id"]).status == "active"
-    assert services.strategies.retire(seeded["shadow_id"]).status == "retired"
-    assert services.strategies.shadow(seeded["shadow_id"]).status == "shadow"
+    sid = seeded["shadow_id"]
+    override = "test override: no paper period in this fixture"
+    assert services.strategies.promote(sid, override=True, reason=override).status == "active"
+    assert services.strategies.retire(sid, reason="superseded").status == "retired"
+    assert services.strategies.shadow(sid, reason="re-incubate").status == "shadow"
+    assert len(services.strategies.history(sid)) == 3
 
 
 def test_strategy_unknown_id_is_not_found(services):
@@ -347,6 +350,28 @@ def test_backtest_returns_plain_report(services):
     assert result.interval == "1d"
     assert len(result.equity) > 100
     assert result.equity[0].value == pytest.approx(10_000.0)
+
+
+def test_backtest_result_carries_its_benchmark(services):
+    auto = services.lab.run_backtest(_bah_request())
+    assert auto.benchmark is not None
+    assert auto.benchmark.name == "EW"  # "auto": no SPY.US in the lake
+    assert auto.benchmark.spec == "auto"
+    assert auto.benchmark.members == ["UP.US"]
+    assert len(auto.benchmark_equity) == len(auto.equity)
+    assert auto.benchmark_equity[0].value == pytest.approx(auto.equity[0].value)
+
+    vs_down = services.lab.run_backtest(_bah_request(benchmark="DOWN.US"))
+    assert vs_down.benchmark.name == "DOWN.US"
+    assert vs_down.benchmark.excess_cagr > 0
+
+    off = services.lab.run_backtest(_bah_request(benchmark="none"))
+    assert off.benchmark is None and off.benchmark_equity == []
+
+
+def test_backtest_benchmark_default_comes_from_lab_config(services):
+    services.lab._ctx.settings.lab.benchmark = "FLAT.US"
+    assert services.lab.run_backtest(_bah_request()).benchmark.name == "FLAT.US"
 
 
 def test_backtest_from_registered_strategy(services, seeded):

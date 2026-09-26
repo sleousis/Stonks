@@ -69,6 +69,16 @@ tbody tr:last-child td {
   border-bottom: 0;
 }
 
+.th-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+
+  th.end & {
+    flex-direction: row-reverse;
+  }
+}
+
 .sort {
   display: inline-flex;
   align-items: center;
@@ -87,6 +97,16 @@ tbody tr:last-child td {
 
   &:hover {
     color: var(--color-ink);
+  }
+
+  // Touch targets: phones (incl. landscape, where the table layout shows)
+  // and any coarse pointer get a full 44px header button.
+  @include bp.phone {
+    min-height: var(--touch-min);
+  }
+
+  @include bp.coarse {
+    min-height: var(--touch-min);
   }
 }
 

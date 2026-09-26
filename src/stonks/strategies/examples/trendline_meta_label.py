@@ -339,7 +339,7 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
 
     def fit(self, dataset: Any) -> None:
         interval = Interval.parse(self.params["interval"])
-        bars = train_bars(dataset, self.params["ticker"], interval)
+        bars = train_bars(dataset, self.params["ticker"], interval, caches=self._bar_caches)
         # completed trades only: a trade still open at the last training bar
         # would need bars after train_end for its label
         trades, _still_open = self._simulate(bars)

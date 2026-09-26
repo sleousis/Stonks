@@ -2,9 +2,12 @@ import {
   type ApplicationConfig,
   Injectable,
   inject,
+  isDevMode,
+  provideAppInitializer,
   provideBrowserGlobalErrorListeners,
 } from '@angular/core';
 import { Title } from '@angular/platform-browser';
+import { provideServiceWorker } from '@angular/service-worker';
 import {
   type RouterStateSnapshot,
   TitleStrategy,
@@ -15,6 +18,7 @@ import {
 
 import { provideApi } from './api/provide-api';
 import { routes } from './app.routes';
+import { FormatService } from './core/format/format.service';
 
 /** "Dashboard – Stonks" */
 @Injectable({ providedIn: 'root' })
@@ -37,5 +41,13 @@ export const appConfig: ApplicationConfig = {
     ),
     { provide: TitleStrategy, useClass: StonksTitleStrategy },
     ...provideApi(),
+    // Apply the stored locale / time zone before the first page renders.
+    provideAppInitializer(() => void inject(FormatService)),
+    // Caches the app shell only (ngsw-config.json has no data groups: API
+    // responses are never cached). Also the Web Push endpoint for SwPush.
+    provideServiceWorker('ngsw-worker.js', {
+      enabled: !isDevMode(),
+      registrationStrategy: 'registerWhenStable:30000',
+    }),
   ],
 };

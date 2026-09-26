@@ -14,6 +14,7 @@ from stonks.production.tick import TickSettings, run_tick
 from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
+from tests.fixtures.governance import seed_status
 
 AS_OF = date(2026, 3, 20)
 UNIVERSE = ["UP.US", "FLAT.US", "DOWN.US"]
@@ -40,7 +41,7 @@ def _register(registry, strategy, status):
     sid = registry.register(
         strategy, reports=[SurvivalReport(test_id="oos", passed=True, metrics={})]
     )
-    registry.set_status(sid, status)
+    seed_status(registry, sid, status)
     return sid
 
 

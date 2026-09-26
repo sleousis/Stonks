@@ -160,3 +160,27 @@ def test_default_toml_parses(monkeypatch):
     assert s.production.health.max_bar_age_days == 4
     assert s.notify.backends == ["log", "store"]
     assert s.notify.min_level == "warning"
+
+
+def test_lab_benchmark_defaults_to_auto_in_code_and_toml(monkeypatch):
+    from pathlib import Path
+
+    from stonks.config import Settings
+
+    monkeypatch.delenv("STONKS_NOTIFY_WEBHOOK_URL", raising=False)
+    assert Settings().lab.benchmark == "auto"
+    assert Settings().lab.embargo_bars == 0
+    repo_cfg = Path(__file__).parents[2] / "config" / "default.toml"
+    lab = load_settings(config_path=repo_cfg).lab
+    assert lab.benchmark == "auto" and lab.embargo_bars == 0
+    assert lab.walk_forward.min_wfe == 0.5 and lab.walk_forward.matrix is False
+
+
+def test_default_toml_golive_matches_the_code_defaults(monkeypatch):
+    from pathlib import Path
+
+    from stonks.config import GoLivePolicy
+
+    monkeypatch.delenv("STONKS_NOTIFY_WEBHOOK_URL", raising=False)
+    repo_cfg = Path(__file__).parents[2] / "config" / "default.toml"
+    assert load_settings(config_path=repo_cfg).golive == GoLivePolicy()

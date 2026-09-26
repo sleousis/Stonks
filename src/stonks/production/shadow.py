@@ -1,6 +1,7 @@
-"""Shadow mode (roadmap 2.4): evaluate ``shadow`` strategies without trading.
+"""Model books (roadmap 2.4, BL-12): evaluate strategies without trading.
 
-Each shadow strategy runs as if it were the sole active strategy, against
+Each ``shadow`` strategy (and, with ``TickSettings.model_books = "all"``,
+each ``active`` one too) runs as if it were the sole active strategy, against
 its own virtual portfolio persisted in ``shadow_portfolio_snapshots`` (one
 row per strategy per ``as_of``), seeded from ``initial_cash``. Its proposed
 orders pass through the same risk policy, are "filled" on an in-memory
@@ -15,6 +16,10 @@ Isolation guarantees:
 - a strategy already evaluated for ``as_of`` (or for a later date) is skipped,
   so re-running a tick never double-applies virtual fills.
 
+The strategy that decides is the instance the tick's signal phase scored
+with (``strategies``), so per-day state from ``estimate_return`` reaches
+``decide``; without it, each strategy is loaded from the registry.
+
 Like the real tick, a strategy with no ranked picks but open virtual
 positions still decides (with no picks) so its exits happen; one with no
 picks and a flat portfolio holds, and is only marked to market. Buys need
@@ -25,12 +30,13 @@ known close.
 from __future__ import annotations
 
 import json
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from stonks.core.corporate_actions import CorporateActions
+from stonks.core.protocols import Strategy
 from stonks.core.types import Fill, Order, Portfolio
 from stonks.execution.orders import make_client_id
 from stonks.logging import get_logger
@@ -80,20 +86,25 @@ def evaluate_shadow_strategies(
     buyable: Collection[str] | None = None,
     volumes: Mapping[str, float] | None = None,
     corporate_actions: CorporateActions | None = None,
+    strategies: Callable[[str], Strategy] | None = None,
+    statuses: Sequence[str] = ("shadow",),
 ) -> list[ShadowOutcome]:
     """``buyable`` restricts buys to tickers with a fresh close (default:
     any ticker in ``prices``). ``volumes`` (of each priced bar) feed the
     cost model's impact term, as in the real tick. ``corporate_actions``
     due since a virtual portfolio's snapshot are applied to it before it
     decides, exactly as for the real portfolio (and persisted with its
-    new snapshot, so once)."""
+    new snapshot, so once). ``strategies(sid)`` returns the instance that
+    decides (default: loaded from the registry); ``statuses`` are the
+    registry statuses that keep a model book."""
     fresh = set(prices) if buyable is None else set(buyable)
     picks_by_strategy: dict[str, list[tuple[float, str]]] = {}
     for r, sid, ticker in ranked:
         picks_by_strategy.setdefault(sid, []).append((r, ticker))
 
     outcomes: list[ShadowOutcome] = []
-    for handle in registry.list_all(status="shadow"):
+    handles = [h for status in statuses for h in registry.list_all(status=status)]
+    for handle in handles:
         log = _log.bind(tick_id=tick_id, strategy_id=handle.id, as_of=as_of.isoformat())
         try:
             outcome = _evaluate_one(
@@ -109,6 +120,7 @@ def evaluate_shadow_strategies(
                 fresh,
                 volumes or {},
                 corporate_actions or CorporateActions(),
+                strategies or registry.load,
             )
         except Exception as exc:
             log.warning("shadow.failed", error=str(exc), error_type=type(exc).__name__)
@@ -134,6 +146,7 @@ def _evaluate_one(
     fresh: Collection[str],
     volumes: Mapping[str, float],
     corporate_actions: CorporateActions,
+    strategies: Callable[[str], Strategy],
 ) -> ShadowOutcome:
     latest = state.sql(
         "SELECT as_of FROM shadow_portfolio_snapshots WHERE strategy_id = ? AND as_of >= ? "
@@ -156,7 +169,7 @@ def _evaluate_one(
     )
     # Load even without picks: the Ranker silently skips a strategy that
     # fails to load, and that must surface as ``failed``, not ``evaluated``.
-    strategy = registry.load(strategy_id)
+    strategy = strategies(strategy_id)
 
     orders: list[Order] = []
     if picks or held_tickers(portfolio.positions):
@@ -169,6 +182,8 @@ def _evaluate_one(
             settings.risk,
             slippage_bps=settings.slippage_bps,
             fee_per_trade=settings.fee_per_trade,
+            cost_model=settings.costs,
+            volumes=volumes,
         )
         orders = [
             replace(

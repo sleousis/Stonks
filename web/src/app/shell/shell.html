@@ -14,27 +14,54 @@
     </svg>
   </button>
   <a routerLink="/" class="brand">Stonks</a>
-  <button
-    type="button"
-    class="btn btn-ghost btn-icon"
-    [attr.aria-label]="
-      theme.resolved() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'
-    "
-    (click)="theme.toggle()"
-  >
-    <ng-container *ngTemplateOutlet="themeIcon" />
-  </button>
+  <span class="topbar-actions">
+    <button
+      type="button"
+      class="btn btn-ghost btn-icon"
+      aria-label="Search"
+      aria-haspopup="dialog"
+      aria-keyshortcuts="Control+K Meta+K /"
+      (click)="openPalette()"
+    >
+      <ng-container *ngTemplateOutlet="searchIcon" />
+    </button>
+    <button
+      type="button"
+      class="btn btn-ghost btn-icon"
+      [attr.aria-label]="
+        theme.resolved() === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'
+      "
+      (click)="theme.toggle()"
+    >
+      <ng-container *ngTemplateOutlet="themeIcon" />
+    </button>
+  </span>
 </header>
 
 <div class="frame">
   <aside class="sidebar">
     <a routerLink="/" class="brand">Stonks</a>
+    <button
+      type="button"
+      class="search-button"
+      aria-haspopup="dialog"
+      aria-keyshortcuts="Control+K Meta+K /"
+      (click)="openPalette()"
+    >
+      <ng-container *ngTemplateOutlet="searchIcon" />
+      <span class="search-label">Search</span>
+      <kbd aria-hidden="true">{{ modKey }} K</kbd>
+    </button>
     <app-nav />
     <ng-container *ngTemplateOutlet="footer" />
   </aside>
 
   <main id="main" #main tabindex="-1">
-    <router-outlet />
+    @if (connectivity.online()) {
+      <router-outlet />
+    } @else {
+      <app-offline-page />
+    }
   </main>
 </div>
 
@@ -80,6 +107,13 @@
   </div>
 </ng-template>
 
+<ng-template #searchIcon>
+  <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+    <circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.7" />
+    <path d="M13 13l4.5 4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+  </svg>
+</ng-template>
+
 <ng-template #themeIcon>
   @if (theme.resolved() === 'dark') {
     <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
@@ -102,5 +136,7 @@
   }
 </ng-template>
 
+<app-command-palette />
+<app-shortcut-help />
 <app-confirm-dialog />
 <app-toast-outlet />

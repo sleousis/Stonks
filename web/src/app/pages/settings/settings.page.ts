@@ -9,7 +9,7 @@ import {
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 
 import { IngestService } from '../../api/ingest.service';
-import { JobsApiService } from '../../api/jobs-api.service';
+import { AuthService } from '../../api/auth.service';
 import { LabService } from '../../api/lab.service';
 import type { AssetClassCosts, CostModelPreset, RiskPolicy } from '../../api/models';
 import { SystemService } from '../../api/system.service';
@@ -17,6 +17,8 @@ import { AuthTokenService } from '../../core/auth/auth-token.service';
 import { formatDateTime, formatMoney, formatNumber, formatPercent } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
 import { type ThemeMode, ThemeService } from '../../core/theme/theme.service';
+import { DisplayPrefs } from '../../shared/ui/display-prefs';
+import { NotificationSettings } from '../../shared/ui/notification-settings';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
@@ -37,14 +39,23 @@ interface CostRow {
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PageHeader, ReactiveFormsModule, StatusPill, LoadingState, ErrorState, EmptyState],
+  imports: [
+    DisplayPrefs,
+    NotificationSettings,
+    PageHeader,
+    ReactiveFormsModule,
+    StatusPill,
+    LoadingState,
+    ErrorState,
+    EmptyState,
+  ],
   templateUrl: './settings.page.html',
   styleUrl: './settings.page.scss',
 })
 export class SettingsPage {
   private readonly auth = inject(AuthTokenService);
   private readonly toasts = inject(ToastService);
-  private readonly jobsApi = inject(JobsApiService);
+  private readonly authApi = inject(AuthService);
   private readonly system = inject(SystemService);
   private readonly ingestApi = inject(IngestService);
   private readonly labApi = inject(LabService);
@@ -172,7 +183,7 @@ export class SettingsPage {
     }
     this.testing.set(true);
     try {
-      await this.jobsApi.probeToken();
+      await this.authApi.check();
       this.tokenCheck.set(TOKEN_ACCEPTED);
     } catch (err) {
       this.tokenCheck.set(tokenCheckFromError(err));

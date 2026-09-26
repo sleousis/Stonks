@@ -3,6 +3,8 @@ import {
   Component,
   computed,
   inject,
+  input,
+  linkedSignal,
   resource,
   signal,
   viewChild,
@@ -33,7 +35,9 @@ const FALLBACK_INTERVALS = [{ code: '1d', is_intraday: false, seconds: 86_400 }]
 export class DataPage {
   private readonly system = inject(SystemService);
 
-  protected readonly ticker = signal<string | null>(null);
+  /** Query param `?instrument=` (e.g. from the command palette) preselects a ticker. */
+  readonly instrument = input<string | undefined>();
+  protected readonly ticker = linkedSignal<string | null>(() => this.instrument() ?? null);
   protected readonly interval = signal('1d');
   /** Bumped after an ingest or on Refresh; panels refetch when it changes. */
   protected readonly refreshKey = signal(0);

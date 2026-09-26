@@ -1,5 +1,5 @@
 """Integration tests for RunsTestSurvivalTest — Wald-Wolfowitz independence
-check on a strategy's per-bar return signs over the full window."""
+check on a strategy's per-bar return signs over the validation window."""
 
 from __future__ import annotations
 
@@ -130,12 +130,20 @@ def test_trade_level_runs_test_scores_signs_of_round_trip_returns(lake_random_wa
     lake, dates = lake_random_walk
     ds = _dataset(lake, dates)
     strategy = Momentum({"lookback_days": 5})
-    _, fills = run_backtest_with_fills(Momentum({"lookback_days": 5}), ds, ds.full_window)
-    returns = np.array([t.return_pct for t in round_trip_trades(fills)])
+    # scored over the whole dataset (window="full") for enough round trips
+    report, fills = run_backtest_with_fills(Momentum({"lookback_days": 5}), ds, ds.full_window)
+    trades = round_trip_trades(report)
+    # Momentum exits whole positions: one closed trade per buy that was sold,
+    # so the ledger's partial-exit semantics leave the sequence unchanged.
+    buys = sum(1 for f in fills if f.side == "buy")
+    assert len(trades) in (buys, buys - 1)  # the last lot may still be open
+    returns = np.array([t.return_pct for t in trades])
     signs = np.sign(returns[returns != 0]).astype(int)
     assert len(signs) >= 10  # enough round trips for the test to mean something
 
-    report = RunsTestSurvivalTest(max_abs_z_score=3.0, trade_level=True).run(strategy, ds)
+    report = RunsTestSurvivalTest(max_abs_z_score=3.0, trade_level=True, window="full").run(
+        strategy, ds
+    )
 
     assert report.metrics["z_score"] == pytest.approx(runs_test_z_score(signs))
     assert report.metrics["n_trades"] == float(len(signs))
@@ -143,7 +151,7 @@ def test_trade_level_runs_test_scores_signs_of_round_trip_returns(lake_random_wa
     assert report.metrics["n_runs"] == float(count_runs(signs))
     assert "trade_level" in report.notes
     # the bar-level default scores a different, much longer sequence
-    bar_level = RunsTestSurvivalTest(max_abs_z_score=3.0).run(strategy, ds)
+    bar_level = RunsTestSurvivalTest(max_abs_z_score=3.0, window="full").run(strategy, ds)
     assert bar_level.metrics["n_positive"] + bar_level.metrics["n_negative"] > len(signs)
 
 

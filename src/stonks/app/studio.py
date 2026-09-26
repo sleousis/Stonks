@@ -66,21 +66,18 @@ from stonks.app.context import AppContext
 from stonks.app.errors import AppError, ConflictError, NotFoundError, ValidationError
 from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.app.lab import (
+    BacktestOptions,
     BacktestRequest,
     BacktestResult,
-    EquityPoint,
+    LabRunOptions,
     LabRunRequest,
     LabRunView,
     LabService,
-    ObjectiveName,
-    SurvivalTestName,
-    TunerName,
+    check_embargo,
 )
 from stonks.app.pagination import Page
-from stonks.app.serialize import finite, to_jsonable
-from stonks.app.strategies import StrategyRef, StrategyStatus
-from stonks.backtest.engine import BacktestConfig, Backtester
-from stonks.backtest.simulated_broker import SimulatedBroker
+from stonks.app.serialize import to_jsonable
+from stonks.app.strategies import StrategyRef, StrategyStatus, change_status
 from stonks.config import Settings
 from stonks.core.interval import Interval
 from stonks.core.params import validate_params
@@ -131,6 +128,14 @@ class RuleStrategySource:
 
 
 # ---- models -----------------------------------------------------------------
+
+
+class StudioCapabilities(BaseModel):
+    """What this server lets the Studio do."""
+
+    #: ``[api] allow_code_strategies``: code drafts can be created, tested
+    #: and registered (otherwise those operations answer 403).
+    code_strategies: bool
 
 
 class RuleTemplateView(BaseModel):
@@ -234,32 +239,22 @@ class _Window(BaseModel):
         return self
 
 
-class DraftBacktestRequest(_Window):
+class DraftBacktestRequest(_Window, BacktestOptions):
     """A :class:`~stonks.app.lab.BacktestRequest` without the strategy
     (the draft is the strategy)."""
 
-    initial_cash: float = Field(default=10_000.0, gt=0)
-    threshold: float = 0.0
-    rebalance_every_bars: int = Field(default=1, ge=1)
-    slippage_bps: float = Field(default=0.0, ge=0)
-    fee_per_trade: float = Field(default=0.0, ge=0)
 
-
-class DraftLabRunRequest(_Window):
+class DraftLabRunRequest(_Window, LabRunOptions):
     """A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A
     rule draft's spec is fixed (it has no tunable parameters); a code
-    draft's class is tuned over its parameter space."""
+    draft's class is tuned over its parameter space. Registering
+    (``register_strategy`` always, ``register_if_passes`` only on a pass)
+    links the new strategy to the draft."""
 
-    train_ratio: float = Field(default=0.7, gt=0, lt=1)
-    tuner: TunerName = "random"
-    budget: int = Field(default=20, ge=1, le=1_000)
-    seed: int = 0
-    objective: ObjectiveName = "sharpe"
-    survival_tests: list[SurvivalTestName] = Field(
-        default_factory=lambda: ["oos", "period_stability"], min_length=1
-    )
-    #: Register the result (status ``shadow``) and link it to the draft.
-    register_strategy: bool = False
+    @model_validator(mode="after")
+    def _embargo_fits_the_window(self) -> Self:
+        check_embargo(self, self.embargo_bars)
+        return self
 
 
 # ---- service ----------------------------------------------------------------
@@ -275,6 +270,9 @@ class StudioService:
         runner.register(STUDIO_LAB_RUN_JOB, self._handle_lab_run, cancellable=True)
 
     # ---- reads -------------------------------------------------------------
+
+    def capabilities(self) -> StudioCapabilities:
+        return StudioCapabilities(code_strategies=self._ctx.settings.api.allow_code_strategies)
 
     def templates(self) -> list[RuleTemplateView]:
         return [
@@ -417,7 +415,7 @@ class StudioService:
     def submit_lab_run(self, draft_id: str, request: DraftLabRunRequest) -> Job:
         draft = self.get_draft(draft_id)
         _parse_interval(request.interval)
-        if request.register_strategy and draft.status == "registered":
+        if request.registers and draft.status == "registered":
             raise ConflictError(
                 f"draft {draft_id} is already registered as {draft.registered_strategy_id}"
             )
@@ -450,11 +448,13 @@ class StudioService:
         self._register(draft.id, draft.name, strategy, [])
         return self.get_draft(draft_id)
 
-    def enable(self, draft_id: str) -> Draft:
-        return self._set_status(draft_id, "active")
+    def enable(self, draft_id: str, *, reason: str | None = None, override: bool = False) -> Draft:
+        """Promote the registered strategy: same go-live rules as
+        ``StrategyService.promote``."""
+        return self._set_status(draft_id, "active", reason=reason, override=override)
 
-    def disable(self, draft_id: str) -> Draft:
-        return self._set_status(draft_id, "shadow")
+    def disable(self, draft_id: str, *, reason: str | None = None) -> Draft:
+        return self._set_status(draft_id, "shadow", reason=reason)
 
     def user_strategy_class(self, class_path: str) -> type:
         """Resolve a registered code strategy's ``stonks_user_strategies.<stem>:Class``
@@ -566,17 +566,30 @@ class StudioService:
         _log.info("studio.draft_registered", draft_id=draft_id, strategy_id=sid)
         return sid
 
-    def _set_status(self, draft_id: str, status: StrategyStatus) -> Draft:
+    def _set_status(
+        self,
+        draft_id: str,
+        status: StrategyStatus,
+        *,
+        reason: str | None = None,
+        override: bool = False,
+    ) -> Draft:
         draft = self.get_draft(draft_id)
         if draft.registered_strategy_id is None:
             raise ConflictError(f"draft {draft_id} is not registered yet")
-        with self._ctx.registry() as registry:
-            try:
-                registry.set_status(draft.registered_strategy_id, status)
-            except KeyError:
-                raise NotFoundError(
-                    f"registered strategy {draft.registered_strategy_id!r} no longer exists"
-                ) from None
+        try:
+            change_status(
+                self._ctx,
+                draft.registered_strategy_id,
+                status,
+                actor="studio",
+                reason=reason,
+                override=override,
+            )
+        except NotFoundError:
+            raise NotFoundError(
+                f"registered strategy {draft.registered_strategy_id!r} no longer exists"
+            ) from None
         _log.info(
             "studio.strategy_status",
             draft_id=draft_id,
@@ -588,39 +601,8 @@ class StudioService:
     # ---- internals: running ------------------------------------------------
 
     def _run_backtest(self, strategy: Any, request: DraftBacktestRequest) -> BacktestResult:
-        interval = _parse_interval(request.interval)
-        broker = SimulatedBroker(
-            portfolio=Portfolio(cash=request.initial_cash, positions={}),
-            slippage_bps=request.slippage_bps,
-            fee_per_trade=request.fee_per_trade,
-        )
-        config = BacktestConfig(
-            start=request.start,
-            end=request.end,
-            universe=list(request.universe),
-            interval=interval,
-            threshold=request.threshold,
-            rebalance_every_bars=request.rebalance_every_bars,
-        )
-        with self._ctx.lake() as lake:
-            report = Backtester(
-                strategies=[strategy], broker=broker, lake=lake, config=config
-            ).run()
-        return BacktestResult(
-            strategy_id=report.strategy_id,
-            interval=interval.code,
-            start=request.start,
-            end=request.end,
-            final_return=finite(report.final_return),
-            sharpe=finite(report.sharpe),
-            max_drawdown=finite(report.max_drawdown),
-            cagr=finite(report.cagr),
-            profit_factor=finite(report.profit_factor),
-            equity=[
-                EquityPoint(timestamp=_as_datetime(ts), value=float(v))
-                for ts, v in zip(report.equity_dates, report.equity_curve, strict=True)
-            ],
-        )
+        """Same backtest path as API backtests (cost model, trade ledger)."""
+        return self._lab.run_backtest_strategy(strategy, request)
 
     def _smoke_lake(self, factory: Callable[[], Any], request: ValidateRequest) -> SmokeCheck:
         errors: list[str] = []

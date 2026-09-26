@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  input,
+  linkedSignal,
+  output,
+  signal,
+} from '@angular/core';
 
 import type {
   BacktestRequest,
@@ -17,6 +25,7 @@ import {
   defaultBacktestForm,
 } from './lab-requests';
 import { StrategyPicker } from './strategy-picker';
+import { type StrategyPreset, presetParamValues } from './strategy-preset';
 import { WindowFields } from './window-fields';
 
 /** Backtest one strategy class with chosen parameters; emits the request body. */
@@ -31,10 +40,21 @@ export class BacktestFormView {
   readonly classes = input.required<readonly StrategyClassInfo[]>();
   readonly intervals = input<readonly IntervalInfo[]>([]);
   readonly costModels = input<readonly CostModelPreset[]>([]);
+  /** A registered strategy to start from (class and parameters). */
+  readonly preset = input<StrategyPreset | null>(null);
   readonly busy = input(false);
   readonly submitted = output<BacktestRequest>();
 
-  protected readonly form = signal<BacktestForm>(defaultBacktestForm());
+  protected readonly form = linkedSignal<StrategyPreset | null, BacktestForm>({
+    source: this.preset,
+    computation: (preset) => {
+      const form = defaultBacktestForm();
+      const cls = preset && this.classes().find((c) => c.class_path === preset.classPath);
+      return cls
+        ? { ...form, classPath: cls.class_path, params: presetParamValues(cls, preset.params) }
+        : form;
+    },
+  });
   protected readonly tried = signal(false);
 
   protected readonly selected = computed(

@@ -27,8 +27,28 @@ after the last bar are never filled. Per bar the engine:
 All bar prices for the universe / interval / window are loaded with one
 query up front, joined to ``instruments`` for each ticker's asset class
 (missing row or NULL -> ``equity``). The broker receives those asset
-classes and, when filling, each fill bar's volume, so its ``CostModel``
-can charge per-asset-class fees and volume-aware slippage.
+classes and, when filling, each fill bar's open, high, low and volume, so
+its ``FillModel`` can cap participation and honour limit / stop orders and
+its ``CostModel`` can charge per-asset-class fees and volume-aware
+slippage.
+
+Execution realism (BL-30, BL-31)
+--------------------------------
+When the broker's fill or cost model needs lagged statistics
+(``broker.market_stats_spec`` is not ``None``), the same single query also
+loads up to ``spec.lookback_bars`` warm-up bars per ticker before
+``start`` (never iterated, never on the equity curve), and
+``stonks.backtest.fills.lagged_market_stats`` computes each bar's ADV,
+sigma and spread estimate from **prior** bars only (a one-bar shift), once
+per run. Each fill bar hands those to the broker with its prices.
+
+Orders are placed with their decision time (``decided_at``) for the fill
+model's gap guard. Whatever the fill model defers (participation cap, zero
+volume; ``broker.unfilled_quantity``) is re-queued for the ticker's next
+bar as a child order ``"<client_id>~<n>"`` (distinct ids keep the broker's
+idempotency and give the trade ledger one fill per child); the next
+rebalance replaces it like any queued order. With the default broker
+nothing is deferred and nothing below changes.
 
 Corporate actions
 -----------------
@@ -44,6 +64,21 @@ applied event is listed in ``BacktestReport.corporate_actions`` so equity
 jumps are explainable. A ticker with no corporate-action rows behaves
 exactly as before. See ``stonks.backtest.corporate_actions``.
 
+Construction (BL-12)
+--------------------
+With ``BacktestConfig.construction`` unset, each strategy decides against
+the shared portfolio exactly as above. Set to a constructor name (or
+:class:`~stonks.portfolio.pipeline.ConstructionSettings`), every rebalance
+runs the same pipeline as the production tick
+(:func:`stonks.portfolio.pipeline.build_orders`): the strategies' signals
+are combined by the constructor (``strategy_weights`` in strategy order,
+equal by default), diffed into orders with the no-trade buffer and passed
+through every registered risk rule when ``BacktestConfig.risk`` is set, with
+a ``RiskContext`` from the engine's own equity curve and daily history. The
+history a decision sees ends at its bar (daily) or the day before
+(intraday), never later. Strategies are keyed ``"0"``, ``"1"``, ... by
+position; each decision's target book is kept in ``target_books``.
+
 Annualization
 -------------
 Sharpe uses ``periods_per_year(interval, asset_classes)`` over the asset
@@ -55,9 +90,10 @@ timestamps; see ``stonks.backtest.calendar``.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
@@ -67,16 +103,29 @@ from stonks.backtest.corporate_actions import (
     adjust_orders_for_split,
     apply_to_portfolio,
 )
+from stonks.backtest.fills import (
+    MarketStats,
+    MarketStatsSpec,
+    lagged_market_stats,
+    market_stats_from_row,
+)
 from stonks.backtest.report import BacktestReport, compute_report, periods_per_year
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.corporate_actions import CorporateActionsProvider, Split
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy
 from stonks.core.timeutil import as_datetime, day_end, day_start
-from stonks.core.types import AssetClass, Order
+from stonks.core.types import AssetClass, Order, OrderSide
 from stonks.logging import get_logger
 from stonks.store.corporate_actions import LakeCorporateActions
 from stonks.store.lake import DuckDBLake
+
+if TYPE_CHECKING:
+    # The pipeline imports ``stonks.config``, which imports the lab and so
+    # this module: it is imported where it runs, never at import time.
+    from stonks.config import RiskPolicy
+    from stonks.portfolio.base import TargetBook
+    from stonks.portfolio.pipeline import ConstructionSettings
 
 _log = get_logger("stonks.backtest.engine")
 
@@ -92,12 +141,30 @@ class BacktestConfig:
     rebalance_every_bars: int = 1
     #: Fraction of each cash dividend withheld as tax (0 = credit in full).
     dividend_withholding_rate: float = 0.0
+    #: ``None``: each strategy decides alone (see the module doc). A
+    #: constructor name or settings: the production construction pipeline.
+    construction: str | ConstructionSettings | None = None
+    #: Capital share per strategy, in strategy order (``None`` = equal).
+    strategy_weights: Sequence[float] | None = None
+    #: The risk policy the pipeline applies (``None`` = no risk layer).
+    risk: RiskPolicy | None = None
+    #: Daily bars of history a pipeline decision may read.
+    history_bars: int = 260
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.dividend_withholding_rate <= 1.0:
             raise ValueError(
                 f"dividend_withholding_rate must be in [0, 1], got {self.dividend_withholding_rate}"
             )
+        if isinstance(self.construction, str):
+            from stonks.portfolio.pipeline import ConstructionSettings
+
+            object.__setattr__(self, "construction", ConstructionSettings(method=self.construction))
+
+    @property
+    def construction_settings(self) -> ConstructionSettings | None:
+        # normalised to settings in __post_init__
+        return self.construction  # type: ignore[return-value]
 
 
 @dataclass(frozen=True)
@@ -106,6 +173,10 @@ class _Bar:
     close: float
     #: Units traded in the bar; ``None`` when the vendor gave no volume.
     volume: float | None = None
+    high: float | None = None
+    low: float | None = None
+    #: Lagged statistics for fills in this bar (only when a model needs them).
+    stats: MarketStats | None = None
 
 
 class Backtester:
@@ -122,9 +193,29 @@ class Backtester:
         self._lake = lake
         self._config = config
         self._corporate_actions = corporate_actions or LakeCorporateActions(lake)
+        # order bookkeeping for one run: decision time per client id, and
+        # the root id / part count of carried remainders
+        self._decided_at: dict[str, datetime] = {}
+        self._roots: dict[str, str] = {}
+        self._parts: dict[str, int] = {}
+        # construction-pipeline state for one run (see the module doc)
+        self._asset_classes: dict[str, AssetClass] = {}
+        self._history: dict[str, pd.DataFrame] = {}
+        self._equity: list[tuple[datetime, float]] = []
+        self._attribution: dict[str, dict[str, float]] = {}
+        self._fill_owner: dict[str, tuple[int, str]] = {}
+        self._fill_seq = 0
+        #: The target book of every pipeline decision, by bar.
+        self.target_books: dict[datetime, TargetBook] = {}
 
     def run(self) -> BacktestReport:
-        bars_by_ts, asset_classes = self._load_bars()
+        self._decided_at, self._roots, self._parts = {}, {}, {}
+        self._equity, self._attribution, self._fill_owner, self._fill_seq = [], {}, {}, 0
+        self.target_books = {}
+        spec = getattr(self._broker, "market_stats_spec", None)
+        bars_by_ts, asset_classes = self._load_bars(spec)
+        self._asset_classes = asset_classes
+        self._history = self._load_history(bars_by_ts)
         self._broker.set_asset_classes(asset_classes)
         schedule = CorporateActionSchedule(
             self._corporate_actions.load(list(self._config.universe))
@@ -157,6 +248,7 @@ class Backtester:
                 or bars_since_rebalance >= self._config.rebalance_every_bars
             ):
                 pending = self._decide(as_of, marks)
+                self._decided_at = {order.client_id: as_of for order in pending}
                 bars_since_rebalance = 1
             else:
                 bars_since_rebalance += 1
@@ -165,6 +257,7 @@ class Backtester:
             portfolio = self._broker.fetch_portfolio()
             equity_dates.append(as_of)
             equity_curve.append(portfolio.total_value(marks))
+            self._equity.append((as_of, equity_curve[-1]))
 
         if pending:
             _log.debug("unfilled_orders_at_end", count=len(pending))
@@ -180,38 +273,68 @@ class Backtester:
     # ---- internals ----------------------------------------------------------
 
     def _load_bars(
-        self,
+        self, spec: MarketStatsSpec | None = None
     ) -> tuple[dict[datetime, dict[str, _Bar]], dict[str, AssetClass]]:
         """All bars for the universe / interval / window, keyed by timestamp
         (ascending) then ticker, plus the asset class of every ticker that
         has bars (from ``instruments``; no row or NULL means equity). One
-        query for the whole run."""
+        query for the whole run. With a ``spec`` the query also returns up
+        to ``spec.lookback_bars`` warm-up bars per ticker before the window,
+        used only to compute each bar's lagged ``MarketStats``."""
         start_ts, end_ts = _to_window_bounds(self._config.start, self._config.end)
-        df = self._lake.sql(
-            """
-            SELECT b.timestamp, b.ticker, b.open, b.close, b.volume,
-                   COALESCE(i.asset_class, 'equity') AS asset_class
-              FROM bars b
-              LEFT JOIN instruments i ON i.id = b.ticker
-             WHERE b.ticker = ANY(?) AND b.interval = ?
-               AND b.timestamp BETWEEN ? AND ?
-             ORDER BY b.timestamp, b.ticker
-            """,
-            [
-                list(self._config.universe),
-                self._config.interval.code,
-                start_ts,
-                end_ts,
-            ],
-        )
+        universe = list(self._config.universe)
+        interval = self._config.interval.code
+        if spec is None:
+            df = self._lake.sql(
+                f"""
+                SELECT {_BAR_COLUMNS}, TRUE AS in_window
+                  FROM bars b
+                  LEFT JOIN instruments i ON i.id = b.ticker
+                 WHERE b.ticker = ANY(?) AND b.interval = ?
+                   AND b.timestamp BETWEEN ? AND ?
+                 ORDER BY b.timestamp, b.ticker
+                """,
+                [universe, interval, start_ts, end_ts],
+            )
+        else:
+            df = self._lake.sql(
+                f"""
+                SELECT {_BAR_COLUMNS}, b.timestamp >= ? AS in_window
+                  FROM bars b
+                  LEFT JOIN instruments i ON i.id = b.ticker
+                 WHERE b.ticker = ANY(?) AND b.interval = ? AND b.timestamp <= ?
+                QUALIFY b.timestamp >= ?
+                     OR ROW_NUMBER() OVER (
+                            PARTITION BY b.ticker, b.timestamp >= ?
+                            ORDER BY b.timestamp DESC
+                        ) <= ?
+                 ORDER BY b.timestamp, b.ticker
+                """,
+                [start_ts, universe, interval, end_ts, start_ts, start_ts, spec.lookback_bars],
+            )
+        stats = None
+        if spec is not None and not df.empty:
+            frame = lagged_market_stats(df, spec)
+            stats = zip(
+                frame["adv"].to_numpy(),
+                frame["sigma_daily"].to_numpy(),
+                frame["half_spread_bps"].to_numpy(),
+                strict=True,
+            )
         out: dict[datetime, dict[str, _Bar]] = {}
         asset_classes: dict[str, AssetClass] = {}
         for row in df.itertuples(index=False):
+            row_stats = next(stats) if stats is not None else None
+            if not row.in_window:
+                continue
             asset_classes[row.ticker] = row.asset_class
-            open_ = None if pd.isna(row.open) else float(row.open)
-            volume = None if pd.isna(row.volume) else float(row.volume)
             out.setdefault(as_datetime(row.timestamp), {})[row.ticker] = _Bar(
-                open=open_, close=float(row.close), volume=volume
+                open=_float(row.open),
+                close=float(row.close),
+                volume=_float(row.volume),
+                high=_float(row.high),
+                low=_float(row.low),
+                stats=None if row_stats is None else market_stats_from_row(*row_stats),
             )
         return out, asset_classes
 
@@ -253,23 +376,51 @@ class Backtester:
         self, pending: list[Order], bars: dict[str, _Bar], as_of: datetime
     ) -> list[Order]:
         """Fill queued orders whose ticker has an open at this bar; return
-        the orders still waiting for their ticker's next bar.
+        the orders still waiting for their ticker's next bar, plus the
+        remainders the fill model deferred.
 
-        The broker's cost model sees this (fill) bar's volume. That is not
-        look-ahead: it only prices the execution of a fill that happens
-        inside this bar, and no strategy decision ever reads it."""
+        The broker sees this (fill) bar's volume, high and low. That is not
+        look-ahead: they only price and bound the execution of a fill that
+        happens inside this bar, and no strategy decision ever reads them.
+        The ``MarketStats`` it sees come from earlier bars only."""
         opens = {t: b.open for t, b in bars.items() if b.open is not None and b.open > 0}
         volumes = {t: bars[t].volume for t in opens if bars[t].volume is not None}
-        self._broker.set_prices(opens, as_of=as_of, volumes=volumes)
+        highs = {t: bars[t].high for t in opens if bars[t].high is not None}
+        lows = {t: bars[t].low for t in opens if bars[t].low is not None}
+        stats = {t: bars[t].stats for t in opens if bars[t].stats is not None}
+        self._broker.set_prices(
+            opens, as_of=as_of, volumes=volumes, highs=highs, lows=lows, stats=stats
+        )
         waiting: list[Order] = []
         for order in pending:
-            if order.ticker in opens:
-                self._broker.place_order(order)
-            else:
+            if order.ticker not in opens:
                 waiting.append(order)
+                continue
+            fill = self._broker.place_order(order, decided_at=self._decided_at.get(order.client_id))
+            if fill is not None and order.strategy_id is not None:
+                self._fill_seq += 1
+                self._fill_owner[order.ticker] = (self._fill_seq, order.strategy_id)
+            rest = self._broker.unfilled_quantity(order.client_id)
+            if rest > 0:
+                waiting.append(self._carry(order, rest, as_of))
         return waiting
 
+    def _carry(self, order: Order, quantity: float, as_of: datetime) -> Order:
+        """The deferred ``quantity`` of ``order`` as a new child order."""
+        root = self._roots.get(order.client_id, order.client_id)
+        part = self._parts.get(root, 1) + 1
+        self._parts[root] = part
+        child = replace(order, client_id=f"{root}~{part}", quantity=quantity)
+        self._roots[child.client_id] = root
+        self._decided_at[child.client_id] = as_of
+        return child
+
     def _decide(self, as_of: datetime, prices: dict[str, float]) -> list[Order]:
+        if self._config.construction_settings is not None:
+            return self._decide_with_pipeline(as_of, prices)
+        return self._decide_per_strategy(as_of, prices)
+
+    def _decide_per_strategy(self, as_of: datetime, prices: dict[str, float]) -> list[Order]:
         """Picks and orders are keyed by the strategy's *position* in the
         engine, not its class-level ``id``, so two instances of one class
         (different params) keep separate picks; each order's ``client_id``
@@ -292,6 +443,120 @@ class Backtester:
                 for order in strategy.decide(picks, portfolio, prices, as_of)
             )
         return orders
+
+    # ---- construction pipeline (BL-12) --------------------------------------
+
+    def _decide_with_pipeline(self, as_of: datetime, prices: dict[str, float]) -> list[Order]:
+        """The production pipeline over this bar's signals; see the module doc."""
+        from stonks.portfolio.pipeline import (
+            PORTFOLIO_STRATEGY,
+            BookInput,
+            MarketView,
+            build_orders,
+            vols_from_history,
+        )
+        from stonks.production.rules import RiskContext
+
+        construction = self._config.construction_settings
+        assert construction is not None
+        keys = [str(i) for i in range(len(self._strategies))]
+        signals: dict[str, dict[str, float]] = {}
+        for key, strategy in zip(keys, self._strategies, strict=True):
+            scores: dict[str, float] = {}
+            for ticker in self._config.universe:
+                r = strategy.estimate_return(ticker, as_of, self._lake)
+                if r is not None and r > self._config.threshold:
+                    scores[ticker] = r
+            signals[key] = scores
+        portfolio = self._broker.fetch_portfolio()
+        history = self._history_until(as_of)
+        market = MarketView(
+            as_of=as_of,
+            prices=prices,
+            asset_classes=self._asset_classes,
+            vols_annual={} if construction.is_single_winner else vols_from_history(history),
+        )
+        weights = self._config.strategy_weights
+        policy = self._config.risk
+        context = None
+        if policy is not None:
+            context = RiskContext(
+                portfolio=portfolio,
+                prices=prices,
+                asset_classes=self._asset_classes,
+                policy=policy,
+                history=history,
+                equity_curve=[(ts.date(), value) for ts, value in self._equity],
+            )
+        book = BookInput(
+            portfolio=portfolio,
+            construction=construction,
+            risk=policy,
+            strategy_weights=None if weights is None else dict(zip(keys, weights, strict=True)),
+            prior_attribution=self._attribution,
+            risk_context=context,
+        )
+
+        def client_id(strategy_id: str | None, ticker: str, side: OrderSide) -> str:
+            return f"{strategy_id or PORTFOLIO_STRATEGY}:{as_of.isoformat()}:{ticker}:{side}"
+
+        result = build_orders(
+            signals,
+            book,
+            market,
+            strategies=lambda key: self._strategies[int(key)],
+            exit_owner=lambda: self._exit_owner(portfolio.positions),
+            client_id=client_id,
+        )
+        self.target_books[as_of] = result.target_book
+        self._attribution = {**self._attribution, **result.attribution}
+        return list(result.orders)
+
+    def _exit_owner(self, positions: Mapping[str, float]) -> str | None:
+        """The strategy behind the most recent fill on a held ticker."""
+        owners = [self._fill_owner[t] for t, q in positions.items() if q and t in self._fill_owner]
+        return max(owners)[1] if owners else None
+
+    def _load_history(self, bars_by_ts: Mapping[datetime, object]) -> dict[str, pd.DataFrame]:
+        """Daily adjusted history for the pipeline's volatilities and risk
+        context: ``history_bars`` before the window plus the window itself.
+        Only loaded when the pipeline runs."""
+        if self._config.construction_settings is None or not bars_by_ts:
+            return {}
+        from stonks.production.prices import load_history
+
+        end = max(bars_by_ts).date()
+        days = len({ts.date() for ts in bars_by_ts})
+        return load_history(
+            self._lake,
+            list(self._config.universe),
+            end,
+            bars=self._config.history_bars + days,
+        )
+
+    def _history_until(self, as_of: datetime) -> dict[str, pd.DataFrame]:
+        """History a decision at ``as_of`` may see: daily bars dated on or
+        before its day for a daily run (the bar closed at the decision),
+        strictly before it for intraday runs (today's daily bar is not
+        complete yet)."""
+        last = as_of.date()
+        if self._config.interval != Interval.DAY_1:
+            last -= timedelta(days=1)
+        cutoff = pd.Timestamp(last)
+        out: dict[str, pd.DataFrame] = {}
+        for ticker, frame in self._history.items():
+            visible = frame.loc[:cutoff].tail(self._config.history_bars)
+            if not visible.empty:
+                out[ticker] = visible
+        return out
+
+
+_BAR_COLUMNS = """b.timestamp, b.ticker, b.open, b.high, b.low, b.close, b.adj_close,
+                   b.volume, COALESCE(i.asset_class, 'equity') AS asset_class"""
+
+
+def _float(value) -> float | None:
+    return None if pd.isna(value) else float(value)
 
 
 def _to_window_bounds(start, end) -> tuple[datetime, datetime]:

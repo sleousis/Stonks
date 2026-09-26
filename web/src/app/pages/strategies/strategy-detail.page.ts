@@ -14,6 +14,7 @@ import { StrategiesService } from '../../api/strategies.service';
 import { ConfirmService, type ConfirmOptions } from '../../core/confirm/confirm.service';
 import { formatDate, formatDateTime, formatNumber } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
+import { HelpTip } from '../../shared/ui/help-tip';
 import { PageHeader } from '../../shared/ui/page-header';
 import { ErrorState, EmptyState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
@@ -86,7 +87,7 @@ function metricList(report: SurvivalReportView): { key: string; value: string }[
 @Component({
   selector: 'app-strategy-detail-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, PageHeader, StatusPill, LoadingState, EmptyState, ErrorState],
+  imports: [HelpTip, RouterLink, PageHeader, StatusPill, LoadingState, EmptyState, ErrorState],
   templateUrl: './strategy-detail.page.html',
   styleUrl: './strategy-detail.page.scss',
 })

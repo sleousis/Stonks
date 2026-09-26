@@ -9,7 +9,7 @@ from __future__ import annotations
 import importlib
 from datetime import date
 from pathlib import Path
-from typing import cast, get_args
+from typing import Any, cast, get_args
 
 import typer
 from rich.console import Console
@@ -736,32 +736,122 @@ def registry_show(strategy_id: str) -> None:
         state.close()
 
 
-def _set_status_or_exit(registry: StrategyRegistry, strategy_id: str, status: str) -> None:
+def _cli_actor() -> str:
+    """``cli:<os user>``: who a CLI status change is logged under."""
+    import getpass
+
     try:
-        registry.set_status(strategy_id, status)
-    except KeyError:
+        return f"cli:{getpass.getuser()}"
+    except Exception:  # no login name (some containers / services)
+        return "cli"
+
+
+def _reason_option() -> typer.models.OptionInfo:
+    return typer.Option(None, "--reason", help="why (logged; required for demotions and overrides)")
+
+
+def _change_status_or_exit(
+    settings: Settings,
+    strategy_id: str,
+    status: str,
+    *,
+    reason: str | None,
+    override: bool = False,
+) -> None:
+    """Change a strategy's status through the governed service
+    (``app.strategies.change_status``: go-live gate for promotions, audit
+    row for every change). Refusals print a friendly message and exit 1."""
+    from stonks.app.context import AppContext
+    from stonks.app.errors import AppError, NotFoundError
+    from stonks.app.strategies import PromotionRefusedError, change_status
+
+    with SqliteState(settings.state.path) as state:
+        state.migrate()
+    try:
+        change = change_status(
+            AppContext(settings),
+            strategy_id,
+            status,
+            actor=_cli_actor(),
+            reason=reason,
+            override=override,
+        )
+    except NotFoundError:
         console.print(f"[red]no strategy with id {strategy_id!r}[/red]")
         raise typer.Exit(code=1) from None
+    except PromotionRefusedError as exc:
+        console.print(f"[red]promotion refused: {exc}[/red]")
+        if exc.failures:
+            console.print("failing go-live checks:")
+            for line in exc.failures:
+                console.print(f"  - {line}")
+        console.print(
+            "See `stonks golive check <id>`, or pass --override with a --reason "
+            "of at least 20 characters."
+        )
+        raise typer.Exit(code=1) from None
+    except AppError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from None
+    colour = {"active": "green", "shadow": "cyan", "retired": "yellow"}[status]
+    if change is None:
+        console.print(f"[{colour}]{strategy_id} is already {status}[/{colour}]")
+    else:
+        console.print(f"[{colour}]{strategy_id} → {status}[/{colour}]")
 
 
 @registry_app.command("promote")
-def registry_promote(strategy_id: str) -> None:
-    settings = _settings()
-    state, registry = _open_registry(settings)
-    try:
-        _set_status_or_exit(registry, strategy_id, "active")
-        console.print(f"[green]{strategy_id} → active[/green]")
-    finally:
-        state.close()
+def registry_promote(
+    strategy_id: str,
+    reason: str | None = _reason_option(),
+    override: bool = typer.Option(
+        False,
+        "--override",
+        help="promote without a passing go-live check (needs --reason, >= 20 chars)",
+    ),
+) -> None:
+    """Move a strategy to active. Needs a passing go-live check, or
+    --override with a reason; every change is audited."""
+    _change_status_or_exit(_settings(), strategy_id, "active", reason=reason, override=override)
+
+
+@registry_app.command("shadow")
+def registry_shadow(strategy_id: str, reason: str | None = _reason_option()) -> None:
+    """Move a strategy back to shadow (paper-traded on a virtual portfolio)."""
+    _change_status_or_exit(_settings(), strategy_id, "shadow", reason=reason)
 
 
 @registry_app.command("retire")
-def registry_retire(strategy_id: str) -> None:
+def registry_retire(strategy_id: str, reason: str | None = _reason_option()) -> None:
+    """Retire a strategy: it is no longer ranked or evaluated."""
+    _change_status_or_exit(_settings(), strategy_id, "retired", reason=reason)
+
+
+@registry_app.command("history")
+def registry_history(strategy_id: str) -> None:
+    """The strategy's audited status changes and interventions, oldest first."""
     settings = _settings()
     state, registry = _open_registry(settings)
     try:
-        _set_status_or_exit(registry, strategy_id, "retired")
-        console.print(f"[yellow]{strategy_id} → retired[/yellow]")
+        state.migrate()
+        if not any(h.id == strategy_id for h in registry.list_all()):
+            console.print(f"[red]no strategy with id {strategy_id!r}[/red]")
+            raise typer.Exit(code=1)
+        table = Table(title=f"status history: {strategy_id}")
+        for col in ("when", "kind", "change", "actor", "override", "go-live", "reason"):
+            table.add_column(col)
+        for c in registry.status_history(strategy_id):
+            golive = "-" if c.golive_passed is None else ("pass" if c.golive_passed else "fail")
+            table.add_row(
+                c.created_at,
+                c.kind,
+                f"{c.from_status} → {c.to_status}" if c.to_status else "-",
+                c.actor,
+                "override" if c.override else "",
+                golive,
+                c.reason,
+            )
+        console.print(table)
     finally:
         state.close()
 
@@ -986,16 +1076,122 @@ app.add_typer(lab_app, name="lab")
 
 _LAB_TUNERS = ("grid", "random")
 _LAB_OBJECTIVES = ("sharpe", "cagr", "final_return")
-_LAB_TESTS = ("oos", "period_stability", "perturbation", "runs_test", "drift")
+_LAB_COST_MODELS = ("config", "zero", "realistic")
 
 
 def _choice(flag: str, choices: tuple[str, ...]):
-    def check(value: str) -> str:
-        if value not in choices:
+    def check(value: str | None) -> str | None:
+        if value is not None and value not in choices:
             raise typer.BadParameter(f"{flag} must be one of {list(choices)}, got {value!r}")
         return value
 
     return check
+
+
+def _preset_choices() -> tuple[str, ...]:
+    from stonks.lab.survival.registry import preset_names
+
+    return tuple(preset_names())
+
+
+def _lab_suite(
+    tests: str | None,
+    preset: str | None,
+    *,
+    mcpt: bool,
+    walk_forward: bool,
+    registers: bool = False,
+) -> list[str]:
+    """Survival test ids for ``stonks lab run``: ``--tests``, else
+    ``--preset``, else ``promotion`` when registering and ``quick``
+    otherwise (the registry's ``resolve_suite``), plus ``mcpt`` /
+    ``walk_forward`` when their flags are set."""
+    from stonks.lab.survival.registry import resolve_suite, survival_test_names
+
+    explicit = _parse_tickers(tests)
+    known = survival_test_names()
+    unknown = [t for t in explicit if t not in known]
+    if unknown:
+        raise typer.BadParameter(f"unknown tests {unknown}; choose from {known}")
+    default = "promotion" if registers else "quick"
+    suite = resolve_suite(explicit, preset=preset, default=default)
+    for flag, test_id in ((mcpt, "mcpt"), (walk_forward, "walk_forward")):
+        if flag and test_id not in suite:
+            suite.append(test_id)
+    return suite
+
+
+def _parse_test_options(values: list[str] | None) -> dict[str, dict[str, Any]] | None:
+    """``--test-option TEST.OPTION=VALUE`` (repeatable) as
+    ``{test: {option: value}}``. VALUE is JSON when it parses (numbers,
+    booleans, lists, null), else a plain string. The lab request validates
+    names and values against each test's options."""
+    import json
+
+    out: dict[str, dict[str, Any]] = {}
+    for raw in values or []:
+        key, sep, text = raw.partition("=")
+        test, dot, option = key.strip().partition(".")
+        if not (sep and dot and test and option):
+            raise typer.BadParameter(
+                f"expected TEST.OPTION=VALUE (e.g. oos.min_trades=0), got {raw!r}",
+                param_hint="--test-option",
+            )
+        try:
+            value: Any = json.loads(text)
+        except json.JSONDecodeError:
+            value = text
+        out.setdefault(test, {})[option.strip()] = value
+    return out or None
+
+
+_TEST_OPTION = typer.Option(
+    None,
+    "--test-option",
+    help="survival-test option TEST.OPTION=VALUE, repeatable "
+    "(e.g. oos.mode=sharpe, pbo.max_pbo=0.3, mc_trades.n_paths=2000); "
+    "VALUE is JSON or a string",
+)
+_BENCHMARK = typer.Option(
+    None,
+    "--benchmark",
+    help="auto|EW|<ticker>|none; default [lab] benchmark",
+)
+
+
+def _validated_strategy(strategy: str, params: str) -> tuple[type, dict]:
+    import json
+
+    from stonks.lab.catalog import resolve_strategy
+
+    try:
+        strategy_cls = resolve_strategy(strategy)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc), param_hint="STRATEGY") from None
+    try:
+        pinned = json.loads(params)
+    except json.JSONDecodeError as exc:
+        raise typer.BadParameter(f"not valid JSON ({exc})", param_hint="--params") from None
+    if not isinstance(pinned, dict):
+        raise typer.BadParameter("must be a JSON object", param_hint="--params")
+    try:
+        strategy_cls(pinned)  # validates names, types and bounds
+    except (ValueError, TypeError) as exc:
+        raise typer.BadParameter(str(exc), param_hint="--params") from None
+    return strategy_cls, pinned
+
+
+def _cost_model_option(name: str) -> str | None:
+    """``config`` means ``[backtest.costs]`` (no override)."""
+    return None if name == "config" else name
+
+
+def _parallel_settings(settings: Settings, workers: int | None):
+    return (
+        settings.lab.parallel
+        if workers is None
+        else settings.lab.parallel.model_copy(update={"max_workers": workers})
+    )
 
 
 @lab_app.command("run")
@@ -1027,16 +1223,29 @@ def lab_run(
         callback=_choice("--objective", _LAB_OBJECTIVES),
         help="sharpe|cagr|final_return",
     ),
-    tests: str = typer.Option(
-        "oos", "--tests", help=f"comma-separated base survival tests ({'|'.join(_LAB_TESTS)})"
+    tests: str | None = typer.Option(
+        None,
+        "--tests",
+        help="comma-separated survival test ids (see stonks.lab.survival.registry); "
+        "default: --preset",
+    ),
+    preset: str | None = typer.Option(
+        None,
+        "--preset",
+        callback=_choice("--preset", _preset_choices()),
+        help="named suite when --tests is not given: quick (default)|standard|promotion",
     ),
     mcpt: bool = typer.Option(False, "--mcpt", help="out-of-sample permutation test"),
     mcpt_retune: bool = typer.Option(
         False, "--mcpt-retune", help="permutation test re-tuning on each permuted train window"
     ),
-    mcpt_permutations: int = typer.Option(50, "--mcpt-permutations", min=1),
-    mcpt_max_p: float = typer.Option(0.05, "--mcpt-max-p", min=0.0, max=1.0),
-    mcpt_seed: int = typer.Option(17, "--mcpt-seed"),
+    mcpt_permutations: int | None = typer.Option(
+        None, "--mcpt-permutations", min=1, help="default 200"
+    ),
+    mcpt_max_p: float | None = typer.Option(
+        None, "--mcpt-max-p", min=0.0001, max=1.0, help="default 0.05"
+    ),
+    mcpt_seed: int | None = typer.Option(None, "--mcpt-seed", help="default 17"),
     walk_forward: bool = typer.Option(False, "--walk-forward", help="add walk-forward test"),
     wf_splits: int | None = typer.Option(
         None, "--wf-splits", min=1, help="default [lab.walk_forward].n_splits"
@@ -1047,50 +1256,68 @@ def lab_run(
     wf_anchored: bool | None = typer.Option(
         None, "--wf-anchored/--wf-rolling", help="default [lab.walk_forward].anchored"
     ),
-    register: bool = typer.Option(
-        False, "--register", help="register the strategy in shadow if the verdict is pass"
+    wf_min_wfe: float | None = typer.Option(
+        None,
+        "--wf-min-wfe",
+        min=0.0,
+        max=1.0,
+        help="walk-forward efficiency gate; default [lab.walk_forward].min_wfe",
     ),
+    wf_matrix: bool | None = typer.Option(
+        None,
+        "--wf-matrix/--no-wf-matrix",
+        help="also run the train x test matrix; default [lab.walk_forward].matrix",
+    ),
+    embargo_bars: int | None = typer.Option(
+        None,
+        "--embargo-bars",
+        min=0,
+        help="bars between train and validation windows; default [lab] embargo_bars",
+    ),
+    cost_model: str = typer.Option(
+        "config",
+        "--cost-model",
+        callback=_choice("--cost-model", _LAB_COST_MODELS),
+        help="config ([backtest.costs], default)|zero|realistic",
+    ),
+    workers: int | None = typer.Option(
+        None, "--workers", min=0, help="tuning processes; default [lab.parallel] (0 = all cores)"
+    ),
+    hypothesis: str | None = typer.Option(
+        None, "--hypothesis", help="the edge and who pays for it (recorded before tuning, P1)"
+    ),
+    premortem: str | None = typer.Option(
+        None, "--premortem", help="how this strategy is expected to fail (recorded)"
+    ),
+    register_if_passes: bool = typer.Option(
+        False,
+        "--register-if-passes",
+        "--register",
+        help="register the strategy in shadow only if every survival test passes "
+        "(default suite: promotion)",
+    ),
+    test_option: list[str] | None = _TEST_OPTION,
+    benchmark: str | None = _BENCHMARK,
     json_out: str | None = typer.Option(None, "--json-out", help="write the result as JSON"),
 ) -> None:
     """Tune a strategy on the train window, then run the survival suite.
 
-    Transaction costs come from [backtest.costs]; walk-forward defaults
-    from [lab.walk_forward].
+    Every run is pre-registered in the trial ledger (with --hypothesis /
+    --premortem). Transaction costs come from [backtest.costs] unless
+    --cost-model says otherwise; walk-forward defaults from
+    [lab.walk_forward]; tuning workers from [lab.parallel]; the benchmark
+    from [lab] benchmark. --test-option tunes any survival test.
     """
     import json
 
+    from stonks.app.errors import ValidationError as AppValidationError
+    from stonks.app.lab import LabRunRequest, McptOptions, execute_lab_run
     from stonks.app.serialize import to_jsonable
+    from stonks.app.strategies import StrategyRef
     from stonks.core.interval import Interval
-    from stonks.lab.catalog import resolve_strategy
-    from stonks.lab.dataset import LabDataset
-    from stonks.lab.objectives import CAGRObjective, FinalReturnObjective, SharpeObjective
-    from stonks.lab.runner import LabRunner
-    from stonks.lab.survival.base import SurvivalSuite
-    from stonks.lab.survival.drift import DriftTest
-    from stonks.lab.survival.oos import OutOfSampleTest
-    from stonks.lab.survival.period_stability import PeriodStabilityTest
-    from stonks.lab.survival.permutation import MonteCarloPermutationTest
-    from stonks.lab.survival.perturbation import PerturbationTest
-    from stonks.lab.survival.runs_test import RunsTestSurvivalTest
-    from stonks.lab.survival.walk_forward import WalkForwardTest
-    from stonks.lab.tuning.grid import GridTuner
-    from stonks.lab.tuning.random import RandomTuner
 
     # -- validate everything before touching the lake ------------------------
-    try:
-        strategy_cls = resolve_strategy(strategy)
-    except ValueError as exc:
-        raise typer.BadParameter(str(exc), param_hint="STRATEGY") from None
-    try:
-        pinned = json.loads(params)
-    except json.JSONDecodeError as exc:
-        raise typer.BadParameter(f"not valid JSON ({exc})", param_hint="--params") from None
-    if not isinstance(pinned, dict):
-        raise typer.BadParameter("must be a JSON object", param_hint="--params")
-    try:
-        strategy_cls(pinned)  # validates names, types and bounds
-    except (ValueError, TypeError) as exc:
-        raise typer.BadParameter(str(exc), param_hint="--params") from None
+    strategy_cls, pinned = _validated_strategy(strategy, params)
     start_d, end_d = date.fromisoformat(start), date.fromisoformat(end)
     if start_d >= end_d:
         raise typer.BadParameter("--start must be before --end")
@@ -1100,83 +1327,95 @@ def lab_run(
         raise typer.BadParameter(str(exc), param_hint="--interval") from None
     if mcpt and mcpt_retune:
         raise typer.BadParameter("pass one of --mcpt / --mcpt-retune, not both")
-    base_tests = _parse_tickers(tests)
-    unknown = [t for t in base_tests if t not in _LAB_TESTS]
-    if unknown:
-        raise typer.BadParameter(f"unknown tests {unknown}; choose from {list(_LAB_TESTS)}")
+    suite = _lab_suite(
+        tests,
+        preset,
+        mcpt=mcpt or mcpt_retune,
+        walk_forward=walk_forward,
+        registers=register_if_passes,
+    )
+    test_options = _parse_test_options(test_option)
+    # only what was passed: the rest comes from the preset or the test
+    mcpt_set: dict[str, Any] = {
+        k: v
+        for k, v in {
+            "n_permutations": mcpt_permutations,
+            "max_p_value": mcpt_max_p,
+            "seed": mcpt_seed,
+            "retune": True if mcpt_retune else False if mcpt else None,
+        }.items()
+        if v is not None
+    }
 
     settings = _settings()
     universe = _parse_tickers(tickers) or list(settings.production.universe)
     if not universe:
         raise typer.BadParameter("pass --tickers or set [production].universe")
 
-    factories = {
-        "oos": OutOfSampleTest,
-        "period_stability": PeriodStabilityTest,
-        "perturbation": PerturbationTest,
-        "runs_test": RunsTestSurvivalTest,
-        "drift": DriftTest,
+    wf_overrides = {
+        k: v
+        for k, v in {
+            "n_splits": wf_splits,
+            "test_days": wf_test_days,
+            "anchored": wf_anchored,
+            "min_wfe": wf_min_wfe,
+            "matrix": wf_matrix,
+        }.items()
+        if v is not None
     }
-    suite_tests = [factories[t]() for t in base_tests]
-    if mcpt or mcpt_retune:
-        suite_tests.append(
-            MonteCarloPermutationTest(
-                n_permutations=mcpt_permutations,
-                max_p_value=mcpt_max_p,
-                retune=mcpt_retune,
-                seed=mcpt_seed,
-            )
-        )
-    if walk_forward:
-        overrides = {
-            k: v
-            for k, v in {
-                "n_splits": wf_splits,
-                "test_days": wf_test_days,
-                "anchored": wf_anchored,
-            }.items()
-            if v is not None
-        }
-        suite_tests.append(WalkForwardTest(settings.lab.walk_forward.model_copy(update=overrides)))
-
-    objectives = {
-        "sharpe": SharpeObjective,
-        "cagr": CAGRObjective,
-        "final_return": FinalReturnObjective,
-    }
-    lab_tuner = (
-        GridTuner(grid_size=grid_size, seed=seed) if tuner == "grid" else RandomTuner(seed=seed)
-    )
-    runner = LabRunner(
-        tuner=lab_tuner,
-        objective=objectives[objective](),
-        suite=SurvivalSuite(suite_tests),
-        budget=budget,
-    )
-
-    lake = _open_lake(settings.lake.path)
+    class_path = f"{strategy_cls.__module__}:{strategy_cls.__name__}"
     try:
-        dataset = LabDataset(
-            lake=lake,
+        request = LabRunRequest(
+            strategy=StrategyRef(class_path=class_path),
             universe=universe,
             start=start_d,
             end=end_d,
+            interval=bar_interval.code,
             train_ratio=train_ratio,
-            interval=bar_interval,
-            costs=settings.backtest.costs,
+            tuner=tuner,  # type: ignore[arg-type]
+            grid_size=grid_size,
+            budget=budget,
+            seed=seed,
+            objective=objective,  # type: ignore[arg-type]
+            survival_tests=suite,
+            walk_forward=(
+                settings.lab.walk_forward.model_copy(update=wf_overrides)
+                if "walk_forward" in suite
+                else None
+            ),
+            # the preset's test options apply unless --tests replaced its suite
+            preset=None if tests else preset or ("promotion" if register_if_passes else "quick"),
+            mcpt=McptOptions(**mcpt_set) if "mcpt" in suite and mcpt_set else None,
+            register_if_passes=register_if_passes,
+            cost_model=_cost_model_option(cost_model),  # type: ignore[arg-type]
+            hypothesis=hypothesis,
+            premortem=premortem,
+            test_options=test_options,
+            benchmark=benchmark,
+            embargo_bars=embargo_bars,
         )
-        result = runner.run(strategy_cls, dataset, fixed_params=pinned)
+    except ValueError as exc:  # pydantic ValidationError is a ValueError
+        raise typer.BadParameter(str(exc)) from None
+
+    lake = _open_lake(settings.lake.path)
+    state = SqliteState(settings.state.path)
+    try:
+        state.migrate()
+        execution = execute_lab_run(
+            settings,
+            strategy_cls,
+            request,
+            lake=lake,
+            state=state,
+            fixed_params=pinned,
+            parallel=_parallel_settings(settings, workers),
+        )
+    except AppValidationError as exc:  # e.g. [lab] embargo_bars vs the window
+        raise typer.BadParameter(str(exc)) from None
     finally:
         lake.close()
-
-    registered_id: str | None = None
-    if register and result.verdict == "pass":
-        state, registry = _open_registry(settings)
-        try:
-            state.migrate()
-            registered_id = registry.register(result.strategy, result.survival_reports)
-        finally:
-            state.close()
+        state.close()
+    result, registered_id = execution.result, execution.registered_id
 
     table = Table(title=f"lab run: {strategy_cls.__name__}  verdict={result.verdict}")
     for col in ("test", "passed", "metrics"):
@@ -1184,12 +1423,23 @@ def lab_run(
     for rep in result.survival_reports:
         metrics = ", ".join(f"{k}={v:.4g}" for k, v in sorted(rep.metrics.items()))
         table.add_row(rep.test_id, "yes" if rep.passed else "no", metrics)
+    console.print(f"run: {result.run_id}")
     console.print(f"best params: {dict(result.best_params)}")
-    console.print(f"best {objective} (train): {result.best_score:.4g}")
+    console.print(
+        f"best {objective} (train): {result.best_score:.4g}  "
+        f"[{result.n_trials_run} trials, {result.n_trials_class} for this class]"
+    )
     console.print(table)
+    if execution.benchmark is not None:
+        s = execution.benchmark.stats
+        console.print(
+            f"vs {execution.benchmark.curve.name} (validation): "
+            f"excess CAGR {s.excess_cagr:+.2%}, IR {s.information_ratio:.2f}, "
+            f"beta {s.beta:.2f}, alpha t {s.alpha_tstat:.2f}"
+        )
     colour = "green" if result.verdict == "pass" else "red"
     console.print(f"[{colour}]verdict: {result.verdict}[/{colour}]")
-    if register:
+    if register_if_passes:
         if registered_id is not None:
             console.print(f"[green]registered {registered_id} (shadow)[/green]")
         else:
@@ -1197,10 +1447,14 @@ def lab_run(
 
     if json_out is not None:
         doc = {
-            "strategy": f"{strategy_cls.__module__}:{strategy_cls.__name__}",
+            "strategy": class_path,
             "universe": universe,
             "window": [start, end],
             "interval": bar_interval.code,
+            "run_id": result.run_id,
+            "n_trials_run": result.n_trials_run,
+            "n_trials_class": result.n_trials_class,
+            "hypothesis": hypothesis,
             "best_params": dict(result.best_params),
             "best_score": result.best_score,
             "verdict": result.verdict,
@@ -1214,8 +1468,148 @@ def lab_run(
                 for rep in result.survival_reports
             ],
             "registered_id": registered_id,
+            "benchmark": execution.view().benchmark,
         }
         Path(json_out).write_text(json.dumps(to_jsonable(doc), indent=2, sort_keys=True))
+
+
+@lab_app.command("sweep")
+def lab_sweep(
+    tickers: str | None = typer.Option(
+        None, "--tickers", help="comma-separated basket; default [production].universe"
+    ),
+    start: str = typer.Option(..., "--start", callback=_validate_iso_date, help="YYYY-MM-DD"),
+    end: str = typer.Option(..., "--end", callback=_validate_iso_date, help="YYYY-MM-DD"),
+    strategies: str | None = typer.Option(
+        None,
+        "--strategies",
+        help="comma-separated strategy ids (default: every catalogued non-wrapper strategy)",
+    ),
+    exclude: str | None = typer.Option(None, "--exclude", help="comma-separated ids to skip"),
+    interval: str = typer.Option("1d", "--interval", help="bar interval (1d, 1h, 5m, ...)"),
+    train_ratio: float = typer.Option(0.7, "--train-ratio", min=0.05, max=0.95),
+    tuner: str = typer.Option(
+        "random", "--tuner", callback=_choice("--tuner", _LAB_TUNERS), help="grid|random"
+    ),
+    grid_size: int = typer.Option(5, "--grid-size", min=1, help="points per numeric axis"),
+    budget: int = typer.Option(10, "--budget", min=1, help="tuning trials per run"),
+    seed: int = typer.Option(0, "--seed", help="tuner seed"),
+    objective: str = typer.Option(
+        "sharpe",
+        "--objective",
+        callback=_choice("--objective", _LAB_OBJECTIVES),
+        help="sharpe|cagr|final_return",
+    ),
+    tests: str | None = typer.Option(
+        None, "--tests", help="comma-separated survival test ids; default: --preset"
+    ),
+    preset: str | None = typer.Option(
+        None,
+        "--preset",
+        callback=_choice("--preset", _preset_choices()),
+        help="named suite when --tests is not given: quick (default)|standard|promotion",
+    ),
+    cost_model: str = typer.Option(
+        "config",
+        "--cost-model",
+        callback=_choice("--cost-model", _LAB_COST_MODELS),
+        help="config ([backtest.costs], default)|zero|realistic",
+    ),
+    workers: int | None = typer.Option(
+        None, "--workers", min=0, help="processes; default [lab.parallel] (0 = all cores)"
+    ),
+    test_option: list[str] | None = _TEST_OPTION,
+    benchmark: str | None = _BENCHMARK,
+    csv_out: str | None = typer.Option(None, "--csv-out", help="write the summary as CSV"),
+    json_out: str | None = typer.Option(None, "--json-out", help="write the summary as JSON"),
+) -> None:
+    """Run every catalogued strategy (or --strategies) through the lab on a
+    ticker basket, in parallel, and summarise the verdicts.
+
+    Single-ticker strategies get one run per basket ticker, universe-aware
+    ones one run over the basket. Every run is recorded in the trial
+    ledger; nothing is registered.
+    """
+    from stonks.app.lab import LabRunRequest
+    from stonks.app.strategies import StrategyRef
+    from stonks.app.sweep import plan_sweep, run_sweep, write_csv, write_json
+    from stonks.core.interval import Interval
+
+    start_d, end_d = date.fromisoformat(start), date.fromisoformat(end)
+    if start_d >= end_d:
+        raise typer.BadParameter("--start must be before --end")
+    try:
+        bar_interval = Interval.parse(interval)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--interval") from None
+    suite = _lab_suite(tests, preset, mcpt=False, walk_forward=False)
+
+    settings = _settings()
+    basket = _parse_tickers(tickers) or list(settings.production.universe)
+    if not basket:
+        raise typer.BadParameter("pass --tickers or set [production].universe")
+    try:
+        tasks = plan_sweep(basket, _parse_tickers(strategies), _parse_tickers(exclude))
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--strategies") from None
+    if not tasks:
+        raise typer.BadParameter("no strategies left to sweep", param_hint="--strategies")
+    try:
+        request = LabRunRequest(
+            strategy=StrategyRef(class_path=tasks[0].class_path),
+            universe=basket,
+            start=start_d,
+            end=end_d,
+            interval=bar_interval.code,
+            train_ratio=train_ratio,
+            tuner=tuner,  # type: ignore[arg-type]
+            grid_size=grid_size,
+            budget=budget,
+            seed=seed,
+            objective=objective,  # type: ignore[arg-type]
+            survival_tests=suite,
+            walk_forward=settings.lab.walk_forward if "walk_forward" in suite else None,
+            cost_model=_cost_model_option(cost_model),  # type: ignore[arg-type]
+            test_options=_parse_test_options(test_option),
+            benchmark=benchmark,
+        )
+    except ValueError as exc:  # pydantic ValidationError is a ValueError
+        raise typer.BadParameter(str(exc)) from None
+    parallel = _parallel_settings(settings, workers)
+    console.print(
+        f"sweeping {len(tasks)} lab runs ({len({t.strategy_id for t in tasks})} strategies, "
+        f"{len(basket)} tickers) on {parallel.resolved_workers()} worker(s)"
+    )
+    lake = _open_lake(settings.lake.path)
+    try:
+        rows = run_sweep(settings, tasks, request, lake=lake, parallel=parallel)
+    finally:
+        lake.close()
+
+    table = Table(title=f"lab sweep: {len(rows)} runs")
+    for col in ("strategy", "ticker", "verdict", "score", "failed tests", "best params"):
+        table.add_column(col)
+    for row in rows:
+        colour = {"pass": "green", "fail": "red"}.get(row.verdict, "yellow")
+        failed = [t for t, rep in row.survival.items() if not rep["passed"]]
+        table.add_row(
+            row.strategy,
+            row.ticker or "*",
+            f"[{colour}]{row.verdict}[/{colour}]",
+            "-" if row.best_score is None else f"{row.best_score:.3g}",
+            ",".join(failed) if row.verdict != "error" else (row.error or "")[:60],
+            ",".join(f"{k}={v}" for k, v in sorted(row.best_params.items()) if k != "ticker"),
+        )
+    console.print(table)
+    passed = sum(r.verdict == "pass" for r in rows)
+    errors = sum(r.verdict == "error" for r in rows)
+    console.print(f"{passed} pass, {len(rows) - passed - errors} fail, {errors} error")
+    if csv_out is not None:
+        write_csv(rows, Path(csv_out))
+        console.print(f"wrote {csv_out}")
+    if json_out is not None:
+        write_json(rows, Path(json_out))
+        console.print(f"wrote {json_out}")
 
 
 # ---- go-live gate (4.3) -----------------------------------------------------
@@ -1255,6 +1649,10 @@ def golive_check(
     for c in report.checks:
         table.add_row(c.name, "[green]PASS[/green]" if c.passed else "[red]FAIL[/red]", c.detail)
     console.print(table)
+    console.print("promotion checklist (context, not checks):")
+    for key, value in report.checklist.items():
+        shown = "-" if value is None else f"{value:.4g}" if isinstance(value, float) else value
+        console.print(f"  {key}: {shown}", markup=False)
     if report.passed:
         console.print("[green]PASS[/green]: ready for a human to promote")
         return
@@ -1273,6 +1671,53 @@ _REPORT_STRATEGIES = typer.Option(
 )
 
 
+def _write_tear_sheet(
+    out: Path,
+    target: str,
+    start: str | None,
+    end: str | None,
+    tickers: str | None,
+    params: str,
+    benchmark: str | None,
+) -> None:
+    import json
+
+    from stonks.app.catalog import CatalogService
+    from stonks.app.context import AppContext
+    from stonks.app.errors import AppError
+    from stonks.app.services import default_strategy_sources
+    from stonks.app.tearsheets import (
+        TearSheetWindow,
+        render_backtest_tear_sheet,
+        tear_sheet_request,
+    )
+
+    try:
+        pinned = json.loads(params)
+    except json.JSONDecodeError as exc:
+        raise typer.BadParameter(f"not valid JSON ({exc})", param_hint="--params") from None
+    if not isinstance(pinned, dict):
+        raise typer.BadParameter("must be a JSON object", param_hint="--params")
+    context = AppContext(_settings())
+    window = TearSheetWindow(
+        start=date.fromisoformat(start) if start else None,
+        end=date.fromisoformat(end) if end else None,
+        universe=tuple(_parse_tickers(tickers)),
+        params=pinned,
+        benchmark=benchmark,
+    )
+    try:
+        request = tear_sheet_request(context, target, window)
+        html = render_backtest_tear_sheet(
+            context, request, CatalogService(default_strategy_sources())
+        )
+    except AppError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--backtest") from None
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(html, encoding="utf-8")
+    console.print(f"[green]wrote[/green] {out}")
+
+
 @app.command("report")
 def report(
     out: Path = _REPORT_OUT,
@@ -1283,11 +1728,36 @@ def report(
         help="first day to show (YYYY-MM-DD); returns are still measured from inception",
         callback=_validate_iso_date,
     ),
+    backtest: str | None = typer.Option(
+        None,
+        "--backtest",
+        help="write a backtest tear sheet instead: a backtest job id, or a strategy id / "
+        "catalog name (with --start/--end)",
+    ),
+    start: str | None = typer.Option(
+        None, "--start", callback=_validate_iso_date, help="tear sheet start (YYYY-MM-DD)"
+    ),
+    end: str | None = typer.Option(
+        None, "--end", callback=_validate_iso_date, help="tear sheet end (YYYY-MM-DD)"
+    ),
+    tickers: str | None = typer.Option(
+        None, "--tickers", help="tear sheet universe; default [production].universe"
+    ),
+    params: str = typer.Option(
+        "{}", "--params", help="JSON params for a catalog strategy's tear sheet"
+    ),
+    benchmark: str | None = _BENCHMARK,
 ) -> None:
     """Write a self-contained static HTML report: equity curve, drawdown,
-    positions, orders/fills, and per-strategy verdicts, shadow P&L and drift."""
+    positions, orders/fills, and per-strategy verdicts, shadow P&L and drift.
+
+    With --backtest, write a backtest tear sheet (strategy vs benchmark,
+    drawdowns, rolling Sharpe, monthly returns, trade and benchmark stats)."""
     from stonks.reporting import build_report, render_html
 
+    if backtest is not None:
+        _write_tear_sheet(out, backtest, start, end, tickers, params, benchmark)
+        return
     settings = _settings()
     since_d = date.fromisoformat(since) if since else None
     state, registry = _open_registry(settings)

@@ -23,7 +23,7 @@ export function tickOutcome(summary: TickSummary | null | undefined): TickOutcom
       strategyId: summary.winner_strategy_id,
     };
   }
-  const exit = typeof summary['exit_strategy_id'] === 'string' ? summary['exit_strategy_id'] : null;
+  const exit = summary.exit_strategy_id;
   if (exit) return { kind: 'exit', text: `Exit ${exit}`, strategyId: exit };
   return {
     kind: 'none',
@@ -42,11 +42,9 @@ export function humanize(value: string): string {
 export function tickNotes(summary: TickSummary | null | undefined): string[] {
   if (!summary) return [];
   const notes: string[] = [];
-  const stale = summary['stale_buys_dropped'];
-  if (Array.isArray(stale) && stale.length) {
+  const stale = summary.stale_buys_dropped ?? [];
+  if (stale.length) {
     notes.push(`Dropped buys on stale prices: ${stale.join(', ')}.`);
-  } else if (typeof stale === 'number' && stale > 0) {
-    notes.push(`Dropped ${stale} buy${stale === 1 ? '' : 's'} on stale prices.`);
   }
   const conflicts = summary['open_order_conflicts'];
   if (Array.isArray(conflicts) && conflicts.length) {

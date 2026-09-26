@@ -20,6 +20,9 @@ class OrderView(BaseModel):
     order_type: str
     limit_price: float | None
     status: str
+    #: Why the order ended in its status (e.g. the broker's rejection
+    #: message); None when there is nothing to explain.
+    status_reason: str | None = None
     broker_order_id: str | None
     created_at: str
     updated_at: str

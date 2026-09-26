@@ -43,6 +43,11 @@ def strategy_catalog() -> dict[str, type[BaseStrategy]]:
     return dict(sorted(found.items()))
 
 
+def is_wrapper(cls: type) -> bool:
+    """True for a wrapper strategy (it needs an inner strategy to run)."""
+    return cls in _WRAPPERS
+
+
 def resolve_strategy(name: str) -> type[BaseStrategy]:
     """The strategy class for an id, a class name, or a ``module:Class``
     path. Raises ``ValueError`` listing the catalog on no match."""

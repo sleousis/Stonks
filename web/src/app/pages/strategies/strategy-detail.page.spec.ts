@@ -7,6 +7,7 @@ import { provideApi } from '../../api/provide-api';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { nextRequest, tick } from '../../../testing/http';
+import { STRATEGY_METADATA } from '../../../testing/strategy-fixtures';
 import { StrategyDetailPage } from './strategy-detail.page';
 
 const DETAIL: StrategyDetail = {
@@ -17,6 +18,8 @@ const DETAIL: StrategyDetail = {
   params: { lookback: 126, top_n: 5, universe: ['AAPL.US', 'MSFT.US'] },
   created_at: '2026-09-01T10:00:00Z',
   updated_at: '2026-09-20T10:00:00Z',
+  metadata: STRATEGY_METADATA,
+  status_history: [],
   survival_reports: [
     { test_id: 'oos', passed: true, notes: 'held up out of sample', metrics: { cagr_oos: 0.1234 } },
     { test_id: 'drift', passed: false, notes: '', metrics: { drift: 0.31, limit: null } },

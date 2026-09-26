@@ -8,6 +8,7 @@ import { HealthPage } from './health.page';
 
 const REPORT: HealthReportView = {
   checked_at: '2026-09-26T12:00:00Z',
+  thresholds: {},
   healthy: false,
   checks: [
     { name: 'freshness:AAPL.US', ok: true, detail: 'latest bar 2026-09-25 (1d old, max 4d)' },

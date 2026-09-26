@@ -23,26 +23,95 @@ Missing data never passes: no snapshots fails ``min_days``,
 ``max_drawdown`` and ``max_drift``; no backtest expectation fails
 ``max_drift``; no survival reports fails ``survival``.
 
+Incubation grade (BL-25) turns on when the policy has ``incubation=True``
+(:class:`IncubationPolicy`, or ``GoLivePolicy`` once it carries the field).
+Its defaults are 63 days and 20 trades, and it adds:
+
+- ``min_days`` becomes ``max(min_days, MinTRL)``: the minimum track record
+  length (``stats.min_trl``) of the ``oos`` report's Sharpe, in bars
+  (trading days), capped at ``min_trl_cap_days``. A stored ``min_trl_bars``
+  metric wins. No Sharpe fails the check;
+- ``within_mc_band``: paper max drawdown <= the ``mc_trades`` report's
+  ``p95_max_dd`` and, when ``p05_return`` is stored, the paper return >= that
+  annual 5th percentile scaled to the period. No Monte Carlo report fails;
+- ``quit_rule``: paper drawdown <= ``quit_drawdown_multiple`` x the backtest
+  max drawdown (``max_drawdown_oos``), or the Monte Carlo 95th percentile
+  when that is tighter;
+- the promotion checklist: ``promotion_preset`` (every registered test of
+  the preset has a stored report), ``nonzero_costs`` (the lab manifest
+  recorded a non-zero cost model), ``hypothesis_recorded`` and
+  ``backtest_min_trades`` (the ``oos`` or ``mc_trades`` trade count).
+
+Every check reports a value and a limit. :attr:`GoLiveReport.checklist`
+carries the promotion context (trial count, DSR, PBO, benchmark excess,
+premortem, hypothesis) for the reviewer; it doesn't change the verdict.
+
 The gate only reports. It never changes a strategy's status; promotion
 stays a human action (``stonks registry promote``).
 """
 
 from __future__ import annotations
 
+import importlib
+import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
-from typing import Literal
+from pathlib import Path
+from typing import Any, Literal
+
+from pydantic import Field
 
 from stonks.config import GoLivePolicy
 from stonks.core.protocols import SurvivalReport
 from stonks.production.pnl import PnlRow, daily_pnl, load_pnl
 from stonks.registry.store import StrategyRegistry
+from stonks.stats.sharpe import min_trl
 from stonks.store.state import SqliteState
 
 PaperSource = Literal["shadow", "portfolio", "none"]
 
 _DAYS_PER_YEAR = 365.25  # matches BacktestReport's CAGR annualization
+#: Cost-model inputs of which at least one must be non-zero
+#: (``max_impact_bps`` is only a cap, so it doesn't count).
+_COST_INPUTS = frozenset({"fee_flat", "fee_bps", "half_spread_bps", "impact_bps"})
+
+
+class IncubationPolicy(GoLivePolicy):
+    """``GoLivePolicy`` plus the incubation-grade limits (BL-25). The
+    integration step moves these fields onto ``GoLivePolicy`` itself;
+    until then pass this model to turn the incubation checks on."""
+
+    incubation: bool = True
+    min_days: int = Field(default=63, ge=1)
+    min_trades: int = Field(default=20, ge=1)
+    # Day requirement = max(min_days, MinTRL of the oos Sharpe) when on.
+    use_min_trl: bool = True
+    min_trl_cap_days: int = Field(default=252, ge=1)
+    # The track record must reach PSR >= 1 - alpha.
+    min_trl_alpha: float = Field(default=0.05, gt=0.0, lt=1.0)
+    # De-annualises the oos Sharpe to a per-bar Sharpe for MinTRL.
+    periods_per_year: float = Field(default=252.0, gt=0.0)
+    # Quit when the paper drawdown exceeds this multiple of the backtest's.
+    quit_drawdown_multiple: float = Field(default=1.5, ge=1.0)
+    # Survival preset whose registered tests all need a stored report.
+    promotion_preset: str = "promotion"
+    # Trades the backtest must have made (oos or mc_trades ``n_trades``).
+    min_backtest_trades: int = Field(default=30, ge=1)
+    # Characters of recorded hypothesis (lab run or strategy class).
+    min_hypothesis_chars: int = Field(default=20, ge=1)
+
+
+def incubation_policy(policy: Any) -> IncubationPolicy | None:
+    """The incubation limits of ``policy``, or ``None`` when it doesn't opt
+    in (``incubation`` missing or false). Fields the policy lacks take the
+    :class:`IncubationPolicy` defaults."""
+    if not getattr(policy, "incubation", False):
+        return None
+    if isinstance(policy, IncubationPolicy):
+        return policy
+    fields = {k: getattr(policy, k) for k in IncubationPolicy.model_fields if hasattr(policy, k)}
+    return IncubationPolicy(**fields)
 
 
 @dataclass(frozen=True)
@@ -55,6 +124,34 @@ class PaperPeriod:
     rows: list[PnlRow]
     trades: int
     reports: list[SurvivalReport]
+    #: The artifact's ``meta.json`` (lab provenance: hypothesis, manifest, ...).
+    meta: dict[str, Any] = field(default_factory=dict)
+    #: The strategy class's ``hypothesis`` attribute (BL-26); "" when none.
+    strategy_hypothesis: str = ""
+
+    def report(self, test_id: str) -> SurvivalReport | None:
+        """The latest stored survival report for ``test_id``."""
+        return next((r for r in reversed(self.reports) if r.test_id == test_id), None)
+
+    def metric(self, test_id: str, key: str) -> float | None:
+        """A finite numeric metric of the latest ``test_id`` report."""
+        report = self.report(test_id)
+        return None if report is None else _finite(report.metrics.get(key))
+
+    @property
+    def hypothesis(self) -> str:
+        """The recorded hypothesis: the lab run's, else the class's."""
+        text = self.meta.get("hypothesis")
+        if isinstance(text, str) and text.strip():
+            return text.strip()
+        return self.strategy_hypothesis.strip()
+
+    @property
+    def years(self) -> float:
+        """Calendar span of the period in years (0 with fewer than two rows)."""
+        if len(self.rows) < 2:
+            return 0.0
+        return (self.rows[-1].day - self.rows[0].day).days / _DAYS_PER_YEAR
 
     @property
     def days(self) -> int:
@@ -73,13 +170,11 @@ class PaperPeriod:
 
     @property
     def expected_cagr(self) -> float | None:
-        for report in reversed(self.reports):
-            if report.test_id == "oos":
-                value = report.metrics.get("cagr_oos")
-                if isinstance(value, int | float) and math.isfinite(value) and value > -1.0:
-                    return float(value)
-                return None
-        return None
+        report = self.report("oos")
+        if report is None:
+            return None
+        value = _finite(report.metrics.get("cagr_oos"))
+        return value if value is not None and value > -1.0 else None
 
     @property
     def expected_return(self) -> float | None:
@@ -87,12 +182,7 @@ class PaperPeriod:
         cagr = self.expected_cagr
         if cagr is None or not self.rows:
             return None
-        years = (self.rows[-1].day - self.rows[0].day).days / _DAYS_PER_YEAR
-        try:
-            expected = (1.0 + cagr) ** years - 1.0
-        except OverflowError:
-            return None
-        return expected if math.isfinite(expected) else None
+        return _compound(cagr, self.years)
 
     @property
     def drift(self) -> float | None:
@@ -118,6 +208,8 @@ class GoLiveReport:
     status: str
     source: PaperSource
     checks: list[GoLiveCheck]
+    #: Promotion context for the reviewer (see :func:`promotion_checklist`).
+    checklist: dict[str, Any] = field(default_factory=dict)
 
     @property
     def passed(self) -> bool:
@@ -160,6 +252,8 @@ def load_paper_period(
         rows=rows,
         trades=trades,
         reports=reports,
+        meta=_artifact_meta(handle.artifact_path),
+        strategy_hypothesis=_class_hypothesis(handle.class_path),
     )
 
 
@@ -176,92 +270,55 @@ def evaluate_golive(
         status=period.status,
         source=period.source,
         checks=gate_checks(period, policy),
+        checklist=promotion_checklist(period),
     )
 
 
 def gate_checks(period: PaperPeriod, policy: GoLivePolicy) -> list[GoLiveCheck]:
-    checks = [_status_check(period)]
-    checks.append(
-        GoLiveCheck(
-            name="min_days",
-            passed=period.days >= policy.min_days,
-            value=period.days,
-            limit=policy.min_days,
-            detail=f"{period.days} paper day(s), need >= {policy.min_days}",
-        )
-    )
-
-    dd = period.max_drawdown
-    checks.append(
-        GoLiveCheck(
-            name="max_drawdown",
-            passed=dd is not None and dd <= policy.max_drawdown,
-            value=dd,
-            limit=policy.max_drawdown,
-            detail=(
-                "no paper snapshots"
-                if dd is None
-                else f"max drawdown {dd:.2%}, limit {policy.max_drawdown:.2%}"
-            ),
-        )
-    )
-
-    drift = period.drift
-    if drift is not None:
-        drift_detail = (
-            f"paper {period.period_return:+.2%} vs backtest {period.expected_return:+.2%} "
-            f"(gap {drift:+.2%}, limit ±{policy.max_drift:.2%})"
-        )
-    elif not period.rows:
-        drift_detail = "no paper snapshots"
-    elif period.expected_return is None:
-        drift_detail = "no finite backtest expectation (oos cagr_oos)"
-    else:
-        drift_detail = "paper return undefined (zero starting value)"
-    checks.append(
-        GoLiveCheck(
-            name="max_drift",
-            passed=drift is not None and abs(drift) <= policy.max_drift,
-            value=drift,
-            limit=policy.max_drift,
-            detail=drift_detail,
-        )
-    )
-
-    checks.append(
-        GoLiveCheck(
-            name="min_trades",
-            passed=period.trades >= policy.min_trades,
-            value=period.trades,
-            limit=policy.min_trades,
-            detail=f"{period.trades} filled trade(s), need >= {policy.min_trades}",
-        )
-    )
-
-    passed_n = sum(1 for r in period.reports if r.passed)
-    total_n = len(period.reports)
-    failed_ids = [r.test_id for r in period.reports if not r.passed]
-    if policy.require_all_survival_passed:
-        survival_ok = total_n > 0 and passed_n == total_n
-        survival_detail = (
-            "no survival reports"
-            if total_n == 0
-            else f"{passed_n}/{total_n} passed"
-            + (f"; failed: {', '.join(failed_ids)}" if failed_ids else "")
-        )
-    else:
-        survival_ok = True
-        survival_detail = f"{passed_n}/{total_n} passed (not required)"
-    checks.append(
-        GoLiveCheck(
-            name="survival",
-            passed=survival_ok,
-            value=passed_n,
-            limit=total_n,
-            detail=survival_detail,
-        )
-    )
+    """Every check of the gate, legacy ones first. The incubation checks
+    are appended when ``policy`` opts in (see :func:`incubation_policy`)."""
+    inc = incubation_policy(policy)
+    checks = [
+        _status_check(period),
+        _min_days_check(period, policy, inc),
+        _max_drawdown_check(period, policy),
+        _max_drift_check(period, policy),
+        _min_trades_check(period, policy),
+        _survival_check(period, policy),
+    ]
+    if inc is not None:
+        checks += [
+            _mc_band_check(period),
+            _quit_rule_check(period, inc),
+            _promotion_preset_check(period, inc),
+            _nonzero_costs_check(period),
+            _hypothesis_check(period, inc),
+            _backtest_trades_check(period, inc),
+        ]
     return checks
+
+
+def promotion_checklist(period: PaperPeriod) -> dict[str, Any]:
+    """What a reviewer reads before promoting: the trial count of the lab
+    run's class, deflated Sharpe, PBO, benchmark excess CAGR, premortem and
+    hypothesis. ``None`` for anything not recorded."""
+    n_trials = period.meta.get("n_trials_total")
+    premortem = period.meta.get("premortem")
+    return {
+        "n_trials_class": (
+            n_trials if isinstance(n_trials, int) and not isinstance(n_trials, bool) else None
+        ),
+        "dsr": period.metric("deflated_sharpe", "dsr"),
+        "pbo": period.metric("pbo", "pbo"),
+        "excess_cagr": period.metric("benchmark_relative", "excess_cagr"),
+        "premortem": premortem.strip()
+        if isinstance(premortem, str) and premortem.strip()
+        else None,
+        "hypothesis": period.hypothesis or None,
+    }
+
+
+# ---- legacy checks -----------------------------------------------------------
 
 
 def _status_check(period: PaperPeriod) -> GoLiveCheck:
@@ -272,6 +329,353 @@ def _status_check(period: PaperPeriod) -> GoLiveCheck:
         else f"{period.status}: no paper period"
     )
     return GoLiveCheck(name="status", passed=ok, value=None, limit=None, detail=detail)
+
+
+def _min_days_check(
+    period: PaperPeriod, policy: GoLivePolicy, inc: IncubationPolicy | None
+) -> GoLiveCheck:
+    if inc is None or not inc.use_min_trl:
+        return GoLiveCheck(
+            name="min_days",
+            passed=period.days >= policy.min_days,
+            value=period.days,
+            limit=policy.min_days,
+            detail=f"{period.days} paper day(s), need >= {policy.min_days}",
+        )
+    trl, source = _min_trl_bars(period, inc)
+    if trl is None:
+        return GoLiveCheck(
+            name="min_days",
+            passed=False,
+            value=period.days,
+            limit=inc.min_days,
+            detail=f"{period.days} paper day(s); MinTRL unavailable: {source}",
+        )
+    trl_days = (
+        inc.min_trl_cap_days if math.isinf(trl) else min(math.ceil(trl), inc.min_trl_cap_days)
+    )
+    need = max(inc.min_days, trl_days)
+    trl_text = "infinite" if math.isinf(trl) else f"{trl:.1f}"
+    return GoLiveCheck(
+        name="min_days",
+        passed=period.days >= need,
+        value=period.days,
+        limit=need,
+        detail=(
+            f"{period.days} paper day(s), need >= {need} = max(min_days {inc.min_days}, "
+            f"MinTRL {trl_text} bars from {source}, capped at {inc.min_trl_cap_days})"
+        ),
+    )
+
+
+def _max_drawdown_check(period: PaperPeriod, policy: GoLivePolicy) -> GoLiveCheck:
+    dd = period.max_drawdown
+    return GoLiveCheck(
+        name="max_drawdown",
+        passed=dd is not None and dd <= policy.max_drawdown,
+        value=dd,
+        limit=policy.max_drawdown,
+        detail=(
+            "no paper snapshots"
+            if dd is None
+            else f"max drawdown {dd:.2%}, limit {policy.max_drawdown:.2%}"
+        ),
+    )
+
+
+def _max_drift_check(period: PaperPeriod, policy: GoLivePolicy) -> GoLiveCheck:
+    drift = period.drift
+    if drift is not None:
+        detail = (
+            f"paper {period.period_return:+.2%} vs backtest {period.expected_return:+.2%} "
+            f"(gap {drift:+.2%}, limit ±{policy.max_drift:.2%})"
+        )
+    elif not period.rows:
+        detail = "no paper snapshots"
+    elif period.expected_return is None:
+        detail = "no finite backtest expectation (oos cagr_oos)"
+    else:
+        detail = "paper return undefined (zero starting value)"
+    return GoLiveCheck(
+        name="max_drift",
+        passed=drift is not None and abs(drift) <= policy.max_drift,
+        value=drift,
+        limit=policy.max_drift,
+        detail=detail,
+    )
+
+
+def _min_trades_check(period: PaperPeriod, policy: GoLivePolicy) -> GoLiveCheck:
+    return GoLiveCheck(
+        name="min_trades",
+        passed=period.trades >= policy.min_trades,
+        value=period.trades,
+        limit=policy.min_trades,
+        detail=f"{period.trades} filled trade(s), need >= {policy.min_trades}",
+    )
+
+
+def _survival_check(period: PaperPeriod, policy: GoLivePolicy) -> GoLiveCheck:
+    passed_n = sum(1 for r in period.reports if r.passed)
+    total_n = len(period.reports)
+    failed_ids = [r.test_id for r in period.reports if not r.passed]
+    if policy.require_all_survival_passed:
+        ok = total_n > 0 and passed_n == total_n
+        detail = (
+            "no survival reports"
+            if total_n == 0
+            else f"{passed_n}/{total_n} passed"
+            + (f"; failed: {', '.join(failed_ids)}" if failed_ids else "")
+        )
+    else:
+        ok = True
+        detail = f"{passed_n}/{total_n} passed (not required)"
+    return GoLiveCheck(name="survival", passed=ok, value=passed_n, limit=total_n, detail=detail)
+
+
+# ---- incubation checks (BL-25) -------------------------------------------------
+
+
+def _mc_band_check(period: PaperPeriod) -> GoLiveCheck:
+    name = "within_mc_band"
+    dd = period.max_drawdown
+    p95 = _p95_drawdown(period)
+    if p95 is None:
+        return GoLiveCheck(
+            name=name,
+            passed=False,
+            value=dd,
+            limit=None,
+            detail="Monte Carlo band unavailable: no mc_trades p95_max_dd in survival reports",
+        )
+    if dd is None:
+        return GoLiveCheck(
+            name=name, passed=False, value=None, limit=p95, detail="no paper snapshots"
+        )
+    ok = dd <= p95
+    detail = f"paper drawdown {dd:.2%} vs Monte Carlo p95 {p95:.2%}"
+    p5 = period.metric("mc_trades", "p05_return")  # mc_trades' metric name
+    if p5 is None:
+        detail += "; no Monte Carlo return floor stored (drawdown only)"
+    else:
+        floor = _compound(max(p5, -1.0), period.years)
+        live = period.period_return
+        if live is None or floor is None:
+            ok = False
+            detail += "; paper return undefined against the Monte Carlo return floor"
+        else:
+            ok = ok and live >= floor
+            detail += f"; paper return {live:+.2%} vs Monte Carlo p5 floor {floor:+.2%}"
+    return GoLiveCheck(name=name, passed=ok, value=dd, limit=p95, detail=detail)
+
+
+def _quit_rule_check(period: PaperPeriod, inc: IncubationPolicy) -> GoLiveCheck:
+    name = "quit_rule"
+    dd = period.max_drawdown
+    p95 = _p95_drawdown(period)
+    bt = period.metric("oos", "max_drawdown_oos")
+    if bt is None:
+        return GoLiveCheck(
+            name=name,
+            passed=False,
+            value=dd,
+            limit=p95,
+            detail="no backtest max drawdown (oos max_drawdown_oos)",
+        )
+    scaled = inc.quit_drawdown_multiple * abs(bt)
+    limit = scaled if p95 is None else min(scaled, p95)
+    basis = f"{inc.quit_drawdown_multiple:g}x backtest max {abs(bt):.2%} = {scaled:.2%}"
+    if p95 is not None:
+        basis += f", Monte Carlo p95 {p95:.2%}"
+    if dd is None:
+        return GoLiveCheck(
+            name=name, passed=False, value=None, limit=limit, detail=f"no paper snapshots ({basis})"
+        )
+    ok = dd <= limit
+    verdict = "within" if ok else "quit rule tripped: stop paper trading;"
+    return GoLiveCheck(
+        name=name,
+        passed=ok,
+        value=dd,
+        limit=limit,
+        detail=f"{verdict} paper drawdown {dd:.2%} vs limit {limit:.2%} ({basis})",
+    )
+
+
+def _promotion_preset_check(period: PaperPeriod, inc: IncubationPolicy) -> GoLiveCheck:
+    from stonks.lab.survival.registry import resolve_preset
+
+    name = "promotion_preset"
+    try:
+        required = resolve_preset(inc.promotion_preset)
+    except ValueError as exc:
+        return GoLiveCheck(name=name, passed=False, value=None, limit=None, detail=str(exc))
+    stored = {r.test_id for r in period.reports}
+    missing = [t for t in required if t not in stored]
+    covered = len(required) - len(missing)
+    if not required:
+        detail = f"preset {inc.promotion_preset!r} has no registered tests"
+    else:
+        detail = f"{covered}/{len(required)} {inc.promotion_preset!r} preset tests on record"
+        if missing:
+            detail += f"; missing: {', '.join(missing)}"
+    return GoLiveCheck(
+        name=name,
+        passed=bool(required) and not missing,
+        value=covered,
+        limit=len(required),
+        detail=detail,
+    )
+
+
+def _nonzero_costs_check(period: PaperPeriod) -> GoLiveCheck:
+    name = "nonzero_costs"
+    manifest = period.meta.get("manifest")
+    costs = manifest.get("costs") if isinstance(manifest, dict) else None
+    if not isinstance(costs, dict):
+        return GoLiveCheck(
+            name=name,
+            passed=False,
+            value=None,
+            limit=1,
+            detail="no cost model recorded (meta.json manifest.costs)",
+        )
+    nonzero = sorted(set(_nonzero_cost_inputs(costs)))
+    detail = (
+        f"non-zero cost inputs: {', '.join(nonzero)}" if nonzero else "backtest ran with zero costs"
+    )
+    return GoLiveCheck(name=name, passed=bool(nonzero), value=len(nonzero), limit=1, detail=detail)
+
+
+def _hypothesis_check(period: PaperPeriod, inc: IncubationPolicy) -> GoLiveCheck:
+    text = period.hypothesis
+    need = inc.min_hypothesis_chars
+    detail = (
+        "no hypothesis recorded (lab run or strategy class)"
+        if not text
+        else f"hypothesis of {len(text)} character(s), need >= {need}"
+    )
+    return GoLiveCheck(
+        name="hypothesis_recorded",
+        passed=len(text) >= need,
+        value=len(text),
+        limit=need,
+        detail=detail,
+    )
+
+
+def _backtest_trades_check(period: PaperPeriod, inc: IncubationPolicy) -> GoLiveCheck:
+    name = "backtest_min_trades"
+    need = inc.min_backtest_trades
+    for test_id in ("oos", "mc_trades"):
+        n = period.metric(test_id, "n_trades")
+        if n is not None:
+            return GoLiveCheck(
+                name=name,
+                passed=n >= need,
+                value=int(n),
+                limit=need,
+                detail=f"{int(n)} backtest trade(s) ({test_id}), need >= {need}",
+            )
+    return GoLiveCheck(
+        name=name,
+        passed=False,
+        value=None,
+        limit=need,
+        detail="no backtest trade count (oos or mc_trades n_trades)",
+    )
+
+
+# ---- helpers ------------------------------------------------------------------
+
+
+def _finite(value: Any) -> float | None:
+    """``value`` as a float when it is a finite real number (not a bool)."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    return float(value) if math.isfinite(value) else None
+
+
+def _compound(annual: float, years: float) -> float | None:
+    try:
+        out = (1.0 + annual) ** years - 1.0
+    except (OverflowError, ZeroDivisionError):
+        return None
+    return out if isinstance(out, float) and math.isfinite(out) else None
+
+
+def _p95_drawdown(period: PaperPeriod) -> float | None:
+    """The Monte Carlo 95th-percentile drawdown as a positive fraction."""
+    value = period.metric("mc_trades", "p95_max_dd")
+    return None if value is None else abs(value)
+
+
+def _min_trl_bars(period: PaperPeriod, inc: IncubationPolicy) -> tuple[float | None, str]:
+    """MinTRL in bars (may be infinite) and where it came from; ``None``
+    with the reason when it can't be had."""
+    report = period.report("oos")
+    if report is None:
+        return None, "no oos survival report"
+    stored = report.metrics.get("min_trl_bars")
+    if (
+        not isinstance(stored, bool)
+        and isinstance(stored, int | float)
+        and not math.isnan(stored)
+        and stored > 0
+    ):
+        return float(stored), "oos min_trl_bars"
+    sharpe = _finite(report.metrics.get("sharpe_oos"))
+    if sharpe is None:
+        return None, "no finite oos sharpe_oos"
+    skew = _finite(report.metrics.get("skew"))
+    kurt = _finite(report.metrics.get("kurtosis"))  # non-excess (normal = 3)
+    try:
+        trl = min_trl(
+            sharpe / math.sqrt(inc.periods_per_year),
+            0.0,
+            0.0 if skew is None else skew,
+            3.0 if kurt is None else kurt,
+            alpha=inc.min_trl_alpha,
+        )
+    except ValueError as exc:
+        return None, f"MinTRL undefined for oos sharpe_oos {sharpe:.2f} ({exc})"
+    if math.isnan(trl) or trl <= 0:
+        return None, f"MinTRL undefined for oos sharpe_oos {sharpe:.2f}"
+    return trl, f"oos sharpe_oos {sharpe:.2f}"
+
+
+def _nonzero_cost_inputs(costs: Any) -> list[str]:
+    """Names of the cost inputs anywhere in ``costs`` that are above zero."""
+    found: list[str] = []
+    if isinstance(costs, dict):
+        for key, value in costs.items():
+            if key in _COST_INPUTS:
+                number = _finite(value)
+                if number is not None and number > 0:
+                    found.append(key)
+            else:
+                found.extend(_nonzero_cost_inputs(value))
+    return found
+
+
+def _artifact_meta(artifact_path: Path) -> dict[str, Any]:
+    """The artifact's ``meta.json``; ``{}`` when missing or unreadable."""
+    try:
+        loaded = json.loads((Path(artifact_path) / "meta.json").read_text())
+    except (OSError, ValueError):
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _class_hypothesis(class_path: str) -> str:
+    """The strategy class's ``hypothesis``; "" when it can't be imported."""
+    module_name, _, cls_name = class_path.partition(":")
+    try:
+        cls = getattr(importlib.import_module(module_name), cls_name)
+    except (ImportError, AttributeError, ValueError):
+        return ""
+    text = getattr(cls, "hypothesis", "")
+    return text if isinstance(text, str) else ""
 
 
 def _shadow_trades(state: SqliteState, strategy_id: str, since: date | None) -> int:
