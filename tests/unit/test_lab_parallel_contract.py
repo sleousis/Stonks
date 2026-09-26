@@ -306,6 +306,9 @@ def test_dataset_snapshot_yields_a_picklable_spec_that_reopens_read_only(mem_lak
         reopened = copy.open()
         try:
             assert reopened.lake.read_only
+            # one DuckDB thread per worker: the pool is the parallelism
+            threads = reopened.lake.con.execute("SELECT current_setting('threads')").fetchone()
+            assert threads[0] == 1
             assert reopened.universe == ds.universe and reopened.end == ds.end
             assert reopened.train_window == ds.train_window
         finally:

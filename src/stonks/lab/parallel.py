@@ -400,9 +400,9 @@ class DatasetSpec:
     def open(self) -> Any:
         """The dataset on a new read-only connection to the snapshot (the
         caller closes ``.lake``; worker processes keep it for life)."""
-        return dataclasses.replace(
-            self.dataset, lake=DuckDBLake(self.snapshot_path, read_only=True)
-        )
+        lake = DuckDBLake(self.snapshot_path, read_only=True)
+        lake.con.execute("SET threads = 1")
+        return dataclasses.replace(self.dataset, lake=lake)
 
 
 @contextmanager
