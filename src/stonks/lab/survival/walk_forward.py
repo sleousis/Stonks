@@ -56,7 +56,7 @@ class WalkForwardFold:
 
 class WalkForwardConfig(BaseModel):
     """Walk-forward settings. ``test_days=None`` splits the dataset's
-    validation share (``1 - train_ratio``) evenly over the folds;
+    validation window evenly over the folds;
     ``train_days=None`` means "everything before the first test window"."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -70,11 +70,14 @@ class WalkForwardConfig(BaseModel):
     min_positive_share: float = Field(default=0.5, ge=0.0, le=1.0)
     min_mean_score: float = 0.0
 
-    def resolved_test_days(self, start: date, end: date, train_ratio: float) -> int:
+    def resolved_test_days(self, val_window: tuple[date, date]) -> int:
+        """``test_days``, or the dataset's validation window split evenly
+        over the folds — so the OOS windows cover the same days the
+        runner's own tuning never saw."""
         if self.test_days is not None:
             return self.test_days
-        span = (end - start).days + 1
-        return max(1, int(span * (1.0 - train_ratio) / self.n_splits))
+        val_start, val_end = val_window
+        return max(1, ((val_end - val_start).days + 1) // self.n_splits)
 
 
 def walk_forward_folds(
@@ -147,7 +150,7 @@ class WalkForwardTest:
             context.start,
             context.end,
             n_splits=cfg.n_splits,
-            test_days=cfg.resolved_test_days(context.start, context.end, context.train_ratio),
+            test_days=cfg.resolved_test_days(context.val_window),
             train_days=cfg.train_days,
             anchored=cfg.anchored,
         )

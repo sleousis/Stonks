@@ -7,6 +7,7 @@ from datetime import date, timedelta
 import pydantic
 import pytest
 
+from stonks.lab.dataset import LabDataset
 from stonks.lab.survival.walk_forward import WalkForwardConfig, walk_forward_folds
 
 START, END = date(2024, 1, 1), date(2024, 12, 31)  # 366 days
@@ -59,10 +60,15 @@ def test_too_short_a_span_raises(kwargs):
         walk_forward_folds(START, END, **kwargs)
 
 
-def test_config_derives_test_days_from_the_validation_share():
+def test_config_splits_the_validation_window_over_the_folds_by_default():
+    # works the same for a ratio split and an explicit train_end
+    ratio = LabDataset(lake=None, start=START, end=END, train_ratio=0.7)
+    explicit = LabDataset(lake=None, start=START, end=END, train_end=date(2024, 6, 30))
     cfg = WalkForwardConfig(n_splits=3)
-    assert cfg.resolved_test_days(START, END, train_ratio=0.7) == int(366 * 0.3 / 3)
-    assert WalkForwardConfig(test_days=10).resolved_test_days(START, END, 0.7) == 10
+    val_days = (END - ratio.val_window[0]).days + 1
+    assert cfg.resolved_test_days(ratio.val_window) == val_days // 3
+    assert cfg.resolved_test_days(explicit.val_window) == 184 // 3
+    assert WalkForwardConfig(test_days=10).resolved_test_days(ratio.val_window) == 10
 
 
 @pytest.mark.parametrize(
