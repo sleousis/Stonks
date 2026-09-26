@@ -40,3 +40,7 @@ uv run ruff check .
 ## Roadmap
 
 See `docs/roadmap.md`.
+
+## License and disclaimer
+
+All rights reserved; see `LICENSE`. This is not financial advice; read `DISCLAIMER.md` before trading with it.
