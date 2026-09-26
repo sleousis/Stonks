@@ -84,12 +84,12 @@ class TickSettings:
     universe: Sequence[str]
     threshold: float = 0.0
     initial_cash: float = 10_000.0
-    #: Legacy flat costs of the simulated broker (and the risk layer's cash
-    #: estimate). Only used when ``costs`` is None.
+    #: Legacy flat costs of the simulated broker and the risk layer's cash
+    #: estimate. Only used when ``costs`` is None.
     slippage_bps: float = 0.0
     fee_per_trade: float = 0.0
     #: The simulated broker's cost model (``[backtest.costs]``, the one
-    #: backtests use). Exclusive with ``slippage_bps`` / ``fee_per_trade``:
+    #: backtests use); the risk layer's cash estimate uses it too. Exclusive with ``slippage_bps`` / ``fee_per_trade``:
     #: ``build_tick_settings`` resolves the precedence.
     costs: CostModelSettings | None = None
     # Closes older than this many calendar days before ``as_of`` are ignored,
@@ -351,6 +351,8 @@ def _run_tick_body(
         settings.risk,
         slippage_bps=settings.slippage_bps,
         fee_per_trade=settings.fee_per_trade,
+        cost_model=settings.costs,
+        volumes=book.volumes,
     )
     risk_adjustments = list(risk_result.adjustments)
 
@@ -464,6 +466,8 @@ def _run_tick_body(
             settings.risk,
             slippage_bps=settings.slippage_bps,
             fee_per_trade=settings.fee_per_trade,
+            cost_model=settings.costs,
+            volumes=book.volumes,
         )
         risk_adjustments.extend(second.adjustments)
         buys = second.orders
