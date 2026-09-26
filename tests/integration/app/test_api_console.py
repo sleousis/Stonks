@@ -178,6 +178,16 @@ def test_tick_alerts_land_in_the_store(client, settings):
     from stonks.production.settings_builder import build_tick_runtime
 
     runtime = build_tick_runtime(settings, ["UP.US"])
-    runtime.notifier.notify(Notification(level="error", title="boom", message="x"))
+    runtime.notifier.notify(
+        Notification(
+            level="error",
+            title="boom",
+            message="auth failed with test-token-123",
+            fields={"token": "test-token-123", "detail": "sent test-token-123"},
+        )
+    )
     with SqliteState(settings.state.path) as state:
-        assert state.sql("SELECT COUNT(*) FROM alerts")[0][0] == before + 1
+        rows = state.sql("SELECT * FROM alerts ORDER BY id")
+    assert len(rows) == before + 1
+    # The configured API token is scrubbed before the row is written.
+    assert "test-token-123" not in json.dumps([dict(r) for r in rows])

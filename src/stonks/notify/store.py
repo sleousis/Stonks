@@ -25,7 +25,7 @@ from stonks.store.state import SqliteState
 _SECRET_KEY_RE = re.compile(
     r"(?i)(token|secret|password|passwd|api[_-]?key|authorization|credential|cookie|webhook)"
 )
-_BEARER_RE = re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]+")
+_BEARER_RE = re.compile(r"(?i)\b(bearer)\s+[A-Za-z0-9._~+/=-]+")
 
 
 class StoreNotifier(Notifier):
