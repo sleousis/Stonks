@@ -11,7 +11,7 @@ import os
 import re
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -252,6 +252,47 @@ def _last_per_key(df: pd.DataFrame, keys: tuple[str, ...]) -> pd.DataFrame:
     NaN/None as equal here, which matches our "NULLs equal" natural keys.
     """
     return df.drop_duplicates(subset=list(keys), keep="last")
+
+
+_STATEMENT_TABLES = frozenset({"income_statement", "balance_sheet", "cash_flow_statement"})
+
+
+def _statement_table(statement: str) -> str:
+    if statement not in _STATEMENT_TABLES:
+        raise ValueError(
+            f"unknown statement {statement!r}; expected one of {sorted(_STATEMENT_TABLES)}"
+        )
+    return statement
+
+
+def _non_negative_lag(days: int) -> int:
+    days = int(days)
+    if days < 0:
+        raise ValueError(f"lag must be >= 0 days, got {days}")
+    return days
+
+
+def _as_calendar_date(value: Any) -> date:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if hasattr(value, "to_pydatetime"):
+        return value.to_pydatetime().date()
+    raise TypeError(f"expected a date or datetime, got {type(value).__name__}")
+
+
+def _dates_to_python(df: pd.DataFrame, cols: tuple[str, ...]) -> pd.DataFrame:
+    """DuckDB hands DATE columns to pandas as timestamps; callers compare
+    them with ``datetime.date``, so convert (NULL stays ``None``)."""
+    for c in cols:
+        if c in df.columns:
+            df[c] = pd.Series(
+                [None if pd.isna(v) else pd.Timestamp(v).date() for v in df[c]],
+                index=df.index,
+                dtype=object,
+            )
+    return df
 
 
 class DuckDBLake:
@@ -653,6 +694,111 @@ class DuckDBLake:
             f"SELECT * FROM {table} WHERE ticker = ? ORDER BY period_end DESC, frequency",
             [ticker],
         ).fetchdf()
+
+    # ---- point-in-time reads (statements, macro) ----------------------------
+
+    def get_statement_history(
+        self,
+        statement: str,
+        ticker: str,
+        *,
+        missing_filing_lag_days: int = 90,
+    ) -> pd.DataFrame:
+        """Every row of one statement table for ``ticker``, oldest period
+        first, plus an ``available_date`` column: the first date the row may
+        be used without look-ahead.
+
+        ``available_date`` is the ``filing_date``; when the vendor didn't
+        supply one it is ``period_end + missing_filing_lag_days`` (a
+        conservative stand-in for the filing delay). It is never earlier
+        than ``period_end``: a filing date before the period closed is bad
+        data and is clamped.
+
+        Known limit: a restatement that overwrites a row's values in place
+        but keeps the original ``filing_date`` makes the restated numbers
+        look available from the original date.
+        """
+        table = _statement_table(statement)
+        lag = _non_negative_lag(missing_filing_lag_days)
+        df = self.con.execute(
+            f"""
+            SELECT *,
+                   CAST(GREATEST(COALESCE(filing_date, period_end + to_days(CAST(? AS INTEGER))),
+                                 period_end) AS DATE) AS available_date
+              FROM {table}
+             WHERE ticker = ?
+             ORDER BY period_end, frequency
+            """,
+            [lag, ticker],
+        ).fetchdf()
+        return _dates_to_python(df, ("period_end", "filing_date", "available_date"))
+
+    def get_statements_as_of(
+        self,
+        statement: str,
+        ticker: str,
+        as_of: Any,
+        *,
+        frequency: str | None = None,
+        missing_filing_lag_days: int = 90,
+    ) -> pd.DataFrame:
+        """Rows of :meth:`get_statement_history` whose ``available_date`` is
+        on or before ``as_of`` (a date, or a datetime's calendar day),
+        newest period first. ``frequency`` (``'Q'`` / ``'A'``) narrows the
+        result to one reporting cadence."""
+        df = self.get_statement_history(
+            statement, ticker, missing_filing_lag_days=missing_filing_lag_days
+        )
+        cutoff = _as_calendar_date(as_of)
+        mask = df["available_date"].map(lambda d: d <= cutoff).astype(bool)
+        if frequency is not None:
+            mask &= df["frequency"] == frequency
+        out = df[mask].iloc[::-1]
+        return out.reset_index(drop=True)
+
+    def get_macro_series(
+        self,
+        country_iso: str,
+        indicator: str,
+        *,
+        as_of: Any = None,
+        publication_lag_days: int = 0,
+    ) -> pd.DataFrame:
+        """One macro indicator series (``observation_date, period, value,
+        available_date``), oldest first.
+
+        Macro data is published well after the date it describes, so
+        ``available_date = observation_date + publication_lag_days``. With
+        ``as_of`` set, only observations available on or before it are
+        returned.
+        """
+        lag = _non_negative_lag(publication_lag_days)
+        df = self.con.execute(
+            """
+            SELECT observation_date, period, value,
+                   CAST(observation_date + to_days(CAST(? AS INTEGER)) AS DATE) AS available_date
+              FROM macro_indicators
+             WHERE country_iso = ? AND indicator = ?
+             ORDER BY observation_date
+            """,
+            [lag, country_iso, indicator],
+        ).fetchdf()
+        df = _dates_to_python(df, ("observation_date", "available_date"))
+        if as_of is not None:
+            cutoff = _as_calendar_date(as_of)
+            df = df[df["available_date"].map(lambda d: d <= cutoff).astype(bool)]
+            df = df.reset_index(drop=True)
+        return df
+
+    def get_shares_outstanding(self, ticker: str) -> pd.DataFrame:
+        """Share-count history (``date, shares``) for ``ticker``, oldest
+        first. ``date`` is the date the count describes, not when it was
+        published; point-in-time callers must add their own lag."""
+        df = self.con.execute(
+            "SELECT date, shares FROM shares_outstanding WHERE ticker = ? ORDER BY date",
+            [ticker],
+        ).fetchdf()
+        return _dates_to_python(df, ("date",))
 
     # ---- ingest_runs --------------------------------------------------------
 
