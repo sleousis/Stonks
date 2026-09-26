@@ -60,7 +60,7 @@ class FileLock:
         if self._fd is not None:
             raise RuntimeError(f"lock {self.path} is already held by this object")
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o644)
+        fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600)
         deadline = time.monotonic() + self.timeout
         delay = self.poll
         while not _try_lock(fd):
