@@ -107,7 +107,9 @@ def _enc(x: float | None) -> float | None | str:
 
 
 def _features(strategy, ticker, as_of, lake) -> dict[str, float | None | str]:
-    return {k: _enc(v) for k, v in sorted(strategy.extract_features(ticker, as_of, lake).values.items())}
+    return {
+        k: _enc(v) for k, v in sorted(strategy.extract_features(ticker, as_of, lake).values.items())
+    }
 
 
 def compute_outputs(lake: DuckDBLake) -> dict[str, list]:
@@ -147,7 +149,9 @@ def compute_outputs(lake: DuckDBLake) -> dict[str, list]:
         ]
 
     rsi = RSIPCAStrategy({"ticker": "AAA.US", "long_quantile": 0.9})
-    rsi.fit(LabDataset(lake=lake, universe=["AAA.US"], start=date(2024, 1, 2), end=date(2025, 8, 29)))
+    rsi.fit(
+        LabDataset(lake=lake, universe=["AAA.US"], start=date(2024, 1, 2), end=date(2025, 8, 29))
+    )
     out["rsi_pca"] = [
         [str(a), _enc(rsi.estimate_return("AAA.US", a, lake)), _features(rsi, "AAA.US", a, lake)]
         for a in _daily_as_ofs()

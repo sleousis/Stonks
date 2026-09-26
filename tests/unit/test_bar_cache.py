@@ -12,6 +12,8 @@ import pytest
 from stonks.core.interval import Interval
 from stonks.store.lake import DuckDBLake
 from stonks.strategies._common import BarCache, LakeBarCaches, get_last_n_bars
+from stonks.strategies.examples.donchian_breakout import DonchianBreakout
+from stonks.strategies.examples.trendline_breakout import TrendlineBreakoutStrategy
 
 
 def _hourly(ticker: str, days: pd.DatetimeIndex, seed: int = 0) -> pd.DataFrame:
@@ -179,3 +181,23 @@ def test_lake_bar_caches_fall_back_to_uncached_reads_for_unweakrefable_lakes(lak
     caches.for_lake(slotted).last_n_closes("X.US", Interval.HOUR_1, AS_OFS[-1], 5)
     caches.for_lake(slotted).last_n_closes("X.US", Interval.HOUR_1, AS_OFS[-1], 5)
     assert slotted.calls == 2  # correct, just not cached
+
+
+# ---- strategies read through the cache --------------------------------------
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        lambda: DonchianBreakout({"ticker": "X.US", "interval": "1h", "lookback": 10}),
+        lambda: TrendlineBreakoutStrategy({"ticker": "X.US", "interval": "1h", "lookback": 20}),
+    ],
+    ids=["donchian", "trendline"],
+)
+def test_bar_strategies_read_each_series_once_per_instance(lake, make):
+    counting = CountingLake(lake)
+    strategy = make()
+    for as_of in AS_OFS:
+        strategy.estimate_return("X.US", as_of, counting)
+        strategy.extract_features("X.US", as_of, counting)
+    assert counting.calls == 1
