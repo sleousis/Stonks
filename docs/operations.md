@@ -128,7 +128,7 @@ The risk layer sits between `strategy.decide` and the broker. It is configured u
 | `enabled` | `false` passes orders through untouched. |
 | `max_open_positions` | A buy that would open a new position beyond this count is dropped. Adding to an existing position is allowed. |
 | `max_weight_per_ticker` | Buys are clipped so the position stays within this fraction of portfolio value. |
-| `max_weight_per_asset_class` | A table such as `crypto = 0.2`. Buys are clipped per class. While any class cap is set, buys of tickers with an unknown class are dropped. |
+| `max_weight_per_asset_class` | A table such as `crypto = 0.2`. Buys are clipped per class. While any class cap is set, buys of tickers with an unknown class are dropped. Buys in a capped class are also dropped while that class holds a position with no current price, since its exposure can't be measured. |
 | `cash_buffer_fraction` | Buys are clipped so this fraction of portfolio value stays in cash, net of slippage and fees. |
 | `min_order_notional` | Buys whose final notional is below this are dropped. |
 

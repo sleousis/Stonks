@@ -96,6 +96,25 @@ def test_asset_class_cap_blocks_buy_of_unknown_class():
     assert result.adjustments[0].rule == "unknown_asset_class"
 
 
+def test_asset_class_cap_blocks_buy_when_a_holding_in_the_class_has_no_price():
+    # ETH is held but unpriced: its value is unknown, so the class exposure
+    # can't be bounded and a crypto buy could breach the cap.
+    policy = RiskPolicy(max_weight_per_asset_class={"crypto": 0.5})
+    classes = {**CLASSES, "ETH-USD.CC": "crypto"}
+    pf = Portfolio(cash=10_000.0, positions={"ETH-USD.CC": 1_000.0})
+    result = apply_risk([_buy("BTC-USD.CC", 10)], pf, PRICES, classes, policy)
+    assert result.orders == []
+    assert result.adjustments[0].rule == "unpriced_holding"
+
+
+def test_ticker_cap_ignores_unpriced_holdings_in_other_classes():
+    policy = RiskPolicy(max_weight_per_asset_class={"crypto": 0.5})
+    classes = {**CLASSES, "OLD.US": "equity"}
+    pf = Portfolio(cash=10_000.0, positions={"OLD.US": 5.0})
+    result = apply_risk([_buy("BTC-USD.CC", 10)], pf, PRICES, classes, policy)
+    assert [o.ticker for o in result.orders] == ["BTC-USD.CC"]
+
+
 def test_cash_buffer_limits_total_buys():
     # equity 10_000, buffer 0.2 → at most 8_000 deployable
     policy = RiskPolicy(cash_buffer_fraction=0.2)

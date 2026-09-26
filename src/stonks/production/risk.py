@@ -34,6 +34,7 @@ RiskRule = Literal[
     "max_open_positions",
     "max_weight_per_ticker",
     "unknown_asset_class",
+    "unpriced_holding",
     "max_weight_per_asset_class",
     "cash_buffer",
     "min_order_notional",
@@ -166,6 +167,19 @@ def apply_risk(
                 continue
             cap = policy.max_weight_per_asset_class.get(cls)
             if cap is not None:
+                unpriced = sorted(
+                    t
+                    for t, q in positions.items()
+                    if q > 0 and asset_classes.get(t) == cls and not prices.get(t)
+                )
+                if unpriced:
+                    record(
+                        order,
+                        "unpriced_holding",
+                        0.0,
+                        f"{cls} exposure unknown: no price for held {', '.join(unpriced)}",
+                    )
+                    continue
                 class_value = sum(
                     q * prices.get(t, 0.0)
                     for t, q in positions.items()
