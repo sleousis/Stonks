@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import type { LabRunView } from '../../api/models';
 import { formatNumber, formatPercent } from '../../core/format/format';
 import { humanize } from '../../shared/ui/param-form/param-spec';
+import { HelpTip } from '../../shared/ui/help-tip';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { SURVIVAL_TESTS } from './lab-requests';
@@ -43,7 +44,7 @@ function paramText(v: unknown): string {
 @Component({
   selector: 'app-lab-run-result',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, StatTile, StatusPill],
+  imports: [HelpTip, RouterLink, StatTile, StatusPill],
   template: `
     @let r = result();
     <div class="summary">
@@ -87,14 +88,14 @@ function paramText(v: unknown): string {
         @for (t of tests(); track t.id) {
           <li class="test" [class.failed]="!t.passed">
             <div class="test-head">
-              <span class="test-name">{{ t.label }}</span>
+              <span class="test-name">{{ t.label }} <app-help-tip [term]="t.id" /></span>
               <app-status-pill [status]="t.passed ? 'pass' : 'fail'" />
             </div>
             @if (t.metrics.length) {
               <dl class="metrics">
                 @for (m of t.metrics; track m.key) {
                   <div>
-                    <dt>{{ m.label }}</dt>
+                    <dt>{{ m.label }} <app-help-tip [term]="m.key" /></dt>
                     <dd class="num">{{ m.value }}</dd>
                   </div>
                 }

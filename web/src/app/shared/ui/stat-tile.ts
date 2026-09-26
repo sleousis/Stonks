@@ -1,18 +1,35 @@
-import { ChangeDetectionStrategy, Component, booleanAttribute, input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  booleanAttribute,
+  computed,
+  input,
+} from '@angular/core';
+
+import { HelpTip } from './help-tip';
 
 export type StatTone = 'gain' | 'loss' | '';
 
 /**
  * One headline figure. Format the value before passing it in (money/pct pipes).
+ * Metric labels found in the glossary ("Sharpe", "Max drawdown") get a help
+ * tip automatically; pass `help` to name the glossary term explicitly, or
+ * `[help]="false"` to hide it.
  *
  *   <app-stat-tile label="Cash" [value]="p.cash | money" [detail]="cashShare() | pct" />
  */
 @Component({
   selector: 'app-stat-tile',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [HelpTip],
   host: { class: 'stat-tile', '[class.featured]': 'featured()' },
   template: `
-    <p class="label">{{ label() }}</p>
+    <p class="label">
+      {{ label() }}
+      @if (helpTerm(); as term) {
+        <app-help-tip [term]="term" />
+      }
+    </p>
     @if (loading()) {
       <p class="value skeleton" aria-hidden="true">&nbsp;</p>
       <span class="visually-hidden">Loading {{ label() }}</span>
@@ -37,6 +54,9 @@ export type StatTone = 'gain' | 'loss' | '';
       border-left: 3px solid var(--color-brass);
     }
     .label {
+      display: flex;
+      align-items: center;
+      gap: var(--space-1);
       font-size: var(--text-sm);
       color: var(--color-ink-2);
     }
@@ -77,4 +97,11 @@ export class StatTile {
   readonly loading = input(false);
   /** The page's headline figure: larger, brass rule. One per page. */
   readonly featured = input(false, { transform: booleanAttribute });
+  /** Glossary key or label for the help tip; defaults to `label`, `false` hides it. */
+  readonly help = input<string | false | null>(null);
+
+  protected readonly helpTerm = computed(() => {
+    const help = this.help();
+    return help === false ? null : (help ?? this.label());
+  });
 }
