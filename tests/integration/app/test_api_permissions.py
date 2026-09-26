@@ -87,6 +87,15 @@ def test_every_unsafe_route_declares_a_permission(app):
     assert missing == []
 
 
+def test_openapi_lists_the_permission_per_route(app):
+    paths = app.openapi()["paths"]
+    assert paths["/api/strategies/{strategy_id}/promote"]["post"]["x-permission"] == (
+        "strategy.promote"
+    )
+    assert paths["/api/ticks"]["post"]["x-permission"] == "operations.run"
+    assert "x-permission" not in paths["/api/auth/login"]["post"]
+
+
 def test_public_allowlist_is_not_stale(app):
     unsafe = {(m, r.path) for r in _api_routes(app.routes) for m in r.methods - _SAFE}
     assert unsafe >= PUBLIC_UNSAFE

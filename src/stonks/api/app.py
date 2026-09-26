@@ -26,6 +26,7 @@ from stonks.api.deps import (
     authorize_metrics,
     authorize_stream,
     require_token,
+    route_permissions,
 )
 from stonks.api.errors import PROBLEM_MEDIA_TYPE, install_error_handlers
 from stonks.api.routers import (
@@ -150,6 +151,12 @@ def _install_openapi_postprocessing(app: FastAPI) -> None:
                             "contentMediaType": "application/json",
                             "contentSchema": {"$ref": "#/components/schemas/JobEvent"},
                         }
+        # The permission each route checks (design section 8), for clients
+        # and reviewers: ``x-permission: strategy.promote``.
+        for method, path, permission in route_permissions(app.routes):
+            op = spec.get("paths", {}).get(path, {}).get(method.lower())
+            if op is not None:
+                op["x-permission"] = permission.value
         app.openapi_schema = spec
         return spec
 

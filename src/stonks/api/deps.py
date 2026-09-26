@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hmac
 import ipaddress
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Annotated, Any
 
@@ -221,6 +221,29 @@ def needs(permission: Permission) -> list[Any]:
 def permission_of(call: object) -> Permission | None:
     """The permission a :func:`require_permission` dependency checks."""
     return getattr(call, _PERMISSION_ATTR, None)
+
+
+def route_permissions(routes: Iterable[Any]) -> list[tuple[str, str, Permission]]:
+    """``(method, path, permission)`` for every route that declares one,
+    through included routers."""
+    from fastapi.routing import APIRoute
+
+    def found(dependant: Any) -> Permission | None:
+        for dep in dependant.dependencies:
+            perm = permission_of(dep.call) or found(dep)
+            if perm is not None:
+                return perm
+        return None
+
+    out: list[tuple[str, str, Permission]] = []
+    for route in routes:
+        if isinstance(route, APIRoute):
+            perm = found(route.dependant)
+            if perm is not None:
+                out.extend((m, route.path, perm) for m in sorted(route.methods))
+        elif hasattr(route, "original_router"):
+            out.extend(route_permissions(route.original_router.routes))
+    return out
 
 
 def current_session(request: Request) -> SessionInfo:
