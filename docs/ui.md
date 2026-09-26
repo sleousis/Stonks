@@ -377,9 +377,14 @@ Tickers open `/data?instrument=<id>`.
 | Data quality | `/ops/data-quality` | Statement audit flags, filtered by ticker and severity |
 | Universes | `/universes`, `/universes/:id` | List, create (JSON spec or CSV), index history import, members on a date, Refresh and Ensure data |
 
-- While a kill switch is on, `<app-halt-banner>` shows above every page.
+- `<app-session-strip>` sits above every page: the next scheduled run with
+  a live countdown (`GET /api/schedule`), and the halt state. It turns red
+  while a kill switch is on and amber for a breaker or operational halt.
   `HaltStateService` (`core/halts/`) reads active halts every minute and
   right after any halt action.
+- Server-paged tables pass the API page's offset: `[total]="p.total"
+  [offset]="p.offset"`. The table is re-created after each load, and the
+  offset keeps the pager on the right page.
 - Resume needs the typed words `RESUME TRADING` and a fresh second factor.
   The page calls `StepUpService.ensure()` (`core/auth/step-up.service.ts`)
   first, and again with `force` when the API answers 403

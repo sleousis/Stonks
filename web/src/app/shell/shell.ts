@@ -21,7 +21,7 @@ import { ConnectivityService } from '../core/pwa/connectivity.service';
 import { ThemeService } from '../core/theme/theme.service';
 import { CommandPalette } from '../shared/ui/command-palette/command-palette';
 import { ConfirmDialog } from '../shared/ui/confirm-dialog';
-import { HaltBanner } from '../shared/ui/halt-banner';
+import { SessionStrip } from '../shared/ui/session-strip';
 import { OfflinePage } from '../shared/ui/offline-page';
 import { ShortcutHelp } from '../shared/ui/shortcut-help';
 import { ToastOutlet } from '../shared/ui/toast-outlet';
@@ -49,7 +49,7 @@ import { registerShellCommands } from './shell-commands';
     ShortcutHelp,
     OfflinePage,
     // ops
-    HaltBanner,
+    SessionStrip,
   ],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
@@ -72,7 +72,7 @@ export class Shell {
 
   constructor() {
     registerShellCommands();
-    // ops: keep the kill switch banner current
+    // ops: keep the halt state in the session strip current
     inject(HaltStateService).watch(inject(DestroyRef));
     this.router.events
       .pipe(
