@@ -125,3 +125,43 @@ def test_input_too_short_returns_unchanged():
     out = permute_bars(bars, start_index=5, seed=1)  # start_index > len
     for col in ("open", "high", "low", "close"):
         assert np.allclose(out[col], bars[col])
+
+
+def _reference_permute_loop(bars: pd.DataFrame, start_index: int, seed: int) -> dict:
+    """The original bar-by-bar reconstruction, kept as an oracle so the
+    vectorized version must reproduce it exactly for a given seed."""
+    df = bars.reset_index(drop=True)
+    perm_index = start_index + 1
+    n = len(df)
+    perm_n = n - perm_index
+    rng = np.random.default_rng(seed)
+    lo = np.log(df["open"].to_numpy(dtype=float))
+    lh = np.log(df["high"].to_numpy(dtype=float))
+    ll = np.log(df["low"].to_numpy(dtype=float))
+    lc = np.log(df["close"].to_numpy(dtype=float))
+    r_o = np.empty(n)
+    r_o[1:] = lo[1:] - lc[:-1]
+    r_o[0] = 0.0
+    r_h, r_l, r_c = lh - lo, ll - lo, lc - lo
+    perm1 = rng.permutation(perm_n)
+    perm2 = rng.permutation(perm_n)
+    sh, sl, sc = r_h[perm_index:][perm1], r_l[perm_index:][perm1], r_c[perm_index:][perm1]
+    so = r_o[perm_index:][perm2]
+    no, nh, nl, nc = lo.copy(), lh.copy(), ll.copy(), lc.copy()
+    for i in range(perm_n):
+        idx = perm_index + i
+        no[idx] = nc[idx - 1] + so[i]
+        nh[idx] = no[idx] + sh[i]
+        nl[idx] = no[idx] + sl[i]
+        nc[idx] = no[idx] + sc[i]
+    return {"open": np.exp(no), "high": np.exp(nh), "low": np.exp(nl), "close": np.exp(nc)}
+
+
+def test_output_matches_reference_loop_exactly_for_seed():
+    bars = _synthetic_bars(n=300, seed=3)
+    for start_index, seed in [(0, 1), (10, 42), (150, 7)]:
+        out = permute_bars(bars, start_index=start_index, seed=seed)
+        ref = _reference_permute_loop(bars, start_index, seed)
+        for col in ("open", "high", "low", "close"):
+            assert np.array_equal(out[col].to_numpy(), ref[col]), (col, start_index, seed)
+        assert np.array_equal(out["adj_close"].to_numpy(), ref["close"])
