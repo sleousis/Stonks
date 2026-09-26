@@ -3,6 +3,11 @@
 Objectives and survival tests all go through here so the dataset's
 interval, universe and starting cash can't drift between call sites
 (previously several of them silently backtested intraday datasets at 1d).
+
+Every report carries its benchmark (BL-22): a ``BenchmarkedReport`` whose
+``benchmark`` is computed by ``stonks.backtest.benchmark`` on the same bars
+and timestamps, from ``getattr(dataset, "benchmark", "auto")`` unless the
+caller passes ``benchmark=`` (``"none"`` turns it off).
 """
 
 from __future__ import annotations
@@ -12,8 +17,13 @@ from typing import Any
 
 import pandas as pd
 
+from stonks.backtest.benchmark import (
+    DEFAULT_BENCHMARK,
+    BenchmarkedReport,
+    benchmark_curve,
+    with_benchmark,
+)
 from stonks.backtest.engine import BacktestConfig, Backtester
-from stonks.backtest.report import BacktestReport
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.backtest.trades import with_trades
 from stonks.core.interval import Interval
@@ -24,6 +34,9 @@ from stonks.core.types import Fill, Portfolio
 #: Starting cash for every lab backtest. Scores are scale-free
 #: (Sharpe, returns), so the value only needs to be consistent.
 LAB_INITIAL_CASH = 10_000.0
+
+#: Default for ``benchmark=``: read the dataset's ``benchmark`` attribute.
+FROM_DATASET = "__from_dataset__"
 
 
 def backtest_config(
@@ -45,14 +58,18 @@ def run_backtest(
     dataset: Any,
     window: tuple[date | datetime, date | datetime],
     lake: Any = None,
-) -> BacktestReport:
+    *,
+    benchmark: str | None = FROM_DATASET,
+) -> BenchmarkedReport:
     """Backtest ``strategy`` on ``dataset`` over ``window``, with the
-    round-trip trade ledger attached (``report.trades``/``trade_stats``).
+    round-trip trade ledger (``report.trades``/``trade_stats``) and the
+    benchmark (``report.benchmark``; ``None`` when off or unpriced) attached.
 
     ``lake`` overrides ``dataset.lake`` — survival tests that build a
-    modified copy of the bars (permuted, perturbed) pass it here.
+    modified copy of the bars (permuted, perturbed) pass it here; the
+    benchmark then comes from the same modified bars.
     """
-    report, _ = run_backtest_with_fills(strategy, dataset, window, lake)
+    report, _ = run_backtest_with_fills(strategy, dataset, window, lake, benchmark=benchmark)
     return report
 
 
@@ -61,7 +78,9 @@ def run_backtest_with_fills(
     dataset: Any,
     window: tuple[date | datetime, date | datetime],
     lake: Any = None,
-) -> tuple[BacktestReport, list[Fill]]:
+    *,
+    benchmark: str | None = FROM_DATASET,
+) -> tuple[BenchmarkedReport, list[Fill]]:
     """:func:`run_backtest` plus every fill the simulated broker made, in
     fill order — for tests that look at trades rather than the equity
     curve (e.g. the trade-level runs test)."""
@@ -80,7 +99,18 @@ def run_backtest_with_fills(
         _trade_bars(lake, config, sorted({f.ticker for f in fills})),
         reference_price=broker.reference_price,
     )
-    return report, list(fills)
+    spec = (
+        getattr(dataset, "benchmark", DEFAULT_BENCHMARK) if benchmark == FROM_DATASET else benchmark
+    )
+    curve = benchmark_curve(
+        lake,
+        spec,
+        report.equity_dates,
+        universe=config.universe,
+        interval=config.interval,
+        initial_value=report.equity_curve[0] if report.equity_curve else 1.0,
+    )
+    return with_benchmark(report, curve), list(fills)
 
 
 def _trade_bars(lake: Any, config: BacktestConfig, tickers: list[str]) -> pd.DataFrame | None:
