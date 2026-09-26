@@ -29,9 +29,9 @@ def test_tick_resolves_a_configured_universe_id(settings, seeded, fake_source, m
     seen: list[list[str]] = []
     real = ticks_module.build_tick_runtime
 
-    def spy(settings_, universe):
+    def spy(settings_, universe, **kw):
         seen.append(list(universe))
-        return real(settings_, universe)
+        return real(settings_, universe, **kw)
 
     monkeypatch.setattr(ticks_module, "build_tick_runtime", spy)
     _store_universe(settings, "mine", ["UP.US", "FLAT.US"])
