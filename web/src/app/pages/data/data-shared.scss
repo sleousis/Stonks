@@ -1,0 +1,70 @@
+@use 'breakpoints' as bp;
+
+// Controls row above a panel's table.
+.filters {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+
+  @include bp.from-tablet {
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    align-items: end;
+  }
+}
+
+// A ticker that selects itself when pressed: looks like a link, is a button.
+.pick {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-primary);
+  font-weight: var(--weight-semibold);
+  text-align: start;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 3px;
+
+  &:hover {
+    text-decoration-color: currentColor;
+  }
+
+  &[aria-pressed='true'] {
+    color: var(--color-ink);
+    text-decoration: none;
+
+    &::before {
+      content: '';
+      width: 3px;
+      height: 1em;
+      margin-right: var(--space-2);
+      border-radius: 2px;
+      background: var(--color-brass);
+    }
+  }
+
+  @include bp.phone {
+    min-height: var(--touch-min);
+  }
+
+  @include bp.coarse {
+    min-height: var(--touch-min);
+  }
+}
+
+.count {
+  font-size: var(--text-sm);
+}
+
+:host {
+  display: block;
+  min-width: 0;
+}
+
+:host > .panel {
+  height: 100%;
+}

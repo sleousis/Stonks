@@ -1,0 +1,26 @@
+<app-page-header
+  title="Data"
+  description="What is in the lake, how fresh it is, and the ingest runs that fill it."
+>
+  <button actions type="button" class="btn" (click)="refresh()">Refresh</button>
+</app-page-header>
+
+<div class="page-grid">
+  <app-instrument-search class="span-5" [selected]="ticker()" (picked)="pickTicker($event)" />
+  <app-coverage-panel
+    class="span-7"
+    [ticker]="ticker()"
+    [refresh]="refreshKey()"
+    (picked)="pickSeries($event)"
+    (cleared)="ticker.set(null)"
+  />
+  <app-price-panel
+    class="span-12"
+    [(ticker)]="ticker"
+    [(interval)]="interval"
+    [intervals]="intervalCodes()"
+    [refresh]="refreshKey()"
+  />
+  <app-ingest-panel class="span-5" [intervals]="intervals()" (finished)="refresh()" />
+  <app-ingest-runs-panel class="span-7" [refresh]="refreshKey()" />
+</div>
