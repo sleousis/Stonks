@@ -38,8 +38,8 @@ def test_cs_zscore_has_mean_0_std_1_after_winsorising() -> None:
     z = cs_zscore(x, winsor=3.0)
     assert z.mean() == pytest.approx(0.0, abs=1e-12)
     assert z.std(ddof=0) == pytest.approx(1.0)
-    # the outlier no longer sits 7 sigma out
-    assert z.iloc[-1] < 7.0
+    # no value is left beyond the winsor limit
+    assert z.abs().max() <= 3.0 + 1e-6
 
 
 def test_cs_zscore_hand_value() -> None:

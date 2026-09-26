@@ -43,18 +43,26 @@ def cs_winsorize(x: Frame, n_std: float = 3.0) -> Frame:
     return _rowwise(x, lambda s: _winsorize(s, n_std))
 
 
+_MAX_WINSOR_PASSES = 50
+
+
 def _zscore(s: pd.Series, winsor: float | None) -> pd.Series:
-    if winsor is not None:
+    for _ in range(_MAX_WINSOR_PASSES):
+        std = s.std(ddof=0)
+        if not std > 0:
+            return (s * 0.0).where(s.notna())
+        z = (s - s.mean()) / std
+        if winsor is None or not (z.abs() > winsor + 1e-9).any():
+            return z
         s = _winsorize(s, winsor)
-    std = s.std(ddof=0)
-    if not std > 0:
-        return (s * 0.0).where(s.notna())
-    return (s - s.mean()) / std
+    return z
 
 
 def cs_zscore(x: Frame, winsor: float | None = 3.0) -> Frame:
-    """Cross-sectional z-score. With ``winsor`` set, values are first clipped
-    at ``+/- winsor`` std, then re-standardised, so the output has mean 0 and
+    """Cross-sectional z-score. With ``winsor`` set, values beyond
+    ``+/- winsor`` std are clipped and the cross section re-standardised,
+    repeated until no z exceeds ``winsor`` (one pass isn't enough: a big
+    outlier inflates the std it is judged by). The output has mean 0 and
     std 1 exactly. A constant cross section gives zeros."""
     if winsor is not None and winsor <= 0:
         raise ValueError(f"winsor must be positive or None, got {winsor}")
