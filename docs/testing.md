@@ -100,16 +100,20 @@ uv run playwright show-trace test-results/<test>/trace-0.zip
 
 ## Known app issues
 
-The suite lets these through today. Each one has a test that fails while the issue is there. Remove the entry once the fix lands.
+None today. The suite fails on any console error, any refused request a journey does not expect and any axe violation.
 
-| Id | Issue | Where it is allowed |
+When a new issue cannot be fixed at once, list it here with an id, add it to `KNOWN_NOISE` or `KNOWN_AXE` in `tests/e2e/conftest.py`, and mark its test `xfail(strict=True)`. Remove all three once the fix lands.
+
+Fixed in integration step 6:
+
+| Id | Issue | Fix |
 |---|---|---|
-| BUG-1 | The shell calls `/api/halts`, `/api/schedule` and `/api/strategies` before anyone signs in, and gets 401 | `KNOWN_NOISE` in `tests/e2e/conftest.py` |
-| BUG-2 | The home calls `/api/subscriptions`, which has no route yet, so My strategies says Coming soon | `KNOWN_NOISE`, strict xfail `test_trader_home_lists_followed_strategies` |
-| BUG-3 | A trader with no portfolio gets 404 from `/api/portfolio` and `/api/pnl` and the home shows an error | strict xfail `test_new_trader_home_loads_without_errors` |
-| BUG-4 | Traders see Promote to active. The server refuses them with 403 | the promote journey expects the 403 |
-| A11Y-1 | On Settings the Notifications panel has the same landmark name as the toast region | `KNOWN_AXE` in `tests/e2e/conftest.py` |
-| A11Y-2 | The data table's scroll region takes its caption as its name, which repeats the panel heading on Universes and Halts | `KNOWN_AXE` |
+| BUG-1 | The shell called `/api/halts`, `/api/schedule` and `/api/strategies` before sign-in | `/api/auth/me` says `reads_open` in its 401, and app-wide pollers wait for a session |
+| BUG-2 | My strategies said Coming soon | It reads `GET /api/subscriptions` through the generated client |
+| BUG-3 | A trader with no portfolio got 404 on home | Home shows No portfolio yet and asks for no holdings |
+| BUG-4 | Traders could press Promote | Go live is turned off for traders, with the reason |
+| A11Y-1 | The toast region had the same name as the Notifications panel | The toast region is named Messages |
+| A11Y-2 | A table's scroll region repeated its panel heading | It is named after the caption plus "scrollable table" |
 
 ## The CLI golden run
 
