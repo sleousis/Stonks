@@ -159,6 +159,23 @@ def test_from_execution_settings():
     assert bar.settlement_days == 1
 
 
+def test_a_cash_limited_buy_carries_nothing():
+    broker = _broker(cash=500.0)  # 5 shares at 100
+    _prices(broker, volume=1_000.0)
+    fill = broker.place_order(_order(qty=250.0))  # capped to 100, then to cash
+    assert fill.quantity == pytest.approx(5.0, rel=1e-6)
+    assert broker.unfilled_quantity("o1") == 0.0
+    assert broker.place_order(_order("o2", qty=250.0)) is None  # no cash left
+    assert broker.unfilled_quantity("o2") == 0.0
+
+
+def test_a_rejected_sell_carries_nothing():
+    broker = _broker(positions={"X.US": 5.0})
+    _prices(broker, volume=1_000.0)
+    assert broker.place_order(_order(side="sell", qty=250.0)) is None
+    assert broker.unfilled_quantity("o1") == 0.0
+
+
 def test_idempotency_keeps_the_first_decision():
     broker = _broker()
     _prices(broker, volume=1_000.0)

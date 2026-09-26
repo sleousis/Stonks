@@ -197,6 +197,8 @@ class SimulatedBroker:
         cost = self._cost(order, price, quantity)
         if order.side == "buy":
             if quantity * cost.fill_price + cost.fee > self.buying_power:
+                # cash, not liquidity, binds: nothing is worth carrying
+                self._unfilled[order.client_id] = 0.0
                 quantity, cost = self._affordable(order, price, quantity, cost)
                 if quantity <= 0:
                     _log.debug(
@@ -217,6 +219,7 @@ class SimulatedBroker:
         else:  # sell
             held = self._portfolio.positions.get(order.ticker, 0.0)
             if held < quantity:
+                self._unfilled[order.client_id] = 0.0
                 _log.debug(
                     "order_rejected",
                     client_id=order.client_id,
@@ -248,7 +251,8 @@ class SimulatedBroker:
     def unfilled_quantity(self, client_id: str) -> float:
         """Quantity of ``client_id`` the fill model deferred to a later bar
         (participation cap, zero volume); ``0`` when it filled in full,
-        expired, or was never placed."""
+        expired, was cut by cash or position (a buy scaled to cash, a
+        rejected sell), or was never placed."""
         return self._unfilled.get(client_id, 0.0)
 
     # ---- trade ledger inputs ------------------------------------------------
