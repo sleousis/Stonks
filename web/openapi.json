@@ -900,12 +900,16 @@
           "survival_tests": {
             "items": {
               "enum": [
+                "cost_stress",
+                "cross_instrument",
                 "drift",
+                "mc_trades",
                 "mcpt",
                 "oos",
                 "period_stability",
                 "permutation",
                 "perturbation",
+                "plateau",
                 "runs_test",
                 "walk_forward",
                 "walk_forward_mcpt"
@@ -1898,12 +1902,16 @@
               {
                 "items": {
                   "enum": [
+                    "cost_stress",
+                    "cross_instrument",
                     "drift",
+                    "mc_trades",
                     "mcpt",
                     "oos",
                     "period_stability",
                     "permutation",
                     "perturbation",
+                    "plateau",
                     "runs_test",
                     "walk_forward",
                     "walk_forward_mcpt"
