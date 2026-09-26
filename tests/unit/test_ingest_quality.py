@@ -291,3 +291,116 @@ def test_fallback_config_lookup():
     assert cfg.for_primary("eodhd") == "yahoo"
     assert cfg.for_primary("yahoo") is None
     assert cfg.for_primary("defillama") is None
+
+
+# ---- stored spikes (DS-03) ------------------------------------------------------------
+
+
+def test_a_stored_last_bar_spike_reverted_by_the_batch_is_reported():
+    # daily incremental ingest: the spike arrived alone yesterday and was
+    # stored; today's one-bar batch takes it back
+    closes = _walk(61)
+    closes[60] = closes[59] * 3.0
+    history = _frame(closes, start=date(2024, 11, 1))
+    batch = _frame([closes[59] * 1.001], start=date(2024, 11, 1) + timedelta(days=61))
+    result = _checker().check(batch, interval=D1, history=history)
+    spike_ts = history["timestamp"].iloc[-1]
+    assert result.stored_spikes == [("AAA.US", spike_ts)]
+    assert _reasons(result) == {}
+    assert "extreme_move" not in _codes(result)
+
+
+def test_a_stored_move_that_holds_is_not_a_stored_spike():
+    closes = _walk(61)
+    closes[60] = closes[59] * 3.0
+    history = _frame(closes, start=date(2024, 11, 1))
+    batch = _frame([closes[60] * 1.001], start=date(2024, 11, 1) + timedelta(days=61))
+    result = _checker().check(batch, interval=D1, history=history)
+    assert result.stored_spikes == []
+
+
+# ---- non-positive prices with an overlapping config (DS-12) ----------------------------
+
+
+def test_negative_prices_do_not_crash_the_spike_rule_when_configs_overlap():
+    closes = [50.0, 40.0, 20.0, -5.0, -37.0, 10.0, 20.0] * 5
+    frame = _frame(closes)
+    frame["high"] = frame["close"] + 1
+    frame["low"] = frame["close"] - 1
+    frame["open"] = frame["close"]
+    checker = _checker(spike_asset_classes=["equity", "crypto", "commodity"])
+    result = checker.check(frame, interval=D1, asset_class="commodity")
+    assert result.rejected == 0
+
+
+# ---- gaps and staleness use the clean rows (DS-19) ---------------------------------------
+
+
+def test_a_day_whose_only_bar_is_quarantined_is_a_calendar_gap():
+    days = [d.date() for d in pd.bdate_range("2025-01-06", periods=10)]
+    frame = _frame(_walk(10), days=days)
+    frame.loc[4, "close"] = 0.0
+    result = BarQualityChecker(DataQualityConfig(), calendar=_WeekdayCalendar()).check(
+        frame, interval=D1
+    )
+    assert set(_reasons(result)) == {4}
+    [w] = [w for w in result.warnings if w.code == "calendar_gap"]
+    assert w.count == 1
+
+
+def test_stale_rule_ignores_a_quarantined_newest_bar():
+    frame = _frame(_walk(10), start=date(2025, 1, 1))
+    frame.loc[9, "close"] = float("nan")
+    # clean bars end on 9 January; the rejected one on the 10th
+    result = _checker(stale_after_days=7).check(frame, interval=D1, as_of=date(2025, 1, 17))
+    assert "stale_series" in _codes(result)
+
+
+# ---- edge cases -------------------------------------------------------------------------
+
+
+def test_one_row_batches_pass_without_history():
+    result = _checker().check(_frame([100.0]), interval=D1)
+    assert result.rejected == 0
+
+
+def test_one_row_batch_spike_with_history_is_a_warning():
+    history = _frame(_walk(50), start=date(2024, 11, 1))
+    last = float(history["close"].iloc[-1])
+    batch = _frame([last * 3], start=date(2024, 12, 21))
+    result = _checker().check(batch, interval=D1, history=history)
+    assert result.rejected == 0 and result.stored_spikes == []
+    assert "extreme_move" in _codes(result)
+
+
+def test_all_nan_adj_close_is_not_a_reason_to_reject():
+    closes = _walk(60)
+    closes[40] = closes[39] * 3.0
+    frame = _frame(closes)
+    frame["adj_close"] = float("nan")
+    result = _checker().check(frame, interval=D1)
+    assert _reasons(result) == {40: "price_spike"}
+
+
+def test_duplicate_timestamp_where_the_later_copy_is_bad():
+    frame = _frame([100.0, 101.0, 102.0])
+    dup = frame.iloc[[1]].copy()
+    dup["close"] = 0.0
+    frame = pd.concat([frame, dup], ignore_index=True)
+    result = _checker().check(frame, interval=D1)
+    # the bad copy is rejected on its own merit and the good one is kept,
+    # so the day is not lost
+    assert _reasons(result) == {3: "non_positive_price,close_out_of_range"}
+
+
+def test_a_split_and_a_spike_on_the_same_day():
+    walk = _walk(60)
+    closes = walk[:40] + [c / 4 for c in walk[40:]]
+    adj = [c / 4 for c in walk]
+    closes[40] *= 3.0  # a bad tick on the ex-date
+    adj[40] *= 3.0
+    frame = _frame(closes)
+    frame["adj_close"] = adj
+    splits = pd.DataFrame([{"ex_date": frame.loc[40, "timestamp"].date(), "ratio": 4.0}])
+    result = _checker().check(frame, interval=D1, splits=splits)
+    assert _reasons(result) == {40: "price_spike"}

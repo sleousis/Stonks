@@ -10,11 +10,15 @@ Canonical codes:
 - hours:   ``1h``, ``4h``, ``6h``, ``12h``
 - days:    ``1d``, ``3d``, ``5d``
 - weeks:   ``1w``
-- months:  ``1mo``, ``6mo``  (case-sensitive suffix to disambiguate from minutes)
+- months:  ``1mo``, ``6mo``  (``mo``, so a month is never read as a minute)
 - years:   ``1y``, ``5y``
 
-``Interval.parse`` also accepts human aliases — ``1month``, ``6months``,
-``1year``, ``5years`` — and normalizes them to the canonical short form.
+``Interval.parse`` ignores case and also accepts human aliases (``1month``,
+``6months``, ``1year``, ``5years``), normalizing them to the canonical
+short form. A bare upper-case ``M`` (``1M``) is refused: pandas and some
+vendors mean a month by it. Equivalent codes collapse to the largest whole
+unit (``60m`` is ``1h``, ``24h`` is ``1d``, ``7d`` is ``1w``, ``12mo`` is
+``1y``), so one duration is always one ``bars`` series.
 
 Monthly and yearly durations are *approximate* in seconds (30 days and 365
 days respectively). DuckDB interval arithmetic on those buckets honors the
@@ -59,12 +63,23 @@ _UNIT_ALIASES: dict[str, str] = {
     "mins": "m",
     "minute": "m",
     "minutes": "m",
+    "hr": "h",
     "hour": "h",
     "hours": "h",
     "day": "d",
     "days": "d",
     "week": "w",
     "weeks": "w",
+}
+
+
+# Unit -> (next larger unit, how many of this unit make one). Months and
+# years are calendar units, so days never roll up into them.
+_NEXT_UNIT: dict[str, tuple[str, int]] = {
+    "m": ("h", 60),
+    "h": ("d", 24),
+    "d": ("w", 7),
+    "mo": ("y", 12),
 }
 
 
@@ -99,7 +114,12 @@ class Interval:
     def parse(cls, code: str) -> Interval:
         if not isinstance(code, str):
             raise TypeError(f"Interval code must be str, got {type(code).__name__}")
-        s = code.strip().lower()
+        raw = code.strip()
+        if raw.endswith("M") and raw[:-1].isdigit():
+            raise ValueError(
+                f"ambiguous Interval code {code!r}: use 'm' for minutes or 'mo' for months"
+            )
+        s = raw.lower()
         if not s:
             raise ValueError(f"invalid Interval code: {code!r}")
 
@@ -129,6 +149,12 @@ class Interval:
             raise ValueError(f"non-integer amount in {code!r}") from exc
         if amount <= 0:
             raise ValueError(f"Interval amount must be positive, got {amount}")
+        # the largest whole unit, so "60m" and "1h" are one series
+        while unit in _NEXT_UNIT:
+            bigger, factor = _NEXT_UNIT[unit]
+            if amount % factor:
+                break
+            amount, unit = amount // factor, bigger
         return cls(code=f"{amount}{unit}", seconds=amount * _UNIT_SECONDS[unit])
 
     def to_timedelta(self) -> timedelta:

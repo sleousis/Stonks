@@ -8,8 +8,15 @@ finds into two kinds:
   the pipeline writes these rows to ``quarantined_bars`` instead of the
   bar store. Only rules a real bar cannot break go here: missing or
   non-positive prices, ``high < low``, ``close`` outside ``[low, high]``,
-  an earlier copy of a duplicated timestamp, and a one-bar spike that the
-  next bar takes back.
+  an earlier copy of a duplicated timestamp (among the copies that pass
+  the other rules, so a bad later copy never costs the day), and a one-bar
+  spike that the next bar takes back.
+- **Stored spikes**: when the batch's first bar takes back a large move
+  made by the last *stored* bar (a daily ingest stores one bar at a
+  time, so yesterday's bad tick was stored before today's bar showed it
+  up), that stored bar is reported in :attr:`BatchQuality.stored_spikes`.
+  The pipeline moves it to ``quarantined_bars`` and deletes it from the
+  bar store.
 - **Warnings** (series level, :data:`WARNING_CODES`): a large move that
   holds, calendar gaps, a stale series, flat-price or zero-volume streaks.
   These can be real (a crash, a halt, an illiquid name), so they are
@@ -63,6 +70,7 @@ WarningCode = Literal[
     "stale_series",
     "flat_price_streak",
     "zero_volume_streak",
+    "no_data",
 ]
 WARNING_CODES: tuple[str, ...] = WarningCode.__args__  # type: ignore[attr-defined]
 
@@ -93,6 +101,9 @@ class BatchQuality:
 
     reasons: pd.Series
     warnings: list[SeriesWarning] = field(default_factory=list)
+    #: ``(ticker, timestamp)`` of stored bars (from ``history``) that the
+    #: batch shows to be one-bar spikes.
+    stored_spikes: list[tuple[str, pd.Timestamp]] = field(default_factory=list)
 
     @property
     def rejected_mask(self) -> pd.Series:
@@ -146,6 +157,7 @@ class BarQualityChecker:
                 asset_class or "equity",
                 codes,
                 result.warnings,
+                result.stored_spikes,
             )
         result.reasons = pd.Series(
             {i: ",".join(c) for i, c in codes.items()}, dtype=object
@@ -165,6 +177,7 @@ class BarQualityChecker:
         asset_class: str,
         codes: dict[Any, list[str]],
         warnings: list[SeriesWarning],
+        stored_spikes: list[tuple[str, pd.Timestamp]],
     ) -> None:
         cfg = self.config
         prices = group[list(_PRICE_COLS)].astype(float)
@@ -178,23 +191,27 @@ class BarQualityChecker:
         out_of_range = (
             ~missing & ~high_below_low & ((close > high * (1 + tol)) | (close < low * (1 - tol)))
         )
-        ts = pd.to_datetime(group["timestamp"])
-        duplicate = ts.duplicated(keep="last")
         for mask, reason in (
             (missing, "missing_price"),
             (non_positive, "non_positive_price"),
             (high_below_low, "high_below_low"),
             (out_of_range, "close_out_of_range"),
-            (duplicate, "duplicate_timestamp"),
         ):
             for idx in group.index[mask.to_numpy()]:
                 codes[idx].append(reason)
+        # Among the copies of a timestamp that pass the row rules, the last
+        # one wins; a bad copy is already rejected on its own merit.
+        passing = group[[not codes[i] for i in group.index]]
+        duplicate = pd.to_datetime(passing["timestamp"]).duplicated(keep="last")
+        for idx in passing.index[duplicate.to_numpy()]:
+            codes[idx].append("duplicate_timestamp")
 
         valid = group[[not codes[i] for i in group.index]]
         spikes: list[Any] = []
         moves: list[Any] = []
         if asset_class in cfg.spike_asset_classes:
-            spikes, moves = self._spikes(valid, history, splits)
+            spikes, moves, stored = self._spikes(valid, history, splits)
+            stored_spikes.extend((ticker, ts) for ts in stored)
         for idx in spikes:
             codes[idx].append("price_spike")
         if moves:
@@ -204,21 +221,22 @@ class BarQualityChecker:
                 )
             )
         clean = valid.drop(index=list(spikes)).sort_values("timestamp")
-        self._series_warnings(ticker, group, clean, interval, as_of, warnings)
+        self._series_warnings(ticker, clean, interval, as_of, warnings)
 
     def _spikes(
         self,
         valid: pd.DataFrame,
         history: pd.DataFrame | None,
         splits: pd.DataFrame | None,
-    ) -> tuple[list[Any], list[Any]]:
-        """Batch rows that are one-bar spikes, and batch rows whose large
-        move holds (warnings)."""
+    ) -> tuple[list[Any], list[Any], list[pd.Timestamp]]:
+        """Batch rows that are one-bar spikes, batch rows whose large move
+        holds (warnings), and the timestamp of the last stored bar when the
+        batch's first bar takes back its large move."""
         cfg = self.config
         batch = valid.assign(_ts=pd.to_datetime(valid["timestamp"]), _idx=valid.index)
         batch = batch.sort_values("_ts")
         if batch.empty:
-            return [], []
+            return [], [], []
         parts = [batch[["_ts", "close", "adj_close", "_idx"]]]
         if history is not None and not history.empty:
             hist = history.assign(_ts=pd.to_datetime(history["timestamp"]), _idx=None)
@@ -228,16 +246,17 @@ class BarQualityChecker:
         series = pd.concat(parts, ignore_index=True).sort_values("_ts", kind="stable")
         series = series.reset_index(drop=True)
         if len(series) - 1 < cfg.min_history_bars:
-            return [], []
+            return [], [], []
         returns = _returns(series, splits)
         finite = returns[np.isfinite(returns)]
         if len(finite) < cfg.min_history_bars:
-            return [], []
+            return [], [], []
         mad = float(np.median(np.abs(finite - np.median(finite))))
         sigma = max(_MAD_TO_SIGMA * mad, cfg.min_sigma)
         threshold = max(cfg.spike_sigmas * sigma, cfg.spike_min_move)
         spikes: list[Any] = []
         moves: list[Any] = []
+        stored: list[pd.Timestamp] = []
         idx_col = series["_idx"].tolist()
         skip_next = False
         for i in range(1, len(series)):
@@ -246,21 +265,27 @@ class BarQualityChecker:
                 continue
             idx = idx_col[i]
             r = returns[i]
-            if pd.isna(idx) or not np.isfinite(r) or abs(r) <= threshold:
+            if not np.isfinite(r) or abs(r) <= threshold:
                 continue
             nxt = returns[i + 1] if i + 1 < len(series) else math.nan
             reverts = np.isfinite(nxt) and abs(r + nxt) < cfg.spike_reversal_tolerance * abs(r)
+            if pd.isna(idx):
+                # a stored bar: judged only when it is the last one and the
+                # batch's first bar takes its move back
+                if reverts and not pd.isna(idx_col[i + 1]):
+                    stored.append(pd.Timestamp(series["_ts"].iloc[i]))
+                    skip_next = True
+                continue
             if reverts:
                 spikes.append(idx)
                 skip_next = True
             else:
                 moves.append(idx)
-        return spikes, moves
+        return spikes, moves, stored
 
     def _series_warnings(
         self,
         ticker: str,
-        group: pd.DataFrame,
         clean: pd.DataFrame,
         interval: Interval,
         as_of: date | None,
@@ -285,7 +310,9 @@ class BarQualityChecker:
             )
         if interval.is_intraday:
             return
-        days = pd.to_datetime(group["timestamp"]).dt.date
+        # Only rows that reach the store count: a day whose only bar was
+        # rejected is a gap, and a rejected newest bar does not refresh.
+        days = pd.to_datetime(clean["timestamp"]).dt.date
         last = max(days)
         if as_of is not None and (as_of - last).days > cfg.stale_after_days:
             warnings.append(
@@ -494,6 +521,10 @@ def _returns(series: pd.DataFrame, splits: pd.DataFrame | None) -> np.ndarray:
     out = np.full(len(series), np.nan)
     with np.errstate(divide="ignore", invalid="ignore"):
         for i in range(1, len(series)):
+            if not (close[i] > 0 and close[i - 1] > 0):
+                # no log return across a zero or negative price (futures,
+                # yields); the rule has nothing to measure there
+                continue
             raw = math.log(close[i] / close[i - 1])
             factor = 1.0
             for day, ratio in split_events:
