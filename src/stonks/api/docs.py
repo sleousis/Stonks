@@ -1,0 +1,191 @@
+"""Render the REST reference (``docs/api/rest.md``) from ``web/openapi.json``.
+
+Regenerate after changing any route or model (after ``stonks.api.openapi``)::
+
+    uv run python -m stonks.api.docs                     # web/openapi.json -> docs/api/rest.md
+    uv run python -m stonks.api.docs spec.json out.md    # custom paths
+
+``tests/unit/test_api_docs.py`` fails when the checked-in file is stale.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+DEFAULT_SPEC = Path("web/openapi.json")
+DEFAULT_OUTPUT = Path("docs/api/rest.md")
+
+_METHODS = ("get", "post", "put", "patch", "delete", "head", "options")
+_SAFE = {"get", "head", "options"}
+_REF_PREFIX = "#/components/schemas/"
+
+_DIAGRAM = """\
+```mermaid
+flowchart LR
+  C["Clients<br/>web UI, stonks mcp, scripts"] -->|"HTTP /api"| A["FastAPI app"]
+  A --> S["Services"]
+  S --> L[("lake.duckdb<br/>market data")]
+  S --> T[("state.sqlite<br/>strategies, orders, ticks")]
+```"""
+
+_AUTH_NOTE = """\
+Auth: reads (`GET`) are open to loopback clients by default
+(`[api].open_reads_on_loopback`). Every other method needs
+`Authorization: Bearer $STONKS_API_TOKEN`."""
+
+
+def _slug(name: str) -> str:
+    """GitHub heading anchor."""
+    return re.sub(r"[^a-z0-9 _-]", "", name.lower()).replace(" ", "-")
+
+
+def _cell(text: str) -> str:
+    return " ".join(str(text).split()).replace("|", "\\|")
+
+
+def _first_paragraph(text: str) -> str:
+    return text.strip().split("\n\n", 1)[0] if text else ""
+
+
+def _type(schema: dict[str, Any]) -> str:
+    if "$ref" in schema:
+        name = schema["$ref"].removeprefix(_REF_PREFIX)
+        return f"[{name}](#{_slug(name)})"
+    for key in ("anyOf", "oneOf"):
+        if key in schema:
+            return " \\| ".join(_type(s) for s in schema[key])
+    if "allOf" in schema and len(schema["allOf"]) == 1:
+        return _type(schema["allOf"][0])
+    if "const" in schema:
+        return json.dumps(schema["const"])
+    if "enum" in schema:
+        return " \\| ".join(json.dumps(v) for v in schema["enum"])
+    kind = schema.get("type", "any")
+    if isinstance(kind, list):
+        return " \\| ".join(kind)
+    if kind == "array":
+        return f"list[{_type(schema.get('items', {}))}]"
+    if kind == "object" and isinstance(schema.get("additionalProperties"), dict):
+        return f"dict[str, {_type(schema['additionalProperties'])}]"
+    if kind == "string" and "format" in schema:
+        return schema["format"]
+    return kind
+
+
+def _body_type(content: dict[str, Any]) -> str:
+    if not content:
+        return ""
+    if "application/json" in content:
+        return _type(content["application/json"].get("schema", {}))
+    media, body = sorted(content.items())[0]
+    if media == "text/event-stream":
+        data = body.get("itemSchema", {}).get("properties", {}).get("data", {})
+        inner = data.get("contentSchema")
+        return f"SSE of {_type(inner)}" if inner else "SSE"
+    return f"`{media}`"
+
+
+def _auth(method: str, op: dict[str, Any], spec: dict[str, Any]) -> str:
+    security = op.get("security", spec.get("security"))
+    if not security:
+        return "none"
+    return "token, or open on loopback" if method in _SAFE else "bearer token"
+
+
+def _response_type(op: dict[str, Any]) -> str:
+    for code in sorted(op.get("responses", {})):
+        if code.startswith("2"):
+            return _body_type(op["responses"][code].get("content", {}))
+    return ""
+
+
+def _operations(spec: dict[str, Any]) -> dict[str, list[tuple[str, str, dict[str, Any]]]]:
+    by_tag: dict[str, list[tuple[str, str, dict[str, Any]]]] = {}
+    for path in sorted(spec.get("paths", {})):
+        item = spec["paths"][path]
+        for method in _METHODS:
+            if method in item:
+                op = item[method]
+                tag = (op.get("tags") or ["other"])[0]
+                by_tag.setdefault(tag, []).append((method, path, op))
+    return dict(sorted(by_tag.items()))
+
+
+def _render_schema(name: str, schema: dict[str, Any]) -> list[str]:
+    lines = [f"### {name}", ""]
+    desc = _cell(_first_paragraph(schema.get("description", "")))
+    if desc:
+        lines += [desc, ""]
+    props = schema.get("properties")
+    if not props:
+        return [*lines, f"Type: {_type(schema)}", ""]
+    required = set(schema.get("required", []))
+    lines += ["| Field | Type | Required | Description |", "|-------|------|----------|-------------|"]
+    for field, prop in props.items():
+        req = "yes" if field in required else "no"
+        prop_desc = _cell(_first_paragraph(prop.get("description", "")))
+        lines.append(f"| `{field}` | {_type(prop)} | {req} | {prop_desc} |")
+    return [*lines, ""]
+
+
+def render_rest_markdown(spec: dict[str, Any]) -> str:
+    info = spec.get("info", {})
+    ops = _operations(spec)
+    out = [
+        "# REST API",
+        "",
+        "<!-- Generated by `uv run python -m stonks.api.docs` from web/openapi.json. "
+        "Do not edit. -->",
+        "",
+        f"{info.get('title', 'API')} {info.get('version', '')}. {info.get('description', '')}",
+        "",
+        _DIAGRAM,
+        "",
+        _AUTH_NOTE,
+        "",
+        "Tags: " + " · ".join(f"[{tag}](#{_slug(tag)}-endpoints)" for tag in ops),
+        "",
+    ]
+    for tag, rows in ops.items():
+        out += [
+            f"## {tag} endpoints",
+            "",
+            "| Method | Path | Summary | Auth | Request | Response |",
+            "|--------|------|---------|------|---------|----------|",
+        ]
+        for method, path, op in rows:
+            request = _body_type(op.get("requestBody", {}).get("content", {}))
+            out.append(
+                f"| {method.upper()} | `{path}` | {_cell(op.get('summary', ''))} | "
+                f"{_auth(method, op, spec)} | {request} | {_response_type(op)} |"
+            )
+        out.append("")
+    schemas = spec.get("components", {}).get("schemas", {})
+    if schemas:
+        out += ["## Schemas", ""]
+        for name in sorted(schemas):
+            out += _render_schema(name, schemas[name])
+    return "\n".join(out).rstrip("\n") + "\n"
+
+
+def write_rest(spec_path: Path = DEFAULT_SPEC, out: Path = DEFAULT_OUTPUT) -> Path:
+    spec = json.loads(Path(spec_path).read_text(encoding="utf-8"))
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(render_rest_markdown(spec), encoding="utf-8", newline="\n")
+    return out
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = sys.argv[1:] if argv is None else argv
+    spec = Path(args[0]) if args else DEFAULT_SPEC
+    out = Path(args[1]) if len(args) > 1 else DEFAULT_OUTPUT
+    print(f"wrote {write_rest(spec, out).as_posix()}")
+
+
+if __name__ == "__main__":
+    main()
