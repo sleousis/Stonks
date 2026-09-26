@@ -196,7 +196,9 @@ class McptOptions(BaseModel):
 
     n_permutations: int = Field(default=200, ge=1, le=1_000)
     max_p_value: float = Field(default=0.05, gt=0, le=1)
-    metric: Literal["profit_factor", "sharpe", "final_return", "cagr"] = "profit_factor"
+    metric: Literal["profit_factor", "bar_profit_factor", "sharpe", "final_return", "cagr"] = (
+        "profit_factor"
+    )
     #: Re-tune on every permutation (Masters); costs ``(n + 1) * budget``
     #: backtests. ``"auto"`` re-tunes only a strategy with a non-trivial
     #: ``fit`` (the promotion preset's choice).
