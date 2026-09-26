@@ -318,7 +318,7 @@ Every trader gets a simple experience: connect a broker for insights, pick strat
 
 ## Phase 16: Short selling
 
-**Status:** planned. Design: `docs/design/shorting.md`.
+**Status:** 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. Design and what changed from it: `docs/design/shorting.md`.
 
 | WP | Scope |
 |----|-------|
