@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from stonks.api.deps import ServicesDep
+from stonks.api.deps import PrincipalDep, ServicesDep
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.app.brokers import AlpacaStatus, BrokerInfo
 
@@ -16,8 +16,10 @@ def get_broker_info(services: ServicesDep) -> BrokerInfo:
 
 
 @router.get("/alpaca/status", response_model=AlpacaStatus, operation_id="getAlpacaStatus")
-def get_alpaca_status(services: ServicesDep) -> AlpacaStatus:
+def get_alpaca_status(services: ServicesDep, principal: PrincipalDep) -> AlpacaStatus:
     """Connect to Alpaca and read the account and market clock (read-only).
-    409 unless ``[brokers].kind`` is ``alpaca``; missing keys or API errors
-    come back as ``connected=false`` with the reason."""
-    return services.brokers.alpaca_status()
+    Only the owner of the book the account backs may read it (404 for
+    anyone else). Answers are cached for 30 seconds. 409 unless
+    ``[brokers].kind`` is ``alpaca``; missing keys or API errors come back
+    as ``connected=false`` with the reason."""
+    return services.brokers.alpaca_status(principal)

@@ -103,3 +103,63 @@ def test_as01_alerts_need_a_credential_even_on_loopback(settings, seeded, fake_s
     app = create_app(settings, source_factory=lambda: fake_source)
     with TestClient(app, client=("127.0.0.1", 5000)) as c:
         assert c.get("/api/alerts").status_code == 401
+
+
+# ---- AS-03 Alpaca status ---------------------------------------------------------
+
+
+class _CountingAlpaca:
+    calls = 0
+
+    def fetch_account(self):
+        from stonks.execution.brokers.base import BrokerAccount
+
+        type(self).calls += 1
+        return BrokerAccount(
+            cash=1.0, equity=2.0, buying_power=3.0, currency="USD", status="ACTIVE"
+        )
+
+    def get_market_clock(self):
+        from stonks.execution.brokers.base import MarketClock
+
+        now = datetime(2026, 3, 20, 15, tzinfo=UTC)
+        return MarketClock(timestamp=now, is_open=True, next_open=now, next_close=now)
+
+
+@pytest.fixture
+def alpaca_client(settings, seeded, fake_source, auth):
+    from pydantic import SecretStr
+
+    settings.api.allowed_hosts = ["testserver"]
+    settings.brokers.kind = "alpaca"
+    settings.brokers.alpaca.api_key = SecretStr("k-123")
+    settings.brokers.alpaca.secret_key = SecretStr("s-456")
+    _CountingAlpaca.calls = 0
+    svc = Services.create(
+        AppContext(settings, source_factory=lambda: fake_source),
+        broker_connector=lambda s: _CountingAlpaca(),
+    )
+    application = create_app(settings, services=svc)
+    application.state.auth = auth
+    with TestClient(application, client=REMOTE, base_url=BASE) as c:
+        yield c
+
+
+def test_as03_alpaca_status_is_only_for_the_account_owner(alpaca_client, people):
+    from tests.integration.app.test_api import AUTH
+
+    for name in ("vic", "alice", "ada"):
+        resp = alpaca_client.get("/api/brokers/alpaca/status", headers=people[name]["headers"])
+        assert resp.status_code == 404, (name, resp.text)
+        assert "equity" not in resp.text
+    # The legacy token is the bootstrap admin, who owns pf_default (the Alpaca book).
+    owner = alpaca_client.get("/api/brokers/alpaca/status", headers=AUTH)
+    assert owner.status_code == 200 and owner.json()["account"]["equity"] == 2.0
+
+
+def test_as03_alpaca_status_is_cached_between_calls(alpaca_client):
+    from tests.integration.app.test_api import AUTH
+
+    for _ in range(3):
+        assert alpaca_client.get("/api/brokers/alpaca/status", headers=AUTH).status_code == 200
+    assert _CountingAlpaca.calls == 1
