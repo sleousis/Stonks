@@ -13,9 +13,10 @@ from stonks.core.interval import Interval
 from stonks.store.lake import DuckDBLake
 
 
-@pytest.fixture
-def lake(tmp_path):
-    lake = DuckDBLake(tmp_path / "lake.duckdb")
+@pytest.fixture(params=["duckdb", "parquet"])
+def lake(tmp_path, request):
+    # Every test runs against both bar stores (roadmap 10.4).
+    lake = DuckDBLake(tmp_path / "lake.duckdb", bar_backend=request.param)
     lake.migrate()
     yield lake
     lake.close()

@@ -1,6 +1,12 @@
 [lake]
 path = "data/lake.duckdb"
 
+# Bar store: "duckdb" (table in the lake file) or "parquet" (partitioned
+# files under <lake dir>/bars, readable while `stonks serve` runs). Switch with
+# `uv run python -m stonks.store.bars_migrate` (see docs/architecture.md).
+[lake.bars]
+backend = "duckdb"
+
 [state]
 path = "data/state.sqlite"
 
