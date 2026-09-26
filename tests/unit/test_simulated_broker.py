@@ -238,6 +238,22 @@ def test_oversized_buy_with_bps_fee_and_impact_is_scaled_to_affordable():
     assert fill.fee == pytest.approx(expected.fee)
 
 
+class _VolumeDiscountModel:
+    """Breaks the CostModel contract: per-unit price falls with size."""
+
+    def cost(self, trade: Trade) -> TradeCost:
+        return TradeCost(fill_price=trade.price * (1 + 1 / (1 + trade.quantity)), fee=0.0)
+
+
+def test_scaling_never_overdraws_cash_even_if_the_model_breaks_the_contract():
+    broker = SimulatedBroker(
+        Portfolio(cash=1_000.0, positions={}), cost_model=_VolumeDiscountModel()
+    )
+    broker.set_prices({"AAPL.US": 100.0}, as_of=date(2026, 4, 1))
+    broker.place_order(_order("big", qty=1_000.0))
+    assert broker.fetch_portfolio().cash >= -1e-9
+
+
 def test_buy_rejected_when_even_the_flat_fee_is_unaffordable_under_cost_model():
     model = CostModelSettings(default=AssetClassCosts(fee_flat=5.0)).build()
     broker = SimulatedBroker(Portfolio(cash=4.0, positions={}), cost_model=model)

@@ -164,6 +164,10 @@ class SimulatedBroker:
         lo_cost = self._cost(order, price, lo) if lo > 0 else cost
         if lo > 0 and lo_cost == cost:
             return lo, cost  # constant costs: the closed form is exact
+        if not affordable(lo, lo_cost):
+            # the model broke the monotonicity contract; search from zero
+            _log.warning("cost_model_not_monotone", client_id=order.client_id)
+            lo, lo_cost = 0.0, cost
         hi = requested
         for _ in range(_SCALE_ITERATIONS):
             mid = (lo + hi) / 2
