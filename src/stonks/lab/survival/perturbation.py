@@ -7,10 +7,8 @@ import math
 import random
 from collections.abc import Sequence
 
-from stonks.backtest.engine import BacktestConfig, Backtester
-from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.protocols import Strategy, SurvivalReport
-from stonks.core.types import Portfolio
+from stonks.lab.backtesting import run_backtest
 from stonks.lab.dataset import LabDataset
 from stonks.store.lake import DuckDBLake
 
@@ -66,18 +64,7 @@ def _run(strategy: Strategy, context: LabDataset, noise: float, seed: int | None
         lake.get_prices = noisy_get_prices  # type: ignore[method-assign]
 
     try:
-        broker = SimulatedBroker(portfolio=Portfolio(cash=10_000.0, positions={}))
-        report = Backtester(
-            strategies=[strategy],
-            broker=broker,
-            lake=lake,
-            config=BacktestConfig(
-                start=context.start,
-                end=context.end,
-                universe=list(context.universe),
-                threshold=0.0,
-            ),
-        ).run()
+        report = run_backtest(strategy, context, context.full_window, lake=lake)
         return list(report.equity_curve)
     finally:
         if noise > 0.0:

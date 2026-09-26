@@ -22,19 +22,15 @@ back into price space.
 from __future__ import annotations
 
 import copy
-from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from stonks.backtest.engine import BacktestConfig, Backtester
-from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy, SurvivalReport
-from stonks.core.types import Portfolio
+from stonks.lab.backtesting import run_backtest
 from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
 
@@ -170,7 +166,7 @@ class MonteCarloPermutationTest:
                 notes="no bars available for the universe; test skipped",
             )
 
-        real_score = _score(strategy, context.lake, start, end, universe, interval, self._metric)
+        real_score = _score(strategy, context, context.lake, self._metric)
 
         master_rng = np.random.default_rng(self._seed)
         perm_scores: list[float] = []
@@ -185,9 +181,7 @@ class MonteCarloPermutationTest:
                 for ticker, bars in real_bars_by_ticker.items()
             }
             with _build_permuted_lake(permuted, interval) as perm_lake:
-                perm_score = _score(
-                    strategy, perm_lake, start, end, universe, interval, self._metric
-                )
+                perm_score = _score(strategy, context, perm_lake, self._metric)
             perm_scores.append(perm_score)
             if perm_score >= real_score:
                 worse_or_equal += 1
@@ -211,28 +205,8 @@ class MonteCarloPermutationTest:
         )
 
 
-def _score(
-    strategy: Strategy,
-    lake: DuckDBLake,
-    start: datetime,
-    end: datetime,
-    universe: Sequence[str],
-    interval: Interval,
-    metric: str,
-) -> float:
-    broker = SimulatedBroker(portfolio=Portfolio(cash=10_000.0, positions={}))
-    report = Backtester(
-        strategies=[strategy],
-        broker=broker,
-        lake=lake,
-        config=BacktestConfig(
-            start=start,
-            end=end,
-            universe=list(universe),
-            interval=interval,
-            threshold=0.0,
-        ),
-    ).run()
+def _score(strategy: Strategy, context, lake: DuckDBLake, metric: str) -> float:
+    report = run_backtest(strategy, context, context.full_window, lake=lake)
     return float(getattr(report, metric))
 
 

@@ -6,10 +6,8 @@ from __future__ import annotations
 import statistics
 from datetime import timedelta
 
-from stonks.backtest.engine import BacktestConfig, Backtester
-from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.protocols import Strategy, SurvivalReport
-from stonks.core.types import Portfolio
+from stonks.lab.backtesting import run_backtest
 from stonks.lab.dataset import LabDataset
 
 
@@ -32,19 +30,7 @@ class PeriodStabilityTest:
             end = (
                 context.start + timedelta(days=(i + 1) * chunk) if i < self._n - 1 else context.end
             )
-            broker = SimulatedBroker(portfolio=Portfolio(cash=10_000.0, positions={}))
-            report = Backtester(
-                strategies=[strategy],
-                broker=broker,
-                lake=context.lake,
-                config=BacktestConfig(
-                    start=start,
-                    end=end,
-                    universe=list(context.universe),
-                    threshold=0.0,
-                ),
-            ).run()
-            sharpes.append(report.sharpe)
+            sharpes.append(run_backtest(strategy, context, (start, end)).sharpe)
 
         std = statistics.pstdev(sharpes) if len(sharpes) > 1 else 0.0
         metrics = {
