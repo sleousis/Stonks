@@ -1,0 +1,363 @@
+{
+ "fills": [
+  [
+   1,
+   "2026-03-16:mom:UP.US:buy",
+   "UP.US",
+   26.20967741935484,
+   190.86461538461538,
+   1.0,
+   "2026-03-16T00:00:00+00:00"
+  ],
+  [
+   2,
+   "2026-03-17:bh_flat:FLAT.US:buy",
+   "FLAT.US",
+   49.965,
+   50.025,
+   1.0,
+   "2026-03-17T00:00:00+00:00"
+  ],
+  [
+   3,
+   "2026-03-18:mom:FLAT.US:sell",
+   "FLAT.US",
+   49.965,
+   49.975,
+   1.0,
+   "2026-03-18T00:00:00+00:00"
+  ],
+  [
+   4,
+   "2026-03-18:mom:UP.US:sell",
+   "UP.US",
+   26.20967741935484,
+   192.21153846153848,
+   1.0,
+   "2026-03-18T00:00:00+00:00"
+  ],
+  [
+   5,
+   "2026-03-20:mom:UP.US:buy",
+   "UP.US",
+   25.86794726222478,
+   193.94307692307692,
+   1.0,
+   "2026-03-20T00:00:00+00:00"
+  ]
+ ],
+ "orders": [
+  [
+   "2026-03-16:mom:UP.US:buy",
+   "tick_2026-03-16_2",
+   "mom",
+   "UP.US",
+   "buy",
+   26.20967741935484,
+   "market",
+   null,
+   "filled",
+   null,
+   null,
+   "2026-03-21T12:00:00+00:00",
+   "2026-03-21T12:00:00+00:00"
+  ],
+  [
+   "2026-03-17:bh_flat:FLAT.US:buy",
+   "tick_2026-03-17_3",
+   "bh_flat",
+   "FLAT.US",
+   "buy",
+   49.965,
+   "market",
+   null,
+   "filled",
+   null,
+   null,
+   "2026-03-21T12:00:00+00:00",
+   "2026-03-21T12:00:00+00:00"
+  ],
+  [
+   "2026-03-18:mom:FLAT.US:sell",
+   "tick_2026-03-18_4",
+   "mom",
+   "FLAT.US",
+   "sell",
+   49.965,
+   "market",
+   null,
+   "filled",
+   null,
+   null,
+   "2026-03-21T12:00:00+00:00",
+   "2026-03-21T12:00:00+00:00"
+  ],
+  [
+   "2026-03-18:mom:UP.US:sell",
+   "tick_2026-03-18_4",
+   "mom",
+   "UP.US",
+   "sell",
+   26.20967741935484,
+   "market",
+   null,
+   "filled",
+   null,
+   null,
+   "2026-03-21T12:00:00+00:00",
+   "2026-03-21T12:00:00+00:00"
+  ],
+  [
+   "2026-03-20:mom:UP.US:buy",
+   "tick_2026-03-20_5",
+   "mom",
+   "UP.US",
+   "buy",
+   25.86794726222478,
+   "market",
+   null,
+   "filled",
+   null,
+   null,
+   "2026-03-21T12:00:00+00:00",
+   "2026-03-21T12:00:00+00:00"
+  ]
+ ],
+ "portfolio_snapshots": [
+  [
+   1,
+   "tick_2026-03-16_2",
+   "2026-03-16",
+   "2026-03-21T12:00:00+00:00",
+   4996.5,
+   "{\"UP.US\": 26.20967741935484}",
+   9996.5
+  ],
+  [
+   2,
+   "tick_2026-03-17_3",
+   "2026-03-17",
+   "2026-03-21T12:00:00+00:00",
+   2496.0008749999997,
+   "{\"FLAT.US\": 49.965, \"UP.US\": 26.20967741935484}",
+   10014.412165322581
+  ],
+  [
+   3,
+   "tick_2026-03-18_4",
+   "2026-03-18",
+   "2026-03-21T12:00:00+00:00",
+   10028.804169354838,
+   "{}",
+   10028.804169354838
+  ],
+  [
+   4,
+   "tick_2026-03-20_5",
+   "2026-03-20",
+   "2026-03-21T12:00:00+00:00",
+   5010.894883635081,
+   "{\"UP.US\": 25.86794726222478}",
+   10025.296968312501
+  ],
+  [
+   5,
+   "tick_2026-03-20_6",
+   "2026-03-20",
+   "2026-03-21T12:00:00+00:00",
+   5010.894883635081,
+   "{\"UP.US\": 25.86794726222478}",
+   10025.296968312501
+  ]
+ ],
+ "results": [
+  {
+   "fills": 0,
+   "orders_placed": 1,
+   "status": "ok",
+   "tick_id": "tick_2026-03-16_1",
+   "winner_strategy_id": "mom"
+  },
+  {
+   "fills": 1,
+   "orders_placed": 1,
+   "status": "ok",
+   "tick_id": "tick_2026-03-16_2",
+   "winner_strategy_id": "mom"
+  },
+  {
+   "fills": 1,
+   "orders_placed": 1,
+   "status": "ok",
+   "tick_id": "tick_2026-03-17_3",
+   "winner_strategy_id": "bh_flat"
+  },
+  {
+   "fills": 2,
+   "orders_placed": 2,
+   "status": "ok",
+   "tick_id": "tick_2026-03-18_4",
+   "winner_strategy_id": null
+  },
+  {
+   "fills": 1,
+   "orders_placed": 1,
+   "status": "ok",
+   "tick_id": "tick_2026-03-20_5",
+   "winner_strategy_id": "mom"
+  },
+  {
+   "fills": 0,
+   "orders_placed": 0,
+   "status": "ok",
+   "tick_id": "tick_2026-03-20_6",
+   "winner_strategy_id": "mom"
+  },
+  {
+   "fills": 0,
+   "orders_placed": 0,
+   "status": "noop",
+   "tick_id": "tick_2026-03-24_7",
+   "winner_strategy_id": null
+  }
+ ],
+ "shadow_decisions": [
+  [
+   1,
+   "tick_2026-03-16_2",
+   "bh_flat",
+   "2026-03-16",
+   "FLAT.US",
+   "buy",
+   100.0,
+   50.025,
+   "filled",
+   "2026-03-21T12:00:00+00:00"
+  ],
+  [
+   2,
+   "tick_2026-03-16_2",
+   "bh_down",
+   "2026-03-16",
+   "DOWN.US",
+   "buy",
+   62.80193236714976,
+   63.72415384615385,
+   "filled",
+   "2026-03-21T12:00:00+00:00"
+  ]
+ ],
+ "shadow_portfolio_snapshots": [
+  [
+   1,
+   "tick_2026-03-16_2",
+   "bh_flat",
+   "2026-03-16",
+   "2026-03-21T12:00:00+00:00",
+   4996.5,
+   "{\"FLAT.US\": 100.0}",
+   9996.5
+  ],
+  [
+   2,
+   "tick_2026-03-16_2",
+   "bh_down",
+   "2026-03-16",
+   "2026-03-21T12:00:00+00:00",
+   5997.0,
+   "{\"DOWN.US\": 62.80193236714976}",
+   9997.0
+  ],
+  [
+   3,
+   "tick_2026-03-17_3",
+   "bh_down",
+   "2026-03-17",
+   "2026-03-21T12:00:00+00:00",
+   5997.0,
+   "{\"DOWN.US\": 62.80193236714976}",
+   9977.676328502415
+  ],
+  [
+   4,
+   "tick_2026-03-18_4",
+   "bh_down",
+   "2026-03-18",
+   "2026-03-21T12:00:00+00:00",
+   5997.0,
+   "{\"DOWN.US\": 62.80193236714976}",
+   9958.35265700483
+  ],
+  [
+   5,
+   "tick_2026-03-20_5",
+   "bh_down",
+   "2026-03-20",
+   "2026-03-21T12:00:00+00:00",
+   5997.0,
+   "{\"DOWN.US\": 62.80193236714976}",
+   9919.705314009661
+  ],
+  [
+   6,
+   "tick_2026-03-24_7",
+   "bh_down",
+   "2026-03-24",
+   "2026-03-21T12:00:00+00:00",
+   5997.0,
+   "{\"DOWN.US\": 62.80193236714976}",
+   9881.057971014492
+  ]
+ ],
+ "tick_runs": [
+  [
+   "tick_2026-03-16_1",
+   "2026-03-21T12:00:00+00:00",
+   "2026-03-21T12:00:00+00:00",
+   "ok",
+   "{\"fills\": 0, \"orders_placed\": 1, \"risk_adjustments\": [{\"adjusted_quantity\": 26.20967741935484, \"original_quantity\": 31.451612903225804, \"reason\": \"quantity 31.451612903225804 exceeds max_weight_per_ticker room 26.20967741935484\", \"rule\": \"max_weight_per_ticker\", \"side\": \"buy\", \"ticker\": \"UP.US\"}], \"stale_buys_dropped\": [], \"winner_expected_return\": 0.020576131687242816, \"winner_strategy_id\": \"mom\"}"
+  ],
+  [
+   "tick_2026-03-16_2",
+   "2026-03-21T12:00:00+00:00",
+   "2026-03-21T12:00:00+00:00",
+   "ok",
+   "{\"fills\": 1, \"orders_placed\": 1, \"risk_adjustments\": [{\"adjusted_quantity\": 26.20967741935484, \"original_quantity\": 31.451612903225804, \"reason\": \"quantity 31.451612903225804 exceeds max_weight_per_ticker room 26.20967741935484\", \"rule\": \"max_weight_per_ticker\", \"side\": \"buy\", \"ticker\": \"UP.US\"}], \"shadow\": [{\"decisions\": 1, \"error\": null, \"fills\": 1, \"status\": \"evaluated\", \"strategy_id\": \"bh_flat\", \"total_value\": 9996.5}, {\"decisions\": 1, \"error\": null, \"fills\": 1, \"status\": \"evaluated\", \"strategy_id\": \"bh_down\", \"total_value\": 9997.0}], \"stale_buys_dropped\": [], \"winner_expected_return\": 0.020576131687242816, \"winner_strategy_id\": \"mom\"}"
+  ],
+  [
+   "tick_2026-03-17_3",
+   "2026-03-21T12:00:00+00:00",
+   "2026-03-21T12:00:00+00:00",
+   "ok",
+   "{\"fills\": 1, \"orders_placed\": 1, \"risk_adjustments\": [], \"shadow\": [{\"decisions\": 0, \"error\": null, \"fills\": 0, \"status\": \"evaluated\", \"strategy_id\": \"bh_down\", \"total_value\": 9977.676328502415}], \"stale_buys_dropped\": [], \"winner_expected_return\": 1.0, \"winner_strategy_id\": \"bh_flat\"}"
+  ],
+  [
+   "tick_2026-03-18_4",
+   "2026-03-21T12:00:00+00:00",
+   "2026-03-21T12:00:00+00:00",
+   "ok",
+   "{\"exit_strategy_id\": \"mom\", \"fills\": 2, \"orders_placed\": 2, \"reason\": \"no_candidates\", \"risk_adjustments\": [], \"shadow\": [{\"decisions\": 0, \"error\": null, \"fills\": 0, \"status\": \"evaluated\", \"strategy_id\": \"bh_down\", \"total_value\": 9958.35265700483}], \"stale_buys_dropped\": [], \"winner_expected_return\": null, \"winner_strategy_id\": null}"
+  ],
+  [
+   "tick_2026-03-20_5",
+   "2026-03-21T12:00:00+00:00",
+   "2026-03-21T12:00:00+00:00",
+   "ok",
+   "{\"fills\": 1, \"orders_placed\": 1, \"risk_adjustments\": [{\"adjusted_quantity\": 25.86794726222478, \"original_quantity\": 31.041536714669736, \"reason\": \"quantity 31.041536714669736 exceeds max_weight_per_ticker room 25.86794726222478\", \"rule\": \"max_weight_per_ticker\", \"side\": \"buy\", \"ticker\": \"UP.US\"}], \"shadow\": [{\"decisions\": 0, \"error\": null, \"fills\": 0, \"status\": \"evaluated\", \"strategy_id\": \"bh_down\", \"total_value\": 9919.705314009661}], \"stale_buys_dropped\": [], \"winner_expected_return\": 0.020242914979756943, \"winner_strategy_id\": \"mom\"}"
+  ],
+  [
+   "tick_2026-03-20_6",
+   "2026-03-21T12:00:00+00:00",
+   "2026-03-21T12:00:00+00:00",
+   "ok",
+   "{\"fills\": 0, \"orders_placed\": 0, \"risk_adjustments\": [], \"shadow\": [{\"decisions\": 0, \"error\": null, \"fills\": 0, \"status\": \"already_evaluated\", \"strategy_id\": \"bh_down\", \"total_value\": null}], \"stale_buys_dropped\": [], \"winner_expected_return\": 0.020242914979756943, \"winner_strategy_id\": \"mom\"}"
+  ],
+  [
+   "tick_2026-03-24_7",
+   "2026-03-21T12:00:00+00:00",
+   "2026-03-21T12:00:00+00:00",
+   "ok",
+   "{\"reason\": \"no_active_owner\", \"shadow\": [{\"decisions\": 0, \"error\": null, \"fills\": 0, \"status\": \"evaluated\", \"strategy_id\": \"bh_down\", \"total_value\": 9881.057971014492}]}"
+  ]
+ ]
+}
