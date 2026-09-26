@@ -91,6 +91,8 @@ class AlpacaBrokerConfig(BaseModel):
 
     paper: bool = True
     allow_live: bool = False
+    #: Short sales through Alpaca (roadmap 16.1). Off by default.
+    allow_short: bool = False
     max_retries: int = 3
     retry_backoff_seconds: float = 1.0
     api_key: SecretStr | None = Field(default_factory=lambda: _env_secret("ALPACA_API_KEY"))
