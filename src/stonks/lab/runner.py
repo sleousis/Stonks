@@ -297,7 +297,8 @@ class LabRunner:
                 bind_run(ctx)
 
         reports = self._suite.run(strategy, suite_dataset(dataset, strategy))
-        verdict = "pass" if all(r.passed for r in reports) else "fail"
+        # RS-39: an empty suite tested nothing, so it can't pass
+        verdict = "pass" if reports and all(r.passed for r in reports) else "fail"
 
         _log.info(
             "lab.survival.done",
