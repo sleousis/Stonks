@@ -4,9 +4,21 @@ structural Protocol; this module just holds the composition helper."""
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
-from stonks.core.protocols import Strategy, SurvivalReport, SurvivalTest
+from stonks.core.protocols import Objective, Strategy, SurvivalReport, SurvivalTest, Tuner
+
+
+@dataclass(frozen=True)
+class TuningSetup:
+    """How a survival test re-tunes a strategy: the runner's tuner,
+    objective and trial budget. ``LabRunner`` hands its own setup to every
+    test exposing ``bind_tuning(setup)`` (walk-forward, re-tuning MCPT)."""
+
+    tuner: Tuner
+    objective: Objective
+    budget: int
 
 
 class SurvivalSuite:

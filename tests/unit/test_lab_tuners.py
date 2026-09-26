@@ -146,3 +146,22 @@ def test_random_tuner_default_seed_is_reproducible():
         )
 
     assert [p for p, _ in run().history] == [p for p, _ in run().history]
+
+
+def test_random_tuner_repeated_tune_calls_draw_the_same_candidates():
+    """Re-tuning survival tests (walk-forward folds, re-tuning MCPT) reuse
+    one tuner instance; each tune() must depend only on the seed, not on
+    how many tunes ran before it, or the real and null runs would search
+    different candidate sets."""
+    tuner = RandomTuner(seed=3)
+
+    def run():
+        return tuner.tune(
+            strategy_cls=_FittableStrategy,
+            param_space=_FittableStrategy.parameter_spec(),
+            objective=_FitAwareObjective(),
+            dataset=_DATASET,
+            budget=8,
+        )
+
+    assert [p for p, _ in run().history] == [p for p, _ in run().history]
