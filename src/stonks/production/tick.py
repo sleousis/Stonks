@@ -68,6 +68,7 @@ from stonks.accounts.models import DEFAULT_PORTFOLIO_ID, Mode, Subscription
 from stonks.accounts.models import Portfolio as AccountPortfolio
 from stonks.backtest.costs import CostModel, CostModelSettings, FixedCostModel
 from stonks.backtest.simulated_broker import SimulatedBroker
+from stonks.core.interval import Interval
 from stonks.core.protocols import Broker
 from stonks.core.types import Fill, Order, OrderSide, OrderStatus, Portfolio
 from stonks.execution.brokers.base import BrokerKind, OrderRejectedError, OrderStateSource
@@ -124,6 +125,7 @@ from stonks.production.tca import annotate_orders, decision_values, tca_recorded
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
+from stonks.strategies._common import decision_interval
 
 TickStatus = Literal["ok", "partial", "error", "noop"]
 _DBTickStatus = Literal["running", "ok", "partial", "error"]
@@ -308,19 +310,23 @@ def run_tick(
     # Any failure past this point closes the tick as 'error' so the ledger
     # never keeps a row stuck at 'running'; the exception still propagates.
     try:
-        result = _run_tick_body(
-            state,
-            lake,
-            registry,
-            settings,
-            as_of,
-            dry_run,
-            tick_id=tick_id,
-            log=log,
-            notifier=notifier,
-            broker_factory=broker_factory,
-            plan=plan,
-        )
+        # RS-03: the tick decides on daily bars, so a strategy sees a bar of
+        # any interval only once it has closed by the day's close (a 24/7
+        # market's midnight decision would otherwise read like an intraday one).
+        with decision_interval(Interval.DAY_1):
+            result = _run_tick_body(
+                state,
+                lake,
+                registry,
+                settings,
+                as_of,
+                dry_run,
+                tick_id=tick_id,
+                log=log,
+                notifier=notifier,
+                broker_factory=broker_factory,
+                plan=plan,
+            )
     except Exception as exc:
         log.error("tick.error", error=str(exc), error_type=type(exc).__name__)
         try:

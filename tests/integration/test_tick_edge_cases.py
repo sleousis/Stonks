@@ -131,3 +131,41 @@ def test_a_dry_run_noop_records_no_breaker_trip(env):  # noqa: F811
     settings = TickSettings(universe=["UP.US"], initial_cash=10_000.0, risk=breaker)
     run_tick(state, lake, registry, settings, as_of=AS_OF, dry_run=True)
     assert list_halts(state, include_cleared=True) == []
+
+
+# ---- RS-03: the tick declares its decision bar ------------------------------------
+
+SEEN_INTERVALS: list[tuple[str, object]] = []
+
+
+class RecordsDecisionInterval(RankAndRotate):
+    """Records the decision interval its calls run under."""
+
+    def estimate_return(self, ticker, as_of, lake):
+        from stonks.strategies._common import _DECISION_INTERVAL
+
+        SEEN_INTERVALS.append(("score", _DECISION_INTERVAL.get()))
+        return super().estimate_return(ticker, as_of, lake)
+
+    def decide(self, my_picks, portfolio, prices, as_of):
+        from stonks.strategies._common import _DECISION_INTERVAL
+
+        SEEN_INTERVALS.append(("decide", _DECISION_INTERVAL.get()))
+        return super().decide(my_picks, portfolio, prices, as_of)
+
+
+def test_strategy_calls_run_inside_the_daily_decision_interval(env):  # noqa: F811
+    """A daily tick at midnight on a 24/7 market must not read like an
+    intraday decision: strategies see bars that closed by the day's close."""
+    from stonks.core.interval import Interval
+
+    lake, state, registry = env
+    _register(registry, RecordsDecisionInterval({"ticker": "UP.US", "allocation": 1.0}))
+    _register(registry, RecordsDecisionInterval({"ticker": "FLAT.US", "allocation": 1.0}), "shadow")
+    SEEN_INTERVALS.clear()
+
+    run_tick(state, lake, registry, TickSettings(universe=["UP.US"]), as_of=AS_OF)
+
+    kinds = {kind for kind, _ in SEEN_INTERVALS}
+    assert kinds == {"score", "decide"}
+    assert {interval for _, interval in SEEN_INTERVALS} == {Interval.DAY_1}
