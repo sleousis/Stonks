@@ -107,7 +107,7 @@ class StrategyRegistry:
             raise ValueError(f"strategy id {sid!r} is already registered")
         class_path = f"{type(strategy).__module__}:{type(strategy).__name__}"
         params = dict(getattr(strategy, "params", {}))
-        now = self._iso_now()
+        now = self._now_iso()
         artifact_path = self._artifacts_dir / sid
 
         # The strategy persists itself first (params + any fitted state such
@@ -184,7 +184,7 @@ class StrategyRegistry:
             reason_, golive_passed = _check_transition(
                 strategy_id, current, status, reason, golive_report, override
             )
-            now = self._iso_now()
+            now = self._now_iso()
             # Log first: the ``strategies_status_audited`` trigger only lets
             # the UPDATE through when the latest log row matches it.
             change = self._log(
@@ -231,7 +231,7 @@ class StrategyRegistry:
                 override=False,
                 golive_passed=None,
                 golive_report=None,
-                created_at=self._iso_now(),
+                created_at=self._now_iso(),
             )
 
     # ---- reads -------------------------------------------------------------
@@ -346,9 +346,10 @@ class StrategyRegistry:
         moved = self._artifacts_dir / path.name
         return moved if moved.is_dir() else path
 
-    def _iso_now(self) -> str:
-        now = self._clock() if self._clock is not None else datetime.now(UTC)
-        return now.astimezone(UTC).isoformat(timespec="seconds")
+    def _now_iso(self) -> str:
+        if self._clock is None:
+            return _iso_now()
+        return self._clock().astimezone(UTC).isoformat(timespec="seconds")
 
     def _generate_id(self, strategy: Strategy) -> str:
         suffix = uuid.uuid4().hex[:8]
@@ -465,3 +466,8 @@ def _change_from_row(row: Any) -> StatusChange:
         golive_report=json.loads(report) if report else None,
         created_at=row["created_at"],
     )
+
+
+def _iso_now() -> str:
+    """The system clock; golden tests patch this module function."""
+    return datetime.now(UTC).isoformat(timespec="seconds")
