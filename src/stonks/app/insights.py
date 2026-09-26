@@ -135,7 +135,7 @@ class InsightsService:
         notes: list[str] = []
         tickers = sorted({h.ticker for h in book.priced if h.ticker})
         returns = self._returns([*tickers, bench])
-        returns_as_of = returns.index.max().date() if not returns.empty else None
+        returns_as_of = _day(returns.index.max()) if not returns.empty else None
         betas = self._betas(book, returns, bench, notes)
         with self._ctx.state() as state:
             points = [(r.day, r.total_value) for r in load_pnl(state, portfolio_id=portfolio_id)]
@@ -293,7 +293,7 @@ class InsightsService:
                 "SELECT id, asset_class, sector, currency FROM instruments WHERE id = ANY(?)",
                 [tickers],
             )
-        info = {r.id: r for r in df.itertuples(index=False)}
+        info: dict[str, dict[str, Any]] = {r["id"]: r for r in df.to_dict("records")}
         out = []
         for h in holdings:
             meta = info.get(h.ticker) if h.ticker else None
@@ -307,9 +307,9 @@ class InsightsService:
                     quantity=h.quantity,
                     price=h.price,
                     market_value=h.market_value,
-                    asset_class=_text(meta.asset_class),
-                    sector=_text(meta.sector),
-                    currency=h.currency or (_text(meta.currency) or "").upper() or None,
+                    asset_class=_text(meta["asset_class"]),
+                    sector=_text(meta["sector"]),
+                    currency=h.currency or (_text(meta["currency"]) or "").upper() or None,
                 )
             )
         return out
@@ -323,7 +323,7 @@ class InsightsService:
                 " WHERE ticker = ANY(?) GROUP BY ticker",
                 [tickers],
             )
-        return {r.ticker: float(r.close) for r in df.itertuples(index=False)}
+        return {str(r["ticker"]): float(r["close"]) for r in df.to_dict("records")}
 
     @staticmethod
     def _last_price_day(lake: Any, tickers: list[str]) -> date | None:
@@ -331,9 +331,7 @@ class InsightsService:
             return None
         df = lake.sql("SELECT max(date) AS d FROM prices WHERE ticker = ANY(?)", [tickers])
         value = df["d"].iloc[0] if not df.empty else None
-        if value is None or pd.isna(value):
-            return None
-        return pd.Timestamp(value).date()
+        return _day(value)
 
     def _returns(self, tickers: list[str]) -> pd.DataFrame:
         """Daily returns (adjusted closes) of ``tickers`` over the lookback
@@ -386,6 +384,17 @@ class InsightsService:
         frame = returns[list(weights)].dropna()
         series = {t: frame[t].tolist() for t in weights}
         return returns_risk(weighted_returns(weights, series))
+
+
+def _day(value: Any) -> date | None:
+    """A price day from a DuckDB or pandas value; ``None`` for a missing one."""
+    if value is None or pd.isna(value):
+        return None
+    if not isinstance(value, date):
+        value = pd.Timestamp(value).to_pydatetime()
+    if isinstance(value, datetime):  # pandas Timestamps are datetimes too
+        return value.date()
+    return value if isinstance(value, date) else None
 
 
 def _text(value: Any) -> str | None:
