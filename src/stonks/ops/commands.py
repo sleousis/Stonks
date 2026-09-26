@@ -28,7 +28,7 @@ app = typer.Typer(help="Backups of the lake, state DB and artifacts.", no_args_i
 
 _CONFIG = typer.Option(None, "--config", help="settings TOML (default config/default.toml)")
 _DEST = typer.Option(
-    None, "--dest", help="backup folder (default [backup].dir or <lake dir>/backups)"
+    None, "--dest", help="backup folder (default \\[backup].dir or <lake dir>/backups)"
 )
 _DATA_DIR = typer.Option(
     None, "--data-dir", help="restore into this folder instead of the configured paths"

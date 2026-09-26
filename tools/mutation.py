@@ -96,6 +96,12 @@ def surviving_rate(outcomes: list[str]) -> float | None:
     return 100.0 * survived / (killed + survived)
 
 
+def outcome_name(outcome: Any) -> str:
+    """``"killed"``, ``"survived"`` or ``"incompetent"``. cosmic-ray's enum
+    prints as ``TestOutcome.KILLED``, so read its value."""
+    return str(getattr(outcome, "value", outcome)).lower()
+
+
 def _outcomes(session: Path) -> tuple[list[str], list[dict[str, Any]]]:
     from cosmic_ray.work_db import WorkDB, use_db
 
@@ -103,7 +109,7 @@ def _outcomes(session: Path) -> tuple[list[str], list[dict[str, Any]]]:
     survivors: list[dict[str, Any]] = []
     with use_db(str(session), WorkDB.Mode.open) as db:
         for item, result in db.completed_work_items:
-            outcome = str(result.test_outcome)
+            outcome = outcome_name(result.test_outcome)
             outcomes.append(outcome)
             if outcome == "survived":
                 for m in item.mutations:

@@ -159,6 +159,17 @@ def test_surviving_rate_ignores_incompetent_mutants():
     assert mutation.surviving_rate(["incompetent"]) is None
 
 
+def test_outcome_names_read_the_enum_value():
+    import enum
+
+    class Outcome(str, enum.Enum):  # cosmic-ray's enum prints as Outcome.KILLED
+        KILLED = "killed"
+
+    assert str(Outcome.KILLED) != "killed"
+    assert mutation.outcome_name(Outcome.KILLED) == "killed"
+    assert mutation.outcome_name("SURVIVED") == "survived"
+
+
 def test_every_target_names_real_modules_and_tests():
     for target in mutation.TARGETS:
         assert (ROOT / target.module).exists(), target.module
