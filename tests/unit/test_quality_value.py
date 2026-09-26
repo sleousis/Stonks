@@ -174,6 +174,24 @@ def test_intraday_datetime_as_of_uses_its_calendar_day(two_names):
     assert f["earnings_yield"] == pytest.approx(0.04)
 
 
+def test_intraday_as_of_prices_off_the_previous_completed_session(two_names):
+    """Daily bars are stamped at midnight but close at the session end: at
+    10:00 on 2024-03-01 that day's close is still in the future."""
+    _prices(two_names, "GOOD.US", 20.0, start="2024-03-01", end="2024-03-01")
+    s = QualityValue({})
+    intraday = s.extract_features("GOOD.US", datetime(2024, 3, 1, 10, 0), two_names).values
+    assert intraday["market_cap"] == pytest.approx(10.0 * 100)  # 2024-02-29 close
+    late = s.extract_features("GOOD.US", datetime(2024, 3, 1, 23, 59), two_names).values
+    assert late["market_cap"] == pytest.approx(10.0 * 100)
+    # a daily as_of (a date, or the midnight bar stamp) is after that day's close
+    assert s.extract_features("GOOD.US", date(2024, 3, 1), two_names).values[
+        "market_cap"
+    ] == pytest.approx(20.0 * 100)
+    assert s.extract_features("GOOD.US", datetime(2024, 3, 1), two_names).values[
+        "market_cap"
+    ] == pytest.approx(20.0 * 100)
+
+
 def test_missing_filing_date_waits_for_the_lag(lake):
     _quarter(lake, "X.US", list(QUARTERS_2023), filing_date=None)
     _prices(lake, "X.US", 10.0)

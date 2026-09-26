@@ -365,7 +365,17 @@ class QualityValue(BaseStrategy):
         return hist.memo[key]
 
     def _price(self, lake: Any, ticker: str, as_of: Any, day: date) -> float | None:
-        cutoff = datetime.combine(day, time.max)
+        # Daily bars are stamped at midnight but only complete at the
+        # session close. A daily as_of (a date or a midnight stamp) is read
+        # after that close, so the day's own bar counts. An intraday as_of
+        # (any time past midnight) is mid-session: only bars stamped before
+        # the day starts, i.e. the previous completed session. Equity
+        # sessions never have intraday bars stamped at 00:00, so midnight
+        # is unambiguous for this equity-only strategy.
+        if as_datetime(as_of).time() == time.min:
+            cutoff = datetime.combine(day, time.max)
+        else:
+            cutoff = datetime.combine(day, time.min) - timedelta(microseconds=1)
         last = self._bar_caches.for_lake(lake).last_close(ticker, Interval.DAY_1, cutoff)
         if last is None:
             return None
