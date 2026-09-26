@@ -64,6 +64,8 @@ BACKTEST_JOB = "backtest"
 LAB_RUN_JOB = "lab_run"
 #: The chained job that fetches a lab run's missing bars (``ensure_data``).
 LAB_ENSURE_JOB = "lab_ensure"
+#: Many catalogued strategies through the lab on one basket.
+LAB_SWEEP_JOB = "lab_sweep"
 
 TunerName = Literal["grid", "random"]
 ObjectiveName = Literal["sharpe", "cagr", "final_return"]
@@ -489,6 +491,55 @@ def check_embargo(window: Any, embargo_bars: int | None) -> None:
     )
 
 
+class SurvivalTestInfo(BaseModel):
+    """A survival test and the options a request's ``test_options[id]`` may
+    set, as JSON Schema from the backend's own options model."""
+
+    id: str
+    description: str
+    options_schema: dict[str, Any]
+    #: The test's ``config`` model, set through its own request field
+    #: (``walk_forward`` for the walk-forward test); ``None`` otherwise.
+    config_schema: dict[str, Any] | None = None
+    #: Presets whose suite runs this test.
+    presets: list[str]
+
+
+class SurvivalPresetInfo(BaseModel):
+    name: str
+    tests: list[str]
+    #: Options the preset gives its tests (a request's own options win).
+    options: dict[str, dict[str, Any]]
+
+
+def survival_test_catalog() -> list[SurvivalTestInfo]:
+    presets = {name: survival_registry.resolve_preset(name) for name in preset_names()}
+    out = []
+    for name in survival_test_names():
+        config = survival_registry.config_model(name)
+        out.append(
+            SurvivalTestInfo(
+                id=name,
+                description=survival_registry.describe(name),
+                options_schema=survival_registry.options_model(name).model_json_schema(),
+                config_schema=config.model_json_schema() if config is not None else None,
+                presets=[p for p, tests in presets.items() if name in tests],
+            )
+        )
+    return out
+
+
+def survival_preset_catalog() -> list[SurvivalPresetInfo]:
+    return [
+        SurvivalPresetInfo(
+            name=name,
+            tests=survival_registry.resolve_preset(name),
+            options=survival_registry.preset_options(name),
+        )
+        for name in preset_names()
+    ]
+
+
 class PreflightIssueView(BaseModel):
     #: e.g. ``missing_data``, ``late_start``, ``static_universe``.
     code: str
@@ -870,6 +921,7 @@ class LabService:
         runner.register(LAB_RUN_JOB, self._handle_lab_run, cancellable=True)
         # Fetching a lab run's missing bars writes the lake: one writer lane.
         runner.register(LAB_ENSURE_JOB, self._handle_lab_ensure, lock="lake_write")
+        runner.register(LAB_SWEEP_JOB, self._handle_sweep)
 
     # ---- backtests ---------------------------------------------------------
 
@@ -985,6 +1037,30 @@ class LabService:
 
     def _handle_lab_ensure(self, params: dict[str, Any], ctx: JobContext) -> EnsureReport:
         return self.ensure_lab_data(LabRunRequest.model_validate(params))
+
+    # ---- sweeps --------------------------------------------------------------
+
+    def submit_sweep(self, request: Any) -> Job:
+        """Queue a sweep (``app.sweep.SweepRequest``); the typed result is
+        ``SweepResultView``."""
+        _parse_interval(request.interval)
+        if request.universe_id is not None:
+            self._require_universe(request.universe_id)
+        return self._runner.submit(LAB_SWEEP_JOB, request.model_dump(mode="json"))
+
+    def run_sweep(self, request: Any) -> Any:
+        from stonks.app.sweep import execute_sweep
+
+        with self._ctx.lake() as lake:
+            try:
+                return execute_sweep(self._ctx.settings, request, lake=lake)
+            except ValueError as exc:  # empty basket, nothing to sweep
+                raise ValidationError(str(exc)) from None
+
+    def _handle_sweep(self, params: dict[str, Any], ctx: JobContext) -> Any:
+        from stonks.app.sweep import SweepRequest
+
+        return self.run_sweep(SweepRequest.model_validate(params))
 
 
 class _CancellableObjective:
