@@ -43,7 +43,7 @@ base_url = "https://example.test/api"
     )
 
     settings = load_settings(config_path=cfg)
-    assert settings.sources.eodhd.api_key == "env-key-123"
+    assert settings.sources.eodhd.api_key.get_secret_value() == "env-key-123"
 
 
 def test_missing_api_key_is_none_not_error(tmp_path, monkeypatch):

@@ -191,6 +191,41 @@ class SubscriptionRepository:
             )
         return self.get(scope, sub.id)
 
+    def enable(
+        self, scope: Scope, subscription_id: str, *, reason: str | None = None
+    ) -> Subscription:
+        """Turn a subscription back on. Idempotent."""
+        return self._set_enabled(scope, subscription_id, True, reason)
+
+    def disable(
+        self, scope: Scope, subscription_id: str, *, reason: str | None = None
+    ) -> Subscription:
+        """Turn a subscription off: its strategy places no orders and sends
+        no signals for it until enabled again. The mode and the paper-day
+        count are kept. Idempotent."""
+        return self._set_enabled(scope, subscription_id, False, reason)
+
+    def _set_enabled(
+        self, scope: Scope, subscription_id: str, enabled: bool, reason: str | None
+    ) -> Subscription:
+        sub = self.get(scope, subscription_id)
+        if sub.enabled is enabled:
+            return sub
+        with self._state.transaction():
+            self._state.execute(
+                "UPDATE subscriptions SET enabled = ?, updated_at = ? WHERE id = ?",
+                [int(enabled), iso_now(), sub.id],
+            )
+            self._audit.record(
+                scope.actor,
+                "subscription.enable" if enabled else "subscription.disable",
+                "subscription",
+                sub.id,
+                portfolio_id=sub.portfolio_id,
+                details={"reason": reason} if reason else {},
+            )
+        return self.get(scope, sub.id)
+
     def record_paper_day(
         self, scope: Scope, subscription_id: str, as_of: date, *, breached: bool
     ) -> Subscription:

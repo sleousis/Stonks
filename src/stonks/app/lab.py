@@ -196,7 +196,9 @@ class McptOptions(BaseModel):
 
     n_permutations: int = Field(default=200, ge=1, le=1_000)
     max_p_value: float = Field(default=0.05, gt=0, le=1)
-    metric: Literal["profit_factor", "sharpe", "final_return", "cagr"] = "profit_factor"
+    metric: Literal["profit_factor", "bar_profit_factor", "sharpe", "final_return", "cagr"] = (
+        "profit_factor"
+    )
     #: Re-tune on every permutation (Masters); costs ``(n + 1) * budget``
     #: backtests. ``"auto"`` re-tunes only a strategy with a non-trivial
     #: ``fit`` (the promotion preset's choice).
@@ -923,15 +925,15 @@ class LabService:
         # Cooperative: stops between tuning trials and survival tests.
         runner.register(LAB_RUN_JOB, self._handle_lab_run, cancellable=True)
         # Fetching a lab run's missing bars writes the lake: one writer lane.
-        runner.register(LAB_ENSURE_JOB, self._handle_lab_ensure, lock="lake_write")
+        runner.register(LAB_ENSURE_JOB, self._handle_lab_ensure, lock="lake_write", operation=False)
         runner.register(LAB_SWEEP_JOB, self._handle_sweep)
 
     # ---- backtests ---------------------------------------------------------
 
-    def submit_backtest(self, request: BacktestRequest) -> Job:
+    def submit_backtest(self, request: BacktestRequest, *, owner_id: str | None = None) -> Job:
         _parse_interval(request.interval)
         self._strategies.resolve(request.strategy)  # validate before queueing
-        return self._runner.submit(BACKTEST_JOB, request.model_dump(mode="json"))
+        return self._runner.submit(BACKTEST_JOB, request.model_dump(mode="json"), owner_id=owner_id)
 
     def run_backtest(self, request: BacktestRequest) -> BacktestResult:
         return self.run_backtest_strategy(self._strategies.resolve(request.strategy), request)
@@ -951,14 +953,14 @@ class LabService:
 
     # ---- lab runs ----------------------------------------------------------
 
-    def submit_lab_run(self, request: LabRunRequest) -> Job:
+    def submit_lab_run(self, request: LabRunRequest, *, owner_id: str | None = None) -> Job:
         _parse_interval(request.interval)
         self._strategies.strategy_class(request.strategy)
         if request.universe_id is not None:
             self._require_universe(request.universe_id)
         if request.ensure_data:
             self._ctx.build_source(None)  # fail fast when it isn't configured
-        return self._runner.submit(LAB_RUN_JOB, request.model_dump(mode="json"))
+        return self._runner.submit(LAB_RUN_JOB, request.model_dump(mode="json"), owner_id=owner_id)
 
     def run_lab(self, request: LabRunRequest, progress: JobContext | None = None) -> LabRunView:
         cls = self._strategies.strategy_class(request.strategy)
@@ -992,7 +994,11 @@ class LabService:
     def _ensure_first(self, request: LabRunRequest, ctx: JobContext) -> str:
         """Run the chained ``lab_ensure`` job and wait for it (checking for
         cancellation); its id. A failed ensure fails the lab run."""
-        job = self._runner.submit(LAB_ENSURE_JOB, request.model_dump(mode="json"))
+        job = self._runner.submit(
+            LAB_ENSURE_JOB,
+            request.model_dump(mode="json"),
+            owner_id=self._runner.store.get(ctx.job_id).owner_id,
+        )
         ctx.progress(0.01, f"fetching missing data (job {job.id})")
         while True:
             final = self._runner.wait(job.id, timeout=1.0)
@@ -1043,13 +1049,15 @@ class LabService:
 
     # ---- sweeps --------------------------------------------------------------
 
-    def submit_sweep(self, request: Any) -> Job:
+    def submit_sweep(self, request: Any, *, owner_id: str | None = None) -> Job:
         """Queue a sweep (``app.sweep.SweepRequest``); the typed result is
         ``SweepResultView``."""
         _parse_interval(request.interval)
         if request.universe_id is not None:
             self._require_universe(request.universe_id)
-        return self._runner.submit(LAB_SWEEP_JOB, request.model_dump(mode="json"))
+        return self._runner.submit(
+            LAB_SWEEP_JOB, request.model_dump(mode="json"), owner_id=owner_id
+        )
 
     def run_sweep(self, request: Any) -> Any:
         from stonks.app.sweep import execute_sweep

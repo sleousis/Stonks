@@ -499,6 +499,30 @@
         "title": "BackupResultView",
         "type": "object"
       },
+      "BackupView": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "size_bytes"
+        ],
+        "title": "BackupView",
+        "type": "object"
+      },
       "BarSeries": {
         "properties": {
           "bars": {
@@ -852,6 +876,29 @@
           "credentials_configured"
         ],
         "title": "BrokerInfo",
+        "type": "object"
+      },
+      "ChannelDefaultView": {
+        "properties": {
+          "channel": {
+            "title": "Channel",
+            "type": "string"
+          },
+          "default_enabled": {
+            "title": "Default Enabled",
+            "type": "boolean"
+          },
+          "fallback": {
+            "title": "Fallback",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "channel",
+          "default_enabled",
+          "fallback"
+        ],
+        "title": "ChannelDefaultView",
         "type": "object"
       },
       "CircuitBreakerSettings": {
@@ -1399,6 +1446,17 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
           },
           "registered_strategy_id": {
             "anyOf": [
@@ -3469,6 +3527,17 @@
             ],
             "title": "Message"
           },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
           "params": {
             "additionalProperties": true,
             "title": "Params",
@@ -4469,6 +4538,39 @@
         "title": "MarketClockView",
         "type": "object"
       },
+      "MarketSessionsView": {
+        "properties": {
+          "calendar": {
+            "title": "Calendar",
+            "type": "string"
+          },
+          "is_open": {
+            "title": "Is Open",
+            "type": "boolean"
+          },
+          "next": {
+            "$ref": "#/components/schemas/SessionTimesView"
+          },
+          "today": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SessionTimesView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "calendar",
+          "is_open",
+          "today",
+          "next"
+        ],
+        "title": "MarketSessionsView",
+        "type": "object"
+      },
       "MaxHoldingSettings": {
         "additionalProperties": false,
         "properties": {
@@ -4503,6 +4605,7 @@
             "default": "profit_factor",
             "enum": [
               "profit_factor",
+              "bar_profit_factor",
               "sharpe",
               "final_return",
               "cagr"
@@ -5498,6 +5601,87 @@
         "title": "PortalLinkView",
         "type": "object"
       },
+      "PortfolioSummaryView": {
+        "properties": {
+          "base_currency": {
+            "title": "Base Currency",
+            "type": "string"
+          },
+          "broker_connection_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broker Connection Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "initial_cash": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initial Cash"
+          },
+          "kind": {
+            "enum": [
+              "simulated",
+              "broker"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "paused",
+              "archived"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "trading": {
+            "enum": [
+              "paper",
+              "live"
+            ],
+            "title": "Trading",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "status",
+          "base_currency",
+          "initial_cash",
+          "broker_connection_id",
+          "trading",
+          "created_at"
+        ],
+        "title": "PortfolioSummaryView",
+        "type": "object"
+      },
       "PortfolioSyncView": {
         "properties": {
           "activities_new": {
@@ -5901,6 +6085,13 @@
       },
       "PreferencesView": {
         "properties": {
+          "channel_defaults": {
+            "items": {
+              "$ref": "#/components/schemas/ChannelDefaultView"
+            },
+            "title": "Channel Defaults",
+            "type": "array"
+          },
           "channels": {
             "items": {
               "type": "string"
@@ -6046,6 +6237,31 @@
       },
       "ProblemDetails": {
         "properties": {
+          "blockers": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blockers"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
           "detail": {
             "anyOf": [
               {
@@ -6096,6 +6312,17 @@
               }
             ],
             "title": "Instance"
+          },
+          "next_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Step"
           },
           "status": {
             "title": "Status",
@@ -6414,6 +6641,63 @@
           "recovery_codes"
         ],
         "title": "RecoveryCodesView",
+        "type": "object"
+      },
+      "RestoreRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmation": {
+            "maxLength": 100,
+            "title": "Confirmation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirmation"
+        ],
+        "title": "RestoreRequest",
+        "type": "object"
+      },
+      "RestoreResultView": {
+        "properties": {
+          "backup_id": {
+            "title": "Backup Id",
+            "type": "string"
+          },
+          "data_dir": {
+            "title": "Data Dir",
+            "type": "string"
+          },
+          "lake_migrations_applied": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Lake Migrations Applied",
+            "type": "array"
+          },
+          "next_steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Next Steps",
+            "type": "array"
+          },
+          "state_migrations_applied": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "State Migrations Applied",
+            "type": "array"
+          }
+        },
+        "required": [
+          "backup_id",
+          "data_dir",
+          "lake_migrations_applied",
+          "state_migrations_applied",
+          "next_steps"
+        ],
+        "title": "RestoreResultView",
         "type": "object"
       },
       "ResumeRequest": {
@@ -6743,6 +7027,16 @@
             "title": "Jobs",
             "type": "array"
           },
+          "market": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MarketSessionsView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "recent": {
             "items": {
               "$ref": "#/components/schemas/ScheduledRunView"
@@ -6927,6 +7221,38 @@
           }
         },
         "title": "SectorCapSettings",
+        "type": "object"
+      },
+      "SessionTimesView": {
+        "properties": {
+          "close": {
+            "format": "date-time",
+            "title": "Close",
+            "type": "string"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "open": {
+            "format": "date-time",
+            "title": "Open",
+            "type": "string"
+          },
+          "pre_open": {
+            "format": "date-time",
+            "title": "Pre Open",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "pre_open",
+          "open",
+          "close"
+        ],
+        "title": "SessionTimesView",
         "type": "object"
       },
       "ShadowDecisionView": {
@@ -8175,6 +8501,213 @@
           "code_strategies"
         ],
         "title": "StudioCapabilities",
+        "type": "object"
+      },
+      "SubscribeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "default": "notify",
+            "enum": [
+              "notify",
+              "paper",
+              "auto"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio Id"
+          },
+          "strategy_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Strategy Id",
+            "type": "string"
+          },
+          "weight": {
+            "default": 1.0,
+            "minimum": 0.0,
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "strategy_id"
+        ],
+        "title": "SubscribeRequest",
+        "type": "object"
+      },
+      "SubscriptionUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "notify",
+                  "paper",
+                  "auto"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "SubscriptionUpdate",
+        "type": "object"
+      },
+      "SubscriptionView": {
+        "properties": {
+          "auto_blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Auto Blockers",
+            "type": "array"
+          },
+          "auto_enabled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Enabled At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "notify",
+              "paper",
+              "auto"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "paper_days_completed": {
+            "title": "Paper Days Completed",
+            "type": "integer"
+          },
+          "paper_days_required": {
+            "title": "Paper Days Required",
+            "type": "integer"
+          },
+          "paused_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused Reason"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio Id"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          },
+          "strategy_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Status"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "weight": {
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "strategy_id",
+          "strategy_status",
+          "portfolio_id",
+          "mode",
+          "weight",
+          "enabled",
+          "paper_days_completed",
+          "paper_days_required",
+          "auto_blockers",
+          "paused_reason",
+          "auto_enabled_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SubscriptionView",
         "type": "object"
       },
       "SurvivalPresetInfo": {
@@ -9716,6 +10249,51 @@
         "title": "TradeView",
         "type": "object"
       },
+      "TradingModeView": {
+        "description": "Whether a portfolio trades paper or live money, and through what.",
+        "properties": {
+          "broker": {
+            "description": "simulated (the Stonks ledger), alpaca (the configured account, default portfolio only) or connection (a linked broker account, synced read-only).",
+            "enum": [
+              "simulated",
+              "alpaca",
+              "connection"
+            ],
+            "title": "Broker",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "trading": {
+            "description": "paper: simulated fills or a paper broker account. live: real money.",
+            "enum": [
+              "paper",
+              "live"
+            ],
+            "title": "Trading",
+            "type": "string"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "name",
+          "trading",
+          "broker",
+          "detail"
+        ],
+        "title": "TradingModeView",
+        "type": "object"
+      },
       "UniverseCreate": {
         "properties": {
           "csv": {
@@ -10167,6 +10745,32 @@
         "title": "VapidKeyView",
         "type": "object"
       },
+      "VerifyView": {
+        "properties": {
+          "backup_id": {
+            "title": "Backup Id",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          }
+        },
+        "required": [
+          "backup_id",
+          "ok",
+          "problems"
+        ],
+        "title": "VerifyView",
+        "type": "object"
+      },
       "WalkForwardConfig": {
         "additionalProperties": false,
         "description": "Walk-forward settings. ``test_days=None`` splits the dataset's\nvalidation window evenly over the folds;\n``train_days=None`` means \"everything before the first test window\".",
@@ -10458,7 +11062,7 @@
   "paths": {
     "/api/alerts": {
       "get": {
-        "description": "Every notification the ``store`` backend recorded, newest first.",
+        "description": "Your notifications, newest first. Admins also see the admin audience\n(operational alerts with no single recipient).",
         "operationId": "listAlerts",
         "parameters": [
           {
@@ -12313,6 +12917,86 @@
       }
     },
     "/api/backups": {
+      "get": {
+        "description": "Backups under ``[backup].dir``, newest first.",
+        "operationId": "listBackups",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BackupView"
+                  },
+                  "title": "Response Listbackups",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Backups",
+        "tags": [
+          "backups"
+        ],
+        "x-permission": "operations.run"
+      },
       "post": {
         "description": "Queue a backup of the lake, state DB and artifacts to ``[backup]``'s\ntarget, pruned by its retention. Runs beside no ingest (lake lock).",
         "operationId": "startBackup",
@@ -12387,7 +13071,7 @@
         "tags": [
           "backups"
         ],
-        "x-permission": "risk.global"
+        "x-permission": "operations.run"
       }
     },
     "/api/backups/jobs/{job_id}/result": {
@@ -12476,7 +13160,286 @@
         "tags": [
           "backups"
         ],
-        "x-permission": "risk.global"
+        "x-permission": "operations.run"
+      }
+    },
+    "/api/backups/restores/{job_id}/result": {
+      "get": {
+        "description": "Where a succeeded restore job put the data (409 until it has succeeded).",
+        "operationId": "getRestoreResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestoreResultView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Restore Result",
+        "tags": [
+          "backups"
+        ],
+        "x-permission": "operations.run"
+      }
+    },
+    "/api/backups/{backup_id}/restore": {
+      "post": {
+        "description": "Queue a staged restore: the backup is verified and restored into a new\ndata folder beside the backups, with migrations applied. The live data\nis not touched; the result says how to switch. Needs a second factor\nfrom the last few minutes and ``confirmation`` = ``RESTORE <backup id>``.",
+        "operationId": "restoreBackup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "backup_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Backup Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Restore Backup",
+        "tags": [
+          "backups"
+        ],
+        "x-permission": "backups.restore"
+      }
+    },
+    "/api/backups/{backup_id}/verify": {
+      "post": {
+        "description": "Re-check a backup's checksums, schema versions and row counts. Takes a\nwhile for a large lake.",
+        "operationId": "verifyBackup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "backup_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Backup Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Verify Backup",
+        "tags": [
+          "backups"
+        ],
+        "x-permission": "operations.run"
       }
     },
     "/api/brokers": {
@@ -12558,7 +13521,7 @@
     },
     "/api/brokers/alpaca/status": {
       "get": {
-        "description": "Connect to Alpaca and read the account and market clock (read-only).\n409 unless ``[brokers].kind`` is ``alpaca``; missing keys or API errors\ncome back as ``connected=false`` with the reason.",
+        "description": "Connect to Alpaca and read the account and market clock (read-only).\nOnly the owner of the book the account backs may read it (404 for\nanyone else). Answers are cached for 30 seconds. 409 unless\n``[brokers].kind`` is ``alpaca``; missing keys or API errors come back\nas ``connected=false`` with the reason.",
         "operationId": "getAlpacaStatus",
         "responses": {
           "200": {
@@ -14752,6 +15715,7 @@
     },
     "/api/jobs": {
       "get": {
+        "description": "Your jobs, newest first. Admins see every job.",
         "operationId": "listJobs",
         "parameters": [
           {
@@ -14899,6 +15863,7 @@
     },
     "/api/jobs/{job_id}": {
       "get": {
+        "description": "One of your jobs (another user's job is a 404; admins see all).",
         "operationId": "getJob",
         "parameters": [
           {
@@ -14986,7 +15951,7 @@
     },
     "/api/jobs/{job_id}/cancel": {
       "post": {
-        "description": "Cancel a queued job, or ask a running lab run to stop at its next\ntrial (it ends ``cancelled``). Other running jobs cannot be interrupted\n(409). Ticks, ingests and backups need an admin.",
+        "description": "Cancel a queued job, or ask a running lab run to stop at its next\ntrial (it ends ``cancelled``). Other running jobs cannot be interrupted\n(409). Ticks, ingests and backups need an admin. Another user's job\nis a 404 (admins may cancel any job).",
         "operationId": "cancelJob",
         "parameters": [
           {
@@ -17128,7 +18093,7 @@
     },
     "/api/notifications/read": {
       "post": {
-        "description": "Mark notifications read (all of yours when ``ids`` is omitted).",
+        "description": "Mark notifications read (all of yours when ``ids`` is omitted). Only\ntouches your own rows, so viewers may do it too.",
         "operationId": "markNotificationsRead",
         "requestBody": {
           "content": {
@@ -17211,7 +18176,7 @@
         "tags": [
           "notifications"
         ],
-        "x-permission": "notifications.manage"
+        "x-permission": "data.read"
       }
     },
     "/api/notifications/webhook": {
@@ -18084,6 +19049,170 @@
           "portfolio"
         ],
         "x-permission": "portfolio.totals"
+      }
+    },
+    "/api/portfolios": {
+      "get": {
+        "description": "Your portfolios, oldest first, each marked paper or live.",
+        "operationId": "listPortfolios",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PortfolioSummaryView"
+                  },
+                  "title": "Response Listportfolios",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Portfolios",
+        "tags": [
+          "portfolio"
+        ],
+        "x-permission": "data.read"
+      }
+    },
+    "/api/portfolios/trading-modes": {
+      "get": {
+        "description": "For each of your portfolios: does it trade paper or live money, and\nthrough which broker.",
+        "operationId": "listTradingModes",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TradingModeView"
+                  },
+                  "title": "Response Listtradingmodes",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Trading Modes",
+        "tags": [
+          "portfolio"
+        ],
+        "x-permission": "data.read"
       }
     },
     "/api/push/subscriptions": {
@@ -20210,6 +21339,7 @@
     },
     "/api/studio/drafts": {
       "get": {
+        "description": "Your drafts, newest first. Admins see every draft.",
         "operationId": "listDrafts",
         "parameters": [
           {
@@ -20520,6 +21650,7 @@
         "x-permission": "lab.run"
       },
       "get": {
+        "description": "One of your drafts (another user's draft is a 404; admins see all).",
         "operationId": "getDraft",
         "parameters": [
           {
@@ -21662,6 +22793,274 @@
         "tags": [
           "studio"
         ]
+      }
+    },
+    "/api/subscriptions": {
+      "get": {
+        "description": "Your subscriptions, with the paper-day count and what still blocks auto.",
+        "operationId": "listSubscriptions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SubscriptionView"
+                  },
+                  "title": "Response Listsubscriptions",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Subscriptions",
+        "tags": [
+          "subscriptions"
+        ],
+        "x-permission": "data.read"
+      },
+      "post": {
+        "description": "Follow a strategy: ``notify`` (signals only) or ``paper`` on one of\nyour portfolios. ``auto`` is never the starting mode (409).",
+        "operationId": "subscribe",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscribeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Subscribe",
+        "tags": [
+          "subscriptions"
+        ],
+        "x-permission": "portfolio.trade"
+      }
+    },
+    "/api/subscriptions/{subscription_id}": {
+      "patch": {
+        "description": "Turn a subscription on or off, or change its mode. Switching to\n``auto`` needs a second factor from the last few minutes (403\n``step_up_required``) and a passing checklist, including 20 paper\ntrading days (409 ``auto_blocked`` with ``blockers``).",
+        "operationId": "updateSubscription",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "subscription_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Subscription Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Subscription",
+        "tags": [
+          "subscriptions"
+        ],
+        "x-permission": "portfolio.trade"
       }
     },
     "/api/tca/journal": {

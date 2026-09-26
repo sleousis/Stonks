@@ -33,6 +33,13 @@ class ProblemDetails(BaseModel):
     status: int
     detail: str | None = None
     instance: str | None = None
+    #: Stable machine code (``not_found``, ``step_up_required``,
+    #: ``mfa_required``, ``auto_blocked``, ...). ``detail`` is for people.
+    code: str | None = None
+    #: 401 ``mfa_required``: ``enrol`` or ``verify``.
+    next_step: str | None = None
+    #: 409 ``auto_blocked``: every auto checklist item that fails.
+    blockers: list[str] | None = None
     #: Field-level errors for 422 responses.
     errors: list[dict[str, Any]] | None = None
     #: A refused promotion (409): the go-live checks that failed.
@@ -53,12 +60,29 @@ PROBLEM_RESPONSES: dict[int | str, dict[str, Any]] = {
 }
 
 
+#: Machine codes for errors that carry none of their own.
+_CODE_BY_STATUS: dict[int, str] = {
+    400: "bad_request",
+    401: "not_authenticated",
+    403: "forbidden",
+    404: "not_found",
+    405: "method_not_allowed",
+    409: "conflict",
+    413: "too_large",
+    422: "validation_failed",
+    429: "too_many_attempts",
+    500: "internal_error",
+    503: "not_configured",
+}
+
+
 def problem(
     request: Request,
     status: int,
     *,
     title: str | None = None,
     detail: str | None = None,
+    code: str | None = None,
     errors: list[dict[str, Any]] | None = None,
     headers: dict[str, str] | None = None,
     extensions: dict[str, Any] | None = None,
@@ -69,6 +93,7 @@ def problem(
         detail=detail,
         instance=request.url.path,
         errors=errors,
+        code=code or _CODE_BY_STATUS.get(status, "error"),
         **(extensions or {}),
     )
     return JSONResponse(
@@ -94,6 +119,7 @@ def install_error_handlers(app: FastAPI) -> None:
             status,
             title=exc.title,
             detail=str(exc),
+            code=getattr(exc, "code", None),
             headers=headers,
             extensions=extend() if callable(extend) else None,
         )

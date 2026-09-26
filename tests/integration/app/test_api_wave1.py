@@ -341,14 +341,14 @@ def test_broker_info_defaults_to_simulated_without_keys(client):
         "credentials_configured": False,
     }
     # the alpaca status route only applies when alpaca is the configured broker
-    assert client.get("/api/brokers/alpaca/status").status_code == 409
+    assert client.get("/api/brokers/alpaca/status", headers=AUTH).status_code == 409
 
 
 def test_alpaca_status_without_keys_reports_not_connected(settings, seeded):
     settings.api.allowed_hosts = ["testserver"]
     settings.brokers.kind = "alpaca"
     with TestClient(create_app(settings), client=LOOPBACK) as c:
-        body = c.get("/api/brokers/alpaca/status").json()
+        body = c.get("/api/brokers/alpaca/status", headers=AUTH).json()
     assert body["connected"] is False
     assert "ALPACA_API_KEY" in body["error"]
     assert body["account"] is None
@@ -379,7 +379,7 @@ def test_alpaca_status_with_a_fake_connection(settings, seeded):
     settings.brokers.alpaca.secret_key = SecretStr("s-456")
     svc = Services.create(AppContext(settings), broker_connector=lambda s: FakeAlpaca())
     with TestClient(create_app(settings, services=svc), client=LOOPBACK) as c:
-        body = c.get("/api/brokers/alpaca/status").json()
+        body = c.get("/api/brokers/alpaca/status", headers=AUTH).json()
         info = c.get("/api/brokers").json()
     assert body["connected"] is True
     assert body["account"]["equity"] == 150.0
@@ -404,7 +404,7 @@ def test_alpaca_status_scrubs_errors(settings, seeded):
     settings.brokers.alpaca.secret_key = SecretStr("s-456")
     svc = Services.create(AppContext(settings), broker_connector=boom)
     with TestClient(create_app(settings, services=svc), client=LOOPBACK) as c:
-        body = c.get("/api/brokers/alpaca/status").json()
+        body = c.get("/api/brokers/alpaca/status", headers=AUTH).json()
     assert body["connected"] is False
     assert "k-123" not in body["error"]
 

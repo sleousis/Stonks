@@ -133,7 +133,9 @@ def test_lab_run_with_ensure_data_chains_an_ensure_job_on_the_lake_lane(settings
         assert final.status == "succeeded", final.error
         ensure_jobs = svc.runner.store.list(kind=LAB_ENSURE_JOB, limit=10, offset=0).items
         assert [j.status for j in ensure_jobs] == ["succeeded"]
-        assert svc.runner.is_operation(LAB_ENSURE_JOB)
+        assert svc.runner.lane(LAB_ENSURE_JOB) == "lake_write"
+        # Research work: whoever queued it may cancel it (AS-13).
+        assert not svc.runner.is_operation(LAB_ENSURE_JOB)
         view = svc.jobs.typed_result(job.id, LAB_RUN_JOB, LabRunView)
         assert view.ensure_job_id == ensure_jobs[0].id
         report = svc.jobs.typed_result(view.ensure_job_id, LAB_ENSURE_JOB, EnsureReport)

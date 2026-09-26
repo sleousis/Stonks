@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Response
 
-from stonks.api.deps import PageDep, ServicesDep, needs
+from stonks.api.deps import OptionalPrincipalDep, PageDep, PrincipalDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.api.routers._jobs_common import JOB_CREATED, accepted
 from stonks.app.ingest import INGEST_JOB, IngestRequest, IngestResultView, IngestRunView
@@ -29,14 +29,18 @@ def list_runs(
     operation_id="startIngest",
     dependencies=needs(Permission.OPERATIONS_RUN),
 )
-def start_ingest(body: IngestRequest, services: ServicesDep, response: Response) -> Job:
+def start_ingest(
+    body: IngestRequest, services: ServicesDep, principal: PrincipalDep, response: Response
+) -> Job:
     """Queue an ingest run; poll ``/api/jobs/{id}`` or stream its events."""
-    return accepted(services.ingest.submit(body), response)
+    return accepted(services.ingest.submit(body, owner_id=principal.user_id), response)
 
 
 @router.get(
     "/jobs/{job_id}/result", response_model=IngestResultView, operation_id="getIngestResult"
 )
-def get_ingest_result(job_id: str, services: ServicesDep) -> IngestResultView:
+def get_ingest_result(
+    job_id: str, services: ServicesDep, principal: OptionalPrincipalDep
+) -> IngestResultView:
     """The result of a succeeded ingest job (409 until it has succeeded)."""
-    return services.jobs.typed_result(job_id, INGEST_JOB, IngestResultView)
+    return services.jobs.typed_result(job_id, INGEST_JOB, IngestResultView, principal)

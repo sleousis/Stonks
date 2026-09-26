@@ -12,6 +12,7 @@ import httpx2
 import pytest
 from typer.testing import CliRunner
 
+from stonks.app.backups import BACKUP_JOB, BackupResultView
 from stonks.app.context import AppContext
 from stonks.app.services import Services
 from stonks.config import Settings
@@ -71,7 +72,7 @@ def test_backup_job_runs_in_the_server_process(settings):
         job = services.backups.submit()
         final = services.runner.wait(job.id, timeout=60)
         assert final.status == "succeeded", final.error
-        view = services.backups.result(job.id)
+        view = services.jobs.typed_result(job.id, BACKUP_JOB, BackupResultView)
         assert (settings.backup.dir / view.backup_id).is_dir()
     finally:
         services.shutdown()

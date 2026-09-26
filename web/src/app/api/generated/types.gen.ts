@@ -259,6 +259,24 @@ export type BackupResultView = {
 };
 
 /**
+ * BackupView
+ */
+export type BackupView = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Size Bytes
+     */
+    size_bytes: number;
+};
+
+/**
  * BarSeries
  */
 export type BarSeries = {
@@ -419,6 +437,24 @@ export type BrokerInfo = {
      * Paper
      */
     paper: boolean;
+};
+
+/**
+ * ChannelDefaultView
+ */
+export type ChannelDefaultView = {
+    /**
+     * Channel
+     */
+    channel: string;
+    /**
+     * Default Enabled
+     */
+    default_enabled: boolean;
+    /**
+     * Fallback
+     */
+    fallback: boolean;
 };
 
 /**
@@ -708,6 +744,10 @@ export type Draft = {
      * Name
      */
     name: string;
+    /**
+     * Owner Id
+     */
+    owner_id?: string | null;
     /**
      * Registered Strategy Id
      */
@@ -1794,6 +1834,10 @@ export type Job = {
      */
     message?: string | null;
     /**
+     * Owner Id
+     */
+    owner_id?: string | null;
+    /**
      * Params
      */
     params: {
@@ -2276,6 +2320,22 @@ export type MarketClockView = {
 };
 
 /**
+ * MarketSessionsView
+ */
+export type MarketSessionsView = {
+    /**
+     * Calendar
+     */
+    calendar: string;
+    /**
+     * Is Open
+     */
+    is_open: boolean;
+    next: SessionTimesView;
+    today: SessionTimesView | null;
+};
+
+/**
  * MaxHoldingSettings
  */
 export type MaxHoldingSettings = {
@@ -2298,7 +2358,7 @@ export type McptOptions = {
     /**
      * Metric
      */
-    metric?: 'profit_factor' | 'sharpe' | 'final_return' | 'cagr';
+    metric?: 'profit_factor' | 'bar_profit_factor' | 'sharpe' | 'final_return' | 'cagr';
     /**
      * N Permutations
      */
@@ -2916,6 +2976,48 @@ export type PortalLinkView = {
 };
 
 /**
+ * PortfolioSummaryView
+ */
+export type PortfolioSummaryView = {
+    /**
+     * Base Currency
+     */
+    base_currency: string;
+    /**
+     * Broker Connection Id
+     */
+    broker_connection_id: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Initial Cash
+     */
+    initial_cash: number | null;
+    /**
+     * Kind
+     */
+    kind: 'simulated' | 'broker';
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Status
+     */
+    status: 'active' | 'paused' | 'archived';
+    /**
+     * Trading
+     */
+    trading: 'paper' | 'live';
+};
+
+/**
  * PortfolioSyncView
  */
 export type PortfolioSyncView = {
@@ -3147,6 +3249,10 @@ export type PreferencesUpdate = {
  */
 export type PreferencesView = {
     /**
+     * Channel Defaults
+     */
+    channel_defaults?: Array<ChannelDefaultView>;
+    /**
      * Channels
      */
     channels: Array<string>;
@@ -3238,6 +3344,14 @@ export type ProbeView = {
  */
 export type ProblemDetails = {
     /**
+     * Blockers
+     */
+    blockers?: Array<string> | null;
+    /**
+     * Code
+     */
+    code?: string | null;
+    /**
      * Detail
      */
     detail?: string | null;
@@ -3255,6 +3369,10 @@ export type ProblemDetails = {
      * Instance
      */
     instance?: string | null;
+    /**
+     * Next Step
+     */
+    next_step?: string | null;
     /**
      * Status
      */
@@ -3431,6 +3549,42 @@ export type RecoveryCodesView = {
      * Recovery Codes
      */
     recovery_codes: Array<string>;
+};
+
+/**
+ * RestoreRequest
+ */
+export type RestoreRequest = {
+    /**
+     * Confirmation
+     */
+    confirmation: string;
+};
+
+/**
+ * RestoreResultView
+ */
+export type RestoreResultView = {
+    /**
+     * Backup Id
+     */
+    backup_id: string;
+    /**
+     * Data Dir
+     */
+    data_dir: string;
+    /**
+     * Lake Migrations Applied
+     */
+    lake_migrations_applied: Array<number>;
+    /**
+     * Next Steps
+     */
+    next_steps: Array<string>;
+    /**
+     * State Migrations Applied
+     */
+    state_migrations_applied: Array<number>;
 };
 
 /**
@@ -3629,6 +3783,7 @@ export type ScheduleView = {
      * Jobs
      */
     jobs: Array<ScheduledJobView>;
+    market?: MarketSessionsView | null;
     /**
      * Recent
      */
@@ -3725,6 +3880,28 @@ export type SectorCapSettings = {
      * Max Weight Per Sector
      */
     max_weight_per_sector?: number | null;
+};
+
+/**
+ * SessionTimesView
+ */
+export type SessionTimesView = {
+    /**
+     * Close
+     */
+    close: string;
+    /**
+     * Date
+     */
+    date: string;
+    /**
+     * Open
+     */
+    open: string;
+    /**
+     * Pre Open
+     */
+    pre_open: string;
 };
 
 /**
@@ -4448,6 +4625,108 @@ export type StudioCapabilities = {
      * Code Strategies
      */
     code_strategies: boolean;
+};
+
+/**
+ * SubscribeRequest
+ */
+export type SubscribeRequest = {
+    /**
+     * Mode
+     */
+    mode?: 'notify' | 'paper' | 'auto';
+    /**
+     * Portfolio Id
+     */
+    portfolio_id?: string | null;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string;
+    /**
+     * Weight
+     */
+    weight?: number;
+};
+
+/**
+ * SubscriptionUpdate
+ */
+export type SubscriptionUpdate = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean | null;
+    /**
+     * Mode
+     */
+    mode?: 'notify' | 'paper' | 'auto' | null;
+    /**
+     * Reason
+     */
+    reason?: string | null;
+};
+
+/**
+ * SubscriptionView
+ */
+export type SubscriptionView = {
+    /**
+     * Auto Blockers
+     */
+    auto_blockers: Array<string>;
+    /**
+     * Auto Enabled At
+     */
+    auto_enabled_at: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Mode
+     */
+    mode: 'notify' | 'paper' | 'auto';
+    /**
+     * Paper Days Completed
+     */
+    paper_days_completed: number;
+    /**
+     * Paper Days Required
+     */
+    paper_days_required: number;
+    /**
+     * Paused Reason
+     */
+    paused_reason: string | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string | null;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string;
+    /**
+     * Strategy Status
+     */
+    strategy_status: string | null;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Weight
+     */
+    weight: number;
 };
 
 /**
@@ -5191,6 +5470,38 @@ export type TradeView = {
 };
 
 /**
+ * TradingModeView
+ *
+ * Whether a portfolio trades paper or live money, and through what.
+ */
+export type TradingModeView = {
+    /**
+     * Broker
+     *
+     * simulated (the Stonks ledger), alpaca (the configured account, default portfolio only) or connection (a linked broker account, synced read-only).
+     */
+    broker: 'simulated' | 'alpaca' | 'connection';
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Trading
+     *
+     * paper: simulated fills or a paper broker account. live: real money.
+     */
+    trading: 'paper' | 'live';
+};
+
+/**
  * UniverseCreate
  */
 export type UniverseCreate = {
@@ -5432,6 +5743,24 @@ export type VapidKeyView = {
      * Public Key
      */
     public_key: string | null;
+};
+
+/**
+ * VerifyView
+ */
+export type VerifyView = {
+    /**
+     * Backup Id
+     */
+    backup_id: string;
+    /**
+     * Ok
+     */
+    ok: boolean;
+    /**
+     * Problems
+     */
+    problems: Array<string>;
 };
 
 /**
@@ -6535,6 +6864,49 @@ export type ResetUserPasswordResponses = {
 
 export type ResetUserPasswordResponse = ResetUserPasswordResponses[keyof ResetUserPasswordResponses];
 
+export type ListBackupsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/backups';
+};
+
+export type ListBackupsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListBackupsError = ListBackupsErrors[keyof ListBackupsErrors];
+
+export type ListBackupsResponses = {
+    /**
+     * Response Listbackups
+     *
+     * Successful Response
+     */
+    200: Array<BackupView>;
+};
+
+export type ListBackupsResponse = ListBackupsResponses[keyof ListBackupsResponses];
+
 export type StartBackupData = {
     body?: never;
     path?: never;
@@ -6621,6 +6993,144 @@ export type GetBackupResultResponses = {
 };
 
 export type GetBackupResultResponse = GetBackupResultResponses[keyof GetBackupResultResponses];
+
+export type GetRestoreResultData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/backups/restores/{job_id}/result';
+};
+
+export type GetRestoreResultErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetRestoreResultError = GetRestoreResultErrors[keyof GetRestoreResultErrors];
+
+export type GetRestoreResultResponses = {
+    /**
+     * Successful Response
+     */
+    200: RestoreResultView;
+};
+
+export type GetRestoreResultResponse = GetRestoreResultResponses[keyof GetRestoreResultResponses];
+
+export type RestoreBackupData = {
+    body: RestoreRequest;
+    path: {
+        /**
+         * Backup Id
+         */
+        backup_id: string;
+    };
+    query?: never;
+    url: '/api/backups/{backup_id}/restore';
+};
+
+export type RestoreBackupErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RestoreBackupError = RestoreBackupErrors[keyof RestoreBackupErrors];
+
+export type RestoreBackupResponses = {
+    /**
+     * Successful Response
+     */
+    202: Job;
+};
+
+export type RestoreBackupResponse = RestoreBackupResponses[keyof RestoreBackupResponses];
+
+export type VerifyBackupData = {
+    body?: never;
+    path: {
+        /**
+         * Backup Id
+         */
+        backup_id: string;
+    };
+    query?: never;
+    url: '/api/backups/{backup_id}/verify';
+};
+
+export type VerifyBackupErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type VerifyBackupError = VerifyBackupErrors[keyof VerifyBackupErrors];
+
+export type VerifyBackupResponses = {
+    /**
+     * Successful Response
+     */
+    200: VerifyView;
+};
+
+export type VerifyBackupResponse = VerifyBackupResponses[keyof VerifyBackupResponses];
 
 export type GetBrokerInfoData = {
     body?: never;
@@ -9339,6 +9849,92 @@ export type GetPortfolioTotalsResponses = {
 
 export type GetPortfolioTotalsResponse = GetPortfolioTotalsResponses[keyof GetPortfolioTotalsResponses];
 
+export type ListPortfoliosData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/portfolios';
+};
+
+export type ListPortfoliosErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListPortfoliosError = ListPortfoliosErrors[keyof ListPortfoliosErrors];
+
+export type ListPortfoliosResponses = {
+    /**
+     * Response Listportfolios
+     *
+     * Successful Response
+     */
+    200: Array<PortfolioSummaryView>;
+};
+
+export type ListPortfoliosResponse = ListPortfoliosResponses[keyof ListPortfoliosResponses];
+
+export type ListTradingModesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/portfolios/trading-modes';
+};
+
+export type ListTradingModesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListTradingModesError = ListTradingModesErrors[keyof ListTradingModesErrors];
+
+export type ListTradingModesResponses = {
+    /**
+     * Response Listtradingmodes
+     *
+     * Successful Response
+     */
+    200: Array<TradingModeView>;
+};
+
+export type ListTradingModesResponse = ListTradingModesResponses[keyof ListTradingModesResponses];
+
 export type DeletePushSubscriptionData = {
     body: PushUnsubscribeRequest;
     path?: never;
@@ -11054,6 +11650,136 @@ export type ListStudioTemplatesResponses = {
 };
 
 export type ListStudioTemplatesResponse = ListStudioTemplatesResponses[keyof ListStudioTemplatesResponses];
+
+export type ListSubscriptionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/subscriptions';
+};
+
+export type ListSubscriptionsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListSubscriptionsError = ListSubscriptionsErrors[keyof ListSubscriptionsErrors];
+
+export type ListSubscriptionsResponses = {
+    /**
+     * Response Listsubscriptions
+     *
+     * Successful Response
+     */
+    200: Array<SubscriptionView>;
+};
+
+export type ListSubscriptionsResponse = ListSubscriptionsResponses[keyof ListSubscriptionsResponses];
+
+export type SubscribeData = {
+    body: SubscribeRequest;
+    path?: never;
+    query?: never;
+    url: '/api/subscriptions';
+};
+
+export type SubscribeErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SubscribeError = SubscribeErrors[keyof SubscribeErrors];
+
+export type SubscribeResponses = {
+    /**
+     * Successful Response
+     */
+    201: SubscriptionView;
+};
+
+export type SubscribeResponse = SubscribeResponses[keyof SubscribeResponses];
+
+export type UpdateSubscriptionData = {
+    body: SubscriptionUpdate;
+    path: {
+        /**
+         * Subscription Id
+         */
+        subscription_id: string;
+    };
+    query?: never;
+    url: '/api/subscriptions/{subscription_id}';
+};
+
+export type UpdateSubscriptionErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type UpdateSubscriptionError = UpdateSubscriptionErrors[keyof UpdateSubscriptionErrors];
+
+export type UpdateSubscriptionResponses = {
+    /**
+     * Successful Response
+     */
+    200: SubscriptionView;
+};
+
+export type UpdateSubscriptionResponse = UpdateSubscriptionResponses[keyof UpdateSubscriptionResponses];
 
 export type ListJournalData = {
     body?: never;

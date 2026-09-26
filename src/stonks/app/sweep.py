@@ -33,6 +33,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from stonks.app.lab import LabRunOptions, LabRunRequest, execute_lab_run
 from stonks.app.strategies import StrategyRef
+from stonks.backtest.benchmark import AUTO_BENCHMARK_TICKER, normalize_spec
 from stonks.lab.catalog import is_wrapper, resolve_strategy, strategy_catalog
 from stonks.lab.parallel import LakeSnapshot, ParallelSettings, planned_workers, run_tasks
 from stonks.logging import get_logger
@@ -162,6 +163,28 @@ def _run_task(worker: _WorkerState, task: SweepTask) -> SweepRow:
     )
 
 
+def snapshot_tickers(
+    request: LabRunRequest, tasks: Sequence[SweepTask], *, default_benchmark: str = "auto"
+) -> list[str]:
+    """Every ticker a sweep reads (RS-01): the basket, the benchmark ticker
+    (``auto`` is :data:`~stonks.backtest.benchmark.AUTO_BENCHMARK_TICKER`,
+    ``EW`` and ``none`` add none) and each strategy's ``data_tickers()``
+    (reference tickers it reads but never trades), from default params."""
+    tickers = list(request.universe)
+    for task in tasks:
+        try:
+            hook = getattr(resolve_strategy(task.class_path)(), "data_tickers", None)
+            tickers.extend(hook() if callable(hook) else ())
+        except Exception:  # an unbuildable strategy fails in its own task
+            continue
+    spec = normalize_spec(request.benchmark or default_benchmark)
+    if spec == "auto":
+        tickers.append(AUTO_BENCHMARK_TICKER)
+    elif spec not in (None, "ew"):
+        tickers.append(spec)
+    return list(dict.fromkeys(str(t) for t in tickers if t))
+
+
 def run_sweep(
     settings: Any,
     tasks: Sequence[SweepTask],
@@ -179,7 +202,11 @@ def run_sweep(
     with SqliteState(settings.state.path) as state:
         state.migrate()
     parallel = parallel or settings.lab.parallel
-    with LakeSnapshot.build(lake, list(request.universe), end=request.end) as snapshot:
+    with LakeSnapshot.build(
+        lake,
+        snapshot_tickers(request, tasks, default_benchmark=settings.lab.benchmark),
+        end=request.end,
+    ) as snapshot:
         payload = _Payload(settings, request, snapshot.path)
         if planned_workers(len(tasks), settings=parallel) > 1:
             return run_tasks(

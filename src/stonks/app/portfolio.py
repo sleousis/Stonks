@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import json
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from stonks.accounts import NotFound, owned_portfolio
+from stonks.accounts import NotFound, PortfolioRepository, owned_portfolio
+from stonks.accounts import Portfolio as AccountPortfolio
 from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
 from stonks.app.context import AppContext
 from stonks.app.cost_basis import FillLot, average_costs
@@ -96,6 +98,37 @@ class PortfolioTotalsView(BaseModel):
     total_value: float = Field(description="Sum of each book's value at its latest snapshot.")
 
 
+Trading = Literal["paper", "live"]
+BrokerKind = Literal["simulated", "alpaca", "connection"]
+
+
+class TradingModeView(BaseModel):
+    """Whether a portfolio trades paper or live money, and through what."""
+
+    portfolio_id: str
+    name: str
+    trading: Trading = Field(
+        description="paper: simulated fills or a paper broker account. live: real money."
+    )
+    broker: BrokerKind = Field(
+        description="simulated (the Stonks ledger), alpaca (the configured account, default "
+        "portfolio only) or connection (a linked broker account, synced read-only)."
+    )
+    detail: str
+
+
+class PortfolioSummaryView(BaseModel):
+    id: str
+    name: str
+    kind: Literal["simulated", "broker"]
+    status: Literal["active", "paused", "archived"]
+    base_currency: str
+    initial_cash: float | None
+    broker_connection_id: str | None
+    trading: Trading
+    created_at: datetime
+
+
 class PortfolioService:
     def __init__(self, context: AppContext) -> None:
         self._ctx = context
@@ -124,6 +157,56 @@ class PortfolioService:
         if not rows:
             raise NotFoundError("you have no portfolio yet")
         return rows[0]["id"]
+
+    def list_mine(self, principal: Principal) -> list[PortfolioSummaryView]:
+        """Your portfolios, oldest first (admins too: never other people's)."""
+        require(principal, Permission.READ)
+        with self._ctx.state() as state:
+            books = PortfolioRepository(state).list(principal.scope)
+        modes = {m.portfolio_id: m for m in self._modes(books)}
+        return [
+            PortfolioSummaryView(
+                id=p.id,
+                name=p.name,
+                kind=p.kind,
+                status=p.status,
+                base_currency=p.base_currency,
+                initial_cash=p.initial_cash,
+                broker_connection_id=p.broker_connection_id,
+                trading=modes[p.id].trading,
+                created_at=datetime.fromisoformat(p.created_at),
+            )
+            for p in books
+        ]
+
+    def trading_modes(self, principal: Principal) -> list[TradingModeView]:
+        """For each of your portfolios: paper or live, and the broker."""
+        require(principal, Permission.READ)
+        with self._ctx.state() as state:
+            books = PortfolioRepository(state).list(principal.scope)
+        return self._modes(books)
+
+    def _modes(self, books: list[AccountPortfolio]) -> list[TradingModeView]:
+        brokers = self._ctx.settings.brokers
+        out: list[TradingModeView] = []
+        for p in books:
+            if p.id == DEFAULT_PORTFOLIO_ID and brokers.kind == "alpaca":
+                live = not brokers.alpaca.paper and brokers.alpaca.allow_live
+                trading: Trading = "live" if live else "paper"
+                broker: BrokerKind = "alpaca"
+                detail = f"orders go to the Alpaca {'live' if live else 'paper'} account"
+            elif p.kind == "broker":
+                trading, broker = "live", "connection"
+                detail = "mirrors a real broker account through its connection (read-only sync)"
+            else:
+                trading, broker = "paper", "simulated"
+                detail = "simulated fills on the Stonks ledger"
+            out.append(
+                TradingModeView(
+                    portfolio_id=p.id, name=p.name, trading=trading, broker=broker, detail=detail
+                )
+            )
+        return out
 
     def totals(self, principal: Principal) -> PortfolioTotalsView:
         """Cash and value summed across every active portfolio (admins)."""

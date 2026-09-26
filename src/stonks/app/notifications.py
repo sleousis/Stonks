@@ -105,6 +105,14 @@ class PushDeviceView(BaseModel):
     failure_count: int
 
 
+class ChannelDefaultView(BaseModel):
+    channel: str
+    #: On for a category you never set.
+    default_enabled: bool
+    #: Used instead of push for high urgency when you have no working device.
+    fallback: bool
+
+
 class PreferencesView(BaseModel):
     preferences: list[PreferenceItem]
     quiet_start: str | None
@@ -114,6 +122,8 @@ class PreferencesView(BaseModel):
     webhook: str | None
     #: Channels a preference can name.
     channels: list[str]
+    #: What each channel does when you have not set it.
+    channel_defaults: list[ChannelDefaultView] = Field(default_factory=list)
 
 
 class FeedItemView(BaseModel):
@@ -174,6 +184,10 @@ def _prefs(p: notify.NotificationPreferences) -> PreferencesView:
         timezone=p.timezone,
         webhook=p.webhook,
         channels=list(p.channels),
+        channel_defaults=[
+            ChannelDefaultView(channel=name, default_enabled=enabled, fallback=fallback)
+            for name, enabled, fallback in p.channel_defaults
+        ],
     )
 
 

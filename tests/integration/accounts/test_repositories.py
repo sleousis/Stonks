@@ -338,6 +338,27 @@ def test_mode_changes_are_audited(state, alice, portfolios, subs):
     assert mode_rows[0].target_id == sub.id
 
 
+def test_disable_and_enable_a_subscription_are_audited(state, alice, bob, portfolios, subs):
+    pf = portfolios.create(alice, name="Book")
+    sub = subs.subscribe(alice, strategy_id="s_active", portfolio_id=pf.id, mode=Mode.PAPER)
+    assert sub.enabled
+    off = subs.disable(alice, sub.id, reason="holiday")
+    assert not off.enabled and off.mode is Mode.PAPER
+    assert subs.disable(alice, sub.id).enabled is False  # idempotent, no second row
+    on = subs.enable(alice, sub.id)
+    assert on.enabled
+    actions = [
+        (e.action, e.details)
+        for e in AuditLog(state).for_portfolio(alice, pf.id)
+        if e.action.startswith("subscription.")
+    ]
+    assert ("subscription.disable", {"reason": "holiday"}) in actions
+    assert ("subscription.enable", {}) in actions
+    assert sum(1 for a, _ in actions if a == "subscription.disable") == 1
+    with pytest.raises(NotFound):
+        subs.disable(bob, sub.id)
+
+
 def test_audit_log_for_portfolio_is_scoped(state, alice, bob, portfolios):
     pf = portfolios.create(alice, name="Book")
     with pytest.raises(NotFound):

@@ -10,7 +10,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
 
-from stonks.api.deps import PrincipalDep, ServicesDep, needs
+from stonks.api.deps import PrincipalDep, ServicesDep, client_ip, needs
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.app.halts import (
     ClearHaltRequest,
@@ -29,10 +29,6 @@ def get_halts(services: ServicesDep) -> HaltService:
 
 
 HaltsDep = Annotated[HaltService, Depends(get_halts)]
-
-
-def _ip(request: Request) -> str | None:
-    return request.client.host if request.client else None
 
 
 @router.get("", response_model=list[HaltView], operation_id="listHalts")
@@ -65,7 +61,7 @@ def engage_kill_switch(
     yours (``user``) or one of yours (``portfolio``). ``flatten`` stops buys
     only, so sells and exits still go through. Returns the open kill switch
     when one is already on at that scope."""
-    return halts.engage_kill(principal, body, ip=_ip(request))
+    return halts.engage_kill(principal, body, ip=client_ip(request))
 
 
 @router.post(
@@ -80,7 +76,7 @@ def resume_kill_switch(
     """Turn a kill switch off. ``confirmation`` must be exactly
     ``RESUME TRADING``; the reason is audited. Needs a second factor from
     the last few minutes (step-up), so API tokens get 403."""
-    return halts.resume_kill(principal, halt_id, body, ip=_ip(request))
+    return halts.resume_kill(principal, halt_id, body, ip=client_ip(request))
 
 
 @router.post(
@@ -94,4 +90,4 @@ def clear_halt(
 ) -> HaltView:
     """The logged reset of a circuit-breaker or operational halt (not the
     kill switch). A latched drawdown halt stays until this is called."""
-    return halts.clear(principal, halt_id, body, ip=_ip(request))
+    return halts.clear(principal, halt_id, body, ip=client_ip(request))

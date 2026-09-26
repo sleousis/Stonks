@@ -208,3 +208,28 @@ def test_cli_sweep_rejects_unknown_strategies(tmp_path, monkeypatch):
     )
     assert result.exit_code == 2
     assert "unknown strategy" in result.output
+
+
+@pytest.mark.parametrize(("benchmark", "expected"), [("QQQ.US", "QQQ.US"), ("auto", "SPY.US")])
+def test_rs01_the_snapshot_holds_the_benchmark_ticker(
+    sweep_settings, lake_trending, monkeypatch, benchmark, expected
+):
+    import stonks.app.sweep as sweep
+
+    seen: list[list[str]] = []
+    real = sweep.LakeSnapshot.build
+
+    def spy(lake, universe, **kwargs):
+        seen.append(list(universe))
+        return real(lake, universe, **kwargs)
+
+    monkeypatch.setattr(sweep.LakeSnapshot, "build", staticmethod(spy))
+    run_sweep(
+        sweep_settings,
+        plan_sweep(BASKET, ["momentum"]),
+        _request(benchmark=benchmark),
+        lake=lake_trending,
+        parallel=ParallelSettings(max_workers=1),
+    )
+    [tickers] = seen
+    assert tickers[: len(BASKET)] == BASKET and expected in tickers
