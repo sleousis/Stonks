@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from stonks.backtest.costs import CostModelSettings
+from stonks.backtest.fills import ExecutionSettings
 from stonks.core.types import AssetClass
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
@@ -346,6 +347,14 @@ class BacktestSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     costs: CostModelSettings = Field(default_factory=CostModelSettings.realistic)
+    #: ``[backtest.execution]``: the simulated broker's fill model
+    #: (``[backtest.execution.fill]``, BL-30; absent = immediate fills at the
+    #: next open) and cash settlement (``settlement_days``).
+    execution: ExecutionSettings = ExecutionSettings()
+    #: ``[backtest.construction]``: run lab and API backtests through the
+    #: production construction pipeline (``None``: each strategy decides
+    #: alone, today's behaviour).
+    construction: ConstructionSettings | None = None
 
 
 class LabSettings(BaseModel):
