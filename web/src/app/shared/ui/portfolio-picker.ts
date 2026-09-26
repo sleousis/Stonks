@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject } from '@angular/core';
 
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
+import { ModeStamp } from './mode-stamp';
 
 /**
  * Which portfolio the money pages show. Sits in the session strip; renders
@@ -11,6 +12,7 @@ import { PortfolioContextService } from '../../core/portfolio/portfolio-context.
 @Component({
   selector: 'app-portfolio-picker',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [ModeStamp],
   template: `
     @if (ctx.hasChoice()) {
       <span class="picker">
@@ -29,9 +31,7 @@ import { PortfolioContextService } from '../../core/portfolio/portfolio-context.
           }
         </select>
         @if (ctx.current()?.mode; as mode) {
-          <span class="stamp" [attr.data-mode]="mode">{{
-            mode === 'live' ? 'LIVE' : 'PAPER'
-          }}</span>
+          <app-mode-stamp [live]="mode === 'live'" />
         }
       </span>
     }
@@ -63,21 +63,6 @@ import { PortfolioContextService } from '../../core/portfolio/portfolio-context.
         height: var(--touch-min);
         font-size: var(--text-lg);
       }
-    }
-    .stamp {
-      padding: 0 var(--space-1);
-      border: 1.5px solid var(--color-ink-3);
-      border-radius: var(--radius-sm);
-      color: var(--color-ink-2);
-      font-size: var(--text-xs);
-      font-weight: var(--weight-bold);
-      letter-spacing: 0.08em;
-      transform: rotate(-2deg);
-    }
-    .stamp[data-mode='live'] {
-      border-color: var(--color-brass);
-      box-shadow: inset 0 0 0 1px var(--color-brass);
-      color: var(--color-ink);
     }
   `,
 })

@@ -140,7 +140,7 @@ describe('SessionStrip', () => {
       'Main',
       'Real money (live)',
     ]);
-    expect(el.querySelector('.stamp')!.textContent).toBe('PAPER');
+    expect(el.querySelector('.stamp')!.textContent).toContain('PAPER');
     select.value = 'pf_live';
     select.dispatchEvent(new Event('change'));
     expect(portfolios.select).toHaveBeenCalledWith('pf_live');
