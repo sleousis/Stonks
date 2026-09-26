@@ -65,7 +65,7 @@ export class HealthPage {
     loader: () => this.ingestApi.runs({ status: 'error', limit: RECENT_FAILURES }),
   });
   protected readonly failedTicks = resource({
-    loader: () => this.ticksApi.list({ status: 'failed', limit: RECENT_FAILURES }),
+    loader: () => this.ticksApi.list({ status: 'error', limit: RECENT_FAILURES }),
   });
 
   protected readonly refreshing = computed(
