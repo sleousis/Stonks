@@ -4,7 +4,11 @@ import { TestBed } from '@angular/core/testing';
 
 import { provideApi } from '../../api/provide-api';
 import { nextRequest, tick } from '../../../testing/http';
-import { NOTIFICATION_POLL_MS, NotificationFeedService, appLink } from './notification-feed.service';
+import {
+  NOTIFICATION_POLL_MS,
+  NotificationFeedService,
+  appLink,
+} from './notification-feed.service';
 import { ToastService } from './toast.service';
 
 const FEED = '/api/notifications';

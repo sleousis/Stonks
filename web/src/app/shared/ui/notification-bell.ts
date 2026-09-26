@@ -37,7 +37,12 @@ import { NotificationFeedService } from '../../core/notify/notification-feed.ser
           stroke-width="1.6"
           stroke-linejoin="round"
         />
-        <path d="M8.2 15.8a1.9 1.9 0 0 0 3.6 0" fill="none" stroke="currentColor" stroke-width="1.6" />
+        <path
+          d="M8.2 15.8a1.9 1.9 0 0 0 3.6 0"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+        />
       </svg>
       @if (count() > 0) {
         <span class="badge num" aria-hidden="true">{{ badge() }}</span>

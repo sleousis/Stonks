@@ -312,7 +312,9 @@ export class NotificationPrefs {
   protected readonly canManage = computed(() => this.session.can('notifications.manage'));
   /** Controls are off while a save runs, or for a user who may not change settings. */
   protected readonly locked = computed(() => this.saving() || !this.canManage());
-  protected readonly hasWebhook = computed(() => this.view()?.channels.includes('webhook') ?? false);
+  protected readonly hasWebhook = computed(
+    () => this.view()?.channels.includes('webhook') ?? false,
+  );
   /** Write-only: never filled from the server, cleared after each save. */
   protected readonly webhookUrl = signal('');
   protected readonly webhookError = signal<string | null>(null);

@@ -26,11 +26,7 @@ describe('NotificationPrefs', () => {
   beforeEach(() => {
     allowed = true;
     TestBed.configureTestingModule({
-      providers: [
-        provideRouter([]),
-        ...provideApi(),
-        provideHttpClientTesting(),
-      ],
+      providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting()],
     });
     controller = TestBed.inject(HttpTestingController);
     const session = TestBed.inject(SessionService);
@@ -157,9 +153,7 @@ describe('NotificationPrefs', () => {
   });
 
   it('asks before removing the webhook', async () => {
-    const confirm = vi
-      .spyOn(TestBed.inject(ConfirmService), 'confirm')
-      .mockResolvedValue(true);
+    const confirm = vi.spyOn(TestBed.inject(ConfirmService), 'confirm').mockResolvedValue(true);
     const el = await render({ ...VIEW, webhook: 'https://hooks.example.com/***' });
     button(el, 'Remove webhook')!.click();
     const req = await nextRequest(controller, '/api/notifications/webhook', 'PUT');

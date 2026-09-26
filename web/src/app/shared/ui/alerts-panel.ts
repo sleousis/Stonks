@@ -1,11 +1,4 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  inject,
-  input,
-  resource,
-  signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input, resource, signal } from '@angular/core';
 
 import { AlertsService } from '../../api/alerts.service';
 import { formatAgo, formatDateTime } from '../../core/format/format';
@@ -23,7 +16,9 @@ const LEVELS: Record<string, { tone: PillTone; label: string }> = {
 /** Tone (shape and colour) and word for an alert or notification level. */
 export function levelPill(level: string | null | undefined): { tone: PillTone; label: string } {
   const key = (level ?? '').toLowerCase();
-  return LEVELS[key] ?? { tone: 'neutral', label: key ? key[0].toUpperCase() + key.slice(1) : 'Info' };
+  return (
+    LEVELS[key] ?? { tone: 'neutral', label: key ? key[0].toUpperCase() + key.slice(1) : 'Info' }
+  );
 }
 
 /**
@@ -61,7 +56,11 @@ export function levelPill(level: string | null | undefined): { tone: PillTone; l
                   [tone]="pill(a.level).tone"
                   [label]="pill(a.level).label"
                 />
-                <time class="when muted" [attr.datetime]="a.created_at" [title]="exact(a.created_at)">
+                <time
+                  class="when muted"
+                  [attr.datetime]="a.created_at"
+                  [title]="exact(a.created_at)"
+                >
                   {{ ago(a.created_at) }}
                 </time>
               </div>
