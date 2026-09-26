@@ -284,13 +284,16 @@ class QualityValue(BaseStrategy):
     def _metrics(self, ticker: str, as_of: Any, lake: Any) -> dict[str, float | None]:
         day = as_datetime(as_of).date()
         oldest = day - timedelta(days=int(self.params["max_statement_age_days"]))
+        # Filing dates carry no time of day (a report may land after the
+        # close), so mid-session only filings from earlier days are known.
+        known = day - timedelta(days=1) if _is_intraday(as_of) else day
 
         def fresh(snap: _Snapshot | None) -> Mapping[str, float | None]:
             return snap.values if snap is not None and snap.period_end >= oldest else {}
 
-        income = fresh(self._flows(lake, "income_statement", ticker, day, _INCOME_FLOWS))
-        cash = fresh(self._flows(lake, "cash_flow_statement", ticker, day, _CASH_FLOWS))
-        balance = fresh(self._balance(lake, ticker, day))
+        income = fresh(self._flows(lake, "income_statement", ticker, known, _INCOME_FLOWS))
+        cash = fresh(self._flows(lake, "cash_flow_statement", ticker, known, _CASH_FLOWS))
+        balance = fresh(self._balance(lake, ticker, known))
         if not (income or cash or balance):
             return {}
 
@@ -308,7 +311,7 @@ class QualityValue(BaseStrategy):
 
         market_cap = None
         price = self._price(lake, ticker, as_of, day)
-        shares = self._shares(lake, ticker, day, balance)
+        shares = self._shares(lake, ticker, known, balance)
         if price is not None and shares is not None:
             market_cap = price * shares
 
@@ -366,16 +369,13 @@ class QualityValue(BaseStrategy):
 
     def _price(self, lake: Any, ticker: str, as_of: Any, day: date) -> float | None:
         # Daily bars are stamped at midnight but only complete at the
-        # session close. A daily as_of (a date or a midnight stamp) is read
-        # after that close, so the day's own bar counts. An intraday as_of
-        # (any time past midnight) is mid-session: only bars stamped before
-        # the day starts, i.e. the previous completed session. Equity
-        # sessions never have intraday bars stamped at 00:00, so midnight
-        # is unambiguous for this equity-only strategy.
-        if as_datetime(as_of).time() == time.min:
-            cutoff = datetime.combine(day, time.max)
-        else:
+        # session close. A daily as_of is read after that close, so the
+        # day's own bar counts; mid-session only bars stamped before the day
+        # starts, i.e. the previous completed session.
+        if _is_intraday(as_of):
             cutoff = datetime.combine(day, time.min) - timedelta(microseconds=1)
+        else:
+            cutoff = datetime.combine(day, time.max)
         last = self._bar_caches.for_lake(lake).last_close(ticker, Interval.DAY_1, cutoff)
         if last is None:
             return None
@@ -411,6 +411,14 @@ class QualityValue(BaseStrategy):
             df = lake.get_shares_outstanding(ticker)
             per_lake[key] = [(d, _finite(s)) for d, s in zip(df["date"], df["shares"], strict=True)]
         return per_lake[key]
+
+
+def _is_intraday(as_of: Any) -> bool:
+    """A daily as_of (a date or a midnight bar stamp) is read after that
+    day's close; any later time of day is mid-session. Equity sessions never
+    have intraday bars stamped at 00:00, so midnight is unambiguous for this
+    equity-only strategy."""
+    return as_datetime(as_of).time() != time.min
 
 
 def _trailing_flows(hist: _History, visible: np.ndarray, cols: tuple[str, ...]) -> _Snapshot | None:

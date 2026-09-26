@@ -174,6 +174,22 @@ def test_intraday_datetime_as_of_uses_its_calendar_day(two_names):
     assert f["earnings_yield"] == pytest.approx(0.04)
 
 
+def test_intraday_as_of_does_not_see_a_filing_dated_the_same_day(two_names):
+    """Filing dates carry no time: a report filed on 2024-05-10 may land
+    after the close, so mid-session on 2024-05-10 it is not yet known. A
+    daily as_of (read after the close) does see it."""
+    _quarter(
+        two_names, "GOOD.US", date(2024, 3, 31), net_income=500.0, filing_date=date(2024, 5, 10)
+    )
+    s = QualityValue({})
+    mid = s.extract_features("GOOD.US", datetime(2024, 5, 10, 10, 0), two_names).values
+    assert mid["earnings_yield"] == pytest.approx(0.04)
+    after_close = s.extract_features("GOOD.US", date(2024, 5, 10), two_names).values
+    assert after_close["earnings_yield"] == pytest.approx((10 + 10 + 10 + 500) / 1000.0)
+    next_day = s.extract_features("GOOD.US", datetime(2024, 5, 11, 10, 0), two_names).values
+    assert next_day["earnings_yield"] == pytest.approx((10 + 10 + 10 + 500) / 1000.0)
+
+
 def test_intraday_as_of_prices_off_the_previous_completed_session(two_names):
     """Daily bars are stamped at midnight but close at the session end: at
     10:00 on 2024-03-01 that day's close is still in the future."""
