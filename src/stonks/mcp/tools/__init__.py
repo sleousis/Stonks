@@ -9,6 +9,7 @@ from stonks.mcp.tools import (
     halts,
     jobs,
     reads,
+    risk,
     studio,
     subscriptions,
     tca,
@@ -16,7 +17,7 @@ from stonks.mcp.tools import (
 )
 from stonks.mcp.tools.common import ToolContext
 
-MODULES = (reads, jobs, guarded, studio, connections, halts, universes, tca, subscriptions)
+MODULES = (reads, jobs, guarded, studio, connections, halts, universes, tca, subscriptions, risk)
 
 
 def register_all(t: ToolContext) -> None:

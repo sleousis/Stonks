@@ -57,11 +57,13 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_ticks`](#list_ticks) | read | no |
 | [`list_trading_modes`](#list_trading_modes) | read | no |
 | [`list_universes`](#list_universes) | read | no |
+| [`live_risk`](#live_risk) | read | no |
 | [`order_tca`](#order_tca) | read | no |
 | [`promote_strategy`](#promote_strategy) | guarded | yes |
 | [`refresh_universe`](#refresh_universe) | guarded | yes |
 | [`register_draft`](#register_draft) | guarded | yes |
 | [`retire_strategy`](#retire_strategy) | guarded | yes |
+| [`risk_snapshots`](#risk_snapshots) | read | no |
 | [`run_backtest`](#run_backtest) | job | no |
 | [`run_ingest`](#run_ingest) | job | no |
 | [`run_lab`](#run_lab) | guarded | yes |
@@ -521,6 +523,21 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
 
+### `live_risk`
+
+One of your portfolios on its latest tick day: one-day 95% and
+99% VaR and expected shortfall (fractions of value, loss positive),
+the rolling VaR violation ratio (1.0 is right, outside 0.5 to 1.5
+means the risk model is off) with its Kupiec p-value, and per
+strategy sleeve the same plus the alpha-decay check against the
+backtest's IR.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string \| null | no | `null` |  |
+
 ### `order_tca`
 
 One of your orders in full: decision price and context, arrival
@@ -531,6 +548,21 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `client_id` | string | yes |  |  |
+
+### `risk_snapshots`
+
+Daily risk snapshots of one of your portfolios, newest first:
+VaR, ES, the day's hypothetical return, violations and decay.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string \| null | no | `null` |  |
+| `strategy_id` | string \| null | no | `null` | one strategy's sleeve; default the whole portfolio |
+| `since` | string \| null | no | `null` | YYYY-MM-DD |
+| `limit` | integer | no | `50` |  |
+| `offset` | integer | no | `0` |  |
 
 ### `search_instruments`
 

@@ -126,6 +126,8 @@ READ_TOOLS = {
     "list_portfolios",
     "list_trading_modes",
     "list_subscriptions",
+    "live_risk",
+    "risk_snapshots",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {

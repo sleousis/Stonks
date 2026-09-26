@@ -935,7 +935,7 @@ export type DraftLabRunRequest = {
     /**
      * Survival Tests
      */
-    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'runs_test' | 'signal_ic' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
+    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'pool_correlation' | 'runs_test' | 'signal_ic' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
     /**
      * Test Options
      */
@@ -2115,7 +2115,7 @@ export type LabRunRequest = {
     /**
      * Survival Tests
      */
-    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'runs_test' | 'signal_ic' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
+    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'pool_correlation' | 'runs_test' | 'signal_ic' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
     /**
      * Test Options
      */
@@ -2716,6 +2716,28 @@ export type PageOrderView = {
      * Items
      */
     items: Array<OrderView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[RiskSnapshotView]
+ */
+export type PageRiskSnapshotView = {
+    /**
+     * Items
+     */
+    items: Array<RiskSnapshotView>;
     /**
      * Limit
      */
@@ -3700,6 +3722,156 @@ export type RiskPolicy = {
      */
     min_order_notional?: number;
     rules?: RuleSettings;
+};
+
+/**
+ * RiskSnapshotView
+ *
+ * One book on one day. Figures are fractions of ``value``; a loss is
+ * positive. ``strategy_id`` is null for the whole portfolio.
+ */
+export type RiskSnapshotView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Decay Days
+     */
+    decay_days: number | null;
+    /**
+     * Decay Reason
+     */
+    decay_reason: string | null;
+    /**
+     * Decayed
+     */
+    decayed: boolean;
+    /**
+     * Es 95
+     */
+    es_95: number | null;
+    /**
+     * Es 99
+     */
+    es_99: number | null;
+    /**
+     * Expected Ir
+     */
+    expected_ir: number | null;
+    /**
+     * Exposures
+     */
+    exposures: {
+        [key: string]: number;
+    };
+    /**
+     * Ir Long
+     */
+    ir_long: number | null;
+    /**
+     * Ir Short
+     */
+    ir_short: number | null;
+    /**
+     * Kupiec P 95
+     */
+    kupiec_p_95: number | null;
+    /**
+     * Kupiec P 99
+     */
+    kupiec_p_99: number | null;
+    /**
+     * Observations
+     */
+    observations: number;
+    /**
+     * Pnl
+     */
+    pnl: number | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Ratio Out Of Band
+     */
+    ratio_out_of_band: boolean;
+    /**
+     * Realized Return
+     */
+    realized_return: number | null;
+    /**
+     * Sigma
+     */
+    sigma: number | null;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string | null;
+    /**
+     * Tick Id
+     */
+    tick_id: string | null;
+    /**
+     * Value
+     */
+    value: number;
+    /**
+     * Var 95
+     */
+    var_95: number | null;
+    /**
+     * Var 99
+     */
+    var_99: number | null;
+    /**
+     * Violation 95
+     */
+    violation_95: boolean | null;
+    /**
+     * Violation 99
+     */
+    violation_99: boolean | null;
+    /**
+     * Violation Ratio 95
+     */
+    violation_ratio_95: number | null;
+    /**
+     * Violation Ratio 99
+     */
+    violation_ratio_99: number | null;
+    /**
+     * Violations 95
+     */
+    violations_95: number;
+    /**
+     * Violations 99
+     */
+    violations_99: number;
+    /**
+     * Window Days
+     */
+    window_days: number;
+};
+
+/**
+ * RiskSummaryView
+ */
+export type RiskSummaryView = {
+    /**
+     * As Of
+     */
+    as_of: string | null;
+    portfolio: RiskSnapshotView | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Strategies
+     */
+    strategies: Array<RiskSnapshotView>;
 };
 
 /**
@@ -4907,7 +5079,7 @@ export type SweepRequest = {
     /**
      * Survival Tests
      */
-    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'runs_test' | 'signal_ic' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
+    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'pool_correlation' | 'runs_test' | 'signal_ic' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
     /**
      * Test Options
      */
@@ -10178,6 +10350,54 @@ export type GetVapidKeyResponses = {
 
 export type GetVapidKeyResponse = GetVapidKeyResponses[keyof GetVapidKeyResponses];
 
+export type GetLiveRiskData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/risk/live';
+};
+
+export type GetLiveRiskErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetLiveRiskError = GetLiveRiskErrors[keyof GetLiveRiskErrors];
+
+export type GetLiveRiskResponses = {
+    /**
+     * Successful Response
+     */
+    200: RiskSummaryView;
+};
+
+export type GetLiveRiskResponse = GetLiveRiskResponses[keyof GetLiveRiskResponses];
+
 export type GetRiskPolicyData = {
     body?: never;
     path?: never;
@@ -10218,6 +10438,76 @@ export type GetRiskPolicyResponses = {
 };
 
 export type GetRiskPolicyResponse = GetRiskPolicyResponses[keyof GetRiskPolicyResponses];
+
+export type ListRiskSnapshotsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Strategy Id
+         *
+         * one strategy's sleeve; default the whole portfolio
+         */
+        strategy_id?: string | null;
+        /**
+         * Since
+         *
+         * days on or after this one
+         */
+        since?: string | null;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/risk/snapshots';
+};
+
+export type ListRiskSnapshotsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListRiskSnapshotsError = ListRiskSnapshotsErrors[keyof ListRiskSnapshotsErrors];
+
+export type ListRiskSnapshotsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageRiskSnapshotView;
+};
+
+export type ListRiskSnapshotsResponse = ListRiskSnapshotsResponses[keyof ListRiskSnapshotsResponses];
 
 export type GetScheduleData = {
     body?: never;

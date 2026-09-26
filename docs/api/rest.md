@@ -198,7 +198,9 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
+| GET | `/api/risk/live` | Get Live Risk | sign-in |  | [RiskSummaryView](#risksummaryview) |
 | GET | `/api/risk/policy` | Get Risk Policy | sign-in |  | [RiskPolicy](#riskpolicy) |
+| GET | `/api/risk/snapshots` | List Risk Snapshots | sign-in |  | [Page_RiskSnapshotView_](#page_risksnapshotview_) |
 
 ## schedule endpoints
 
@@ -648,7 +650,7 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
 | `strict_preflight` | boolean \| null | no |  |
-| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "signal_ic" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
+| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" | no |  |
@@ -1080,7 +1082,7 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `start` | date | yes |  |
 | `strategy` | [StrategyRef](#strategyref) | yes |  |
 | `strict_preflight` | boolean \| null | no |  |
-| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "signal_ic" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
+| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" | no |  |
@@ -1330,6 +1332,15 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[OrderView](#orderview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_RiskSnapshotView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[RiskSnapshotView](#risksnapshotview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
@@ -1716,6 +1727,52 @@ Portfolio construction limits applied between ``strategy.decide`` and the broker
 | `max_weight_per_ticker` | number | no |  |
 | `min_order_notional` | number | no |  |
 | `rules` | [RuleSettings](#rulesettings) | no |  |
+
+### RiskSnapshotView
+
+One book on one day. Figures are fractions of ``value``; a loss is positive. ``strategy_id`` is null for the whole portfolio.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `decay_days` | integer \| null | yes |  |
+| `decay_reason` | string \| null | yes |  |
+| `decayed` | boolean | yes |  |
+| `es_95` | number \| null | yes |  |
+| `es_99` | number \| null | yes |  |
+| `expected_ir` | number \| null | yes |  |
+| `exposures` | dict[str, number] | yes |  |
+| `ir_long` | number \| null | yes |  |
+| `ir_short` | number \| null | yes |  |
+| `kupiec_p_95` | number \| null | yes |  |
+| `kupiec_p_99` | number \| null | yes |  |
+| `observations` | integer | yes |  |
+| `pnl` | number \| null | yes |  |
+| `portfolio_id` | string | yes |  |
+| `ratio_out_of_band` | boolean | yes |  |
+| `realized_return` | number \| null | yes |  |
+| `sigma` | number \| null | yes |  |
+| `strategy_id` | string \| null | yes |  |
+| `tick_id` | string \| null | yes |  |
+| `value` | number | yes |  |
+| `var_95` | number \| null | yes |  |
+| `var_99` | number \| null | yes |  |
+| `violation_95` | boolean \| null | yes |  |
+| `violation_99` | boolean \| null | yes |  |
+| `violation_ratio_95` | number \| null | yes |  |
+| `violation_ratio_99` | number \| null | yes |  |
+| `violations_95` | integer | yes |  |
+| `violations_99` | integer | yes |  |
+| `window_days` | integer | yes |  |
+
+### RiskSummaryView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date \| null | yes |  |
+| `portfolio` | [RiskSnapshotView](#risksnapshotview) \| null | yes |  |
+| `portfolio_id` | string | yes |  |
+| `strategies` | list[[RiskSnapshotView](#risksnapshotview)] | yes |  |
 
 ### Role
 
@@ -2165,7 +2222,7 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 | `start` | date | yes |  |
 | `strategies` | list[string] \| null | no |  |
 | `strict_preflight` | boolean \| null | no |  |
-| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "signal_ic" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
+| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" | no |  |
