@@ -275,10 +275,12 @@ def test_a_constant_cross_section_under_zscore_is_equal_conviction() -> None:
     assert out["s"] == pytest.approx(dict.fromkeys("ABCD", 1.0))
 
 
-def test_vol_target_ignores_names_with_a_clipped_zero_forecast() -> None:
-    """RS-22: iw = 1/N counts only names with a positive forecast."""
+def test_vol_target_keeps_the_slice_of_a_zero_forecast_name() -> None:
+    """RS-22 checked: Carver's instrument weights are a fixed allocation over
+    the instrument set, so a name at forecast 0 holds nothing but still
+    counts in iw = 1/N (the book targets tau when forecasts average 10)."""
     c = get_constructor("vol_target", tau=0.2, idm=1.0)
     book = c.target_weights(_inp({"s": {"A": 10.0, "B": 0.0}}, vols={"A": 0.2, "B": 0.2}))
     alone = c.target_weights(_inp({"s": {"A": 10.0}}, vols={"A": 0.2}))
     assert book.weights.get("B", 0.0) == 0.0
-    assert book.weights["A"] == pytest.approx(alone.weights["A"])
+    assert book.weights["A"] == pytest.approx(alone.weights["A"] / 2)

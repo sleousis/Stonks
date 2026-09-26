@@ -190,9 +190,11 @@ class VolTarget(PortfolioConstructor):
       without enough history).
     - ``w_i = tau * IDM * iw_i * F_i / 10 / sigma_i``. With
       ``instrument_weight="equal"`` (default) ``iw_i = 1/N`` over the N
-      tradable names with a non-zero forecast (positive in long-only mode)
-      and a volatility, so the book targets
-      ``tau`` when forecasts average 10 (Carver ch. 11); ``"unit"`` sets
+      tradable names with a forecast and a volatility, so the book targets
+      ``tau`` when forecasts average 10 (Carver ch. 11). A name whose
+      forecast is 0 holds nothing but keeps its slice: instrument weights
+      are a fixed allocation over the instrument set, not over today's
+      longs; ``"unit"`` sets
       ``iw_i = 1`` (every name sized for ``tau`` on its own).
     - ``idm="auto"`` estimates it from ``returns_history`` with the same
       weights; otherwise the given value.
@@ -207,12 +209,7 @@ class VolTarget(PortfolioConstructor):
         strategy_weights = inp.normalized_strategy_weights()
         fdm = diversification_multiplier(inp.forecast_history, strategy_weights)
         combined, attribution = combine_signals(inp)
-        # A forecast clipped to 0 holds nothing, so it must not dilute iw (RS-22).
-        eligible = [
-            t
-            for t, f in combined.items()
-            if (f > 0 if s.long_only else f != 0) and inp.tradable(t) and inp.vol(t) is not None
-        ]
+        eligible = [t for t in combined if inp.tradable(t) and inp.vol(t) is not None]
         if not eligible:
             return self.finalize({}, meta={"fdm": fdm, "idm": 1.0})
         iw = 1.0 / len(eligible) if s.instrument_weight == "equal" else 1.0

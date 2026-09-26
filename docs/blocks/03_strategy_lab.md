@@ -167,7 +167,7 @@ Before tuning, the runner checks the data (`lab/preflight.py`). An empty univers
 - When a construction method is configured, the engine runs the same construction pipeline as the tick (`portfolio/pipeline.py`). Its daily history is rebased to the raw close of each decision's last bar, so a split after the decision never changes risk sizing. Risk rules see each position's entry date, and a rule's date-keyed client id gets the bar time added.
 - `BacktestReport` carries the trade ledger, Sharpe, Sortino, Calmar, drawdown and its duration, Ulcer index, VaR, ES, skew, kurtosis, turnover and costs, plus benchmark alpha and beta. The ledger pools lots per ticker: a sell closes its own strategy's lots first, then any other lot, so an owner change or a risk-rule exit never leaves a lot open.
 - Intraday Sharpe counts whole bars per session: a 6.5 hour session has 7 hourly bars and 2 four-hour bars.
-- `equal_weight_top_n` and `inverse_vol` rank their signals, so every positive pick can be held. `vol_target` sizes only names with a positive forecast.
+- `equal_weight_top_n` and `inverse_vol` rank their signals, so every positive pick can be held. In `vol_target` a name at forecast 0 keeps its instrument weight slice (Carver).
 
 ## Signal research
 
