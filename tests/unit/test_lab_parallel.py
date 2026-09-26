@@ -55,6 +55,21 @@ def test_parallel_run_matches_serial_and_runs_in_workers():
     assert os.getpid() not in {pid for _, pid in parallel}
 
 
+def _blas_env(state, task):
+    return {v: os.environ.get(v) for v in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS")}
+
+
+def test_workers_use_single_threaded_blas_and_the_parent_env_is_restored(monkeypatch):
+    # N workers x N BLAS threads oversubscribes the CPU, and OpenBLAS commits
+    # buffers per thread (~0.8 GB per process on a 32-core machine)
+    monkeypatch.delenv("OPENBLAS_NUM_THREADS", raising=False)
+    monkeypatch.setenv("OMP_NUM_THREADS", "4")  # an explicit user choice wins
+    out = run_tasks(_blas_env, [1, 2], max_workers=2)
+    assert out == [{"OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "4"}] * 2
+    assert "OPENBLAS_NUM_THREADS" not in os.environ
+    assert os.environ["OMP_NUM_THREADS"] == "4"
+
+
 def test_worker_errors_propagate():
     with pytest.raises(RuntimeError, match="failed"):
         run_tasks(_boom, [1, 2], max_workers=2)

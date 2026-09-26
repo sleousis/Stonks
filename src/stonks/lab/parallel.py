@@ -28,6 +28,12 @@ in the worker.
 ``max_workers=None`` means :func:`default_max_workers`: the
 ``STONKS_LAB_MAX_WORKERS`` environment variable when set, else
 ``os.cpu_count()``.
+
+Workers start with single-threaded BLAS/OpenMP (``OPENBLAS_NUM_THREADS``
+etc. set to 1 unless the user set them): the pool is the parallelism, N
+workers x N BLAS threads would oversubscribe the CPU, and OpenBLAS commits
+per-thread buffers at import (~0.8 GB per process on a 32-core machine,
+enough to exhaust the commit limit with 32 workers).
 """
 
 from __future__ import annotations
@@ -36,8 +42,9 @@ import multiprocessing
 import os
 import shutil
 import tempfile
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ProcessPoolExecutor
+from contextlib import contextmanager
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -49,6 +56,9 @@ from stonks.lab.lake_copy import copy_universe_lake
 from stonks.store.lake import DuckDBLake
 
 MAX_WORKERS_ENV = "STONKS_LAB_MAX_WORKERS"
+
+#: Thread-count variables pinned to 1 in workers (unless already set).
+_THREAD_ENV = ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS")
 
 # Per-worker state set by ``_init_worker`` (one value per worker process).
 _WORKER_STATE: Any = None
@@ -88,13 +98,31 @@ def run_tasks[T, R](
     if workers <= 1:
         state = setup(payload) if setup is not None else payload
         return [task_fn(state, task) for task in tasks]
-    with ProcessPoolExecutor(
-        max_workers=workers,
-        mp_context=multiprocessing.get_context("spawn"),
-        initializer=_init_worker,
-        initargs=(setup, payload),
-    ) as pool:
+    with (
+        _single_threaded_children(),
+        ProcessPoolExecutor(
+            max_workers=workers,
+            mp_context=multiprocessing.get_context("spawn"),
+            initializer=_init_worker,
+            initargs=(setup, payload),
+        ) as pool,
+    ):
         return list(pool.map(partial(_call, task_fn), tasks))
+
+
+@contextmanager
+def _single_threaded_children() -> Iterator[None]:
+    """Set the unset ``_THREAD_ENV`` variables to 1 while the pool spawns
+    its workers (children inherit the environment; numpy reads it at
+    import), then restore the parent's environment."""
+    added = [v for v in _THREAD_ENV if v not in os.environ]
+    for var in added:
+        os.environ[var] = "1"
+    try:
+        yield
+    finally:
+        for var in added:
+            os.environ.pop(var, None)
 
 
 def _init_worker(setup: Callable[[Any], Any] | None, payload: Any) -> None:
