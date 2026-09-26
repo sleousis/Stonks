@@ -20,11 +20,13 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from stonks.api.deps import (
+    CSRF_HEADER,
     MetricsAccessConfig,
     authorize,
     authorize_metrics,
     authorize_stream,
     require_token,
+    route_permissions,
 )
 from stonks.api.errors import PROBLEM_MEDIA_TYPE, install_error_handlers
 from stonks.api.routers import (
@@ -107,12 +109,15 @@ def create_app(
     # Middleware: last added runs first. Host check first (DNS-rebinding
     # guard for the open-on-loopback reads), then CORS, then logging.
     app.add_middleware(_RequestLogMiddleware)
+    # Only the Angular dev server's origin ([api].ui_origin) may call the
+    # API cross-origin, with the session cookie and its CSRF header. The
+    # built console is same-origin and needs no CORS at all.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[cfg.ui_origin],
-        allow_credentials=False,
+        allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "Last-Event-ID"],
+        allow_headers=["Authorization", "Content-Type", "Last-Event-ID", CSRF_HEADER],
     )
     allowed = [*_LOOPBACK_HOSTS, cfg.host, *cfg.allowed_hosts]
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=sorted(set(allowed)))
@@ -146,6 +151,12 @@ def _install_openapi_postprocessing(app: FastAPI) -> None:
                             "contentMediaType": "application/json",
                             "contentSchema": {"$ref": "#/components/schemas/JobEvent"},
                         }
+        # The permission each route checks (design section 8), for clients
+        # and reviewers: ``x-permission: strategy.promote``.
+        for method, path, permission in route_permissions(app.routes):
+            op = spec.get("paths", {}).get(path, {}).get(method.lower())
+            if op is not None:
+                op["x-permission"] = permission.value
         app.openapi_schema = spec
         return spec
 

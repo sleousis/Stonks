@@ -30,6 +30,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from stonks.accounts import DEFAULT_OWNER_ID, AuditLog, NotFound, Role, User, UserRepository
+from stonks.accounts.users import normalize_email
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
 from stonks.auth.credentials import (
     hash_secret,
@@ -217,13 +218,24 @@ class AuthService:
     def _check_limit(self, state: SqliteState, email: str, ip: str | None) -> None:
         now = self._now()
         since = _iso(now - timedelta(minutes=self.settings.failure_window_minutes))
+        # Per account, two counters. Password failures reset on any success.
+        # Second-factor failures reset only on a second-factor success, so a
+        # stolen password can't buy fresh code guesses by logging in again.
         checks = [
             (
                 "SELECT created_at FROM login_attempts WHERE email = ? AND success = 0"
-                " AND created_at > ? AND id > COALESCE((SELECT MAX(id) FROM login_attempts"
-                " WHERE email = ? AND success = 1), 0) ORDER BY id",
+                " AND stage = 'password' AND created_at > ? AND id > COALESCE("
+                "(SELECT MAX(id) FROM login_attempts WHERE email = ? AND success = 1), 0)"
+                " ORDER BY id",
                 [email, since, email],
-            )
+            ),
+            (
+                "SELECT created_at FROM login_attempts WHERE email = ? AND success = 0"
+                " AND stage = 'mfa' AND created_at > ? AND id > COALESCE("
+                "(SELECT MAX(id) FROM login_attempts WHERE email = ? AND success = 1"
+                " AND stage = 'mfa'), 0) ORDER BY id",
+                [email, since, email],
+            ),
         ]
         if ip:
             checks.append(
@@ -421,7 +433,7 @@ class AuthService:
     def login(
         self, email: str, password: str, *, ip: str | None = None, user_agent: str | None = None
     ) -> LoginResult:
-        key = (email or "").strip().lower()
+        key = normalize_email(email or "")
         with self._state() as state:
             self._check_limit(state, key, ip)
             try:
@@ -672,6 +684,12 @@ class AuthService:
 
     # ---- the signed-in user ----------------------------------------------------
 
+    def is_active_user(self, user_id: str) -> bool:
+        """True while ``user_id`` exists and is not disabled (stream tokens)."""
+        with self._state() as state:
+            rows = state.sql("SELECT status FROM users WHERE id = ?", [user_id])
+        return bool(rows) and rows[0]["status"] == "active"
+
     def me(self, principal: Principal) -> UserAuthInfo:
         with self._state() as state:
             user = UserRepository(state).get(principal.user_id)
@@ -811,6 +829,9 @@ class AuthService:
         ip: str | None = None,
     ) -> UserAuthInfo:
         require(principal, Permission.USERS_MANAGE)
+        email = normalize_email(email or "")
+        if "@" not in email:
+            raise ValidationError("a valid email is required")
         password_hash = self._hash(password)
         with self._state() as state, state.transaction():
             repo = UserRepository(state)
@@ -928,7 +949,7 @@ class AuthService:
         the first login works. Refused once it already has a password (use
         :meth:`set_password_by_email` to reset)."""
         new_hash = self._hash(password)
-        email = (email or "").strip()
+        email = normalize_email(email or "")
         if "@" not in email:
             raise ValidationError("a valid email is required")
         with self._state() as state, state.transaction():

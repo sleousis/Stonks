@@ -12,9 +12,10 @@ flowchart LR
   S --> T[("state.sqlite<br/>strategies, orders, ticks")]
 ```
 
-Auth: reads (`GET`) are open to loopback clients by default
-(`[api].open_reads_on_loopback`). Every other method needs
-`Authorization: Bearer $STONKS_API_TOKEN`.
+Auth: every route except health and sign-in needs a credential: the browser
+session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...`.
+The Auth column names the permission a route checks (see `docs/security.md`).
+"sign-in" means any signed-in user.
 
 Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [connections](#connections-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints)
 
@@ -22,76 +23,76 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/alerts` | List Alerts | token, or open on loopback |  | [Page_AlertView_](#page_alertview_) |
+| GET | `/api/alerts` | List Alerts | sign-in |  | [Page_AlertView_](#page_alertview_) |
 
 ## auth endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/auth/check` | Check Auth | token, or open on loopback |  | [AuthCheck](#authcheck) |
+| GET | `/api/auth/check` | Check Auth | sign-in |  | [AuthCheck](#authcheck) |
 | POST | `/api/auth/login` | Login | none | [LoginRequest](#loginrequest) | [LoginView](#loginview) |
 | POST | `/api/auth/logout` | Logout | none |  |  |
-| GET | `/api/auth/me` | Me | token, or open on loopback |  | [MeView](#meview) |
+| GET | `/api/auth/me` | Me | sign-in |  | [MeView](#meview) |
 | POST | `/api/auth/mfa/enrol` | Start Enrolment | none |  | [EnrolStartView](#enrolstartview) |
 | POST | `/api/auth/mfa/enrol/confirm` | Confirm Enrolment | none | [MfaCodeRequest](#mfacoderequest) | [MfaView](#mfaview) |
 | POST | `/api/auth/mfa/verify` | Verify Mfa | none | [MfaCodeRequest](#mfacoderequest) | [MfaView](#mfaview) |
-| POST | `/api/auth/password` | Change Password | bearer token | [PasswordChangeRequest](#passwordchangerequest) |  |
-| POST | `/api/auth/recovery-codes` | Regenerate Recovery Codes | bearer token |  | [RecoveryCodesView](#recoverycodesview) |
-| GET | `/api/auth/tokens` | List Tokens | token, or open on loopback |  | list[[TokenView](#tokenview)] |
-| POST | `/api/auth/tokens` | Create Token | bearer token | [TokenCreateRequest](#tokencreaterequest) | [TokenCreatedView](#tokencreatedview) |
-| DELETE | `/api/auth/tokens/{token_id}` | Revoke Token | bearer token |  |  |
-| GET | `/api/auth/users` | List Users | token, or open on loopback |  | list[[UserView](#userview)] |
-| POST | `/api/auth/users` | Create User | bearer token | [UserCreateRequest](#usercreaterequest) | [UserView](#userview) |
-| PATCH | `/api/auth/users/{user_id}` | Update User | bearer token | [UserUpdateRequest](#userupdaterequest) | [UserView](#userview) |
-| DELETE | `/api/auth/users/{user_id}/mfa` | Reset User Mfa | bearer token |  |  |
-| POST | `/api/auth/users/{user_id}/password` | Reset User Password | bearer token | [PasswordResetRequest](#passwordresetrequest) |  |
+| POST | `/api/auth/password` | Change Password | `password.change` | [PasswordChangeRequest](#passwordchangerequest) |  |
+| POST | `/api/auth/recovery-codes` | Regenerate Recovery Codes | `mfa.recovery_codes` |  | [RecoveryCodesView](#recoverycodesview) |
+| GET | `/api/auth/tokens` | List Tokens | sign-in |  | list[[TokenView](#tokenview)] |
+| POST | `/api/auth/tokens` | Create Token | `tokens.manage` | [TokenCreateRequest](#tokencreaterequest) | [TokenCreatedView](#tokencreatedview) |
+| DELETE | `/api/auth/tokens/{token_id}` | Revoke Token | `tokens.revoke` |  |  |
+| GET | `/api/auth/users` | List Users | `users.read` |  | list[[UserView](#userview)] |
+| POST | `/api/auth/users` | Create User | `users.manage` | [UserCreateRequest](#usercreaterequest) | [UserView](#userview) |
+| PATCH | `/api/auth/users/{user_id}` | Update User | `users.manage` | [UserUpdateRequest](#userupdaterequest) | [UserView](#userview) |
+| DELETE | `/api/auth/users/{user_id}/mfa` | Reset User Mfa | `users.manage` |  |  |
+| POST | `/api/auth/users/{user_id}/password` | Reset User Password | `users.manage` | [PasswordResetRequest](#passwordresetrequest) |  |
 
 ## backups endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| POST | `/api/backups` | Start Backup | bearer token |  | [Job](#job) |
-| GET | `/api/backups/jobs/{job_id}/result` | Get Backup Result | token, or open on loopback |  | [BackupResultView](#backupresultview) |
+| POST | `/api/backups` | Start Backup | `risk.global` |  | [Job](#job) |
+| GET | `/api/backups/jobs/{job_id}/result` | Get Backup Result | `risk.global` |  | [BackupResultView](#backupresultview) |
 
 ## brokers endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/brokers` | Get Broker Info | token, or open on loopback |  | [BrokerInfo](#brokerinfo) |
-| GET | `/api/brokers/alpaca/status` | Get Alpaca Status | token, or open on loopback |  | [AlpacaStatus](#alpacastatus) |
+| GET | `/api/brokers` | Get Broker Info | sign-in |  | [BrokerInfo](#brokerinfo) |
+| GET | `/api/brokers/alpaca/status` | Get Alpaca Status | sign-in |  | [AlpacaStatus](#alpacastatus) |
 
 ## catalog endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/catalog/asset-classes` | List Asset Classes | token, or open on loopback |  | list[string] |
-| GET | `/api/catalog/intervals` | List Intervals | token, or open on loopback |  | list[[IntervalInfo](#intervalinfo)] |
-| GET | `/api/catalog/strategies` | List Strategy Classes | token, or open on loopback |  | list[[StrategyClassInfo](#strategyclassinfo)] |
+| GET | `/api/catalog/asset-classes` | List Asset Classes | sign-in |  | list[string] |
+| GET | `/api/catalog/intervals` | List Intervals | sign-in |  | list[[IntervalInfo](#intervalinfo)] |
+| GET | `/api/catalog/strategies` | List Strategy Classes | sign-in |  | list[[StrategyClassInfo](#strategyclassinfo)] |
 
 ## connections endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/connections` | List Connections | token, or open on loopback |  | list[[ConnectionView](#connectionview)] |
-| GET | `/api/connections/callback` | Complete Portal | token, or open on loopback |  | [ConnectionView](#connectionview) |
-| POST | `/api/connections/keys` | Connect With Keys | bearer token | [ConnectWithKeysRequest](#connectwithkeysrequest) | [ConnectionView](#connectionview) |
-| POST | `/api/connections/portal` | Start Portal | bearer token | [StartPortalRequest](#startportalrequest) | [PortalLinkView](#portallinkview) |
-| GET | `/api/connections/providers` | List Providers | token, or open on loopback |  | list[[ProviderView](#providerview)] |
-| GET | `/api/connections/{connection_id}` | Get Connection | token, or open on loopback |  | [ConnectionView](#connectionview) |
-| DELETE | `/api/connections/{connection_id}` | Delete Connection | bearer token |  | [DisconnectView](#disconnectview) |
-| GET | `/api/connections/{connection_id}/accounts` | List Accounts | token, or open on loopback |  | list[[stonks__app__connections__BrokerAccountView](#stonks__app__connections__brokeraccountview)] |
-| POST | `/api/connections/{connection_id}/link` | Link Account | bearer token | [LinkAccountRequest](#linkaccountrequest) | [LinkResultView](#linkresultview) |
-| POST | `/api/connections/{connection_id}/sync` | Sync Connection | bearer token |  | [SyncResultView](#syncresultview) |
+| GET | `/api/connections` | List Connections | sign-in |  | list[[ConnectionView](#connectionview)] |
+| GET | `/api/connections/callback` | Complete Portal | sign-in |  | [ConnectionView](#connectionview) |
+| POST | `/api/connections/keys` | Connect With Keys | `connection.manage` | [ConnectWithKeysRequest](#connectwithkeysrequest) | [ConnectionView](#connectionview) |
+| POST | `/api/connections/portal` | Start Portal | `connection.manage` | [StartPortalRequest](#startportalrequest) | [PortalLinkView](#portallinkview) |
+| GET | `/api/connections/providers` | List Providers | sign-in |  | list[[ProviderView](#providerview)] |
+| GET | `/api/connections/{connection_id}` | Get Connection | sign-in |  | [ConnectionView](#connectionview) |
+| DELETE | `/api/connections/{connection_id}` | Delete Connection | `connection.manage` |  | [DisconnectView](#disconnectview) |
+| GET | `/api/connections/{connection_id}/accounts` | List Accounts | sign-in |  | list[[stonks__app__connections__BrokerAccountView](#stonks__app__connections__brokeraccountview)] |
+| POST | `/api/connections/{connection_id}/link` | Link Account | `portfolio.manage` | [LinkAccountRequest](#linkaccountrequest) | [LinkResultView](#linkresultview) |
+| POST | `/api/connections/{connection_id}/sync` | Sync Connection | `portfolio.manage` |  | [SyncResultView](#syncresultview) |
 
 ## halts endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/halts` | List Halts | token, or open on loopback |  | list[[HaltView](#haltview)] |
-| POST | `/api/halts/kill` | Engage Kill Switch | bearer token | [KillSwitchRequest](#killswitchrequest) | [HaltView](#haltview) |
-| GET | `/api/halts/{halt_id}` | Get Halt | token, or open on loopback |  | [HaltView](#haltview) |
-| POST | `/api/halts/{halt_id}/clear` | Clear Halt | bearer token | [ClearHaltRequest](#clearhaltrequest) | [HaltView](#haltview) |
-| POST | `/api/halts/{halt_id}/resume` | Resume Kill Switch | bearer token | [ResumeRequest](#resumerequest) | [HaltView](#haltview) |
+| GET | `/api/halts` | List Halts | sign-in |  | list[[HaltView](#haltview)] |
+| POST | `/api/halts/kill` | Engage Kill Switch | `killswitch.user` | [KillSwitchRequest](#killswitchrequest) | [HaltView](#haltview) |
+| GET | `/api/halts/{halt_id}` | Get Halt | sign-in |  | [HaltView](#haltview) |
+| POST | `/api/halts/{halt_id}/clear` | Clear Halt | `risk.reset` | [ClearHaltRequest](#clearhaltrequest) | [HaltView](#haltview) |
+| POST | `/api/halts/{halt_id}/resume` | Resume Kill Switch | `killswitch.resume` | [ResumeRequest](#resumerequest) | [HaltView](#haltview) |
 
 ## health endpoints
 
@@ -100,175 +101,176 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | GET | `/api/health` | Liveness probe | none |  | [Health](#health) |
 | GET | `/api/health/live` | Liveness probe (process and hosted scheduler) | none |  | [ProbeView](#probeview) |
 | GET | `/api/health/ready` | Readiness probe (state migrated, lake present) | none |  | [ProbeView](#probeview) |
-| GET | `/api/health/report` | Health Report | token, or open on loopback |  | [HealthReportView](#healthreportview) |
+| GET | `/api/health/report` | Health Report | sign-in |  | [HealthReportView](#healthreportview) |
 
 ## ingest endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/ingest/jobs/{job_id}/result` | Get Ingest Result | token, or open on loopback |  | [IngestResultView](#ingestresultview) |
-| GET | `/api/ingest/runs` | List Runs | token, or open on loopback |  | [Page_IngestRunView_](#page_ingestrunview_) |
-| POST | `/api/ingest/runs` | Start Ingest | bearer token | [IngestRequest](#ingestrequest) | [Job](#job) |
+| GET | `/api/ingest/jobs/{job_id}/result` | Get Ingest Result | sign-in |  | [IngestResultView](#ingestresultview) |
+| GET | `/api/ingest/runs` | List Runs | sign-in |  | [Page_IngestRunView_](#page_ingestrunview_) |
+| POST | `/api/ingest/runs` | Start Ingest | `operations.run` | [IngestRequest](#ingestrequest) | [Job](#job) |
 
 ## jobs endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/jobs` | List Jobs | token, or open on loopback |  | [Page_Job_](#page_job_) |
-| GET | `/api/jobs/{job_id}` | Get Job | token, or open on loopback |  | [Job](#job) |
-| POST | `/api/jobs/{job_id}/cancel` | Cancel Job | bearer token |  | [Job](#job) |
-| GET | `/api/jobs/{job_id}/events` | Stream Job Events | token, or open on loopback |  | SSE of [JobEvent](#jobevent) |
-| POST | `/api/jobs/{job_id}/stream-token` | Create Stream Token | bearer token |  | [StreamToken](#streamtoken) |
+| GET | `/api/jobs` | List Jobs | sign-in |  | [Page_Job_](#page_job_) |
+| GET | `/api/jobs/{job_id}` | Get Job | sign-in |  | [Job](#job) |
+| POST | `/api/jobs/{job_id}/cancel` | Cancel Job | `lab.run` |  | [Job](#job) |
+| GET | `/api/jobs/{job_id}/events` | Stream Job Events | sign-in |  | SSE of [JobEvent](#jobevent) |
+| POST | `/api/jobs/{job_id}/stream-token` | Create Stream Token | `data.read` |  | [StreamToken](#streamtoken) |
 
 ## lab endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| POST | `/api/lab/backtests` | Start Backtest | bearer token | [BacktestRequest](#backtestrequest) | [Job](#job) |
-| GET | `/api/lab/backtests/{job_id}/result` | Get Backtest Result | token, or open on loopback |  | [BacktestResult](#backtestresult) |
-| GET | `/api/lab/cost-models` | List Cost Models | token, or open on loopback |  | list[[CostModelPreset](#costmodelpreset)] |
-| POST | `/api/lab/runs` | Start Lab Run | bearer token | [LabRunRequest](#labrunrequest) | [Job](#job) |
-| GET | `/api/lab/runs/{job_id}/result` | Get Lab Run Result | token, or open on loopback |  | [LabRunView](#labrunview) |
-| POST | `/api/lab/signal-ic` | Start Signal Ic | bearer token | [SignalICRequest](#signalicrequest) | [Job](#job) |
-| GET | `/api/lab/signal-ic/{job_id}/result` | Get Signal Ic Result | token, or open on loopback |  | [SignalICView](#signalicview) |
+| POST | `/api/lab/backtests` | Start Backtest | `lab.run` | [BacktestRequest](#backtestrequest) | [Job](#job) |
+| GET | `/api/lab/backtests/{job_id}/result` | Get Backtest Result | sign-in |  | [BacktestResult](#backtestresult) |
+| GET | `/api/lab/cost-models` | List Cost Models | sign-in |  | list[[CostModelPreset](#costmodelpreset)] |
+| POST | `/api/lab/runs` | Start Lab Run | `lab.run` | [LabRunRequest](#labrunrequest) | [Job](#job) |
+| GET | `/api/lab/runs/{job_id}/result` | Get Lab Run Result | sign-in |  | [LabRunView](#labrunview) |
+| POST | `/api/lab/signal-ic` | Start Signal Ic | `lab.run` | [SignalICRequest](#signalicrequest) | [Job](#job) |
+| GET | `/api/lab/signal-ic/{job_id}/result` | Get Signal Ic Result | sign-in |  | [SignalICView](#signalicview) |
 
 ## market endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/market/bars` | Get Bars | token, or open on loopback |  | [BarSeries](#barseries) |
-| GET | `/api/market/coverage` | List Coverage | token, or open on loopback |  | [Page_CoverageRow_](#page_coveragerow_) |
-| GET | `/api/market/instruments` | List Instruments | token, or open on loopback |  | [Page_InstrumentView_](#page_instrumentview_) |
+| GET | `/api/market/bars` | Get Bars | sign-in |  | [BarSeries](#barseries) |
+| GET | `/api/market/coverage` | List Coverage | sign-in |  | [Page_CoverageRow_](#page_coveragerow_) |
+| GET | `/api/market/instruments` | List Instruments | sign-in |  | [Page_InstrumentView_](#page_instrumentview_) |
 
 ## notifications endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/notifications` | List Notifications | token, or open on loopback |  | [FeedView](#feedview) |
-| GET | `/api/notifications/preferences` | Get Preferences | token, or open on loopback |  | [PreferencesView](#preferencesview) |
-| PUT | `/api/notifications/preferences` | Update Preferences | bearer token | [PreferencesUpdate](#preferencesupdate) | [PreferencesView](#preferencesview) |
-| PUT | `/api/notifications/quiet-hours` | Set Quiet Hours | bearer token | [QuietHoursUpdate](#quiethoursupdate) | [PreferencesView](#preferencesview) |
-| POST | `/api/notifications/read` | Mark Read | bearer token | [MarkReadRequest](#markreadrequest) | [MarkReadView](#markreadview) |
-| PUT | `/api/notifications/webhook` | Set Webhook | bearer token | [WebhookUpdate](#webhookupdate) | [PreferencesView](#preferencesview) |
+| GET | `/api/notifications` | List Notifications | sign-in |  | [FeedView](#feedview) |
+| GET | `/api/notifications/preferences` | Get Preferences | sign-in |  | [PreferencesView](#preferencesview) |
+| PUT | `/api/notifications/preferences` | Update Preferences | `notifications.manage` | [PreferencesUpdate](#preferencesupdate) | [PreferencesView](#preferencesview) |
+| PUT | `/api/notifications/quiet-hours` | Set Quiet Hours | `notifications.manage` | [QuietHoursUpdate](#quiethoursupdate) | [PreferencesView](#preferencesview) |
+| POST | `/api/notifications/read` | Mark Read | `notifications.manage` | [MarkReadRequest](#markreadrequest) | [MarkReadView](#markreadview) |
+| PUT | `/api/notifications/webhook` | Set Webhook | `notifications.manage` | [WebhookUpdate](#webhookupdate) | [PreferencesView](#preferencesview) |
 
 ## orders endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/orders` | List Orders | token, or open on loopback |  | [Page_OrderView_](#page_orderview_) |
-| GET | `/api/orders/fills` | List Fills | token, or open on loopback |  | [Page_FillView_](#page_fillview_) |
+| GET | `/api/orders` | List Orders | sign-in |  | [Page_OrderView_](#page_orderview_) |
+| GET | `/api/orders/fills` | List Fills | sign-in |  | [Page_FillView_](#page_fillview_) |
 
 ## pnl endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/pnl` | Get Pnl | token, or open on loopback |  | [PnlSeries](#pnlseries) |
+| GET | `/api/pnl` | Get Pnl | sign-in |  | [PnlSeries](#pnlseries) |
 
 ## portfolio endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/portfolio` | Get Portfolio | token, or open on loopback |  | [PortfolioView](#portfolioview) |
-| GET | `/api/portfolio/snapshots` | List Snapshots | token, or open on loopback |  | [Page_SnapshotView_](#page_snapshotview_) |
+| GET | `/api/portfolio` | Get Portfolio | sign-in |  | [PortfolioView](#portfolioview) |
+| GET | `/api/portfolio/snapshots` | List Snapshots | sign-in |  | [Page_SnapshotView_](#page_snapshotview_) |
+| GET | `/api/portfolio/totals` | Get Totals | `portfolio.totals` |  | [PortfolioTotalsView](#portfoliototalsview) |
 
 ## push endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/push/subscriptions` | List Push Subscriptions | token, or open on loopback |  | list[[PushDeviceView](#pushdeviceview)] |
-| POST | `/api/push/subscriptions` | Create Push Subscription | bearer token | [PushSubscriptionRequest](#pushsubscriptionrequest) | [PushDeviceView](#pushdeviceview) |
-| DELETE | `/api/push/subscriptions` | Delete Push Subscription | bearer token | [PushUnsubscribeRequest](#pushunsubscriberequest) |  |
-| GET | `/api/push/vapid-key` | Vapid Key | token, or open on loopback |  | [VapidKeyView](#vapidkeyview) |
+| GET | `/api/push/subscriptions` | List Push Subscriptions | sign-in |  | list[[PushDeviceView](#pushdeviceview)] |
+| POST | `/api/push/subscriptions` | Create Push Subscription | `notifications.manage` | [PushSubscriptionRequest](#pushsubscriptionrequest) | [PushDeviceView](#pushdeviceview) |
+| DELETE | `/api/push/subscriptions` | Delete Push Subscription | `notifications.manage` | [PushUnsubscribeRequest](#pushunsubscriberequest) |  |
+| GET | `/api/push/vapid-key` | Vapid Key | sign-in |  | [VapidKeyView](#vapidkeyview) |
 
 ## risk endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/risk/policy` | Get Risk Policy | token, or open on loopback |  | [RiskPolicy](#riskpolicy) |
+| GET | `/api/risk/policy` | Get Risk Policy | sign-in |  | [RiskPolicy](#riskpolicy) |
 
 ## schedule endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/schedule` | Get Schedule | token, or open on loopback |  | [ScheduleView](#scheduleview) |
-| POST | `/api/schedule/{job}/run-now` | Run Now | bearer token | [RunNowRequest](#runnowrequest) | [RunNowView](#runnowview) |
+| GET | `/api/schedule` | Get Schedule | sign-in |  | [ScheduleView](#scheduleview) |
+| POST | `/api/schedule/{job}/run-now` | Run Now | `operations.run` | [RunNowRequest](#runnowrequest) | [RunNowView](#runnowview) |
 
 ## shadow endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/shadow/decisions` | List Shadow Decisions | token, or open on loopback |  | [Page_ShadowDecisionView_](#page_shadowdecisionview_) |
-| GET | `/api/shadow/pnl` | List Shadow Pnl | token, or open on loopback |  | [Page_ShadowPnlSummary_](#page_shadowpnlsummary_) |
-| GET | `/api/shadow/strategies/{strategy_id}/pnl` | Get Shadow Pnl | token, or open on loopback |  | [PnlSeries](#pnlseries) |
+| GET | `/api/shadow/decisions` | List Shadow Decisions | sign-in |  | [Page_ShadowDecisionView_](#page_shadowdecisionview_) |
+| GET | `/api/shadow/pnl` | List Shadow Pnl | sign-in |  | [Page_ShadowPnlSummary_](#page_shadowpnlsummary_) |
+| GET | `/api/shadow/strategies/{strategy_id}/pnl` | Get Shadow Pnl | sign-in |  | [PnlSeries](#pnlseries) |
 
 ## sources endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/sources` | List Sources | token, or open on loopback |  | list[[DataSourceInfo](#datasourceinfo)] |
+| GET | `/api/sources` | List Sources | sign-in |  | list[[DataSourceInfo](#datasourceinfo)] |
 
 ## statements endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/statements/flags` | List Statement Flags | token, or open on loopback |  | [Page_StatementFlagView_](#page_statementflagview_) |
+| GET | `/api/statements/flags` | List Statement Flags | sign-in |  | [Page_StatementFlagView_](#page_statementflagview_) |
 
 ## strategies endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/strategies` | List Strategies | token, or open on loopback |  | [Page_StrategySummary_](#page_strategysummary_) |
-| GET | `/api/strategies/summary` | Strategy Summary | token, or open on loopback |  | [StrategyStatusCounts](#strategystatuscounts) |
-| GET | `/api/strategies/{strategy_id}` | Get Strategy | token, or open on loopback |  | [StrategyDetail](#strategydetail) |
-| GET | `/api/strategies/{strategy_id}/golive` | Get Golive | token, or open on loopback |  | [GoLiveReport](#golivereport) |
-| GET | `/api/strategies/{strategy_id}/history` | Get Strategy History | token, or open on loopback |  | list[[StatusChangeView](#statuschangeview)] |
-| POST | `/api/strategies/{strategy_id}/promote` | Promote | bearer token | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
-| POST | `/api/strategies/{strategy_id}/retire` | Retire | bearer token | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
-| POST | `/api/strategies/{strategy_id}/shadow` | Shadow | bearer token | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
+| GET | `/api/strategies` | List Strategies | sign-in |  | [Page_StrategySummary_](#page_strategysummary_) |
+| GET | `/api/strategies/summary` | Strategy Summary | sign-in |  | [StrategyStatusCounts](#strategystatuscounts) |
+| GET | `/api/strategies/{strategy_id}` | Get Strategy | sign-in |  | [StrategyDetail](#strategydetail) |
+| GET | `/api/strategies/{strategy_id}/golive` | Get Golive | sign-in |  | [GoLiveReport](#golivereport) |
+| GET | `/api/strategies/{strategy_id}/history` | Get Strategy History | sign-in |  | list[[StatusChangeView](#statuschangeview)] |
+| POST | `/api/strategies/{strategy_id}/promote` | Promote | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
+| POST | `/api/strategies/{strategy_id}/retire` | Retire | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
+| POST | `/api/strategies/{strategy_id}/shadow` | Shadow | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
 
 ## studio endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/studio/capabilities` | Capabilities | token, or open on loopback |  | [StudioCapabilities](#studiocapabilities) |
-| GET | `/api/studio/drafts` | List Drafts | token, or open on loopback |  | [Page_Draft_](#page_draft_) |
-| POST | `/api/studio/drafts` | Create Draft | bearer token | [DraftCreate](#draftcreate) | [Draft](#draft) |
-| GET | `/api/studio/drafts/{draft_id}` | Get Draft | token, or open on loopback |  | [Draft](#draft) |
-| PATCH | `/api/studio/drafts/{draft_id}` | Update Draft | bearer token | [DraftUpdate](#draftupdate) | [Draft](#draft) |
-| DELETE | `/api/studio/drafts/{draft_id}` | Delete Draft | bearer token |  | [Draft](#draft) |
-| POST | `/api/studio/drafts/{draft_id}/backtests` | Start Backtest | bearer token | [DraftBacktestRequest](#draftbacktestrequest) | [Job](#job) |
-| POST | `/api/studio/drafts/{draft_id}/disable` | Disable Draft | bearer token | [StatusChangeRequest](#statuschangerequest) \| null | [Draft](#draft) |
-| POST | `/api/studio/drafts/{draft_id}/enable` | Enable Draft | bearer token | [StatusChangeRequest](#statuschangerequest) \| null | [Draft](#draft) |
-| POST | `/api/studio/drafts/{draft_id}/lab-runs` | Start Lab Run | bearer token | [DraftLabRunRequest](#draftlabrunrequest) | [Job](#job) |
-| POST | `/api/studio/drafts/{draft_id}/register` | Register Draft | bearer token |  | [Draft](#draft) |
-| POST | `/api/studio/drafts/{draft_id}/validate` | Validate Draft | bearer token | [ValidateRequest](#validaterequest) \| null | [DraftValidation](#draftvalidation) |
-| GET | `/api/studio/schema` | Schema | token, or open on loopback |  | object |
-| POST | `/api/studio/spec/validate` | Validate Spec | bearer token | [SpecValidateRequest](#specvalidaterequest) | [DraftValidation](#draftvalidation) |
-| GET | `/api/studio/templates` | Templates | token, or open on loopback |  | list[[RuleTemplateView](#ruletemplateview)] |
+| GET | `/api/studio/capabilities` | Capabilities | sign-in |  | [StudioCapabilities](#studiocapabilities) |
+| GET | `/api/studio/drafts` | List Drafts | sign-in |  | [Page_Draft_](#page_draft_) |
+| POST | `/api/studio/drafts` | Create Draft | `lab.run` | [DraftCreate](#draftcreate) | [Draft](#draft) |
+| GET | `/api/studio/drafts/{draft_id}` | Get Draft | sign-in |  | [Draft](#draft) |
+| PATCH | `/api/studio/drafts/{draft_id}` | Update Draft | `lab.run` | [DraftUpdate](#draftupdate) | [Draft](#draft) |
+| DELETE | `/api/studio/drafts/{draft_id}` | Delete Draft | `lab.run` |  | [Draft](#draft) |
+| POST | `/api/studio/drafts/{draft_id}/backtests` | Start Backtest | `lab.run` | [DraftBacktestRequest](#draftbacktestrequest) | [Job](#job) |
+| POST | `/api/studio/drafts/{draft_id}/disable` | Disable Draft | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [Draft](#draft) |
+| POST | `/api/studio/drafts/{draft_id}/enable` | Enable Draft | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [Draft](#draft) |
+| POST | `/api/studio/drafts/{draft_id}/lab-runs` | Start Lab Run | `lab.run` | [DraftLabRunRequest](#draftlabrunrequest) | [Job](#job) |
+| POST | `/api/studio/drafts/{draft_id}/register` | Register Draft | `strategy.promote` |  | [Draft](#draft) |
+| POST | `/api/studio/drafts/{draft_id}/validate` | Validate Draft | `lab.run` | [ValidateRequest](#validaterequest) \| null | [DraftValidation](#draftvalidation) |
+| GET | `/api/studio/schema` | Schema | sign-in |  | object |
+| POST | `/api/studio/spec/validate` | Validate Spec | `lab.run` | [SpecValidateRequest](#specvalidaterequest) | [DraftValidation](#draftvalidation) |
+| GET | `/api/studio/templates` | Templates | sign-in |  | list[[RuleTemplateView](#ruletemplateview)] |
 
 ## ticks endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/ticks` | List Ticks | token, or open on loopback |  | [Page_TickRun_](#page_tickrun_) |
-| POST | `/api/ticks` | Start Tick | bearer token | [TickRequest](#tickrequest) | [Job](#job) |
-| GET | `/api/ticks/jobs/{job_id}/result` | Get Tick Result | token, or open on loopback |  | [TickResultView](#tickresultview) |
-| GET | `/api/ticks/{tick_id}` | Get Tick | token, or open on loopback |  | [TickRunWithOrders](#tickrunwithorders) |
+| GET | `/api/ticks` | List Ticks | sign-in |  | [Page_TickRun_](#page_tickrun_) |
+| POST | `/api/ticks` | Start Tick | `operations.run` | [TickRequest](#tickrequest) | [Job](#job) |
+| GET | `/api/ticks/jobs/{job_id}/result` | Get Tick Result | sign-in |  | [TickResultView](#tickresultview) |
+| GET | `/api/ticks/{tick_id}` | Get Tick | sign-in |  | [TickRunWithOrders](#tickrunwithorders) |
 
 ## universes endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
-| GET | `/api/universes` | List Universes | token, or open on loopback |  | list[[UniverseView](#universeview)] |
-| POST | `/api/universes` | Create Universe | bearer token | [UniverseCreate](#universecreate) | [UniverseView](#universeview) |
-| GET | `/api/universes/ensure/{job_id}/result` | Get Ensure Result | token, or open on loopback |  | [EnsureReport](#ensurereport) |
-| POST | `/api/universes/index-history` | Import Index History | bearer token | [IndexHistoryImport](#indexhistoryimport) | [IndexHistoryView](#indexhistoryview) |
-| GET | `/api/universes/refresh/{job_id}/result` | Get Refresh Result | token, or open on loopback |  | [UniverseRefreshView](#universerefreshview) |
-| GET | `/api/universes/{universe_id}` | Get Universe | token, or open on loopback |  | [UniverseView](#universeview) |
-| DELETE | `/api/universes/{universe_id}` | Delete Universe | bearer token |  | [UniverseView](#universeview) |
-| POST | `/api/universes/{universe_id}/ensure` | Ensure Data | bearer token | [EnsureDataRequest](#ensuredatarequest) | [Job](#job) |
-| GET | `/api/universes/{universe_id}/members` | Get Members | token, or open on loopback |  | [UniverseMembers](#universemembers) |
-| POST | `/api/universes/{universe_id}/refresh` | Refresh Universe | bearer token |  | [Job](#job) |
+| GET | `/api/universes` | List Universes | sign-in |  | list[[UniverseView](#universeview)] |
+| POST | `/api/universes` | Create Universe | `lab.run` | [UniverseCreate](#universecreate) | [UniverseView](#universeview) |
+| GET | `/api/universes/ensure/{job_id}/result` | Get Ensure Result | sign-in |  | [EnsureReport](#ensurereport) |
+| POST | `/api/universes/index-history` | Import Index History | `lab.run` | [IndexHistoryImport](#indexhistoryimport) | [IndexHistoryView](#indexhistoryview) |
+| GET | `/api/universes/refresh/{job_id}/result` | Get Refresh Result | sign-in |  | [UniverseRefreshView](#universerefreshview) |
+| GET | `/api/universes/{universe_id}` | Get Universe | sign-in |  | [UniverseView](#universeview) |
+| DELETE | `/api/universes/{universe_id}` | Delete Universe | `strategy.promote` |  | [UniverseView](#universeview) |
+| POST | `/api/universes/{universe_id}/ensure` | Ensure Data | `lab.run` | [EnsureDataRequest](#ensuredatarequest) | [Job](#job) |
+| GET | `/api/universes/{universe_id}/members` | Get Members | sign-in |  | [UniverseMembers](#universemembers) |
+| POST | `/api/universes/{universe_id}/refresh` | Refresh Universe | `lab.run` |  | [Job](#job) |
 
 ## Schemas
 
@@ -1312,6 +1314,17 @@ One row per day. ``strategy_id`` is ``None`` for the real portfolio and a shadow
 | `positions` | integer | yes |  |
 | `snapshot_id` | integer \| null | yes |  |
 | `unmapped` | list[string] | yes |  |
+
+### PortfolioTotalsView
+
+Sums over every active portfolio's latest snapshot, for admins. No tickers and no per-person numbers (decision 2026-09-26).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cash` | number | yes |  |
+| `owners` | integer | yes | People who own those portfolios. |
+| `portfolios` | integer | yes | Active portfolios with at least one snapshot. |
+| `total_value` | number | yes | Sum of each book's value at its latest snapshot. |
 
 ### PortfolioView
 

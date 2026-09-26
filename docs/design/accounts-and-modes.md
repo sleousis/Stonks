@@ -52,9 +52,9 @@ erDiagram
 | Manage own portfolios, subscriptions, connections, notification settings | | yes | yes |
 | Run backtests and lab jobs, use the Studio (rule strategies) | | yes | yes |
 | Manual orders and auto mode on own portfolios (with 2FA) | | yes | yes |
-| Promote, retire, register code strategies; global risk policy; providers; users | | | yes |
+| Promote, retire and register strategies (code and Studio), code drafts, run ticks and ingests, global risk policy, providers, users | | | yes |
 | Global kill switch | | | yes |
-| Read other users' portfolios (audited "support view") | | | yes |
+| Totals across all traders (cash and value, never holdings, decision 2026-09-26) | | | yes |
 
 **Sessions (UI).** Opaque random id in an `HttpOnly; Secure; SameSite=Lax` cookie; only its SHA-256 is stored in `sessions (id_hash, user_id, created_at, last_seen_at, expires_at, mfa_verified_at, ip, user_agent, revoked_at)`. Idle timeout 12 h, absolute 7 days. Unsafe methods also need an `X-CSRF-Token` header matching a per-session token (double submit).
 
@@ -85,7 +85,7 @@ The CLI runs as the local OS user mapped to an admin (`--as <email>`, default th
 
 **Policy, one place.** `auth/policy.py` maps each `Permission` (e.g. `portfolio.trade`, `strategy.promote`, `killswitch.global`) to the roles and scopes that grant it. Services call `require(principal, Permission.X)`. Routers never check roles themselves.
 
-**Transition from the single token.** `STONKS_API_TOKEN` keeps working during migration as a token of the bootstrap admin, with a deprecation warning, and is removed one release after login ships. `open_reads_on_loopback` stays only in the `dev` profile.
+**Transition from the single token.** `STONKS_API_TOKEN` keeps working during migration as a token of the bootstrap admin, with a deprecation warning, and is removed one release after login ships. `open_reads_on_loopback` stays only in the `dev` profile (`STONKS_PROFILE=dev`).
 
 ## 3. Scoping every piece of state
 

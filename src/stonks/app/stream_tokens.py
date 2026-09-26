@@ -6,13 +6,16 @@ call) and passes it as ``?token=`` on the job's events URL. A token
 
 - names exactly one job and grants nothing else (no other job, no other
   route, no writes);
+- names the user it was issued to, so the API refuses it once that user is
+  disabled;
 - expires ``ttl_seconds`` after it was issued (minutes, not hours), so a
   URL that ends up in a log or browser history is soon worthless;
 - is an HMAC-SHA256 over ``job_id`` and expiry with a random per-process
   key: it needs no storage, can't be forged without the key, and every
   token dies with the process that issued it (a restart revokes them all).
 
-Format: ``base64url(json {"j": job_id, "e": expiry}) "." base64url(hmac)``.
+Format: ``base64url(json {"j": job_id, "u": user_id, "e": expiry}) "."
+base64url(hmac)``.
 """
 
 from __future__ import annotations
@@ -27,7 +30,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-_PURPOSE = b"stonks.job-events.v1:"
+_PURPOSE = b"stonks.job-events.v2:"
 
 
 @dataclass(frozen=True)
@@ -50,27 +53,31 @@ class StreamTokenSigner:
         self._key = key or secrets.token_bytes(32)
         self._clock = clock
 
-    def issue(self, job_id: str) -> IssuedStreamToken:
+    def issue(self, job_id: str, user_id: str) -> IssuedStreamToken:
         expiry = int(self._clock() + self._ttl)
-        payload = _b64(json.dumps({"j": job_id, "e": expiry}, separators=(",", ":")).encode())
+        claims = {"j": job_id, "u": user_id, "e": expiry}
+        payload = _b64(json.dumps(claims, separators=(",", ":")).encode())
         token = f"{payload}.{_b64(self._sign(payload))}"
         return IssuedStreamToken(token=token, expires_at=datetime.fromtimestamp(expiry, UTC))
 
-    def verify(self, token: str, job_id: str) -> bool:
-        """True only for an unexpired token this signer issued for ``job_id``."""
+    def verify(self, token: str, job_id: str) -> str | None:
+        """The user id of an unexpired token this signer issued for
+        ``job_id``, else ``None``."""
         try:
             payload, sig = token.split(".")
             if not hmac.compare_digest(_unb64(sig), self._sign(payload)):
-                return False
+                return None
             claims = json.loads(_unb64(payload))
-            return (
+            ok = (
                 isinstance(claims, dict)
                 and claims.get("j") == job_id
+                and isinstance(claims.get("u"), str)
                 and isinstance(claims.get("e"), int)
                 and self._clock() < claims["e"]
             )
+            return claims["u"] if ok else None
         except (ValueError, TypeError, UnicodeDecodeError):
-            return False
+            return None
 
     def _sign(self, payload: str) -> bytes:
         return hmac.new(self._key, _PURPOSE + payload.encode("ascii"), hashlib.sha256).digest()

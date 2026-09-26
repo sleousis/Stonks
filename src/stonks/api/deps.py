@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import hmac
 import ipaddress
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -64,19 +64,10 @@ CSRF_HEADER = "X-CSRF-Token"
 
 
 def get_auth(request: Request) -> AuthService:
-    """The app's :class:`AuthService`, built on first use (tests may set
-    ``app.state.auth`` beforehand)."""
-    auth = getattr(request.app.state, "auth", None)
-    if auth is None:
-        services = get_services(request)
-
-        def legacy() -> str | None:
-            token = services.context.settings.api.token
-            return token.get_secret_value() if token is not None else None
-
-        auth = AuthService(services.context.state, legacy_token=legacy)
-        request.app.state.auth = auth
-    return auth
+    """The app's :class:`AuthService` (``Services.auth``). Tests may set
+    ``app.state.auth`` to use another one."""
+    override = getattr(request.app.state, "auth", None)
+    return override if override is not None else get_services(request).auth
 
 
 AuthDep = Annotated[AuthService, Depends(get_auth)]
@@ -154,10 +145,12 @@ def authorize_stream(
         ),
     ] = None,
 ) -> None:
-    """Auth for a job's event stream: a valid stream token for *this* job,
-    or whatever :func:`authorize` accepts. A bad token is always 401."""
+    """Auth for a job's event stream: a valid stream token for *this* job
+    whose user is still active, or whatever :func:`authorize` accepts. A bad
+    token is always 401."""
     if token is not None:
-        if get_services(request).jobs.verify_stream_token(job_id, token):
+        user_id = get_services(request).jobs.verify_stream_token(job_id, token)
+        if user_id is not None and get_auth(request).is_active_user(user_id):
             return
         raise HTTPException(status_code=401, detail="invalid or expired stream token")
     authorize(request, creds)
@@ -184,14 +177,73 @@ def current_scope(principal: PrincipalDep) -> Scope:
 ScopeDep = Annotated[Scope, Depends(current_scope)]
 
 
+def owned_portfolio_id(
+    services: ServicesDep,
+    principal: PrincipalDep,
+    portfolio_id: Annotated[
+        str | None,
+        Query(
+            max_length=64,
+            description="One of your portfolios (404 otherwise). Default: your own book.",
+        ),
+    ] = None,
+) -> str:
+    """The portfolio a read is about, checked against the caller: another
+    user's id is a 404 (admins included; they get totals instead)."""
+    return services.portfolio.resolve(principal, portfolio_id)
+
+
+PortfolioIdDep = Annotated[str, Depends(owned_portfolio_id)]
+
+
+_PERMISSION_ATTR = "__stonks_permission__"
+
+
 def require_permission(permission: Permission) -> Callable[[Principal], None]:
-    """Route dependency: ``Depends(require_permission(Permission.X))``."""
+    """Route dependency: ``Depends(require_permission(Permission.X))``.
+
+    Every unsafe route declares one (a test walks the route table). The
+    OpenAPI spec lists it per operation as ``x-permission``."""
 
     def dependency(principal: PrincipalDep) -> None:
         require(principal, permission)
 
     dependency.__name__ = f"require_{permission.name.lower()}"
+    setattr(dependency, _PERMISSION_ATTR, permission)
     return dependency
+
+
+def needs(permission: Permission) -> list[Any]:
+    """``dependencies=needs(Permission.X)`` on a route decorator."""
+    return [Depends(require_permission(permission))]
+
+
+def permission_of(call: object) -> Permission | None:
+    """The permission a :func:`require_permission` dependency checks."""
+    return getattr(call, _PERMISSION_ATTR, None)
+
+
+def route_permissions(routes: Iterable[Any]) -> list[tuple[str, str, Permission]]:
+    """``(method, path, permission)`` for every route that declares one,
+    through included routers."""
+    from fastapi.routing import APIRoute
+
+    def found(dependant: Any) -> Permission | None:
+        for dep in dependant.dependencies:
+            perm = permission_of(dep.call) or found(dep)
+            if perm is not None:
+                return perm
+        return None
+
+    out: list[tuple[str, str, Permission]] = []
+    for route in routes:
+        if isinstance(route, APIRoute):
+            perm = found(route.dependant)
+            if perm is not None:
+                out.extend((m, route.path, perm) for m in sorted(route.methods))
+        elif hasattr(route, "original_router"):
+            out.extend(route_permissions(route.original_router.routes))
+    return out
 
 
 def current_session(request: Request) -> SessionInfo:

@@ -12,10 +12,11 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pydantic import BaseModel
 
-from stonks.api.deps import PageDep, ServicesDep
+from stonks.api.deps import PageDep, PrincipalDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.app.jobs import Job, JobStatus
 from stonks.app.pagination import Page
+from stonks.auth import Permission
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"], responses=PROBLEM_RESPONSES)
 #: The event stream authorizes itself (bearer *or* a job-scoped stream token).
@@ -52,12 +53,17 @@ def get_job(job_id: str, services: ServicesDep) -> Job:
     return services.jobs.get(job_id)
 
 
-@router.post("/{job_id}/cancel", response_model=Job, operation_id="cancelJob")
-def cancel_job(job_id: str, services: ServicesDep) -> Job:
+@router.post(
+    "/{job_id}/cancel",
+    response_model=Job,
+    operation_id="cancelJob",
+    dependencies=needs(Permission.LAB_RUN),
+)
+def cancel_job(job_id: str, services: ServicesDep, principal: PrincipalDep) -> Job:
     """Cancel a queued job, or ask a running lab run to stop at its next
     trial (it ends ``cancelled``). Other running jobs cannot be interrupted
-    (409)."""
-    return services.jobs.cancel(job_id)
+    (409). Ticks, ingests and backups need an admin."""
+    return services.jobs.cancel(job_id, principal)
 
 
 class StreamToken(BaseModel):
@@ -67,12 +73,18 @@ class StreamToken(BaseModel):
     events_url: str
 
 
-@router.post("/{job_id}/stream-token", response_model=StreamToken, operation_id="createStreamToken")
-def create_stream_token(job_id: str, services: ServicesDep) -> StreamToken:
+@router.post(
+    "/{job_id}/stream-token",
+    response_model=StreamToken,
+    operation_id="createStreamToken",
+    dependencies=needs(Permission.READ),
+)
+def create_stream_token(job_id: str, services: ServicesDep, principal: PrincipalDep) -> StreamToken:
     """A short-lived token (``api.stream_token_ttl_seconds``) that lets a
     client which cannot send the bearer header (browser ``EventSource``)
-    read this job's event stream, and nothing else."""
-    issued = services.jobs.stream_token(job_id)
+    read this job's event stream, and nothing else. It is tied to your
+    user and stops working if your account is disabled."""
+    issued = services.jobs.stream_token(job_id, principal)
     return StreamToken(
         token=issued.token,
         expires_at=issued.expires_at,

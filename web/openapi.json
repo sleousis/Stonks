@@ -5194,6 +5194,38 @@
         "title": "PortfolioSyncView",
         "type": "object"
       },
+      "PortfolioTotalsView": {
+        "description": "Sums over every active portfolio's latest snapshot, for admins. No\ntickers and no per-person numbers (decision 2026-09-26).",
+        "properties": {
+          "cash": {
+            "title": "Cash",
+            "type": "number"
+          },
+          "owners": {
+            "description": "People who own those portfolios.",
+            "title": "Owners",
+            "type": "integer"
+          },
+          "portfolios": {
+            "description": "Active portfolios with at least one snapshot.",
+            "title": "Portfolios",
+            "type": "integer"
+          },
+          "total_value": {
+            "description": "Sum of each book's value at its latest snapshot.",
+            "title": "Total Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "portfolios",
+          "owners",
+          "cash",
+          "total_value"
+        ],
+        "title": "PortfolioTotalsView",
+        "type": "object"
+      },
       "PortfolioView": {
         "properties": {
           "cash": {
@@ -10024,7 +10056,8 @@
         "summary": "Change Password",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-permission": "password.change"
       }
     },
     "/api/auth/recovery-codes": {
@@ -10121,7 +10154,8 @@
         "summary": "Regenerate Recovery Codes",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-permission": "mfa.recovery_codes"
       }
     },
     "/api/auth/tokens": {
@@ -10327,7 +10361,8 @@
         "summary": "Create Token",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-permission": "tokens.manage"
       }
     },
     "/api/auth/tokens/{token_id}": {
@@ -10428,7 +10463,8 @@
         "summary": "Revoke Token",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-permission": "tokens.revoke"
       }
     },
     "/api/auth/users": {
@@ -10529,7 +10565,8 @@
         "summary": "List Users",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-permission": "users.read"
       },
       "post": {
         "description": "Add a person (fresh second factor needed). They set up their own\nsecond factor at first login.",
@@ -10634,7 +10671,8 @@
         "summary": "Create User",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-permission": "users.manage"
       }
     },
     "/api/auth/users/{user_id}": {
@@ -10752,7 +10790,8 @@
         "summary": "Update User",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-permission": "users.manage"
       }
     },
     "/api/auth/users/{user_id}/mfa": {
@@ -10853,7 +10892,8 @@
         "summary": "Reset User Mfa",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-permission": "users.manage"
       }
     },
     "/api/auth/users/{user_id}/password": {
@@ -10964,7 +11004,8 @@
         "summary": "Reset User Password",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-permission": "users.manage"
       }
     },
     "/api/backups": {
@@ -11041,7 +11082,8 @@
         "summary": "Start Backup",
         "tags": [
           "backups"
-        ]
+        ],
+        "x-permission": "risk.global"
       }
     },
     "/api/backups/jobs/{job_id}/result": {
@@ -11129,7 +11171,8 @@
         "summary": "Get Backup Result",
         "tags": [
           "backups"
-        ]
+        ],
+        "x-permission": "risk.global"
       }
     },
     "/api/brokers": {
@@ -11811,7 +11854,8 @@
         "summary": "Connect With Keys",
         "tags": [
           "connections"
-        ]
+        ],
+        "x-permission": "connection.manage"
       }
     },
     "/api/connections/portal": {
@@ -11898,7 +11942,8 @@
         "summary": "Start Portal",
         "tags": [
           "connections"
-        ]
+        ],
+        "x-permission": "connection.manage"
       }
     },
     "/api/connections/providers": {
@@ -12067,7 +12112,8 @@
         "summary": "Delete Connection",
         "tags": [
           "connections"
-        ]
+        ],
+        "x-permission": "connection.manage"
       },
       "get": {
         "operationId": "getConnection",
@@ -12342,7 +12388,8 @@
         "summary": "Link Account",
         "tags": [
           "connections"
-        ]
+        ],
+        "x-permission": "portfolio.manage"
       }
     },
     "/api/connections/{connection_id}/sync": {
@@ -12430,7 +12477,8 @@
         "summary": "Sync Connection",
         "tags": [
           "connections"
-        ]
+        ],
+        "x-permission": "portfolio.manage"
       }
     },
     "/api/halts": {
@@ -12612,7 +12660,8 @@
         "summary": "Engage Kill Switch",
         "tags": [
           "halts"
-        ]
+        ],
+        "x-permission": "killswitch.user"
       }
     },
     "/api/halts/{halt_id}": {
@@ -12797,12 +12846,13 @@
         "summary": "Clear Halt",
         "tags": [
           "halts"
-        ]
+        ],
+        "x-permission": "risk.reset"
       }
     },
     "/api/halts/{halt_id}/resume": {
       "post": {
-        "description": "Turn a kill switch off. ``confirmation`` must be exactly\n``RESUME TRADING``; the reason is audited.",
+        "description": "Turn a kill switch off. ``confirmation`` must be exactly\n``RESUME TRADING``; the reason is audited. Needs a second factor from\nthe last few minutes (step-up), so API tokens get 403.",
         "operationId": "resumeKillSwitch",
         "parameters": [
           {
@@ -12895,7 +12945,8 @@
         "summary": "Resume Kill Switch",
         "tags": [
           "halts"
-        ]
+        ],
+        "x-permission": "killswitch.resume"
       }
     },
     "/api/health": {
@@ -13391,7 +13442,8 @@
         "summary": "Start Ingest",
         "tags": [
           "ingest"
-        ]
+        ],
+        "x-permission": "operations.run"
       }
     },
     "/api/jobs": {
@@ -13630,7 +13682,7 @@
     },
     "/api/jobs/{job_id}/cancel": {
       "post": {
-        "description": "Cancel a queued job, or ask a running lab run to stop at its next\ntrial (it ends ``cancelled``). Other running jobs cannot be interrupted\n(409).",
+        "description": "Cancel a queued job, or ask a running lab run to stop at its next\ntrial (it ends ``cancelled``). Other running jobs cannot be interrupted\n(409). Ticks, ingests and backups need an admin.",
         "operationId": "cancelJob",
         "parameters": [
           {
@@ -13713,7 +13765,8 @@
         "summary": "Cancel Job",
         "tags": [
           "jobs"
-        ]
+        ],
+        "x-permission": "lab.run"
       }
     },
     "/api/jobs/{job_id}/events": {
@@ -13843,7 +13896,7 @@
     },
     "/api/jobs/{job_id}/stream-token": {
       "post": {
-        "description": "A short-lived token (``api.stream_token_ttl_seconds``) that lets a\nclient which cannot send the bearer header (browser ``EventSource``)\nread this job's event stream, and nothing else.",
+        "description": "A short-lived token (``api.stream_token_ttl_seconds``) that lets a\nclient which cannot send the bearer header (browser ``EventSource``)\nread this job's event stream, and nothing else. It is tied to your\nuser and stops working if your account is disabled.",
         "operationId": "createStreamToken",
         "parameters": [
           {
@@ -13926,7 +13979,8 @@
         "summary": "Create Stream Token",
         "tags": [
           "jobs"
-        ]
+        ],
+        "x-permission": "data.read"
       }
     },
     "/api/lab/backtests": {
@@ -14013,7 +14067,8 @@
         "summary": "Start Backtest",
         "tags": [
           "lab"
-        ]
+        ],
+        "x-permission": "lab.run"
       }
     },
     "/api/lab/backtests/{job_id}/result": {
@@ -14187,7 +14242,7 @@
     },
     "/api/lab/runs": {
       "post": {
-        "description": "Queue tune → fit → survival suite; fetch the typed result from\n``GET /api/lab/runs/{job_id}/result`` once it succeeds.",
+        "description": "Queue tune → fit → survival suite; fetch the typed result from\n``GET /api/lab/runs/{job_id}/result`` once it succeeds. Registering the\nresult in the catalog (``register_strategy``, ``register_if_passes``)\nneeds an admin.",
         "operationId": "startLabRun",
         "requestBody": {
           "content": {
@@ -14269,7 +14324,8 @@
         "summary": "Start Lab Run",
         "tags": [
           "lab"
-        ]
+        ],
+        "x-permission": "lab.run"
       }
     },
     "/api/lab/runs/{job_id}/result": {
@@ -14444,7 +14500,8 @@
         "summary": "Start Signal Ic",
         "tags": [
           "lab"
-        ]
+        ],
+        "x-permission": "lab.run"
       }
     },
     "/api/lab/signal-ic/{job_id}/result": {
@@ -15247,7 +15304,8 @@
         "summary": "Update Preferences",
         "tags": [
           "notifications"
-        ]
+        ],
+        "x-permission": "notifications.manage"
       }
     },
     "/api/notifications/quiet-hours": {
@@ -15334,7 +15392,8 @@
         "summary": "Set Quiet Hours",
         "tags": [
           "notifications"
-        ]
+        ],
+        "x-permission": "notifications.manage"
       }
     },
     "/api/notifications/read": {
@@ -15421,7 +15480,8 @@
         "summary": "Mark Read",
         "tags": [
           "notifications"
-        ]
+        ],
+        "x-permission": "notifications.manage"
       }
     },
     "/api/notifications/webhook": {
@@ -15508,7 +15568,8 @@
         "summary": "Set Webhook",
         "tags": [
           "notifications"
-        ]
+        ],
+        "x-permission": "notifications.manage"
       }
     },
     "/api/orders": {
@@ -15607,6 +15668,25 @@
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
             }
           }
         ],
@@ -15764,6 +15844,25 @@
               "title": "Offset",
               "type": "integer"
             }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
           }
         ],
         "responses": {
@@ -15841,7 +15940,7 @@
     },
     "/api/pnl": {
       "get": {
-        "description": "Daily P&L of the real portfolio (last snapshot per UTC day). Returns\nand drawdown are measured from inception even when ``since`` trims it.",
+        "description": "Daily P&L of one of your portfolios (last snapshot per UTC day).\nReturns and drawdown are measured from inception even when ``since``\ntrims it.",
         "operationId": "getPnl",
         "parameters": [
           {
@@ -15859,6 +15958,25 @@
                 }
               ],
               "title": "Since"
+            }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
             }
           }
         ],
@@ -15939,6 +16057,27 @@
       "get": {
         "description": "Latest snapshot, positions valued at the latest stored closes.",
         "operationId": "getPortfolio",
+        "parameters": [
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -16045,6 +16184,25 @@
               "title": "Offset",
               "type": "integer"
             }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
           }
         ],
         "responses": {
@@ -16118,6 +16276,84 @@
         "tags": [
           "portfolio"
         ]
+      }
+    },
+    "/api/portfolio/totals": {
+      "get": {
+        "description": "Admins: cash and value summed across every active portfolio. No\ntickers and no per-person numbers.",
+        "operationId": "getPortfolioTotals",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioTotalsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Totals",
+        "tags": [
+          "portfolio"
+        ],
+        "x-permission": "portfolio.totals"
       }
     },
     "/api/push/subscriptions": {
@@ -16197,7 +16433,8 @@
         "summary": "Delete Push Subscription",
         "tags": [
           "push"
-        ]
+        ],
+        "x-permission": "notifications.manage"
       },
       "get": {
         "description": "Your registered browsers and installed apps (no endpoints or keys).",
@@ -16361,7 +16598,8 @@
         "summary": "Create Push Subscription",
         "tags": [
           "push"
-        ]
+        ],
+        "x-permission": "notifications.manage"
       }
     },
     "/api/push/vapid-key": {
@@ -16706,7 +16944,8 @@
         "summary": "Run Now",
         "tags": [
           "schedule"
-        ]
+        ],
+        "x-permission": "operations.run"
       }
     },
     "/api/shadow/decisions": {
@@ -17936,7 +18175,8 @@
         "summary": "Promote",
         "tags": [
           "strategies"
-        ]
+        ],
+        "x-permission": "strategy.promote"
       }
     },
     "/api/strategies/{strategy_id}/retire": {
@@ -18041,7 +18281,8 @@
         "summary": "Retire",
         "tags": [
           "strategies"
-        ]
+        ],
+        "x-permission": "strategy.promote"
       }
     },
     "/api/strategies/{strategy_id}/shadow": {
@@ -18146,7 +18387,8 @@
         "summary": "Shadow",
         "tags": [
           "strategies"
-        ]
+        ],
+        "x-permission": "strategy.promote"
       }
     },
     "/api/studio/capabilities": {
@@ -18445,7 +18687,8 @@
         "summary": "Create Draft",
         "tags": [
           "studio"
-        ]
+        ],
+        "x-permission": "lab.run"
       }
     },
     "/api/studio/drafts/{draft_id}": {
@@ -18543,7 +18786,8 @@
         "summary": "Delete Draft",
         "tags": [
           "studio"
-        ]
+        ],
+        "x-permission": "lab.run"
       },
       "get": {
         "operationId": "getDraft",
@@ -18743,7 +18987,8 @@
         "summary": "Update Draft",
         "tags": [
           "studio"
-        ]
+        ],
+        "x-permission": "lab.run"
       }
     },
     "/api/studio/drafts/{draft_id}/backtests": {
@@ -18851,7 +19096,8 @@
         "summary": "Start Backtest",
         "tags": [
           "studio"
-        ]
+        ],
+        "x-permission": "lab.run"
       }
     },
     "/api/studio/drafts/{draft_id}/disable": {
@@ -18966,7 +19212,8 @@
         "summary": "Disable Draft",
         "tags": [
           "studio"
-        ]
+        ],
+        "x-permission": "strategy.promote"
       }
     },
     "/api/studio/drafts/{draft_id}/enable": {
@@ -19081,12 +19328,13 @@
         "summary": "Enable Draft",
         "tags": [
           "studio"
-        ]
+        ],
+        "x-permission": "strategy.promote"
       }
     },
     "/api/studio/drafts/{draft_id}/lab-runs": {
       "post": {
-        "description": "Queue tune → fit → survival suite for the draft; the job result is a\n``LabRunView``.",
+        "description": "Queue tune → fit → survival suite for the draft; the job result is a\n``LabRunView``. Registering the result needs an admin.",
         "operationId": "startDraftLabRun",
         "parameters": [
           {
@@ -19189,7 +19437,8 @@
         "summary": "Start Lab Run",
         "tags": [
           "studio"
-        ]
+        ],
+        "x-permission": "lab.run"
       }
     },
     "/api/studio/drafts/{draft_id}/register": {
@@ -19287,7 +19536,8 @@
         "summary": "Register Draft",
         "tags": [
           "studio"
-        ]
+        ],
+        "x-permission": "strategy.promote"
       }
     },
     "/api/studio/drafts/{draft_id}/validate": {
@@ -19402,7 +19652,8 @@
         "summary": "Validate Draft",
         "tags": [
           "studio"
-        ]
+        ],
+        "x-permission": "lab.run"
       }
     },
     "/api/studio/schema": {
@@ -19588,7 +19839,8 @@
         "summary": "Validate Spec",
         "tags": [
           "studio"
-        ]
+        ],
+        "x-permission": "lab.run"
       }
     },
     "/api/studio/templates": {
@@ -19894,7 +20146,8 @@
         "summary": "Start Tick",
         "tags": [
           "ticks"
-        ]
+        ],
+        "x-permission": "operations.run"
       }
     },
     "/api/ticks/jobs/{job_id}/result": {
@@ -20235,7 +20488,8 @@
         "summary": "Create Universe",
         "tags": [
           "universes"
-        ]
+        ],
+        "x-permission": "lab.run"
       }
     },
     "/api/universes/ensure/{job_id}/result": {
@@ -20410,7 +20664,8 @@
         "summary": "Import Index History",
         "tags": [
           "universes"
-        ]
+        ],
+        "x-permission": "lab.run"
       }
     },
     "/api/universes/refresh/{job_id}/result": {
@@ -20586,7 +20841,8 @@
         "summary": "Delete Universe",
         "tags": [
           "universes"
-        ]
+        ],
+        "x-permission": "strategy.promote"
       },
       "get": {
         "operationId": "getUniverse",
@@ -20769,7 +21025,8 @@
         "summary": "Ensure Data",
         "tags": [
           "universes"
-        ]
+        ],
+        "x-permission": "lab.run"
       }
     },
     "/api/universes/{universe_id}/members": {
@@ -20962,7 +21219,8 @@
         "summary": "Refresh Universe",
         "tags": [
           "universes"
-        ]
+        ],
+        "x-permission": "lab.run"
       }
     }
   }

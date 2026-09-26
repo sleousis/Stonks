@@ -1092,17 +1092,17 @@ def serve(
 ) -> None:
     """Run the REST API (and the built UI from web/dist, if present) with uvicorn.
 
-    Binds 127.0.0.1 by default. Mutating routes need STONKS_API_TOKEN.
+    Binds 127.0.0.1 by default. Every call needs a sign-in or an API token
+    (docs/security.md). X-Forwarded-For is trusted only from
+    [api].trusted_proxies (env STONKS_API_TRUSTED_PROXIES).
     """
     import uvicorn
 
     settings = _settings()
     bind_host = host or settings.api.host
     bind_port = port or settings.api.port
-    if settings.api.token is None:
-        console.print(
-            "[yellow]STONKS_API_TOKEN is not set: mutating routes will return 503[/yellow]"
-        )
+    if settings.api.open_reads_on_loopback:
+        console.print("[yellow]dev profile: reads from 127.0.0.1 need no credential[/yellow]")
     if bind_host not in ("127.0.0.1", "localhost", "::1"):
         log.warning("serve.non_loopback_bind", host=bind_host)
     uvicorn.run(
@@ -1112,7 +1112,102 @@ def serve(
         port=bind_port,
         reload=reload,
         log_config=None,
+        # The client IP feeds the login limit and the audit log: believe a
+        # forwarded header only from the reverse proxy.
+        proxy_headers=True,
+        forwarded_allow_ips=",".join(settings.api.trusted_proxies),
     )
+
+
+# ---- users ------------------------------------------------------------------
+
+users_app = typer.Typer(
+    help="People who can sign in. Shell access to the server implies admin. "
+    "Passwords come from STONKS_AUTH_PASSWORD or a no-echo prompt, never an option."
+)
+app.add_typer(users_app, name="users")
+
+
+def _auth_service(settings: Settings) -> Any:
+    from contextlib import contextmanager
+
+    from stonks.auth.service import AuthService
+
+    @contextmanager
+    def state_factory():
+        with SqliteState(settings.state.path) as state:
+            yield state
+
+    return AuthService(state_factory, settings=settings.auth)
+
+
+def _users_call(fn: Any) -> Any:
+    """Run ``fn`` and turn an app error into a red line and exit code 1."""
+    from stonks.app.errors import AppError
+
+    try:
+        return fn()
+    except AppError as exc:
+        console.print(f"[red]error:[/red] {exc}")
+        raise typer.Exit(1) from None
+
+
+@users_app.command("bootstrap")
+def users_bootstrap(
+    email: str = typer.Option(..., "--email", help="the first admin's sign-in email"),
+) -> None:
+    """Give the bootstrap admin an email and a password so the first sign-in
+    works. The second factor is set up at that sign-in."""
+    from stonks.auth.prompt import read_new_password
+
+    svc = _auth_service(_settings())
+    user = _users_call(lambda: svc.bootstrap_admin(email, read_new_password()))
+    console.print(f"bootstrap admin {user.id} can now sign in as {user.email}")
+
+
+@users_app.command("reset-password")
+def users_reset_password(
+    email: str = typer.Option(..., "--email", help="the person's sign-in email"),
+) -> None:
+    """Set a new password for a person and sign them out everywhere."""
+    from stonks.auth.prompt import read_new_password
+
+    svc = _auth_service(_settings())
+    user = _users_call(lambda: svc.set_password_by_email(email, read_new_password()))
+    console.print(f"password reset for {user.id}; their sessions were signed out")
+
+
+@users_app.command("list")
+def users_list() -> None:
+    """Everyone with an account: email, role, status, second factor. No holdings."""
+    from stonks.accounts import DEFAULT_OWNER_ID, Role
+    from stonks.auth import Principal
+    from stonks.auth.principal import ROLE_SCOPES
+
+    svc = _auth_service(_settings())
+    cli = Principal.create(
+        user_id=DEFAULT_OWNER_ID,
+        kind="human",
+        role=Role.ADMIN,
+        scopes=ROLE_SCOPES[Role.ADMIN],
+        mfa_fresh=False,
+        via="cli",
+    )
+    people = _users_call(lambda: svc.list_users(cli))
+    table = Table(title="Users")
+    for col in ("id", "email", "name", "role", "status", "2FA"):
+        table.add_column(col)
+    for info in people:
+        u = info.user
+        table.add_row(
+            u.id,
+            u.email or "-",
+            u.display_name,
+            u.role.value,
+            u.status,
+            "yes" if info.mfa_enrolled else "no",
+        )
+    console.print(table)
 
 
 # ---- lab --------------------------------------------------------------------

@@ -776,9 +776,23 @@
         "open_world": false,
         "read_only": true
       },
-      "description": "Daily P&L of the real portfolio (last snapshot per UTC day). Returns\nand drawdown are measured from inception even when since trims the rows.",
+      "description": "Daily P&L of one of your portfolios (last snapshot per UTC day). Returns\nand drawdown are measured from inception even when since trims the rows.",
       "input_schema": {
         "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
           "since": {
             "anyOf": [
               {
@@ -807,13 +821,44 @@
         "open_world": false,
         "read_only": true
       },
-      "description": "Current portfolio: cash, positions valued at the latest stored closes, weights and total value, from the latest snapshot.",
+      "description": "Current portfolio: cash, positions valued at the latest stored closes,\nweights and total value, from the latest snapshot.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          }
+        },
+        "title": "get_portfolioArguments",
+        "type": "object"
+      },
+      "name": "get_portfolio",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Admins only: cash and value summed across every active portfolio (no holdings).",
       "input_schema": {
         "properties": {},
         "title": "toolArguments",
         "type": "object"
       },
-      "name": "get_portfolio",
+      "name": "get_portfolio_totals",
       "needs_confirm": false
     },
     {
@@ -1429,6 +1474,20 @@
             "default": null,
             "title": "Order Client Id"
           },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
           "tick_id": {
             "anyOf": [
               {
@@ -1627,6 +1686,20 @@
             "title": "Offset",
             "type": "integer"
           },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
           "status": {
             "anyOf": [
               {
@@ -1706,6 +1779,20 @@
             "minimum": 0,
             "title": "Offset",
             "type": "integer"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
           }
         },
         "title": "list_portfolio_snapshotsArguments",

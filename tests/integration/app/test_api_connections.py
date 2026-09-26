@@ -21,6 +21,7 @@ from stonks.connections.service import ConnectionService
 from stonks.connections.settings import ConnectionsConfig
 from stonks.security import KeyRing, SecretBox, generate_key
 from stonks.store.state import SqliteState
+from tests.integration.app.stepup import allow_step_up
 from tests.integration.app.test_api import AUTH, LOOPBACK, REMOTE
 
 TOKEN = "demo-secret-token-9f8e7d"
@@ -52,7 +53,9 @@ def services(settings, seeded, fake_source, box):
 
 @pytest.fixture
 def client(settings, services):
-    with TestClient(create_app(settings, services=services), client=LOOPBACK) as c:
+    # Connecting and deleting need a fresh second factor (step-up).
+    app = allow_step_up(create_app(settings, services=services))
+    with TestClient(app, client=LOOPBACK) as c:
         yield c
 
 
@@ -265,3 +268,15 @@ def test_writes_need_the_token(settings, services):
         assert resp.status_code == 401
         assert remote.post("/api/connections/c/sync").status_code == 401
         assert remote.delete("/api/connections/c").status_code == 401
+
+
+def test_connect_and_delete_need_a_step_up(settings, services):
+    # Without a fresh second factor (any API token) connecting is refused.
+    with TestClient(create_app(settings, services=services), client=LOOPBACK) as c:
+        resp = c.post(
+            "/api/connections/keys",
+            json={"provider": "fake", "fields": {"token": TOKEN}},
+            headers=AUTH,
+        )
+        assert resp.status_code == 403 and "step_up_required" in resp.json()["detail"]
+        assert c.delete("/api/connections/c", headers=AUTH).status_code == 403

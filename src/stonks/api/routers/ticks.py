@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Response
 
-from stonks.api.deps import PageDep, ServicesDep
+from stonks.api.deps import PageDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.api.routers._jobs_common import JOB_CREATED, accepted
 from stonks.app.jobs import Job
 from stonks.app.pagination import Page
 from stonks.app.tick_summary import TickRun, TickRunWithOrders, typed_tick_run
 from stonks.app.ticks import TICK_JOB, TickRequest, TickResultView, TickStatus
+from stonks.auth import Permission
 
 router = APIRouter(prefix="/api/ticks", tags=["ticks"], responses=PROBLEM_RESPONSES)
 
@@ -37,7 +38,9 @@ def get_tick(tick_id: str, services: ServicesDep) -> TickRun:
     return typed_tick_run(services.ticks.get(tick_id))
 
 
-@router.post("", **JOB_CREATED, operation_id="startTick")
+@router.post(
+    "", **JOB_CREATED, operation_id="startTick", dependencies=needs(Permission.OPERATIONS_RUN)
+)
 def start_tick(body: TickRequest, services: ServicesDep, response: Response) -> Job:
     """Queue a production tick (``dry_run`` ranks and logs only)."""
     return accepted(services.ticks.submit(body), response)

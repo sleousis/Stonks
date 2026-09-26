@@ -31,12 +31,20 @@ class Permission(StrEnum):
     CONNECTION_MANAGE = "connection.manage"
     LAB_RUN = "lab.run"
     KILLSWITCH_USER = "killswitch.user"
+    KILLSWITCH_RESUME = "killswitch.resume"
+    RISK_RESET = "risk.reset"
+    NOTIFICATIONS_MANAGE = "notifications.manage"
     KILLSWITCH_GLOBAL = "killswitch.global"
     STRATEGY_PROMOTE = "strategy.promote"
+    CODE_STRATEGIES = "strategy.code"
+    OPERATIONS_RUN = "operations.run"
     RISK_GLOBAL = "risk.global"
+    PORTFOLIO_TOTALS = "portfolio.totals"
     USERS_READ = "users.read"
     USERS_MANAGE = "users.manage"
     TOKENS_MANAGE = "tokens.manage"
+    TOKENS_REVOKE = "tokens.revoke"
+    RECOVERY_CODES = "mfa.recovery_codes"
     PASSWORD_CHANGE = "password.change"
 
 
@@ -56,12 +64,22 @@ POLICY: dict[Permission, Rule] = {
     Permission.CONNECTION_MANAGE: Rule(_TRADERS, frozenset({ApiScope.TRADE}), step_up=True),
     Permission.LAB_RUN: Rule(_TRADERS, frozenset({ApiScope.LAB})),
     Permission.KILLSWITCH_USER: Rule(_TRADERS, frozenset({ApiScope.TRADE})),
+    Permission.KILLSWITCH_RESUME: Rule(_TRADERS, frozenset({ApiScope.TRADE}), step_up=True),
+    Permission.RISK_RESET: Rule(_TRADERS, frozenset({ApiScope.TRADE})),
+    Permission.NOTIFICATIONS_MANAGE: Rule(_TRADERS, frozenset({ApiScope.TRADE})),
     Permission.KILLSWITCH_GLOBAL: Rule(_ADMINS, frozenset({ApiScope.ADMIN})),
     Permission.STRATEGY_PROMOTE: Rule(_ADMINS, frozenset({ApiScope.ADMIN})),
+    Permission.CODE_STRATEGIES: Rule(_ADMINS, frozenset({ApiScope.ADMIN})),
+    Permission.OPERATIONS_RUN: Rule(_ADMINS, frozenset({ApiScope.ADMIN})),
     Permission.RISK_GLOBAL: Rule(_ADMINS, frozenset({ApiScope.ADMIN})),
+    # Sums across every trader, never anyone's holdings.
+    Permission.PORTFOLIO_TOTALS: Rule(_ADMINS, frozenset({ApiScope.ADMIN})),
     Permission.USERS_READ: Rule(_ADMINS, frozenset({ApiScope.ADMIN})),
     Permission.USERS_MANAGE: Rule(_ADMINS, frozenset({ApiScope.ADMIN}), step_up=True),
     Permission.TOKENS_MANAGE: Rule(_ALL, frozenset({ApiScope.READ}), session_only=True),
+    # Any credential of the owner may revoke (a leaked token can revoke itself).
+    Permission.TOKENS_REVOKE: Rule(_ALL, frozenset(ApiScope)),
+    Permission.RECOVERY_CODES: Rule(_ALL, frozenset({ApiScope.READ}), step_up=True),
     Permission.PASSWORD_CHANGE: Rule(_ALL, frozenset({ApiScope.READ}), step_up=True),
 }
 

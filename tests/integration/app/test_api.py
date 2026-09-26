@@ -149,9 +149,9 @@ def test_unknown_api_route_is_problem_404(client):
 
 
 def test_portfolio_routes(client):
-    body = client.get("/api/portfolio").json()
+    body = client.get("/api/portfolio", headers=AUTH).json()
     assert body["positions"][0]["ticker"] == "UP.US"
-    snaps = client.get("/api/portfolio/snapshots").json()
+    snaps = client.get("/api/portfolio/snapshots", headers=AUTH).json()
     assert snaps["total"] == 1
 
 
@@ -195,9 +195,11 @@ def test_market_routes(client):
 
 
 def test_orders_ticks_routes(client, seeded):
-    orders = client.get("/api/orders", params={"tick_id": seeded["tick_id"]}).json()
+    orders = client.get("/api/orders", params={"tick_id": seeded["tick_id"]}, headers=AUTH).json()
     assert orders["total"] == 1
-    fills = client.get("/api/orders/fills", params={"tick_id": seeded["tick_id"]}).json()
+    fills = client.get(
+        "/api/orders/fills", params={"tick_id": seeded["tick_id"]}, headers=AUTH
+    ).json()
     assert fills["total"] == 1
     ticks = client.get("/api/ticks").json()
     assert ticks["total"] == 1
@@ -343,6 +345,29 @@ def test_cors_allows_only_configured_origin(client):
     bad = client.options(
         "/api/strategies",
         headers={"Origin": "http://evil.example", "Access-Control-Request-Method": "GET"},
+    )
+    assert "access-control-allow-origin" not in bad.headers
+
+
+def test_cors_lets_the_dev_origin_send_cookies_and_the_csrf_header(client):
+    ok = client.options(
+        "/api/halts/kill",
+        headers={
+            "Origin": "http://localhost:4200",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "x-csrf-token, content-type",
+        },
+    )
+    assert ok.status_code == 200
+    assert ok.headers.get("access-control-allow-credentials") == "true"
+    assert "x-csrf-token" in ok.headers.get("access-control-allow-headers", "").lower()
+    bad = client.options(
+        "/api/halts/kill",
+        headers={
+            "Origin": "http://evil.example",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "x-csrf-token",
+        },
     )
     assert "access-control-allow-origin" not in bad.headers
 

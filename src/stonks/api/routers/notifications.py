@@ -8,7 +8,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Response
 
-from stonks.api.deps import ScopeDep, ServicesDep
+from stonks.api.deps import ScopeDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.app.notifications import (
     FeedView,
@@ -23,6 +23,7 @@ from stonks.app.notifications import (
     VapidKeyView,
     WebhookUpdate,
 )
+from stonks.auth import Permission
 from stonks.notify.service import FEED_LIMIT_MAX
 
 push_router = APIRouter(prefix="/api/push", tags=["push"], responses=PROBLEM_RESPONSES)
@@ -52,6 +53,7 @@ def list_push_subscriptions(services: ServicesDep, scope: ScopeDep) -> list[Push
     status_code=201,
     response_model=PushDeviceView,
     operation_id="createPushSubscription",
+    dependencies=needs(Permission.NOTIFICATIONS_MANAGE),
 )
 def create_push_subscription(
     body: PushSubscriptionRequest, services: ServicesDep, scope: ScopeDep
@@ -61,7 +63,12 @@ def create_push_subscription(
     return services.notifications.subscribe(scope, body)
 
 
-@push_router.delete("/subscriptions", status_code=204, operation_id="deletePushSubscription")
+@push_router.delete(
+    "/subscriptions",
+    status_code=204,
+    operation_id="deletePushSubscription",
+    dependencies=needs(Permission.NOTIFICATIONS_MANAGE),
+)
 def delete_push_subscription(
     body: PushUnsubscribeRequest, services: ServicesDep, scope: ScopeDep
 ) -> Response:
@@ -81,7 +88,10 @@ def get_preferences(services: ServicesDep, scope: ScopeDep) -> PreferencesView:
 
 
 @router.put(
-    "/preferences", response_model=PreferencesView, operation_id="updateNotificationPreferences"
+    "/preferences",
+    response_model=PreferencesView,
+    operation_id="updateNotificationPreferences",
+    dependencies=needs(Permission.NOTIFICATIONS_MANAGE),
 )
 def update_preferences(
     body: PreferencesUpdate, services: ServicesDep, scope: ScopeDep
@@ -90,7 +100,12 @@ def update_preferences(
     return services.notifications.update_preferences(scope, body)
 
 
-@router.put("/quiet-hours", response_model=PreferencesView, operation_id="setQuietHours")
+@router.put(
+    "/quiet-hours",
+    response_model=PreferencesView,
+    operation_id="setQuietHours",
+    dependencies=needs(Permission.NOTIFICATIONS_MANAGE),
+)
 def set_quiet_hours(
     body: QuietHoursUpdate, services: ServicesDep, scope: ScopeDep
 ) -> PreferencesView:
@@ -99,7 +114,12 @@ def set_quiet_hours(
     return services.notifications.set_quiet_hours(scope, body)
 
 
-@router.put("/webhook", response_model=PreferencesView, operation_id="setNotificationWebhook")
+@router.put(
+    "/webhook",
+    response_model=PreferencesView,
+    operation_id="setNotificationWebhook",
+    dependencies=needs(Permission.NOTIFICATIONS_MANAGE),
+)
 def set_webhook(body: WebhookUpdate, services: ServicesDep, scope: ScopeDep) -> PreferencesView:
     """Your fallback webhook. Write-only: never shown back in full."""
     return services.notifications.set_webhook(scope, body)
@@ -122,7 +142,12 @@ def list_notifications(
     )
 
 
-@router.post("/read", response_model=MarkReadView, operation_id="markNotificationsRead")
+@router.post(
+    "/read",
+    response_model=MarkReadView,
+    operation_id="markNotificationsRead",
+    dependencies=needs(Permission.NOTIFICATIONS_MANAGE),
+)
 def mark_read(body: MarkReadRequest, services: ServicesDep, scope: ScopeDep) -> MarkReadView:
     """Mark notifications read (all of yours when ``ids`` is omitted)."""
     return services.notifications.mark_read(scope, body)

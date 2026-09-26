@@ -197,6 +197,21 @@ def test_stream_token_works_from_a_remote_peer(remote, client):
     assert _stream_status(remote, f"/api/jobs/{job['id']}/events?token={token}")[0] == 200
 
 
+def test_stream_token_dies_with_its_user(closed_client, settings):
+    """The token names the user who asked for it: once that person is
+    disabled (or signed out of everything) it stops opening the stream."""
+    from stonks.accounts import DEFAULT_OWNER_ID
+    from stonks.store.state import SqliteState
+
+    job = closed_client.post("/api/lab/backtests", json=_backtest_body(), headers=AUTH).json()
+    url = closed_client.post(f"/api/jobs/{job['id']}/stream-token", headers=AUTH).json()[
+        "events_url"
+    ]
+    with SqliteState(settings.state.path) as state:
+        state.execute("UPDATE users SET status = 'disabled' WHERE id = ?", [DEFAULT_OWNER_ID])
+    assert _stream_status(closed_client, url)[0] == 401
+
+
 def test_stream_token_for_unknown_job_is_404(client):
     assert client.post("/api/jobs/job_missing/stream-token", headers=AUTH).status_code == 404
 
@@ -222,7 +237,7 @@ def test_get_risk_policy(settings, seeded, fake_source):
 
 
 def test_real_pnl_series(client):
-    body = client.get("/api/pnl").json()
+    body = client.get("/api/pnl", headers=AUTH).json()
     assert body["strategy_id"] is None
     rows = body["rows"]
     assert len(rows) == 1  # the seeded tick wrote one snapshot
@@ -230,7 +245,7 @@ def test_real_pnl_series(client):
     assert rows[0]["daily_return"] is None
     assert rows[0]["days_elapsed"] is None  # first row: nothing before it
     assert rows[0]["drawdown"] == 0.0
-    assert client.get("/api/pnl", params={"since": "2999-01-01"}).json()["rows"] == []
+    assert client.get("/api/pnl", params={"since": "2999-01-01"}, headers=AUTH).json()["rows"] == []
 
 
 # ---- shadow -------------------------------------------------------------------

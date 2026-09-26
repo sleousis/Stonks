@@ -16,6 +16,7 @@ from stonks.connections.ratelimit import reset_limiters
 from stonks.connections.settings import ConnectionsConfig
 from stonks.mcp.server import build_server
 from stonks.security import KeyRing, SecretBox, generate_key
+from tests.integration.app.stepup import allow_step_up
 from tests.integration.app.test_api import AUTH
 from tests.integration.app.test_mcp_server import _api, call, call_error
 
@@ -46,7 +47,8 @@ def test_client(settings, seeded, fake_source):
         config=ConnectionsConfig(enabled_providers=("fake",)),
         box=SecretBox(KeyRing.parse(f"k1:{generate_key()}")),
     )
-    with TestClient(create_app(settings, services=svc), client=("127.0.0.1", 50000)) as tc:
+    app = allow_step_up(create_app(settings, services=svc))
+    with TestClient(app, client=("127.0.0.1", 50000)) as tc:
         yield tc
 
 

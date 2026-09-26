@@ -29,6 +29,7 @@ from stonks.api.deps import (
     AuthDep,
     PrincipalDep,
     SessionDep,
+    needs,
     require_permission,
 )
 from stonks.api.errors import PROBLEM_RESPONSES, ProblemDetails
@@ -350,7 +351,12 @@ def me(principal: PrincipalDep, auth: AuthDep) -> MeView:
     )
 
 
-@router.post("/password", status_code=204, operation_id="changePassword")
+@router.post(
+    "/password",
+    status_code=204,
+    operation_id="changePassword",
+    dependencies=needs(Permission.PASSWORD_CHANGE),
+)
 def change_password(
     body: PasswordChangeRequest, request: Request, principal: PrincipalDep, auth: AuthDep
 ) -> Response:
@@ -361,7 +367,10 @@ def change_password(
 
 
 @router.post(
-    "/recovery-codes", response_model=RecoveryCodesView, operation_id="regenerateRecoveryCodes"
+    "/recovery-codes",
+    response_model=RecoveryCodesView,
+    operation_id="regenerateRecoveryCodes",
+    dependencies=needs(Permission.RECOVERY_CODES),
 )
 def regenerate_recovery_codes(
     request: Request, principal: PrincipalDep, auth: AuthDep
@@ -383,7 +392,11 @@ def list_tokens(principal: PrincipalDep, auth: AuthDep) -> list[TokenView]:
 
 
 @router.post(
-    "/tokens", status_code=201, response_model=TokenCreatedView, operation_id="createApiToken"
+    "/tokens",
+    status_code=201,
+    response_model=TokenCreatedView,
+    operation_id="createApiToken",
+    dependencies=needs(Permission.TOKENS_MANAGE),
 )
 def create_token(
     body: TokenCreateRequest, request: Request, principal: PrincipalDep, auth: AuthDep
@@ -401,7 +414,12 @@ def create_token(
     return TokenCreatedView(token=token, info=_token_view(info))
 
 
-@router.delete("/tokens/{token_id}", status_code=204, operation_id="revokeApiToken")
+@router.delete(
+    "/tokens/{token_id}",
+    status_code=204,
+    operation_id="revokeApiToken",
+    dependencies=needs(Permission.TOKENS_REVOKE),
+)
 def revoke_token(
     token_id: str, request: Request, principal: PrincipalDep, auth: AuthDep
 ) -> Response:
@@ -423,7 +441,13 @@ def list_users(principal: PrincipalDep, auth: AuthDep) -> list[UserView]:
     return [_user_view(u) for u in auth.list_users(principal)]
 
 
-@router.post("/users", status_code=201, response_model=UserView, operation_id="createUser")
+@router.post(
+    "/users",
+    status_code=201,
+    response_model=UserView,
+    operation_id="createUser",
+    dependencies=needs(Permission.USERS_MANAGE),
+)
 def create_user(
     body: UserCreateRequest, request: Request, principal: PrincipalDep, auth: AuthDep
 ) -> UserView:
@@ -440,7 +464,12 @@ def create_user(
     return _user_view(info)
 
 
-@router.patch("/users/{user_id}", response_model=UserView, operation_id="updateUser")
+@router.patch(
+    "/users/{user_id}",
+    response_model=UserView,
+    operation_id="updateUser",
+    dependencies=needs(Permission.USERS_MANAGE),
+)
 def update_user(
     user_id: str,
     body: UserUpdateRequest,
@@ -454,7 +483,12 @@ def update_user(
     return _user_view(info)
 
 
-@router.post("/users/{user_id}/password", status_code=204, operation_id="resetUserPassword")
+@router.post(
+    "/users/{user_id}/password",
+    status_code=204,
+    operation_id="resetUserPassword",
+    dependencies=needs(Permission.USERS_MANAGE),
+)
 def reset_user_password(
     user_id: str,
     body: PasswordResetRequest,
@@ -467,7 +501,12 @@ def reset_user_password(
     return Response(status_code=204)
 
 
-@router.delete("/users/{user_id}/mfa", status_code=204, operation_id="resetUserMfa")
+@router.delete(
+    "/users/{user_id}/mfa",
+    status_code=204,
+    operation_id="resetUserMfa",
+    dependencies=needs(Permission.USERS_MANAGE),
+)
 def reset_user_mfa(
     user_id: str, request: Request, principal: PrincipalDep, auth: AuthDep
 ) -> Response:

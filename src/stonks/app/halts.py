@@ -33,6 +33,8 @@ from stonks.accounts import NotFound, Role, Scope, owned_portfolio
 from stonks.accounts.audit import AuditLog
 from stonks.app.context import AppContext
 from stonks.app.errors import NotFoundError, ValidationError
+from stonks.auth.policy import Permission, require
+from stonks.auth.principal import Principal
 from stonks.logging import get_logger
 from stonks.production.halts import (
     Halt,
@@ -124,6 +126,15 @@ def _today() -> date:
     return datetime.now(UTC).date()
 
 
+#: The caller: a :class:`Principal` (API, MCP) or a bare :class:`Scope`
+#: (the CLI and in-process services).
+Who = Scope | Principal
+
+
+def _scope(who: Who) -> Scope:
+    return who.scope if isinstance(who, Principal) else who
+
+
 def _is_admin(scope: Scope) -> bool:
     return scope.is_service or scope.role == Role.ADMIN
 
@@ -139,26 +150,29 @@ class HaltService:
 
     # ---- reads -----------------------------------------------------------------------
 
-    def list(self, scope: Scope, *, include_cleared: bool = False) -> list[HaltView]:
+    def list(self, who: Who, *, include_cleared: bool = False) -> list[HaltView]:
         """Halts the caller can see, newest first: global ones, their own
         user halts and those of portfolios they own. By default only the
         halts in force today."""
+        scope = _scope(who)
         today = _today()
         with self._state() as state:
             halts = list_halts(state, include_cleared=include_cleared, on=today)
             return [HaltView.of(h, today) for h in halts if self._visible(state, scope, h)]
 
-    def get(self, scope: Scope, halt_id: int) -> HaltView:
+    def get(self, who: Who, halt_id: int) -> HaltView:
+        scope = _scope(who)
         with self._state() as state:
             return HaltView.of(self._load(state, scope, halt_id), _today())
 
     # ---- the kill switch ---------------------------------------------------------------
 
     def engage_kill(
-        self, scope: Scope, request: KillSwitchRequest, *, ip: str | None = None
+        self, who: Who, request: KillSwitchRequest, *, ip: str | None = None
     ) -> HaltView:
         """Stop new orders at ``request.scope``. Idempotent: a kill switch
         already on at that scope is returned as it is."""
+        scope = _scope(who)
         if not (scope.is_service or Role(scope.role).can_trade):
             raise ValidationError("the kill switch needs a role that can trade")
         user_id: str | None = None
@@ -214,9 +228,16 @@ class HaltService:
             return HaltView.of(halt, _today())
 
     def resume_kill(
-        self, scope: Scope, halt_id: int, request: ResumeRequest, *, ip: str | None = None
+        self, who: Who, halt_id: int, request: ResumeRequest, *, ip: str | None = None
     ) -> HaltView:
-        """Turn a kill switch off. Needs :data:`RESUME_PHRASE` typed exactly."""
+        """Turn a kill switch off. Needs :data:`RESUME_PHRASE` typed exactly.
+
+        A person needs a second factor checked in the last few minutes
+        (step-up), so API tokens are refused (``StepUpRequired``). A bare
+        :class:`Scope` is the CLI, where shell access already implies admin."""
+        if isinstance(who, Principal):
+            require(who, Permission.KILLSWITCH_RESUME)
+        scope = _scope(who)
         if request.confirmation.strip() != RESUME_PHRASE:
             raise ValidationError(f"type {RESUME_PHRASE!r} to resume trading")
         with self._state() as state:
@@ -228,9 +249,10 @@ class HaltService:
     # ---- other halts -------------------------------------------------------------------
 
     def clear(
-        self, scope: Scope, halt_id: int, request: ClearHaltRequest, *, ip: str | None = None
+        self, who: Who, halt_id: int, request: ClearHaltRequest, *, ip: str | None = None
     ) -> HaltView:
         """The logged reset of a circuit-breaker or operational halt."""
+        scope = _scope(who)
         with self._state() as state:
             halt = self._load(state, scope, halt_id)
             if halt.kind == "kill":

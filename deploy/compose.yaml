@@ -37,6 +37,13 @@ services:
   api:
     <<: *app
     command: ["stonks", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    # The anchor's environment is replaced, not merged: repeat STONKS_DATA_DIR.
+    # Caddy's X-Forwarded-For is believed only from this network, so the
+    # login limit and the audit log see each visitor's real IP. Port 8000 is
+    # not published, so nothing outside the network can reach the API.
+    environment:
+      STONKS_DATA_DIR: /data
+      STONKS_API_TRUSTED_PROXIES: ${STONKS_DOCKER_SUBNET:-172.31.250.0/24}
     expose:
       - "8000"
     healthcheck:
@@ -105,6 +112,14 @@ services:
       - restic_cache:/cache
       - restore:/restore
     logging: *logging
+
+networks:
+  default:
+    # A fixed subnet, so the API can trust exactly this range as its proxy.
+    # Change STONKS_DOCKER_SUBNET in .env if it clashes with a host network.
+    ipam:
+      config:
+        - subnet: ${STONKS_DOCKER_SUBNET:-172.31.250.0/24}
 
 volumes:
   # All Stonks state: lake.duckdb, Parquet bars, state.sqlite, artifacts,

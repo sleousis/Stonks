@@ -9,6 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
 from stonks.app.context import AppContext
 from stonks.app.errors import NotFoundError
 from stonks.app.pagination import Page
@@ -107,9 +108,13 @@ class OperationsService:
 
     # ---- P&L ---------------------------------------------------------------
 
-    def pnl(self, since: date | None = None) -> PnlSeries:
+    def pnl(
+        self, since: date | None = None, *, portfolio_id: str = DEFAULT_PORTFOLIO_ID
+    ) -> PnlSeries:
+        """One portfolio's daily P&L. Callers resolve ``portfolio_id``
+        through ``PortfolioService.resolve`` first."""
         with self._ctx.state() as state:
-            rows = load_pnl(state, since=since)
+            rows = load_pnl(state, since=since, portfolio_id=portfolio_id)
         return PnlSeries(strategy_id=None, rows=[_pnl_view(r) for r in rows])
 
     def shadow_pnl(self, strategy_id: str, since: date | None = None) -> PnlSeries:
