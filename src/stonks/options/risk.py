@@ -45,12 +45,12 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from stonks.core.options import OptionContract, is_option_id, parse_contract_id
+from stonks.options.market import PricingMarket, market_or_flat
 from stonks.options.pricing import (
     ZERO_GREEKS,
     Greeks,
     PricingModel,
     default_model_for,
-    inputs_for,
 )
 
 #: Equity and index scenario ranges of the risk-based estimate.
@@ -95,6 +95,12 @@ class OptionRiskView:
     rate: float = 0.0
     #: The book's position groups (instrument -> signed quantity each).
     groups: tuple[Mapping[str, float], ...] = ()
+    #: Rates to each expiry and known dividends (roadmap 17.7). ``None``
+    #: prices in a flat market of ``rate``.
+    market: PricingMarket | None = None
+
+    def pricing(self) -> PricingMarket:
+        return market_or_flat(self.market, self.rate)
 
     def contract(self, instrument: str) -> OptionContract | None:
         known = self.contracts.get(instrument)
@@ -272,6 +278,7 @@ def _reprice(
     model: PricingModel | None,
 ) -> float | None:
     total = 0.0
+    market = view.pricing()
     for instrument, qty in positions.items():
         contract = view.contract(instrument)
         if contract is None:
@@ -289,9 +296,7 @@ def _reprice(
             price = contract.intrinsic(shocked)
         else:
             pricer = model or default_model_for(contract)
-            price = pricer.price(
-                inputs_for(contract, view.as_of, spot=shocked, vol=iv, rate=view.rate)
-            )
+            price = pricer.price(market.inputs(contract, view.as_of, spot=shocked, vol=iv))
         total += qty * price * contract.multiplier
     return total
 

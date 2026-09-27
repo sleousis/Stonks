@@ -8,7 +8,9 @@ liquidity filters count: a two-sided market, a spread no wider than
 
 Delta comes from the quote when the vendor sent one; otherwise from the
 pricing model with the quote's implied vol, or with the vol implied by its
-mid. A quote whose delta cannot be found is skipped.
+mid. A quote whose delta cannot be found is skipped. The model prices in
+``market`` (Treasury rates and known dividends, roadmap 17.7) when set,
+else in a flat market of ``rate``.
 """
 
 from __future__ import annotations
@@ -17,7 +19,8 @@ from dataclasses import dataclass
 from datetime import date
 
 from stonks.options.chain import ChainSnapshot, OptionQuote
-from stonks.options.pricing import default_model_for, inputs_for
+from stonks.options.market import PricingMarket, market_or_flat
+from stonks.options.pricing import default_model_for
 
 
 @dataclass(frozen=True)
@@ -27,6 +30,7 @@ class LegSelector:
     max_spread_pct: float = 0.5
     min_open_interest: float = 0.0
     rate: float = 0.0
+    market: PricingMarket | None = None
 
     def liquid(self, quote: OptionQuote) -> bool:
         if not quote.two_sided:
@@ -58,15 +62,14 @@ class LegSelector:
         if contract.year_fraction(quote.as_of) <= 0:
             return None
         model = default_model_for(contract)
+        market = market_or_flat(self.market, self.rate)
         iv = quote.iv
         if iv is None and quote.mid is not None:
-            base = inputs_for(contract, quote.as_of, spot=spot, vol=0.2, rate=self.rate)
+            base = market.inputs(contract, quote.as_of, spot=spot, vol=0.2)
             iv = model.implied_vol(base, quote.mid)
         if iv is None:
             return None
-        return model.greeks(
-            inputs_for(contract, quote.as_of, spot=spot, vol=iv, rate=self.rate)
-        ).delta
+        return model.greeks(market.inputs(contract, quote.as_of, spot=spot, vol=iv)).delta
 
     def by_delta(
         self,

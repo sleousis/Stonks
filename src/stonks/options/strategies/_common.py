@@ -127,7 +127,7 @@ def atm_iv(ctx: OptionDecisionContext, underlying: str, target_dte: int = 30) ->
     if not calls:
         return None
     quote = min(calls, key=lambda q: abs(q.contract.strike - spot))
-    return analyze(quote, spot, rate=ctx.rate).iv
+    return analyze(quote, spot, market=ctx.pricing()).iv
 
 
 def sma(values: list[float], n: int) -> float | None:

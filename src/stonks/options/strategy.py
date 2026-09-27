@@ -26,6 +26,7 @@ from typing import Any, ClassVar
 from stonks.backtest.options_ledger import OptionLedger, PositionGroup
 from stonks.core.params import Params, ParamSpace, validate_params
 from stonks.options.chain import ChainSnapshot
+from stonks.options.market import PricingMarket, market_or_flat
 from stonks.options.orders import ComboOrder
 
 
@@ -54,6 +55,12 @@ class OptionDecisionContext:
         default_factory=dict[str, tuple[date, float]]
     )
     rate: float = 0.0
+    #: Rates to each expiry and dividends known on ``as_of`` (roadmap 17.7).
+    market: PricingMarket | None = None
+
+    def pricing(self) -> PricingMarket:
+        """``market``, or a flat market of ``rate`` without one."""
+        return market_or_flat(self.market, self.rate)
 
     def spot(self, underlying: str) -> float | None:
         series = self.history.get(underlying) or ()
