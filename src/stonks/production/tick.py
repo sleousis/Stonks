@@ -75,7 +75,6 @@ from stonks.core.protocols import Broker
 from stonks.core.types import Fill, Order, OrderStatus, Portfolio
 from stonks.execution.brokers.base import BrokerKind, OrderRejectedError, OrderStateSource
 from stonks.execution.brokers.simulated import SimulatedCosts
-from stonks.execution.margin import RegTMargin
 from stonks.execution.orders import SideToken, make_client_id
 from stonks.execution.reconcile import (
     NON_TERMINAL_STATUSES,
@@ -114,7 +113,7 @@ from stonks.production.corporate_actions import (
     working_orders,
 )
 from stonks.production.decay import DecaySettings
-from stonks.production.financing import last_accrual, record_accrual
+from stonks.production.financing import last_accrual, record_accrual, short_account
 from stonks.production.halts import active_halts
 from stonks.production.hooks import (
     GateContext,
@@ -985,6 +984,13 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             volumes=book_prices.volumes,
             portfolio_id=portfolio_id,
         )
+        if book.spec.allow_short:
+            # the short rules read the book's own margin model and borrow
+            # source, as they do in a backtest (BE-30)
+            margin, borrow = short_account(book.spec.risk)
+            risk_context = replace(
+                risk_context, margin=margin, borrow=borrow or risk_context.borrow
+            )
     book_input = BookInput(
         portfolio=portfolio,
         construction=construction,
@@ -1084,9 +1090,9 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             portfolio, settings, prices, as_of, factory, book_prices.volumes, asset_classes
         )
         if book.spec.allow_short and isinstance(broker, SimulatedBroker):
-            # Roadmap 16.1: a short book's paper broker trades on margin.
-            model = book.spec.risk.rules.margin_call.margin.build()
-            broker.enable_shorts(model if model.allows_short else RegTMargin())
+            # Roadmap 16.1: a short book's paper broker trades on margin, with
+            # the configured borrow lists and fees (BE-30).
+            broker.enable_shorts(*short_account(book.spec.risk))
     # Roadmap 16.1: a short book's paper broker charges borrow fees and debit
     # interest for the days since the stored accrual date (else the last
     # snapshot), before any order changes the positions.
