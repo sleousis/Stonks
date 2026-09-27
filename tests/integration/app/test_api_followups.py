@@ -66,11 +66,11 @@ def test_golive_route_returns_typed_report(client, seeded):
         "passed": True,
         "value": None,
         "limit": None,
-        "detail": "shadow: paper period from shadow P&L",
+        "detail": "Paper trading, measured on its paper trading results",
     }
     survival = next(c for c in body["checks"] if c["name"] == "survival")
     assert survival["passed"] is False
-    assert survival["detail"] == "no survival reports"
+    assert survival["detail"] == "No robustness tests on record"
 
 
 def test_golive_route_accepts_since(client, seeded):

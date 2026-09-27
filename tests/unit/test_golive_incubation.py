@@ -124,7 +124,7 @@ def test_mc_band_reads_the_stored_p05_return_of_mc_trades(env):
     mc = mc_report(0.50, p05_return=-0.05)
     sid = _seed(env, reports=promotion_reports(mc=mc))
     check = _check(_evaluate(env, sid), "within_mc_band")
-    assert "Monte Carlo p5 floor" in check.detail
+    assert "Monte Carlo floor" in check.detail
 
 
 def test_policy_with_incubation_field_turns_on_new_checks(env):
@@ -167,7 +167,7 @@ def test_low_sharpe_raises_day_requirement_to_the_cap(env):
     check = _check(_evaluate(env, sid), "min_days")
     assert check.limit == 252
     assert not check.passed
-    assert "MinTRL" in check.detail
+    assert "minimum track record" in check.detail
 
 
 def test_mid_sharpe_requirement_is_the_min_trl(env):
@@ -211,7 +211,7 @@ def test_missing_backtest_sharpe_fails_min_days(env):
     sid = _seed(env, reports=promotion_reports(oos=bare), points=_flat(300))
     check = _check(_evaluate(env, sid), "min_days")
     assert not check.passed
-    assert "MinTRL unavailable" in check.detail
+    assert "cannot work out the minimum track record" in check.detail
 
 
 def test_min_trl_off_uses_min_days(env):
@@ -252,7 +252,7 @@ def test_missing_monte_carlo_fails_the_band(env):
     sid = _seed(env, reports=reports)
     check = _check(_evaluate(env, sid), "within_mc_band")
     assert not check.passed
-    assert "Monte Carlo band unavailable" in check.detail
+    assert "No Monte Carlo test on record" in check.detail
 
 
 def test_no_paper_snapshots_fails_the_band(env):
@@ -296,7 +296,7 @@ def test_quit_rule_without_backtest_drawdown_fails(env):
     sid = _seed(env, reports=promotion_reports(oos=bare))
     check = _check(_evaluate(env, sid), "quit_rule")
     assert not check.passed
-    assert "backtest max drawdown" in check.detail
+    assert "No backtest drawdown" in check.detail
 
 
 # ---- promotion checklist ----------------------------------------------------------
@@ -307,7 +307,7 @@ def test_missing_preset_test_fails_the_checklist(env):
     sid = _seed(env, reports=reports)
     check = _check(_evaluate(env, sid), "promotion_preset")
     assert not check.passed
-    assert "walk_forward" in check.detail
+    assert "missing: Walk-forward" in check.detail
     assert check.value == check.limit - 1
 
 

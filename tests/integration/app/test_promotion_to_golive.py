@@ -123,7 +123,7 @@ def test_promotion_run_registers_and_golive_shows_the_monte_carlo_band(settings,
     band = next(c for c in report.checks if c.name == "within_mc_band")
     assert band.limit == pytest.approx(p95)
     assert band.value == pytest.approx(0.0)  # the flat paper period
-    assert band.passed and "Monte Carlo p95" in band.detail
+    assert band.passed and "Monte Carlo worst case" in band.detail
     preset = next(c for c in report.checks if c.name == "promotion_preset")
     assert preset.passed, preset.detail
     assert next(c for c in report.checks if c.name == "hypothesis_recorded").passed
