@@ -69,9 +69,7 @@ def test_underlyings_and_a_chain_with_greeks(client):
     picked = client.get(
         "/api/options/chains/UP.US", params={"as_of": "2026-01-30", "expiry": other}, headers=AUTH
     ).json()
-    assert picked["expiry"] == other and picked["rows"][0]["call"]["contract_id"].endswith(
-        ":C:120"
-    )
+    assert picked["expiry"] == other and picked["rows"][0]["call"]["contract_id"].endswith(":C:120")
     latest = client.get("/api/options/chains/UP.US", headers=AUTH).json()
     assert latest["as_of"] == "2026-03-31"
 
@@ -154,9 +152,7 @@ def test_backtest_requests_are_checked_before_queueing(client):
         "end": "2026-02-27",
         "validation": False,
     }
-    unknown = client.post(
-        "/api/options/backtests", json=body | {"strategy": "nope"}, headers=AUTH
-    )
+    unknown = client.post("/api/options/backtests", json=body | {"strategy": "nope"}, headers=AUTH)
     assert unknown.status_code == 422
     bad_param = client.post(
         "/api/options/backtests", json=body | {"params": {"lookback": 5000}}, headers=AUTH

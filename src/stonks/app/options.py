@@ -312,9 +312,7 @@ class OptionsService:
         with self._ctx.lake() as lake:
             return [_underlying_view(s) for s in OptionStore(lake).underlyings()]
 
-    def _snapshot(
-        self, store: OptionStore, underlying: str, as_of: date | None
-    ) -> ChainSnapshot:
+    def _snapshot(self, store: OptionStore, underlying: str, as_of: date | None) -> ChainSnapshot:
         day = store.latest_day(underlying, as_of)
         if day is None:
             when = f" on or before {as_of}" if as_of else ""
@@ -464,9 +462,7 @@ class OptionsService:
         cls = self._strategy(request)
         params = request.params or None
         with self._ctx.lake() as lake:
-            data = OptionMarketData.from_lake(
-                lake, request.underlyings, request.start, request.end
-            )
+            data = OptionMarketData.from_lake(lake, request.underlyings, request.start, request.end)
             sources = OptionStore(lake).sources(request.underlyings, request.start, request.end)
         config = OptionsBacktestConfig(
             start=request.start,
