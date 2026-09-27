@@ -583,7 +583,9 @@ async def test_lab_options_need_their_test(mcp):
 
 @pytest.mark.anyio
 async def test_ingest_job(mcp):
-    job = await call(mcp, "run_ingest", {"kind": "prices", "tickers": ["NEW.US"]})
+    job = await call(
+        mcp, "run_ingest", {"kind": "prices", "source": "eodhd", "tickers": ["NEW.US"]}
+    )
     done = await call(mcp, "wait_for_job", {"job_id": job["id"], "poll_seconds": 0.05})
     assert done["job"]["status"] == "succeeded", done["job"]["error"]
     assert done["result"]["kind"] == "prices" and done["result"]["tickers_ok"] == 1

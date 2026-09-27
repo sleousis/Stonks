@@ -136,7 +136,9 @@ class VolatilityHawkesStrategy(SingleTickerLongFlat):
             close, v.to_numpy(), q05.to_numpy(), q95.to_numpy()
         )
         lb = int(last_below[-1])
-        base = close[lb] if lb >= 0 else float("nan")
+        # No calm bar in the window yet: the current close stands in, so the
+        # feature stays finite and the score is 0.
+        base = close[lb] if lb >= 0 else close[-1]
         long = bool(signal[-1] == 1)
         return {
             "v": float(v.iloc[-1]),

@@ -378,6 +378,15 @@ CASES: dict[str, Case] = {
     "list_subscriptions": _c("GET", "/api/subscriptions"),
     "list_universes": _c("GET", "/api/universes"),
     "get_universe": _c("GET", "/api/universes/{universe_id}", lambda i: {"universe_id": "u_perm"}),
+    "get_universe_history": _c(
+        "GET", "/api/universes/{universe_id}/history", lambda i: {"universe_id": "u_perm"}
+    ),
+    "list_universe_exchanges": _c("GET", "/api/universes/exchanges"),
+    "update_universe": _c(
+        "PUT",
+        "/api/universes/{universe_id}",
+        lambda i: {"universe_id": "u_perm", "kind": "list", "spec": {}, "confirm": True},
+    ),
     "get_universe_members": _c(
         "GET", "/api/universes/{universe_id}/members", lambda i: {"universe_id": "u_perm"}
     ),

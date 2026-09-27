@@ -438,7 +438,11 @@ def register(t: ToolContext) -> None:
 
     @server.tool(annotations=JOB_OPEN_WORLD)
     async def run_ingest(
-        kind: Literal["prices", "intraday", "fundamentals", "metadata"],
+        kind: Literal["prices", "intraday", "fundamentals", "metadata", "borrow"],
+        source: Annotated[
+            Literal["eodhd", "yahoo", "defillama"] | None,
+            Field(description="data source; the default one when left out (see list_sources)"),
+        ] = None,
         tickers: Annotated[
             list[str] | None, Field(description="instrument ids; or use exchange")
         ] = None,
@@ -446,17 +450,24 @@ def register(t: ToolContext) -> None:
         since: IsoDate | None = None,
         until: IsoDate | None = None,
         interval: Annotated[str | None, Field(description="for intraday, e.g. 5m")] = None,
+        markets: Annotated[
+            list[str] | None,
+            Field(description="for borrow: IBKR short stock markets, e.g. usa"),
+        ] = None,
     ) -> dict[str, Any]:
-        """Queue a market-data ingest into the lake from the configured vendor.
-        Returns the job; use wait_for_job for the outcome."""
+        """Queue a market-data ingest into the lake from the configured vendor,
+        or from ``source``. ``borrow`` pulls daily stock borrow rates. Returns
+        the job; use wait_for_job for the outcome."""
         body = drop_none(
             {
                 "kind": kind,
+                "source": source,
                 "tickers": tickers,
                 "exchange": exchange,
                 "since": iso(since),
                 "until": iso(until),
                 "interval": interval,
+                "markets": markets,
             }
         )
         return await t.post("/api/ingest/runs", body)

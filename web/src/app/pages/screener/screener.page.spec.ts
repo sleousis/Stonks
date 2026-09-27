@@ -304,6 +304,8 @@ describe('ScreenerPage', () => {
       'Open the universe',
     );
     expect(root.querySelector('a[href="/universes"]')).not.toBeNull();
+    const lab = saved.querySelector<HTMLAnchorElement>('a[href^="/lab"]')!;
+    expect(lab.getAttribute('href')).toBe('/lab?universe=cheap-payers');
   });
 
   it('sends a rule universe by the saved screen when it is unchanged', async () => {

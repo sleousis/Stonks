@@ -1736,26 +1736,30 @@ class DuckDBLake:
     def get_corporate_actions(self, tickers: list[str]) -> pd.DataFrame:
         """Splits and cash dividends for ``tickers`` in one query.
 
-        Columns ``ticker, ex_date, kind, value``: ``kind`` is ``split``
-        (``value`` = new shares per old share) or ``dividend`` (``value`` =
-        cash per share on the ex-date). Ordered by ticker, ex-date, then
-        splits before dividends on the same ex-date."""
+        Columns ``ticker, ex_date, kind, value, declaration_date``: ``kind``
+        is ``split`` (``value`` = new shares per old share) or ``dividend``
+        (``value`` = cash per share on the ex-date). ``declaration_date`` is
+        the dividend's announcement day, NULL when unknown and for splits.
+        Ordered by ticker, ex-date, then splits before dividends on the same
+        ex-date."""
         if not tickers:
-            return pd.DataFrame(columns=["ticker", "ex_date", "kind", "value"])
+            return pd.DataFrame(columns=["ticker", "ex_date", "kind", "value", "declaration_date"])
         df = self.con.execute(
             """
-            SELECT ticker, ex_date, kind, value FROM (
-                SELECT ticker, date AS ex_date, 'split' AS kind, ratio AS value, 0 AS ord
+            SELECT ticker, ex_date, kind, value, declaration_date FROM (
+                SELECT ticker, date AS ex_date, 'split' AS kind, ratio AS value,
+                       CAST(NULL AS DATE) AS declaration_date, 0 AS ord
                   FROM stock_splits WHERE ticker = ANY(?)
                 UNION ALL
-                SELECT ticker, ex_date, 'dividend' AS kind, amount AS value, 1 AS ord
+                SELECT ticker, ex_date, 'dividend' AS kind, amount AS value,
+                       declaration_date, 1 AS ord
                   FROM dividends WHERE ticker = ANY(?)
             )
             ORDER BY ticker, ex_date, ord
             """,
             [list(tickers), list(tickers)],
         ).fetchdf()
-        return _dates_to_python(df, ("ex_date",))
+        return _dates_to_python(df, ("ex_date", "declaration_date"))
 
     def upsert_insider_transactions(self, df: pd.DataFrame) -> int:
         # Deduplicates on the NULL-safe ``natural_key`` column (migration

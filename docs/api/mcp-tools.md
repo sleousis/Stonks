@@ -1760,19 +1760,22 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 
 ### `run_ingest`
 
-Queue a market-data ingest into the lake from the configured vendor.
-Returns the job; use wait_for_job for the outcome.
+Queue a market-data ingest into the lake from the configured vendor,
+or from ``source``. ``borrow`` pulls daily stock borrow rates. Returns
+the job; use wait_for_job for the outcome.
 
 Safety: writes, non-destructive, not idempotent, open world. Needs confirm: no.
 
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `kind` | "prices" \| "intraday" \| "fundamentals" \| "metadata" | yes |  |  |
+| `kind` | "prices" \| "intraday" \| "fundamentals" \| "metadata" \| "borrow" | yes |  |  |
+| `source` | "eodhd" \| "yahoo" \| "defillama" \| null | no | `null` | data source; the default one when left out (see list_sources) |
 | `tickers` | list[string] \| null | no | `null` | instrument ids; or use exchange |
 | `exchange` | string \| null | no | `null` | ingest a whole exchange |
 | `since` | date \| null | no | `null` | YYYY-MM-DD |
 | `until` | date \| null | no | `null` | YYYY-MM-DD |
 | `interval` | string \| null | no | `null` | for intraday, e.g. 5m |
+| `markets` | list[string] \| null | no | `null` | for borrow: IBKR short stock markets, e.g. usa |
 
 ### `run_options_backtest`
 

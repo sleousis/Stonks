@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import date
 from typing import Any
 
 import pandas as pd
@@ -32,7 +33,8 @@ class LakeCorporateActions:
 
 
 def actions_from_frame(df: pd.DataFrame | None) -> CorporateActions:
-    """Typed events from a ``ticker, ex_date, kind, value`` frame."""
+    """Typed events from a ``ticker, ex_date, kind, value`` frame, with an
+    optional ``declaration_date`` column for dividends."""
     if df is None or df.empty:
         return CorporateActions()
     events: list[CorporateAction] = []
@@ -42,5 +44,14 @@ def actions_from_frame(df: pd.DataFrame | None) -> CorporateActions:
         if row.kind == "split" and value > 0 and value != 1.0:
             events.append(Split(row.ticker, ex_date, value))
         elif row.kind == "dividend" and value > 0:
-            events.append(Dividend(row.ticker, ex_date, value))
+            declared_on = _optional_date(getattr(row, "declaration_date", None))
+            events.append(Dividend(row.ticker, ex_date, value, declared_on=declared_on))
     return CorporateActions.from_events(events)
+
+
+def _optional_date(value: Any) -> date | None:
+    """A frame cell as a date, ``None`` for NULL, NaN or NaT."""
+    if value is None:
+        return None
+    stamp = pd.Timestamp(value)
+    return stamp.date() if isinstance(stamp, pd.Timestamp) else None

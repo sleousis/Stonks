@@ -341,7 +341,9 @@ the verdict", which sends `register_strategy`) sits in one closed
 **Advanced** fold that opens itself when one of its fields is wrong. The
 `promotion` preset is called the **Go-live suite** everywhere. `/lab?preset=`
 picks a suite, with `?strategy=` and `?tickers=`, so a failing go-live check
-links straight to a prefilled run. A backtest or plain lab run starts with
+links straight to a prefilled run. `/lab?universe=` opens the lab run form
+with that stored universe picked. A universe's page (Test in the lab) and a
+screen saved as a universe link there. A backtest or plain lab run starts with
 no confirm; a run that may start paper trading asks once, plainly. A
 finished run shows a next step: Start paper trading (a prefilled re-run),
 what failed and "Change and run again", or Open strategy and Follow. Costs
