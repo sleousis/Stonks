@@ -322,7 +322,7 @@ class ModelVersionRegistry:
             target = self.get(strategy_id, version)
             if target.status != "candidate":
                 raise GovernanceError(
-                    f"{strategy_id} v{version} is {target.status}; only a candidate can swap in"
+                    f"{strategy_id} v{version} is {target.status}, only a candidate can swap in"
                 )
             reason_, passed = _check_swap(strategy_id, version, reason, check_report, override)
             current = self.live(strategy_id)
@@ -371,7 +371,7 @@ class ModelVersionRegistry:
             target = self.get(strategy_id, version)
             if target.status != "candidate":
                 raise GovernanceError(
-                    f"{strategy_id} v{version} is {target.status}; only a candidate can be rejected"
+                    f"{strategy_id} v{version} is {target.status}, only a candidate can be rejected"
                 )
             now = self._now_iso()
             event = self._log(
