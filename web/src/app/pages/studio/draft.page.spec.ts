@@ -131,6 +131,82 @@ describe('DraftPage', () => {
     expect(el.querySelector('.save-bar')).toBeNull();
   });
 
+  describe('saving while typing (UX-05)', () => {
+    const page = () =>
+      fixture.componentInstance as unknown as {
+        save(): Promise<boolean>;
+        dirty(): boolean;
+      };
+
+    async function editName(value: string): Promise<void> {
+      const name = el.querySelector('#rb-name') as HTMLInputElement;
+      name.value = value;
+      name.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    }
+
+    it('edit during save keeps dirty true', async () => {
+      await answerValidation(VALID);
+      await editName('First');
+      const saving = page().save();
+      const req = await nextRequest(controller, '/api/studio/drafts/draft_abc123', 'PATCH');
+      expect((req.request.body as { spec: { name: string } }).spec.name).toBe('First');
+      // The trader keeps typing while the request is in flight.
+      await editName('Second');
+      req.flush(makeDraft({ spec: (req.request.body as { spec: Record<string, unknown> }).spec }));
+      expect(await saving).toBe(true);
+      await settle();
+      expect(page().dirty()).toBe(true);
+      expect(el.textContent).toContain('Unsaved changes');
+      controller.match('/api/studio/spec/validate').forEach((r) => r.flush(VALID));
+    });
+
+    it('two save() calls send one PATCH', async () => {
+      await answerValidation(VALID);
+      await editName('Once');
+      const a = page().save();
+      const b = page().save();
+      const req = await nextRequest(controller, '/api/studio/drafts/draft_abc123', 'PATCH');
+      await tick(5);
+      expect(controller.match((r) => r.method === 'PATCH')).toEqual([]);
+      req.flush(makeDraft({ spec: (req.request.body as { spec: Record<string, unknown> }).spec }));
+      expect(await a).toBe(true);
+      expect(await b).toBe(true);
+      await settle();
+      expect(page().dirty()).toBe(false);
+      controller.match('/api/studio/spec/validate').forEach((r) => r.flush(VALID));
+    });
+  });
+
+  it('a registered draft shows the note (UX-63)', async () => {
+    await answerValidation(VALID);
+    expect(el.querySelector('#registered-note')).toBeNull();
+    fixture.componentRef.setInput('id', 'draft_reg');
+    fixture.detectChanges();
+    (await nextRequest(controller, '/api/studio/drafts/draft_reg')).flush(
+      makeDraft({
+        id: 'draft_reg',
+        status: 'registered',
+        registered_strategy_id: 'rule_rsi_v1',
+        strategy_status: 'shadow',
+      }),
+    );
+    await settle();
+    const note = el.querySelector('#panel-build #registered-note');
+    expect(note?.textContent).toContain('no longer change');
+    expect(note?.querySelector('a')?.getAttribute('href')).toBe('/strategies/rule_rsi_v1');
+    await answerValidation(VALID);
+  });
+
+  it('asks to sign in again, in plain words, when the rule check is refused (UX-63)', async () => {
+    const req = await nextRequest(controller, '/api/studio/spec/validate', 'POST', 2000);
+    req.flush({ detail: 'no' }, { status: 401, statusText: 'Unauthorized' });
+    await settle();
+    const text = el.textContent ?? '';
+    expect(text).not.toContain('API token');
+    expect(text).toContain('Sign in again to check the rules');
+  });
+
   it('asks before leaving with unsaved changes', async () => {
     await answerValidation(VALID);
     expect(await fixture.componentInstance.canLeave()).toBe(true);
