@@ -65,8 +65,10 @@ def test_every_backend_runs_the_builtin_actions(registry):
 
 
 def test_default_jobs_validate_against_every_backend():
+    expected = {job.name for job in SchedulerConfig().jobs}
     for registry in (LOCAL_ACTIONS, API_ACTIONS, IN_PROCESS_ACTIONS):
-        build_job_specs(SchedulerConfig(), env={}, actions=registry.names())
+        specs = build_job_specs(SchedulerConfig(), env={}, actions=registry.names())
+        assert {s.name for s in specs} == expected
 
 
 def test_duplicate_job_names_rejected():

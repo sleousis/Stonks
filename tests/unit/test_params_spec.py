@@ -77,7 +77,9 @@ def test_validate_params_accepts_valid():
         ParameterSpec(name="n", kind="int", default=10, bounds=(1, 100)),
         ParameterSpec(name="w", kind="categorical", default="x", bounds=["x", "y"]),
     ]
-    validate_params({"n": 20, "w": "y"}, space)  # should not raise
+    params = {"n": 20, "w": "y"}
+    assert validate_params(params, space) is None  # should not raise
+    assert params == {"n": 20, "w": "y"}  # and leaves the params alone
 
 
 def test_validate_params_rejects_unknown_key():
@@ -112,7 +114,9 @@ def test_validate_params_uses_defaults_for_missing_tunable():
         ParameterSpec(name="a", kind="int", default=1, bounds=(0, 10)),
         ParameterSpec(name="b", kind="int", default=2, bounds=(0, 10)),
     ]
-    validate_params({"a": 5}, space)  # should not raise; b is just missing
+    params = {"a": 5}
+    assert validate_params(params, space) is None  # b is just missing
+    assert "b" not in params  # the caller fills defaults, not the check
 
 
 def test_numpy_scalars_are_accepted():

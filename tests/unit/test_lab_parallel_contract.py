@@ -275,9 +275,12 @@ def test_snapshot_needs_a_universe(mem_lake):
 def test_snapshot_of_a_file_lake_does_not_lock_the_source(tmp_path):
     source = random_walk_lake(tmp_path / "lake.duckdb", ["A.US"], periods=10)
     try:
-        with LakeSnapshot.build(source, ["A.US"]) as snap, snap.open():
+        with LakeSnapshot.build(source, ["A.US"]) as snap, snap.open() as copy:
             # the source stays writable while workers read the snapshot
             source.con.execute("DELETE FROM bars WHERE ticker = 'A.US'")
+            left = source.con.execute("SELECT COUNT(*) FROM bars").fetchone()[0]
+            assert left == 0
+            assert copy.sql("SELECT COUNT(*) AS n FROM bars")["n"].iloc[0] > 0
     finally:
         source.close()
 
