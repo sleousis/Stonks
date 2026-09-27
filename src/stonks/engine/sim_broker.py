@@ -142,8 +142,13 @@ class IntradaySimBroker:
         interval: Interval = Interval.MIN_1,
         session_key: SessionKey | None = calendar_session_key,
         clock: Clock = SYSTEM_CLOCK,
+        order_prefix: str = "sim",
     ) -> None:
         self.clock = clock
+        #: Broker order ids (and so execution ids) start with this. A book
+        #: that restarts needs a new prefix, or its new execution ids would
+        #: repeat the ones already booked (21.2.5).
+        self.order_prefix = order_prefix
         self.interval = interval
         self._step = interval.to_timedelta()
         self._session_key = session_key
@@ -204,7 +209,7 @@ class IntradaySimBroker:
             decided = decided.replace(tzinfo=UTC)
         work = _Working(
             order=order,
-            broker_order_id=f"sim-{len(self._orders) + 1}",
+            broker_order_id=f"{self.order_prefix}-{len(self._orders) + 1}",
             decided_bar=floor_to(decided, self._step),
             remaining=order.quantity,
             updated_at=self.clock.now(),

@@ -21,6 +21,7 @@ from stonks.assistant.settings import AssistantConfig
 from stonks.backtest.costs import CostModelSettings
 from stonks.backtest.fills import ExecutionSettings
 from stonks.core.types import AssetClass
+from stonks.engine.settings import EngineSettings
 from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig
 from stonks.factors.settings import FactorSettings
 from stonks.ingest.ensure_settings import EnsureSettings
@@ -559,6 +560,8 @@ class Settings(BaseSettings):
     streaming: StreamingSettings = Field(default_factory=StreamingSettings)
     # ``[screener]``: candidate cap, job threshold and result cache (roadmap 20.11).
     screener: ScreenerSettings = Field(default_factory=ScreenerSettings)
+    # ``[engine]``: the intraday engine process (roadmap 21.2.5). Off by default.
+    engine: EngineSettings = Field(default_factory=EngineSettings)
 
 
 #: Secrets read straight from the environment by blocks that keep their own

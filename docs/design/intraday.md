@@ -6,6 +6,8 @@ Status: 21.1 (streaming data), 21.2.1 (event driver), 21.2.4 (session rules) and
 
 Status: 21.1 (streaming data) and 21.2.3 (the intraday router and fills, section 9) built. The rest of 21.2 and 21.3 is planned and split into small work packages (section 10).
 
+Status: 21.1 (streaming data) and 21.2.5 (the engine process, section 9) built. The rest of 21.2 and 21.3 are split into small work packages (section 10).
+
 Owner decisions this page follows:
 
 - Intraday comes after live daily trading is stable (Phase 19 stages).
@@ -231,6 +233,62 @@ flowchart LR
 `BarQuote` gains four optional fields (`bid`, `ask`, `gap_bars`, `new_session`) that the daily model ignores.
 
 Not yet: the kill switch and halts on every event (21.3.2), the price band collar for intraday limits (the IBKR collar applies), flatten orders at the close through the router (the session rules build them, the engine process sends them, 21.2.5), and the parity test of one recording through the backtest and live paths (21.2.2 and 21.2.5).
+
+## 9. The engine process (21.2.5)
+
+`engine/process.py` runs the intraday books in one always-on process. It is off by default (`[engine] enabled = false`).
+
+```mermaid
+flowchart LR
+  SR[StreamRunner<br/>live] -->|every event| EP
+  RP[recording or lake bars<br/>replay] -->|every event| EP
+  EP[EngineProcess] --> DRV[EventDriver]
+  DRV -->|bar close| H[engine handler]
+  H --> W[write the bars<br/>live only]
+  H --> R1[router: fills<br/>and reconcile]
+  H --> ST[DecisionStep<br/>gates, flatten]
+  ST --> R2[router: route]
+  H --> CP[(engine_runs<br/>checkpoint)]
+```
+
+On each bar close the handler:
+
+1. skips the close when a crashed run already handled it (the checkpoint),
+2. writes the decision bars to the bar store in live mode, so the step reads them even before the runner's writer flushes,
+3. lets each book's router fill simulated orders and reconcile,
+4. tells the step about the new fills, so it knows who owns each holding,
+5. runs the decision step (signals, `build_orders`, session gates, flatten orders),
+6. routes each book's orders and writes the checkpoint and heartbeat.
+
+**Startup.** Before the first order the process:
+
+- marks any run row left `running` as `crashed`. The engine lock proves no other engine is up.
+- rebuilds each simulated book from its starting cash and the ledger's fills, and ends its open orders, because they died with the old process.
+- runs `startup_reconcile` and `require_reconciled` on every router. An order still `unknown` stops the start. Nothing is sent.
+
+**Restart without re-sending.** Client ids are deterministic and the router never sends a client id already in the ledger, so a decision made again is `known`. A replay that resumes also skips every close up to the crashed run's checkpoint. A new simulated broker gets a new order id prefix, so its execution ids never repeat booked ones.
+
+**Flatten.** A book with `flatten_at_close` gets closing orders from the step in the flatten window. They go through the router like any order. When the step fails on a bar, the engine still builds and sends the flatten orders.
+
+**Stop.** A stop file in the control directory, a signal, the end of a replay, or the close plus `stop_after_close_minutes` ends the loop. Simulated day orders still working expire, and every book is reconciled once more.
+
+**Control files** live in `[engine] control_dir` (default `engine` next to the state DB): `engine.lock` (an OS lock the running process holds, dropped by the OS if it dies), `stop` (a stop request) and `engine.log`.
+
+**Scheduler jobs.** `engine_start` (open minus 15 minutes) starts a detached `python -m stonks.engine run`. `engine_stop` (close plus 10 minutes) writes the stop file and waits `stop_timeout_seconds`. Both work the same on the `api`, `in_process` and `local` backends, since they only touch the control files. Both skip while the engine is off, `engine_start` also on closed days and while an engine runs.
+
+**Entry point.** `python -m stonks.engine run [--session D]`, `replay PATH [--session D --speed S --write-bars]`, `status` and `stop [--timeout S]`.
+
+**Settings** (`engine/settings.py`, `[engine]`): `enabled`, `interval`, `calendar`, `source`, `universe`, `stale_after_seconds`, `threshold`, `control_dir`, the job times, and `[[engine.books]]` with `id`, `portfolio_id`, `strategies` (registry ids or catalog names), `broker` (`simulated` or `ibkr`), `initial_cash`, `construction` and `sessions`.
+
+**Migration.** SQLite 041 adds `engine_runs` (status, heartbeat, checkpoint, counts, the run it recovered from).
+
+**Parity.** `tests/unit/engine/test_process_parity.py` plays one recorded minute stream through the replay path and checks it gives the same orders and fills as the intraday backtest, with and without flatten.
+
+**Limits.**
+
+- The process opens the lake itself, like `python -m stonks.streaming run`. It cannot run beside `stonks serve` on a DuckDB lake. Running the engine inside the server is left to integration.
+- Orders keep a strategy id in the ledger only for registered strategies. A catalog strategy or a flatten order is stored without one (`orders.strategy_id` references the registry). The process keeps the owner in memory.
+- A replay trades simulated books only.
 
 ## 10. Work packages
 

@@ -404,3 +404,20 @@ def in_process_live_gate_days(ctx: RunContext) -> JobOutcome:
     from stonks.scheduling.local import live_gate_days_action
 
     return live_gate_days_action(ctx)
+
+
+@IN_PROCESS_ACTIONS.register("engine_start")
+def in_process_engine_start_action(ctx: RunContext) -> JobOutcome:
+    """The engine is its own process, controlled through files next to the
+    state DB, so every backend starts it the same way (roadmap 21.2.5)."""
+    from stonks.scheduling.jobs import engine_start_job
+
+    return engine_start_job(ctx)
+
+
+@IN_PROCESS_ACTIONS.register("engine_stop")
+def in_process_engine_stop_action(ctx: RunContext) -> JobOutcome:
+    """Every backend stops the engine the same way (roadmap 21.2.5)."""
+    from stonks.scheduling.jobs import engine_stop_job
+
+    return engine_stop_job(ctx)

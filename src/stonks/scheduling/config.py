@@ -109,7 +109,9 @@ def default_jobs() -> list[JobConfig]:
     live book turns stops on.
     ``live_gate_days`` (close plus 75 minutes)
     records the live stages' gate metrics and skips while no portfolio is
-    past ``sim_paper``."""
+    past ``sim_paper``. ``engine_start`` (open minus 15 minutes) and
+    ``engine_stop`` (close plus 10 minutes) run the intraday engine process
+    and skip while ``[engine] enabled = false``."""
     return [
         JobConfig(
             name="universes_refresh",
@@ -237,6 +239,20 @@ def default_jobs() -> list[JobConfig]:
             name="live_gate_days",
             action="live_gate_days",
             trigger=SessionTriggerConfig(offset_minutes=75),
+        ),
+        # The intraday engine process (roadmap 21.2.5). Both skip while
+        # [engine] is off. A missed start is not caught up: a late start
+        # would join a session already under way.
+        JobConfig(
+            name="engine_start",
+            action="engine_start",
+            trigger=SessionTriggerConfig(anchor="open", offset_minutes=-15),
+            catch_up="none",
+        ),
+        JobConfig(
+            name="engine_stop",
+            action="engine_stop",
+            trigger=SessionTriggerConfig(offset_minutes=10),
         ),
     ]
 
