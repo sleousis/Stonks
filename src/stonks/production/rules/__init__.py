@@ -32,7 +32,8 @@ Order of application (``order``; lower first):
 1. ``max_holding`` (1): forced sells of positions held too long;
 2. ``drawdown_scaling`` (2): every opening buy times the drawdown size;
 3. ``portfolio_vol`` (3): opening buys scaled to the volatility caps,
-   measured on the buys drawdown scaling left;
+   measured on the buys drawdown scaling left; ``style_exposure`` (3):
+   opening orders scaled to the style exposure cap (roadmap 22.4);
 4. ``circuit_breaker`` (4) and ``operational_halt`` (5): every opening buy
    dropped after a loss halt or when the data feed is stale (BL-28);
 4b. ``gross_exposure`` (6), ``net_exposure`` (7), ``short_caps`` (8) and
@@ -169,6 +170,10 @@ class RiskContext:
     #: the account rules' inputs. ``None`` in backtests and paper books, so
     #: the live safeguards do nothing there.
     live: LiveContext | None = None
+    #: Raw style exposures known at ``as_of``, rows tickers (``momentum``,
+    #: ``size``, ``value``, ``volatility``, ``sector``; roadmap 22.4). The
+    #: style exposure rule reads the bars instead when ``None``.
+    factor_exposures: pd.DataFrame | None = None
 
     def __post_init__(self) -> None:
         if self.cost_model is not None and (self.slippage_bps or self.fee_per_trade):

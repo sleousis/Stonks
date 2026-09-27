@@ -22,10 +22,11 @@ from abc import abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
+from typing import Any
 
 import numpy as np
 import pandas as pd
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from stonks.portfolio.base import (
     ConstructionInput,
@@ -43,6 +44,9 @@ class RiskBasedSettings(ConstructorSettings):
     top_n: int = Field(default=20, ge=1)
     max_weight: float = Field(default=1.0, gt=0.0, le=1.0)
     estimator: str = "ledoit_wolf"
+    #: Knobs of the estimator (``n_factors`` for ``pca``, ``residual_pcs``
+    #: for ``style``, ``lam`` for ``ewma``).
+    estimator_params: dict[str, Any] = Field(default_factory=dict)
     lookback: int = Field(default=252, ge=2)
     min_observations: int = Field(default=60, ge=2)
     periods_per_year: float = Field(default=252.0, gt=0.0)
@@ -55,6 +59,14 @@ class RiskBasedSettings(ConstructorSettings):
                 f"unknown covariance estimator {value!r}; choose one of {estimator_names()}"
             )
         return value
+
+    @model_validator(mode="after")
+    def _estimator_builds(self) -> RiskBasedSettings:
+        try:
+            get_estimator(self.estimator, **self.estimator_params)
+        except TypeError as exc:
+            raise ValueError(f"bad estimator_params for {self.estimator!r}: {exc}") from None
+        return self
 
 
 @dataclass(frozen=True)
@@ -120,7 +132,9 @@ def covariance_for(
     position = {t: i for i, t in enumerate(kept)}
     observations = 0
     if hist_cols and block is not None:
-        estimate = get_estimator(settings.estimator).estimate(block) * settings.periods_per_year
+        estimator = get_estimator(settings.estimator, **settings.estimator_params)
+        estimate = estimator.estimate(block, exposures=inp.factor_exposures)
+        estimate = estimate * settings.periods_per_year
         idx = [position[t] for t in hist_cols]
         matrix[np.ix_(idx, idx)] = estimate
         observations = len(block)

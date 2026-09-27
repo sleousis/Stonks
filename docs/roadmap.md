@@ -16,9 +16,9 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 15 | Mostly done: design, data model, connection seam, insights, automation modes, notifications, home screen. The tick trades one book per portfolio. Open: order placement for real providers. |
 | 16 | 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. |
 | 17 | Planned. |
-| 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7, with console screens. The IBKR adapter (19.2) done. Design: `docs/design/live-trading.md`. |
+| 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7, with console screens. 19.2 IBKR adapter and 19.8 tickets and approve mode done. Design: `docs/design/live-trading.md`. |
 | 20 | 20.1 to 20.6 done, backend and console. 20.7 and 20.8 in progress. |
-| 22 | 22.1, 22.2, 22.3, 22.5, 22.6, 22.7, 22.8 and 22.9 done. 22.4 is next. Factors: `docs/factors.md`. |
+| 22 | All of 22.1 to 22.9 done. Factors: `docs/factors.md`. |
 
 Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor-agnostic schemas, third-party libraries wrapped behind a seam). Live-network tests go under `tests/integration/live/` behind `@pytest.mark.live`.
 
@@ -494,7 +494,7 @@ From the competitor study of 44 open-source projects (Qlib, alphalens, vectorbt,
 | 22.1 Optuna tuner and objectives | An Optuna tuner behind the Tuner seam, seeded and parallel, with every trial in the ledger, plus Sortino, Calmar, drawdown-penalised and multi-metric objectives. |
 | 22.2 Factor layer | Done. A Factor ABC and registry, a small expression language compiled to DuckDB SQL, cached date-by-ticker panels, and a FactorStrategy. Modelled on Qlib's expression engine. `stonks factors`, `/api/factors`, MCP tools. The console views are still to do. |
 | 22.3 Factor tear sheets | Done. alphalens-style IC by sector, asset class and size, returns per quantile, factor alpha and beta, and a monthly IC heatmap, for any factor. `stonks factors tearsheet --html`, a tear sheet job in the API and MCP. |
-| 22.4 Factor risk model | A PCA then style-factor risk model as a CovarianceEstimator, a style-exposure RiskRule, and factor attribution in reports. |
+| 22.4 Factor risk model | Done. The `pca` and `style` covariance estimators (`portfolio/factor_model.py`), style exposures from the factor library read point in time (`factors/style.py`, a new `size_dv_60` factor), the `style_exposure` risk rule (off by default, tighten only), and factor attribution of P&L on every backtest tear sheet (`reporting/factor_attribution.py`). |
 | 22.5 Sweeps and heatmaps | Vectorised sweeps for more strategies, with parameter heatmaps in reports and the console, linked to the plateau test. |
 | 22.6 Model lifecycle | Scheduled retraining for ML strategies, model versions under one strategy id, new fits run as model books, swaps only through governance. Done: the weekly `model_retrain` job on all three backends, candidate and live version books in the tick, the swap check and an audited swap (`stonks registry versions|retrain|swap-check|swap|reject`, REST and MCP). See `docs/model-lifecycle.md`. |
 | 22.7 Forecast weights | Carver-style forecast weights estimated net of costs, and rules dropped when too costly for an instrument. Done: the `ForecastWeightEstimator` seam (`handcraft`, `bootstrap`, `equal`), the speed limit, the `forecast_blend` strategy and a tear sheet section. See [forecast weights](strategies/forecast-weights.md). |

@@ -41,6 +41,7 @@ from stonks.production.rules.sector_cap import SectorCapSettings
 from stonks.production.rules.short_caps import ShortCapsSettings
 from stonks.production.rules.short_option_guard import ShortOptionGuardSettings
 from stonks.production.rules.squeeze_guard import SqueezeGuardSettings
+from stonks.production.rules.style_exposure import StyleExposureSettings, union_styles
 
 __all__ = [
     "AccountRulesSettings",
@@ -70,6 +71,7 @@ __all__ = [
     "SqueezeGuardSettings",
     "StopCooldownSettings",
     "StopGuardSettings",
+    "StyleExposureSettings",
     "merge_schedules",
     "tighter_rule_settings",
 ]
@@ -110,6 +112,8 @@ class RuleSettings(BaseModel):
     stop_cooldown: StopCooldownSettings = StopCooldownSettings()
     stop_guard: StopGuardSettings = StopGuardSettings()
     losing_lock: LosingLockSettings = LosingLockSettings()
+    # Style factor exposure cap (roadmap 22.4), off by default.
+    style_exposure: StyleExposureSettings = StyleExposureSettings()
 
 
 def _min_optional(a: float | None, b: float | None) -> float | None:
@@ -242,6 +246,7 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
     "stop_cooldown": {"cooldown_days": _max_optional, "count_losses": _either},
     "stop_guard": {"max_stops": _min_optional, "window_days": max, "count_losses": _either},
     "losing_lock": {"max_consecutive_losses": _min_optional, "lock_days": max},
+    "style_exposure": {"max_abs_exposure": _min_optional, "styles": union_styles},
 }
 
 

@@ -19,7 +19,7 @@ Every factor lives in a module of `stonks/factors/library/`. Each module is a se
 | Set | What is in it |
 |-----|---------------|
 | `alpha158` | 157 price and volume features ported from Qlib's Alpha158: candle shapes, price ratios and 29 rolling features at 5, 10, 20, 30 and 60 bars. |
-| `classic` | Momentum (12-1, 6-1), one-month reversal, low volatility and distance from the 52-week high, each with a hypothesis. |
+| `classic` | Momentum (12-1, 6-1), one-month reversal, low volatility, distance from the 52-week high and size (log dollar volume), each with a hypothesis. |
 | `fundamentals` | The value, quality and forensic scores (EBIT/TEV, book to market, Piotroski F, Altman Z, accruals, Beneish M and more), equities only. |
 
 A new factor or set is one new module with a `factors()` function. Nothing else is edited.
@@ -112,6 +112,68 @@ uv run stonks factors dataset alpha158 --universe-id sp500 \
 ```
 
 One row per date and ticker, one column per factor, and a `label` column: the return from the next open over `--label-horizon` bars (`O[t+1+h] / O[t+1] - 1`), the way the backtest fills.
+
+## Factor risk model
+
+A factor model writes the covariance of many names as a few shared factors plus what is left per name. It is stable where a sample covariance is noise.
+
+```mermaid
+flowchart LR
+  L[Factor library] --> X[Style exposures at the decision]
+  R[Daily returns up to the decision] --> M[Style model: B F B' + D]
+  X --> M
+  M --> O[hrp, erc, mean_variance_costs]
+  X --> K[style_exposure rule]
+  F[Style factor returns] --> A[Factor attribution in tear sheets]
+```
+
+### Styles
+
+| Style | Library factor |
+|-------|----------------|
+| momentum | `mom_12_1` |
+| size | `size_dv_60` (log of 60-bar dollar volume) |
+| value | `book_to_market` (equities only) |
+| volatility | `low_vol_60` |
+| sector | `instruments.sector`, one dummy per sector |
+
+Each style is clipped at 3 robust standard deviations and z-scored across the names. A name with no value sits at the average. A style that fails (no statements for value) is left out and logged.
+
+### Covariance estimators
+
+Two estimators join `sample`, `ledoit_wolf`, `ewma` and `denoised`:
+
+- `pca`: the top `n_factors` principal components plus specific variance.
+- `style`: each day's returns regressed on the market and the styles, the covariance of those factor returns, plus specific variance. `residual_pcs` adds principal components of what the styles leave.
+
+```toml
+[production.construction]
+method = "erc"
+
+[production.construction.params]
+estimator = "style"
+estimator_params = { residual_pcs = 1 }   # or estimator = "pca" with { n_factors = 3 }
+```
+
+A portfolio's `construction_json` takes the same knobs flat: `{"method": "erc", "estimator": "style"}`.
+
+The tick and the backtest read style exposures with `values_at` at the decision, through the point-in-time view in a backtest. Returns stop at the decision too (P12). Without exposures the `style` model reads momentum and volatility from the returns themselves.
+
+### Style exposure rule
+
+`style_exposure` keeps the book's net lean to each style inside a cap. The lean is the sum of weight times z-score. A lean of 0.5 is half a standard deviation towards that style.
+
+```toml
+[production.risk.rules.style_exposure]
+max_abs_exposure = 0.5
+styles = ["momentum", "size", "value", "volatility"]
+```
+
+It is off by default. Opening orders are scaled down until every style fits. When the holdings are already over the cap, new orders may still go if they leave no style further out. Sells and covers always pass. Portfolio and subscription overrides can only tighten it: a lower cap, or more styles.
+
+### Factor attribution
+
+Every backtest tear sheet (`stonks report --backtest`) ends with a factor attribution. The book's daily returns are regressed on the style factor returns of its universe. Each line shows how much of the return came from the market, each style and the sectors, and what is left is specific. Returns are summed, so the lines add up to the total. The factor returns are point in time: each day's move is explained by the exposures known the day before.
 
 ## API and MCP
 

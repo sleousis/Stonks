@@ -39,6 +39,7 @@ from stonks.production import rules as _rules
 from stonks.production.ledger import ledger_filter
 from stonks.production.prices import load_history
 from stonks.production.rules import OrderRule, RiskAdjustment, RiskContext, RiskRule
+from stonks.production.rules.style_exposure import wants_exposures
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
 
@@ -182,6 +183,11 @@ def build_risk_context(
     held = [t for t, q in portfolio.positions.items() if abs(q) > 1e-12]
     tickers = sorted({*held, *prices, *universe})
     profiles = _profiles(lake, tickers)
+    exposures = None
+    if policy is not None and wants_exposures(policy):
+        from stonks.factors.style import safe_style_exposures
+
+        exposures = safe_style_exposures(lake, tickers, as_of)
     return RiskContext(
         portfolio=portfolio,
         prices=dict(prices),
@@ -201,6 +207,7 @@ def build_risk_context(
         ),
         volumes=dict(volumes or {}),
         as_of=as_of,
+        factor_exposures=exposures,
     )
 
 
