@@ -1415,7 +1415,8 @@ export const getStrategy = <ThrowOnError extends boolean = false>(options: Optio
  *
  * Every go-live check of the strategy's paper period against
  * ``[golive]`` (same as ``stonks golive check``). Reports only; promotion
- * stays a human action.
+ * stays a human action. An active strategy's P&L figures come from the
+ * default book: only its owner and admins see them.
  */
 export const getGoLiveReport = <ThrowOnError extends boolean = false>(options: Options<GetGoLiveReportData, ThrowOnError>): RequestResult<GetGoLiveReportResponses, GetGoLiveReportErrors, ThrowOnError> => (options.client ?? client).get<GetGoLiveReportResponses, GetGoLiveReportErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
