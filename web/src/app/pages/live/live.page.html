@@ -16,11 +16,7 @@
 </app-page-header>
 
 @if (status.error(); as err) {
-  <app-error-state
-    title="Could not load the live engine"
-    [error]="err"
-    (retry)="status.reload()"
-  />
+  <app-error-state title="Could not load the live engine" [error]="err" (retry)="status.reload()" />
 } @else if (!status.hasValue()) {
   <app-loading-state label="Loading the live engine" [rows]="3" />
 } @else {
@@ -57,7 +53,10 @@
             <dl class="facts">
               <div>
                 <dt>Market</dt>
-                <dd>{{ e.market_open ? 'Open' : 'Closed' }} <span class="muted">({{ e.calendar }})</span></dd>
+                <dd>
+                  {{ e.market_open ? 'Open' : 'Closed' }}
+                  <span class="muted">({{ e.calendar }})</span>
+                </dd>
               </div>
               <div>
                 <dt>Last bar closed</dt>
@@ -84,18 +83,24 @@
             </dl>
 
             <div class="panels">
-              <section class="sub" [attr.aria-labelledby]="'stream-' + e.engine_id">
+              <div class="sub" role="group" [attr.aria-labelledby]="'stream-' + e.engine_id">
                 <h3 [id]="'stream-' + e.engine_id">Price stream</h3>
                 @if (e.stream; as s) {
                   <dl class="facts">
                     <div>
                       <dt>State</dt>
-                      <dd>{{ streamWords(s) }} <span class="muted">({{ s.source }})</span></dd>
+                      <dd>
+                        {{ streamWords(s) }} <span class="muted">({{ s.source }})</span>
+                      </dd>
                     </div>
                     <div>
                       <dt>Last price</dt>
                       <dd class="num">
-                        {{ s.last_event_age_seconds === null ? 'None yet' : seconds(s.last_event_age_seconds) + ' ago' }}
+                        {{
+                          s.last_event_age_seconds === null
+                            ? 'None yet'
+                            : seconds(s.last_event_age_seconds) + ' ago'
+                        }}
                       </dd>
                     </div>
                     <div>
@@ -116,14 +121,16 @@
                     </div>
                   </dl>
                   @if (s.last_error) {
-                    <p class="problem" role="note"><strong>Last problem:</strong> {{ s.last_error }}</p>
+                    <p class="problem" role="note">
+                      <strong>Last problem:</strong> {{ s.last_error }}
+                    </p>
                   }
                 } @else {
                   <p class="muted">This engine reads bars without a live stream.</p>
                 }
-              </section>
+              </div>
 
-              <section class="sub" [attr.aria-labelledby]="'speed-' + e.engine_id">
+              <div class="sub" role="group" [attr.aria-labelledby]="'speed-' + e.engine_id">
                 <h3 [id]="'speed-' + e.engine_id">Speed</h3>
                 <dl class="facts">
                   <div>
@@ -143,22 +150,24 @@
                     <dd class="num">{{ count(e.event_to_order.count) }}</dd>
                   </div>
                 </dl>
-              </section>
+              </div>
             </div>
 
             @if (errors(e.handler_errors); as lines) {
               @if (lines.length) {
-                <section class="sub" [attr.aria-labelledby]="'errors-' + e.engine_id">
+                <div class="sub" role="group" [attr.aria-labelledby]="'errors-' + e.engine_id">
                   <h3 [id]="'errors-' + e.engine_id">Steps that failed</h3>
                   <ul class="errors">
                     @for (line of lines; track line.name) {
                       <li>
                         <span class="step">{{ line.name }}</span>
-                        <span class="num">{{ count(line.count) }} {{ line.count === 1 ? 'time' : 'times' }}</span>
+                        <span class="num"
+                          >{{ count(line.count) }} {{ line.count === 1 ? 'time' : 'times' }}</span
+                        >
                       </li>
                     }
                   </ul>
-                </section>
+                </div>
               }
             }
           </section>
@@ -175,8 +184,8 @@
   </section>
 
   <p class="muted footnote">
-    The alarm goes off after {{ status.value().deadman_minutes }} minutes without a closed bar
-    while the market is open. An engine that stops reporting for
+    The alarm goes off after {{ status.value().deadman_minutes }} minutes without a closed bar while
+    the market is open. An engine that stops reporting for
     {{ seconds(status.value().stale_after_seconds) }} counts as not running.
   </p>
 }
