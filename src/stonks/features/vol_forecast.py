@@ -22,6 +22,12 @@ Implementations (:data:`VOL_FORECASTERS`):
 - ``har_rv``: Corsi's heterogeneous autoregression on the squared-return
   proxy of realised variance, with daily, weekly (5) and monthly (22)
   components, by least squares.
+
+No seed reads the future: EWMA starts from the first squared return and
+HAR's first month from the squared returns so far. Model parameters
+(GARCH, HAR) are fitted on the whole sample given to ``fit``, so
+``conditional_vol`` is an in-sample path; fit on data up to the decision
+for an out-of-sample forecast.
 """
 
 from __future__ import annotations
@@ -91,7 +97,9 @@ class EwmaVol(VolForecaster):
     def fit(self, returns: np.ndarray) -> EwmaVol:
         r = _clean(returns, 2)
         var = np.empty(len(r))
-        var[0] = float(np.mean(r**2))  # seed with the sample second moment
+        # Seed with the first squared return: a warm-up value, not a
+        # forecast, but it reads nothing past the first bar (BE-59).
+        var[0] = float(r[0] ** 2)
         for t in range(1, len(r)):
             var[t] = self.lam * var[t - 1] + (1.0 - self.lam) * r[t - 1] ** 2
         self._var = var
@@ -254,7 +262,11 @@ class HarRv(VolForecaster):
     def conditional_vol(self) -> np.ndarray:
         coef, rv = self._require()
         fitted = self._design(rv)[:-1] @ coef
-        head = np.full(self.LAGS[2], float(np.mean(rv)))
+        # Warm-up bars before a full month: the mean of the squared returns
+        # so far (the first bar seeds itself), never a later one (BE-59).
+        n = self.LAGS[2]
+        seen = np.cumsum(rv[:n])
+        head = np.concatenate([[rv[0]], seen[:-1] / np.arange(1, n)])
         return np.sqrt(np.maximum(np.concatenate([head, fitted]), 0.0))
 
     def forecast(self, horizon: int = 1) -> float:
