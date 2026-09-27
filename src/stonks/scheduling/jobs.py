@@ -212,6 +212,31 @@ def universes_outcome(results: Mapping[str, Mapping[str, Any]]) -> JobOutcome:
     return JobOutcome("failed" if failed else "succeeded", detail)
 
 
+def retrain_body(ctx: RunContext) -> dict[str, Any]:
+    """The ``model_retrain`` request (``app.model_versions.RetrainRequest``):
+    the fire's date, plus ``params.strategy_ids``, ``force`` and ``tickers``."""
+    body: dict[str, Any] = {"as_of": ctx.fire.as_of.isoformat()}
+    for key in ("strategy_ids", "tickers"):
+        if ctx.params.get(key):
+            body[key] = [str(v) for v in ctx.params[key]]
+    if ctx.params.get("force"):
+        body["force"] = True
+    return body
+
+
+def retrain_outcome(result: Mapping[str, Any], job_id: str | None = None) -> JobOutcome:
+    """A retrain result (``RetrainResultView`` as JSON): failed when a fit
+    failed, skipped when nothing needed a refit."""
+    detail = {k: result.get(k) for k in ("as_of", "candidates", "failed", "skipped") if k in result}
+    if job_id is not None:
+        detail["job_id"] = job_id
+    if result.get("failed"):
+        return JobOutcome("failed", detail)
+    if not result.get("candidates"):
+        return JobOutcome("skipped", {**detail, "reason": "nothing_to_retrain"})
+    return JobOutcome("succeeded", detail)
+
+
 def closed_day_outcome(
     ctx: RunContext, universe: list[str], asset_classes: Mapping[str, str]
 ) -> JobOutcome | None:

@@ -11,7 +11,9 @@ it. This backend starts each job on the API's own job routes and waits on
 - ``tick``: ``POST /api/ticks`` for the fire's date;
 - ``health``: ``POST /api/health/run`` (checks plus the operational
   halt), alerting here when unhealthy;
-- ``report``: reads only the state DB, so it runs in this process.
+- ``report``: reads only the state DB, so it runs in this process;
+- ``model_retrain``: ``POST /api/model-versions/retrain`` for the fire's
+  date (roadmap 22.6).
 
 The closed-day check uses ticker suffixes for calendars (``.CC`` is
 crypto, 24/7), since the lake's asset classes are out of reach here.
@@ -40,6 +42,8 @@ from stonks.scheduling.jobs import (
     ensure_window,
     job_is_scoped,
     job_universe,
+    retrain_body,
+    retrain_outcome,
     universes_outcome,
 )
 
@@ -111,6 +115,16 @@ def backup_job_outcome(
         )
     return JobOutcome(
         "failed", {"job_id": job_id, "error": job_error or f"backup job {job_status}"}
+    )
+
+
+def retrain_job_outcome(
+    job_status: str, job_error: str | None, result: Mapping[str, Any] | None, job_id: str
+) -> JobOutcome:
+    if job_status == "succeeded" and result is not None:
+        return retrain_outcome(result, job_id)
+    return JobOutcome(
+        "failed", {"job_id": job_id, "error": job_error or f"retrain job {job_status}"}
     )
 
 
@@ -308,6 +322,18 @@ def api_price_alerts(ctx: RunContext) -> JobOutcome:
     )
     keys = ("rules", "checked", "fired", "published", "skipped_no_price")
     return JobOutcome("succeeded", {k: view.get(k) for k in keys})
+
+
+@API_ACTIONS.register("model_retrain")
+def api_model_retrain(ctx: RunContext) -> JobOutcome:
+    """The server holds the lake, so it refits (``POST /api/model-versions/retrain``)."""
+    job_id, status, error, result = _run_job(
+        _executor(ctx),
+        "/api/model-versions/retrain",
+        retrain_body(ctx),
+        "/api/model-versions/jobs/{job_id}/result",
+    )
+    return retrain_job_outcome(status, error, result, job_id)
 
 
 @API_ACTIONS.register("connections_sync")

@@ -74,7 +74,7 @@ class JobConfig(BaseModel):
     name: str = Field(min_length=1, pattern=r"^[A-Za-z0-9_.-]+$")
     #: A registered job action (``ingest_prices``, ``tick``, ``health``,
     #: ``report``, ``universes_refresh``, ``backup``, ``connections_sync``,
-    #: ``price_alerts``).
+    #: ``price_alerts``, ``model_retrain``).
     action: str
     trigger: TriggerConfig
     params: dict[str, Any] = Field(default_factory=dict)
@@ -97,7 +97,9 @@ def default_jobs() -> list[JobConfig]:
     every four hours; a backup every night; due broker syncs every hour.
     ``universes_refresh`` skips while no universe is stored. The IB Gateway
     jobs (``broker_health`` every 5 minutes, ``ibkr_reauth_reminder`` on
-    Sunday at 18:00 New York time) skip while no gateway is configured."""
+    Sunday at 18:00 New York time) skip while no gateway is configured.
+    ``model_retrain`` refits the strategies that learn from data every
+    Saturday into candidate versions, and skips when there are none."""
     return [
         JobConfig(
             name="universes_refresh",
@@ -157,6 +159,12 @@ def default_jobs() -> list[JobConfig]:
             action="broker_health",
             trigger=IntervalTriggerConfig(every_minutes=5),
             catch_up="none",
+        ),
+        # Roadmap 22.6: candidates only, a swap stays a governed human action.
+        JobConfig(
+            name="model_retrain",
+            action="model_retrain",
+            trigger=DailyTriggerConfig(at=time(6, 0), weekdays=[5]),
         ),
         JobConfig(
             name="ibkr_reauth_reminder",

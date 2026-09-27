@@ -27,10 +27,12 @@ from stonks.scheduling.api_backend import (
     health_view_outcome,
     ingest_job_outcome,
     ingest_window,
+    retrain_job_outcome,
     tick_job_outcome,
 )
 from stonks.scheduling.config import SchedulerConfig, scheduler_config_from
 from stonks.scheduling.jobs import (
+    SCHEDULER_ACTOR,
     ActionRegistry,
     JobExecutor,
     JobOutcome,
@@ -39,6 +41,7 @@ from stonks.scheduling.jobs import (
     closed_day_outcome,
     job_is_scoped,
     job_universe,
+    retrain_body,
     universes_outcome,
 )
 
@@ -268,6 +271,18 @@ def in_process_price_alerts(ctx: RunContext) -> JobOutcome:
     """Every person's price alert rules against the latest closes."""
     out = _executor(ctx).services.price_alerts.evaluate(as_of=ctx.fire.as_of)
     return JobOutcome("succeeded", out.as_dict())
+
+
+@IN_PROCESS_ACTIONS.register("model_retrain")
+def in_process_model_retrain(ctx: RunContext) -> JobOutcome:
+    """Refit on the server's JobRunner; each fit becomes a candidate version."""
+    from stonks.app.model_versions import RETRAIN_JOB, RetrainRequest, RetrainResultView
+
+    ex = _executor(ctx)
+    job = ex.services.model_versions.submit_retrain(
+        RetrainRequest.model_validate(retrain_body(ctx)), actor=SCHEDULER_ACTOR
+    )
+    return retrain_job_outcome(*ex.run_job(job, RETRAIN_JOB, RetrainResultView))
 
 
 @IN_PROCESS_ACTIONS.register("connections_sync")

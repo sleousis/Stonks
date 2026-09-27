@@ -55,6 +55,7 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `connections_sync`: broker connections whose sync is due | every hour | none |
 | `broker_health`: probes each IB Gateway (see Live trading) | every 5 minutes | none |
 | `ibkr_reauth_reminder`: push to approve the weekly IBKR login | Sunday 18:00 New York | none |
+| `model_retrain`: refit strategies that learn from data into candidate versions (see [Model lifecycle](model-lifecycle.md)) | Saturday 06:00 UTC | none |
 
 Session jobs run on NYSE trading days. The two IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty. `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
 
