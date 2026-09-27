@@ -93,7 +93,7 @@ Each journey also checks:
 - no sideways scroll on the phone,
 - no axe-core violation on every page it visits.
 
-`test_accessibility.py` runs axe on every page of the console as the admin and the trader, on both viewports.
+`test_accessibility.py` runs axe on every page of the console as the admin and the trader, on both viewports. On the phone it also fails a page that scrolls sideways. A new page goes into its `ADMIN_PAGES` or `TRADER_PAGES` list.
 
 ## When a test fails
 
