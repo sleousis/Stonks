@@ -290,6 +290,22 @@ class IngestPipeline:
             units=[({"pair": f"{b}{q}"}, partial(ingest, b, q)) for b, q in pairs],
         )
 
+    def run_borrow_rates(self, markets: Sequence[str]) -> IngestRunResult:
+        """Pull today's stock borrow rates of each market into
+        ``borrow_rates`` (roadmap 19.3). One market is one unit of
+        soft-fail accounting."""
+
+        def ingest(market: str) -> dict[str, Any]:
+            rows = list(self._source.fetch_borrow_rates(market))
+            self._lake.upsert_borrow_rates(_rows_to_df(rows))
+            return {"rows": len(rows)}
+
+        return self._run_units(
+            kind="borrow",
+            event="market",
+            units=[({"ticker": m, "market": m}, partial(ingest, m)) for m in markets],
+        )
+
     def run_calendars(
         self,
         start: date,

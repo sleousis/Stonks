@@ -32,8 +32,9 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from stonks.core.clock import SYSTEM_CLOCK, Clock
+from stonks.core.clock import SYSTEM_CLOCK, Clock, today
 from stonks.core.types import Fill, Order, OrderSide, Portfolio, TimeInForce
+from stonks.execution.borrow import BorrowSource
 from stonks.execution.brokers.base import (
     AccountType,
     BrokerError,
@@ -57,7 +58,7 @@ from stonks.execution.brokers.ibkr.client import (
     IbExecution,
     IbTrade,
 )
-from stonks.execution.brokers.ibkr.contracts import ContractResolver
+from stonks.execution.brokers.ibkr.contracts import ContractResolver, ticker_for_contract
 from stonks.execution.brokers.ibkr.errors import classify, to_broker_error
 from stonks.execution.brokers.ibkr.orders import broker_ref, to_ib_order
 from stonks.execution.brokers.ibkr.settings import GatewayMode, IbkrOrderSettings
@@ -103,6 +104,7 @@ class IbkrBroker:
         order_settings: IbkrOrderSettings | None = None,
         account_type: AccountType = "cash",
         allow_short: bool = False,
+        borrow: BorrowSource | None = None,
         ref_lookup: Callable[[str], str | None] | None = None,
         clock: Clock = SYSTEM_CLOCK,
     ) -> None:
@@ -114,6 +116,9 @@ class IbkrBroker:
         self.order_settings = order_settings or IbkrOrderSettings()
         self.account_type: AccountType = account_type
         self.allow_short = allow_short
+        #: Answers the locate before an opening sell (``IbkrBorrowSource``).
+        #: Without one, a short sale is refused.
+        self.borrow = borrow
         self.clock = clock
         #: orderRef -> client id, for references this process sent. A hashed
         #: reference from an earlier process is looked up through
@@ -250,10 +255,8 @@ class IbkrBroker:
         if existing is not None:
             _log.info("ibkr.order.already_at_broker", client_id=order.client_id)
             return
-        if order.side == "sell" and order.position_effect == "open" and not self.allow_short:
-            raise OrderRejectedError(
-                f"short sale of {order.ticker} refused: this IBKR account trades long only"
-            )
+        if order.side == "sell" and order.position_effect == "open":
+            self._check_short(order)
         resolved = self.resolver.resolve(order.ticker)
         request = to_ib_order(order, resolved.spec(), account=account, settings=self.order_settings)
         try:
@@ -274,6 +277,28 @@ class IbkrBroker:
             ) from exc
         _log.info("ibkr.order.submitted", client_id=order.client_id, order_type=request.order_type)
         return
+
+    def _check_short(self, order: Order) -> None:
+        """An opening sell needs a margin account and a locate: a quote
+        that is shortable with enough shares to lend (roadmap 19.3)."""
+        if not self.allow_short or self.account_type != "margin":
+            raise OrderRejectedError(
+                f"short sale of {order.ticker} refused: this IBKR account trades long only"
+            )
+        if self.borrow is None:
+            raise OrderRejectedError(
+                f"short sale of {order.ticker} refused: no borrow source to check the locate"
+            )
+        quote = self.borrow.quote(order.ticker, today(self.clock))
+        if quote is None or not quote.shortable:
+            raise OrderRejectedError(
+                f"short sale of {order.ticker} refused: IBKR has no shares to borrow"
+            )
+        if quote.available_shares is not None and quote.available_shares < order.quantity:
+            raise OrderRejectedError(
+                f"short sale of {order.ticker} refused: IBKR can lend "
+                f"{quote.available_shares:g} shares, the order needs {order.quantity:g}"
+            )
 
     def reconcile(self) -> list[Fill]:
         """Executions not returned before, as fills (one per execution id)."""
@@ -451,8 +476,9 @@ class IbkrBroker:
         return completed[-1] if completed else None
 
     def _ticker_of(self, contract: IbContract) -> str:
-        """Our ticker for a contract, else its raw IBKR symbol (not covered)."""
-        ticker = self.resolver.ticker_for(contract.con_id)
+        """Our ticker for a contract: the cached one, else the one its market
+        and symbol name, else its raw IBKR symbol (not covered)."""
+        ticker = self.resolver.ticker_for(contract.con_id) or ticker_for_contract(contract)
         if ticker is None:
             _log.info("ibkr.contract.unmapped", con_id=contract.con_id)
             return contract.symbol

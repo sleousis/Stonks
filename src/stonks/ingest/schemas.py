@@ -952,6 +952,23 @@ class FxRateRow(FrozenRow):
     source: str = Field(min_length=1)
 
 
+class BorrowRateRow(FrozenRow):
+    """One stock's borrow terms on one day (roadmap 19.3). Rates are yearly
+    fractions (0.0025 = 0.25 %). ``available_shares`` is what the lender
+    can supply (0: no locate, ``None``: not stated). Adapters map their
+    vendor symbols and percent columns at parse time. ``source`` is the
+    ``DataSource.source_id`` and part of the key."""
+
+    ticker: str = Field(min_length=1)
+    as_of: date
+    fee_rate_annual: float = Field(ge=0.0)
+    rebate_rate_annual: float | None = None
+    available_shares: float | None = Field(default=None, ge=0.0)
+    currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
+    isin: str | None = None
+    source: str = Field(min_length=1)
+
+
 # ---- source discovery (not a lake-row type) --------------------------------
 
 

@@ -80,12 +80,14 @@ def test_providers_lists_every_provider_and_marks_the_enabled_ones(client):
     resp = client.get("/api/connections/providers", headers=AUTH)
     assert resp.status_code == 200
     by_name = {p["name"]: p for p in resp.json()}
-    assert set(by_name) == {"alpaca", "fake", "fake_portal", "fake_trading", "snaptrade"}
+    assert set(by_name) == {"alpaca", "fake", "fake_portal", "fake_trading", "ibkr", "snaptrade"}
     assert {n for n, p in by_name.items() if p["enabled"]} == {"fake", "fake_portal"}
     assert by_name["fake"]["auth_flow"] == "api_key"
     assert by_name["fake"]["credential_fields"] == ["token"]
     assert by_name["alpaca"]["has_paper"] is True
     assert by_name["snaptrade"]["has_paper"] is False
+    assert by_name["ibkr"]["can_trade"] is True
+    assert by_name["ibkr"]["credential_fields"] == ["gateway"]
 
 
 def test_a_disabled_provider_cannot_be_connected(client):

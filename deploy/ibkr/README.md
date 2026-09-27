@@ -148,6 +148,37 @@ order_ref_max_length = 40       # longer client ids go out as a stable hash
 - `[brokers.ibkr.health] probe = "socket"` only checks the port, for a gateway that is not logged in yet. The default `login` checks the account.
 - Contracts are looked up once and cached in the `broker_contracts` table for 7 days (`contract_max_age_days`).
 - No username, password or token goes in TOML. The optional Flex statements token is `STONKS_IBKR_FLEX_TOKEN` in `deploy/.env`.
+- `account_type = "cash"` is the default and trades long only. Set `"margin"` on a gateway only for a margin account. Its short sales are then checked against IBKR's locate first.
+
+## Link a portfolio (the ibkr connection)
+
+A trader links a broker portfolio to a gateway through a connection. The connection holds only the gateway's name, never a login.
+
+1. An admin adds `ibkr` to `[connections] enabled_providers` (or `STONKS_CONNECTIONS_ENABLED_PROVIDERS`).
+2. The trader connects provider `ibkr` with the field `gateway` set to a gateway name, for example `paper`.
+3. Stonks checks the account the gateway is logged in to and links a broker portfolio to it.
+
+The sync reads cash, positions and the day's executions every few minutes (API client id 12). An auto book trades through the same gateway (client id 11). The account can also hold your own trades. Stonks only trades what it opened, and your holdings stay external.
+
+## Optional Flex statements
+
+A Flex statement adds older trades, dividends, interest, fees and cash moves to the sync.
+
+1. In Client Portal, create an Activity Flex Query (Trades at execution level, and Cash Transactions) and turn on the Flex Web Service. Note the query id and the token.
+2. Put the token in `deploy/.env` as `STONKS_IBKR_FLEX_TOKEN`. Never in TOML.
+3. Put the query id in TOML:
+
+```toml
+[brokers.ibkr.flex]
+query_id = "123456"
+refresh_hours = 6   # a sync reuses a statement this recent
+```
+
+A Flex failure never fails a sync. It is logged and the sync goes on.
+
+## Borrow rates
+
+`stonks ingest borrow` reads IBKR's public short stock files into the lake table `borrow_rates`. It uses IBKR's shared public FTP login, not yours. Pick the markets with `--markets usa,uk` or `[sources.ibkr_borrow] markets`.
 
 ## Start and stop
 

@@ -26,6 +26,7 @@ from stonks.execution.brokers.ibkr.client import (
     IbLinkStatus,
     IbOrderRequest,
     IbPosition,
+    IbShortability,
     IbSnapshot,
     IbTrade,
     IbWhatIf,
@@ -92,6 +93,9 @@ class FakeIbGateway:
         self.what_if_timeout = False
         self.what_if_result: IbWhatIf | None = None
         self.snapshot_data: dict[int, IbSnapshot] = {}
+        #: the shortable ticks by conId (roadmap 19.3)
+        self.shortable_data: dict[int, IbShortability] = {}
+        self.shortable_requests = 0
         self.no_market_data = False
         self.positions_by_account: dict[str, list[IbPosition]] = {}
         self.values_by_account: dict[str, list[IbAccountValue]] = {}
@@ -363,3 +367,8 @@ class FakeIbGateway:
         if self.no_market_data:
             raise IbApiError(354, "Requested market data is not subscribed")
         return [self.snapshot_data[c.con_id] for c in contracts if c.con_id in self.snapshot_data]
+
+    def shortability(self, contracts: Sequence[IbContract]) -> Sequence[IbShortability]:
+        self._need_connection()
+        self.shortable_requests += 1
+        return [self.shortable_data[c.con_id] for c in contracts if c.con_id in self.shortable_data]

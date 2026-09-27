@@ -50,3 +50,18 @@ def test_unknown_keys_are_rejected(tmp_path):
     path.write_text("[connections]\nenabled = true\n")
     with pytest.raises(ValueError):
         ConnectionsConfig.load(path, environ={})
+
+
+def test_ibkr_gateways_come_from_brokers_ibkr(tmp_path):
+    path = tmp_path / "c.toml"
+    path.write_text(
+        '[brokers.ibkr.gateways.paper]\nhost = "gw"\nport = 4004\nmode = "paper"\n'
+        '[brokers.ibkr.flex]\nquery_id = "123"\n'
+    )
+    cfg = ConnectionsConfig.load(path, environ={})
+    assert cfg.ibkr.gateways["paper"].port == 4004
+    assert cfg.ibkr.flex.query_id == "123"
+    assert ConnectionsConfig.load(tmp_path / "none.toml", environ={}).ibkr.gateways == {}
+    path.write_text("[connections.ibkr]\nallow_live = true\n")
+    with pytest.raises(ValueError, match=r"\[brokers.ibkr\]"):
+        ConnectionsConfig.load(path, environ={})

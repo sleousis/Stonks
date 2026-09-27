@@ -199,3 +199,29 @@ def test_lake_lookup():
     assert profile == InstrumentProfile("AAPL.US", "US0378331005", "NASDAQ", None)
     assert lake_instrument_lookup(_Lake(df.iloc[0:0]))("AAPL.US") is None
     assert lake_instrument_lookup(_Lake(fail=True))("AAPL.US") is None
+
+
+# ---- contracts back onto tickers (roadmap 19.3) ------------------------------------------
+
+
+def test_ticker_for_symbol_undoes_the_share_class_separator():
+    from stonks.execution.brokers.ibkr.contracts import ticker_for_symbol
+
+    assert ticker_for_symbol("BRK B", "US") == "BRK-B.US"
+    assert ticker_for_symbol("bt.a", "lse") == "BT-A.LSE"
+    assert ticker_for_symbol("SAP", "XETRA") == "SAP.XETRA"
+    assert ticker_for_symbol("7203", "TSE") is None
+    assert ticker_for_symbol("", "US") is None
+
+
+def test_ticker_for_contract_uses_the_primary_exchange():
+    from dataclasses import replace
+
+    from stonks.execution.brokers.ibkr.contracts import ticker_for_contract
+
+    assert ticker_for_contract(AAPL.contract) == "AAPL.US"
+    assert ticker_for_contract(BRKB.contract) == "BRK-B.US"
+    assert ticker_for_contract(VOD.contract) == "VOD.LSE"
+    assert ticker_for_contract(replace(AAPL.contract, primary_exchange=None)) == "AAPL.US"
+    assert ticker_for_contract(replace(AAPL.contract, sec_type="OPT")) is None
+    assert ticker_for_contract(stock(1, "7203", currency="JPY", primary="TSEJ").contract) is None

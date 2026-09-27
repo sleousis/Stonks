@@ -9,6 +9,9 @@ read from the same TOML file's ``[connections]`` table plus the environment:
 - ``STONKS_SNAPTRADE_CLIENT_ID`` / ``STONKS_SNAPTRADE_CONSUMER_KEY``: the
   SnapTrade partner credentials. The consumer key is env-only (refused in
   TOML) and kept as a ``SecretStr``.
+
+The ``ibkr`` provider reads the same ``[brokers.ibkr]`` table as the IBKR
+broker (one source of truth for the gateways), copied into ``ibkr`` here.
 """
 
 from __future__ import annotations
@@ -20,6 +23,8 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+
+from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig
 
 ENABLED_ENV = "STONKS_CONNECTIONS_ENABLED_PROVIDERS"
 SNAPTRADE_CLIENT_ID_ENV = "STONKS_SNAPTRADE_CLIENT_ID"
@@ -53,6 +58,9 @@ class ConnectionsConfig(BaseModel):
     #: First sync pulls this much activity history; later syncs overlap a week.
     activity_lookback_days: int = Field(default=90, ge=1)
     snaptrade: SnapTradeConfig = Field(default_factory=SnapTradeConfig)
+    #: The IB Gateways of ``[brokers.ibkr]`` (roadmap 19.3), for the
+    #: ``ibkr`` provider. Loaded from that table, never ``[connections]``.
+    ibkr: IbkrBrokerConfig = Field(default_factory=IbkrBrokerConfig)
 
     @field_validator("enabled_providers", mode="before")
     @classmethod
@@ -77,9 +85,15 @@ class ConnectionsConfig(BaseModel):
         env = os.environ if environ is None else environ
         path = Path(config_path) if config_path is not None else DEFAULT_CONFIG_PATH
         data: dict[str, Any] = {}
+        ibkr: dict[str, Any] = {}
         if path.exists():
             with open(path, "rb") as fh:
-                data = dict(tomllib.load(fh).get("connections", {}))
+                raw = tomllib.load(fh)
+            data = dict(raw.get("connections", {}))
+            ibkr = dict(raw.get("brokers", {}).get("ibkr", {}))
+        if "ibkr" in data:
+            raise ValueError("configure IB Gateways under [brokers.ibkr], not [connections.ibkr]")
+        data["ibkr"] = ibkr
         snap = dict(data.get("snaptrade", {}))
         if "consumer_key" in snap:
             raise ValueError(

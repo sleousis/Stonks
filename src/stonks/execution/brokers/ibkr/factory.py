@@ -15,7 +15,9 @@ from datetime import timedelta
 from typing import Literal
 
 from stonks.core.clock import SYSTEM_CLOCK, Clock
+from stonks.execution.borrow import BorrowSource
 from stonks.execution.brokers.base import AccountType, BrokerError
+from stonks.execution.brokers.ibkr.borrow import IbkrBorrowSource
 from stonks.execution.brokers.ibkr.broker import IbkrBroker
 from stonks.execution.brokers.ibkr.client import IbClient, IbEndpoint
 from stonks.execution.brokers.ibkr.contracts import (
@@ -94,11 +96,17 @@ def connect_ibkr(
     role: Role = "tick",
     state: SqliteState | None = None,
     lookup: InstrumentLookup | None = None,
-    account_type: AccountType = "cash",
+    account_type: AccountType | None = None,
     clock: Clock = SYSTEM_CLOCK,
     client_factory: ClientFactory = default_client_factory,
+    borrow_fees: BorrowSource | None = None,
 ) -> IbkrBroker:
+    """``account_type`` defaults to the gateway's. A margin account may
+    short: its broker checks each opening sell against IBKR's locate
+    (``IbkrBorrowSource``), with fees from ``borrow_fees`` (the lake's
+    ``borrow_rates``, say) when given."""
     _, gw = pick_gateway(config, gateway=gateway, portfolio_id=portfolio_id)
+    kind: AccountType = account_type or gw.account_type
     client = client_factory(endpoint_for(config, gw, role))
     cache = SqliteContractCache(state) if state is not None else MemoryContractCache()
     resolver = ContractResolver(
@@ -108,14 +116,18 @@ def connect_ibkr(
         clock=clock,
         max_age=timedelta(days=config.contract_max_age_days),
     )
-    return IbkrBroker(
+    broker = IbkrBroker(
         client,
         mode=gw.mode,
         account_id=gw.account_id,
         allow_live=config.allow_live,
         resolver=resolver,
         order_settings=config.orders,
-        account_type=account_type,
+        account_type=kind,
+        allow_short=kind == "margin",
         ref_lookup=order_ref_lookup(state) if state is not None else None,
         clock=clock,
     )
+    if kind == "margin":
+        broker.borrow = IbkrBorrowSource(broker, fees=borrow_fees)
+    return broker

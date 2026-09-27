@@ -176,6 +176,19 @@ class IbSnapshot:
 
 
 @dataclass(frozen=True)
+class IbShortability:
+    """What IBKR says about shorting one contract (generic tick 236).
+
+    ``indicator`` is IBKR's shortable value: above 2.5 easy to borrow,
+    above 1.5 hard to borrow (a locate is needed), else not shortable.
+    ``shares`` is how many shares IBKR can lend. ``None``: no answer."""
+
+    con_id: int
+    indicator: float | None
+    shares: float | None = None
+
+
+@dataclass(frozen=True)
 class IbLinkStatus:
     """The session as the gateway reports it.
 
@@ -235,6 +248,15 @@ class IbClient(Protocol):
     def what_if(self, contract: IbContract, order: IbOrderRequest) -> IbWhatIf: ...
 
     def snapshots(self, contracts: Sequence[IbContract]) -> Sequence[IbSnapshot]: ...
+
+
+@runtime_checkable
+class IbShortableClient(Protocol):
+    """An ``IbClient`` that can also read the shortable ticks (roadmap
+    19.3). A separate protocol, so a client without it still works for
+    long-only accounts."""
+
+    def shortability(self, contracts: Sequence[IbContract]) -> Sequence[IbShortability]: ...
 
 
 @dataclass(frozen=True)

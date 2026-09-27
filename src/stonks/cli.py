@@ -633,6 +633,36 @@ def ingest_fx(
     _print_result(result)
 
 
+@ingest_app.command("borrow")
+def ingest_borrow(
+    markets: str | None = typer.Option(
+        None,
+        "--markets",
+        help="comma-separated IBKR short stock markets, e.g. usa,uk "
+        "(default: \\[sources.ibkr_borrow] markets)",
+    ),
+) -> None:
+    """Pull today's stock borrow rates from IBKR's public short stock files
+    into ``borrow_rates``. Each market is one unit of the
+    ``ingest_runs`` row. Re-running the same day is idempotent."""
+    from stonks.ingest.sources.ibkr_borrow import SHORT_STOCK_MARKETS, IbkrBorrowDataSource
+
+    settings = _settings()
+    cfg = settings.sources.ibkr_borrow
+    chosen = [m.lower() for m in _parse_tickers(markets)] if markets else list(cfg.markets)
+    unknown = [m for m in chosen if m not in SHORT_STOCK_MARKETS]
+    if unknown or not chosen:
+        raise typer.BadParameter(
+            f"--markets must be some of {sorted(SHORT_STOCK_MARKETS)}", param_hint="--markets"
+        )
+    source = IbkrBorrowDataSource.from_config(cfg)
+    with _open_lake(settings.lake.path) as lake:
+        lake.migrate()
+        pipeline = build_ingest_pipeline(settings, source, lake)
+        result = pipeline.run_borrow_rates(chosen)
+    _print_result(result)
+
+
 @ingest_app.command("aggregate")
 def ingest_aggregate(
     tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),
