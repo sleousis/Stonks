@@ -44,8 +44,9 @@ def known_versions(
     eligible = first | (stamps <= pd.Timestamp(known_by))
     if filed is not None:
         eligible &= pd.Series(filed.to_numpy(dtype=bool), index=frame.index)
-    chosen = frame.loc[eligible.to_numpy()]
-    order = stamps[eligible.to_numpy()].sort_values(kind="stable")
+    mask = eligible.to_numpy()
+    chosen = frame.loc[mask]
+    order = stamps.loc[mask].sort_values(kind="stable")
     latest = chosen.loc[order.index].groupby(list(STATEMENT_KEY), sort=False).tail(1)
     out = frame.loc[sorted(latest.index)].drop(columns=[KNOWN_AT])
     return out.reset_index(drop=True)

@@ -957,7 +957,7 @@ class DuckDBLake:
             for c in _STATEMENT_PK
         )
         unchanged = " AND ".join(f"v.{c} IS NOT DISTINCT FROM t.{c}" for c in cols)
-        keys = _last_per_key(df[list(_STATEMENT_PK)], _STATEMENT_PK)
+        keys = _last_per_key(pd.DataFrame(df[list(_STATEMENT_PK)]), _STATEMENT_PK)
         with self._registered(keys, "_keys"):
             self.con.execute(
                 f"DELETE FROM {versions} t WHERE t.known_at = ?"
@@ -1163,7 +1163,7 @@ class DuckDBLake:
         versions = self.get_statement_versions(
             statement, ticker, missing_filing_lag_days=missing_filing_lag_days
         )
-        filed = versions["available_date"].map(lambda d: d <= cutoff).astype(bool)
+        filed = pd.Series(versions["available_date"].map(lambda d: d <= cutoff), dtype=bool)
         df = known_versions(versions, known_by or day_start(cutoff + timedelta(days=1)), filed)
         mask = pd.Series(True, index=df.index)
         if frequency is not None:

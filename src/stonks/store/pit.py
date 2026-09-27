@@ -274,7 +274,7 @@ class PointInTimeLake:
         then, and seen by then unless it is the first version."""
         if self._versioned():
             full = self._versions(statement, ticker, missing_filing_lag_days, True)
-            filed = _on_or_before(full["available_date"], self._filed_by)
+            filed = _on_or_before(pd.Series(full["available_date"]), self._filed_by)
             return known_versions(full, self._reach, filed)
         full = self._cached(
             ("statement_history", statement, ticker, missing_filing_lag_days),
@@ -297,7 +297,9 @@ class PointInTimeLake:
         day after it (BE-22). Each period reads the version known then."""
         if self._versioned():
             full = self._versions(table, ticker, 90, False)
-            filed = _on_or_before(full["filing_date"], self._filed_by - timedelta(days=1))
+            filed = _on_or_before(
+                pd.Series(full["filing_date"]), self._filed_by - timedelta(days=1)
+            )
             picked = known_versions(full, self._reach, filed).drop(columns=["available_date"])
             picked = picked.sort_values(
                 ["period_end", "frequency"], ascending=[False, True], kind="stable"
