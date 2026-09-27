@@ -162,5 +162,8 @@ describe('ChartPage', () => {
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
     expect(el.textContent).toContain('No prices yet');
+    // A trader cannot update data: no dead end on a page they may not use.
+    expect(el.querySelector('a[href="/data"]')).toBeNull();
+    expect(el.querySelector('app-empty-state a')?.getAttribute('href')).toBe('/watchlists');
   });
 });

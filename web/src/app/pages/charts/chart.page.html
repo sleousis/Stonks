@@ -112,12 +112,21 @@
       } @else if (!chart.hasValue() || !data()) {
         <app-loading-state label="Loading the chart" [rows]="6" />
       } @else if (data()!.candles.length === 0) {
-        <app-empty-state
-          title="No prices yet"
-          message="Load prices for this ticker on the Data page, then come back."
-        >
-          <a routerLink="/data" class="btn">Go to Data</a>
-        </app-empty-state>
+        @if (session.can('operations.run')) {
+          <app-empty-state
+            title="No prices yet"
+            message="Update data for this ticker on the Data page, then come back."
+          >
+            <a routerLink="/data" class="btn">Go to Data</a>
+          </app-empty-state>
+        } @else {
+          <app-empty-state
+            title="No prices yet"
+            message="Prices for this ticker are not loaded yet. Check the spelling, or pick a ticker from your watchlist."
+          >
+            <a routerLink="/watchlists" class="btn">Your watchlists</a>
+          </app-empty-state>
+        }
       } @else {
         <app-price-chart
           [ariaLabel]="symbol() + ' daily candles'"
