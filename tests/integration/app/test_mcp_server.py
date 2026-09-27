@@ -160,6 +160,8 @@ READ_TOOLS = {
     "get_fx_rate",
     "list_order_drafts",
     "list_cash_flows",
+    "list_research_sessions",
+    "get_research_session",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
@@ -179,6 +181,7 @@ JOB_TOOLS = {
     "create_watchlist",
     "create_price_alert",
     "draft_order",
+    "start_research",
 }
 # Overwrite a draft's fields; no confirm (a draft is never traded).
 EDIT_TOOLS = {

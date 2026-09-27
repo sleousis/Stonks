@@ -312,6 +312,10 @@ CASES: dict[str, Case] = {
     "get_schedule": _c("GET", "/api/schedule"),
     "list_ledger_runs": _c("GET", "/api/lab/ledger"),
     "get_ledger_run": _c("GET", "/api/lab/ledger/{run_id}", lambda i: {"run_id": "lab_missing"}),
+    "list_research_sessions": _c("GET", "/api/assistant/research"),
+    "get_research_session": _c(
+        "GET", "/api/assistant/research/{session_id}", lambda i: {"session_id": "rs_missing"}
+    ),
     "list_alerts": _c("GET", "/api/alerts"),
     "list_notifications": _c("GET", "/api/notifications"),
     "mark_notifications_read": _c("POST", "/api/notifications/read"),
@@ -437,6 +441,12 @@ CASES: dict[str, Case] = {
         lambda i: {"draft_id": i["draft"], "universe": ["UP.US"]} | _WINDOW,
     ),
     "run_sweep": _c("POST", "/api/lab/sweeps", lambda i: {"universe": ["UP.US"]} | _WINDOW),
+    # the research loop is off here: 503 once the permission passed
+    "start_research": _c(
+        "POST",
+        "/api/assistant/research",
+        lambda i: {"goal": "find an edge in these names", "universe": ["UP.US"]},
+    ),
     "cancel_job": _c("POST", "/api/jobs/{job_id}/cancel", lambda i: {"job_id": i["job"]}),
     "update_draft": _c(
         "PATCH", "/api/studio/drafts/{draft_id}", lambda i: {"draft_id": i["draft"], "name": "y"}

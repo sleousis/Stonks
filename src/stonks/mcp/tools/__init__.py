@@ -14,6 +14,7 @@ from stonks.mcp.tools import (
     orders,
     price_alerts,
     reads,
+    research,
     risk,
     studio,
     subscriptions,
@@ -42,6 +43,7 @@ MODULES = (
     risk,
     notifications,
     workspace,
+    research,
 )
 
 

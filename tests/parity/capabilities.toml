@@ -1361,6 +1361,19 @@ console = { limited = "an operator check before switching models" }
 cli = "stonks assistant eval"
 mcp = { limited = "an operator check before switching models" }
 
+[[capability]]
+id = "assistant.research"
+domain = "assistant"
+title = "AI research sessions: the model proposes and runs lab trials under a budget, never registering"
+routes = [
+  "POST /api/assistant/research",
+  "GET /api/assistant/research",
+  "GET /api/assistant/research/{session_id}",
+]
+console = { limited = "research sessions start from the assistant chat, which calls the MCP tool" }
+cli = { limited = "a research session runs as an API job, and the eval set checks the loop from the shell" }
+mcp = ["start_research", "list_research_sessions", "get_research_session"]
+
 
 # ---- live trading (roadmap 19.6, 19.7) --------------------------------------------
 

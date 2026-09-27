@@ -120,7 +120,7 @@ CATEGORIES: dict[str, tuple[str, frozenset[str]]] = {
         ),
     ),
     "lab": (
-        "the lab: backtests, lab runs, sweeps, signal studies and their results",
+        "the lab: backtests, lab runs, sweeps, signal studies, research sessions and results",
         frozenset(
             {
                 "run_backtest",
@@ -134,6 +134,9 @@ CATEGORIES: dict[str, tuple[str, frozenset[str]]] = {
                 "list_cost_models",
                 "list_ledger_runs",
                 "get_ledger_run",
+                "start_research",
+                "list_research_sessions",
+                "get_research_session",
             }
         ),
     ),
@@ -170,6 +173,7 @@ RESEARCH_WRITES: frozenset[str] = frozenset(
         "run_lab",
         "run_sweep",
         "run_signal_ic",
+        "start_research",
         "cancel_job",
         "create_price_alert",
         "update_price_alert",

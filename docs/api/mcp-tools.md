@@ -47,6 +47,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_pnl`](#get_pnl) | read | no |
 | [`get_portfolio`](#get_portfolio) | read | no |
 | [`get_portfolio_totals`](#get_portfolio_totals) | read | no |
+| [`get_research_session`](#get_research_session) | read | no |
 | [`get_risk_policy`](#get_risk_policy) | read | no |
 | [`get_rule_schema`](#get_rule_schema) | read | no |
 | [`get_schedule`](#get_schedule) | read | no |
@@ -82,6 +83,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_portfolios`](#list_portfolios) | read | no |
 | [`list_price_alert_events`](#list_price_alert_events) | read | no |
 | [`list_price_alerts`](#list_price_alerts) | read | no |
+| [`list_research_sessions`](#list_research_sessions) | read | no |
 | [`list_risk_snapshots`](#list_risk_snapshots) | read | no |
 | [`list_shadow_decisions`](#list_shadow_decisions) | read | no |
 | [`list_shadow_pnl`](#list_shadow_pnl) | read | no |
@@ -117,6 +119,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`run_tick`](#run_tick) | guarded | yes |
 | [`search_instruments`](#search_instruments) | read | no |
 | [`shadow_strategy`](#shadow_strategy) | guarded | yes |
+| [`start_research`](#start_research) | job | no |
 | [`subscribe`](#subscribe) | guarded | yes |
 | [`sync_connection`](#sync_connection) | guarded | yes |
 | [`tca_summary`](#tca_summary) | read | no |
@@ -388,6 +391,17 @@ Admins only: cash and value summed across every active portfolio (no holdings).
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
+
+### `get_research_session`
+
+One research session with every proposal: its hypothesis, whether
+it ran or why not, and its lab run in the trial ledger.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `session_id` | string | yes |  | the rs_... id |
 
 ### `get_risk_policy`
 
@@ -767,6 +781,17 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `limit` | integer | no | `100` | page size |
+| `offset` | integer | no | `0` | rows to skip |
+
+### `list_research_sessions`
+
+Your AI research sessions, newest first: goal, budgets used, status.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
 
 ### `list_risk_snapshots`
@@ -1331,6 +1356,26 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 | `strict_preflight` | boolean \| null | no | `null` | treat preflight warnings as errors. Default [lab] strict_preflight |
 | `hypothesis` | string \| null | no | `null` | the edge and who pays for it; recorded before tuning (trial ledger) |
 | `premortem` | string \| null | no | `null` | how the strategy is expected to fail; recorded |
+
+### `start_research`
+
+Start an AI research session: the assistant's model proposes lab
+trials for the goal and runs them under the session's budgets. Every
+proposal is recorded with its hypothesis first, every trial is counted
+in the trial ledger, and validation windows start after the model's
+training cutoff. It never registers or promotes a strategy. Returns
+the job; use wait_for_job, then get_research_session.
+
+Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `goal` | string | yes |  | what to look for |
+| `universe` | list[string] \| null | no | `null` | instrument ids, or give universe_id |
+| `universe_id` | string \| null | no | `null` | a stored universe |
+| `max_trials` | integer \| null | no | `null` | tuning trials, at most the setting |
+| `max_proposals` | integer \| null | no | `null` | proposals, at most the setting |
+| `max_cpu_seconds` | number \| null | no | `null` | compute seconds, at most the setting |
 
 ### `update_draft`
 

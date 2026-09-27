@@ -3026,6 +3026,10 @@ export type LabRunView = {
      */
     n_trials_class?: number;
     /**
+     * N Trials Family
+     */
+    n_trials_family?: number;
+    /**
      * N Trials Run
      */
     n_trials_run?: number;
@@ -4938,6 +4942,28 @@ export type PagePushDeviceView = {
 };
 
 /**
+ * Page[ResearchSessionView]
+ */
+export type PageResearchSessionView = {
+    /**
+     * Items
+     */
+    items: Array<ResearchSessionView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[RiskSnapshotView]
  */
 export type PageRiskSnapshotView = {
@@ -6451,6 +6477,307 @@ export type RecoveryCodesView = {
      * Recovery Codes
      */
     recovery_codes: Array<string>;
+};
+
+/**
+ * ResearchProposalView
+ */
+export type ResearchProposalView = {
+    /**
+     * Arguments
+     *
+     * What the model proposed.
+     */
+    arguments: {
+        [key: string]: unknown;
+    };
+    /**
+     * Best Score
+     */
+    best_score: number | null;
+    /**
+     * Budget
+     */
+    budget: number | null;
+    /**
+     * Class Path
+     */
+    class_path: string | null;
+    /**
+     * Cpu Seconds
+     */
+    cpu_seconds: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Finished At
+     */
+    finished_at: string | null;
+    /**
+     * Hypothesis
+     */
+    hypothesis: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Lab Run Id
+     *
+     * The run in the trial ledger.
+     */
+    lab_run_id: string | null;
+    /**
+     * Outcome
+     */
+    outcome: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Premortem
+     */
+    premortem: string | null;
+    /**
+     * Reason
+     *
+     * Why it was rejected, stopped or failed.
+     */
+    reason: string | null;
+    /**
+     * Seq
+     */
+    seq: number;
+    /**
+     * Status
+     */
+    status: 'rejected' | 'running' | 'done' | 'failed' | 'stopped';
+    /**
+     * Trials
+     */
+    trials: number;
+    /**
+     * Validation Start
+     */
+    validation_start: string | null;
+    /**
+     * Verdict
+     */
+    verdict: string | null;
+};
+
+/**
+ * ResearchSessionDetailView
+ */
+export type ResearchSessionDetailView = {
+    /**
+     * Cpu Seconds Used
+     */
+    cpu_seconds_used: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Finished At
+     */
+    finished_at: string | null;
+    /**
+     * Goal
+     */
+    goal: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Job Id
+     */
+    job_id: string | null;
+    /**
+     * Max Cpu Seconds
+     */
+    max_cpu_seconds: number;
+    /**
+     * Max Proposals
+     */
+    max_proposals: number;
+    /**
+     * Max Trials
+     */
+    max_trials: number;
+    /**
+     * Model
+     */
+    model: string;
+    /**
+     * Model Cutoff
+     *
+     * The model's training cutoff: validation windows start after it.
+     */
+    model_cutoff: string;
+    /**
+     * Prompt Version
+     */
+    prompt_version: string;
+    /**
+     * Proposals
+     */
+    proposals: Array<ResearchProposalView>;
+    /**
+     * Started At
+     */
+    started_at: string | null;
+    /**
+     * Status
+     */
+    status: 'queued' | 'running' | 'done' | 'stopped' | 'failed';
+    /**
+     * Stop Reason
+     */
+    stop_reason: string | null;
+    /**
+     * Summary
+     */
+    summary: string | null;
+    /**
+     * Trials Used
+     */
+    trials_used: number;
+    /**
+     * Universe
+     */
+    universe: Array<string>;
+    /**
+     * Universe Id
+     */
+    universe_id: string | null;
+};
+
+/**
+ * ResearchSessionView
+ */
+export type ResearchSessionView = {
+    /**
+     * Cpu Seconds Used
+     */
+    cpu_seconds_used: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Finished At
+     */
+    finished_at: string | null;
+    /**
+     * Goal
+     */
+    goal: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Job Id
+     */
+    job_id: string | null;
+    /**
+     * Max Cpu Seconds
+     */
+    max_cpu_seconds: number;
+    /**
+     * Max Proposals
+     */
+    max_proposals: number;
+    /**
+     * Max Trials
+     */
+    max_trials: number;
+    /**
+     * Model
+     */
+    model: string;
+    /**
+     * Model Cutoff
+     *
+     * The model's training cutoff: validation windows start after it.
+     */
+    model_cutoff: string;
+    /**
+     * Prompt Version
+     */
+    prompt_version: string;
+    /**
+     * Started At
+     */
+    started_at: string | null;
+    /**
+     * Status
+     */
+    status: 'queued' | 'running' | 'done' | 'stopped' | 'failed';
+    /**
+     * Stop Reason
+     */
+    stop_reason: string | null;
+    /**
+     * Summary
+     */
+    summary: string | null;
+    /**
+     * Trials Used
+     */
+    trials_used: number;
+    /**
+     * Universe
+     */
+    universe: Array<string>;
+    /**
+     * Universe Id
+     */
+    universe_id: string | null;
+};
+
+/**
+ * ResearchStart
+ *
+ * A research session: what to look for, on which universe, and budgets
+ * that may only be lower than the configured ones.
+ */
+export type ResearchStart = {
+    /**
+     * Goal
+     *
+     * What to look for.
+     */
+    goal: string;
+    /**
+     * Max Cpu Seconds
+     *
+     * At most the setting.
+     */
+    max_cpu_seconds?: number | null;
+    /**
+     * Max Proposals
+     *
+     * At most the setting.
+     */
+    max_proposals?: number | null;
+    /**
+     * Max Trials
+     *
+     * At most the setting.
+     */
+    max_trials?: number | null;
+    /**
+     * Universe
+     */
+    universe?: Array<string>;
+    /**
+     * Universe Id
+     */
+    universe_id?: string | null;
 };
 
 /**
@@ -10046,6 +10373,145 @@ export type ClearAssistantFreezeResponses = {
 };
 
 export type ClearAssistantFreezeResponse = ClearAssistantFreezeResponses[keyof ClearAssistantFreezeResponses];
+
+export type ListAssistantResearchData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/assistant/research';
+};
+
+export type ListAssistantResearchErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListAssistantResearchError = ListAssistantResearchErrors[keyof ListAssistantResearchErrors];
+
+export type ListAssistantResearchResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageResearchSessionView;
+};
+
+export type ListAssistantResearchResponse = ListAssistantResearchResponses[keyof ListAssistantResearchResponses];
+
+export type StartAssistantResearchData = {
+    body: ResearchStart;
+    path?: never;
+    query?: never;
+    url: '/api/assistant/research';
+};
+
+export type StartAssistantResearchErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type StartAssistantResearchError = StartAssistantResearchErrors[keyof StartAssistantResearchErrors];
+
+export type StartAssistantResearchResponses = {
+    /**
+     * Successful Response
+     */
+    202: Job;
+};
+
+export type StartAssistantResearchResponse = StartAssistantResearchResponses[keyof StartAssistantResearchResponses];
+
+export type GetAssistantResearchData = {
+    body?: never;
+    path: {
+        /**
+         * Session Id
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/api/assistant/research/{session_id}';
+};
+
+export type GetAssistantResearchErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetAssistantResearchError = GetAssistantResearchErrors[keyof GetAssistantResearchErrors];
+
+export type GetAssistantResearchResponses = {
+    /**
+     * Successful Response
+     */
+    200: ResearchSessionDetailView;
+};
+
+export type GetAssistantResearchResponse = GetAssistantResearchResponses[keyof GetAssistantResearchResponses];
 
 export type GetAssistantStatusData = {
     body?: never;
