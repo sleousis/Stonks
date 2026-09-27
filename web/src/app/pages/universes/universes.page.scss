@@ -47,6 +47,14 @@ fieldset.source {
   }
 }
 
+.json-toggle {
+  margin-right: var(--space-2);
+}
+
+label.check.field {
+  align-self: end;
+}
+
 .form-actions {
   display: flex;
   flex-wrap: wrap;

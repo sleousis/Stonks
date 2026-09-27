@@ -50,13 +50,30 @@ const FAILED_INGEST: Page<IngestRunView> = {
 };
 
 const NO_TICKS: Page<TickRun> = { items: [], total: 0, limit: 10, offset: 0 };
+const FAILED_TICKS: Page<TickRun> = {
+  items: [
+    {
+      id: '20260926-t9',
+      started_at: '2026-09-26T20:45:00Z',
+      finished_at: '2026-09-26T20:45:30Z',
+      status: 'error',
+      summary: { error: 'broker down', error_type: 'BrokerError' },
+    } as TickRun,
+  ],
+  total: 1,
+  limit: 10,
+  offset: 0,
+};
 
 describe('HealthPage', () => {
   let fixture: ComponentFixture<HealthPage>;
   let http: HttpTestingController;
   let el: HTMLElement;
 
-  async function flushAll(report: HealthReportView = REPORT): Promise<void> {
+  async function flushAll(
+    report: HealthReportView = REPORT,
+    ticksPage: Page<TickRun> = NO_TICKS,
+  ): Promise<void> {
     (await nextRequest(http, '/api/health/report')).flush(report);
     (await nextRequest(http, '/api/health')).flush({ status: 'ok', version: '1.2.3' });
     const ingest = await nextRequest(http, '/api/ingest/runs');
@@ -64,7 +81,7 @@ describe('HealthPage', () => {
     ingest.flush(FAILED_INGEST);
     const ticks = await nextRequest(http, '/api/ticks');
     expect(ticks.request.urlWithParams).toContain('status=error');
-    ticks.flush(NO_TICKS);
+    ticks.flush(ticksPage);
     // The system alerts panel loads on its own, once.
     http
       .match((r) => r.url.split('?')[0] === '/api/alerts')
@@ -99,10 +116,34 @@ describe('HealthPage', () => {
     expect(text).toContain('7d old');
   });
 
-  it('shows recent ingest failures with their error text', async () => {
+  it('shows recent data update failures with their error text in trader words', async () => {
     await flushAll();
-    expect(el.textContent).toContain('HTTP 402 payment required');
+    const section = el.querySelector('[aria-labelledby="ingest-fail-title"]')!;
+    expect(section.textContent).toContain('HTTP 402 payment required');
+    expect(section.textContent).toContain('Daily prices');
     expect(el.textContent).toContain('No failed trading runs');
+  });
+
+  it('links each failed trading run to its page', async () => {
+    await flushAll(REPORT, FAILED_TICKS);
+    const section = el.querySelector('[aria-labelledby="tick-fail-title"]')!;
+    const link = section.querySelector('a');
+    expect(link?.getAttribute('href')).toBe('/orders/ticks/20260926-t9');
+    expect(section.textContent).toContain('broker down');
+  });
+
+  it('says when it last updated', async () => {
+    await flushAll();
+    expect(el.querySelector('app-updated-ago')?.textContent).toContain('Updated just now');
+  });
+
+  it('Refresh reloads the alerts too', async () => {
+    await flushAll();
+    [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Refresh')!.click();
+    fixture.detectChanges();
+    (await nextRequest(http, '/api/alerts')).flush({ items: [], total: 0, limit: 20, offset: 0 });
+    await flushAll();
+    http.verify();
   });
 
   it('is critical when a run is stuck', async () => {
@@ -208,6 +249,7 @@ describe('HealthPage run checks now (admin)', () => {
     expect(confirm).toHaveBeenCalledWith(
       expect.objectContaining({
         confirmLabel: 'Run checks now',
+        tone: 'danger',
         message: expect.stringContaining('stops trading for everyone'),
       }),
     );

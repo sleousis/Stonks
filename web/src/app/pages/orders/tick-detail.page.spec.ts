@@ -106,6 +106,39 @@ describe('TickDetailPage', () => {
     expect(shadow?.textContent).toContain('KeyError: close');
   });
 
+  it('marks a dry run in the header, and never says shadow', async () => {
+    (await nextRequest(controller, '/api/ticks/t1')).flush({
+      ...TICK,
+      summary: { ...TICK.summary, dry_run: true },
+    });
+    (await nextRequest(controller, '/api/orders/fills')).flush({
+      items: [],
+      total: 0,
+      limit: 200,
+      offset: 0,
+    });
+    await settle();
+    expect(el.querySelector('.detail-head')?.textContent).toContain('Dry run');
+    expect(el.textContent).not.toMatch(/shadow|\bticks?\b/i);
+    expect(el.textContent).not.toContain('evaluated');
+    expect(el.textContent).toContain('Paper trading');
+  });
+
+  it('stamps a live run LIVE in the header', async () => {
+    (await nextRequest(controller, '/api/ticks/t1')).flush({
+      ...TICK,
+      summary: { ...TICK.summary, dry_run: false, broker_mode: 'live' },
+    });
+    (await nextRequest(controller, '/api/orders/fills')).flush({
+      items: [],
+      total: 0,
+      limit: 200,
+      offset: 0,
+    });
+    await settle();
+    expect(el.querySelector('.detail-head app-mode-stamp')?.textContent).toContain('LIVE');
+  });
+
   it('names the run by its time and keeps the id as secondary text', async () => {
     (await nextRequest(controller, '/api/ticks/t1')).flush(TICK);
     (await nextRequest(controller, '/api/orders/fills')).flush({

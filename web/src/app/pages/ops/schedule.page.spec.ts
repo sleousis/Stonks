@@ -2,7 +2,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 
-import type { BackupView, Job, MeView, Page, ScheduleView } from '../../api/models';
+import type { BackupView, BrokerInfo, Job, MeView, Page, ScheduleView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
@@ -11,7 +11,22 @@ import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
-import { SchedulePage, formatSize, jobRows } from './schedule.page';
+import { DUE_GRACE_MS, SchedulePage, formatSize, jobRows } from './schedule.page';
+
+const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
+
+const SIMULATED: BrokerInfo = {
+  kind: 'simulated',
+  paper: true,
+  allow_live: false,
+  credentials_configured: false,
+};
+const ALPACA_LIVE: BrokerInfo = {
+  kind: 'alpaca',
+  paper: false,
+  allow_live: true,
+  credentials_configured: true,
+};
 
 const SCHEDULE: ScheduleView = {
   backend: 'in_process',
@@ -22,14 +37,14 @@ const SCHEDULE: ScheduleView = {
       action: 'tick',
       trigger: 'XNYS close +45m',
       trigger_text: '45 minutes after the New York market closes, on trading days',
-      next_run_at: '2026-09-28T20:45:00Z',
-      next_as_of: '2026-09-28',
+      next_run_at: inDays(1),
+      next_as_of: inDays(1).slice(0, 10),
     },
     {
       name: 'health',
       action: 'health',
       trigger: 'every 240m',
-      next_run_at: '2026-09-26T16:00:00Z',
+      next_run_at: inDays(0.1),
       next_as_of: null,
     },
   ],
@@ -138,7 +153,11 @@ describe('SchedulePage', () => {
     return [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === text);
   }
 
-  async function setup(me: MeView): Promise<void> {
+  async function setup(
+    me: MeView,
+    broker: BrokerInfo = SIMULATED,
+    schedule: ScheduleView = SCHEDULE,
+  ): Promise<void> {
     confirm = vi.fn().mockResolvedValue(true);
     track = vi.fn((id: string) => finished(id));
     stepUp = vi.fn().mockResolvedValue(true);
@@ -160,8 +179,9 @@ describe('SchedulePage', () => {
     fixture.detectChanges();
     const sched = await nextRequest(http, '/api/schedule');
     expect(sched.request.urlWithParams).toContain('limit=30');
-    sched.flush(SCHEDULE);
+    sched.flush(schedule);
     if (me.role === 'admin') {
+      (await nextRequest(http, '/api/brokers')).flush(broker);
       const list = await nextRequest(http, '/api/backups');
       expect(list.request.urlWithParams).toContain('limit=50');
       list.flush(backupPage());
@@ -180,8 +200,10 @@ describe('SchedulePage', () => {
       expect(jobs.textContent).toContain('45 minutes after the New York market closes');
       expect(jobs.textContent).not.toContain('XNYS close +45m');
       expect(jobs.textContent).toContain('Never');
-      // Names read as words; the next run shows its time and a countdown.
-      expect(jobs.textContent).toContain('Health');
+      // Names read as trader words; the next run shows its time and a countdown.
+      expect(jobs.textContent).toContain('Trading run');
+      expect(jobs.textContent).toContain('Health check');
+      expect(jobs.textContent).not.toMatch(/\btick\b/i);
       expect(jobs.querySelector('.next .num')).not.toBeNull();
       expect(jobs.querySelector('.until')!.textContent).toMatch(/in |due now/);
       expect(jobs.textContent).not.toContain('in_process');
@@ -196,16 +218,45 @@ describe('SchedulePage', () => {
       expect(el.textContent).not.toContain('[scheduler]');
     });
 
-    it('runs a tick now only after typing its name', async () => {
-      const runButtons = [...el.querySelectorAll<HTMLButtonElement>('button[aria-label^="Run "]')];
-      runButtons.find((b) => b.getAttribute('aria-label') === 'Run Tick now')!.click();
-      const post = await nextRequest(http, '/api/schedule/tick/run-now', 'POST');
-      expect(confirm).toHaveBeenCalledWith(
-        expect.objectContaining({ typedConfirmation: 'tick', tone: 'danger' }),
-      );
-      post.flush({ job: 'tick', run_key: 'manual:x', as_of: '2026-09-26', status: 'started' });
+    it('asks a plain confirm in trader words for jobs that place no orders', async () => {
+      el.querySelector<HTMLButtonElement>('button[aria-label="Run now: Health check"]')!.click();
+      const post = await nextRequest(http, '/api/schedule/health/run-now', 'POST');
+      const options = confirm.mock.calls[0][0];
+      expect(options.title).toBe('Run the health check now?');
+      expect(options.typedConfirmation).toBeUndefined();
+      expect(options.ticket).toBeUndefined();
+      post.flush({ job: 'health', run_key: 'manual:x', as_of: '2026-09-26', status: 'started' });
       (await nextRequest(http, '/api/schedule')).flush(SCHEDULE);
       await settle();
+    });
+
+    it('result 500 after success shows inline error with retry (backup)', async () => {
+      button('Back up now')!.click();
+      (await nextRequest(http, '/api/backups', 'POST')).flush(
+        backupJob({ id: 'job_b3', status: 'queued', result: null }),
+      );
+      await tick();
+      for (const r of http.match((x) => x.url.split('?')[0] === '/api/backups')) {
+        r.flush(backupPage());
+      }
+      (await nextRequest(http, '/api/backups/jobs/job_b3/result')).flush(
+        { title: 'x', status: 500, detail: 'Result store unavailable.' },
+        { status: 500, statusText: 'Server Error' },
+      );
+      await tick();
+      for (const r of http.match((x) => x.url.split('?')[0] === '/api/backups')) {
+        r.flush(backupPage());
+      }
+      await settle();
+      const error = el.querySelector('app-job-progress app-error-state')!;
+      expect(error.textContent).toContain('Backup finished, but its result could not load');
+      error.querySelector('button')!.click();
+      (await nextRequest(http, '/api/backups/jobs/job_b3/result')).flush({
+        backup_id: 'stonks-20260926T120000Z',
+        pruned: [],
+      });
+      await settle();
+      expect(el.querySelector('app-job-progress app-error-state')).toBeNull();
     });
 
     it('backs up now, follows the job and names the backup', async () => {
@@ -232,6 +283,46 @@ describe('SchedulePage', () => {
     });
   });
 
+  describe('the trading run job, as an admin with a live broker', () => {
+    beforeEach(() => setup(ADMIN, ALPACA_LIVE));
+
+    it('Run now on a tick job with a live broker shows the LIVE stamp and needs the broker label', async () => {
+      el.querySelector<HTMLButtonElement>('button[aria-label="Run now: Trading run"]')!.click();
+      const post = await nextRequest(http, '/api/schedule/tick/run-now', 'POST');
+      const options = confirm.mock.calls[0][0];
+      expect(options.ticket.live).toBe(true);
+      expect(options.typedConfirmation).toBe('alpaca live');
+      expect(options.typedConfirmation).not.toBe('tick');
+      expect(options.tone).toBe('danger');
+      expect(options.message).toContain('real money');
+      expect(`${options.title} ${options.message}`).not.toMatch(/\btick/i);
+      post.flush({ job: 'tick', run_key: 'manual:x', as_of: '2026-09-26', status: 'started' });
+      (await nextRequest(http, '/api/schedule')).flush(SCHEDULE);
+      await settle();
+    });
+
+    it('sends nothing when the ticket is closed', async () => {
+      confirm.mockResolvedValue(false);
+      el.querySelector<HTMLButtonElement>('button[aria-label="Run now: Trading run"]')!.click();
+      await settle();
+      expect(http.match('/api/schedule/tick/run-now')).toEqual([]);
+    });
+  });
+
+  describe('a job coming due', () => {
+    it('schedule reloads after next_run_at passes', async () => {
+      const soon: ScheduleView = {
+        ...SCHEDULE,
+        jobs: [{ ...SCHEDULE.jobs[1], next_run_at: new Date(Date.now() + 300).toISOString() }],
+      };
+      await setup(TRADER, SIMULATED, soon);
+      const reload = await nextRequest(http, '/api/schedule', 'GET', DUE_GRACE_MS + 3000);
+      reload.flush(SCHEDULE);
+      await settle();
+      expect(el.querySelector('.until')!.textContent).toContain('in ');
+    }, 10_000);
+  });
+
   describe('backups on disk, as an admin', () => {
     beforeEach(() => setup(ADMIN));
 
@@ -249,6 +340,32 @@ describe('SchedulePage', () => {
       expect(outcome.getAttribute('data-ok')).toBe('false');
       expect(outcome.textContent).toContain('checksum mismatch');
       expect(outcome.textContent).toContain('Do not restore from it.');
+    });
+
+    it('result 500 after success shows inline error with retry (restore)', async () => {
+      el.querySelector<HTMLButtonElement>(
+        'button[aria-label="Restore backup stonks-20260925T020000Z"]',
+      )!.click();
+      (await nextRequest(http, `/api/backups/${BACKUP.id}/restore`, 'POST')).flush(
+        backupJob({ id: 'job_r', kind: 'backup_restore', status: 'queued' }),
+      );
+      (await nextRequest(http, '/api/backups/restores/job_r/result')).flush(
+        { title: 'x', status: 500, detail: 'Result store unavailable.' },
+        { status: 500, statusText: 'Server Error' },
+      );
+      await settle();
+      const error = el.querySelector('app-job-progress app-error-state')!;
+      expect(error.textContent).toContain('Restore finished, but its result could not load');
+      error.querySelector('button')!.click();
+      (await nextRequest(http, '/api/backups/restores/job_r/result')).flush({
+        backup_id: BACKUP.id,
+        data_dir: '/data/restores/r1',
+        next_steps: [],
+        lake_migrations_applied: [],
+        state_migrations_applied: [],
+      });
+      await settle();
+      expect(el.querySelector('.outcome')!.textContent).toContain('/data/restores/r1');
     });
 
     it('restores only after the typed words and a step-up, and never touches live data', async () => {

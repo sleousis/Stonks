@@ -114,10 +114,20 @@ describe('DataPage', () => {
     expect(coverage.textContent).toContain('Old');
   });
 
-  it('shows ingest history with status and error text', () => {
+  it('shows data updates with status and error text in trader words', () => {
     const runs = el.querySelector('[aria-labelledby="runs-title"]')!;
-    expect(runs.textContent).toContain('partial');
+    expect(runs.textContent).toContain('Partly done');
+    expect(runs.textContent).toContain('Daily prices');
+    expect(runs.textContent).toContain('EODHD');
+    expect(runs.textContent).not.toMatch(/\b(partial|eodhd)\b/);
     expect(runs.textContent).toContain('MSFT.US: HTTP 404');
+  });
+
+  it('ingest is absent from the Data page', () => {
+    expect(el.textContent).not.toMatch(/ingest/i);
+    expect(el.textContent).not.toContain('Run #');
+    expect(el.textContent).toContain('Update data');
+    expect(el.textContent).toContain('Data updates');
   });
 
   it('charts a ticker picked from the search and narrows coverage to it', async () => {

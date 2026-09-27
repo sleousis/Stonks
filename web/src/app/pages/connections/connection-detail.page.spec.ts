@@ -183,6 +183,19 @@ describe('ConnectionDetailPage', () => {
     expect(navigate).toHaveBeenCalledWith(['/connections']);
   });
 
+  it('disconnect with a live linked account shows LIVE, the portfolio names, and needs typing', async () => {
+    await setUp();
+    confirm.mockResolvedValueOnce(false);
+    button('Disconnect')!.click();
+    await settle();
+    const options = confirm.mock.calls[0][0];
+    expect(options.ticket.live).toBe(true);
+    expect(options.typedConfirmation).toBe('Alpaca');
+    expect(options.ticket.lines).toContainEqual({ label: 'IRA', value: 'Alpaca mirror (live)' });
+    expect(options.message).toContain('Alpaca mirror');
+    expect(options.message).toContain('archives');
+  });
+
   it('hides sync and disconnect from a viewer and disables linking', async () => {
     await setUp(false);
     expect(button('Sync now')).toBeUndefined();

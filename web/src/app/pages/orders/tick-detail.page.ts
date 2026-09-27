@@ -19,15 +19,16 @@ import { SideTag } from '../../shared/ui/side-tag';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { FILL_COLUMNS } from './fills.page';
 import { OrdersTable } from './orders-table';
+import { TickModeTag } from './tick-mode';
 import { humanize, tickNotes, tickOutcome } from './tick-summary';
 
 /** Fills shown on a run's page; the fills page has the rest. */
 export const TICK_FILLS_LIMIT = 200;
 
 /**
- * One trading run (tick): what it decided (winner or exit), what the risk
- * policy changed, the orders and fills it produced, and how each shadow
- * strategy fared.
+ * One trading run: dry run or its PAPER or LIVE stamp, what it decided
+ * (winner or exit), what the risk policy changed, the orders and fills it
+ * produced, and how each paper trading strategy fared.
  */
 @Component({
   selector: 'app-tick-detail-page',
@@ -40,6 +41,7 @@ export const TICK_FILLS_LIMIT = 200;
     StatusPill,
     SideTag,
     OrdersTable,
+    TickModeTag,
     LoadingState,
     EmptyState,
     ErrorState,
@@ -63,8 +65,9 @@ export const TICK_FILLS_LIMIT = 200;
       <div class="detail-head">
         <h2>Trading run of {{ dateTime(t.started_at) }}</h2>
         <app-status-pill [status]="t.status" />
+        <app-tick-mode [summary]="s" />
         <span class="run-id muted"
-          >Run id <span class="mono">{{ t.id }}</span></span
+          >Reference <span class="mono">{{ t.id }}</span></span
         >
       </div>
 
@@ -210,27 +213,32 @@ export const TICK_FILLS_LIMIT = 200;
 
         <section class="panel span-6" aria-labelledby="shadow-title">
           <div class="panel-head">
-            <h2 id="shadow-title">Shadow outcomes</h2>
-            <a class="cell-link" routerLink="/shadow">Open shadow</a>
+            <h2 id="shadow-title">Paper trading</h2>
+            <a class="cell-link" routerLink="/shadow">Open paper trading</a>
           </div>
           @if (s?.shadow_error) {
-            <p class="alert-line" role="alert">Shadow phase failed: {{ s?.shadow_error }}</p>
+            <p class="alert-line" role="alert">
+              Paper trading could not be checked: {{ s?.shadow_error }}
+            </p>
           }
           @if (shadows().length === 0) {
             <app-empty-state
-              title="No shadow strategies evaluated"
-              message="Shadow strategies run after real trading runs (not dry runs) when shadow mode is on."
+              title="No paper trading strategies checked"
+              message="Paper trading strategies are checked after real trading runs, not dry runs."
             />
           } @else {
             <app-data-table
-              caption="How each shadow strategy was evaluated"
+              caption="How each paper trading strategy did"
               [rows]="shadows()"
               [columns]="shadowColumns"
               [rowKey]="shadowKey"
               [pageSize]="0"
             >
               <ng-template appCell="status" [appCellOf]="shadows()" let-o>
-                <app-status-pill [status]="o.status" />
+                <app-status-pill
+                  [status]="o.status"
+                  [label]="o.status === 'evaluated' ? 'Checked' : humanize(o.status)"
+                />
                 @if (o.error) {
                   <span class="reason-text">{{ o.error }}</span>
                 }
@@ -303,7 +311,7 @@ export class TickDetailPage {
   });
   protected readonly shadowCount = computed(() => {
     const n = this.shadows().length;
-    return n ? `${n} shadow strateg${n === 1 ? 'y' : 'ies'} evaluated` : null;
+    return n ? `${n} paper trading strateg${n === 1 ? 'y' : 'ies'} checked` : null;
   });
 
   protected readonly dateTime = formatDateTime;
