@@ -31,7 +31,6 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TypeVar
 
 from stonks.core.clock import SYSTEM_CLOCK, Clock
 from stonks.core.types import Fill, Order, OrderSide, Portfolio, TimeInForce
@@ -68,7 +67,6 @@ from stonks.logging import get_logger
 
 _log = get_logger("stonks.execution.brokers.ibkr")
 
-T = TypeVar("T")
 
 _TIF_BACK: dict[str, TimeInForce] = {"DAY": "day", "GTC": "gtc", "OPG": "opg", "IOC": "ioc"}
 #: A what-if or snapshot value IBKR sends for "not set".
@@ -416,7 +414,7 @@ class IbkrBroker:
 
     # ---- internals ------------------------------------------------------------------
 
-    def _guard(self, action: str, fn: Callable[[], T]) -> T:
+    def _guard[T](self, action: str, fn: Callable[[], T]) -> T:
         try:
             return fn()
         except (IbApiError, ConnectionError, TimeoutError) as exc:
