@@ -135,6 +135,31 @@ class IbkrOrderSettings(BaseModel):
     order_ref_max_length: int = Field(default=40, ge=24, le=128)
 
 
+class IbkrFlexSettings(BaseModel):
+    """The optional Flex Web Service statement (roadmap 19.3). The query id
+    is not a secret. The token comes only from ``STONKS_IBKR_FLEX_TOKEN``."""
+
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+    #: The Activity Flex Query to run. ``None`` turns Flex off.
+    query_id: str | None = None
+    base_url: str = (
+        "https://ndcdyn.interactivebrokers.com/AccountManagement/FlexWebService"
+    )
+    timeout_seconds: float = Field(default=30.0, gt=0)
+    #: Seconds between polls while IBKR generates the statement.
+    poll_seconds: float = Field(default=5.0, ge=0)
+    max_polls: int = Field(default=12, ge=1)
+    #: A sync reuses a statement fetched this recently (Flex is slow and
+    #: rate limited, and statements change once a day).
+    refresh_hours: float = Field(default=6.0, gt=0)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _no_secrets(cls, data: Any) -> Any:
+        return _refuse_secrets(data, "brokers.ibkr.flex")
+
+
 class IbkrBrokerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
 
@@ -153,6 +178,7 @@ class IbkrBrokerConfig(BaseModel):
     orders: IbkrOrderSettings = Field(default_factory=IbkrOrderSettings)
     gateways: dict[str, IbkrGatewayConfig] = Field(default_factory=dict[str, IbkrGatewayConfig])
     health: IbkrHealthSettings = Field(default_factory=IbkrHealthSettings)
+    flex: IbkrFlexSettings = Field(default_factory=IbkrFlexSettings)
 
     @model_validator(mode="before")
     @classmethod
