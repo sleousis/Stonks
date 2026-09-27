@@ -35,6 +35,8 @@ class FillView(BaseModel):
     order_client_id: str
     tick_id: str | None
     ticker: str
+    #: The order's side (``buy`` or ``sell``); null when the order is gone.
+    side: str | None = None
     quantity: float
     price: float
     fee: float
@@ -90,7 +92,7 @@ class OrdersService:
             base = f"FROM fills f LEFT JOIN orders o ON o.client_id = f.order_client_id{clause}"
             total = int(state.sql(f"SELECT COUNT(*) {base}", params)[0][0])
             rows = state.sql(
-                f"SELECT f.*, o.tick_id AS tick_id {base} "
+                f"SELECT f.*, o.tick_id AS tick_id, o.side AS side {base} "
                 "ORDER BY f.filled_at DESC, f.id DESC LIMIT ? OFFSET ?",
                 [*params, limit, offset],
             )
