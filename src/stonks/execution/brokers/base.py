@@ -6,14 +6,18 @@ vendor SDK type ever crosses the ``execution.brokers`` seam.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal, Protocol, runtime_checkable
 
-from stonks.core.types import Fill, OrderSide, OrderStatus
+from stonks.core.types import Fill, Order, OrderSide, OrderStatus
 
 #: Which broker the production tick trades through (``[brokers].kind``).
-BrokerKind = Literal["simulated", "alpaca"]
+#: ``ibkr`` is the Interactive Brokers adapter (roadmap 19.2).
+BrokerKind = Literal["simulated", "alpaca", "ibkr"]
+#: The kind of a real-money account (roadmap 19.7).
+AccountType = Literal["cash", "margin"]
 
 
 class BrokerError(RuntimeError):
@@ -31,6 +35,12 @@ class LiveTradingRefusedError(RuntimeError):
 class OrderRejectedError(BrokerError):
     """A pre-trade check refused the order before it was sent (blocked
     account, untradable asset, quantity below the broker minimum, ...)."""
+
+
+class BrokerUnavailableError(BrokerError):
+    """The broker could not be reached (gateway down, link to the broker
+    lost, competing session). A short outage: the book skips and alerts,
+    and only a repeated outage pauses auto mode (roadmap 19.4)."""
 
 
 @dataclass(frozen=True)
@@ -136,3 +146,168 @@ class OrderCanceller(Protocol):
     tick queued at the broker don't fill after trading was stopped."""
 
     def cancel_order(self, client_id: str) -> bool: ...
+
+
+# ---- live broker capabilities (roadmap 19.1) -------------------------------------
+
+
+@dataclass(frozen=True)
+class LiveAccountState:
+    """A real account's balances as the broker reports them. The broker is
+    the source of truth for cash, settled cash, buying power and day trades
+    remaining; our own counters only explain a refusal early."""
+
+    #: Net liquidation value.
+    equity: float
+    #: Total cash in the base currency.
+    cash: float
+    settled_cash: float
+    available_funds: float
+    buying_power: float
+    #: The account's base currency.
+    currency: str
+    account_type: AccountType
+    excess_liquidity: float | None = None
+    #: US margin accounts under the pattern day trader rule.
+    day_trades_remaining: int | None = None
+    initial_margin: float = 0.0
+    maintenance_margin: float = 0.0
+    #: Cash per currency (an EU or UK account often holds USD too).
+    cash_by_currency: Mapping[str, float] = field(default_factory=dict[str, float])
+    #: The broker's account id (never logged or labelled in metrics).
+    account_id: str | None = None
+
+    def cash_in(self, currency: str) -> float:
+        """Cash held in ``currency``: the per-currency ledger when the broker
+        sent one, else ``cash`` for the base currency and 0 otherwise."""
+        if self.cash_by_currency:
+            return float(self.cash_by_currency.get(currency, 0.0))
+        return self.cash if currency == self.currency else 0.0
+
+
+@dataclass(frozen=True)
+class MarginPreview:
+    """The broker's what-if answer for one order: nothing is transmitted."""
+
+    client_id: str
+    initial_margin_change: float
+    maintenance_margin_change: float
+    equity_with_loan_after: float
+    commission: float | None
+    commission_currency: str | None = None
+    #: The broker refused the order in the preview (its text).
+    warning: str | None = None
+
+
+@dataclass(frozen=True)
+class Quote:
+    """A market data snapshot for one ticker. ``delayed`` is true for a
+    delayed feed (no subscription): a price band never treats it as live."""
+
+    ticker: str
+    last: float | None
+    bid: float | None
+    ask: float | None
+    as_of: datetime
+    delayed: bool
+
+    @property
+    def mid(self) -> float | None:
+        if self.bid is None or self.ask is None or self.bid <= 0 or self.ask <= 0:
+            return None
+        return (self.bid + self.ask) / 2.0
+
+    @property
+    def reference(self) -> float | None:
+        """The last trade, else the mid, else ``None``."""
+        if self.last is not None and self.last > 0:
+            return self.last
+        return self.mid
+
+
+@dataclass(frozen=True)
+class Execution:
+    """One broker execution, keyed by the broker's execution id. The
+    commission arrives later at some brokers, so it may be ``None`` first
+    and booked onto the fill when it comes."""
+
+    broker_exec_id: str
+    #: Our client id (the broker's order reference mapped back).
+    client_id: str
+    ticker: str
+    side: OrderSide
+    quantity: float
+    price: float
+    executed_at: datetime
+    commission: float | None = None
+    commission_currency: str | None = None
+
+    def to_fill(self) -> Fill:
+        return Fill(
+            order_client_id=self.client_id,
+            ticker=self.ticker,
+            quantity=self.quantity,
+            price=self.price,
+            fee=self.commission or 0.0,
+            filled_at=self.executed_at,
+            side=self.side,
+            broker_exec_id=self.broker_exec_id,
+            fee_currency=self.commission_currency,
+        )
+
+
+@runtime_checkable
+class GlobalCanceller(Protocol):
+    """Optional capability: cancel every working order in the account,
+    including ones placed by hand (the kill switch in stop-all mode).
+    Returns how many cancels were requested."""
+
+    def cancel_all(self) -> int: ...
+
+
+@runtime_checkable
+class AccountReader(Protocol):
+    """Optional capability: the account's live balances."""
+
+    def fetch_account(self) -> LiveAccountState: ...
+
+
+@runtime_checkable
+class MarginPreviewer(Protocol):
+    """Optional capability: a what-if preview of an order. A preview that
+    fails or times out must never let a buy through."""
+
+    def what_if(self, order: Order) -> MarginPreview: ...
+
+
+@runtime_checkable
+class ExecutionSource(Protocol):
+    """Optional capability: executions (with commissions when known) since
+    ``since``. Reconciliation books one fill per execution id."""
+
+    def executions(self, since: datetime) -> Sequence[Execution]: ...
+
+
+@runtime_checkable
+class QuoteSource(Protocol):
+    """Optional capability: market data snapshots for a few tickers. A
+    ticker with no data is left out of the answer."""
+
+    def quotes(self, tickers: Sequence[str]) -> Mapping[str, Quote]: ...
+
+
+#: Capability name per protocol, for logs, health and the console.
+CAPABILITIES: tuple[tuple[str, type], ...] = (
+    ("order_state", OrderStateSource),
+    ("cancel", OrderCanceller),
+    ("global_cancel", GlobalCanceller),
+    ("account", AccountReader),
+    ("what_if", MarginPreviewer),
+    ("executions", ExecutionSource),
+    ("quotes", QuoteSource),
+)
+
+
+def broker_capabilities(broker: object) -> frozenset[str]:
+    """The optional capabilities ``broker`` implements, by name."""
+    return frozenset(name for name, proto in CAPABILITIES if isinstance(broker, proto))

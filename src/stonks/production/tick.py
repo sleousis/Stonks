@@ -81,6 +81,8 @@ from stonks.execution.brokers.simulated import SimulatedCosts
 from stonks.execution.orders import SideToken, make_client_id
 from stonks.execution.reconcile import (
     NON_TERMINAL_STATUSES,
+    fill_live_values,
+    order_live_values,
     reconcile_order,
     reconcile_orders,
 )
@@ -2119,6 +2121,7 @@ def _record_order(
         extra.update(decision_values(order))
     if order.position_effect is not None and "position_effect" in ledger_columns(state, "orders"):
         extra["position_effect"] = order.position_effect  # migration 021
+    extra.update(order_live_values(order, ledger_columns(state, "orders")))  # migration 027
     extra_col = "".join(f", {c}" for c in extra)
     extra_val = ", ?" * len(extra)
     state.execute(
@@ -2174,6 +2177,7 @@ def _record_fill(
         extra["portfolio_id"] = portfolio_id
     if arrival_price is not None and tca_recorded(state):
         extra["arrival_price"] = arrival_price
+    extra.update(fill_live_values(fill, ledger_columns(state, "fills")))  # migration 027
     extra_col = "".join(f", {c}" for c in extra)
     extra_val = ", ?" * len(extra)
     state.execute(

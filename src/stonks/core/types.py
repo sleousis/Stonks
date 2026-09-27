@@ -21,6 +21,12 @@ OrderStatus = Literal["pending", "filled", "partially_filled", "rejected", "canc
 #: (``docs/design/shorting.md``).
 PositionEffect = Literal["open", "close"]
 _POSITION_EFFECTS = ("open", "close")
+#: How long a working order lives at the broker (roadmap 19.1): ``day``
+#: (the session), ``gtc`` (until cancelled), ``opg`` (the opening auction
+#: only) or ``ioc`` (fill now or cancel). ``None`` leaves it to the broker's
+#: default for the order type.
+TimeInForce = Literal["day", "gtc", "opg", "ioc"]
+_TIMES_IN_FORCE = ("day", "gtc", "opg", "ioc")
 
 # Top-level asset class. Closed set; future additions (forex, fund, index)
 # are non-breaking. Lives in core so every block (ingest, lake, strategies,
@@ -53,10 +59,28 @@ class Order:
     #: ``open`` or ``close``; ``None`` (legacy) means infer it from the
     #: position when filling. See ``execution.orders.classify``.
     position_effect: PositionEffect | None = None
+    # ---- live broker fields (roadmap 19.1) ----
+    #: The trigger price of a ``stop`` or ``stop_limit`` order at a live
+    #: broker. The backtest's fill model still reads a stop's trigger from
+    #: ``limit_price`` when this is ``None``.
+    stop_price: float | None = None
+    #: ``None``: the broker's default for the order type.
+    time_in_force: TimeInForce | None = None
+    #: Allow a fill outside regular trading hours. Live adapters refuse
+    #: ``True`` in Phase 19.
+    outside_rth: bool = False
 
     def __post_init__(self) -> None:
         if self.quantity <= 0:
             raise ValueError(f"Order.quantity must be positive, got {self.quantity}")
+        for name in ("limit_price", "stop_price"):
+            value = getattr(self, name)
+            if value is not None and not (_finite(value) and value > 0):
+                raise ValueError(f"Order.{name} must be a positive finite number, got {value!r}")
+        if self.time_in_force is not None and self.time_in_force not in _TIMES_IN_FORCE:
+            raise ValueError(
+                f"Order.time_in_force must be one of {_TIMES_IN_FORCE}, got {self.time_in_force!r}"
+            )
         if self.position_effect is not None and self.position_effect not in _POSITION_EFFECTS:
             raise ValueError(
                 f"Order.position_effect must be open or close, got {self.position_effect!r}"
@@ -74,6 +98,12 @@ class Fill:
     fee: float
     filled_at: datetime
     side: OrderSide
+    #: The broker's id of the execution this fill books (roadmap 19.1).
+    #: Unique per portfolio, so booking an execution twice is a no-op.
+    broker_exec_id: str | None = None
+    #: The currency ``fee`` is in when it differs from the book's base
+    #: currency (a commission report in another currency).
+    fee_currency: str | None = None
 
     @property
     def signed_quantity(self) -> float:
