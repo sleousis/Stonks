@@ -20,6 +20,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, WithJsonSchem
 
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
+from stonks.app.heatmap import HeatmapView, check_heatmap_axes
 from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.app.serialize import FiniteFloat, finite, to_jsonable
 from stonks.app.strategies import StrategyRef, StrategyService, SurvivalReportView
@@ -38,6 +39,7 @@ from stonks.ingest.wiring import build_ingest_pipeline
 from stonks.lab.backtesting import run_backtest
 from stonks.lab.cv import CVObjective
 from stonks.lab.dataset import LabDataset, scoring_window
+from stonks.lab.heatmap import HeatmapOptions
 from stonks.lab.objectives import (
     OBJECTIVES,
     CAGRObjective,
@@ -381,6 +383,9 @@ class LabRunOptions(BaseModel):
     #: Let the ``optuna`` tuner stop trials whose fast vectorised score
     #: trails, before their full backtest. Pruned trials still count (P2).
     prune: bool = False
+    #: Sweep two parameters around the tuned set into a heatmap with the
+    #: plateau verdict on it (22.5). Every cell is a counted trial.
+    heatmap: HeatmapOptions | None = None
     #: Survival test ids to run, in order. When omitted, ``preset`` decides.
     survival_tests: list[SurvivalTestName] | None = Field(default=None, min_length=1)
     #: A named suite used when ``survival_tests`` is omitted. Without either,
@@ -637,6 +642,8 @@ class LabRunView(BaseModel):
     #: The chained ``lab_ensure`` job that fetched missing bars first
     #: (``ensure_data``); its report is at ``/api/lab/ensure/{id}/result``.
     ensure_job_id: str | None = None
+    #: The parameter heatmap around the tuned set (``heatmap`` option).
+    heatmap: HeatmapView | None = None
 
 
 @dataclass(frozen=True)
@@ -671,6 +678,7 @@ class LabExecution:
             n_trials_class=result.n_trials_class,
             benchmark=BenchmarkStatsView.of(self.benchmark) if self.benchmark else None,
             preflight=PreflightView.of(result.preflight) if result.preflight else None,
+            heatmap=HeatmapView.of(result.heatmap) if result.heatmap is not None else None,
         )
 
 
@@ -716,7 +724,9 @@ def execute_lab_run(
     ``data_ensurer`` (a :class:`~stonks.ingest.ensure.DataEnsurer`) fetches
     missing bars before the preflight (``stonks lab run --ensure-data``)."""
     interval = _parse_interval(request.interval)
-    tuner = build_tuner(request, parallel or settings.lab.parallel)
+    check_heatmap_axes(cls, request.heatmap, set(fixed_params or {}))
+    workers = parallel or settings.lab.parallel
+    tuner = build_tuner(request, workers)
     objective: Objective = _OBJECTIVES[request.objective]()
     tests: list[SurvivalTest] = [
         build_survival_test(name, _test_options(name, request, settings.lab.walk_forward))
@@ -740,6 +750,8 @@ def execute_lab_run(
             else request.strict_preflight
         ),
         data_ensurer=data_ensurer,
+        heatmap=request.heatmap,
+        parallel=workers,
     )
     if progress is not None:
         progress.progress(0.05, "tuning")
@@ -1010,7 +1022,7 @@ class LabService:
 
     def submit_lab_run(self, request: LabRunRequest, *, owner_id: str | None = None) -> Job:
         _parse_interval(request.interval)
-        self._strategies.strategy_class(request.strategy)
+        check_heatmap_axes(self._strategies.strategy_class(request.strategy), request.heatmap)
         if request.universe_id is not None:
             self._require_universe(request.universe_id)
         if request.ensure_data:
