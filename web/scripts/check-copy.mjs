@@ -166,7 +166,9 @@ function main(args) {
     for (const p of wordProblems(file, source)) problems.push(`${relative('.', file)}: ${p}`);
   }
   if (problems.length) {
-    console.error('Trader copy must use trader words, never the command line or config (UI-09, UX-49):');
+    console.error(
+      'Trader copy must use trader words, never the command line or config (UI-09, UX-49):',
+    );
     for (const p of problems) console.error(`  ${p}`);
     process.exit(1);
   }
