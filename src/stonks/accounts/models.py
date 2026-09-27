@@ -41,10 +41,13 @@ class Role(StrEnum):
 
 
 class Mode(StrEnum):
-    """How a subscription acts on its strategy's signals."""
+    """How a subscription acts on its strategy's signals. The ladder runs
+    notify, paper, approve, auto. ``approve`` is optional (roadmap 19.8):
+    the tick decides and every order waits for a person."""
 
     NOTIFY = "notify"
     PAPER = "paper"
+    APPROVE = "approve"
     AUTO = "auto"
 
     @property
@@ -54,6 +57,17 @@ class Mode(StrEnum):
     @property
     def places_orders(self) -> bool:
         return self is not Mode.NOTIFY
+
+    @property
+    def trades_live(self) -> bool:
+        """Orders go to the broker account (approve and auto). Switching to
+        one passes the auto checklist."""
+        return self in (Mode.APPROVE, Mode.AUTO)
+
+    @property
+    def needs_approval(self) -> bool:
+        """Every order of this mode waits for a person (an order ticket)."""
+        return self is Mode.APPROVE
 
 
 class AccountsError(ValueError):

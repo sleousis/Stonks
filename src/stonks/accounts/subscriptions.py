@@ -19,6 +19,9 @@ Mode rules (design section 4, decision 2026-09-26):
 - The auto gate also needs the broker portfolio's connection to be healthy
   and able to trade, and no halt (kill switch, breaker) in force for the
   portfolio or its owner.
+- ``approve`` (roadmap 19.8) is optional and sits between paper and auto.
+  Switching to it passes the same checklist as auto. From approve, auto
+  passes the same checklist again, which approve already met.
 - Every mode change writes an ``audit_log`` row in the same transaction.
 """
 
@@ -52,7 +55,7 @@ from stonks.store.state import SqliteState
 #: needs the auto gate).
 _ALLOWED_MODES: dict[str, frozenset[Mode]] = {
     "shadow": frozenset({Mode.NOTIFY, Mode.PAPER}),
-    "active": frozenset({Mode.NOTIFY, Mode.PAPER, Mode.AUTO}),
+    "active": frozenset({Mode.NOTIFY, Mode.PAPER, Mode.APPROVE, Mode.AUTO}),
     "retired": frozenset(),
 }
 
@@ -108,8 +111,10 @@ class SubscriptionRepository:
         mode = Mode(mode)
         if scope.is_service:
             raise AccountsError("subscriptions belong to people, not services")
-        if mode is Mode.AUTO:
-            raise AutoGateRefused(["start in paper; auto needs a paper track record first"])
+        if mode.trades_live:
+            raise AutoGateRefused(
+                [f"start in paper; {mode.value} needs a paper track record first"]
+            )
         status = self._strategy_status(strategy_id)
         self._check_mode_allowed(status, mode, strategy_id)
         if portfolio_id is not None:
@@ -168,9 +173,9 @@ class SubscriptionRepository:
         sub = self.get(scope, subscription_id)
         if mode is sub.mode and not sub.auto_paused:
             return sub
-        if mode is Mode.AUTO:
+        if mode.trades_live:
             # The gate reports every failure at once (strategy status included).
-            blockers = self._auto_blockers(scope, sub)
+            blockers = self._auto_blockers(scope, sub, mode)
             if blockers:
                 raise AutoGateRefused(blockers)
         else:
@@ -179,7 +184,7 @@ class SubscriptionRepository:
                 raise AccountsError(f"{mode.value} mode needs a portfolio")
 
         sets: dict[str, Any] = {"mode": mode.value, "updated_at": iso_now()}
-        if mode is Mode.AUTO:
+        if mode.trades_live:
             sets |= {
                 "auto_enabled_at": sets["updated_at"],
                 "auto_enabled_by": scope.actor,
@@ -264,17 +269,19 @@ class SubscriptionRepository:
                 f"strategy {strategy_id!r} is {status}; {mode.value} mode is not allowed"
             )
 
-    def _auto_blockers(self, scope: Scope, sub: Subscription) -> list[str]:
+    def _auto_blockers(
+        self, scope: Scope, sub: Subscription, mode: Mode = Mode.AUTO
+    ) -> list[str]:
         reasons: list[str] = []
         if self._strategy_status(sub.strategy_id) != "active":
             reasons.append("the strategy is not active")
         portfolio: Portfolio | None = None
         if sub.portfolio_id is None:
-            reasons.append("auto mode needs a portfolio")
+            reasons.append(f"{mode.value} mode needs a portfolio")
         else:
             portfolio = owned_portfolio(self._state, scope, sub.portfolio_id)
             if portfolio.kind != "broker":
-                reasons.append("auto mode needs a broker portfolio")
+                reasons.append(f"{mode.value} mode needs a broker portfolio")
             if portfolio.status != "active":
                 reasons.append(f"the portfolio is {portfolio.status}")
             if portfolio.kind == "broker":
