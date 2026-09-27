@@ -25,7 +25,7 @@ from __future__ import annotations
 import statistics
 from collections import Counter
 from dataclasses import asdict, dataclass, field
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 
 from stonks.store.state import SqliteState
@@ -281,9 +281,7 @@ def _reconcile_reports(
 def _findings(report: SoakReport) -> list[str]:
     out: list[str] = []
     if report.days_observed < report.days_requested:
-        out.append(
-            f"only {report.days_observed} of {report.days_requested} trading days observed"
-        )
+        out.append(f"only {report.days_observed} of {report.days_requested} trading days observed")
     if report.unknown:
         out.append(f"{report.unknown} order(s) with an unknown outcome")
     if report.orders and report.reject_rate > MAX_REJECT_RATE:
@@ -323,7 +321,7 @@ def soak_report(
     portfolio's paper twin, else left out."""
     if days < 1:
         raise ValueError("days must be at least 1")
-    end = end or date.today()
+    end = end or datetime.now(UTC).date()
     window = _window(state, portfolio_id, days, end)
     start_s = window[0] if window else end.isoformat()
     end_s = end.isoformat()
