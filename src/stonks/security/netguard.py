@@ -82,16 +82,32 @@ def ip_literal(host: str) -> IPAddress | None:
     return _inet_aton(host)
 
 
+#: The well-known NAT64 prefix: the IPv4 address sits in the low 32 bits.
+_NAT64 = ipaddress.IPv6Network("64:ff9b::/96")
+#: Local-use NAT64 (RFC 8215): where the IPv4 sits is up to the network,
+#: so an address here is never taken as public.
+_NAT64_LOCAL = ipaddress.IPv6Network("64:ff9b:1::/48")
+#: Deprecated IPv4-compatible addresses (``::a.b.c.d``).
+_IPV4_COMPATIBLE = ipaddress.IPv6Network("::/96")
+
+
 def _unwrap(ip: IPAddress) -> IPAddress:
     if isinstance(ip, ipaddress.IPv6Address):
         if ip.ipv4_mapped is not None:
             return ip.ipv4_mapped
         if ip.sixtofour is not None:
             return ip.sixtofour
+        if ip in _NAT64:
+            return ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
     return ip
 
 
 def is_public_ip(ip: IPAddress) -> bool:
+    """Public on the internet, also through every IPv6 wrapping of an IPv4
+    address (mapped, 6to4, NAT64). Local-use NAT64 and IPv4-compatible
+    addresses are refused outright (BE-39)."""
+    if isinstance(ip, ipaddress.IPv6Address) and (ip in _NAT64_LOCAL or ip in _IPV4_COMPATIBLE):
+        return False
     inner = _unwrap(ip)
     return inner.is_global and ip.is_global and not inner.is_multicast
 

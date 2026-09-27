@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 import pytest
 
 from stonks.accounts import Role, Scope, UserRepository
-from stonks.store.state import SqliteState
 
 NOW = datetime(2026, 1, 5, 15, 0, tzinfo=UTC)  # a Monday, 10:00 in New York
 
@@ -25,14 +24,6 @@ class Clock:
 @pytest.fixture
 def clock() -> Clock:
     return Clock()
-
-
-@pytest.fixture
-def state(tmp_path):
-    s = SqliteState(tmp_path / "state.sqlite")
-    s.migrate()
-    yield s
-    s.close()
 
 
 @pytest.fixture

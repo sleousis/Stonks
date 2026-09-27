@@ -11,7 +11,8 @@ once with a model that never saw it.
 Leakage control (principle P9): the training segments of a split are
 purged of the ``h`` trading days before each test group and embargoed for
 ``max(h, ceil(embargo_pct * n))`` days after it, where ``h`` is the
-strategy's effective embargo (``max(embargo_bars, label_horizon_bars)``).
+strategy's effective embargo (``max(embargo_bars, label_horizon_bars)``)
+in trading days: an intraday horizon counts the sessions its bars fill.
 A split's dataset carries the segments as ``train_segments``: a strategy
 that fits on several windows reads ``train_windows``, one that reads only
 ``train_window`` gets the longest segment. The tuner's objective scores
@@ -25,9 +26,12 @@ no fit and no re-tune gives identical paths.
 Passing requires both
 
 - at least ``min_positive_share`` (0.6) of the path Sharpes above zero, and
-- the pooled PSR (every path's per-bar returns together, against a zero
-  Sharpe, with their skew, kurtosis and autocorrelation) at least
-  ``min_psr`` (0.9).
+- the pooled PSR at least ``min_psr`` (0.9). Every held-out day sits in
+  every path, so the paths are pooled into one series of ``n_days`` (the
+  bar-by-bar mean across paths) before the PSR (against a zero Sharpe,
+  with its skew, kurtosis and autocorrelation). Stacking the paths end to
+  end would count each day once per path and shrink the PSR's error
+  about ``sqrt(n_paths)`` times (BE-08).
 
 Splits run as ``lab.parallel.run_tasks`` tasks over a lake snapshot, so
 the report is the same for any worker count.
@@ -49,6 +53,7 @@ from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.lab.backtesting import run_backtest
 from stonks.lab.cv import (
     CombinatorialPurgedKFold,
+    purge_days,
     purge_horizon,
     refit,
     segments_from_indices,
@@ -117,6 +122,19 @@ def _run_split(job: _Job, split: _Split) -> _SplitResult:
         returns[group] = np.asarray(report.returns, dtype=float)
         ppy = float(report.periods_per_year)
     return _SplitResult(returns=returns, periods_per_year=ppy)
+
+
+def pooled_psr(path_returns: list[np.ndarray]) -> float:
+    """PSR against zero of the paths pooled over their shared days: the
+    bar-by-bar mean when the paths line up, else the median path PSR.
+    Each day counts once, whatever the number of paths (BE-08)."""
+    if not path_returns:
+        return math.nan
+    if len({len(r) for r in path_returns}) == 1:
+        with np.errstate(all="ignore"):
+            mean = np.nanmean(np.vstack(path_returns), axis=0)
+        return psr0(mean[np.isfinite(mean)])
+    return float(np.nanmedian([psr0(r[np.isfinite(r)]) for r in path_returns]))
 
 
 def _sharpe(returns: np.ndarray, periods_per_year: float) -> float:
@@ -201,7 +219,7 @@ class CPCVTest:
                 metrics={"n_days": float(len(dates))},
                 notes=f"insufficient data: {len(dates)} trading days for {o.n_groups} groups",
             )
-        horizon = purge_horizon(context, strategy)
+        horizon = purge_days(context, strategy)
         positions = np.arange(len(dates))
         bounds = cv.group_bounds(len(dates))
         splits = [
@@ -220,32 +238,35 @@ class CPCVTest:
         ]
         sharpes = [_sharpe(r, ppy) for r in path_returns]
         positive = sum(1 for s in sharpes if s > 0) / len(sharpes)
-        pooled = np.concatenate(path_returns)
-        pooled_psr = psr0(pooled[np.isfinite(pooled)])
+        path_psrs = [psr0(r[np.isfinite(r)]) for r in path_returns]
+        pooled = pooled_psr(path_returns)
         metrics: dict[str, float] = {
             "n_splits": float(cv.n_splits),
             "n_paths": float(cv.n_paths),
             "n_days": float(len(dates)),
-            "purge_bars": float(horizon),
+            "purge_bars": float(purge_horizon(context, strategy)),
+            "purge_days": float(horizon),
             "positive_share": positive,
-            "psr0_pooled": pooled_psr,
+            "psr0_pooled": pooled,
             "sharpe_mean": float(np.nanmean(sharpes)) if any(np.isfinite(sharpes)) else math.nan,
             "sharpe_min": float(np.nanmin(sharpes)) if any(np.isfinite(sharpes)) else math.nan,
             "retuned": 1.0 if self._retunes() else 0.0,
         }
         for i, s in enumerate(sharpes):
             metrics[f"sharpe_path_{i}"] = s
+        for i, p in enumerate(path_psrs):
+            metrics[f"psr0_path_{i}"] = p
         failures = []
         if positive < o.min_positive_share:
             failures.append(f"positive paths {positive:.0%} < {o.min_positive_share:.0%}")
-        if not pooled_psr >= o.min_psr:
-            failures.append(f"pooled PSR {pooled_psr:.3f} < {o.min_psr}")
+        if not pooled >= o.min_psr:
+            failures.append(f"pooled PSR {pooled:.3f} < {o.min_psr}")
         return SurvivalReport(
             test_id=self.id,
             passed=not failures,
             metrics=metrics,
             notes="; ".join(failures)
-            or f"{cv.n_paths} paths, {positive:.0%} positive, pooled PSR {pooled_psr:.3f}",
+            or f"{cv.n_paths} paths, {positive:.0%} positive, pooled PSR {pooled:.3f}",
         )
 
     def _retunes(self) -> bool:

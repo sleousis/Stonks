@@ -122,8 +122,9 @@ def test_webhook_never_raises_on_http_error_status(capsys):
     assert "SECRETTOKEN" not in out
 
 
-def test_notifier_base_swallows_any_exception():
-    _Exploding().notify(_n())  # must not raise
+def test_notifier_base_swallows_any_exception(capsys):
+    assert _Exploding().notify(_n()) is None  # must not raise
+    assert "boom" in _output(capsys)  # the failure is logged, not lost
 
 
 def test_notification_fields_are_coerced_json_safe():

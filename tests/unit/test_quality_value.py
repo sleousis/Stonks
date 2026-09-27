@@ -144,16 +144,19 @@ def test_better_business_at_a_lower_price_scores_higher(two_names):
     assert bad is None or bad < good
 
 
-def test_statement_is_invisible_before_its_filing_date(two_names):
-    # Q1 2024 with a huge profit, filed 2024-05-10.
+def test_statement_is_invisible_until_the_session_after_its_filing(two_names):
+    # Q1 2024 with a huge profit, filed on Friday 2024-05-10 (maybe after
+    # the close): the first decision that may use it is Monday's (BE-22).
     _quarter(
         two_names, "GOOD.US", date(2024, 3, 31), net_income=500.0, filing_date=date(2024, 5, 10)
     )
     s = QualityValue({})
     before = s.extract_features("GOOD.US", date(2024, 5, 9), two_names).values
     on = s.extract_features("GOOD.US", date(2024, 5, 10), two_names).values
+    after = s.extract_features("GOOD.US", date(2024, 5, 13), two_names).values
     assert before["earnings_yield"] == pytest.approx(0.04)  # still 2023 TTM
-    assert on["earnings_yield"] == pytest.approx((10 + 10 + 10 + 500) / 1000.0)
+    assert on["earnings_yield"] == pytest.approx(0.04)  # filed that day: not yet
+    assert after["earnings_yield"] == pytest.approx((10 + 10 + 10 + 500) / 1000.0)
 
 
 def test_intraday_datetime_as_of_uses_its_calendar_day(two_names):
@@ -167,8 +170,8 @@ def test_intraday_datetime_as_of_uses_its_calendar_day(two_names):
 
 def test_intraday_as_of_does_not_see_a_filing_dated_the_same_day(two_names):
     """Filing dates carry no time: a report filed on 2024-05-10 may land
-    after the close, so mid-session on 2024-05-10 it is not yet known. A
-    daily as_of (read after the close) does see it."""
+    after the close, so neither mid-session nor the daily decision on
+    2024-05-10 knows it. The next day's session does (BE-22)."""
     _quarter(
         two_names, "GOOD.US", date(2024, 3, 31), net_income=500.0, filing_date=date(2024, 5, 10)
     )
@@ -176,7 +179,7 @@ def test_intraday_as_of_does_not_see_a_filing_dated_the_same_day(two_names):
     mid = s.extract_features("GOOD.US", datetime(2024, 5, 10, 10, 0), two_names).values
     assert mid["earnings_yield"] == pytest.approx(0.04)
     after_close = s.extract_features("GOOD.US", date(2024, 5, 10), two_names).values
-    assert after_close["earnings_yield"] == pytest.approx((10 + 10 + 10 + 500) / 1000.0)
+    assert after_close["earnings_yield"] == pytest.approx(0.04)
     next_day = s.extract_features("GOOD.US", datetime(2024, 5, 11, 10, 0), two_names).values
     assert next_day["earnings_yield"] == pytest.approx((10 + 10 + 10 + 500) / 1000.0)
 

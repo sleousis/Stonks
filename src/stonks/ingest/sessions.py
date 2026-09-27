@@ -18,6 +18,7 @@ for crypto) as a session that closes at the next UTC midnight.
 from __future__ import annotations
 
 import threading
+from collections import OrderedDict
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Protocol
 
@@ -31,6 +32,8 @@ __all__ = [
     "drop_open_sessions",
     "fallback_closes",
     "is_final",
+    "open_sessions",
+    "session_close",
 ]
 
 
@@ -46,10 +49,14 @@ class SessionCloses(Protocol):
 class MarketSessionCloses:
     """:class:`SessionCloses` over the scheduler's market calendars. The
     import is lazy so the ingest block does not load the scheduler at
-    import time."""
+    import time. Answers are cached per calendar and range, keeping the
+    ``max_entries`` most recently used (BE-62)."""
 
-    def __init__(self) -> None:
-        self._cache: dict[tuple[str, date, date], dict[date, datetime] | None] = {}
+    def __init__(self, max_entries: int = 1024) -> None:
+        self._cache: OrderedDict[tuple[str, date, date], dict[date, datetime] | None] = (
+            OrderedDict()
+        )
+        self._max_entries = max(1, int(max_entries))
         self._lock = threading.Lock()
 
     def closes(
@@ -68,6 +75,7 @@ class MarketSessionCloses:
         key = (cal.name, start, end)
         with self._lock:
             if key in self._cache:
+                self._cache.move_to_end(key)
                 return self._cache[key]
         first = getattr(cal, "first_session", None)
         last = getattr(cal, "last_session", None)
@@ -81,6 +89,9 @@ class MarketSessionCloses:
                 out = None
         with self._lock:
             self._cache[key] = out
+            self._cache.move_to_end(key)
+            while len(self._cache) > self._max_entries:
+                self._cache.popitem(last=False)
         return out
 
 
@@ -135,6 +146,19 @@ def closed_sessions(
     return sorted(d for d, close in closes.items() if close <= now)
 
 
+def open_sessions(
+    sessions: SessionCloses | None,
+    ticker: str,
+    start: date,
+    end: date,
+    now: datetime,
+    asset_class: str | None = None,
+) -> list[date]:
+    """Session dates in ``[start, end]`` whose close is after ``now``."""
+    closes = _closes(sessions, ticker, start, end, asset_class)
+    return sorted(d for d, close in closes.items() if close > now)
+
+
 def is_final(
     sessions: SessionCloses | None,
     ticker: str,
@@ -153,6 +177,15 @@ def is_final(
         close = closes.get(d) or datetime.combine(d + timedelta(days=1), time(), UTC)
         out.append(close <= now)
     return out
+
+
+def session_close(
+    sessions: SessionCloses | None, ticker: str, day: date, asset_class: str | None = None
+) -> datetime:
+    """The UTC close of ``day``'s session (the next UTC midnight when the
+    calendar has no session that day)."""
+    close = _closes(sessions, ticker, day, day, asset_class).get(day)
+    return close or datetime.combine(day + timedelta(days=1), time(), UTC)
 
 
 def drop_open_sessions(

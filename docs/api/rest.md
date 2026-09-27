@@ -1153,6 +1153,7 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers, sect
 | `exposure` | [Exposure](#exposure) | yes |  |
 | `owners` | integer | yes |  |
 | `portfolios` | integer | yes |  |
+| `suppressed` | boolean | no |  |
 | `total_value` | number | yes |  |
 
 ### InsightsView
@@ -2034,6 +2035,7 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers and n
 | `cash` | number | yes |  |
 | `owners` | integer | yes | People who own those portfolios. |
 | `portfolios` | integer | yes | Active portfolios with at least one snapshot. |
+| `suppressed` | boolean | no | True when too few other people own books for the sums to hide anyone's numbers: cash and value then read 0. |
 | `total_value` | number | yes | Sum of each book's value at its latest snapshot. |
 
 ### PortfolioView

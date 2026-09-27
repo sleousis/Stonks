@@ -13,8 +13,8 @@ With the Parquet bar store the copy holds only the small tables, and the
 bar partitions are hard links (writers replace files, never modify them),
 so publishing is cheap. With the DuckDB bar table the bars are copied too.
 
-A snapshot is rebuilt when the lake changed since (a newer ingest run or
-bar fetch) or it is older than a maximum age. Old snapshots are pruned,
+A snapshot is rebuilt when the lake changed since (a newer ingest run,
+bar fetch, or universe change) or it is older than a maximum age. Old snapshots are pruned,
 except ones a worker holds.
 """
 
@@ -57,17 +57,35 @@ class SnapshotInfo:
         return DuckDBLake(self.path, read_only=True)
 
 
+#: Small tables a lab run reads that change outside an ingest run: stored
+#: universes, their membership and index histories (BE-19). Each is hashed
+#: whole, row by row, so any insert, update or delete shows.
+_HASHED_TABLES = (
+    "universe_definitions",
+    "universe_membership",
+    "index_constituent_snapshots",
+    "index_constituent_changes",
+)
+
+
 def lake_fingerprint(lake: DuckDBLake) -> str:
-    """Changes whenever an ingest run finishes or bars are fetched on
-    demand: the two ways data lands in a running lake."""
+    """Changes whenever an ingest run finishes, bars are fetched on
+    demand, or a universe, its membership or an index history changes:
+    the ways data lands in a running lake."""
     parts: list[str] = []
     for table, column in (("ingest_runs", "finished_at"), ("bar_fetch_ranges", "fetched_at")):
-        try:
-            row = lake.con.execute(f"SELECT MAX({column}), COUNT(*) FROM {table}").fetchone()
-        except Exception:  # an older lake without the table
-            row = None
-        parts.append("-" if row is None else f"{row[0]}#{row[1]}")
+        parts.append(_part(lake, f"SELECT MAX({column}), COUNT(*) FROM {table}"))
+    for table in _HASHED_TABLES:
+        parts.append(_part(lake, f"SELECT bit_xor(hash(t)), COUNT(*) FROM {table} t"))
     return "|".join(parts)
+
+
+def _part(lake: DuckDBLake, sql: str) -> str:
+    try:
+        row = lake.con.execute(sql).fetchone()
+    except Exception:  # an older lake without the table
+        row = None
+    return "-" if row is None else f"{row[0]}#{row[1]}"
 
 
 class LakeSnapshots:

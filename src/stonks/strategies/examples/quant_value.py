@@ -462,14 +462,16 @@ class QuantValue(BaseStrategy):
 
     def _metrics(self, ticker: str, as_of: Any, lake: Any) -> dict[str, float | None]:
         day = as_datetime(as_of).date()
-        # Filing dates carry no time of day: mid-session only earlier filings count.
+        # Day-stamped rows (share counts) are known once their day ends.
+        # A filing is used from the day after it, which ``available_date``
+        # already holds, daily or intraday (BE-22).
         known = day - timedelta(days=1) if _is_intraday(as_of) else day
-        oldest = known - timedelta(days=int(self.params["max_statement_age_days"]))
+        oldest = day - timedelta(days=int(self.params["max_statement_age_days"]))
 
-        years = self._annual_years(lake, ticker, known, oldest)
-        balance = self._latest_balance(lake, ticker, known, oldest)
+        years = self._annual_years(lake, ticker, day, oldest)
+        balance = self._latest_balance(lake, ticker, day, oldest)
         ebit_snap = self._pit._flows(
-            lake, "income_statement", ticker, known, ("ebit", "operating_income")
+            lake, "income_statement", ticker, day, ("ebit", "operating_income")
         )
         ebit = None
         if ebit_snap is not None and ebit_snap.period_end >= oldest:

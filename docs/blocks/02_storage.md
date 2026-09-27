@@ -29,7 +29,7 @@ lake.get_bars(ticker, interval, start, end)
 lake.aggregate_bars(...)                      # build 1w from 1d, 4h from 1h, ...
 lake.delete_bars(ticker, interval, stamps)    # drop bars (a stored spike)
 lake.upsert_prices(df) / lake.get_prices(...) # daily shims over bars
-lake.get_statement_history(...)               # point in time, by filing_date
+lake.get_statement_history(...)               # point in time, from the day after filing_date
 lake.get_corporate_actions(tickers)           # splits and dividends
 lake.sql("SELECT ...")                        # escape hatch
 ```

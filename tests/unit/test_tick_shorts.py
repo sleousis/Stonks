@@ -10,14 +10,6 @@ from stonks.production.tick import _record_order, _reduces
 from stonks.store.state import SqliteState
 
 
-@pytest.fixture
-def state(tmp_path):
-    s = SqliteState(tmp_path / "state.sqlite")
-    s.migrate()
-    yield s
-    s.close()
-
-
 def _effect(state: SqliteState, client_id: str):
     return state.sql("SELECT position_effect FROM orders WHERE client_id = ?", [client_id])[0][
         "position_effect"

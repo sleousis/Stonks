@@ -96,6 +96,32 @@ class PortfolioTotalsView(BaseModel):
     owners: int = Field(description="People who own those portfolios.")
     cash: float
     total_value: float = Field(description="Sum of each book's value at its latest snapshot.")
+    suppressed: bool = Field(
+        default=False,
+        description="True when too few other people own books for the sums to hide anyone's "
+        "numbers: cash and value then read 0.",
+    )
+
+
+#: Fewest owners besides the viewing admin before money totals are shown,
+#: so no sum reveals one person's numbers (BE-43).
+TOTALS_MIN_OWNERS = 3
+
+#: Active books with at least one snapshot. A broker book's paper account
+#: (``paper_of``) is the same person's book, so it is left out.
+TOTALS_PORTFOLIOS_SQL = (
+    "SELECT p.id, p.owner_id FROM portfolios p WHERE p.status = 'active' AND p.paper_of IS NULL"
+    " AND EXISTS (SELECT 1 FROM portfolio_snapshots s WHERE s.portfolio_id = p.id)"
+    " ORDER BY p.id"
+)
+
+
+def totals_suppressed(owner_ids: set[str], viewer_id: str) -> bool:
+    """Whether money totals over books owned by ``owner_ids`` would expose
+    someone other than the viewer: fewer than :data:`TOTALS_MIN_OWNERS`
+    other owners (books that are all the viewer's own are always shown)."""
+    others = owner_ids - {viewer_id}
+    return 0 < len(others) < TOTALS_MIN_OWNERS
 
 
 Trading = Literal["paper", "live"]
@@ -276,22 +302,25 @@ class PortfolioService:
         """Cash and value summed across every active portfolio (admins)."""
         require(principal, Permission.PORTFOLIO_TOTALS)
         with self._ctx.state() as state:
+            books = state.sql(TOTALS_PORTFOLIOS_SQL)
             row = state.sql(
                 """
-                SELECT COUNT(*) AS n, COUNT(DISTINCT p.owner_id) AS owners,
-                       COALESCE(SUM(s.cash), 0) AS cash,
+                SELECT COALESCE(SUM(s.cash), 0) AS cash,
                        COALESCE(SUM(s.total_value), 0) AS total
                   FROM portfolios p
                   JOIN portfolio_snapshots s ON s.id = (
                         SELECT MAX(id) FROM portfolio_snapshots WHERE portfolio_id = p.id)
-                 WHERE p.status = 'active'
+                 WHERE p.status = 'active' AND p.paper_of IS NULL
                 """
             )[0]
+        owners = {str(r["owner_id"]) for r in books}
+        hidden = totals_suppressed(owners, principal.user_id)
         return PortfolioTotalsView(
-            portfolios=int(row["n"]),
-            owners=int(row["owners"]),
-            cash=float(row["cash"]),
-            total_value=float(row["total"]),
+            portfolios=len(books),
+            owners=len(owners),
+            cash=0.0 if hidden else float(row["cash"]),
+            total_value=0.0 if hidden else float(row["total"]),
+            suppressed=hidden,
         )
 
     def current(self, portfolio_id: str = DEFAULT_PORTFOLIO_ID) -> PortfolioView:

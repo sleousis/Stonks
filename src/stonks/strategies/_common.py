@@ -44,7 +44,7 @@ import weakref
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import numpy as np
@@ -52,6 +52,7 @@ import pandas as pd
 
 from stonks.core.corporate_actions import CorporateAction, PriceBasis
 from stonks.core.interval import Interval
+from stonks.core.interval import known_through as core_known_through
 from stonks.core.interval import visible_cutoff as core_visible_cutoff
 from stonks.core.timeutil import as_datetime, iso
 from stonks.core.types import Order, Portfolio
@@ -107,6 +108,14 @@ def visible_cutoff(as_of: Any, interval: Interval) -> datetime:
     :func:`stonks.core.interval.visible_cutoff`; this reads ``L`` from
     :func:`decision_interval`."""
     return core_visible_cutoff(as_datetime(as_of), interval, _DECISION_INTERVAL.get())
+
+
+def known_day(as_of: Any) -> date:
+    """The last calendar day whose day-stamped rows (a macro print, a
+    yield, a filing) are known at a decision on the bar starting at
+    ``as_of``: that day for a daily decision, the day before for an
+    intraday one (BE-20). Reads ``L`` from :func:`decision_interval`."""
+    return core_known_through(as_datetime(as_of), _DECISION_INTERVAL.get())
 
 
 def _initial_span(interval: Interval, n: int) -> timedelta:
@@ -428,6 +437,39 @@ def long_only_decide(
             strategy_id=strategy_id,
         )
     ]
+
+
+def close_all_positions(strategy_id: str, portfolio: Portfolio, as_of: Any) -> list[Order]:
+    """A market close of every position: longs sold, shorts covered (a
+    wrapper's risk-off exit, BE-14). For a long-only book it is
+    :func:`sell_all_longs` with each order marked as a close."""
+    out: list[Order] = []
+    for ticker, qty in portfolio.positions.items():
+        if qty == 0:
+            continue
+        side = "sell" if qty > 0 else "buy"
+        token = "sell" if qty > 0 else "cover"
+        out.append(
+            Order(
+                client_id=f"{strategy_id}:{token}:{ticker}:{iso(as_of)}",
+                ticker=ticker,
+                side=side,
+                quantity=abs(qty),
+                order_type="market",
+                strategy_id=strategy_id,
+                position_effect="close",
+            )
+        )
+    return out
+
+
+def closing_orders(orders: Sequence[Order], portfolio: Portfolio) -> list[Order]:
+    """The legs of ``orders`` that reduce a position, split at zero against
+    ``portfolio``: a risk-off block keeps covers and sells of longs and
+    drops every order that opens or adds to one (BE-14)."""
+    from stonks.execution.orders import classify_all
+
+    return [o for o in classify_all(orders, portfolio.positions) if o.position_effect == "close"]
 
 
 def sell_all_longs(strategy_id: str, portfolio: Portfolio, as_of: Any) -> list[Order]:

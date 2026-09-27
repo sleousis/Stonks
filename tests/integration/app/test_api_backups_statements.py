@@ -7,34 +7,13 @@ from datetime import date
 
 import pandas as pd
 import pytest
-from fastapi.testclient import TestClient
 
 from stonks.accounts import Role
-from stonks.api import create_app
 from stonks.api.deps import current_principal
 from stonks.auth import Principal
 from stonks.store.audit import audit_statements
 from stonks.store.lake import DuckDBLake
-from tests.integration.app.test_api import AUTH, LOOPBACK, REMOTE, _wait_job
-
-
-@pytest.fixture
-def app(settings, seeded, fake_source):
-    settings.api.allowed_hosts = ["testserver"]
-    return create_app(settings, source_factory=lambda: fake_source, sse_poll_seconds=0.02)
-
-
-@pytest.fixture
-def client(app):
-    with TestClient(app, client=LOOPBACK) as c:
-        yield c
-
-
-@pytest.fixture
-def remote(app):
-    with TestClient(app, client=REMOTE) as c:
-        yield c
-
+from tests.integration.app.test_api import AUTH, _wait_job
 
 # ---- backups ------------------------------------------------------------------------
 

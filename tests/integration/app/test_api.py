@@ -5,34 +5,14 @@ from __future__ import annotations
 import json
 import time
 
-import pytest
 from fastapi.testclient import TestClient
 
 from stonks.api import create_app
-from tests.integration.app.conftest import API_TOKEN
+from tests.integration.app.conftest import API_TOKEN, AUTH, LOOPBACK, REMOTE
 
-LOOPBACK = ("127.0.0.1", 50000)
-REMOTE = ("203.0.113.7", 50000)
-AUTH = {"Authorization": f"Bearer {API_TOKEN}"}
+__all__ = ["API_TOKEN", "AUTH", "BAH", "LOOPBACK", "REMOTE"]
+
 BAH = "stonks.strategies.examples.buy_and_hold:BuyAndHold"
-
-
-@pytest.fixture
-def app(settings, seeded, fake_source):
-    settings.api.allowed_hosts = ["testserver"]
-    return create_app(settings, source_factory=lambda: fake_source, sse_poll_seconds=0.02)
-
-
-@pytest.fixture
-def client(app):
-    with TestClient(app, client=LOOPBACK) as c:
-        yield c
-
-
-@pytest.fixture
-def remote(app):
-    with TestClient(app, client=REMOTE) as c:
-        yield c
 
 
 def _wait_job(client: TestClient, job_id: str, timeout: float = 60) -> dict:

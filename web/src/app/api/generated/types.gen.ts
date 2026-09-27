@@ -2141,6 +2141,10 @@ export type InsightsTotalsView = {
      */
     portfolios: number;
     /**
+     * Suppressed
+     */
+    suppressed?: boolean;
+    /**
      * Total Value
      */
     total_value: number;
@@ -4448,6 +4452,12 @@ export type PortfolioTotalsView = {
      * Active portfolios with at least one snapshot.
      */
     portfolios: number;
+    /**
+     * Suppressed
+     *
+     * True when too few other people own books for the sums to hide anyone's numbers: cash and value then read 0.
+     */
+    suppressed?: boolean;
     /**
      * Total Value
      *
@@ -12049,6 +12059,10 @@ export type SendTestNotificationErrors = {
      * Unprocessable Content
      */
     422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
     /**
      * Service Unavailable
      */

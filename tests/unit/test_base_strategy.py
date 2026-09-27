@@ -41,7 +41,9 @@ def test_base_strategy_fills_defaults_for_missing_tunable_params():
 
 def test_base_strategy_fit_is_noop_by_default(tmp_path):
     s = _MiniStrategy({})
-    s.fit(dataset=None)  # should not raise
+    before = dict(s.params)
+    assert s.fit(dataset=None) is None
+    assert s.params == before  # nothing learned, nothing changed
 
 
 def test_base_strategy_extract_features_returns_empty_by_default():

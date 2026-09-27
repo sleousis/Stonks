@@ -122,8 +122,9 @@ book has room. A name too big for the room left is skipped and listed in
 `strategies/examples/quant_value.py`, formulas in `features/fundamentals.py`
 (each function documents its formula and source). Unlike the two momentum
 strategies it reads the three statement tables, point in time: a row is
-visible from its `filing_date` (or `period_end + missing_filing_lag_days`
-when the vendor gave none; mid-session only from the next day), through the
+visible from the day after its `filing_date`, since a filing may land after
+the close (or `period_end + missing_filing_lag_days` when the vendor gave
+none), through the
 same readers as `quality_value`.
 
 Default mode, `mode = "quant_value"`:
@@ -417,6 +418,8 @@ Risk off when at least `k` of the n conditions trigger. Then `mode` decides:
 - `block_new_buys` (default): buys are dropped, sells pass, holdings stay.
 - `exit_all`: every long is sold.
 - `scale`: buys shrink to the share of conditions that did not trigger.
+
+The wrapper takes `supports_short` from its inner strategy. Around a strategy in `short_mode = "short"` the modes act on opening orders of either side: a new short is blocked or scaled like a new long, a cover always passes, and `exit_all` covers shorts too.
 
 Example params:
 

@@ -115,3 +115,56 @@ def test_fingerprint_covers_warm_up_bars_before_the_start(lake_trending):
         "AND timestamp = TIMESTAMP '2025-11-03'"
     )
     assert data_fingerprint(ds)["hash"] != before
+
+
+# ---- reference tickers, the benchmark and every interval read (BE-28) -----------------
+
+
+def _bump(lake, ticker: str, interval: str = "1d") -> None:
+    lake.con.execute(
+        f"UPDATE bars SET close = close + 0.01 WHERE ticker = '{ticker}' "
+        f"AND interval = '{interval}' AND timestamp = TIMESTAMP '2026-01-15'"
+    )
+
+
+def test_a_reference_ticker_bar_changes_the_hash(lake_trending):
+    ds = LabDataset(
+        lake=lake_trending, universe=["UP.US"], start=date(2025, 10, 1), end=date(2026, 4, 1),
+        reference_tickers=("DOWN.US",), benchmark="none",
+    )  # fmt: skip
+    before = data_fingerprint(ds)
+    assert "DOWN.US" in before["references"]
+    _bump(lake_trending, "DOWN.US")
+    assert data_fingerprint(ds)["hash"] != before["hash"]
+
+
+def test_a_benchmark_bar_changes_the_hash(lake_trending):
+    ds = LabDataset(
+        lake=lake_trending, universe=["UP.US"], start=date(2025, 10, 1), end=date(2026, 4, 1),
+        benchmark="FLAT.US",
+    )  # fmt: skip
+    before = data_fingerprint(ds)
+    _bump(lake_trending, "FLAT.US")
+    assert data_fingerprint(ds)["hash"] != before["hash"]
+
+
+def test_an_intraday_run_also_hashes_the_daily_bars_it_reads(lake_trending):
+    from datetime import datetime, timedelta
+
+    from stonks.core.interval import Interval
+
+    hourly = pd.DataFrame(
+        [
+            {"ticker": "UP.US", "timestamp": datetime(2026, 1, 15, 14) + timedelta(hours=h),
+             "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "adj_close": 1.0, "volume": 1}
+            for h in range(3)
+        ]
+    )  # fmt: skip
+    lake_trending.upsert_bars(hourly, interval=Interval.HOUR_1)
+    ds = LabDataset(
+        lake=lake_trending, universe=["UP.US"], start=date(2026, 1, 1), end=date(2026, 2, 1),
+        interval=Interval.HOUR_1, benchmark="none",
+    )  # fmt: skip
+    before = data_fingerprint(ds)
+    _bump(lake_trending, "UP.US", "1d")
+    assert data_fingerprint(ds)["hash"] != before["hash"]

@@ -43,7 +43,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic import ValidationError as PydanticValidationError
 
 from stonks.core.interval import Interval
-from stonks.core.timeutil import as_datetime
 
 __all__ = [
     "ConditionContext",
@@ -153,7 +152,12 @@ def _closes(ctx: ConditionContext, ticker: str, interval: str, as_of: Any, n: in
 
 
 def _day(as_of: Any) -> date:
-    return as_datetime(as_of).date()
+    """The last day whose day-stamped rows the decision may read: ``as_of``'s
+    day for a daily decision, the day before for an intraday one, whose
+    day has not closed yet (BE-20)."""
+    from stonks.strategies._common import known_day
+
+    return known_day(as_of)
 
 
 # ---- conditions ----------------------------------------------------------------------

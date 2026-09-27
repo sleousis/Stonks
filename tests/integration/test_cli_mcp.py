@@ -23,10 +23,14 @@ def anyio_backend():
     return "asyncio"
 
 
-def _closed_port() -> int:
+@pytest.fixture
+def closed_port():
+    """A loopback port bound but never listening, held for the whole test
+    so nothing else can take it: every connection is refused (TT-18,
+    BE-69). The socket closes when the test ends."""
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
+        yield s.getsockname()[1]
 
 
 def test_mcp_command_is_registered():
@@ -49,8 +53,8 @@ def test_mcp_refuses_token_over_plain_http_to_remote(tmp_path, monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_stdio_session_reports_unreachable_api(tmp_path):
-    port = _closed_port()
+async def test_stdio_session_reports_unreachable_api(tmp_path, closed_port):
+    port = closed_port
     (tmp_path / "config").mkdir()
     (tmp_path / "config" / "default.toml").write_text(
         f'[mcp]\napi_url = "http://127.0.0.1:{port}"\ntimeout_seconds = 5\n'

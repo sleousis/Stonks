@@ -291,10 +291,10 @@ flowchart LR
 ```
 
 1. The API gets a lab run, sweep or Studio lab run. When `STONKS_LAB_EXECUTOR=worker`, it does not run it. It writes the job row with `executor = worker`.
-2. First it makes sure a fresh read-only copy of the lake exists under `/data/lab_snapshots`. It builds a new one when an ingest or bar fetch finished since, or the copy is older than an hour. With Parquet bars the copy is small: the bar files are hard links.
+2. First it makes sure a fresh read-only copy of the lake exists under `/data/lab_snapshots`. It builds a new one when an ingest or bar fetch finished since, a universe, its members or an index history changed, or the copy is older than an hour. With Parquet bars the copy is small: the bar files are hard links.
 3. The worker claims the oldest queued job, opens the copy read-only and runs the same handler the API would. DuckDB allows one writer, and the worker never writes the lake.
 4. Progress, the result and registered strategies go to the real state DB and artifacts. The job row, its event stream and its result route work as before.
-5. Cancel works: the worker checks a flag at every heartbeat and stops at the next checkpoint. A worker that dies stops its heartbeat, and its job fails after two minutes.
+5. Cancel works: the worker checks a flag at every heartbeat and stops at the next checkpoint. A worker that dies stops its heartbeat, and its job fails after two minutes. A worker you stop (SIGTERM, `docker compose restart`) puts its running job back in the queue, and a restart with the same `--id` reuses its row.
 
 Turn it on:
 

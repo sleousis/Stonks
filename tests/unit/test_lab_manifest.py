@@ -115,7 +115,8 @@ def test_build_manifest_is_json_serialisable():
     import json
 
     ds = LabDataset(lake=None, universe=["X.US"], start=date(2024, 1, 1), end=date(2024, 6, 1))
-    json.dumps(build_manifest(None, ds, {}))
+    manifest = build_manifest(None, ds, {})
+    assert json.loads(json.dumps(manifest))["dataset"]["universe"] == ["X.US"]
 
 
 @pytest.mark.parametrize("dataset", [None, object()])

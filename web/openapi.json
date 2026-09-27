@@ -4042,6 +4042,11 @@
             "title": "Portfolios",
             "type": "integer"
           },
+          "suppressed": {
+            "default": false,
+            "title": "Suppressed",
+            "type": "boolean"
+          },
           "total_value": {
             "title": "Total Value",
             "type": "number"
@@ -8201,6 +8206,12 @@
             "description": "Active portfolios with at least one snapshot.",
             "title": "Portfolios",
             "type": "integer"
+          },
+          "suppressed": {
+            "default": false,
+            "description": "True when too few other people own books for the sums to hide anyone's numbers: cash and value then read 0.",
+            "title": "Suppressed",
+            "type": "boolean"
           },
           "total_value": {
             "description": "Sum of each book's value at its latest snapshot.",
@@ -23200,7 +23211,7 @@
     },
     "/api/notifications/test": {
       "post": {
-        "description": "Send yourself a test notification on every channel you turned on\n(push devices, email, your webhook), to check that alerts reach you.\nIt skips quiet hours. Only ever reaches you, so viewers may do it too.",
+        "description": "Send yourself a test notification on every channel you turned on\n(push devices, email, your webhook), to check that alerts reach you.\nIt skips quiet hours. Only ever reaches you, so viewers may do it too.\nOne a minute: a second call in the same minute answers 429.",
         "operationId": "sendTestNotification",
         "responses": {
           "201": {
@@ -23252,6 +23263,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           },
           "503": {
             "content": {

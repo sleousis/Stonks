@@ -204,3 +204,69 @@ def test_hac_se_is_gap_aware():
     assert se == pytest.approx(_reference_gap_hac(gappy, 3))
     # compressing the gaps away pairs dates that are not lag-l apart
     assert se != pytest.approx(newey_west_se(gappy[np.isfinite(gappy)], 3))
+
+
+# ---- intraday scores never see a daily close before it closes (BE-21) -----------------
+
+
+class _LastDailyClose:
+    """Scores a ticker by its latest visible daily close."""
+
+    id = "last_daily_close"
+    applicable_asset_classes = ("crypto",)
+    label_horizon_bars = 0
+    required_history_bars = 0
+
+    def __init__(self, params=None) -> None:
+        self.params = dict(params or {})
+
+    def estimate_return(self, ticker, as_of, lake):
+        from stonks.core.interval import Interval
+        from stonks.strategies._common import BarCache
+
+        bars = BarCache(lake).last_n_bars(ticker, Interval.DAY_1, as_of, 1)
+        return None if bars.empty else float(bars["close"].iloc[-1])
+
+    def decide(self, my_picks, portfolio, prices, as_of):
+        return []
+
+    def fit(self, dataset) -> None:
+        return None
+
+
+def test_an_hourly_score_at_midnight_does_not_see_that_days_close():
+    from datetime import UTC, date, datetime
+
+    from stonks.core.interval import Interval
+    from stonks.lab.dataset import LabDataset
+    from stonks.store.lake import DuckDBLake
+
+    lake = DuckDBLake(":memory:")
+    lake.migrate()
+    try:
+        start = datetime(2026, 4, 1, tzinfo=UTC)
+        hourly = [
+            {"ticker": "BTC", "timestamp": start + timedelta(hours=h), "open": 1.0, "high": 1.0,
+             "low": 1.0, "close": 1.0, "adj_close": 1.0, "volume": 10}
+            for h in range(72)
+        ]  # fmt: skip
+        lake.upsert_bars(pd.DataFrame(hourly), interval=Interval.HOUR_1)
+        daily = [
+            {"ticker": "BTC", "date": date(2026, 4, 1 + d), "open": 1.0, "high": 999.0,
+             "low": 1.0, "close": 1.0 if d == 0 else 999.0, "adj_close": 1.0, "volume": 10}
+            for d in range(3)
+        ]  # fmt: skip
+        lake.upsert_prices(pd.DataFrame(daily))
+        ds = LabDataset(
+            lake=lake,
+            universe=["BTC"],
+            start=date(2026, 4, 1),
+            end=date(2026, 4, 3),
+            interval=Interval.HOUR_1,
+            benchmark="none",
+        )
+        panel = score_panel(_LastDailyClose(), ds, ds.full_window, max_workers=1)
+        at_midnight = panel.loc[pd.Timestamp("2026-04-02 00:00"), "BTC"]
+        assert at_midnight == pytest.approx(1.0)  # 04-02's close comes at its end
+    finally:
+        lake.close()

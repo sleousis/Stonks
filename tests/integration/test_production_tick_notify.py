@@ -7,13 +7,8 @@ from datetime import date
 import pytest
 
 import stonks.production.tick as tick_mod
-from stonks.core.protocols import SurvivalReport
 from stonks.notify import Notification, Notifier
 from stonks.production.tick import TickSettings, run_tick
-from stonks.registry.store import StrategyRegistry
-from stonks.store.state import SqliteState
-from stonks.strategies.examples.buy_and_hold import BuyAndHold
-from tests.fixtures.governance import seed_status
 
 AS_OF = date(2026, 3, 20)
 
@@ -31,20 +26,6 @@ class RaisingNotifier:
 
     def notify(self, notification):
         raise RuntimeError("notifier exploded")
-
-
-@pytest.fixture
-def tick_env(tmp_path, lake_trending):
-    state = SqliteState(tmp_path / "state.sqlite")
-    state.migrate()
-    registry = StrategyRegistry(state=state, artifacts_dir=tmp_path / "artifacts")
-    sid = registry.register(
-        BuyAndHold({"ticker": "UP.US", "allocation": 1.0}),
-        reports=[SurvivalReport(test_id="oos", passed=True, metrics={})],
-    )
-    seed_status(registry, sid, "active")
-    yield lake_trending, state, registry
-    state.close()
 
 
 SETTINGS = TickSettings(universe=["UP.US"], initial_cash=10_000.0)

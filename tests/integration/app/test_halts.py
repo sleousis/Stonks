@@ -7,10 +7,8 @@ from __future__ import annotations
 import json
 
 import pytest
-from fastapi.testclient import TestClient
 
 from stonks.accounts import DEFAULT_OWNER_ID, PortfolioRepository, Role, Scope, UserRepository
-from stonks.api import create_app
 from stonks.api.deps import current_principal
 from stonks.app.errors import NotFoundError, ValidationError
 from stonks.app.halts import (
@@ -24,7 +22,7 @@ from stonks.auth import PermissionDenied, Principal, StepUpRequired
 from stonks.auth.principal import ROLE_SCOPES
 from stonks.production.halts import trip_halt
 from stonks.store.state import SqliteState
-from tests.integration.app.test_api import AUTH, LOOPBACK
+from tests.integration.app.test_api import AUTH
 
 
 @pytest.fixture
@@ -136,14 +134,6 @@ def test_each_user_sees_global_halts_and_their_own(halts, people):
 
 
 # ---- REST ----------------------------------------------------------------------------
-
-
-@pytest.fixture
-def client(settings, seeded, fake_source):
-    settings.api.allowed_hosts = ["testserver"]
-    app = create_app(settings, source_factory=lambda: fake_source)
-    with TestClient(app, client=LOOPBACK) as c:
-        yield c
 
 
 def test_the_rest_routes_engage_list_and_resume(client):

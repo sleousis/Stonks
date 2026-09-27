@@ -26,8 +26,9 @@ def test_loopback_is_allowed():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
         server.bind(("127.0.0.1", 0))
         server.listen(1)
-        with socket.create_connection(server.getsockname(), timeout=2):
-            conn, _ = server.accept()
+        with socket.create_connection(server.getsockname(), timeout=2) as client:
+            conn, peer = server.accept()
+            assert peer == client.getsockname()
             conn.close()
 
 

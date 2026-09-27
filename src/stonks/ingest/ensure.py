@@ -51,18 +51,25 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from datetime import time as dtime
-from typing import Any
+from typing import Any, cast
 
-import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field
 
 from stonks.core.interval import Interval
+from stonks.ingest.adjustment import adj_ratio, adjustment_drift
 from stonks.ingest.ensure_settings import EnsureSettings
 from stonks.ingest.pipeline import _SOFT_FAIL_EXCEPTIONS, IngestPipeline
 from stonks.ingest.redact import format_exception
 from stonks.ingest.schemas import FinancialStatementsBundle, RawPriceBar
-from stonks.ingest.sessions import SessionCloses, closed_sessions, default_sessions, is_final
+from stonks.ingest.sessions import (
+    SessionCloses,
+    closed_sessions,
+    default_sessions,
+    is_final,
+    open_sessions,
+    session_close,
+)
 from stonks.ingest.sources.base import DataSource, DataSourceError
 from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
@@ -243,7 +250,11 @@ class DataEnsurer:
         self._lake = lake
         self._source = source
         self._settings = settings or EnsureSettings()
-        self._pipeline_factory = pipeline_factory or (lambda src, lk: IngestPipeline(src, lk))
+        self._pipeline_factory = pipeline_factory or (
+            lambda src, lk: IngestPipeline(
+                src, lk, adjustment_tolerance=self._settings.adjustment_tolerance
+            )
+        )
         self._today = today
         self._clock = clock
         self._sessions = sessions if sessions is not None else default_sessions()
@@ -339,39 +350,6 @@ class DataEnsurer:
         todo = [t for t in plan.gaps if t not in prefetched]
         return self._write(plan, prefetched, todo, interval, report)
 
-    def refresh_exchange_day(
-        self, exchange: str, day: date, tickers: Sequence[str] | None = None
-    ) -> EnsureReport:
-        """Refresh one exchange for one day: one bulk call, falling back to
-        one call per ticker (``tickers``, else the source's listing) when
-        the plan or the source has no bulk data."""
-        report = EnsureReport(
-            interval=str(Interval.DAY_1), start=day, end=day, source=self._source.source_id
-        )
-        rows: dict[str, list[Any]] = {}
-        if self._limits.bulk:
-            try:
-                self._limiter.acquire()
-                for bar in self._source.fetch_bulk_eod(exchange, day):
-                    rows.setdefault(bar.ticker, []).append(bar)
-                report.bulk_days = 1
-            except _SOFT_FAIL_EXCEPTIONS as exc:
-                report.warnings.append(f"bulk {exchange} {day} failed: {format_exception(exc)}")
-                rows = {}
-        if report.bulk_days:
-            names = list(rows) if tickers is None else [t for t in tickers if t in rows]
-            plan = _Plan(gaps={t: [(day, day)] for t in names})
-            plan.asset_classes = self._lake.get_asset_classes(names)
-            report.tickers_requested = len(names)
-            report.gaps = len(names)
-            return self._write(plan, {t: rows[t] for t in names}, [], Interval.DAY_1, report)
-        names = list(tickers) if tickers is not None else self._source.list_tickers(exchange)
-        plan = _Plan(gaps={t: [(day, day)] for t in names})
-        plan.asset_classes = self._lake.get_asset_classes(names)
-        report.tickers_requested = len(names)
-        report.gaps = len(names)
-        return self._write(plan, {}, names, Interval.DAY_1, report)
-
     # ---- internals -----------------------------------------------------------
 
     def _covered(
@@ -379,11 +357,15 @@ class DataEnsurer:
     ) -> dict[str, list[DateRange]]:
         out: dict[str, list[DateRange]] = {}
         cov = self._lake.bar_coverage(tickers, interval, start, end)
-        for r in cov.itertuples(index=False):
-            if int(r.n_window) > 0:
-                out.setdefault(r.ticker, []).append(
-                    (pd.Timestamp(r.first_bar).date(), pd.Timestamp(r.last_bar).date())
-                )
+        classes = self._lake.get_asset_classes(tickers) if interval.is_intraday else {}
+        for r in cov.to_dict("records"):
+            if int(r["n_window"]) > 0:
+                first = _day_of(r["first_bar"])
+                last = _day_of(r["last_bar"])
+                if interval.is_intraday:
+                    last = self._last_full_day(r["ticker"], r["last_bar"], interval, classes)
+                if last >= first:
+                    out.setdefault(r["ticker"], []).append((first, last))
         rows = self._lake.con.execute(
             """
             SELECT ticker, range_start, range_end FROM bar_fetch_ranges
@@ -394,6 +376,19 @@ class DataEnsurer:
         for t, s, e in rows:
             out.setdefault(t, []).append((pd.Timestamp(s).date(), pd.Timestamp(e).date()))
         return out
+
+    def _last_full_day(
+        self, ticker: str, last_bar: Any, interval: Interval, classes: dict[str, str]
+    ) -> date:
+        """The last day an intraday series holds in full: the last stored
+        bar's day when that bar reaches its session's close, else the day
+        before (a mid-session fetch stored only part of it, BE-23)."""
+        stamp = _utc(last_bar)
+        day = stamp.date()
+        close = session_close(self._sessions, ticker, day, classes.get(ticker))
+        if stamp + interval.to_timedelta() >= close:
+            return day
+        return day - timedelta(days=1)
 
     def _load_tails(self, plan: _Plan) -> None:
         """Read the stored ``adj_close / close`` of the last
@@ -414,7 +409,7 @@ class DataEnsurer:
             [names, befores, self._settings.overlap_bars],
         ).fetchall()
         for ticker, ts, close, adj in rows:
-            ratio = _ratio(close, adj)
+            ratio = adj_ratio(close, adj)
             if ratio is not None:
                 plan.tails.setdefault(ticker, {})[pd.Timestamp(ts).date()] = ratio
         if not plan.tails:
@@ -429,16 +424,12 @@ class DataEnsurer:
     def _drift(self, tail: dict[date, float], rows: Iterable[Any]) -> float | None:
         """The factor by which the vendor's ``adj_close / close`` moved on
         the oldest overlapping bar that moved, or ``None`` when none did."""
-        tol = self._settings.adjustment_tolerance
-        for r in sorted(rows, key=_row_day):
-            old = tail.get(_row_day(r))
-            new = _ratio(getattr(r, "close", None), getattr(r, "adj_close", None))
-            if old is None or new is None:
-                continue
-            factor = new / old
-            if abs(factor - 1.0) > tol:
-                return factor
-        return None
+        fresh: dict[date, float] = {}
+        for r in rows:
+            ratio = adj_ratio(getattr(r, "close", None), getattr(r, "adj_close", None))
+            if ratio is not None:
+                fresh.setdefault(_row_day(r), ratio)
+        return adjustment_drift(tail, fresh, self._settings.adjustment_tolerance)
 
     def _bulk(self, plan: _Plan) -> tuple[dict[str, list[Any]], int]:
         """Prefetched rows for tickers whose gaps a few bulk days cover.
@@ -452,11 +443,17 @@ class DataEnsurer:
                 by_exchange.setdefault(t.rsplit(".", 1)[1], []).append(t)
         out: dict[str, list[Any]] = {}
         calls = 0
-        for exchange, names in by_exchange.items():
+        limit = self._settings.bulk_max_days
+        for exchange, listed in by_exchange.items():
+            # a name missing more days than a bulk run covers (a dead name
+            # in a point-in-time universe) goes per ticker, so it never
+            # turns bulk off for the rest of its exchange (BE-61)
+            own = {t: {d for g in gaps[t] for d in _business_days(g)} for t in listed}
+            names = [t for t in listed if len(own[t]) <= limit]
             if len(names) < self._settings.bulk_min_tickers:
                 continue
-            days = sorted({d for t in names for g in gaps[t] for d in _business_days(g)})
-            if not days or len(days) > self._settings.bulk_max_days:
+            days = sorted(set().union(*(own[t] for t in names)))
+            if not days or len(days) > limit:
                 continue
             tails = [max(plan.tails[t]) for t in names if plan.tails.get(t)]
             overlap = max(tails) if tails else None
@@ -514,8 +511,7 @@ class DataEnsurer:
         tail = plan.tails.get(ticker) if interval == Interval.DAY_1 else None
         factor = plan.drift.get(ticker)
         if factor is None:
-            ranges = [*gaps[:-1], (min(tail), gaps[-1][1])] if tail else gaps
-            rows = self._fetch_ranges(ticker, ranges, interval)
+            rows = self._fetch_ranges(ticker, _with_overlap(gaps, tail), interval)
             factor = self._drift(tail, rows) if tail else None
             if factor is None:
                 return self._final(ticker, rows, interval, plan)
@@ -529,8 +525,15 @@ class DataEnsurer:
         return self._final(ticker, rows, interval, plan)
 
     def _final(self, ticker: str, rows: list[Any], interval: Interval, plan: _Plan) -> list[Any]:
-        """``rows`` without the daily bars whose session has not closed."""
-        if interval != Interval.DAY_1 or not rows:
+        """``rows`` without the daily bars whose session has not closed, or
+        the intraday bars that are not complete yet (BE-23)."""
+        if not rows:
+            return rows
+        if interval.is_intraday:
+            now = self.now()
+            span = interval.to_timedelta()
+            return [r for r in rows if _utc(r.timestamp) + span <= now]
+        if interval != Interval.DAY_1:
             return rows
         keep = is_final(
             self._sessions,
@@ -586,20 +589,24 @@ class DataEnsurer:
             until = max(g[1] for gs in gaps.values() for g in gs)
             try:
                 if interval == Interval.DAY_1:
-                    result = pipeline.run_prices(tickers, since=since, until=until, ranges=gaps)
+                    # a fallback is asked for the overlap too, so the
+                    # pipeline's drift check sees its basis (BE-36)
+                    spans = {t: _with_overlap(g, plan.tails.get(t)) for t, g in gaps.items()}
+                    result = pipeline.run_prices(tickers, since=since, until=until, ranges=spans)
                 else:
                     result = pipeline.run_intraday_bars(
                         tickers, interval, since=since, until=until, ranges=gaps
                     )
             finally:
                 prefetcher.cancel()
-        self._record_ranges(gaps, fetched, interval)
-        for ticker, (start, factor) in readjusted.items():
-            first = plan.first_bar.get(ticker)
-            if ticker in fetched and first is not None and first < start:
-                self._rescale(ticker, start, factor)
-        report.readjusted = sorted(t for t in readjusted if t in fetched)
-        failed = [t for t in tickers if t not in fetched]
+        # Stored bars older than a refetch (past the vendor's history
+        # limit) were scaled onto the new basis by the pipeline (BE-09).
+        # The pipeline's own per-ticker outcomes (BE-35): a ticker a
+        # fallback rescued is not failed, and a failed write is.
+        failed = [t for t in tickers if t in set(result.failed)]
+        written = {t: rows for t, rows in fetched.items() if t not in set(failed)}
+        self._record_ranges(gaps, written, interval)
+        report.readjusted = sorted(t for t in readjusted if t in written)
         report.run_id = result.run_id
         report.status = result.status
         report.tickers_fetched = result.tickers_ok
@@ -616,24 +623,6 @@ class DataEnsurer:
         )
         return report
 
-    def _rescale(self, ticker: str, before: date, factor: float) -> None:
-        """Multiply ``adj_close`` of the stored daily bars older than
-        ``before`` (which the vendor no longer serves) by ``factor``."""
-        end = datetime.combine(before, dtime()) - timedelta(microseconds=1)
-        old = self._lake.get_bars(ticker, Interval.DAY_1, datetime(1900, 1, 1), end)
-        if old.empty:
-            return
-        old["adj_close"] = old["adj_close"] * factor
-        self._lake.upsert_bars(old, interval=Interval.DAY_1)
-        _log.warning(
-            "ensure.rescaled",
-            ticker=ticker,
-            before=str(before),
-            bars=len(old),
-            factor=factor,
-            reason="older than the vendor's history limit",
-        )
-
     def _record_ranges(
         self,
         gaps: dict[str, list[DateRange]],
@@ -642,11 +631,19 @@ class DataEnsurer:
     ) -> None:
         cutoff = self.today - timedelta(days=self._settings.settle_days)
         now = datetime.now(UTC).replace(tzinfo=None)
+        classes = self._lake.get_asset_classes(list(fetched)) if interval.is_intraday else {}
         records = []
         for ticker, rows in fetched.items():
             days = [_row_day(r) for r in rows]
             for since, until in gaps.get(ticker, []):
                 end = until
+                if interval.is_intraday:
+                    # a session still open is asked for again (BE-23)
+                    still_open = open_sessions(
+                        self._sessions, ticker, since, until, self.now(), classes.get(ticker)
+                    )
+                    if still_open:
+                        until = end = min(end, still_open[0] - timedelta(days=1))
                 if until > cutoff:
                     last = max((d for d in days if since <= d <= until), default=None)
                     end = max(cutoff, last) if last is not None else cutoff
@@ -666,15 +663,23 @@ class DataEnsurer:
             )
 
 
-def _ratio(close: Any, adj: Any) -> float | None:
-    """``adj / close`` when both are finite and positive, else ``None``."""
-    try:
-        c, a = float(close), float(adj)
-    except (TypeError, ValueError):
-        return None
-    if not (np.isfinite(c) and np.isfinite(a)) or c <= 0 or a <= 0:
-        return None
-    return a / c
+def _with_overlap(gaps: list[DateRange], tail: dict[date, float] | None) -> list[DateRange]:
+    """``gaps`` with the last one stretched back over the stored ``tail``."""
+    if not tail:
+        return gaps
+    return [*gaps[:-1], (min(tail), gaps[-1][1])]
+
+
+def _utc(value: Any) -> datetime:
+    """``value`` as an aware UTC ``datetime`` (naive stamps are UTC)."""
+    stamp = pd.Timestamp(value)
+    stamp = stamp.tz_localize(UTC) if stamp.tzinfo is None else stamp.tz_convert(UTC)
+    return cast(datetime, stamp.to_pydatetime())
+
+
+def _day_of(value: Any) -> date:
+    """The calendar day of a stored stamp (never NaT here)."""
+    return cast(date, pd.Timestamp(value).date())
 
 
 def _row_day(row: Any) -> date:

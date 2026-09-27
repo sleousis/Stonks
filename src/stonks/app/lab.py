@@ -848,6 +848,9 @@ def backtest_report(
         threshold=request.threshold,
         rebalance_every_bars=request.rebalance_every_bars,
         construction=settings.backtest.construction,
+        # Load every name of the window, trade each only while a member
+        # (point in time, P14, BE-07).
+        universe_id=universe_id,
     )
     report = Backtester(strategies=[strategy], broker=broker, lake=lake, config=config).run()
     report = with_trades(report, broker.fills, reference_price=broker.reference_price)
