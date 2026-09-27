@@ -72,7 +72,7 @@ describe('FollowPanel', () => {
     );
     await tick();
     fixture.detectChanges();
-    expect(el.textContent).toContain('You follow this strategy')
+    expect(el.textContent).toContain('You follow this strategy');
     expect(el.textContent).toContain('Signals only');
   });
 

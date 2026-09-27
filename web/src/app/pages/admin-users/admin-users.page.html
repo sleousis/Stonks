@@ -173,7 +173,6 @@
   }
 </section>
 
-
 <app-sheet
   [open]="!!resetting()"
   labelledBy="reset-title"
@@ -181,11 +180,16 @@
   (dismiss)="closeReset()"
 >
   @if (resetting(); as u) {
-    <form id="reset-password-form" class="sheet-form" (submit)="$event.preventDefault(); resetPassword()" novalidate>
+    <form
+      id="reset-password-form"
+      class="sheet-form"
+      (submit)="$event.preventDefault(); resetPassword()"
+      novalidate
+    >
       <h2 id="reset-title">Reset the password for {{ u.display_name }}?</h2>
       <p id="reset-message" class="sheet-message">
-        They are signed out everywhere and their API tokens stop working. Share the new
-        password privately.
+        They are signed out everywhere and their API tokens stop working. Share the new password
+        privately.
       </p>
       <div class="field">
         <label for="reset-password">New password</label>

@@ -74,8 +74,8 @@ export const FOLLOW_MODES: readonly { value: FollowMode; label: string; help: st
           aria-describedby="follow-lead"
         >
           <p id="follow-lead" class="lead">
-            Get its signals, or let it paper trade. Real money comes later, from Today, after
-            enough paper days.
+            Get its signals, or let it paper trade. Real money comes later, from Today, after enough
+            paper days.
           </p>
           <fieldset class="modes">
             <legend class="visually-hidden">How to follow</legend>
@@ -114,7 +114,9 @@ export const FOLLOW_MODES: readonly { value: FollowMode; label: string; help: st
                     (change)="portfolioId.set($any($event.target).value)"
                   >
                     @for (p of portfolios(); track p.id) {
-                      <option [value]="p.id" [selected]="p.id === portfolioId()">{{ p.name }}</option>
+                      <option [value]="p.id" [selected]="p.id === portfolioId()">
+                        {{ p.name }}
+                      </option>
                     }
                   </select>
                   <app-mode-stamp [live]="false" />

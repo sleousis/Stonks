@@ -34,7 +34,11 @@ const NAME_MAX = 80;
         <h2 id="portfolios-title">Your portfolios</h2>
       </div>
       @if (list.error(); as err) {
-        <app-error-state title="Could not load your portfolios" [error]="err" (retry)="list.reload()" />
+        <app-error-state
+          title="Could not load your portfolios"
+          [error]="err"
+          (retry)="list.reload()"
+        />
       } @else if (!list.hasValue()) {
         <app-loading-state label="Loading your portfolios" [rows]="2" />
       } @else {
@@ -236,7 +240,7 @@ export class PortfoliosPanel {
     const name = this.newName().trim();
     const cashText = String(this.newCash()).trim();
     const cash = cashText ? Number(cashText) : null;
-    this.nameError.set(name ? null : 'Enter a name.')
+    this.nameError.set(name ? null : 'Enter a name.');
     this.cashError.set(
       cash === null || (Number.isFinite(cash) && cash > 0) ? null : 'Enter an amount above 0.',
     );

@@ -112,7 +112,9 @@ describe('StrategiesCard', () => {
   it('says how to start when the trader follows nothing', async () => {
     const el = await render([]);
     expect(el.textContent).toContain('You follow no strategies yet');
-    const follow = [...el.querySelectorAll('a')].filter((a) => a.textContent?.includes('Follow a strategy'));
+    const follow = [...el.querySelectorAll('a')].filter((a) =>
+      a.textContent?.includes('Follow a strategy'),
+    );
     expect(follow.length).toBe(2);
     expect(follow[1].getAttribute('href')).toBe('/strategies');
   });

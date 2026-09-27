@@ -230,9 +230,10 @@ export class LabPage {
 
   async startBacktest(request: BacktestRequest): Promise<void> {
     const name = shortName(request.strategy.class_path);
+    const tickers = request.universe?.length ?? 0;
     const ok = await this.confirm.confirm({
       title: `Run a backtest of ${name}?`,
-      message: `${request.universe.length} ticker${request.universe.length === 1 ? '' : 's'}, ${request.start} to ${request.end}, ${request.interval ?? '1d'} bars. It runs in the background.`,
+      message: `${tickers} ticker${tickers === 1 ? '' : 's'}, ${request.start} to ${request.end}, ${request.interval ?? '1d'} bars. It runs in the background.`,
       confirmLabel: 'Run backtest',
     });
     if (!ok) return;
