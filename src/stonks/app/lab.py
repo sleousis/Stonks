@@ -186,7 +186,17 @@ class BacktestOptions(BaseModel):
 
 
 class BacktestRequest(_WindowRequest, BacktestOptions):
-    pass
+    """Give ``universe`` (tickers) or ``universe_id``: a stored universe,
+    every member at some point in the window, delisted names included."""
+
+    universe: list[str] = Field(default_factory=list)
+    universe_id: str | None = Field(default=None, pattern=UNIVERSE_ID_PATTERN)
+
+    @model_validator(mode="after")
+    def _basket(self) -> Self:
+        if not self.universe and not self.universe_id:
+            raise ValueError("give universe (tickers) or universe_id")
+        return self
 
 
 class CostModelPreset(BaseModel):
@@ -824,10 +834,16 @@ def backtest_report(
         fill_model=execution.fill_model(),
         settlement_days=execution.settlement_days,
     )
+    universe = list(request.universe)
+    universe_id = getattr(request, "universe_id", None)
+    if not universe and universe_id:
+        universe = lake.members_between(universe_id, request.start, request.end)
+        if not universe:
+            raise ValidationError(f"universe {universe_id!r} has no members in the window")
     config = BacktestConfig(
         start=request.start,
         end=request.end,
-        universe=list(request.universe),
+        universe=universe,
         interval=interval,
         threshold=request.threshold,
         rebalance_every_bars=request.rebalance_every_bars,
@@ -939,6 +955,8 @@ class LabService:
     def submit_backtest(self, request: BacktestRequest, *, owner_id: str | None = None) -> Job:
         _parse_interval(request.interval)
         self._strategies.resolve(request.strategy)  # validate before queueing
+        if request.universe_id is not None:
+            self._require_universe(request.universe_id)
         return self._runner.submit(BACKTEST_JOB, request.model_dump(mode="json"), owner_id=owner_id)
 
     def run_backtest(self, request: BacktestRequest) -> BacktestResult:

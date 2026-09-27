@@ -157,9 +157,10 @@ def register(t: ToolContext) -> None:
 
     @server.tool(annotations=JOB)
     async def run_backtest(
-        universe: Tickers,
         start: IsoDate,
         end: IsoDate,
+        universe: OptionalTickers = None,
+        universe_id: UniverseId = None,
         strategy_id: Annotated[
             str | None, Field(description="registered strategy id (or use class_path)")
         ] = None,
@@ -184,13 +185,16 @@ def register(t: ToolContext) -> None:
         ] = None,
         benchmark: Benchmark = None,
     ) -> dict[str, Any]:
-        """Queue a backtest of one strategy over a universe and date window.
-        Returns the job; use wait_for_job to get the metrics and equity curve.
-        Simulated only: never places real orders."""
+        """Queue a backtest of one strategy over typed tickers (universe) or a
+        stored universe (universe_id) and a date window. Returns the job; use
+        wait_for_job to get the metrics and equity curve. Simulated only:
+        never places real orders."""
+        _need_universe(universe, universe_id)
         body = drop_none(
             {
                 "strategy": strategy_ref(strategy_id, class_path, params),
                 "universe": universe,
+                "universe_id": universe_id,
                 "start": iso(start),
                 "end": iso(end),
                 "interval": interval,

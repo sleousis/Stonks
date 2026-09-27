@@ -3341,7 +3341,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Queue a backtest of one strategy over a universe and date window.\nReturns the job; use wait_for_job to get the metrics and equity curve.\nSimulated only: never places real orders.",
+      "description": "Queue a backtest of one strategy over typed tickers (universe) or a\nstored universe (universe_id) and a date window. Returns the job; use\nwait_for_job to get the metrics and equity curve. Simulated only:\nnever places real orders.",
       "input_schema": {
         "properties": {
           "benchmark": {
@@ -3462,17 +3462,37 @@
             "type": "number"
           },
           "universe": {
-            "description": "instrument ids",
-            "items": {
-              "type": "string"
-            },
-            "minItems": 1,
-            "title": "Universe",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "instrument ids; or give universe_id",
+            "title": "Universe"
+          },
+          "universe_id": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "a stored universe (see list_universes): its point-in-time members, delisted names included, instead of typed tickers",
+            "title": "Universe Id"
           }
         },
         "required": [
-          "universe",
           "start",
           "end"
         ],

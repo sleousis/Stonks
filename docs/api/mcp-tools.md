@@ -982,17 +982,19 @@ Safety: writes, non-destructive, idempotent, closed world. Needs confirm: no.
 
 ### `run_backtest`
 
-Queue a backtest of one strategy over a universe and date window.
-Returns the job; use wait_for_job to get the metrics and equity curve.
-Simulated only: never places real orders.
+Queue a backtest of one strategy over typed tickers (universe) or a
+stored universe (universe_id) and a date window. Returns the job; use
+wait_for_job to get the metrics and equity curve. Simulated only:
+never places real orders.
 
 Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no.
 
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `universe` | list[string] | yes |  | instrument ids |
 | `start` | date | yes |  | YYYY-MM-DD |
 | `end` | date | yes |  | YYYY-MM-DD |
+| `universe` | list[string] \| null | no | `null` | instrument ids; or give universe_id |
+| `universe_id` | string \| null | no | `null` | a stored universe (see list_universes): its point-in-time members, delisted names included, instead of typed tickers |
 | `strategy_id` | string \| null | no | `null` | registered strategy id (or use class_path) |
 | `class_path` | string \| null | no | `null` | catalog class path, e.g. pkg.mod:Class |
 | `params` | object \| null | no | `null` | strategy params (with class_path) |
