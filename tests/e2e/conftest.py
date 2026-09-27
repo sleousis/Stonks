@@ -207,6 +207,15 @@ class Visit:
                 "() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]"
             )
             assert widths[0] <= widths[1], f"{name}: page scrolls sideways on phone {widths}"
+        # Axe reads colours as painted: a toast or panel still fading in has
+        # opacity below 1 and fails contrast it passes at rest. Let finite
+        # animations settle first (endless ones such as the loader are fine).
+        page.wait_for_function(
+            """() => document.getAnimations().every(
+                a => a.playState !== 'running'
+                  || a.effect?.getComputedTiming().iterations === Infinity)""",
+            timeout=5_000,
+        )
         violations = new_axe_violations(page, record_axe(page, name, self.viewport))
         assert not violations, f"{name}: axe violations {[v['id'] for v in violations]}"
 
