@@ -83,6 +83,7 @@ READ_TOOLS = {
     "list_universes",
     "get_universe",
     "get_universe_members",
+    "get_api_health",
     "health",
     "get_portfolio",
     "get_portfolio_totals",
@@ -130,8 +131,20 @@ READ_TOOLS = {
     "get_insights",
     "get_strategy_agreement",
     "get_insights_totals",
+    "get_live_risk",
     "live_risk",
+    "list_risk_snapshots",
     "risk_snapshots",
+    "get_tca_summary",
+    "list_trade_journal",
+    "get_order_tca",
+    "get_golive_report",
+    "get_schedule",
+    "list_alerts",
+    "list_notifications",
+    "list_survival_tests",
+    "list_survival_presets",
+    "get_studio_capabilities",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
@@ -143,9 +156,14 @@ JOB_TOOLS = {
     "validate_draft",
     "backtest_draft",
     "lab_run_draft",
+    "run_draft_backtest",
+    "run_draft_lab",
+    "run_sweep",
+    "add_journal_note",
+    "mark_notifications_read",
 }
 # Overwrite a draft's fields; no confirm (a draft is never traded).
-EDIT_TOOLS = {"update_draft"}
+EDIT_TOOLS = {"update_draft", "edit_journal_note", "cancel_job"}
 GUARDED_TOOLS = {
     "create_universe",
     "refresh_universe",
@@ -163,6 +181,7 @@ GUARDED_TOOLS = {
     "engage_kill_switch",
     "subscribe",
     "update_subscription",
+    "delete_draft",
 }
 
 

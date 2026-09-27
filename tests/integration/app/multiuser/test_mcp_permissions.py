@@ -261,6 +261,7 @@ _RULE = {"version": 1}
 CASES: dict[str, Case] = {
     # reads
     "health": _c("GET", "/api/health"),
+    "get_api_health": _c("GET", "/api/health"),
     "whoami": _c("GET", "/api/auth/me"),
     "get_portfolio": _c("GET", "/api/portfolio", lambda i: {"portfolio_id": i["portfolio"]}),
     "get_portfolio_totals": _c("GET", "/api/portfolio/totals"),
@@ -295,6 +296,20 @@ CASES: dict[str, Case] = {
     "get_pnl": _c("GET", "/api/pnl", lambda i: {"portfolio_id": i["portfolio"]}),
     "live_risk": _c("GET", "/api/risk/live", lambda i: {"portfolio_id": i["portfolio"]}),
     "risk_snapshots": _c("GET", "/api/risk/snapshots", lambda i: {"portfolio_id": i["portfolio"]}),
+    "get_live_risk": _c("GET", "/api/risk/live", lambda i: {"portfolio_id": i["portfolio"]}),
+    "list_risk_snapshots": _c(
+        "GET", "/api/risk/snapshots", lambda i: {"portfolio_id": i["portfolio"]}
+    ),
+    "get_golive_report": _c(
+        "GET", "/api/strategies/{strategy_id}/golive", lambda i: {"strategy_id": "bah_active"}
+    ),
+    "get_schedule": _c("GET", "/api/schedule"),
+    "list_alerts": _c("GET", "/api/alerts"),
+    "list_notifications": _c("GET", "/api/notifications"),
+    "mark_notifications_read": _c("POST", "/api/notifications/read"),
+    "list_survival_tests": _c("GET", "/api/lab/survival-tests"),
+    "list_survival_presets": _c("GET", "/api/lab/survival-presets"),
+    "get_studio_capabilities": _c("GET", "/api/studio/capabilities"),
     "list_shadow_decisions": _c("GET", "/api/shadow/decisions"),
     "list_shadow_pnl": _c("GET", "/api/shadow/pnl"),
     "get_shadow_pnl": _c(
@@ -319,6 +334,17 @@ CASES: dict[str, Case] = {
     "tca_summary": _c("GET", "/api/tca/summary", lambda i: {"portfolio_id": i["portfolio"]}),
     "trade_journal": _c("GET", "/api/tca/journal", lambda i: {"portfolio_id": i["portfolio"]}),
     "order_tca": _c("GET", "/api/tca/orders/{client_id}", lambda i: {"client_id": "nope"}),
+    "get_tca_summary": _c("GET", "/api/tca/summary", lambda i: {"portfolio_id": i["portfolio"]}),
+    "list_trade_journal": _c("GET", "/api/tca/journal", lambda i: {"portfolio_id": i["portfolio"]}),
+    "get_order_tca": _c("GET", "/api/tca/orders/{client_id}", lambda i: {"client_id": "nope"}),
+    "add_journal_note": _c(
+        "POST",
+        "/api/tca/orders/{client_id}/notes",
+        lambda i: {"client_id": "nope", "note": "why"},
+    ),
+    "edit_journal_note": _c(
+        "PUT", "/api/tca/notes/{note_id}", lambda i: {"note_id": 999999, "note": "why"}
+    ),
     "list_portfolios": _c("GET", "/api/portfolios"),
     "list_trading_modes": _c("GET", "/api/portfolios/trading-modes"),
     "list_subscriptions": _c("GET", "/api/subscriptions"),
@@ -372,6 +398,18 @@ CASES: dict[str, Case] = {
         "/api/studio/drafts/{draft_id}/lab-runs",
         lambda i: {"draft_id": i["draft"], "universe": ["UP.US"]} | _WINDOW,
     ),
+    "run_draft_backtest": _c(
+        "POST",
+        "/api/studio/drafts/{draft_id}/backtests",
+        lambda i: {"draft_id": i["draft"], "universe": ["UP.US"]} | _WINDOW,
+    ),
+    "run_draft_lab": _c(
+        "POST",
+        "/api/studio/drafts/{draft_id}/lab-runs",
+        lambda i: {"draft_id": i["draft"], "universe": ["UP.US"]} | _WINDOW,
+    ),
+    "run_sweep": _c("POST", "/api/lab/sweeps", lambda i: {"universe": ["UP.US"]} | _WINDOW),
+    "cancel_job": _c("POST", "/api/jobs/{job_id}/cancel", lambda i: {"job_id": i["job"]}),
     "update_draft": _c(
         "PATCH", "/api/studio/drafts/{draft_id}", lambda i: {"draft_id": i["draft"], "name": "y"}
     ),
@@ -457,10 +495,15 @@ CASES: dict[str, Case] = {
         "/api/universes/{universe_id}",
         lambda i: {"universe_id": "u_missing", "confirm": True},
     ),
+    "delete_draft": _c(
+        "DELETE",
+        "/api/studio/drafts/{draft_id}",
+        lambda i: {"draft_id": i["draft"], "confirm": True},
+    ),
 }
 
 #: Tools whose preview reads the target first; a missing id stops them there.
-_PREVIEW_READ_404 = {"delete_universe", "promote_strategy", "retire_strategy"}
+_PREVIEW_READ_404 = {"delete_universe", "promote_strategy", "retire_strategy", "delete_draft"}
 
 
 def test_every_tool_has_a_case():

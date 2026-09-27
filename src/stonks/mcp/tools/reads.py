@@ -31,7 +31,20 @@ from stonks.mcp.tools.common import (
 )
 
 ROUTE_READS: tuple[RouteRead, ...] = (
-    RouteRead("health", "/api/health", "Check that the Stonks API is up and report its version."),
+    RouteRead(
+        "get_api_health", "/api/health", "Check that the Stonks API is up and report its version."
+    ),
+    RouteRead(
+        "list_survival_tests",
+        "/api/lab/survival-tests",
+        "Every survival test a lab run can name (the ids survival_tests takes), with what "
+        "it checks and its options schema (the keys test_options takes).",
+    ),
+    RouteRead(
+        "list_survival_presets",
+        "/api/lab/survival-presets",
+        "The named survival suites (quick, standard, promotion) and the tests in each.",
+    ),
     RouteRead(
         "whoami",
         "/api/auth/me",
@@ -321,6 +334,38 @@ def register(t: ToolContext) -> None:
     async def get_shadow_pnl(strategy_id: str, since: Since = None) -> dict[str, Any]:
         """Daily P&L of one shadow strategy's virtual portfolio."""
         return await t.get(f"/api/shadow/strategies/{seg(strategy_id)}/pnl", {"since": iso(since)})
+
+    @server.tool(annotations=READ)
+    async def get_golive_report(
+        strategy_id: str,
+        since: Annotated[
+            IsoDate | None, Field(description="first day of the paper period; default all")
+        ] = None,
+    ) -> dict[str, Any]:
+        """The go-live gate for one strategy: every check of its paper period
+        (days, trades, drawdown, Sharpe against the backtest, MinTRL, ...)
+        with its value, limit and pass or fail, and the verdict. Read it
+        before promote_strategy: an override skips exactly these checks."""
+        return await t.get(f"/api/strategies/{seg(strategy_id)}/golive", {"since": iso(since)})
+
+    @server.tool(annotations=READ)
+    async def get_schedule(
+        limit: Annotated[int, Field(ge=1, le=200, description="recent runs to show")] = 20,
+    ) -> dict[str, Any]:
+        """The scheduler: each job with its next run and last outcome, the
+        most recent runs (did last night's trading run go?), and the market
+        session today and next (open, close, and whether it is open now)."""
+        return await t.get("/api/schedule", {"limit": limit})
+
+    @server.tool(annotations=READ)
+    async def list_alerts(
+        level: Literal["info", "warning", "error"] | None = None,
+        limit: Limit = 50,
+        offset: Offset = 0,
+    ) -> dict[str, Any]:
+        """System alerts for you, newest first (admins also see operational
+        alerts with no single recipient): failed runs, halts, stale data."""
+        return await t.get("/api/alerts", {"level": level, "limit": limit, "offset": offset})
 
     @server.tool(annotations=READ)
     async def get_health_report(
