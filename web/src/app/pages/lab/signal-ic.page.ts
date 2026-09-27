@@ -51,7 +51,7 @@ import { SignalIcFormView } from './signal-ic-form';
         <div class="panel-body">
           <p class="lead">
             The strategy scores every ticker on each date. We then compare its ranking with the
-            moves that followed. Research only: nothing trades and nothing is registered.
+            moves that followed. Research only: nothing trades and nothing starts paper trading.
           </p>
           @if (classes.error(); as err) {
             <app-error-state

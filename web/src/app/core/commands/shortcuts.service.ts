@@ -13,6 +13,8 @@ export interface KeySequence {
   path?: string;
   /** ...or run the palette command with this id. */
   commandId?: string;
+  /** Off (and left out of the cheat sheet) when this returns false. */
+  visible?: () => boolean;
 }
 
 export const SEQUENCE_WINDOW_MS = 1200;
@@ -46,8 +48,9 @@ export class ShortcutsService {
     this.sequences = sequences;
   }
 
+  /** The sequences this user may use now (hidden pages and actions left out). */
   get allSequences(): readonly KeySequence[] {
-    return this.sequences;
+    return this.sequences.filter((s) => s.visible?.() ?? true);
   }
 
   openPalette(): void {
@@ -93,7 +96,7 @@ export class ShortcutsService {
     const pending = this.pending;
     if (pending && now - pending.at < SEQUENCE_WINDOW_MS) {
       this.pending = null;
-      const seq = this.sequences.find(
+      const seq = this.allSequences.find(
         (s) => s.prefix === pending.prefix && s.key === key.toLowerCase(),
       );
       if (!seq) return false;
@@ -125,7 +128,7 @@ export class ShortcutsService {
       void this.router.navigateByUrl(seq.path);
       return;
     }
-    const command = this.registry.commands().find((c) => c.id === seq.commandId);
+    const command = this.registry.available().find((c) => c.id === seq.commandId);
     void command?.run();
   }
 

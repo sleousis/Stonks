@@ -1,12 +1,7 @@
-import { strategyKindName } from './strategy-format';
+import { STATUS_FILTERS } from './strategy-format';
 
-describe('strategyKindName', () => {
-  it('turns a class path into a readable name', () => {
-    expect(strategyKindName('stonks.strategies.momentum.MomentumStrategy')).toBe(
-      'Momentum strategy',
-    );
-    expect(strategyKindName('BuyAndHold')).toBe('Buy and hold');
-    expect(strategyKindName('x.RSIMeanReversion')).toBe('RSI mean reversion');
-    expect(strategyKindName('x.TSMOM')).toBe('TSMOM');
+describe('STATUS_FILTERS', () => {
+  it('reads All, Live, Paper trading, Stopped (UX-09)', () => {
+    expect(STATUS_FILTERS.map((f) => f.label)).toEqual(['All', 'Live', 'Paper trading', 'Stopped']);
   });
 });

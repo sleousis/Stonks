@@ -94,15 +94,15 @@ describe('describeIngest', () => {
   it('says what will be fetched, from where and from when', () => {
     expect(
       describeIngest({ source: 'eodhd', kind: 'prices', tickers: ['A', 'B'], since: '2026-01-02' }),
-    ).toBe('Fetches prices for 2 tickers (A, B) from eodhd since 2026-01-02 and saves them.');
+    ).toBe('Fetches daily prices for 2 tickers (A, B) from EODHD since 2026-01-02 and saves them.');
   });
 
   it('describes exchange discovery and intraday intervals', () => {
     expect(describeIngest({ source: 'eodhd', kind: 'prices', tickers: [], exchange: 'US' })).toBe(
-      'Fetches prices for every ticker on US from eodhd and saves them.',
+      'Fetches daily prices for every ticker on US from EODHD and saves them.',
     );
     expect(
       describeIngest({ source: 'yahoo', kind: 'intraday', tickers: ['A'], interval: '5m' }),
-    ).toBe('Fetches 5m intraday bars for 1 ticker (A) from yahoo and saves them.');
+    ).toBe('Fetches 5m intraday bars for 1 ticker (A) from Yahoo Finance and saves them.');
   });
 });

@@ -13,6 +13,7 @@ import { NotificationsService } from '../../api/notifications.service';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
+import { ApiError } from '../../core/http/api-error';
 import { PermissionNote } from './permission-note';
 import { ErrorState, LoadingState } from './states';
 
@@ -46,7 +47,7 @@ const ALWAYS_ON = 'inapp';
   template: `
     <section class="panel" aria-labelledby="prefs-title">
       <div class="panel-head">
-        <h2 id="prefs-title">Alert settings</h2>
+        <h3 id="prefs-title">Alert settings</h3>
       </div>
       @if (prefs.error(); as err) {
         <app-error-state
@@ -422,8 +423,15 @@ export class NotificationPrefs {
           'Sent a test notification to the app only. Turn on push on this device, or another channel, to get it elsewhere.',
         );
       }
-    } catch {
-      // The error interceptor already showed the API's message.
+    } catch (err) {
+      // The call is silent, so every answer is worded here.
+      if (err instanceof ApiError && err.status === 429) {
+        this.toasts.info('One test a minute. Wait a moment, then send another.');
+      } else {
+        this.toasts.error(
+          err instanceof ApiError ? err.message : 'Could not send the test notification.',
+        );
+      }
     } finally {
       this.testing.set(false);
     }

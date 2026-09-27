@@ -1,6 +1,8 @@
 # Options
 
-Design for roadmap Phase 17. Stonks has no derivatives today: positions are keyed by ticker, valued at `qty × price`, and every instrument lives in `instruments`.
+Design for roadmap Phase 17. When it was written Stonks had no derivatives: positions were keyed by ticker, valued at `qty × price`, and every instrument lived in `instruments`.
+
+**Status:** stages 1 to 4 are built as research, off by default (roadmap 17.1 to 17.5). Nothing in the tick, the console or MCP trades options. Stage 5 (live) waits for Phase 19. Section 9 lists what changed from this design.
 
 Staging is the main decision: **read-only analytics first** (chains, implied volatility, Greeks, "what would a covered call on my holdings pay"), then backtests, then paper, and live trading last behind its own go-live.
 
@@ -151,3 +153,38 @@ Depends on: shorting's `position_effect` and margin seam (Phase 16) for short le
 1. Which options data vendor, and do we buy history or collect forward only?
 2. Which underlyings to snapshot (size and cost)?
 3. Is QuantLib acceptable as a dependency (large wheel), or py_vollib only and European approximations at first?
+
+## 9. What changed from this design
+
+The build follows the sections above, with these differences.
+
+**Data and vendor.**
+- Vendor: EODHD's US options API. It is a separate Marketplace subscription (about $30 to $40 a month), not part of All-In-One. It covers about 6,000 US underlyings with two years of end-of-day history, bid, ask, last, volume, open interest, implied vol and the five Greeks. Live quotes will come from IBKR (OPRA top of book) with Phase 19.
+- The seam is `DataSource.fetch_option_quotes(underlying, since, until)`, a date range, so one call can load history. `since == until` is one day's chain.
+- `option_quotes` keeps the vendor's IV and Greeks as `vendor_*` columns. There are no `option_analytics` or `vol_surface_points` tables: our own IV and Greeks are computed when needed (`options/analytics.py`). The tables are plain DuckDB tables with indexes. Parquet partitions can come when the size needs them.
+- A synthetic source (`options/synthetic.py`) prices chains from closes for hermetic tests. Its results are never evidence.
+
+**Contracts and valuation.**
+- Contracts are one case of a general `InstrumentSpec` (`core/instruments.py`), the model every instrument uses, with broker ids for the IBKR contract cache. Combo orders are general too (`core/combos.py`).
+- The contract id adds the multiplier only when it is not 100 (`AAPL.US:2026-01-16:C:100:150`). Style and settlement travel with the contract, not in the id.
+- `core/types.py` is unchanged. `Portfolio.total_value` gets no multiplier map. Instead the options ledger hands risk code a portfolio whose option prices are per contract (mark times multiplier), so the equity comes out right.
+- Splits adjust contracts by OCC rules (whole-number splits multiply contracts, other ratios change the deliverable) instead of closing the position.
+
+**Pricing.**
+- The seam is `PricingModel` over plain `PricingInputs` (right, spot, strike, time, rate, dividend yield, vol). `inputs_for` builds them from a contract.
+- QuantLib alone covers every model (question 3): Black-Scholes with a dividend yield, Black-76, Barone-Adesi-Whaley, Bjerksund-Stensland and a binomial tree, plus implied vol. py_vollib is not used.
+- Rates are a flat configured rate and dividends are not yet in the pricing inputs. Treasury curves and dividend schedules are still to come.
+
+**Backtest.**
+- A separate engine, `backtest/options_engine.py`, so the stock backtest and its golden results are untouched.
+- Combos fill against the next day's quotes, not the decision day's (P12).
+- Position groups live in the backtest ledger. There is no SQLite table yet, because nothing trades options on paper or live.
+
+**Risk.**
+- Four rules at order 9: `option_greek_limits`, `option_max_loss`, `option_margin` (Reg T strategy-based or a risk-based estimate) and `short_option_guard` (approval levels 1 to 4, no naked calls, cash-secured puts). Liquidity is a leg selector filter and expiry handling is each strategy's `roll_dte`, not separate rules.
+- The rules read the day's option market from a new `RiskContext.options` field and keep or drop a combo as one unit.
+
+**Strategies and validation.**
+- The volatility strategy sells iron condors when at-the-money implied vol is rich against realized vol. IV rank needs an IV history we do not store yet.
+- Options strategies have their own catalog and are not tuned in the lab. `stonks options backtest --validate` runs the tests that apply to any equity curve: out of sample PSR, deflated Sharpe, wider fills, missing quote days and doubled fees.
+- There are no console pages or MCP tools yet. The CLI is `stonks options ingest|chain|strategies|backtest`.

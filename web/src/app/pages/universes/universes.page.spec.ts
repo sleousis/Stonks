@@ -82,7 +82,7 @@ describe('UniversesPage', () => {
     expect(link).not.toBeNull();
   });
 
-  it('creates a universe from a spec and opens it', async () => {
+  it('creates a universe from its fields and opens it', async () => {
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     button('New universe')!.click();
     fixture.detectChanges();
@@ -95,18 +95,55 @@ describe('UniversesPage', () => {
     kind.value = 'exchange';
     kind.dispatchEvent(new Event('change'));
     fixture.detectChanges();
-    expect(el.querySelector<HTMLTextAreaElement>('#u-spec')!.value).toContain('"exchange"');
+    // Each kind asks for its own fields; JSON is an advanced option.
+    expect(el.querySelector('#u-spec')).toBeNull();
+    expect(el.querySelector<HTMLInputElement>('#u-exchange')!.value).toBe('US');
+    expect(el.textContent).not.toContain('Spec (JSON)');
     // CSV is for lists only.
     expect(el.querySelector('input[name="u-source"]')).toBeNull();
+    type('#u-exchange', 'lse');
+    el.querySelector<HTMLInputElement>('#u-delisted')!.click();
+    fixture.detectChanges();
 
     button('Create universe')!.click();
     const post = await nextRequest(http, '/api/universes', 'POST');
     expect(post.request.body).toMatchObject({ id: 'tech', kind: 'exchange', csv: null });
-    expect(post.request.body.spec).toMatchObject({ exchange: 'US' });
+    expect(post.request.body.spec).toMatchObject({ exchange: 'LSE', include_delisted: false });
     post.flush({ id: 'tech', kind: 'exchange', spec: {} });
     (await nextRequest(http, '/api/universes')).flush(page(UNIVERSES));
     await settle();
     expect(navigate).toHaveBeenCalledWith(['/universes', 'tech']);
+  });
+
+  it('asks for at least one ticker on a list', async () => {
+    button('New universe')!.click();
+    fixture.detectChanges();
+    type('#u-id', 'mine');
+    type('#u-tickers', ' ');
+    button('Create universe')!.click();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Enter at least one ticker.');
+    expect(http.match((r) => r.method === 'POST')).toEqual([]);
+  });
+
+  it('offers the definition as JSON, as an advanced option', async () => {
+    vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    button('New universe')!.click();
+    fixture.detectChanges();
+    type('#u-id', 'raw');
+    type('#u-tickers', 'nvda.us');
+    button('Edit as JSON')!.click();
+    fixture.detectChanges();
+    const spec = el.querySelector<HTMLTextAreaElement>('#u-spec')!;
+    expect(JSON.parse(spec.value)).toMatchObject({ tickers: ['NVDA.US'] });
+    expect(el.querySelector('label[for="u-spec"]')!.textContent).toContain('Definition (JSON)');
+    type('#u-spec', '{"tickers": ["TSLA.US"]}');
+    button('Create universe')!.click();
+    const post = await nextRequest(http, '/api/universes', 'POST');
+    expect(post.request.body.spec).toEqual({ tickers: ['TSLA.US'] });
+    post.flush({ id: 'raw', kind: 'list', spec: {} });
+    (await nextRequest(http, '/api/universes')).flush(page(UNIVERSES));
+    await settle();
   });
 
   it('creates a list universe from an uploaded CSV', async () => {

@@ -16,6 +16,7 @@ from datetime import date
 
 from stonks.core.interval import Interval
 from stonks.ingest.metadata_bundle import MetadataBundle
+from stonks.ingest.option_schemas import OptionQuoteRow
 from stonks.ingest.schemas import (
     DefiTvlRow,
     ExchangeInfo,
@@ -122,6 +123,20 @@ class DataSource(ABC):
         """
         del country_iso, indicator
         return ()
+
+    def fetch_option_quotes(
+        self, underlying: str, since: date | None = None, until: date | None = None
+    ) -> Iterable[OptionQuoteRow]:
+        """End-of-day option quotes of every listed contract on
+        ``underlying`` for the days in ``[since, until]`` (roadmap 17.1).
+        ``since == until`` is one day's chain snapshot.
+
+        Optional capability: the default raises
+        :class:`UnsupportedCapabilityError`."""
+        del since, until
+        raise UnsupportedCapabilityError(
+            f"{self.source_id} does not serve option quotes ({underlying!r})"
+        )
 
     def fetch_chain_tvl(self, chain: str, since: date | None = None) -> Iterable[DefiTvlRow]:
         """Return the daily DeFi total-value-locked series for one chain

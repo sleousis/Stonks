@@ -18,7 +18,8 @@ a daily decision). Then:
   (:attr:`PointInTimeLake.known_through`): statements by
   ``available_date`` (the day after the filing date, since a filing may
   land after the close: usable from the decision bar's start day, daily
-  or intraday), macro prints by their period end plus the publication
+  or intraday) and, per period, the version Stonks had seen by the
+  decision (a restatement seen later stays hidden, DuckDB 018), macro prints by their period end plus the publication
   lag the caller passes (0 by default: a daily close such as the VIX is
   known when its day ends, but a monthly print needs the caller's lag),
   share counts :data:`SHARE_COUNT_LAG_DAYS` after the period date they
@@ -48,6 +49,7 @@ import pandas as pd
 
 from stonks.core.interval import Interval, decision_reach, known_through, visible_cutoff
 from stonks.core.timeutil import as_datetime
+from stonks.store.statement_versions import known_versions
 
 __all__ = ["PitSession", "PointInTimeLake", "PointInTimeViolation"]
 
@@ -253,9 +255,27 @@ class PointInTimeLake:
 
     # ---- statements --------------------------------------------------------------
 
+    def _versioned(self) -> bool:
+        """The lake keeps statement versions (DuckDB 018)."""
+        return callable(getattr(self._lake, "get_statement_versions", None))
+
+    def _versions(self, statement: str, ticker: str, lag: int, python_dates: bool) -> pd.DataFrame:
+        return self._cached(
+            ("statement_versions", statement, ticker, lag, python_dates),
+            lambda: self._lake.get_statement_versions(
+                statement, ticker, missing_filing_lag_days=lag, python_dates=python_dates
+            ),
+        )
+
     def _read_get_statement_history(
         self, statement: str, ticker: str, *, missing_filing_lag_days: int = 90
     ) -> pd.DataFrame:
+        """Per period, the version known at the decision (P12): filed by
+        then, and seen by then unless it is the first version."""
+        if self._versioned():
+            full = self._versions(statement, ticker, missing_filing_lag_days, True)
+            filed = _on_or_before(pd.Series(full["available_date"]), self._filed_by)
+            return known_versions(full, self._reach, filed)
         full = self._cached(
             ("statement_history", statement, ticker, missing_filing_lag_days),
             lambda: self._lake.get_statement_history(
@@ -268,11 +288,23 @@ class PointInTimeLake:
         self, statement: str, ticker: str, as_of: Any, **kwargs: Any
     ) -> pd.DataFrame:
         day = self._filed_by if as_of is None else min(_day(as_of), self._filed_by)
+        if self._versioned():
+            kwargs["known_by"] = min(self._reach, as_datetime(day + timedelta(days=1)))
         return self._lake.get_statements_as_of(statement, ticker, day, **kwargs)
 
     def _statement(self, table: str, ticker: str) -> pd.DataFrame:
         """Rows filed before the decision day: a filing is used from the
-        day after it (BE-22)."""
+        day after it (BE-22). Each period reads the version known then."""
+        if self._versioned():
+            full = self._versions(table, ticker, 90, False)
+            filed = _on_or_before(
+                pd.Series(full["filing_date"]), self._filed_by - timedelta(days=1)
+            )
+            picked = known_versions(full, self._reach, filed).drop(columns=["available_date"])
+            picked = picked.sort_values(
+                ["period_end", "frequency"], ascending=[False, True], kind="stable"
+            )
+            return picked.reset_index(drop=True)
         full = self._cached((table, ticker), lambda: getattr(self._lake, f"get_{table}")(ticker))
         return _rows(full, _on_or_before(full["filing_date"], self._filed_by - timedelta(days=1)))
 

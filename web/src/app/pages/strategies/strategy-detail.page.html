@@ -1,11 +1,14 @@
-<app-page-header [title]="id()" [description]="description()">
+<app-page-header [title]="displayName()" [description]="description()">
+  @if (detail()?.status === 'active' && realMoney()) {
+    <p class="title-stamp"><app-mode-stamp [live]="true" /> Trades real money</p>
+  }
   @for (a of actions(); track a.key) {
     <button
       actions
       type="button"
       class="btn"
-      [class.btn-primary]="a.key === 'live'"
-      [class.btn-danger]="a.key === 'stop'"
+      [class.btn-primary]="a.primary"
+      [class.btn-danger]="a.danger"
       [disabled]="busy() !== null || !canPromote()"
       [attr.aria-busy]="busy() === a.key"
       (click)="run(a.key)"
@@ -42,8 +45,7 @@
     [strategyId]="s.id"
     [status]="s.status"
     [golivePassed]="golivePassed()"
-    [canGoLive]="canPromote() && busy() === null"
-    (goLive)="run('live')"
+    [report]="goliveReport()"
   />
 
   <div class="page-grid">
@@ -162,6 +164,7 @@
             <span class="class-name">{{ kindName() }}</span>
             <details class="tech">
               <summary>Technical details</summary>
+              <span class="class-path">Id {{ s.id }}</span>
               <span class="class-path">{{ s.class_path }}</span>
             </details>
           </dd>
@@ -179,7 +182,7 @@
           </dd>
         </div>
         <div>
-          <dt>Registered</dt>
+          <dt>Added</dt>
           <dd class="num">{{ date(s.created_at) }}</dd>
         </div>
         <div>
@@ -243,7 +246,7 @@
         <dl class="params">
           @for (p of params(); track p.key) {
             <div>
-              <dt>{{ p.key }}</dt>
+              <dt [title]="p.key">{{ p.label }}</dt>
               <dd class="num">{{ p.value }}</dd>
             </div>
           }
@@ -312,18 +315,18 @@
       }
     </section>
 
-    <!-- Survival reports -------------------------------------------------->
+    <!-- Robustness tests -------------------------------------------------->
     <section class="panel span-12" aria-labelledby="survival-title">
       <div class="panel-head">
-        <h2 id="survival-title">Survival reports</h2>
+        <h2 id="survival-title">Robustness tests</h2>
         @if (reportSummary(); as sum) {
           <app-status-pill [status]="sum.allPassed ? 'pass' : 'fail'" [label]="sum.label" />
         }
       </div>
       @if (s.survival_reports.length === 0) {
         <app-empty-state
-          title="No survival reports"
-          message="Reports are written when a lab run tests this strategy (out of sample, period stability, perturbation, drift). Re-run it in Lab to add them."
+          title="No robustness tests yet"
+          message="Results are saved when a Lab run tests this strategy (out of sample, period stability, perturbation, drift). Re-run it in Lab to add them."
         >
           <a routerLink="/lab" [queryParams]="{ strategy: s.id }" class="btn">Re-run in Lab</a>
         </app-empty-state>

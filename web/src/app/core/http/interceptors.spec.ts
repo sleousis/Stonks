@@ -131,7 +131,7 @@ describe('HTTP interceptors', () => {
         );
       await expect(result).rejects.toBeTruthy();
       expect(error).toHaveBeenCalledWith(
-        'missing or invalid bearer token. Sign in, or enter an API token in Settings.',
+        'missing or invalid bearer token. Sign in again.',
         'Unauthorized',
       );
     });

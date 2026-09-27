@@ -4,7 +4,8 @@ import { Router } from '@angular/router';
 import { catchError, from, switchMap, throwError } from 'rxjs';
 
 import { toApiError } from '../http/api-error';
-import { isApiRequest } from '../http/interceptors';
+import { isApiRequest, quietError } from '../http/interceptors';
+import { AuthTokenService } from './auth-token.service';
 import { SessionService } from './session.service';
 import { StepUpService } from './step-up.service';
 
@@ -29,7 +30,9 @@ function pathOf(url: string): string {
  *   the session cookie (not when an API token is sent instead);
  * - 401 `mfa_required`: the second factor is missing, go to the code screen;
  * - 401 on a session that was signed in: it expired, go to sign-in;
- * - 403 `step_up_required`: ask for a fresh code, then retry once.
+ * - 401 with the tab's API token: it was revoked, forget it and go to sign-in;
+ * - 403 `step_up_required`: ask for a fresh code, then retry once (a
+ *   cancelled prompt fails quietly, without an error toast).
  *
  * Registered after the error interceptor, so it sees failures first and a
  * step-up that succeeds is never toasted.
@@ -48,14 +51,34 @@ export const sessionInterceptor: HttpInterceptorFn = (req, next) => {
 
   return next(withCsrf(req)).pipe(
     catchError((err: unknown) => {
-      if (!(err instanceof HttpErrorResponse) || bearer || SELF_HANDLED.test(pathOf(req.url))) {
+      if (!(err instanceof HttpErrorResponse) || SELF_HANDLED.test(pathOf(req.url))) {
         return throwError(() => err);
       }
-      const code = toApiError(err).code;
+
+      if (bearer) {
+        // The tab's API token was revoked or expired (UX-39): forget it and sign in.
+        const tokens = injector.get(AuthTokenService);
+        const tabToken = tokens.token();
+        if (
+          err.status === 401 &&
+          tabToken &&
+          req.headers.get('Authorization') === `Bearer ${tabToken}`
+        ) {
+          tokens.clear();
+          session.markSignedOut();
+          const router = injector.get(Router);
+          void router.navigate(['/login'], { queryParams: { next: router.url } });
+        }
+        return throwError(() => err);
+      }
+
+      const apiError = toApiError(err);
+      const code = apiError.code;
 
       if (err.status === 403 && code === 'step_up_required' && !SAFE_METHODS.has(req.method)) {
         return from(injector.get(StepUpService).prompt()).pipe(
-          switchMap((ok) => (ok ? next(withCsrf(req)) : throwError(() => err))),
+          // Cancelled: the trader knows, so no error toast on top (UX-38).
+          switchMap((ok) => (ok ? next(withCsrf(req)) : throwError(() => quietError(err)))),
         );
       }
 
@@ -63,7 +86,7 @@ export const sessionInterceptor: HttpInterceptorFn = (req, next) => {
         const router = injector.get(Router);
         const here = router.url;
         if (code === 'mfa_required') {
-          session.markMfaPending();
+          session.markMfaPending(apiError.nextStep);
           void router.navigate(['/login'], { queryParams: { step: 'code', next: here } });
         } else if (session.status() === 'signed-in') {
           session.markSignedOut();

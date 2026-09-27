@@ -59,6 +59,29 @@ describe('AlertsPanel', () => {
     expect(el.textContent).toContain('3 to 3 of 3');
   });
 
+  it('rows stay while the next page loads', async () => {
+    await flush({ items: [ALERT, { ...ALERT, id: 2 }], total: 3, limit: 2, offset: 0 });
+    const el = fixture.nativeElement as HTMLElement;
+    const older = [...el.querySelectorAll('button')].find((b) => b.textContent?.includes('Older'))!;
+    older.click();
+    fixture.detectChanges();
+    await tick();
+    fixture.detectChanges();
+    expect(el.querySelectorAll('.alerts li').length).toBe(2);
+    expect(el.querySelector('app-loading-state')).toBeNull();
+    expect(el.querySelector('.alerts')?.getAttribute('aria-busy')).toBe('true');
+    await flush({ items: [{ ...ALERT, id: 3 }], total: 3, limit: 2, offset: 2 });
+    expect(el.querySelectorAll('.alerts li').length).toBe(1);
+    expect(el.querySelector('.alerts')?.getAttribute('aria-busy')).toBe('false');
+  });
+
+  it('reloads on demand', async () => {
+    await flush({ items: [ALERT], total: 1, limit: 2, offset: 0 });
+    fixture.componentInstance.reload();
+    await flush({ items: [], total: 0, limit: 2, offset: 0 });
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('No alerts');
+  });
+
   it('explains what lands here when there are none', async () => {
     await flush({ items: [], total: 0, limit: 2, offset: 0 });
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('No alerts');

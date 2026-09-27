@@ -22,10 +22,14 @@ from stonks.production.rules.liquidity import LiquiditySettings
 from stonks.production.rules.margin_call import MarginCallSettings
 from stonks.production.rules.max_holding import MaxHoldingSettings
 from stonks.production.rules.operational_halt import OperationalHaltSettings
+from stonks.production.rules.option_greek_limits import OptionGreekLimitsSettings
+from stonks.production.rules.option_margin import OptionMarginSettings
+from stonks.production.rules.option_max_loss import OptionMaxLossSettings
 from stonks.production.rules.portfolio_vol import PortfolioVolSettings
 from stonks.production.rules.risk_per_position import RiskPerPositionSettings
 from stonks.production.rules.sector_cap import SectorCapSettings
 from stonks.production.rules.short_caps import ShortCapsSettings
+from stonks.production.rules.short_option_guard import ShortOptionGuardSettings
 from stonks.production.rules.squeeze_guard import SqueezeGuardSettings
 
 __all__ = [
@@ -38,11 +42,15 @@ __all__ = [
     "MaxHoldingSettings",
     "NetExposureSettings",
     "OperationalHaltSettings",
+    "OptionGreekLimitsSettings",
+    "OptionMarginSettings",
+    "OptionMaxLossSettings",
     "PortfolioVolSettings",
     "RiskPerPositionSettings",
     "RuleSettings",
     "SectorCapSettings",
     "ShortCapsSettings",
+    "ShortOptionGuardSettings",
     "SqueezeGuardSettings",
     "merge_schedules",
     "tighter_rule_settings",
@@ -67,6 +75,11 @@ class RuleSettings(BaseModel):
     net_exposure: NetExposureSettings = NetExposureSettings()
     short_caps: ShortCapsSettings = ShortCapsSettings()
     borrow_check: BorrowCheckSettings = BorrowCheckSettings()
+    # Options (roadmap 17.4), every one off by default.
+    option_greek_limits: OptionGreekLimitsSettings = OptionGreekLimitsSettings()
+    option_max_loss: OptionMaxLossSettings = OptionMaxLossSettings()
+    option_margin: OptionMarginSettings = OptionMarginSettings()
+    short_option_guard: ShortOptionGuardSettings = ShortOptionGuardSettings()
 
 
 def _min_optional(a: float | None, b: float | None) -> float | None:
@@ -153,6 +166,23 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
     "net_exposure": {"min_net": _max_optional, "max_net": _min_optional},
     "short_caps": {"max_short_weight": _min_optional, "max_short_total": _min_optional},
     "borrow_check": {"enabled": _either, "max_borrow_fee": _min_optional, "borrow": _keep_base},
+    "option_greek_limits": {
+        "max_dollar_delta": _min_optional,
+        "max_dollar_gamma": _min_optional,
+        "max_vega": _min_optional,
+        "max_theta": _min_optional,
+        "max_position_dollar_delta": _min_optional,
+        "max_position_vega": _min_optional,
+    },
+    "option_max_loss": {"max_loss_per_group": _min_optional, "max_loss_total": _min_optional},
+    "option_margin": {"enabled": _either, "method": _keep_base, "cash_buffer": max},
+    "short_option_guard": {
+        "enabled": _either,
+        "approval_level": min,
+        "cash_secured": _either,
+        "min_dte": max,
+        "max_short_contracts": _min_optional,
+    },
 }
 
 

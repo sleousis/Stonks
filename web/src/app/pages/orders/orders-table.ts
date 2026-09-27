@@ -80,7 +80,8 @@ export class OrdersTable {
     { key: 'status', label: 'Status' },
     { key: 'strategy_id', label: 'Strategy' },
     { key: 'tick_id', label: 'Run', sortable: false, mobile: 'hide' },
-    { key: 'created_at', label: 'Created', format: 'datetime', mobile: 'hide' },
+    // Phones keep the time an order was placed (UX-57); Limit goes instead.
+    { key: 'created_at', label: 'Created', format: 'datetime' },
   ];
   /** Inside a run's own drill-down the run column would point to itself. */
   protected readonly columns = computed(() =>

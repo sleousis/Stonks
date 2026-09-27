@@ -77,8 +77,8 @@ describe('TcaSummary', () => {
 
   it('asks for another grouping when the switch changes', async () => {
     await flushSummaries('strategy');
-    const byTicker = Array.from(el.querySelectorAll<HTMLInputElement>('input[type=radio]')).find(
-      (i) => i.value === 'ticker',
+    const byTicker = Array.from(el.querySelectorAll<HTMLButtonElement>('[role=radio]')).find(
+      (b) => b.textContent?.trim() === 'By ticker',
     )!;
     byTicker.click();
     fixture.detectChanges();

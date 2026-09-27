@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
   resource,
   signal,
@@ -22,7 +23,17 @@ import { STEP_COPY, progressText } from '../welcome/welcome-steps';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink],
   template: `
-    @if (view(); as v) {
+    @if (reserve()) {
+      <!-- While the guide loads, hold its place so Today does not jump. -->
+      <div class="setup reserve" aria-hidden="true">
+        <div class="text">
+          <span class="h2">&nbsp;</span>
+          <span class="line">&nbsp;</span>
+          <span class="ticks-bar"></span>
+        </div>
+        <div class="actions"><span class="btn">&nbsp;</span></div>
+      </div>
+    } @else if (view(); as v) {
       <section class="setup" aria-labelledby="setup-title">
         <div class="text">
           <h2 id="setup-title">Finish setting up</h2>
@@ -102,6 +113,20 @@ import { STEP_COPY, progressText } from '../welcome/welcome-steps';
       flex-wrap: wrap;
       gap: var(--space-2);
     }
+    .reserve {
+      visibility: hidden;
+    }
+    .reserve .h2 {
+      font-size: var(--text-lg);
+    }
+    .reserve .line {
+      font-size: var(--text-sm);
+    }
+    .reserve .ticks-bar {
+      display: block;
+      height: 4px;
+      margin-top: var(--space-1);
+    }
   `,
 })
 export class SetupCard {
@@ -119,6 +144,19 @@ export class SetupCard {
     },
   });
   protected readonly hiding = signal(false);
+  /** The guide showed last time on this device (per person), so hold its place. */
+  private readonly lastShown = computed(() => readShown(this.session.me()?.user_id));
+  protected readonly reserve = computed(
+    () => this.guide.isLoading() && !this.guide.hasValue() && this.lastShown(),
+  );
+
+  constructor() {
+    effect(() => {
+      const id = this.session.me()?.user_id;
+      if (!id || !this.guide.hasValue()) return;
+      writeShown(id, this.guide.value()?.show === true);
+    });
+  }
 
   protected readonly view = computed(() => {
     const v = this.guide.hasValue() ? this.guide.value() : null;
@@ -142,5 +180,25 @@ export class SetupCard {
     } finally {
       this.hiding.set(false);
     }
+  }
+}
+
+const SHOWN_KEY = 'stonks.setupShown.';
+
+/** Unknown counts as shown: a new trader sees the guide. */
+function readShown(userId: string | undefined): boolean {
+  if (!userId) return false;
+  try {
+    return localStorage.getItem(SHOWN_KEY + userId) !== '0';
+  } catch {
+    return true;
+  }
+}
+
+function writeShown(userId: string, shown: boolean): void {
+  try {
+    localStorage.setItem(SHOWN_KEY + userId, shown ? '1' : '0');
+  } catch {
+    // Storage blocked: Today may shift once when the guide loads.
   }
 }

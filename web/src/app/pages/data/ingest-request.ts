@@ -1,4 +1,5 @@
 import type { IngestRequest } from '../../api/models';
+import { KIND_LABELS, kindLabel, sourceLabel } from './data-labels';
 
 export type IngestKind = IngestRequest['kind'];
 /**
@@ -7,12 +8,12 @@ export type IngestKind = IngestRequest['kind'];
  */
 export type IngestSource = string;
 
-export const INGEST_KINDS: readonly { value: IngestKind; label: string }[] = [
-  { value: 'prices', label: 'Daily prices' },
-  { value: 'intraday', label: 'Intraday bars' },
-  { value: 'fundamentals', label: 'Fundamentals' },
-  { value: 'metadata', label: 'Metadata' },
-];
+const FORM_KINDS: readonly IngestKind[] = ['prices', 'intraday', 'fundamentals', 'metadata'];
+
+/** The kinds the Update data form offers, in trader words. */
+export const INGEST_KINDS: readonly { value: IngestKind; label: string }[] = FORM_KINDS.map(
+  (value) => ({ value, label: KIND_LABELS[value] }),
+);
 
 /** Raw form state: every field a string, as the inputs hold it. */
 export interface IngestFormValue {
@@ -85,7 +86,10 @@ const MAX_LISTED = 5;
 
 /** One sentence for the confirm dialog: what, for which tickers, from where and when. */
 export function describeIngest(r: IngestRequest): string {
-  const what = r.kind === 'intraday' ? `${r.interval ?? ''} intraday bars`.trim() : r.kind;
+  const what =
+    r.kind === 'intraday'
+      ? `${r.interval ?? ''} intraday bars`.trim()
+      : kindLabel(r.kind).toLowerCase();
   const tickers = r.tickers ?? [];
   let scope: string;
   if (tickers.length) {
@@ -96,5 +100,5 @@ export function describeIngest(r: IngestRequest): string {
     scope = `every ticker on ${r.exchange}`;
   }
   const range = (r.since ? ` since ${r.since}` : '') + (r.until ? ` until ${r.until}` : '');
-  return `Fetches ${what} for ${scope} from ${r.source ?? 'eodhd'}${range} and saves them.`;
+  return `Fetches ${what} for ${scope} from ${sourceLabel(r.source ?? 'eodhd')}${range} and saves them.`;
 }

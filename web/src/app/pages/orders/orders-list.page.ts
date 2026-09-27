@@ -59,7 +59,7 @@ const PAGE_SIZE = 50;
           <input
             id="f-strategy"
             class="input"
-            placeholder="Strategy id"
+            placeholder="Any strategy"
             [value]="strategy() ?? ''"
             (change)="setFilter('strategy', $any($event.target).value)"
           />
@@ -69,7 +69,7 @@ const PAGE_SIZE = 50;
           <input
             id="f-tick"
             class="input"
-            placeholder="Run id"
+            placeholder="Any run"
             [value]="tick() ?? ''"
             (change)="setFilter('tick', $any($event.target).value)"
           />

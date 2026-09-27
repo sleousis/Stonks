@@ -2,13 +2,14 @@
   title="Schedule and backups"
   description="The jobs that run the daily loop, and backups of the stores."
 >
+  <app-updated-ago [at]="auto.updatedAt()" />
   <button
     actions
     type="button"
     class="btn"
     [disabled]="schedule.isLoading() || backups.isLoading()"
     [attr.aria-busy]="schedule.isLoading() || backups.isLoading()"
-    (click)="schedule.reload(); backups.reload()"
+    (click)="auto.refresh()"
   >
     {{ schedule.isLoading() || backups.isLoading() ? 'Refreshing…' : 'Refresh' }}
   </button>
@@ -70,7 +71,7 @@
             class="btn"
             [disabled]="running() === j.name"
             [attr.aria-busy]="running() === j.name"
-            [attr.aria-label]="'Run ' + jobName(j.name) + ' now'"
+            [attr.aria-label]="'Run now: ' + jobName(j)"
             (click)="runNow(j)"
           >
             Run now
@@ -128,10 +129,10 @@
       </div>
     </div>
     @if (backupRun(); as run) {
-      <app-job-progress label="Backup" [handle]="run" />
+      <app-job-progress label="Backup" [handle]="run" [result]="backedUp" />
     }
     @if (restoreRun(); as run) {
-      <app-job-progress label="Restore" [handle]="run" />
+      <app-job-progress label="Restore" [handle]="run" [result]="restored" />
     }
     @if (verified(); as v) {
       <div class="outcome" role="status" [attr.data-ok]="v.ok">
@@ -151,7 +152,7 @@
         }
       </div>
     }
-    @if (restored(); as r) {
+    @if (restored.value(); as r) {
       <div class="outcome" role="status" data-ok="true">
         <p>
           <strong>Restored backup {{ r.backup_id }} into a new folder.</strong> The live data was

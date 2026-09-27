@@ -42,7 +42,9 @@ export const routes: Routes = [
   { path: 'lab', loadChildren: () => import('./pages/lab/lab.routes') },
   { path: 'data', loadChildren: () => import('./pages/data/data.routes') },
   { path: 'orders', loadChildren: () => import('./pages/orders/orders.routes') },
-  { path: 'shadow', loadChildren: () => import('./pages/shadow/shadow.routes') },
+  // The Paper trading page (UX-09). Old /shadow links land on it.
+  { path: 'paper', loadChildren: () => import('./pages/shadow/shadow.routes') },
+  { path: 'shadow', redirectTo: 'paper' },
   { path: 'go-live', loadChildren: () => import('./pages/go-live/go-live.routes') },
   { path: 'health', loadChildren: () => import('./pages/health/health.routes') },
   { path: 'settings', loadChildren: () => import('./pages/settings/settings.routes') },

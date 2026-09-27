@@ -18,6 +18,7 @@ import { NotificationFeedService, appLink } from '../../core/notify/notification
 import { ToastService } from '../../core/notify/toast.service';
 import { levelPill } from '../../shared/ui/alerts-panel';
 import { PermissionNote } from '../../shared/ui/permission-note';
+import { Segmented, type SegmentOption } from '../../shared/ui/segmented';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 
@@ -45,7 +46,15 @@ export function categoryLabel(category: string | null): string {
 @Component({
   selector: 'app-notification-feed',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, StatusPill, PermissionNote, LoadingState, EmptyState, ErrorState],
+  imports: [
+    RouterLink,
+    Segmented,
+    StatusPill,
+    PermissionNote,
+    LoadingState,
+    EmptyState,
+    ErrorState,
+  ],
   template: `
     <section class="panel" aria-labelledby="feed-title">
       <div class="panel-head head">
@@ -56,24 +65,12 @@ export function categoryLabel(category: string | null): string {
           }
         </h2>
         <div class="tools">
-          <div class="filter" role="group" aria-label="Show">
-            <button
-              type="button"
-              class="btn btn-ghost"
-              [attr.aria-pressed]="!unreadOnly()"
-              (click)="unreadOnly.set(false)"
-            >
-              All
-            </button>
-            <button
-              type="button"
-              class="btn btn-ghost"
-              [attr.aria-pressed]="unreadOnly()"
-              (click)="unreadOnly.set(true)"
-            >
-              Unread only
-            </button>
-          </div>
+          <app-segmented
+            label="Show"
+            [options]="filters"
+            [value]="show()"
+            (valueChange)="setShow($event)"
+          />
           <button
             type="button"
             class="btn"
@@ -100,7 +97,7 @@ export function categoryLabel(category: string | null): string {
             title="Nothing unread"
             message="You are all caught up. Choose All to see older notifications."
           >
-            <button type="button" class="btn" (click)="unreadOnly.set(false)">Show all</button>
+            <button type="button" class="btn" (click)="setShow('all')">Show all</button>
           </app-empty-state>
         } @else {
           <app-empty-state
@@ -190,21 +187,6 @@ export function categoryLabel(category: string | null): string {
       flex-wrap: wrap;
       gap: var(--space-2);
     }
-    .filter {
-      display: inline-flex;
-      border: 1px solid var(--color-border-strong);
-      border-radius: var(--radius-sm);
-      overflow: hidden;
-    }
-    .filter .btn {
-      border: 0;
-      border-radius: 0;
-    }
-    .filter .btn[aria-pressed='true'] {
-      background: var(--color-surface-3);
-      color: var(--color-ink);
-      font-weight: var(--weight-semibold);
-    }
     .note-row {
       padding: 0 var(--space-4);
     }
@@ -286,7 +268,14 @@ export class NotificationFeed {
   private readonly session = inject(SessionService);
   private readonly toasts = inject(ToastService);
 
-  protected readonly unreadOnly = signal(false);
+  protected readonly filters: readonly SegmentOption<'all' | 'unread'>[] = [
+    { value: 'all', label: 'All' },
+    { value: 'unread', label: 'Unread only' },
+  ];
+  protected readonly show = signal<'all' | 'unread'>('all');
+  protected readonly unreadOnly = computed(() => this.show() === 'unread');
+  /** Bumped when the filter changes, so an older page from the last filter is dropped (UX-33). */
+  private filterEpoch = 0;
   protected readonly feed = resource({
     params: () => ({ unread_only: this.unreadOnly(), limit: FEED_PAGE }),
     loader: ({ params }) => this.api.feed(params),
@@ -312,6 +301,12 @@ export class NotificationFeed {
     });
   }
 
+  protected setShow(value: 'all' | 'unread'): void {
+    if (value === this.show()) return;
+    this.filterEpoch += 1;
+    this.show.set(value);
+  }
+
   protected link(n: FeedItemView): string | null {
     return appLink(n.deep_link);
   }
@@ -327,6 +322,7 @@ export class NotificationFeed {
   protected async loadOlder(): Promise<void> {
     const last = this.items().at(-1);
     if (!last) return;
+    const epoch = this.filterEpoch;
     this.loadingMore.set(true);
     try {
       const page = await this.api.feed({
@@ -334,6 +330,7 @@ export class NotificationFeed {
         limit: FEED_PAGE,
         before_id: last.id,
       });
+      if (epoch !== this.filterEpoch) return;
       this.items.update((items) => [...items, ...page.items]);
       this.hasMore.set(page.items.length >= FEED_PAGE);
       this.counter.set(page.unread_count);

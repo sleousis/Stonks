@@ -5,6 +5,7 @@ import type { JournalEntryView } from '../../api/models';
 import { TcaService } from '../../api/tca.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
+import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { SideTag } from '../../shared/ui/side-tag';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
@@ -31,25 +32,27 @@ export const JOURNAL_PAGE_SIZE = 25;
     <section class="panel" aria-labelledby="journal-title">
       <div class="panel-head">
         <h2 id="journal-title">Trade journal</h2>
-        @if (journal.hasValue() && journal.value().total > 0) {
-          <span class="muted num">{{ journal.value().total }} orders</span>
+        @if (latest(); as p) {
+          @if (p.total > 0) {
+            <span class="muted num">{{ p.total }} orders</span>
+          }
         }
       </div>
 
+      @let page = latest();
       @if (journal.error(); as err) {
         <app-error-state
           title="Could not load the journal"
           [error]="err"
           (retry)="journal.reload()"
         />
-      } @else if (!journal.hasValue()) {
+      } @else if (!page) {
         <app-loading-state label="Loading the journal" [rows]="6" />
-      } @else if (journal.value().items.length === 0) {
+      } @else if (page.items.length === 0) {
         <app-empty-state title="No trades yet" message="Costs appear after the first filled order.">
           <a class="btn" routerLink="/orders">See orders</a>
         </app-empty-state>
       } @else {
-        @let page = journal.value();
         <app-data-table
           caption="Trade journal, newest first. Open an order for its costs and notes."
           [rows]="page.items"
@@ -58,6 +61,7 @@ export const JOURNAL_PAGE_SIZE = 25;
           [total]="page.total"
           [offset]="page.offset"
           [pageSize]="pageSize"
+          [busy]="journal.isLoading()"
           (pageChange)="offset.set($event.offset)"
         >
           <ng-template appCell="ticker" [appCellOf]="page.items" let-o>
@@ -86,6 +90,8 @@ export class TradeJournal {
     params: () => ({ offset: this.offset(), portfolio: this.ctx.selectedId() }),
     loader: ({ params }) => this.tca.journal({ limit: JOURNAL_PAGE_SIZE, offset: params.offset }),
   });
+  /** The last page stays on screen, dimmed, while the next loads (UX-35). */
+  protected readonly latest = keepLatest(this.journal);
 
   protected readonly columns: TableColumn<JournalEntryView>[] = [
     { key: 'ticker', label: 'Order', mobile: 'title' },

@@ -135,7 +135,7 @@ About 60 trading books from three reading lists and the Axon "100 books" series,
 - Wave 2: done. The tick runs its books through the shared pipeline; backtests use it only when `BacktestConfig.construction` is set, which the lab and API don't do yet.
 - Wave 3: done. The rules are set under `[production.risk.rules.*]`, the circuit breaker and operational halt are off by default, and the quit rule alerts after every tick (`[production.quit_rule]`). Halts are listed and cleared with `stonks halts`. The lab runs the data preflight before tuning, and `stonks audit statements` checks the statements (also after `stonks ingest fundamentals`). 9.3.4 records the decision price and context on every order and reports implementation shortfall and the trade journal with `stonks tca`, `/api/tca` and MCP tools. Round trips with MAE and MFE in the journal are not built yet.
 - Wave 4: done. 9.4.1 to 9.4.4 (`quant_momentum`, `stocks_on_the_move` with `atr_parity`, `ewmac_trend`, `tsmom`, `ath_trend`, `TrailingStopWrapper`, `quant_value`), 9.4.5 (`RegimeFilter`) and 9.4.6 (legacy defaults and metadata backfill).
-- Wave 5: 9.5.1 done. The `hrp`, `erc` and `mean_variance_costs` constructors, four covariance estimators and the effective number of bets are in `portfolio/`. They read `returns_history`, which the tick and the backtest don't fill yet, so today they fall back to each name's own volatility.
+- Wave 5: 9.5.1 done. The `hrp`, `erc` and `mean_variance_costs` constructors, four covariance estimators and the effective number of bets are in `portfolio/`. The tick and the backtest fill `returns_history` with daily returns of adjusted closes up to the decision, read through the point-in-time view once per decision (`portfolio/returns.py`). The lookback is the constructor's `lookback` setting. Volumes reach `mean_variance_costs`, so its impact term works. Books on `single_winner` and the other constructors load nothing new. Restated statements are versioned (DuckDB `018`), so a restatement Stonks saw after a decision stays hidden from it (P12).
 - Wave 5: 9.5.4 done. After each real tick the `risk_monitor` hook writes daily VaR and ES per portfolio and per strategy sleeve to `risk_snapshots` (SQLite `019`), with the violation ratio, a Kupiec test and the alpha-decay check. Alerts go to the portfolio owner, `health` warns on a bad violation ratio, and `/api/risk/live`, `/api/risk/snapshots` and two MCP tools read them. The `pool_correlation` survival test is in the registry but in no preset yet. The monitor reads `[production.risk_monitor]` and `[production.decay]`. `registry audit` with BH is not built.
 - Wave 5: 9.5.2 done. Purged and combinatorial purged k-fold and `CVObjective` (`lab/cv.py`), the `cpcv` test (in `promotion`), `LabDataset.train_segments`, the triple-barrier and uniqueness toolkit (`features/labels.py`), bet sizing and sample weights (`features/ml.py`). `trendline_meta_label` fits each CV segment separately, weights trades by uniqueness, reports a purged CV score and trades above the barriers' break-even probability. The lab objectives `cv_sharpe`, `cv_cagr` and `cv_final_return` tune on purged folds through `CVObjective` (CLI, API, MCP and the Lab page).
 - Wave 5: 9.5.3 done. `MarkovSwitchingRegime` (statsmodels, wrapped, with our own Hamilton filter) in `features/regimes.py`, the `latent_regime_filter` wrapper, the `vix_term_structure` condition (`features/regime_vix.py`) and Yahoo's `vix_spot` and `vix_3m` macro series.
@@ -345,15 +345,15 @@ Every trader gets a simple experience: connect a broker for insights, pick strat
 
 ## Phase 17: Options
 
-**Status:** planned. Design: `docs/design/options.md`.
+**Status:** 17.1 to 17.5 done as research, off by default. Nothing in the tick, the console or MCP trades options. Design and what changed from it: `docs/design/options.md`. Still open: live options through Interactive Brokers (after Phase 19), options in the console and MCP, Treasury rates and dividends in pricing, and a paid chain history for real validation.
 
 | WP | Scope |
 |----|-------|
-| 17.1 Instruments and data | An option contract model (underlying, expiry, strike, right, multiplier) and an options chain data source behind the `DataSource` seam, with daily chain snapshots in the lake. Stage 1 with 17.2 is read-only analytics; nothing trades options until 17.3 to 17.5. |
-| 17.2 Pricing and Greeks | Black-Scholes and implied volatility through a maintained library (for example py_vollib or QuantLib), wrapped behind a seam; volatility surface basics. |
-| 17.3 Backtesting options | Fills on option prices, expiry and assignment handling, early exercise rules, and multi-leg positions. |
-| 17.4 Risk for options | Greek limits (delta, gamma, vega), max loss per spread, and margin. |
-| 17.5 Options strategies | Covered calls, cash-secured puts, protective puts, vertical spreads, and volatility strategies from the book research (Sinclair, Natenberg). |
+| 17.1 Instruments and data | Done. `core/options.py` holds the contract (underlying, expiry, strike, right, multiplier, style, settlement), its canonical id, OCC symbols and the OCC split adjustment. Lake migration 017 adds `option_contracts` and `option_quotes` with the vendor's IV and Greeks. The EODHD Marketplace options API sits behind `DataSource.fetch_option_quotes`, and a synthetic source is the hermetic test path. `stonks options ingest` fills the lake. |
+| 17.2 Pricing and Greeks | Done. A `PricingModel` seam over QuantLib: Black-Scholes with a dividend yield, Black-76, and the Barone-Adesi-Whaley, Bjerksund-Stensland and binomial American models. Implied vol that cannot be solved is empty, never a guess. A basic volatility surface interpolates the smile and total variance. |
+| 17.3 Backtesting options | Done. A separate options backtest (`backtest/options_engine.py`): an options ledger with multipliers and position groups, fills from the next day's quotes with a spread share, all-or-none combo orders, expiry with exercise by exception, physical and cash settlement, early assignment through an `AssignmentModel` with risk flags, and split and dividend handling. |
+| 17.4 Risk for options | Done. Portfolio and position Greeks, max loss of any structure, Reg T strategy-based and risk-based margin (`options/risk.py`), and four registered rules, all off: `option_greek_limits`, `option_max_loss`, `option_margin` and `short_option_guard`. They check a combo as one unit. |
+| 17.5 Options strategies | Done. `covered_call`, `cash_secured_put` (with the wheel), `protective_put`, `vertical_spread` and `vol_premium_condor`, each with a hypothesis, built from a structure registry and a leg selector. `stonks options backtest --validate` runs the survival tests that apply: out of sample PSR, deflated Sharpe, wider fills, missing quote days and doubled fees. |
 
 ## Phase 18: Review, polish and prove it
 
@@ -396,8 +396,10 @@ CI enforces each gate at today's value where it is still below the target, so it
 | Property tests (Hypothesis) | every money-path invariant | orders, ledger, fills, costs, risk rules, price adjustment | `tests/property/`, derandomized in CI (`HYPOTHESIS_PROFILE=deep` for 5000 examples) |
 | Surviving mutants on the money paths | under 10% | 19.8% over six targets (the risk rules still to run in full) | `tools/mutation.py`, weekly and manual (`.github/workflows/mutation.yml`) |
 | Ruff | no ignore without a comment | met | `[tool.ruff.lint]`, every ignore says why |
-| End to end, desktop and 375px phone | every journey passes | 26 passed (13 per viewport), 0 xfail, no known app issue | `uv run pytest -m e2e tests/e2e`, `.github/workflows/e2e.yml` |
+| End to end, desktop and 375px phone | every journey passes | 40 passed (20 per viewport), 2 skipped (no known axe issue to recheck), 0 xfail | `uv run pytest -m e2e tests/e2e`, `.github/workflows/e2e.yml` |
 | axe violations | 0 | 0 on every page, both viewports, admin and trader | `test_accessibility.py`, `KNOWN_AXE` is empty |
+| Lighthouse mobile, main pages (18.6) | 95+ performance, accessibility, best practices | Today 98/100/100, Strategies 99/100/100, Insights 98/100/100, Orders 98/100/100, Trade costs 98/100/100, Chart 99/100/100 (HTTPS, HTTP/2 and compression as in production; 91 to 96 performance over plain HTTP/1.1) | measured by hand, see docs/ui.md "Lighthouse budget" |
+| Console copy | trader words only | no tick, ingest, shadow, promote, register or retire in trader prose | `npm run lint` runs `scripts/check-copy.mjs` |
 
 First mutation run per target (cosmic-ray, mutants inside type annotations skipped as equivalent):
 
@@ -459,10 +461,28 @@ Decided with the owner on 2026-09-27. Stonks stays private: the owner plus invit
 | 20.4 AI assistant | An in-app chat that talks to any OpenAI-compatible model endpoint (the owner's own open-source model on the local server through Ollama, vLLM or llama.cpp) and acts through the existing MCP tools as the signed-in user. Write actions need the same confirmations as the console, step-up actions stay in the web app. |
 | 20.5 Currency and tax per portfolio | Each portfolio picks a base currency. FX rates in the lake, values and P&L converted, and yearly tax exports (realized gains per lot with FIFO or specific lots, dividends, withholding) for US and EU rules. |
 | 20.6 Deploy anywhere | The same stack on a cloud VM or a local home server: one Compose file with profiles, a local-server guide (Tailscale, auto start, UPS and power loss, backups off the machine), and a cloud guide, with the lab worker and the model server optional. |
+| 20.7 Calendars and news | Earnings, dividend and economic calendars from EODHD, a news and sentiment panel in the console (the data is already in the lake), a warning on an order ticket when earnings fall before the next open, and alerts on these events. |
+| 20.8 Screener | Saved screens on fundamentals and price rules, built on the universe rule provider, savable as a universe for the lab, and an MCP tool. |
 
 ## Phase 21: Intraday trading
 
 Planned after live daily trading is stable. Streaming prices (EODHD websockets, IBKR), a live event engine that decides on minute bars, intraday strategies with realistic fills and session rules, intraday risk (per-minute loss limits, halts), and the monitoring an always-on intraday loop needs.
+
+## Phase 22: Research depth
+
+From the competitor study of 44 open-source projects (Qlib, alphalens, vectorbt, pysystemtrade, freqtrade and others). Stonks leads on validation; these close the gaps in factor research, risk and model lifecycle.
+
+| WP | Scope |
+|----|-------|
+| 22.1 Optuna tuner and objectives | An Optuna tuner behind the Tuner seam, seeded and parallel, with every trial in the ledger, plus Sortino, Calmar, drawdown-penalised and multi-metric objectives. |
+| 22.2 Factor layer | A Factor ABC and registry, a small expression language compiled to DuckDB SQL, cached date-by-ticker panels, and a FactorStrategy. Modelled on Qlib's expression engine. |
+| 22.3 Factor tear sheets | alphalens-style IC by sector, asset class and size, returns per quantile, factor alpha and beta, and a monthly IC heatmap, for any factor. |
+| 22.4 Factor risk model | A PCA then style-factor risk model as a CovarianceEstimator, a style-exposure RiskRule, and factor attribution in reports. |
+| 22.5 Sweeps and heatmaps | Vectorised sweeps for more strategies, with parameter heatmaps in reports and the console, linked to the plateau test. |
+| 22.6 Model lifecycle | Scheduled retraining for ML strategies, model versions under one strategy id, new fits run as model books, swaps only through governance. |
+| 22.7 Forecast weights | Carver-style forecast weights estimated net of costs, and rules dropped when too costly for an instrument. |
+| 22.8 Factor library | An Alpha158-style factor set with a next-open label, plus the fundamentals scores as factors. |
+| 22.9 AI research loop | The assistant proposes hypotheses and runs lab trials under a budget, each counted in the trial ledger. |
 
 ## Execution order
 
@@ -478,3 +498,4 @@ Planned after live daily trading is stable. Streaming prices (EODHD websockets, 
 10. Phase 18 runs last: the review sweep starts as soon as the code is frozen for review, the fix waves follow each merge wave, and the release waits for every gate.
 11. Phase 19 follows `docs/design/live-trading.md`. Its code waves can start once Phase 18 has frozen the money paths, and real money waits for each stage gate.
 12. Phase 17 (options) starts now, in parallel with Phase 19. Phase 20 runs alongside them. Phase 21 (intraday) follows once live daily trading is stable.
+13. Phase 22 (research depth) follows the Phase 19 and 20 waves. Full comparison: the competitor study page.

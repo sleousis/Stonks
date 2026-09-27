@@ -154,7 +154,7 @@ kbd {
   padding: var(--space-3) var(--space-4) var(--space-2);
   border-top: 1px solid var(--color-border);
 
-  h3 {
+  h4 {
     font-size: var(--text-md);
   }
 
@@ -230,7 +230,7 @@ kbd {
     border-top: 1px solid var(--color-border);
   }
 
-  h3 {
+  h4 {
     font-size: var(--text-md);
     text-transform: capitalize;
   }
@@ -275,5 +275,21 @@ kbd {
   th:last-child,
   td:last-child {
     padding-right: 0;
+  }
+}
+
+// For scripts: the API token panel, folded away at the bottom (UX-43).
+.scripts {
+  display: grid;
+  gap: var(--space-3);
+
+  > summary {
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-min);
+    color: var(--color-ink-2);
+    font-weight: var(--weight-semibold);
+    cursor: pointer;
   }
 }

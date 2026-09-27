@@ -3,9 +3,11 @@ import {
   Component,
   computed,
   inject,
+  input,
   linkedSignal,
   resource,
   signal,
+  untracked,
 } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
@@ -65,6 +67,9 @@ export class WelcomePage {
   protected readonly portfolios = inject(PortfolioContextService);
   private readonly watchlists = inject(WatchlistContextService);
 
+  /** `?step=portfolio` opens that step first (links from empty money pages). */
+  readonly step = input<string>();
+
   protected readonly copy = STEP_COPY;
   protected readonly systemCopy = SYSTEM_COPY;
 
@@ -88,6 +93,10 @@ export class WelcomePage {
     source: () => (this.guide.hasValue() ? this.guide.value() : undefined),
     computation: (view, previous) => {
       if (!view) return null;
+      const asked = untracked(this.step);
+      if (!previous?.source && asked && view.steps.some((s) => s.id === asked)) {
+        return asked as OnboardingStepId;
+      }
       const prev = previous?.value;
       const stillTodo = prev && view.steps.find((s) => s.id === prev)?.state === 'todo';
       return stillTodo ? prev : currentStep(view);

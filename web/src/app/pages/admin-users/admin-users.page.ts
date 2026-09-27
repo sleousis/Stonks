@@ -10,11 +10,12 @@ import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angula
 
 import type { Role, UserView } from '../../api/models';
 import { UsersService } from '../../api/users.service';
-import { PASSWORD_MAX, PASSWORD_MIN } from '../../core/auth/passwords';
+import { PASSWORD_MAX, PASSWORD_MIN, generatePassword } from '../../core/auth/passwords';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { formatAgo } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
+import { CopyButton } from '../../shared/ui/copy-button';
 import { PageHeader } from '../../shared/ui/page-header';
 import { Sheet, TypedConfirm, typedMatches } from '../../shared/ui/sheet';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -42,6 +43,7 @@ export const ROLES: readonly { value: Role; label: string; help: string }[] = [
     ErrorState,
     Sheet,
     TypedConfirm,
+    CopyButton,
   ],
   templateUrl: './admin-users.page.html',
   styleUrl: './admin-users.page.scss',
@@ -76,6 +78,20 @@ export class AdminUsersPage {
     ],
   });
 
+  protected readonly showNewPassword = signal(false);
+
+  protected newPasswordInvalid(): boolean {
+    const c = this.form.controls.password;
+    return c.touched && c.invalid;
+  }
+
+  /** Fill in a strong password and show it, ready to copy (UX-40). */
+  protected generateNewPassword(): void {
+    this.form.controls.password.setValue(generatePassword());
+    this.form.controls.password.markAsTouched();
+    this.showNewPassword.set(true);
+  }
+
   protected async create(): Promise<void> {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -86,6 +102,7 @@ export class AdminUsersPage {
     try {
       const user = await this.api.create({ ...v, email: v.email.trim() });
       this.form.reset();
+      this.showNewPassword.set(false);
       this.showForm.set(false);
       this.users.reload();
       this.toasts.success(
@@ -163,6 +180,12 @@ export class AdminUsersPage {
   protected readonly newPassword = signal('');
   protected readonly resetTyped = signal('');
   protected readonly resetBusy = signal(false);
+  protected readonly showResetPassword = signal(false);
+
+  protected generateResetPassword(): void {
+    this.newPassword.set(generatePassword());
+    this.showResetPassword.set(true);
+  }
   protected readonly resetPhrase = computed(() => {
     const u = this.resetting();
     return u ? (u.email ?? u.display_name) : '';
@@ -177,6 +200,7 @@ export class AdminUsersPage {
 
   protected openReset(user: UserView): void {
     this.newPassword.set('');
+    this.showResetPassword.set(false);
     this.resetTyped.set('');
     this.resetting.set(user);
   }
@@ -184,6 +208,7 @@ export class AdminUsersPage {
   protected closeReset(): void {
     this.resetting.set(null);
     this.newPassword.set('');
+    this.showResetPassword.set(false);
     this.resetTyped.set('');
   }
 

@@ -1,11 +1,5 @@
-import {
-  bps1,
-  formatBps,
-  humanize,
-  portfolioLive,
-  portfolioName,
-  triggerLabel,
-} from './trades-format';
+import { bps1, formatBps, portfolioLive, portfolioName, triggerLabel } from './trades-format';
+import { humanize } from '../../shared/ui/param-form/param-spec';
 import { book } from '../../../testing/portfolio-fixtures';
 
 describe('trades-format', () => {

@@ -1,15 +1,21 @@
-import { signal } from '@angular/core';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { computed, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
-import type { HaltView, ScheduleView } from '../../api/models';
+import type { HaltView, MeView, ScheduleView, ScheduledJobView } from '../../api/models';
+import { provideApi } from '../../api/provide-api';
 import { ScheduleService } from '../../api/schedule.service';
 import type { PortfolioRef } from '../../api/portfolios.service';
+import { type Permission, allowed } from '../../core/auth/permissions';
 import { SessionService } from '../../core/auth/session.service';
 import { HaltStateService } from '../../core/halts/halt-state.service';
+import { type HaltScope, haltScopeText, haltSummary } from '../../core/halts/halt-view';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
-import { tick } from '../../../testing/http';
+import { nextRequest, tick } from '../../../testing/http';
+import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { activeFormat, browserFormat } from '../../core/format/format';
+import { DEFAULT_KILL_REASON } from './kill-sheet';
 import { SCHEDULE_POLL_MS, SessionStrip, countdown, nextJob, sessionPhase } from './session-strip';
 import { book } from '../../../testing/portfolio-fixtures';
 
@@ -110,41 +116,77 @@ describe('sessionPhase', () => {
 describe('SessionStrip', () => {
   const active = signal<HaltView[]>([]);
   const options = signal<PortfolioRef[]>([]);
+  const me = signal<MeView | null>(TRADER);
+  const current = computed(
+    () => options().find((p) => p.is_default) ?? (options().length === 1 ? options()[0] : null),
+  );
   const portfolios = {
     options,
     hasChoice: () => options().length > 1,
     selectedId: () => null,
-    current: () => options()[0] ?? null,
+    current,
+    live: computed(() => current()?.trading === 'live'),
     load: vi.fn().mockResolvedValue(undefined),
     select: vi.fn(),
   };
+  const names = computed(() => new Map(options().map((p) => [p.id, p.name] as const)));
+  const halts = {
+    active,
+    killOn: computed(() => active().some((h) => h.kind === 'kill' && h.active)),
+    scopeText: computed(() => (h: HaltScope) => haltScopeText(h, names(), me()?.user_id)),
+    summary: computed(() => haltSummary(active(), (h) => haltScopeText(h, names(), me()?.user_id))),
+    add: vi.fn((h: HaltView) => active.update((list) => [...list, h])),
+    refresh: vi.fn().mockResolvedValue(undefined),
+  };
   let overview: ReturnType<typeof vi.fn>;
   const canRead = signal(true);
+  const session = {
+    canRead,
+    me,
+    can: (p: Permission) => allowed(me(), p),
+    isAdmin: () => me()?.role === 'admin',
+    csrfToken: () => null,
+  };
 
   async function render() {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
-        { provide: HaltStateService, useValue: { active } },
+        ...provideApi(),
+        provideHttpClientTesting(),
+        { provide: HaltStateService, useValue: halts },
         { provide: ScheduleService, useValue: { overview } },
         { provide: SCHEDULE_POLL_MS, useValue: 0 },
         { provide: PortfolioContextService, useValue: portfolios },
-        { provide: SessionService, useValue: { canRead } },
+        { provide: SessionService, useValue: session },
       ],
     });
     const fixture = TestBed.createComponent(SessionStrip);
     fixture.detectChanges();
     await tick();
     fixture.detectChanges();
-    return fixture.nativeElement as HTMLElement;
+    return fixture;
+  }
+
+  async function renderEl() {
+    return (await render()).nativeElement as HTMLElement;
   }
 
   beforeEach(() => {
     vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
+    activeFormat.set({ locale: 'en-US', timeZone: 'UTC', dateStyle: 'iso' });
     overview = vi.fn().mockResolvedValue(schedule());
     active.set([]);
     options.set([]);
+    me.set(TRADER);
     canRead.set(true);
+    halts.add.mockClear();
+    halts.refresh.mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    activeFormat.set(browserFormat());
   });
 
   it('asks nothing of the API while signed out (BUG-1)', async () => {
@@ -153,21 +195,75 @@ describe('SessionStrip', () => {
     expect(overview).not.toHaveBeenCalled();
   });
 
-  afterEach(() => vi.useRealTimers());
-
-  it('shows the next scheduled run with a countdown, read quietly', async () => {
-    const el = await render();
+  it('counts down to the next trading run, read quietly (UX-08)', async () => {
+    const el = await renderEl();
     expect(overview).toHaveBeenCalledWith({ limit: 1 }, true);
     const next = el.querySelector<HTMLAnchorElement>('a.next')!;
     expect(next.getAttribute('href')).toBe('/ops/schedule');
-    expect(next.textContent).toContain('Ingest prices');
-    expect(next.querySelector('.clock')!.textContent).toBe('2h 05m');
+    expect(next.textContent).toContain('Trading run');
+    expect(next.textContent).not.toContain('Price update');
+    expect(next.textContent).toContain('Mon 20:45');
+    expect(next.querySelector('.clock')!.textContent).toBe('2d 2h');
+    expect(next.getAttribute('aria-label')).toBe(
+      'Next trading run at Mon 20:45. Open the schedule.',
+    );
     expect(el.querySelector('.strip')!.getAttribute('data-tone')).toBe('calm');
+  });
+
+  it("with connections_sync at 14:00 and tick at 16:45, the strip shows 'Trading run 16:45'", async () => {
+    vi.setSystemTime(Date.parse('2026-09-28T12:00:00Z'));
+    overview.mockResolvedValue({
+      ...schedule(),
+      jobs: [job('connections_sync', '2026-09-28T14:00:00Z'), job('tick', '2026-09-28T16:45:00Z')],
+    });
+    const el = await renderEl();
+    const next = el.querySelector('a.next')!;
+    expect(next.querySelector('.job')!.textContent).toBe('Trading run');
+    expect(next.querySelector('.at')!.textContent).toBe('16:45');
+    expect(el.textContent).not.toContain('Broker sync');
+    expect(el.textContent).not.toMatch(/\btick\b/i);
+  });
+
+  it('gives admins the next system job in a quieter slot, only when it comes first', async () => {
+    me.set(ADMIN);
+    vi.setSystemTime(Date.parse('2026-09-28T12:00:00Z'));
+    overview.mockResolvedValue({
+      ...schedule(),
+      jobs: [
+        job('connections_sync', '2026-09-28T14:00:00Z'),
+        job('tick', '2026-09-28T16:45:00Z'),
+        job('backup', '2026-09-28T23:00:00Z'),
+      ],
+    });
+    const el = await renderEl();
+    expect(el.querySelector('a.other')!.textContent).toContain('Then Broker sync 14:00');
+    expect(el.querySelector('a.next .job')!.textContent).toBe('Trading run');
+  });
+
+  it('holds the phase and countdown places until the schedule is read', async () => {
+    let answer!: (v: unknown) => void;
+    overview.mockReturnValue(new Promise((r) => (answer = r)));
+    const fixture = await render();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelectorAll('.hold').length).toBe(2);
+    expect(el.querySelector('.hold')!.getAttribute('aria-hidden')).toBe('true');
+    answer(schedule());
+    await tick();
+    fixture.detectChanges();
+    expect(el.querySelector('.hold')).toBeNull();
+    expect(el.querySelector('a.next .job')!.textContent).toBe('Trading run');
+  });
+
+  it('says so plainly when no trading run is scheduled', async () => {
+    overview.mockResolvedValue({ ...schedule(), jobs: [job('health', '2026-09-26T19:00:00Z')] });
+    const el = await renderEl();
+    expect(el.querySelector('a.next')!.textContent).toContain('No trading run scheduled');
+    expect(el.querySelector('.clock')).toBeNull();
   });
 
   it('shows the market phase and the day track when the schedule has sessions', async () => {
     overview.mockResolvedValue({ ...schedule(), market: { ...MARKET, today: null } });
-    const el = await render();
+    const el = await renderEl();
     expect(el.querySelector('.phase')!.textContent).toContain('Market closed');
     expect(el.querySelector('.phase')!.getAttribute('data-phase')).toBe('closed');
     expect(el.querySelector('.track')).toBeNull();
@@ -175,11 +271,31 @@ describe('SessionStrip', () => {
 
   it('turns red while a kill switch is on and links to the halts page', async () => {
     active.set([{ id: 1, kind: 'kill', scope: 'global', halt: 'all', active: true } as HaltView]);
-    const el = await render();
+    const el = await renderEl();
     const strip = el.querySelector('.strip')!;
     expect(strip.getAttribute('data-tone')).toBe('kill');
     expect(strip.textContent).toContain('Kill switch on.');
+    expect(strip.textContent).toContain('Every portfolio');
     expect(strip.querySelector('a.strip-link')!.getAttribute('href')).toBe('/ops/halts');
+  });
+
+  it('names the portfolio in the banner, never its id (UX-17)', async () => {
+    options.set([book({ id: 'pf_default', name: 'Main', is_default: true })]);
+    active.set([
+      {
+        id: 1,
+        kind: 'kill',
+        scope: 'portfolio',
+        portfolio_id: 'pf_default',
+        user_id: null,
+        halt: 'buys',
+        active: true,
+      } as HaltView,
+    ]);
+    const el = await renderEl();
+    const text = el.querySelector('.halt')!.textContent!;
+    expect(text).toContain('Portfolio Main');
+    expect(text).not.toMatch(/pf_|usr_/);
   });
 
   it('shows a breaker in amber and hides itself when there is nothing to say', async () => {
@@ -187,13 +303,14 @@ describe('SessionStrip', () => {
     active.set([
       { id: 2, kind: 'drawdown', scope: 'global', halt: 'buys', active: true } as HaltView,
     ]);
-    const el = await render();
+    me.set({ ...TRADER, role: 'viewer', scopes: ['read'] });
+    const el = await renderEl();
     expect(el.querySelector('.strip')!.getAttribute('data-tone')).toBe('halt');
     expect(el.querySelector('a.next')).toBeNull();
 
     TestBed.resetTestingModule();
     active.set([]);
-    const empty = await render();
+    const empty = await renderEl();
     expect(empty.querySelector('.strip')).toBeNull();
   });
 
@@ -203,18 +320,156 @@ describe('SessionStrip', () => {
       book({ id: 'pf_default', name: 'Main', trading: 'paper', is_default: true }),
       book({ id: 'pf_live', name: 'Real money', trading: 'live' }),
     ]);
-    const el = await render();
+    const el = await renderEl();
     expect(portfolios.load).toHaveBeenCalled();
     const select = el.querySelector<HTMLSelectElement>('#portfolio-picker')!;
     expect(select).not.toBeNull();
     expect([...select.options].map((o) => o.textContent?.trim())).toEqual([
-      'My default portfolio',
       'Main',
       'Real money (live)',
     ]);
-    expect(el.querySelector('.stamp')!.textContent).toContain('PAPER');
+    expect(el.querySelector('.pick .stamp')!.textContent).toContain('PAPER');
     select.value = 'pf_live';
     select.dispatchEvent(new Event('change'));
     expect(portfolios.select).toHaveBeenCalledWith('pf_live');
   });
+
+  describe('Stop trading (UX-01)', () => {
+    it('Stop trading opens the kill sheet in one tap at 375px, and the POST carries the picked portfolio', async () => {
+      options.set([
+        book({ id: 'pf_other', name: 'Side book' }),
+        book({ id: 'pf_main', name: 'Main book', is_default: true }),
+      ]);
+      const fixture = await render();
+      const el = fixture.nativeElement as HTMLElement;
+      // Not behind a menu or a fold: a labelled button right in the strip.
+      const stop = el.querySelector<HTMLButtonElement>('.strip button.stop')!;
+      expect(stop.textContent!.trim()).toBe('Stop trading');
+      expect(el.querySelector('#kill-sheet-title')).toBeNull();
+
+      stop.click();
+      fixture.detectChanges();
+      expect(el.querySelector('#kill-sheet-title')!.textContent).toBe('Stop trading');
+      const picked = el.querySelector<HTMLInputElement>('input[name="kill-sheet-scope"]:checked')!;
+      expect(picked.value).toBe('portfolio');
+      expect(picked.closest('label')!.textContent).toContain('Main book');
+      // The ticket: scope, what stops, reason and the stamp.
+      const ticket = el.querySelector('[aria-label="Kill switch"]')!;
+      expect(ticket.textContent).toContain('Portfolio Main book');
+      expect(ticket.textContent).toContain('All new orders');
+      expect(ticket.textContent).toContain(DEFAULT_KILL_REASON);
+      expect(ticket.querySelector('.stamp')!.textContent).toContain('PAPER');
+
+      el.querySelector<HTMLFormElement>('.kill-form')!.dispatchEvent(new Event('submit'));
+      const http = TestBed.inject(HttpTestingController);
+      const req = await nextRequest(http, '/api/halts/kill', 'POST');
+      expect(req.request.body).toEqual({
+        scope: 'portfolio',
+        portfolio_id: 'pf_main',
+        buys_only: false,
+        reason: DEFAULT_KILL_REASON,
+      });
+      const halt = {
+        id: 9,
+        kind: 'kill',
+        scope: 'portfolio',
+        portfolio_id: 'pf_main',
+        user_id: null,
+        halt: 'all',
+        active: true,
+      } as HaltView;
+      req.flush(halt);
+      await tick();
+      fixture.detectChanges();
+      // Red at once, and the control turns into Resume.
+      expect(halts.add).toHaveBeenCalledWith(halt);
+      expect(el.querySelector('.strip')!.getAttribute('data-tone')).toBe('kill');
+      expect(el.querySelector('#kill-sheet-title')).toBeNull();
+      const resume = el.querySelector<HTMLAnchorElement>('a.stop.resume')!;
+      expect(resume.textContent!.trim()).toBe('Resume');
+      expect(resume.getAttribute('href')).toBe('/ops/halts');
+    });
+
+    it('stops new buys only across all your portfolios, with an edited reason', async () => {
+      options.set([book({ id: 'pf_main', name: 'Main book', is_default: true })]);
+      const fixture = await render();
+      const el = fixture.nativeElement as HTMLElement;
+      el.querySelector<HTMLButtonElement>('button.stop')!.click();
+      fixture.detectChanges();
+      const pick = (sel: string) => {
+        const input = el.querySelector<HTMLInputElement>(sel)!;
+        input.checked = true;
+        input.dispatchEvent(new Event('change'));
+        fixture.detectChanges();
+      };
+      pick('input[name="kill-sheet-scope"][value="user"]');
+      pick('input[name="kill-sheet-stops"][value="buys"]');
+      expect(
+        el.querySelector('input[name="kill-sheet-stops"][value="buys"]')!.closest('label')!
+          .textContent,
+      ).toContain('Stop new buys only');
+      const reason = el.querySelector<HTMLInputElement>('#kill-sheet-reason')!;
+      reason.value = '';
+      reason.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      el.querySelector<HTMLFormElement>('.kill-form')!.dispatchEvent(new Event('submit'));
+      await tick();
+      fixture.detectChanges();
+      const http = TestBed.inject(HttpTestingController);
+      expect(http.match('/api/halts/kill')).toEqual([]);
+      expect(el.querySelector('#kill-sheet-reason-hint')!.textContent).toContain('Say why');
+
+      reason.value = 'Fed day';
+      reason.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      const ticket = el.querySelector('[aria-label="Kill switch"]')!;
+      expect(ticket.textContent).toContain('Your portfolios');
+      expect(ticket.textContent).toContain('New buys');
+      expect(ticket.textContent).toContain('Sells and exits');
+      el.querySelector<HTMLFormElement>('.kill-form')!.dispatchEvent(new Event('submit'));
+      const req = await nextRequest(http, '/api/halts/kill', 'POST');
+      expect(req.request.body).toEqual({
+        scope: 'user',
+        portfolio_id: null,
+        buys_only: true,
+        reason: 'Fed day',
+      });
+      req.flush({ id: 3, kind: 'kill', scope: 'user', halt: 'buys', active: true });
+      await tick();
+    });
+
+    it('wears the brass ring and a LIVE stamp when the shown portfolio is live', async () => {
+      options.set([book({ id: 'pf_live', name: 'Real', trading: 'live', is_default: true })]);
+      const fixture = await render();
+      const el = fixture.nativeElement as HTMLElement;
+      const stop = el.querySelector<HTMLButtonElement>('button.stop')!;
+      expect(stop.classList).toContain('live');
+      stop.click();
+      fixture.detectChanges();
+      expect(el.querySelector('[aria-label="Kill switch"] .stamp')!.textContent).toContain('LIVE');
+    });
+
+    it('lets admins stop every portfolio; viewers never see the control', async () => {
+      me.set(ADMIN);
+      const fixture = await render();
+      const el = fixture.nativeElement as HTMLElement;
+      el.querySelector<HTMLButtonElement>('button.stop')!.click();
+      fixture.detectChanges();
+      expect(el.querySelector('input[name="kill-sheet-scope"][value="global"]')).not.toBeNull();
+      // No portfolio listed: the scope starts on all of the user's portfolios.
+      expect(
+        el.querySelector<HTMLInputElement>('input[name="kill-sheet-scope"]:checked')!.value,
+      ).toBe('user');
+
+      TestBed.resetTestingModule();
+      me.set({ ...TRADER, role: 'viewer', scopes: ['read'] });
+      const viewer = await renderEl();
+      expect(viewer.querySelector('.stop')).toBeNull();
+      expect(viewer.querySelector('app-kill-sheet')).toBeNull();
+    });
+  });
 });
+
+function job(action: string, at: string | null): ScheduledJobView {
+  return { name: action, action, trigger: 'x', next_run_at: at, next_as_of: null };
+}

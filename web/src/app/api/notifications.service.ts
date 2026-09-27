@@ -75,9 +75,12 @@ export class NotificationsService {
     return unwrap(listNotifications({ query, headers: silent ? SILENT_HEADERS : undefined }));
   }
 
-  /** Send the caller a test notification on every channel they turned on. */
+  /**
+   * Send the caller a test notification on every channel they turned on.
+   * Silent: the caller words the answer (one test a minute, 429).
+   */
   sendTest() {
-    return unwrap(sendTestNotification());
+    return unwrap(sendTestNotification({ headers: SILENT_HEADERS }));
   }
 
   /** Mark these ids read, or every notification when `ids` is omitted. */

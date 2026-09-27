@@ -69,7 +69,9 @@ def test_first_sign_in_enrols_totp_then_signs_in_with_a_code(browse, stack, view
 
 
 def sign_out(v: Visit) -> None:
+    """Sign out sits in the account menu by the user's name (UX-10)."""
     v.open_nav()
+    v.page.locator("app-account-menu summary:visible").click()
     v.page.get_by_role("button", name="Sign out").click()
 
 
@@ -182,8 +184,8 @@ def test_lab_run_with_quick_preset_shows_results(browse, stack, viewport):
     page.locator("#lr-end").fill(stack.market_end.isoformat())
     form.get_by_role("radio", name=re.compile("^Quick")).check()
     v.check_page("lab-run-form")
+    # A plain lab run starts at once: no confirm for research (UX-29).
     page.get_by_role("button", name="Start lab run").click()
-    page.locator("dialog[open]").get_by_role("button", name="Start lab run").click()
 
     result = page.locator("section", has=page.get_by_role("heading", name="Result"))
     expect(result).to_contain_text(re.compile("pass|fail", re.I), timeout=180_000)
@@ -196,14 +198,16 @@ def test_promote_gate_refuses_then_admin_overrides_and_trader_is_refused(browse,
     sid = SHADOW_IDS[viewport]
     promote_url = rf"/api/strategies/{sid}/promote$"
 
-    # A trader sees Go live turned off with the reason, and the server
-    # refuses the call anyway.
+    # A strategy that has not passed the go-live check offers no Go live
+    # (UX-23). A trader sees why they cannot act, and the server refuses the
+    # call anyway.
     trader = browse(stack.trader)
     trader.guard.expect_refusal(403, promote_url, "traders cannot promote")
     page = trader.go(f"/strategies/{sid}")
     expect(page.get_by_role("heading", level=1)).to_contain_text(sid)
-    expect(page.get_by_role("button", name="Go live")).to_be_disabled()
-    expect(page.locator("app-permission-note")).to_be_visible()
+    expect(page.get_by_role("button", name="Go live")).to_have_count(0)
+    expect(page.get_by_role("button", name="Override…")).to_have_count(0)
+    expect(page.locator("app-permission-note").first).to_be_visible()
     refused = trader.api("POST", f"/api/strategies/{sid}/promote", data={"reason": "trader tries"})
     assert refused.status == 403
     status = trader.api("GET", f"/api/strategies/{sid}").json()["status"]
@@ -212,12 +216,13 @@ def test_promote_gate_refuses_then_admin_overrides_and_trader_is_refused(browse,
     admin = browse(stack.admin)
     page = admin.go(f"/strategies/{sid}")
     admin.check_page("strategy-detail")
-    admin.guard.expect_refusal(409, rf"/api/strategies/{sid}/promote$", "the go-live gate refuses")
-    page.get_by_role("button", name="Go live").click()
+    # An admin gets "Override…", which asks for the override straight away,
+    # on the go-live ticket with the failed check.
+    expect(page.get_by_role("button", name="Go live")).to_have_count(0)
+    page.get_by_role("button", name="Override…").click()
     dialog = page.locator("dialog[open]")
-    expect(dialog).to_contain_text("Go-live check failed")
-    fill_status_dialog(dialog, sid, "First promotion attempt from e2e.")
-    hold(page, dialog.get_by_role("button", name="Go live"))
+    expect(dialog).to_contain_text("without passing the check")
+    expect(dialog.locator("app-mode-stamp")).to_contain_text("PAPER")
 
     override = page.get_by_role("button", name="Override and go live")
     expect(override).to_be_visible()
@@ -225,19 +230,10 @@ def test_promote_gate_refuses_then_admin_overrides_and_trader_is_refused(browse,
     dialog = page.locator("dialog[open]")
     fill_status_dialog(dialog, "override", "Seeded e2e strategy, override recorded on purpose.")
     override.click()
-    expect(page.locator("main")).to_contain_text("active")
+    expect(page.locator("main")).to_contain_text("Live")
     history = admin.api("GET", f"/api/strategies/{sid}/history").json()
     rows = history if isinstance(history, list) else history["items"]
     assert any(r.get("override") and r.get("to_status") == "active" for r in rows), rows
-
-
-def hold(page, button) -> None:
-    """Press and hold a hold-to-confirm button for longer than its second."""
-    expect(button).to_be_enabled()
-    button.hover()
-    page.mouse.down()
-    page.wait_for_timeout(1_400)
-    page.mouse.up()
 
 
 def stack_cash() -> float:
@@ -348,6 +344,43 @@ def test_kill_switch_blocks_orders_until_resumed_with_a_fresh_code(
     step_up.get_by_role("button", name=re.compile("^(Confirm|Continue|Verify)")).click()
     expect(page.locator("main")).to_contain_text("Trading is not halted")
     expect(page.locator("app-session-strip .strip")).to_have_attribute("data-tone", "calm")
+
+
+def test_stop_trading_from_the_strip_halts_the_picked_portfolio(
+    browse, stack, viewport, lift_halts_after
+):
+    """UX-01: from any page, one tap on Stop trading opens the kill sheet,
+    preset to the portfolio on screen, and the strip turns red at once."""
+    v = browse(stack.trader)
+    page = v.go("/strategies")
+    strip = page.locator("app-session-strip .strip")
+    stop = strip.get_by_role("button", name="Stop trading")
+    expect(stop).to_be_visible()
+    if v.phone:
+        box = stop.bounding_box()
+        assert box and box["height"] >= 44, box
+    stop.click()
+
+    sheet = page.get_by_role("dialog", name="Stop trading")
+    expect(sheet).to_be_visible()
+    expect(sheet.get_by_role("radio", name="Trader paper book")).to_be_checked()
+    expect(sheet.get_by_role("radio", name="All new orders")).to_be_checked()
+    expect(sheet.get_by_role("group", name="Kill switch")).to_contain_text("PAPER")
+    v.check_page("kill-sheet")
+    sheet.get_by_label("Reason").fill(f"e2e stop from the strip ({viewport})")
+    sheet.get_by_role("button", name="Stop trading").click()
+
+    expect(strip).to_have_attribute("data-tone", "kill")
+    expect(page.get_by_role("region", name="Trading halted")).to_contain_text("Trader paper book")
+    expect(strip.get_by_role("link", name="Resume trading on the Halts page")).to_be_visible()
+    v.check_page("kill-strip")
+
+    halts = v.api("GET", "/api/halts").json()
+    rows = halts if isinstance(halts, list) else halts["items"]
+    mine = [h for h in rows if h.get("reason") == f"e2e stop from the strip ({viewport})"]
+    assert len(mine) == 1, rows
+    assert mine[0]["scope"] == "portfolio"
+    assert mine[0]["portfolio_id"] == stack.trader_portfolio
 
 
 def test_admin_backs_up_now_and_lists_backups(browse, stack, viewport):

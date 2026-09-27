@@ -4,7 +4,7 @@ unknown) and macro observations visible after a publication lag."""
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pandas as pd
 import pytest
@@ -99,7 +99,9 @@ def test_a_statement_is_known_from_the_day_after_its_filing(lake):
     assert date(2024, 3, 31) in set(after["period_end"])
 
 
-def test_a_restated_statement_moves_to_its_new_filing_date(lake):
+def test_a_restated_statement_is_read_from_when_stonks_saw_it(lake):
+    """P12, DuckDB 018: the restatement below is first seen now, long after
+    its filing date, so earlier days keep reading the numbers as filed."""
     lake.upsert_income_statement(
         pd.DataFrame(
             [
@@ -113,13 +115,21 @@ def test_a_restated_statement_moves_to_its_new_filing_date(lake):
             ]
         )
     )
-    # the original numbers are overwritten, so the period is hidden until
-    # the restatement: never visible early
-    between = lake.get_statements_as_of("income_statement", "A.US", date(2024, 7, 1))
-    assert date(2024, 3, 31) not in set(between["period_end"])
-    after = lake.get_statements_as_of("income_statement", "A.US", date(2024, 8, 2))
-    row = after[after["period_end"] == date(2024, 3, 31)].iloc[0]
+    q1 = date(2024, 3, 31)
+    for day in (date(2024, 7, 1), date(2024, 8, 2)):
+        seen = lake.get_statements_as_of("income_statement", "A.US", day)
+        assert seen[seen["period_end"] == q1].iloc[0]["revenue"] == 100.0
+    today = datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=1)
+    after = lake.get_statements_as_of("income_statement", "A.US", date(2024, 8, 2), known_by=today)
+    row = after[after["period_end"] == q1].iloc[0]
     assert row["revenue"] == 90.0 and row["net_income"] == 10.0
+    assert (
+        lake.get_income_statement("A.US")
+        .set_index("period_end")
+        .loc[pd.Timestamp(q1), "revenue"]
+        .item()
+        == 90.0
+    )
 
 
 def test_members_between_treats_end_date_as_the_first_day_out(lake):

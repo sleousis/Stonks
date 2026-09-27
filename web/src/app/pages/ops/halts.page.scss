@@ -49,16 +49,25 @@ fieldset.scope {
   }
 }
 
-// The kill switch is the one red control on the page, and it stops real
-// money: a brass ring sits around the button (brass means real money).
+// The kill switch is the one red control on the page. When one of the
+// user's portfolios trades real money, a brass ring sits around the button
+// (brass means real money, and only then).
 .kill {
   border-left: var(--border-live) solid var(--color-loss);
 
-  .btn-danger {
+  &.live .btn-danger {
     box-shadow:
       0 0 0 2px var(--color-surface),
       0 0 0 4px var(--color-live);
   }
+}
+
+// While a kill switch is on, the page head carries the same red as the
+// session strip (UX-51).
+app-page-header.kill-on {
+  display: block;
+  padding-left: var(--space-3);
+  border-left: var(--border-live) solid var(--color-loss);
 }
 
 .cell-action {

@@ -37,6 +37,9 @@ Order of application (``order``; lower first):
    dropped after a loss halt or when the data feed is stale (BL-28);
 4b. ``gross_exposure`` (6), ``net_exposure`` (7), ``short_caps`` (8) and
    ``borrow_check`` (9): the short-book limits (roadmap 16.2);
+4c. ``option_greek_limits``, ``option_margin``, ``option_max_loss`` and
+   ``short_option_guard`` (9): the option rules (roadmap 17.4). They see
+   a combo as one unit and only drop opening option units;
 5. one order-rule pass: ``sell_within_position`` (10), ``require_price``
    (20), ``max_open_positions`` (30), ``max_weight_per_ticker`` (40),
    ``max_weight_per_asset_class`` (50), ``risk_per_position`` (52),
@@ -152,6 +155,9 @@ class RiskContext:
     #: short rules fall back to their own settings without them.
     margin: Any = None
     borrow: Any = None
+    #: The day's option market (``stonks.options.risk.OptionRiskView``) for
+    #: the option rules (roadmap 17.4); ``None`` for a book without options.
+    options: Any = None
 
     def __post_init__(self) -> None:
         if self.cost_model is not None and (self.slippage_bps or self.fee_per_trade):

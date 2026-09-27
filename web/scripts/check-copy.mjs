@@ -1,14 +1,20 @@
 // Fails when trader-facing copy sends people to a terminal or a config file
-// (finding UI-09). Scans templates (.html) and string literals in .ts files
-// under src/app, skipping comments, specs and the generated client.
-// Run by `npm run lint`.
+// (finding UI-09), or uses the system's names instead of trader words
+// (UX-09, UX-49): "tick", "ingest", "shadow", "promote", "register",
+// "retire", class paths. Scans templates (.html) and string literals in .ts
+// files under src/app, skipping comments, specs, styles and the generated
+// client. Run by `npm run lint`.
+//
+//   node scripts/check-copy.mjs                 every file
+//   node scripts/check-copy.mjs src/app/pages/lab   only files under these paths
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const ROOT = 'src/app';
 const SKIP_DIRS = new Set(['generated']);
 
-/** What a trader must never be asked to type or edit. */
+/** What a trader must never be asked to type or edit. Checked on all visible text. */
 export const RULES = [
   {
     id: 'cli',
@@ -22,6 +28,30 @@ export const RULES = [
   { id: 'terminal', re: /\b(command line|from a terminal|in a terminal)\b/i },
   { id: 'toml', re: /\b[a-z_]+\.toml\b/ },
 ];
+
+/**
+ * System words with a trader word in the words table (docs/ui.md). Checked
+ * on prose only: template text, visible attributes and string literals with
+ * a space, after dropping paths and code-like tokens.
+ */
+export const WORD_RULES = [
+  { id: 'tick', re: /\bticks?\b/i, say: 'Trading run' },
+  { id: 'ingest', re: /\bingest(s|ed|ing|ion)?\b/i, say: 'Update data' },
+  { id: 'shadow', re: /\bshadow\b/i, say: 'Paper trading' },
+  { id: 'promote', re: /\bpromot(e|es|ed|ing|ion)\b/i, say: 'Go live' },
+  { id: 'register', re: /\bregist(er|ers|ered|ering|ration)\b/i, say: 'Start paper trading' },
+  { id: 'retire', re: /\bretir(e|es|ed|ing)\b/i, say: 'Stop' },
+  { id: 'code', re: /\bclass_path\b|\bpython -m\b/i, say: 'a plain name' },
+];
+
+/**
+ * Files allowed to use a system word, with the reason. Keep this short: a
+ * page a trader can open is never on it.
+ */
+export const ALLOW = {
+  // The glossary explains the system's names on purpose ("also called ...").
+  'src/app/core/help/glossary.ts': ['tick', 'shadow', 'promote', 'retire', 'ingest', 'register'],
+};
 
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
@@ -55,26 +85,96 @@ export function stripHtmlComments(source) {
   }
 }
 
+function stripCode(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`\\])\/\/.*$/gm, '$1');
+}
+
+const STRING_RE = /'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`/g;
+
 /** The text a trader can see: template text, or string literals outside comments. */
 export function visibleText(source, isHtml) {
   if (isHtml) return stripHtmlComments(source);
-  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
-  const strings = code.match(/'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`/g) ?? [];
-  return strings.join('\n');
+  return (stripCode(source).match(STRING_RE) ?? []).join('\n');
 }
 
-const problems = [];
-for (const file of walk(ROOT)) {
-  const text = visibleText(readFileSync(file, 'utf8'), file.endsWith('.html'));
-  for (const rule of RULES) {
-    const m = rule.re.exec(text);
-    if (m) problems.push(`${relative('.', file)}: ${rule.id}: "${m[0]}"`);
+/** Attributes whose static value is shown to people. */
+const SHOWN_ATTRS =
+  /\s(aria-label|title|placeholder|alt|label|hint|message|heading|description|subtitle|confirmLabel|emptyTitle|emptyText|emptyMessage|detail)\s*=\s*"([^"]*)"/g;
+
+/** The words a person reads in a template: text between tags and shown attributes. */
+export function templateProse(html) {
+  let s = stripHtmlComments(html);
+  s = s.replace(/\{\{[\s\S]*?\}\}/g, ' ');
+  // Control flow headers: @if (...) {, @for (...), @let x = ...;, @case (...)
+  s = s.replace(/@(if|else if|for|switch|case|defer|let)\b[^{;\n]*[{;]?/g, ' ');
+  const shown = [];
+  s = s.replace(/<[^>]*>/g, (tag) => {
+    for (const m of tag.matchAll(SHOWN_ATTRS)) shown.push(m[2]);
+    return ' ';
+  });
+  return `${s}\n${shown.join('\n')}`;
+}
+
+/** Drop what is code, not words: paths, dotted names, snake and kebab ids, placeholders. */
+function scrub(text) {
+  return text
+    .replace(/\$\{[^}]*\}/g, ' ')
+    .replace(/[\w.-]*\/[\w/{}:.?=&-]*/g, ' ')
+    .replace(/\b\w+[._-]\w[\w.-]*/g, ' ');
+}
+
+/** Prose in a .ts file: inline templates as HTML, literals with a space, capitalised labels. */
+export function tsProse(source) {
+  const code = stripCode(source)
+    .replace(/styles\s*:\s*`(?:\\.|[^`\\])*`/g, ' ')
+    .replace(/styles\s*:\s*\[[\s\S]*?\]\s*,/g, ' ');
+  const out = [];
+  for (const lit of code.match(STRING_RE) ?? []) {
+    const body = lit.slice(1, -1);
+    if (lit[0] === '`' && /<[a-z][\w-]*[\s>]/i.test(body)) out.push(templateProse(body));
+    else if (/\s/.test(body.trim()) && /[a-z]{3}/i.test(body)) out.push(body);
+    // A capitalised single word is a label ('Shadow'); lowercase ones are keys.
+    else if (/^[A-Z][a-z]+$/.test(body)) out.push(body);
   }
+  return out.join('\n');
 }
 
-if (problems.length) {
-  console.error('Trader copy must not mention the command line or config files (UI-09):');
-  for (const p of problems) console.error(`  ${p}`);
-  process.exit(1);
+export function wordProblems(file, source) {
+  const isHtml = file.endsWith('.html');
+  const text = scrub(isHtml ? templateProse(source) : tsProse(source));
+  const allowed = ALLOW[file.split(sep).join('/')] ?? [];
+  const found = [];
+  for (const rule of WORD_RULES) {
+    if (allowed.includes(rule.id)) continue;
+    const m = rule.re.exec(text);
+    if (m) found.push(`${rule.id}: "${m[0]}" (say "${rule.say}")`);
+  }
+  return found;
 }
-console.log('Copy check passed: no CLI or config-file language in the console.');
+
+function main(args) {
+  const scopes = args.length ? args.map((a) => a.split(/[\\/]/).join(sep)) : null;
+  const files = walk(ROOT).filter((f) => !scopes || scopes.some((s) => f.startsWith(s)));
+  const problems = [];
+  for (const file of files) {
+    const source = readFileSync(file, 'utf8');
+    const text = visibleText(source, file.endsWith('.html'));
+    for (const rule of RULES) {
+      const m = rule.re.exec(text);
+      if (m) problems.push(`${relative('.', file)}: ${rule.id}: "${m[0]}"`);
+    }
+    for (const p of wordProblems(file, source)) problems.push(`${relative('.', file)}: ${p}`);
+  }
+  if (problems.length) {
+    console.error(
+      'Trader copy must use trader words, never the command line or config (UI-09, UX-49):',
+    );
+    for (const p of problems) console.error(`  ${p}`);
+    process.exit(1);
+  }
+  console.log('Copy check passed: trader words only, no CLI or config-file language.');
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main(process.argv.slice(2));
+}

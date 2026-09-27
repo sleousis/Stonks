@@ -2128,6 +2128,12 @@ from stonks.cli_tca import app as tca_app  # noqa: E402
 
 app.add_typer(tca_app, name="tca")
 
+# ---- options research (Phase 17) -----------------------------------------------
+
+from stonks.cli_options import app as options_app  # noqa: E402
+
+app.add_typer(options_app, name="options")
+
 golive_app = typer.Typer(help="Go-live gate for paper-traded strategies")
 app.add_typer(golive_app, name="golive")
 

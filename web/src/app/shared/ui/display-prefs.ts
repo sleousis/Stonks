@@ -15,7 +15,7 @@ const SAMPLE_TIME = '2026-09-26T14:05:00Z';
   template: `
     <section class="panel" aria-labelledby="display-title">
       <div class="panel-head">
-        <h2 id="display-title">Numbers and dates</h2>
+        <h3 id="display-title">Numbers and dates</h3>
       </div>
       <div class="panel-body form-grid">
         <div class="field">

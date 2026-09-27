@@ -84,22 +84,35 @@ describe('compareToReal', () => {
 });
 
 describe('comparisonSeries', () => {
-  it('puts real and shadow on one axis starting at 100 on the same day', () => {
+  it('strategies starting day 1 and day 30 keep the day-1 history (UX-25)', () => {
     const late = [row('2026-09-03', 50_000), row('2026-09-04', 55_000)];
     const out = comparisonSeries(REAL, [
       { id: 'value-v1', rows: SHADOW },
       { id: 'late-v1', rows: late },
     ]);
 
-    // The latest start among the series.
-    expect(out.baseDay).toBe('2026-09-03');
-    expect(out.real[0]).toEqual({ time: '2026-09-03', value: 100 });
-    expect(out.shadows.map((s) => s.points[0])).toEqual([
-      { time: '2026-09-03', value: 100 },
-      { time: '2026-09-03', value: 100 },
+    // Your portfolio starts at 100 on the earliest strategy's first day.
+    expect(out.baseDay).toBe('2026-09-02');
+    expect(out.real[0]).toEqual({ time: '2026-09-02', value: 100 });
+    // The early strategy keeps all its days.
+    expect(out.shadows[0].points.map((p) => p.time)).toEqual([
+      '2026-09-02',
+      '2026-09-03',
+      '2026-09-04',
     ]);
-    expect(out.shadows[0].points[1].value).toBeCloseTo((105 / 98) * 100);
-    expect(out.shadows[1].points[1].value).toBeCloseTo(110);
+    expect(out.shadows[0].points[0].value).toBe(100);
+    expect(out.shadows[0].points[2].value).toBeCloseTo(105);
+    // The late one starts on its own day, at your portfolio's value that day.
+    const realOnSep3 = (220 / 210) * 100;
+    expect(out.shadows[1].points[0].time).toBe('2026-09-03');
+    expect(out.shadows[1].points[0].value).toBeCloseTo(realOnSep3);
+    expect(out.shadows[1].points[1].value).toBeCloseTo(realOnSep3 * 1.1);
+  });
+
+  it('starts at 100 when your portfolio has no history', () => {
+    const out = comparisonSeries([], [{ id: 'value-v1', rows: SHADOW }]);
+    expect(out.real).toEqual([]);
+    expect(out.shadows[0].points[0]).toEqual({ time: '2026-09-02', value: 100 });
   });
 
   it('is empty until a shadow strategy has P&L', () => {

@@ -141,7 +141,7 @@ describe('StrategiesPage', () => {
   it('does not send traders to the command line when empty', async () => {
     (await nextRequest(controller, '/api/strategies')).flush(page([]));
     await settle();
-    expect(el.textContent).toContain('No strategies registered');
+    expect(el.textContent).toContain('No strategies yet');
     expect(el.textContent).not.toContain('stonks');
     expect(el.textContent).not.toContain('command line');
   });
@@ -151,7 +151,7 @@ describe('StrategiesPage', () => {
     await settle();
 
     const shadow = Array.from(el.querySelectorAll<HTMLLabelElement>('.segment')).find(
-      (l) => l.textContent?.trim() === 'Shadow',
+      (l) => l.textContent?.trim() === 'Paper trading',
     );
     shadow?.querySelector('input')?.dispatchEvent(new Event('change'));
     fixture.detectChanges();
@@ -196,8 +196,19 @@ describe('StrategiesPage', () => {
     await tick(5);
     for (const req of controller.match(() => true)) req.flush(page([]));
     await settle();
-    expect(el.textContent).toContain('No retired strategies');
+    expect(el.textContent).toContain('Nothing is stopped');
     expect(el.textContent).toContain('Show all statuses');
+  });
+
+  it('uses trader words only: pills, filters and copy (UX-09)', async () => {
+    (await nextRequest(controller, '/api/strategies')).flush(page(ALL));
+    await settle();
+    const filters = [...el.querySelectorAll('.segment')].map((l) => l.textContent?.trim());
+    expect(filters).toEqual(['All', 'Live', 'Paper trading', 'Stopped']);
+    const pills = [...el.querySelectorAll('app-status-pill')].map((p) => p.textContent?.trim());
+    expect(pills.length).toBeGreaterThan(0);
+    for (const pill of pills) expect(['Live', 'Paper trading', 'Stopped']).toContain(pill);
+    expect(el.textContent).not.toMatch(/shadow|promot|regist|retire/i);
   });
 
   it('shows the API message when the list fails', async () => {

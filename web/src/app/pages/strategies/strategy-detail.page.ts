@@ -14,24 +14,29 @@ import type {
   OrderView,
   PnlRowView,
   StatusChangeView,
+  StrategyDetail,
   StrategyMetadataView,
   SurvivalReportView,
 } from '../../api/models';
 import { OrdersService } from '../../api/orders.service';
 import { ShadowService } from '../../api/shadow.service';
 import { StrategiesService } from '../../api/strategies.service';
+import { SubscriptionsService } from '../../api/subscriptions.service';
+import { SystemService } from '../../api/system.service';
 import { SessionService } from '../../core/auth/session.service';
 import { formatDate, formatDateTime, formatMoney, formatPercent } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import type { ChartSeries } from '../../shared/chart/chart-engine';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
-import { promoteThroughGate } from '../../shared/governance';
+import { demoteOptions, isRealMoneyBroker, promoteThroughGate } from '../../shared/governance';
 import { LIFECYCLE, type LifecycleAction, STATUS_WORDS } from '../../shared/governance-labels';
 import { testLabel } from '../../shared/lab-results/survival-tests';
 import { formatMetric, metricLabel } from '../../shared/metrics';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { HelpTip } from '../../shared/ui/help-tip';
+import { ModeStamp } from '../../shared/ui/mode-stamp';
+import { humanize } from '../../shared/ui/param-form/param-spec';
 import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { SideTag } from '../../shared/ui/side-tag';
@@ -40,7 +45,46 @@ import { StatusChangeDialog } from '../../shared/ui/status-change-dialog';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { FollowPanel } from './follow-panel';
 import { StageBar } from './stage-bar';
-import { formatParam, strategyKindName } from './strategy-format';
+import { formatParam, strategyDisplayName, strategyKindName } from './strategy-format';
+
+/** A header action: the lifecycle steps, plus the admin's override (UX-23). */
+export type DetailAction = LifecycleAction | 'override';
+
+export interface ActionButton {
+  key: DetailAction;
+  label: string;
+  primary: boolean;
+  danger: boolean;
+}
+
+/**
+ * The header actions for a strategy (UX-23):
+ * - stopped: only Start paper trading;
+ * - live: Back to paper trading and Stop;
+ * - paper trading: Go live (primary) only once the go-live check passed,
+ *   otherwise an "Override..." for those who may go live, and Stop.
+ */
+export function detailActions(
+  status: StrategyDetail['status'],
+  golivePassed: boolean | null,
+  canPromote: boolean,
+): ActionButton[] {
+  const button = (key: DetailAction, label: string, primary = false): ActionButton => ({
+    key,
+    label,
+    primary,
+    danger: key === 'stop',
+  });
+  if (status === 'retired') return [button('paper', LIFECYCLE.paper.label, true)];
+  if (status === 'active') {
+    return [button('pause', LIFECYCLE.pause.label), button('stop', LIFECYCLE.stop.label)];
+  }
+  const actions: ActionButton[] = [];
+  if (golivePassed === true) actions.push(button('live', LIFECYCLE.live.label, true));
+  else if (canPromote) actions.push(button('override', 'Override…'));
+  actions.push(button('stop', LIFECYCLE.stop.label));
+  return actions;
+}
 
 /** Recent orders shown on the page; the Orders page has the rest. */
 export const RECENT_ORDERS = 10;
@@ -133,6 +177,7 @@ function metricList(report: SurvivalReportView): { key: string; label: string; v
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     HelpTip,
+    ModeStamp,
     RouterLink,
     PageHeader,
     StatusPill,
@@ -155,6 +200,8 @@ export class StrategyDetailPage {
   private readonly strategiesApi = inject(StrategiesService);
   private readonly shadowApi = inject(ShadowService);
   private readonly ordersApi = inject(OrdersService);
+  private readonly systemApi = inject(SystemService);
+  private readonly subscriptionsApi = inject(SubscriptionsService);
   private readonly portfolioCtx = inject(PortfolioContextService);
   private readonly toasts = inject(ToastService);
   protected readonly session = inject(SessionService);
@@ -177,12 +224,28 @@ export class StrategyDetailPage {
     this.history.hasValue() ? historyEntries(this.history.value()) : [],
   );
 
-  protected readonly busy = signal<LifecycleAction | null>(null);
+  protected readonly busy = signal<DetailAction | null>(null);
 
   protected readonly detail = computed(() =>
     this.strategy.hasValue() ? this.strategy.value() : null,
   );
   private readonly status = computed(() => this.detail()?.status ?? null);
+  /** A name to read, not the registry id (UX-27). The id sits under Technical details. */
+  protected readonly displayName = computed(() =>
+    strategyDisplayName(this.detail()?.id ?? this.id()),
+  );
+
+  /**
+   * The broker, read for a live strategy: its title carries the LIVE stamp
+   * when orders reach a real-money account (docs/ui.md: a stamp, not a pill).
+   */
+  protected readonly broker = resource({
+    params: () => (this.status() === 'active' ? { live: true } : undefined),
+    loader: () => this.systemApi.broker(),
+  });
+  protected readonly realMoney = computed(
+    () => this.broker.hasValue() && isRealMoneyBroker(this.broker.value()),
+  );
 
   /** The go-live verdict of a paper strategy, for the stage bar. */
   protected readonly golive = resource({
@@ -191,6 +254,9 @@ export class StrategyDetailPage {
   });
   protected readonly golivePassed = computed(() =>
     this.golive.hasValue() ? this.golive.value().passed : null,
+  );
+  protected readonly goliveReport = computed(() =>
+    this.golive.hasValue() ? this.golive.value() : null,
   );
 
   /** Its paper book's daily value (shadow strategies only). */
@@ -257,19 +323,15 @@ export class StrategyDetailPage {
     const s = this.detail();
     return s
       ? `${strategyKindName(s.class_path)}. ${STATUS_WORDS[s.status]}.`
-      : 'Status, parameters and survival evidence.';
+      : 'Status, parameters and robustness tests.';
   });
 
   protected readonly canPromote = computed(() => this.session.can('strategy.promote'));
 
   /** Actions that change the current status, in the order they are offered. */
-  protected readonly actions = computed<{ key: LifecycleAction; label: string }[]>(() => {
+  protected readonly actions = computed<ActionButton[]>(() => {
     const s = this.detail();
-    if (!s) return [];
-    const toPaper: LifecycleAction = s.status === 'active' ? 'pause' : 'paper';
-    return (['live', toPaper, 'stop'] as const)
-      .filter((key) => LIFECYCLE[key].target !== s.status)
-      .map((key) => ({ key, label: LIFECYCLE[key].label }));
+    return s ? detailActions(s.status, this.golivePassed(), this.canPromote()) : [];
   });
 
   protected readonly research = computed(() => {
@@ -287,7 +349,11 @@ export class StrategyDetailPage {
   protected readonly params = computed(() => {
     const s = this.detail();
     if (!s) return [];
-    return Object.entries(s.params).map(([key, value]) => ({ key, value: formatParam(value) }));
+    return Object.entries(s.params).map(([key, value]) => ({
+      key,
+      label: humanize(key),
+      value: formatParam(value),
+    }));
   });
 
   protected readonly reports = computed(() =>
@@ -316,54 +382,58 @@ export class StrategyDetailPage {
     return formatPercent(value, { signed });
   }
 
-  protected async run(action: LifecycleAction): Promise<void> {
+  protected async run(action: DetailAction): Promise<void> {
     const s = this.detail();
     if (!s || this.busy() || !this.canPromote()) return;
-    const done = action === 'live' ? await this.promote(s.id) : await this.demote(action, s);
+    const done =
+      action === 'live' || action === 'override'
+        ? await this.promote(s.id, action === 'override')
+        : await this.demote(action, s);
     if (!done) return;
     this.strategy.reload();
     this.history.reload();
   }
 
-  private async promote(id: string): Promise<boolean> {
+  /** Names of your portfolios that paper trade or auto trade it, for the ticket. */
+  private async followers(id: string): Promise<string[]> {
+    const subs = await this.subscriptionsApi.list();
+    const names = this.portfolioCtx.options();
+    return subs
+      .filter((s) => s.strategy_id === id && s.portfolio_id && s.mode !== 'notify')
+      .map((s) => names.find((p) => p.id === s.portfolio_id)?.name ?? 'One of your portfolios');
+  }
+
+  private async promote(id: string, overrideFirst: boolean): Promise<boolean> {
+    const name = this.displayName();
     const result = await promoteThroughGate({
       id,
+      name,
       dialog: this.dialog(),
       toasts: this.toasts,
       golive: () => this.strategiesApi.golive(id),
       promote: (body) => this.strategiesApi.promote(id, body, true),
-      title: `Go live with ${id}?`,
+      broker: () => this.systemApi.broker(),
+      followers: () => this.followers(id),
+      overrideFirst,
+      title: `Go live with ${name}?`,
       message: 'It places orders through the broker from the next trading run.',
       confirmLabel: LIFECYCLE.live.label,
-      busy: (on) => this.busy.set(on ? 'live' : null),
+      busy: (on) => this.busy.set(on ? (overrideFirst ? 'override' : 'live') : null),
     });
     if (!result) return false;
-    this.toasts.success(LIFECYCLE.live.done(id));
+    this.toasts.success(LIFECYCLE.live.done(name));
     return true;
   }
 
-  private async demote(action: LifecycleAction, s: { id: string; status: string }) {
-    const stop = action === 'stop';
+  private async demote(action: LifecycleAction, s: { id: string }) {
+    const name = this.displayName();
     const words = LIFECYCLE[action];
     const body = await this.dialog().open(
-      stop
-        ? {
-            title: `Stop ${s.id}?`,
-            message:
-              'It stops trading and stops paper decisions from the next run. Its reports and history stay.',
-            confirmLabel: words.label,
-            tone: 'danger',
-            minReason: 1,
-          }
+      action === 'pause' || action === 'stop'
+        ? demoteOptions(action, name)
         : {
-            title:
-              s.status === 'active'
-                ? `Move ${s.id} back to paper trading?`
-                : `Start paper trading ${s.id}?`,
-            message:
-              s.status === 'active'
-                ? 'It stops placing orders from the next run and keeps making paper decisions you can compare in Shadow.'
-                : 'It makes paper decisions from the next run without placing orders.',
+            title: `Start paper trading ${name}?`,
+            message: 'It makes paper decisions from the next run without placing orders.',
             confirmLabel: words.label,
             minReason: 1,
           },
@@ -371,8 +441,10 @@ export class StrategyDetailPage {
     if (!body) return false;
     this.busy.set(action);
     try {
-      await (stop ? this.strategiesApi.retire(s.id, body) : this.strategiesApi.shadow(s.id, body));
-      this.toasts.success(words.done(s.id));
+      await (action === 'stop'
+        ? this.strategiesApi.retire(s.id, body)
+        : this.strategiesApi.shadow(s.id, body));
+      this.toasts.success(words.done(name));
       return true;
     } catch {
       return false; // The error interceptor already showed the API's message.

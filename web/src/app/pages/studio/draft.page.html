@@ -99,6 +99,16 @@
 
   <!-- Build ------------------------------------------------------------------>
   <div role="tabpanel" id="panel-build" aria-labelledby="tab-build" [hidden]="tab() !== 'build'">
+    @if (d.status === 'registered' && d.registered_strategy_id; as strategyId) {
+      <div id="registered-note" class="callout" role="note">
+        <p class="callout-title">Edits here no longer change the running strategy</p>
+        <p>
+          The strategy started from this draft keeps the rules it had then. Test your edits here,
+          then start a new strategy from them if you want the change.
+          <a [routerLink]="['/strategies', strategyId]">Open the strategy</a>
+        </p>
+      </div>
+    }
     @if (isCode()) {
       @if (d.source_code === null) {
         <div class="callout" role="note">
@@ -254,8 +264,8 @@
     } @else {
       @if (!isCode() && issues().length) {
         <p class="notice">
-          The rules have {{ issues().length === 1 ? 'a problem' : issues().length + ' problems' }};
-          the API will refuse to test them until they are fixed on the Build tab.
+          The rules have {{ issues().length === 1 ? 'a problem' : issues().length + ' problems' }}.
+          Fix them on the Build tab before testing.
         </p>
       }
       <app-draft-test

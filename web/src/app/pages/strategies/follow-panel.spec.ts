@@ -4,6 +4,7 @@ import { provideRouter } from '@angular/router';
 
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
+import { MODES } from '../../shared/governance-labels';
 import { nextRequest, page, tick } from '../../../testing/http';
 import { sub } from '../../../testing/home-fixtures';
 import { book } from '../../../testing/portfolio-fixtures';
@@ -58,6 +59,9 @@ describe('FollowPanel', () => {
       (r) => r.value,
     );
     expect(values).toEqual(['notify', 'paper']);
+    // The same words as Today's mode switch (UX-31).
+    const labels = [...el.querySelectorAll('.mode strong')].map((s) => s.textContent!.trim());
+    expect(labels).toEqual(MODES.filter((m) => m.value !== 'auto').map((m) => m.label));
     expect(el.textContent).not.toContain('Auto');
   });
 

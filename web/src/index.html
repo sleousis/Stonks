@@ -22,9 +22,109 @@
         if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
       } catch (e) {}
     </script>
+    <style>
+      /* Shown until the app starts (UX-44): the rail and the brand mark
+         drawing itself, so the first paint does not wait for scripts. */
+      .boot {
+        --boot-rail: #16222e;
+        --boot-ink: #e6ecf2;
+        --boot-bg: #eceff2;
+        --boot-muted: #5a6672;
+        display: grid;
+        grid-template-rows: 48px 1fr;
+        min-height: 100vh;
+        margin: 0;
+        background: var(--boot-bg);
+        font:
+          500 1rem/1.4 system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) .boot {
+          --boot-rail: #0e161e;
+          --boot-bg: #0b1117;
+          --boot-muted: #8e9aa7;
+        }
+      }
+      :root[data-theme='dark'] .boot {
+        --boot-rail: #0e161e;
+        --boot-bg: #0b1117;
+        --boot-muted: #8e9aa7;
+      }
+      .boot-rail {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 16px;
+        background: var(--boot-rail);
+        color: var(--boot-ink);
+        font-weight: 800;
+        font-size: 1.25rem;
+      }
+      .boot-main {
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: 12px;
+        color: var(--boot-muted);
+      }
+      .boot svg path {
+        fill: none;
+        stroke: #8db4ea;
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .boot-main path {
+        stroke: #2c64ad;
+        stroke-dasharray: 30;
+        animation: boot-draw 1.2s ease-in-out infinite alternate;
+      }
+      @keyframes boot-draw {
+        from {
+          stroke-dashoffset: 30;
+        }
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+      @media (min-width: 768px) {
+        .boot {
+          grid-template-rows: none;
+          grid-template-columns: 224px 1fr;
+        }
+        .boot-rail {
+          align-items: flex-start;
+          padding: 20px 16px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-main path {
+          animation: none;
+          stroke-dashoffset: 0;
+        }
+      }
+    </style>
   </head>
   <body>
-    <app-root></app-root>
+    <app-root>
+      <div class="boot" aria-busy="true">
+        <div class="boot-rail">
+          <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true">
+            <path d="M6 22l6-6 5 4 9-10" />
+          </svg>
+          <span>Stonks</span>
+        </div>
+        <div class="boot-main" role="status">
+          <svg viewBox="0 0 32 32" width="40" height="40" aria-hidden="true">
+            <path d="M6 22l6-6 5 4 9-10" />
+          </svg>
+          <span>Opening your trading day</span>
+        </div>
+      </div>
+    </app-root>
     <noscript>The Stonks console needs JavaScript. Turn it on and reload.</noscript>
   </body>
 </html>

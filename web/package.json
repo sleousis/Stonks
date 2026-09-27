@@ -4,11 +4,11 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "build": "ng build",
+    "build": "ng build && node scripts/preload-routes.mjs",
     "watch": "ng build --watch --configuration development",
     "test": "ng test --watch=false",
     "test:watch": "ng test",
-    "lint": "ng lint && node scripts/check-copy.mjs",
+    "lint": "ng lint && node --test scripts/check-copy.test.mjs scripts/preload-routes.test.mjs && node scripts/check-copy.mjs",
     "format": "prettier --write \"src/**/*.{ts,html,scss}\" \"*.{json,ts,js}\"",
     "format:check": "prettier --check \"src/**/*.{ts,html,scss}\"",
     "api:generate": "openapi-ts && node scripts/gen-permissions.mjs",

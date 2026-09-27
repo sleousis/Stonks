@@ -25,6 +25,7 @@ import { NotificationSettings } from '../../shared/ui/notification-settings';
 import { RiskLimitsPanel } from '../../shared/ui/risk-limits-panel';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
+import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { NO_TOKEN, TOKEN_ACCEPTED, type TokenCheck, tokenCheckFromError } from './token-check';
 
@@ -51,6 +52,7 @@ interface CostRow {
     PageHeader,
     ReactiveFormsModule,
     RouterLink,
+    ModeStamp,
     StatusPill,
     LoadingState,
     ErrorState,
@@ -184,7 +186,8 @@ export class SettingsPage {
   }
 
   // Actions -----------------------------------------------------------------
-  protected saveToken(): void {
+  /** Save the token, then ask who it signs in as, and say so (UX-37). */
+  protected async saveToken(): Promise<void> {
     if (this.tokenForm.invalid) {
       this.tokenForm.markAllAsTouched();
       return;
@@ -193,13 +196,32 @@ export class SettingsPage {
     this.tokenForm.reset();
     this.showToken.set(false);
     this.tokenCheck.set(null);
-    this.toasts.success('API token saved for this browser tab.', 'Token saved');
+    const status = await this.session.load(true);
+    const me = this.session.me();
+    if (status === 'signed-in' && me) {
+      this.toasts.success(
+        `Token saved for this tab. You are ${me.display_name}, ${me.role}.`,
+        'Token saved',
+      );
+      return;
+    }
+    // A token the server refuses would sign this tab out: drop it again.
+    this.auth.clear();
+    await this.session.load(true);
+    this.toasts.error('That token did not work, so it was not kept. Check it and try again.');
   }
 
-  protected clearToken(): void {
+  /** Forget the token, then ask who this tab is without it (UX-37). */
+  protected async clearToken(): Promise<void> {
     this.auth.clear();
     this.tokenCheck.set(null);
-    this.toasts.info('API token removed. The console is read-only until you enter it again.');
+    const status = await this.session.load(true);
+    const me = this.session.me();
+    this.toasts.info(
+      status === 'signed-in' && me
+        ? `Token removed. You are ${me.display_name}, ${me.role}.`
+        : 'Token removed. Sign in to keep using the console.',
+    );
   }
 
   /** Confirms the saved token against the API without changing anything. */

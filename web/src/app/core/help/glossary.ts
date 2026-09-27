@@ -1,10 +1,12 @@
-// Plain-English, one-line explanations of every figure the console shows.
-// The single source for in-app help: <app-help-tip>, stat tiles and table
-// headers look terms up here by key or by their visible label. Every tip
-// links to the in-app glossary page (/help/glossary), built from this file.
+// Plain-English, one-line explanations of every figure and trading word the
+// console shows. The single source for in-app help: <app-help-tip>, stat
+// tiles and table headers look terms up here by key or by their visible
+// label. Every tip links to the in-app glossary page (/help/glossary), built
+// from this file.
 //
-// Add a metric: add a key to METRIC_KEYS, an entry below (the compiler
-// insists), and any labels or API keys it appears under as `aliases`.
+// Add a metric: add a key to METRIC_KEYS (or a trading word to TRADING_KEYS),
+// an entry below (the compiler insists), and any labels or API keys it
+// appears under as `aliases`.
 
 /** The in-app glossary page. Each term has an anchor named after its key. */
 export const GLOSSARY_PATH = '/help/glossary';
@@ -92,6 +94,38 @@ export const METRIC_KEYS = [
 
 export type MetricKey = (typeof METRIC_KEYS)[number];
 
+/**
+ * The words a trader meets in the first hour (UX-42): the trading day, the
+ * modes and the safety controls. Each says the system's own name too
+ * ("also called ..."), so a trader and an operator mean the same thing.
+ */
+export const TRADING_KEYS = [
+  'paper_trading',
+  'live',
+  'signals_only',
+  'auto',
+  'kill_switch',
+  'buys_only',
+  'circuit_breaker',
+  'dry_run',
+  'trading_run',
+  'fill',
+  'universe',
+  'recovery_code',
+] as const;
+
+export type TradingKey = (typeof TRADING_KEYS)[number];
+export type GlossaryKey = MetricKey | TradingKey;
+
+/** Every key, trading words first. */
+export const GLOSSARY_KEYS: readonly GlossaryKey[] = [...TRADING_KEYS, ...METRIC_KEYS];
+
+/** The glossary page's sections, in order. */
+export const GLOSSARY_GROUPS: readonly { title: string; keys: readonly GlossaryKey[] }[] = [
+  { title: 'Trading words', keys: TRADING_KEYS },
+  { title: 'Figures', keys: METRIC_KEYS },
+];
+
 export interface GlossaryEntry {
   /** Display name, as a trader would say it. */
   term: string;
@@ -101,7 +135,79 @@ export interface GlossaryEntry {
   aliases?: readonly string[];
 }
 
-export const GLOSSARY: Record<MetricKey, GlossaryEntry> = {
+export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
+  // Trading words ------------------------------------------------------------
+  paper_trading: {
+    term: 'Paper trading',
+    short:
+      'Trading with pretend money on real prices, to see how a strategy does before real money. Also called shadow.',
+    aliases: ['Paper', 'Shadow', 'Paper mode'],
+  },
+  live: {
+    term: 'Live',
+    short:
+      'Real money: orders go to your broker and fill for real. A strategy goes live after it passes the checks.',
+    aliases: ['Go live', 'Real money'],
+  },
+  signals_only: {
+    term: 'Signals only',
+    short:
+      'You get a notification for each trade a strategy wants and place the order yourself. Also called notify.',
+    aliases: ['Notify', 'Signals only mode'],
+  },
+  auto: {
+    term: 'Auto',
+    short:
+      'Orders go to your broker by themselves at each trading run. It opens after enough paper trading days.',
+    aliases: ['Auto mode', 'Automatic'],
+  },
+  kill_switch: {
+    term: 'Kill switch',
+    short:
+      'Stops new orders at once, for one portfolio, all yours or everyone. No position is closed. Also called a halt.',
+    aliases: ['Stop trading', 'Halt', 'Halts'],
+  },
+  buys_only: {
+    term: 'Stop new buys only',
+    short:
+      'A kill switch that stops new buys but lets sells and exits go out, so you can still leave positions.',
+    aliases: ['Buys only', 'New buys'],
+  },
+  circuit_breaker: {
+    term: 'Circuit breaker',
+    short:
+      'Halts trading by itself after a big weekly or monthly loss or a deep drawdown, until someone clears it.',
+    aliases: ['Breaker', 'Drawdown breaker', 'Loss breaker'],
+  },
+  dry_run: {
+    term: 'Dry run',
+    short:
+      'A practice trading run: strategies decide and orders are sized, but nothing goes to the broker.',
+    aliases: ['Dry-run', 'Rehearsal'],
+  },
+  trading_run: {
+    term: 'Trading run',
+    short:
+      'The moment each day when strategies read prices, decide and send orders. Also called a tick.',
+    aliases: ['Tick', 'Trading runs'],
+  },
+  fill: {
+    term: 'Fill',
+    short: 'An order that was carried out: the shares, price and time the broker traded.',
+    aliases: ['Fills', 'Filled'],
+  },
+  universe: {
+    term: 'Universe',
+    short: 'The list of tickers a strategy may trade, such as an index or your own list.',
+    aliases: ['Universes'],
+  },
+  recovery_code: {
+    term: 'Recovery code',
+    short:
+      'A one-time code that signs you in if you lose your authenticator app. Keep them somewhere safe.',
+    aliases: ['Recovery codes'],
+  },
+  // Figures ------------------------------------------------------------------
   total_return: {
     term: 'Total return',
     short: 'How much the value grew or shrank over the whole period, as a percentage.',
@@ -449,7 +555,7 @@ export const GLOSSARY: Record<MetricKey, GlossaryEntry> = {
 };
 
 export interface GlossaryMatch {
-  key: MetricKey;
+  key: GlossaryKey;
   entry: GlossaryEntry;
 }
 
@@ -458,9 +564,9 @@ function normalise(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9%]+/g, '');
 }
 
-const INDEX: ReadonlyMap<string, MetricKey> = (() => {
-  const map = new Map<string, MetricKey>();
-  for (const key of METRIC_KEYS) {
+const INDEX: ReadonlyMap<string, GlossaryKey> = (() => {
+  const map = new Map<string, GlossaryKey>();
+  for (const key of GLOSSARY_KEYS) {
     const entry = GLOSSARY[key];
     for (const name of [key, entry.term, ...(entry.aliases ?? [])]) {
       const norm = normalise(name);

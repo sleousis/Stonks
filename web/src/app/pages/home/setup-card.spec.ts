@@ -57,6 +57,27 @@ describe('SetupCard', () => {
     expect(el.querySelector('section')).toBeNull();
   });
 
+  it('holds its place while loading only if it showed last time', async () => {
+    localStorage.removeItem(`stonks.setupShown.${TRADER.user_id}`);
+    let fixture = TestBed.createComponent(SetupCard);
+    fixture.detectChanges();
+    // A new trader: the guide is likely, so its place is held.
+    expect(fixture.nativeElement.querySelector('.reserve')).not.toBeNull();
+    (await nextRequest(http, '/api/onboarding')).flush({ ...VIEW, show: false });
+    await tick();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.reserve')).toBeNull();
+    expect(localStorage.getItem(`stonks.setupShown.${TRADER.user_id}`)).toBe('0');
+
+    // Next visit: the guide was closed, so nothing is held.
+    fixture.destroy();
+    fixture = TestBed.createComponent(SetupCard);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.reserve')).toBeNull();
+    (await nextRequest(http, '/api/onboarding')).flush({ ...VIEW, show: false });
+    await tick();
+  });
+
   it('stays out of the way when the guide cannot load', async () => {
     const fixture = TestBed.createComponent(SetupCard);
     fixture.detectChanges();

@@ -7,6 +7,8 @@ The follow is for signals only, so no book trades in the other journeys.
 
 from __future__ import annotations
 
+import re
+
 import pyotp
 import pytest
 from playwright.sync_api import expect
@@ -40,9 +42,9 @@ def test_a_trader_opens_a_portfolio_and_follows_a_strategy(browse, stack, viewpo
     v.go(f"/strategies/{sid}")
     follow = page.locator("app-follow-panel")
     expect(follow.get_by_role("radio")).to_have_count(2)
-    follow.get_by_label("Paper trading").check()
+    follow.get_by_role("radio", name=re.compile("^Paper trading")).check()
     expect(follow.get_by_label("Portfolio", exact=True)).to_contain_text(name)
-    follow.get_by_label("Signals only").check()
+    follow.get_by_role("radio", name=re.compile("^Signals only")).check()
     v.check_page("strategy-follow")
     follow.get_by_role("button", name="Follow").click()
     expect(follow).to_contain_text("You follow this strategy")

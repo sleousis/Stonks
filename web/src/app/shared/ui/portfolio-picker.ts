@@ -6,8 +6,9 @@ import { ModeStamp } from './mode-stamp';
 /**
  * Which portfolio the money pages show. Sits in the session strip; renders
  * only when the user has more than one portfolio (and the server lists
- * them). A live portfolio carries a brass LIVE stamp, a paper one a grey
- * PAPER stamp.
+ * them). One option per portfolio (UX-69): with no pick yet, the default
+ * portfolio shows as chosen. A live portfolio carries a brass LIVE stamp, a
+ * paper one a grey PAPER stamp.
  */
 @Component({
   selector: 'app-portfolio-picker',
@@ -20,12 +21,13 @@ import { ModeStamp } from './mode-stamp';
         <select
           id="portfolio-picker"
           class="input"
-          [value]="ctx.selectedId() ?? ''"
           (change)="ctx.select($any($event.target).value)"
         >
-          <option value="">My default portfolio</option>
+          @if (!ctx.current()) {
+            <option value="" selected>Pick a portfolio</option>
+          }
           @for (p of ctx.options(); track p.id) {
-            <option [value]="p.id" [selected]="p.id === ctx.selectedId()">
+            <option [value]="p.id" [selected]="p.id === ctx.current()?.id">
               {{ p.name }}{{ p.trading === 'live' ? ' (live)' : '' }}
             </option>
           }

@@ -5,6 +5,8 @@ import { provideRouter } from '@angular/router';
 import type { PnlSeries, PortfolioView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
+import { TradingDayService } from '../../core/schedule/trading-day.service';
+import { AUTO_REFRESH_MS } from '../../shared/auto-refresh';
 import { ADMIN, TRADER, UNAUTHORIZED, problem } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
 import { book } from '../../../testing/portfolio-fixtures';
@@ -61,6 +63,7 @@ describe('HomePage', () => {
       providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting()],
     });
     controller = TestBed.inject(HttpTestingController);
+    TestBed.inject(TradingDayService)['settledSignal'].set(true);
   });
 
   afterEach(() => controller.verify());
@@ -191,5 +194,103 @@ describe('HomePage', () => {
     controller.expectNone('/api/pnl');
     controller.expectNone('/api/orders/fills');
     expect(el.querySelector('app-fills-tape section')).toBeNull();
+  });
+
+  describe('during the session (UX-12)', () => {
+    const START = Date.parse('2026-09-28T14:00:00Z');
+
+    beforeEach(() => {
+      // Intervals and the clock are fake; setTimeout stays real for the HTTP helpers.
+      vi.useFakeTimers({ now: START, toFake: ['setInterval', 'clearInterval', 'Date'] });
+    });
+    afterEach(() => vi.useRealTimers());
+
+    /** Today with one portfolio, every first read answered. */
+    async function openToday() {
+      await signIn(TRADER);
+      const fixture = TestBed.createComponent(HomePage);
+      fixture.detectChanges();
+      (await nextRequest(controller, '/api/portfolios')).flush(
+        page([book({ id: 'pf_1', name: 'Main' })]),
+      );
+      (await nextRequest(controller, '/api/portfolio')).flush(PORTFOLIO);
+      (await nextRequest(controller, '/api/pnl')).flush(PNL);
+      await flushCommon();
+      await flushPersonal();
+      await flushTape();
+      await tick();
+      fixture.detectChanges();
+      return fixture;
+    }
+
+    /** Every request made since the last flush, by path; all answered. */
+    async function askedAgain(fixture: { detectChanges(): void }): Promise<string[]> {
+      for (let i = 0; i < 5; i++) {
+        await tick(2);
+        fixture.detectChanges();
+      }
+      const reqs = controller.match(() => true);
+      const paths = reqs.map((r) => r.request.url.split('?')[0]);
+      for (const r of reqs) {
+        const path = r.request.url.split('?')[0];
+        if (path === '/api/portfolio') r.flush(PORTFOLIO);
+        else if (path === '/api/pnl') r.flush(PNL);
+        else if (path === '/api/notifications') r.flush({ items: [], unread_count: 0 });
+        else r.flush(page([]));
+      }
+      await tick();
+      return paths;
+    }
+
+    it('after AUTO_REFRESH_MS the feed, fills and portfolio are requested again', async () => {
+      const fixture = await openToday();
+      expect(await askedAgain(fixture)).toEqual([]);
+
+      vi.advanceTimersByTime(AUTO_REFRESH_MS);
+      const paths = await askedAgain(fixture);
+      for (const path of [
+        '/api/notifications',
+        '/api/orders/fills',
+        '/api/portfolio',
+        '/api/pnl',
+        '/api/subscriptions',
+      ]) {
+        expect(paths).toContain(path);
+      }
+    });
+
+    it('reloads when the next trading run starts, before the minute is up', async () => {
+      const day = TestBed.inject(TradingDayService);
+      day['settledSignal'].set(true);
+      day['jobsSignal'].set([
+        {
+          action: 'connections_sync',
+          name: 'connections_sync',
+          next_run_at: new Date(START + 5_000).toISOString(),
+          next_as_of: null,
+          trigger: 'interval',
+        },
+        {
+          action: 'tick',
+          name: 'tick',
+          next_run_at: new Date(START + 20_000).toISOString(),
+          next_as_of: null,
+          trigger: 'daily',
+        },
+      ]);
+      const fixture = await openToday();
+      const el: HTMLElement = fixture.nativeElement;
+      expect(el.querySelector('.row.next .title')?.textContent).toContain('Next: Trading run');
+
+      vi.advanceTimersByTime(10_000);
+      expect(await askedAgain(fixture)).toEqual([]);
+
+      // The day service counts the run once its time has passed (its own spec covers when).
+      day['passed'].update((n) => n + 1);
+      const paths = await askedAgain(fixture);
+      expect(paths).toContain('/api/notifications');
+      expect(paths).toContain('/api/orders/fills');
+      expect(paths).toContain('/api/portfolio');
+    });
   });
 });

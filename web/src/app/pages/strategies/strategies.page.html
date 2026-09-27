@@ -1,6 +1,6 @@
 <app-page-header
   title="Strategies"
-  description="Every registered strategy, its status and its survival evidence."
+  description="Every strategy, where it is on its way to live, and how it does on paper."
 >
   <a actions class="btn btn-ghost" routerLink="/leaderboard">Leaderboard</a>
   <button
@@ -17,7 +17,7 @@
 
 <section class="panel" aria-labelledby="list-title">
   <div class="panel-head">
-    <h2 id="list-title">Registry</h2>
+    <h2 id="list-title">All strategies</h2>
     @if (countLabel(); as count) {
       <span class="muted num" aria-live="polite">{{ count }}</span>
     }
@@ -65,8 +65,8 @@
     <app-loading-state label="Loading strategies" [rows]="6" />
   } @else if (strategies.value().items.length === 0) {
     <app-empty-state
-      [title]="statusFilter() ? 'No ' + statusFilter() + ' strategies' : 'No strategies registered'"
-      message="A strategy appears here once a lab run passes its survival tests and is registered, or when you start paper trading a draft in Studio."
+      [title]="statusFilter() ? 'Nothing is ' + filterWord() : 'No strategies yet'"
+      message="A strategy appears here once it passes its tests in Lab and starts paper trading, or when you start paper trading a draft in Studio."
     >
       @if (statusFilter()) {
         <button type="button" class="btn" (click)="setStatus(null)">Show all statuses</button>
@@ -90,7 +90,7 @@
       <p class="hint paper-note">Paper results could not be loaded, so those columns are empty.</p>
     }
     <app-data-table
-      caption="Registered strategies"
+      caption="Strategies"
       [rows]="visible()"
       [columns]="columns"
       [rowKey]="strategyKey"
@@ -98,7 +98,7 @@
       [pageSize]="25"
     >
       <ng-template appCell="id" [appCellOf]="visible()" let-s>
-        <a class="id-link" [routerLink]="['/strategies', s.id]">{{ s.id }}</a>
+        <a class="id-link" [routerLink]="['/strategies', s.id]">{{ s.name }}</a>
       </ng-template>
       <ng-template appCell="status" [appCellOf]="visible()" let-s>
         <app-status-pill [status]="s.status" />

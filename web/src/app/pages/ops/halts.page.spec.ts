@@ -13,7 +13,7 @@ import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, page, tick } from '../../../testing/http';
-import { answerDialog, dialogForm, fillDialog } from '../../../testing/status-dialog';
+import { answerDialog } from '../../../testing/status-dialog';
 import { HaltsPage } from './halts.page';
 import { book } from '../../../testing/portfolio-fixtures';
 
@@ -81,13 +81,18 @@ describe('HaltsPage', () => {
       pending = http.match(isHalts);
     }
     if (!pending.length) throw new Error('no GET /api/halts request');
-    await tick(5);
-    pending = [...pending, ...http.match(isHalts)];
-    for (const req of pending) {
-      const everything = req.request.urlWithParams.includes('include_cleared=true');
-      req.flush(page(everything ? all : all.filter((h) => h.active)));
+    // A read can start another (the page follows the app-wide halt state), so
+    // keep answering until the page is quiet.
+    for (let round = 0; round < 5 && pending.length; round++) {
+      await tick(5);
+      pending = [...pending, ...http.match(isHalts)];
+      for (const req of pending) {
+        const everything = req.request.urlWithParams.includes('include_cleared=true');
+        req.flush(page(everything ? all : all.filter((h) => h.active)));
+      }
+      await settle();
+      pending = http.match(isHalts);
     }
-    await settle();
   }
 
   function button(text: string): HTMLButtonElement | undefined {
@@ -134,8 +139,12 @@ describe('HaltsPage', () => {
       expect(active.textContent).toContain('Kill switch on');
       expect(active.textContent).toContain('Kill switch');
       expect(active.textContent).toContain('Broker outage');
-      expect(active.textContent).toContain('Portfolio pf_default');
-      expect(active.textContent).toContain('Buys only');
+      // No portfolio names known to an admin here: still no ids (UX-17).
+      expect(active.textContent).toContain('One portfolio');
+      expect(active.textContent).not.toContain('pf_default');
+      // "Stops: New buys", not "Buys only" (UX-66).
+      expect(active.textContent).toContain('New buys');
+      expect(active.textContent).not.toContain('Buys only');
       expect(button('Resume trading')).toBeDefined();
       expect(button('Clear')).toBeDefined();
 
@@ -163,7 +172,6 @@ describe('HaltsPage', () => {
 
       button('Engage kill switch')!.click();
       const post = await nextRequest(http, '/api/halts/kill', 'POST');
-      expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ tone: 'danger' }));
       expect(post.request.body).toEqual({
         scope: 'portfolio',
         reason: 'Odd fills',
@@ -172,15 +180,74 @@ describe('HaltsPage', () => {
       });
       post.flush(halt({ id: 9, scope: 'portfolio', portfolio_id: 'pf_default', halt: 'buys' }));
       await flushAll([KILL, BREAKER, OLD]);
-      expect(success).toHaveBeenCalledWith('Engaged the kill switch for portfolio pf_default.');
+      expect(success).toHaveBeenCalledWith('Engaged the kill switch: One portfolio.');
+    });
+
+    it('engage confirm shows scope and Stops lines as a ticket (UX-51)', async () => {
+      const reason = el.querySelector<HTMLTextAreaElement>('#kill-reason')!;
+      reason.value = 'Odd fills';
+      reason.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      confirm.mockResolvedValue(false);
+      button('Engage kill switch')!.click();
+      await settle();
+      expect(confirm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tone: 'danger',
+          confirmLabel: 'Engage kill switch',
+          ticket: {
+            kind: 'Kill switch',
+            live: false,
+            lines: [
+              { label: 'Scope', value: 'Every portfolio' },
+              { label: 'Stops', value: 'All new orders' },
+              { label: 'Still goes out', value: 'Nothing new' },
+              { label: 'Reason', value: 'Odd fills' },
+            ],
+          },
+        }),
+      );
+      expect(http.match('/api/halts/kill')).toEqual([]);
+    });
+
+    it('reloads when the app-wide halt state changes, e.g. Stop trading in the strip (UX-45)', async () => {
+      const fromStrip = halt({ id: 20, reason: 'From the strip', tripped_by: 'usr_admin' });
+      TestBed.inject(HaltStateService).add(fromStrip);
+      TestBed.tick();
+      await flushAll([KILL, BREAKER, OLD, fromStrip]);
+      expect(el.querySelector('[aria-labelledby="active-title"]')!.textContent).toContain(
+        'From the strip',
+      );
+    });
+
+    it('turns the page head red while a kill switch is on (UX-51)', () => {
+      expect(el.querySelector('app-page-header')!.classList).toContain('kill-on');
     });
 
     it('resumes only with the typed words and after a step-up', async () => {
       button('Resume trading')!.click();
       await settle();
-      expect(dialogForm(el)!.textContent).toContain('RESUME TRADING');
-      expect(fillDialog(fixture, { reason: 'Broker back', typed: 'resume' }).disabled).toBe(true);
-      answerDialog(fixture, { reason: 'Broker back', typed: 'RESUME TRADING' });
+      const form = el.querySelector<HTMLFormElement>('app-resume-sheet form')!;
+      // A ticket: scope, what starts again, and the stamp.
+      const ticket = form.querySelector('[aria-label="Resume trading"]')!;
+      expect(ticket.textContent).toContain('Every portfolio');
+      expect(ticket.textContent).toContain('All new orders');
+      expect(ticket.textContent).toContain('Broker outage');
+      expect(ticket.querySelector('.stamp')!.textContent).toContain('PAPER');
+      const type = (sel: string, text: string) => {
+        const input = form.querySelector<HTMLInputElement | HTMLTextAreaElement>(sel)!;
+        input.value = text;
+        input.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+      };
+      const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+      type('#resume-reason', 'Broker back');
+      type('#resume-typed', 'resume');
+      expect(submit.disabled).toBe(true);
+      type('#resume-typed', 'RESUME TRADING');
+      expect(submit.disabled).toBe(false);
+      submit.click();
+      fixture.detectChanges();
 
       const post = await nextRequest(http, '/api/halts/1/resume', 'POST');
       expect(stepUp).toHaveBeenCalledWith('Resume trading');

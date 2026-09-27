@@ -6,7 +6,10 @@ import type { FeedItemView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { nextRequest, tick } from '../../../testing/http';
 import type { TickRun } from '../../api/models';
-import { SignalsCard, appLink, runDetail, todaysRuns, todaysSignals } from './signals-card';
+import { formatWeekday } from '../../core/format/format';
+import { NotificationFeedService } from '../../core/notify/notification-feed.service';
+import { TradingDayService } from '../../core/schedule/trading-day.service';
+import { SignalsCard, runDetail, todaysRuns, todaysSignals } from './signals-card';
 
 function run(overrides: Partial<TickRun>): TickRun {
   return {
@@ -45,13 +48,6 @@ describe('todaysSignals', () => {
     ];
     expect(todaysSignals(items, now).map((i) => i.id)).toEqual([1, 2]);
   });
-
-  it('opens same-app links only', () => {
-    expect(appLink('/strategies/x')).toBe('/strategies/x');
-    expect(appLink('https://evil.example')).toBeNull();
-    expect(appLink('//evil.example')).toBeNull();
-    expect(appLink(null)).toBeNull();
-  });
 });
 
 describe('trading runs on the blotter', () => {
@@ -78,11 +74,35 @@ describe('SignalsCard', () => {
       providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting()],
     });
     controller = TestBed.inject(HttpTestingController);
+    // The strip reads the schedule. Here it has been read: nothing to wait for.
+    TestBed.inject(TradingDayService)['settledSignal'].set(true);
   });
 
   afterEach(() => controller.verify());
 
+  it('keeps the loading rows until the schedule is read, so nothing jumps', async () => {
+    TestBed.inject(TradingDayService)['settledSignal'].set(false);
+    const fixture = TestBed.createComponent(SignalsCard);
+    fixture.detectChanges();
+    (await nextRequest(controller, '/api/notifications')).flush({ items: [], unread_count: 0 });
+    (await nextRequest(controller, '/api/ticks')).flush({
+      items: [],
+      total: 0,
+      limit: 10,
+      offset: 0,
+    });
+    await tick();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('app-loading-state')).not.toBeNull();
+    TestBed.inject(TradingDayService)['settledSignal'].set(true);
+    fixture.detectChanges();
+    expect(el.querySelector('app-loading-state')).toBeNull();
+  });
+
   it('lists today signals, marks new ones, and marks them read', async () => {
+    const counter = TestBed.inject(NotificationFeedService);
+    counter.set(5);
     const fixture = TestBed.createComponent(SignalsCard);
     fixture.detectChanges();
     const feed = await nextRequest(controller, '/api/notifications');
@@ -107,11 +127,69 @@ describe('SignalsCard', () => {
     [...el.querySelectorAll('button')].find((b) => b.textContent?.includes('Mark all'))!.click();
     const read = await nextRequest(controller, '/api/notifications/read', 'POST');
     expect(read.request.body).toEqual({ ids: [7] });
-    read.flush({ updated: 1, unread_count: 0 });
-    (await nextRequest(controller, '/api/notifications')).flush({ items: [], unread_count: 0 });
+    read.flush({ updated: 1, unread_count: 2 });
+    (await nextRequest(controller, '/api/notifications')).flush({ items: [], unread_count: 2 });
     await tick();
     fixture.detectChanges();
     expect(el.textContent).toContain('No signals today');
+    // The bell takes the reply's count (UX-32).
+    expect(counter.unread()).toBe(2);
+  });
+
+  it('counts down to the next trading run, not the earliest system job (UX-08)', async () => {
+    const soon = (min: number) => new Date(Date.now() + min * 60_000).toISOString();
+    TestBed.inject(TradingDayService)['jobsSignal'].set([
+      {
+        action: 'connections_sync',
+        name: 'connections_sync',
+        next_run_at: soon(5),
+        next_as_of: null,
+        trigger: 'interval',
+      },
+      {
+        action: 'health',
+        name: 'health',
+        next_run_at: soon(10),
+        next_as_of: null,
+        trigger: 'interval',
+      },
+      { action: 'tick', name: 'tick', next_run_at: soon(90), next_as_of: null, trigger: 'daily' },
+    ]);
+    const fixture = TestBed.createComponent(SignalsCard);
+    fixture.detectChanges();
+    (await nextRequest(controller, '/api/notifications')).flush({ items: [], unread_count: 0 });
+    (await nextRequest(controller, '/api/ticks')).flush({
+      items: [],
+      total: 0,
+      limit: 10,
+      offset: 0,
+    });
+    await tick();
+    fixture.detectChanges();
+    const next = (fixture.nativeElement as HTMLElement).querySelector('.row.next')!;
+    expect(next.querySelector('.title')?.textContent?.trim()).toBe('Next: Trading run');
+    expect(next.textContent).toContain('1h 2');
+    expect(next.textContent).not.toMatch(/sync|Health|Tick/);
+  });
+
+  it('names the weekday of a trading run on another day', async () => {
+    const at = new Date(Date.now() + 3 * 86_400_000).toISOString();
+    TestBed.inject(TradingDayService)['jobsSignal'].set([
+      { action: 'tick', name: 'tick', next_run_at: at, next_as_of: null, trigger: 'daily' },
+    ]);
+    const fixture = TestBed.createComponent(SignalsCard);
+    fixture.detectChanges();
+    (await nextRequest(controller, '/api/notifications')).flush({ items: [], unread_count: 0 });
+    (await nextRequest(controller, '/api/ticks')).flush({
+      items: [],
+      total: 0,
+      limit: 10,
+      offset: 0,
+    });
+    await tick();
+    fixture.detectChanges();
+    const time = (fixture.nativeElement as HTMLElement).querySelector('.row.next .time')!;
+    expect(time.querySelector('.weekday')?.textContent?.trim()).toBe(formatWeekday(at));
   });
 
   it('puts runs and signals in one time line, newest first', async () => {

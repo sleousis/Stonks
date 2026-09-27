@@ -38,15 +38,15 @@ describe('OrdersPage', () => {
   const headerLink = (el: HTMLElement) =>
     el.querySelector<HTMLAnchorElement>('app-page-header a.btn');
 
-  it('offers "Go to trading runs" on the orders tab, as a plain link', async () => {
+  it('has no header link to trading runs: the tabs hold it', async () => {
     const el = await at('/orders');
-    const link = headerLink(el);
-    expect(link?.textContent?.trim()).toBe('Go to trading runs');
-    expect(link?.classList).not.toContain('btn-primary');
+    expect(headerLink(el)).toBeNull();
+    const tab = el.querySelector<HTMLAnchorElement>('nav.tabs a[href="/orders/ticks"]');
+    expect(tab?.textContent?.trim()).toBe('Trading runs');
     expect(el.textContent).not.toContain('Run tick');
   });
 
-  it('drops the link on the trading runs tab, where the runner is on screen', async () => {
+  it('shows the tabs on the trading runs tab too', async () => {
     const el = await at('/orders/ticks');
     expect(headerLink(el)).toBeNull();
     expect(el.querySelector('nav.tabs')?.textContent).toContain('Trading runs');

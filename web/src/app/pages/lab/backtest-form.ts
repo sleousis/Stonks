@@ -22,13 +22,14 @@ import { type ParamValues, defaultParamValues } from '../../shared/ui/param-form
 import {
   type BacktestForm,
   type BenchmarkForm,
-  type CostChoice,
+  type CostForm,
   type WindowForm,
   backtestErrors,
   buildBacktestRequest,
   defaultBacktestForm,
 } from './lab-requests';
 import { BenchmarkField } from './benchmark-field';
+import { CostField } from './cost-field';
 import { StrategyPicker } from './strategy-picker';
 import { type StrategyPreset, presetParamValues } from './strategy-preset';
 import { WindowFields } from './window-fields';
@@ -37,7 +38,7 @@ import { WindowFields } from './window-fields';
 @Component({
   selector: 'app-backtest-form',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [StrategyPicker, ParamForm, WindowFields, BenchmarkField, PermissionNote],
+  imports: [StrategyPicker, ParamForm, WindowFields, BenchmarkField, CostField, PermissionNote],
   templateUrl: './backtest-form.html',
   styleUrl: './lab-form.scss',
 })
@@ -78,13 +79,6 @@ export class BacktestFormView {
   /** Shown only after a submit attempt, so a fresh form isn't all red. */
   protected readonly errors = computed(() => (this.tried() ? this.allErrors() : {}));
   protected readonly errorCount = computed(() => Object.keys(this.errors()).length);
-  protected readonly costHint = computed(() => {
-    const c = this.form().cost;
-    if (c === 'configured') return 'The fees and slippage your admin set up for backtests.';
-    if (c === 'flat') return 'A flat slippage on every fill and a fixed fee per trade.';
-    return this.costModels().find((m) => m.name === c)?.description ?? '';
-  });
-
   protected selectClass(classPath: string): void {
     const cls = this.classes().find((c) => c.class_path === classPath);
     this.form.update((f) => ({
@@ -94,16 +88,14 @@ export class BacktestFormView {
     }));
   }
 
-  protected patch(p: Partial<BacktestForm> | Partial<WindowForm> | Partial<BenchmarkForm>): void {
+  protected patch(
+    p: Partial<BacktestForm> | Partial<WindowForm> | Partial<BenchmarkForm> | Partial<CostForm>,
+  ): void {
     this.form.update((f) => ({ ...f, ...p }));
   }
 
   protected setParams(params: ParamValues): void {
     this.patch({ params });
-  }
-
-  protected setCost(cost: string): void {
-    this.patch({ cost: cost as CostChoice });
   }
 
   protected setNumber(key: keyof BacktestForm, raw: string): void {

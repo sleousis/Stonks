@@ -202,4 +202,21 @@ describe('NotificationPrefs', () => {
     await tick();
     expect(info).toHaveBeenCalledWith(expect.stringContaining('Turn on push'));
   });
+
+  it('asks for a moment when a test was sent in the last minute (429)', async () => {
+    const toasts = TestBed.inject(ToastService);
+    const info = vi.spyOn(toasts, 'info');
+    const error = vi.spyOn(toasts, 'error');
+    const el = await render();
+    button(el, 'Send a test notification')!.click();
+    (await nextRequest(controller, '/api/notifications/test', 'POST')).flush(
+      { title: 'Too Many Requests', status: 429, detail: 'One test notification a minute.' },
+      { status: 429, statusText: 'Too Many Requests', headers: { 'Retry-After': '42' } },
+    );
+    await tick();
+    expect(info).toHaveBeenCalledWith('One test a minute. Wait a moment, then send another.');
+    expect(error).not.toHaveBeenCalled();
+    fixture.detectChanges();
+    expect(button(el, 'Send a test notification')!.disabled).toBe(false);
+  });
 });

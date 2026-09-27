@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { SessionService } from '../../core/auth/session.service';
 import { formatLongDay } from '../../core/format/format';
+import { type Reloadable, autoRefresh } from '../../shared/auto-refresh';
 import { FillsTape } from './fills-tape';
 import { PageHeader } from '../../shared/ui/page-header';
 import { PortfolioCard } from './portfolio-card';
@@ -11,6 +12,7 @@ import { WatchlistFilter } from '../../shared/ui/watchlist-filter';
 import { SignalsCard } from './signals-card';
 import { StrategiesCard } from './strategies-card';
 import { TotalsCard } from './totals-card';
+import { TradingDayService } from '../../core/schedule/trading-day.service';
 
 /**
  * Today, the trader's home: my portfolio (admins see totals across traders
@@ -103,6 +105,20 @@ import { TotalsCard } from './totals-card';
 })
 export class HomePage {
   protected readonly session = inject(SessionService);
+
+  /**
+   * The strategies card keeps its switches fresh too (UX-12). Its file
+   * belongs to another page agent, so Today reloads its list from here: the
+   * other cards refresh themselves the same way.
+   */
+  private readonly strategiesCard = viewChild(StrategiesCard);
+  protected readonly strategiesAuto = autoRefresh(
+    () => {
+      const card = this.strategiesCard();
+      return card ? [card['subs'] as Reloadable] : [];
+    },
+    { triggers: [inject(TradingDayService).runsPassed] },
+  );
 
   /** "Sunday 27 September" in the trader's locale, then what the page holds. */
   protected readonly dateLine = computed(

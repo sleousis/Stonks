@@ -101,6 +101,25 @@ A wrapper gates an inner strategy. It takes the inner strategy's asset classes.
 
 The `vix_term_structure` regime condition triggers when spot VIX is above 3-month VIX (an inverted curve). It reads `vix_spot` and `vix_3m` from `macro_indicators`. Load them with `stonks ingest macro --source yahoo --countries USA --indicators vix_spot,vix_3m`.
 
+## Options (roadmap 17.5)
+
+Options strategies have their own catalog (`stonks.options.strategies`) and their own backtest, so the lab list above does not include them. They are research only: off by default, never in the tick. Each one returns intents such as "sell a 0.30 delta call 35 days out", and the structure registry picks the contracts from the day's chain. See [the options design](../design/options.md).
+
+| Id | What it does |
+|----|--------------|
+| `covered_call` | Holds round lots and writes one call per 100 shares near 0.30 delta, 35 days out. Buys back at half the credit or near expiry. |
+| `cash_secured_put` | Sells puts near 0.25 delta secured by cash, with an optional trend filter. Assigned shares get covered calls (the wheel). |
+| `protective_put` | Holds round lots and buys puts only while the close is below its moving average. |
+| `vertical_spread` | Debit spreads in the direction of time-series momentum: a bull call spread when the trend is up, a bear put spread when it is down. |
+| `vol_premium_condor` | Sells an iron condor when at-the-money implied vol is rich against realized vol. |
+
+```bash
+uv run stonks options strategies
+uv run stonks options backtest covered_call --underlyings AAPL.US --start 2025-01-01 --end 2025-12-31 --validate
+```
+
+`--validate` runs the survival tests that apply to an options equity curve: out of sample PSR, deflated Sharpe, wider fills, missing quote days and doubled fees.
+
 ## Not in the catalog
 
 - **`TrailingStopWrapper`** (`strategies/trailing_stop.py`): a volatility-scaled trailing stop around any strategy. Used in code; `stonks lab run` cannot name it yet. [Details](book-strategies.md#trailingstopwrapper).

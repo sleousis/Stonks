@@ -57,16 +57,46 @@
       </div>
       <div class="field">
         <label for="user-password">First password</label>
-        <input
-          id="user-password"
-          class="input"
-          type="password"
-          formControlName="password"
-          autocomplete="new-password"
-          aria-describedby="user-password-hint"
-        />
-        @if (form.controls.password.touched && form.controls.password.invalid) {
-          <span class="error">Use at least {{ passwordMin }} characters.</span>
+        <!-- Not the admin's own password: keep password managers from saving it (UX-40). -->
+        <div class="with-button">
+          <input
+            id="user-password"
+            class="input"
+            formControlName="password"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            data-1p-ignore
+            data-lpignore="true"
+            data-form-type="other"
+            [type]="showNewPassword() ? 'text' : 'password'"
+            [attr.aria-invalid]="newPasswordInvalid()"
+            [attr.aria-describedby]="
+              newPasswordInvalid() ? 'user-password-error' : 'user-password-hint'
+            "
+          />
+          <button
+            type="button"
+            class="btn"
+            [attr.aria-pressed]="showNewPassword()"
+            [attr.aria-label]="showNewPassword() ? 'Hide password' : 'Show password'"
+            (click)="showNewPassword.set(!showNewPassword())"
+          >
+            {{ showNewPassword() ? 'Hide' : 'Show' }}
+          </button>
+        </div>
+        <div class="pw-tools">
+          <button type="button" class="btn btn-ghost" (click)="generateNewPassword()">
+            Generate
+          </button>
+          @if (form.controls.password.value) {
+            <app-copy-button [text]="form.controls.password.value" label="password" />
+          }
+        </div>
+        @if (newPasswordInvalid()) {
+          <span id="user-password-error" class="error"
+            >Use at least {{ passwordMin }} characters.</span
+          >
         } @else {
           <span id="user-password-hint" class="hint"
             >Share it privately. They set up their authenticator at first sign-in.</span
@@ -193,15 +223,39 @@
       </p>
       <div class="field">
         <label for="reset-password">New password</label>
-        <input
-          id="reset-password"
-          class="input"
-          type="password"
-          autocomplete="new-password"
-          aria-describedby="reset-password-hint"
-          [value]="newPassword()"
-          (input)="newPassword.set($any($event.target).value)"
-        />
+        <div class="with-button">
+          <input
+            id="reset-password"
+            class="input"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            data-1p-ignore
+            data-lpignore="true"
+            data-form-type="other"
+            aria-describedby="reset-password-hint"
+            [type]="showResetPassword() ? 'text' : 'password'"
+            [value]="newPassword()"
+            (input)="newPassword.set($any($event.target).value)"
+          />
+          <button
+            type="button"
+            class="btn"
+            [attr.aria-pressed]="showResetPassword()"
+            [attr.aria-label]="showResetPassword() ? 'Hide password' : 'Show password'"
+            (click)="showResetPassword.set(!showResetPassword())"
+          >
+            {{ showResetPassword() ? 'Hide' : 'Show' }}
+          </button>
+        </div>
+        <div class="pw-tools">
+          <button type="button" class="btn btn-ghost" (click)="generateResetPassword()">
+            Generate
+          </button>
+          @if (newPassword()) {
+            <app-copy-button [text]="newPassword()" label="password" />
+          }
+        </div>
         <span id="reset-password-hint" class="hint">At least {{ passwordMin }} characters.</span>
       </div>
       <app-typed-confirm inputId="reset-typed" [phrase]="resetPhrase()" [(value)]="resetTyped" />

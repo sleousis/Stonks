@@ -17,6 +17,7 @@ import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-tab
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { DateTimePipe } from '../../shared/format.pipes';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { TickModeTag } from './tick-mode';
 import { TickRunner } from './tick-runner';
 import { tickOutcome } from './tick-summary';
 
@@ -29,7 +30,10 @@ const TICK_STATUSES = [
   { value: 'running', label: 'Running' },
 ];
 
-/** Trading run history (server paged, filter by status) and the runner. */
+/**
+ * Trading run history (server paged, filter by status) and the runner. Each
+ * row says Dry run, or stamps where the orders went, when the run recorded it.
+ */
 @Component({
   selector: 'app-ticks-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -40,6 +44,7 @@ const TICK_STATUSES = [
     TableCell,
     StatusPill,
     TickRunner,
+    TickModeTag,
     LoadingState,
     EmptyState,
     ErrorState,
@@ -106,7 +111,10 @@ const TICK_STATUSES = [
                 }}</a>
               </ng-template>
               <ng-template appCell="status" [appCellOf]="p.items" let-t>
-                <app-status-pill [status]="t.status" />
+                <span class="status-cell">
+                  <app-status-pill [status]="t.status" />
+                  <app-tick-mode [summary]="t.summary" />
+                </span>
               </ng-template>
               <ng-template appCell="outcome" [appCellOf]="p.items" let-t>
                 <span
@@ -130,6 +138,12 @@ const TICK_STATUSES = [
 
     .head-tools select {
       min-width: 9rem;
+    }
+    .status-cell {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2);
     }
     @include bp.phone {
       .runner {

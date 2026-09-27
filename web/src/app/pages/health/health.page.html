@@ -1,4 +1,5 @@
 <app-page-header title="Health" [description]="checkedAt()">
+  <app-updated-ago [at]="auto.updatedAt()" />
   <button
     actions
     type="button"
@@ -248,6 +249,11 @@
         [rowKey]="tickKey"
         [pageSize]="0"
       >
+        <ng-template appCell="started_at" [appCellOf]="failedTicks.value().items" let-t>
+          <a class="num cell-link" [routerLink]="['/orders/ticks', t.id]">{{
+            dateTime(t.started_at)
+          }}</a>
+        </ng-template>
         <ng-template appCell="status" [appCellOf]="failedTicks.value().items" let-t>
           <app-status-pill [status]="t.status" />
         </ng-template>

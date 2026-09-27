@@ -20,8 +20,14 @@ describe('autoBlockedReason', () => {
   });
 
   it('shows other blockers as sentences', () => {
-    expect(autoBlockedReason(sub({ auto_blockers: ['strategy is shadow'] }))).toBe(
-      'Strategy is shadow.',
+    expect(autoBlockedReason(sub({ auto_blockers: ['the portfolio is paused'] }))).toBe(
+      'The portfolio is paused.',
+    );
+  });
+
+  it('says live instead of the status key (UX-09)', () => {
+    expect(autoBlockedReason(sub({ auto_blockers: ['the strategy is not active'] }))).toBe(
+      'The strategy is not live yet.',
     );
   });
 });
