@@ -14,7 +14,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from functools import partial
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 import pydantic
@@ -463,12 +463,11 @@ class IngestPipeline:
             quality.bars_checked += len(frame)
             # a row with a missing price never overwrites a stored bar,
             # even with the checker off (BE-37)
-            missing = frame[list(_PRICE_COLUMNS)].isna().any(axis=1)
-            if missing.any():
-                self._log.warning(
-                    "bars.missing_price_dropped", ticker=ticker, rows=int(missing.sum())
-                )
-            return frame[~missing], 0
+            missing = cast(pd.Series, frame[list(_PRICE_COLUMNS)].isna().any(axis=1))
+            dropped = int(missing.sum())
+            if dropped:
+                self._log.warning("bars.missing_price_dropped", ticker=ticker, rows=dropped)
+            return cast(pd.DataFrame, frame.loc[~missing]), 0
         if "timestamp" in frame.columns:
             timed = frame
         else:
@@ -670,7 +669,7 @@ def _ratios(days: pd.Series, frame: pd.DataFrame) -> dict[date, float]:
     for day, close, adj in zip(days, frame["close"], frame["adj_close"], strict=True):
         ratio = adj_ratio(close, adj)
         if ratio is not None:
-            out[pd.Timestamp(day).date()] = ratio
+            out[cast(date, pd.Timestamp(day).date())] = ratio
     return out
 
 

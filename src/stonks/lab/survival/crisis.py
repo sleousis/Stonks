@@ -173,7 +173,9 @@ class CrisisTest:
 
 def _train_windows(context: Any) -> tuple[tuple[date, date], ...]:
     """The windows the tuner fitted on (none for a context without them)."""
-    windows = getattr(context, "train_windows", None)
+    windows: Any = getattr(context, "train_windows", None)
     if windows is None:
         return ()
-    return tuple(windows() if callable(windows) else windows)
+    if callable(windows):
+        windows = windows()
+    return tuple(windows)

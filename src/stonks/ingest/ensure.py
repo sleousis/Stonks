@@ -51,7 +51,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from datetime import time as dtime
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 from pydantic import BaseModel, Field
@@ -391,14 +391,14 @@ class DataEnsurer:
         out: dict[str, list[DateRange]] = {}
         cov = self._lake.bar_coverage(tickers, interval, start, end)
         classes = self._lake.get_asset_classes(tickers) if interval.is_intraday else {}
-        for r in cov.itertuples(index=False):
-            if int(r.n_window) > 0:
-                first = pd.Timestamp(r.first_bar).date()
-                last = pd.Timestamp(r.last_bar).date()
+        for r in cov.to_dict("records"):
+            if int(r["n_window"]) > 0:
+                first = _day_of(r["first_bar"])
+                last = _day_of(r["last_bar"])
                 if interval.is_intraday:
-                    last = self._last_full_day(r.ticker, r.last_bar, interval, classes)
+                    last = self._last_full_day(r["ticker"], r["last_bar"], interval, classes)
                 if last >= first:
-                    out.setdefault(r.ticker, []).append((first, last))
+                    out.setdefault(r["ticker"], []).append((first, last))
         rows = self._lake.con.execute(
             """
             SELECT ticker, range_start, range_end FROM bar_fetch_ranges
@@ -416,11 +416,10 @@ class DataEnsurer:
         """The last day an intraday series holds in full: the last stored
         bar's day when that bar reaches its session's close, else the day
         before (a mid-session fetch stored only part of it, BE-23)."""
-        stamp = pd.Timestamp(last_bar)
-        stamp = stamp.tz_localize(UTC) if stamp.tzinfo is None else stamp.tz_convert(UTC)
+        stamp = _utc(last_bar)
         day = stamp.date()
         close = session_close(self._sessions, ticker, day, classes.get(ticker))
-        if stamp.to_pydatetime() + interval.to_timedelta() >= close:
+        if stamp + interval.to_timedelta() >= close:
             return day
         return day - timedelta(days=1)
 
@@ -702,7 +701,12 @@ def _utc(value: Any) -> datetime:
     """``value`` as an aware UTC ``datetime`` (naive stamps are UTC)."""
     stamp = pd.Timestamp(value)
     stamp = stamp.tz_localize(UTC) if stamp.tzinfo is None else stamp.tz_convert(UTC)
-    return stamp.to_pydatetime()
+    return cast(datetime, stamp.to_pydatetime())
+
+
+def _day_of(value: Any) -> date:
+    """The calendar day of a stored stamp (never NaT here)."""
+    return cast(date, pd.Timestamp(value).date())
 
 
 def _row_day(row: Any) -> date:
