@@ -34,6 +34,7 @@ from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
 from stonks.strategies._common import LakeBarCaches, long_only_decide
+from stonks.strategies._vectorized import single_ticker_weights
 from stonks.strategies.base import BaseStrategy
 
 
@@ -144,6 +145,21 @@ class DonchianBreakout(BaseStrategy):
             as_of,
         )
 
+    # ---- vectorised fast path (lab/vectorized.py) ---------------------------
+
+    @classmethod
+    def target_positions(cls, closes: pd.DataFrame, params: Mapping[str, Any]) -> pd.DataFrame:
+        """Long ``allocation`` in the ticker from a close above the channel
+        until a close below it, for a whole table of daily closes. Exact
+        against the event engine at ``allocation = 1``."""
+        p = cls(dict(params)).params
+        lookback = int(p["lookback"])
+
+        def signal(column: pd.Series) -> np.ndarray:
+            return breakout_signal(column.reset_index(drop=True), lookback).to_numpy()
+
+        return single_ticker_weights(closes, p, signal)
+
     # ---- internals ---------------------------------------------------------
 
     def _compute_signal(
@@ -165,11 +181,7 @@ class DonchianBreakout(BaseStrategy):
             if len(closes) < lookback:
                 return None
             s = pd.Series(closes)
-            upper = s.rolling(lookback - 1).max().shift(1)
-            lower = s.rolling(lookback - 1).min().shift(1)
-            sig_series = pd.Series(np.full(len(s), np.nan))
-            sig_series.loc[s > upper] = 1.0
-            sig_series.loc[s < lower] = -1.0
+            upper, lower, sig_series = _channel(s, lookback)
             if sig_series.notna().any() or len(closes) < n:
                 break
             n *= 2
@@ -178,3 +190,21 @@ class DonchianBreakout(BaseStrategy):
         last_upper = float(upper.iloc[-1]) if not pd.isna(upper.iloc[-1]) else float("nan")
         last_lower = float(lower.iloc[-1]) if not pd.isna(lower.iloc[-1]) else float("nan")
         return last_upper, last_lower, float(closes[-1]), int(sig_series.iloc[-1])
+
+
+def _channel(closes: pd.Series, lookback: int) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """The channel over the prior ``lookback - 1`` closes and the raw
+    breakout marks (1 above, -1 below, NaN inside)."""
+    upper = pd.Series(closes.rolling(lookback - 1).max().shift(1))
+    lower = pd.Series(closes.rolling(lookback - 1).min().shift(1))
+    marks = pd.Series(np.full(len(closes), np.nan), index=closes.index)
+    marks.loc[closes > upper] = 1.0
+    marks.loc[closes < lower] = -1.0
+    return upper, lower, marks
+
+
+def breakout_signal(closes: pd.Series, lookback: int) -> pd.Series:
+    """1 while long (after a close above the channel, until one below), else
+    0, per bar of ``closes``."""
+    _, _, marks = _channel(closes, lookback)
+    return (marks.ffill().fillna(0.0) > 0).astype(float)

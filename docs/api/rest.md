@@ -980,22 +980,25 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `embargo_bars` | integer \| null | no |  |
 | `end` | date | yes |  |
 | `grid_size` | integer | no |  |
+| `heatmap` | [HeatmapOptions](#heatmapoptions) \| null | no |  |
 | `hypothesis` | string \| null | no |  |
 | `interval` | string | no |  |
 | `mcpt` | [McptOptions](#mcptoptions) \| null | no |  |
-| `objective` | "sharpe" \| "cagr" \| "final_return" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no |  |
+| `objective` | "sharpe" \| "cagr" \| "final_return" \| "sortino" \| "calmar" \| "sharpe_dd" \| "multi" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no |  |
 | `preflight` | boolean \| null | no |  |
 | `premortem` | string \| null | no |  |
 | `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |
+| `prune` | boolean | no |  |
 | `register_if_passes` | boolean | no |  |
 | `register_strategy` | boolean | no |  |
+| `sampler` | "tpe" \| "nsga2" \| "random" | no |  |
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
 | `strict_preflight` | boolean \| null | no |  |
 | `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
-| `tuner` | "grid" \| "random" | no |  |
+| `tuner` | "grid" \| "random" \| "optuna" | no |  |
 | `universe` | list[string] | yes |  |
 | `walk_forward` | [WalkForwardConfig](#walkforwardconfig) \| null | no |  |
 
@@ -1246,6 +1249,34 @@ Thresholds for ``stonks health`` (``[production.health]``).
 |-------|------|----------|-------------|
 | `tickers` | list[string] \| null | no |  |
 
+### HeatmapOptions
+
+Which two parameters to sweep and how finely.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `fast` | boolean | no | Score cells on the vectorised fast path when the strategy has one. |
+| `grid_size` | integer | no | Points per axis. |
+| `x` | string \| null | no | Parameter across the map. Default: the first numeric tunable one. |
+| `y` | string \| null | no | Parameter down the map. Default: the next numeric tunable one. |
+
+### HeatmapView
+
+Scores over ``y_values`` (rows) by ``x_values`` (columns), ``None`` for a cell that failed. ``metric`` is the run's objective, or ``fast_sharpe`` when the cells were scored on the vectorised fast path. Every cell is a trial in the ledger.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `best` | object | yes |  |
+| `fast` | boolean | yes |  |
+| `fixed` | object | yes |  |
+| `metric` | string | yes |  |
+| `plateau` | [PlateauOverlayView](#plateauoverlayview) \| null | no |  |
+| `scores` | list[list[number \| null]] | yes |  |
+| `x` | string | yes |  |
+| `x_values` | list[any] | yes |  |
+| `y` | string | yes |  |
+| `y_values` | list[any] | yes |  |
+
 ### HoldingAgreement
 
 | Field | Type | Required | Description |
@@ -1488,15 +1519,18 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `end` | date | yes |  |
 | `ensure_data` | boolean | no |  |
 | `grid_size` | integer | no |  |
+| `heatmap` | [HeatmapOptions](#heatmapoptions) \| null | no |  |
 | `hypothesis` | string \| null | no |  |
 | `interval` | string | no |  |
 | `mcpt` | [McptOptions](#mcptoptions) \| null | no |  |
-| `objective` | "sharpe" \| "cagr" \| "final_return" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no |  |
+| `objective` | "sharpe" \| "cagr" \| "final_return" \| "sortino" \| "calmar" \| "sharpe_dd" \| "multi" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no |  |
 | `preflight` | boolean \| null | no |  |
 | `premortem` | string \| null | no |  |
 | `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |
+| `prune` | boolean | no |  |
 | `register_if_passes` | boolean | no |  |
 | `register_strategy` | boolean | no |  |
+| `sampler` | "tpe" \| "nsga2" \| "random" | no |  |
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
 | `strategy` | [StrategyRef](#strategyref) | yes |  |
@@ -1504,7 +1538,7 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
-| `tuner` | "grid" \| "random" | no |  |
+| `tuner` | "grid" \| "random" \| "optuna" | no |  |
 | `universe` | list[string] | no |  |
 | `universe_id` | string \| null | no |  |
 | `walk_forward` | [WalkForwardConfig](#walkforwardconfig) \| null | no |  |
@@ -1518,6 +1552,7 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `best_score` | number \| null | yes |  |
 | `class_path` | string | yes |  |
 | `ensure_job_id` | string \| null | no |  |
+| `heatmap` | [HeatmapView](#heatmapview) \| null | no |  |
 | `n_trials_class` | integer | no |  |
 | `n_trials_run` | integer | no |  |
 | `preflight` | [PreflightView](#preflightview) \| null | no |  |
@@ -2465,6 +2500,19 @@ The model book's result. Every figure is null without two days.
 | `start_day` | date \| null | yes | Day of the start value; null without history. |
 | `start_value` | number \| null | yes |  |
 | `twr` | number \| null | no | Time-weighted return over the period: deposits and withdrawals taken out, so a deposit is never profit. Null without a start value. |
+
+### PlateauOverlayView
+
+The plateau test's verdict on the tuned set, laid over the map.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `metrics` | dict[str, number \| null] | no |  |
+| `notes` | string | yes |  |
+| `passed` | boolean | yes |  |
+| `step` | number | yes |  |
+| `x_range` | list[number] \| null | no |  |
+| `y_range` | list[number] \| null | no |  |
 
 ### PnlRowView
 
@@ -3470,15 +3518,18 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 | `end` | date | yes |  |
 | `exclude` | list[string] | no |  |
 | `grid_size` | integer | no |  |
+| `heatmap` | [HeatmapOptions](#heatmapoptions) \| null | no |  |
 | `hypothesis` | string \| null | no |  |
 | `interval` | string | no |  |
 | `mcpt` | [McptOptions](#mcptoptions) \| null | no |  |
-| `objective` | "sharpe" \| "cagr" \| "final_return" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no |  |
+| `objective` | "sharpe" \| "cagr" \| "final_return" \| "sortino" \| "calmar" \| "sharpe_dd" \| "multi" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no |  |
 | `preflight` | boolean \| null | no |  |
 | `premortem` | string \| null | no |  |
 | `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |
+| `prune` | boolean | no |  |
 | `register_if_passes` | boolean | no |  |
 | `register_strategy` | boolean | no |  |
+| `sampler` | "tpe" \| "nsga2" \| "random" | no |  |
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
 | `strategies` | list[string] \| null | no |  |
@@ -3486,7 +3537,7 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 | `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
-| `tuner` | "grid" \| "random" | no |  |
+| `tuner` | "grid" \| "random" \| "optuna" | no |  |
 | `universe` | list[string] | no |  |
 | `universe_id` | string \| null | no |  |
 | `walk_forward` | [WalkForwardConfig](#walkforwardconfig) \| null | no |  |

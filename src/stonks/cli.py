@@ -1404,9 +1404,35 @@ def lab_ic(ctx: typer.Context) -> None:
     raise typer.Exit(code=signal_eval.main(list(ctx.args), prog="stonks lab ic"))
 
 
-_LAB_TUNERS = ("grid", "random")
-_LAB_OBJECTIVES = ("sharpe", "cagr", "final_return", "cv_sharpe", "cv_cagr", "cv_final_return")
+_LAB_TUNERS = ("grid", "random", "optuna")
+_LAB_SAMPLERS = ("tpe", "nsga2", "random")
+_LAB_OBJECTIVES = (
+    "sharpe",
+    "cagr",
+    "final_return",
+    "sortino",
+    "calmar",
+    "sharpe_dd",
+    "multi",
+    "cv_sharpe",
+    "cv_cagr",
+    "cv_final_return",
+)
 _LAB_COST_MODELS = ("config", "zero", "realistic")
+
+
+def _heatmap_option(spec: str | None, grid: int, full: bool) -> Any:
+    """``--heatmap auto`` or ``--heatmap x,y`` as ``HeatmapOptions``."""
+    if spec is None:
+        return None
+    from stonks.lab.heatmap import HeatmapOptions
+
+    if spec.strip().lower() == "auto":
+        return HeatmapOptions(grid_size=grid, fast=not full)
+    names = [n.strip() for n in spec.split(",") if n.strip()]
+    if len(names) != 2:
+        raise typer.BadParameter("give 'auto' or two names: x,y", param_hint="--heatmap")
+    return HeatmapOptions(x=names[0], y=names[1], grid_size=grid, fast=not full)
 
 
 def _preset_choices() -> tuple[str, ...]:
@@ -1547,16 +1573,35 @@ def lab_run(
     interval: str = typer.Option("1d", "--interval", help="bar interval (1d, 1h, 5m, ...)"),
     train_ratio: float = typer.Option(0.7, "--train-ratio", min=0.05, max=0.95),
     tuner: str = typer.Option(
-        "grid", "--tuner", callback=_choice("--tuner", _LAB_TUNERS), help="grid|random"
+        "grid", "--tuner", callback=_choice("--tuner", _LAB_TUNERS), help="grid|random|optuna"
     ),
     grid_size: int = typer.Option(5, "--grid-size", min=1, help="points per numeric axis"),
     budget: int = typer.Option(20, "--budget", min=1, help="tuning trials"),
     seed: int = typer.Option(0, "--seed", help="tuner seed"),
+    sampler: str = typer.Option(
+        "tpe",
+        "--sampler",
+        callback=_choice("--sampler", _LAB_SAMPLERS),
+        help="optuna sampler: tpe|nsga2 (Pareto over the multi objective)|random",
+    ),
+    prune: bool = typer.Option(
+        False, "--prune", help="optuna: stop trials whose fast score trails (they still count)"
+    ),
+    heatmap: str | None = typer.Option(
+        None,
+        "--heatmap",
+        help="sweep two params around the tuned set: 'auto' or 'x,y' (every cell is a trial)",
+    ),
+    heatmap_grid: int = typer.Option(7, "--heatmap-grid", min=2, max=15, help="points per axis"),
+    heatmap_full: bool = typer.Option(
+        False, "--heatmap-full", help="score heatmap cells with full backtests, not the fast path"
+    ),
     objective: str = typer.Option(
         "sharpe",
         "--objective",
         callback=_choice("--objective", _LAB_OBJECTIVES),
-        help="sharpe|cagr|final_return, or cv_ plus one of them to score on purged folds",
+        help="sharpe|cagr|final_return|sortino|calmar|sharpe_dd|multi, or cv_ plus "
+        "sharpe, cagr or final_return to score on purged folds",
     ),
     tests: str | None = typer.Option(
         None,
@@ -1730,6 +1775,9 @@ def lab_run(
             grid_size=grid_size,
             budget=budget,
             seed=seed,
+            sampler=sampler,  # type: ignore[arg-type]
+            prune=prune,
+            heatmap=_heatmap_option(heatmap, heatmap_grid, heatmap_full),
             objective=objective,  # type: ignore[arg-type]
             survival_tests=suite,
             walk_forward=(
@@ -1812,6 +1860,10 @@ def lab_run(
             f"excess CAGR {s.excess_cagr:+.2%}, IR {s.information_ratio:.2f}, "
             f"beta {s.beta:.2f}, alpha t {s.alpha_tstat:.2f}"
         )
+    if result.heatmap is not None:
+        from stonks.reporting.heatmap import heatmap_text
+
+        console.print(heatmap_text(result.heatmap), markup=False, highlight=False)
     colour = "green" if result.verdict == "pass" else "red"
     console.print(f"[{colour}]verdict: {result.verdict}[/{colour}]")
     if register_if_passes:
@@ -1846,6 +1898,7 @@ def lab_run(
             "registered_id": registered_id,
             "benchmark": execution.view().benchmark,
             "preflight": preflight,
+            "heatmap": result.heatmap.to_dict() if result.heatmap is not None else None,
         }
         Path(json_out).write_text(json.dumps(to_jsonable(doc), indent=2, sort_keys=True))
 
@@ -1866,7 +1919,7 @@ def lab_sweep(
     interval: str = typer.Option("1d", "--interval", help="bar interval (1d, 1h, 5m, ...)"),
     train_ratio: float = typer.Option(0.7, "--train-ratio", min=0.05, max=0.95),
     tuner: str = typer.Option(
-        "random", "--tuner", callback=_choice("--tuner", _LAB_TUNERS), help="grid|random"
+        "random", "--tuner", callback=_choice("--tuner", _LAB_TUNERS), help="grid|random|optuna"
     ),
     grid_size: int = typer.Option(5, "--grid-size", min=1, help="points per numeric axis"),
     budget: int = typer.Option(10, "--budget", min=1, help="tuning trials per run"),

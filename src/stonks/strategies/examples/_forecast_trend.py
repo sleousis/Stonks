@@ -141,6 +141,14 @@ def forecast_diversification_multiplier(rules: pd.DataFrame, fallback: float) ->
     return diversification_multiplier(overlap, weights, min_observations=MIN_ESTIMATION_BARS)
 
 
+def require_fixed_modes(params: Mapping[str, Any]) -> None:
+    """Raise ``ValueError`` unless the forecast scalar and the FDM are fixed:
+    the estimated ones read a history window the vectorised fast path does
+    not replay."""
+    if params.get("scalar_mode", "fixed") != "fixed" or params.get("fdm_mode", "fixed") != "fixed":
+        raise ValueError("the fast path supports scalar_mode and fdm_mode 'fixed' only")
+
+
 def rule_scalar(raw: pd.Series, fixed: float, mode: str) -> float:
     """``fixed``, or in ``"estimate"`` mode ``10 / mean|raw|`` over ``raw``
     (the ticker's history up to as_of) once it has a year of values."""

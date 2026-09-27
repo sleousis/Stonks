@@ -5,11 +5,13 @@ result keeps only the API view, not the report a tear sheet needs), a
 registered strategy id, or a catalog strategy (id, class name or
 ``module:Class``) with a window. Every backtest goes through
 :func:`stonks.app.lab.backtest_report`, so costs and the benchmark are the
-API's.
+API's. A registered strategy whose lab run drew a parameter heatmap
+(22.5) gets it on its tear sheet, read from the artifact's ``meta.json``.
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -21,10 +23,14 @@ from stonks.app.jobs import JobStore
 from stonks.app.lab import BACKTEST_JOB, BacktestRequest, backtest_report
 from stonks.app.strategies import StrategyRef, StrategyService
 from stonks.lab.catalog import resolve_strategy
+from stonks.lab.heatmap import ParameterHeatmap
+from stonks.logging import get_logger
 from stonks.production.universe import EmptyUniverseError, window_tickers
 from stonks.reporting.tearsheet import TearSheet, render_tear_sheet_page
 
 __all__ = ["TearSheetWindow", "render_backtest_tear_sheet", "tear_sheet_request"]
+
+_log = get_logger("stonks.app.tearsheets")
 
 
 @dataclass(frozen=True)
@@ -96,7 +102,24 @@ def render_backtest_tear_sheet(
         report, _ = backtest_report(context.settings, strategy, request, lake)
     ref = request.strategy
     title = ref.strategy_id or f"{ref.class_path} {ref.params or ''}".strip()
-    return render_tear_sheet_page(TearSheet(title=title, report=report))
+    heatmap = _registered_heatmap(context, ref.strategy_id) if ref.strategy_id else None
+    return render_tear_sheet_page(TearSheet(title=title, report=report, heatmap=heatmap))
+
+
+def _registered_heatmap(context: AppContext, strategy_id: str) -> ParameterHeatmap | None:
+    """The heatmap the strategy's lab run stored in its ``meta.json``;
+    ``None`` when there is none or it can't be read."""
+    with context.registry() as registry:
+        handle = next((h for h in registry.list_all() if h.id == strategy_id), None)
+    if handle is None:
+        return None
+    try:
+        meta = json.loads((handle.artifact_path / "meta.json").read_text())
+        data = meta.get("heatmap")
+        return ParameterHeatmap.from_dict(data) if data else None
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        _log.warning("tearsheet.heatmap.unreadable", strategy_id=strategy_id, error=str(exc))
+        return None
 
 
 def _backtest_job(context: AppContext, target: str) -> dict[str, Any] | None:

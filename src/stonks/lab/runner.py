@@ -14,6 +14,11 @@ tickers first gets that universe's members over the window, and with a
 ``data_ensurer`` their missing bars are fetched before the preflight
 (:func:`~stonks.lab.universe_data.prepare_dataset`). Survival tests with a ``bind_run(ctx)`` hook receive a
 :class:`~stonks.lab.trials.LabRunContext` before the suite runs.
+
+With ``heatmap`` options the runner sweeps two parameters around the
+tuned set right after tuning (:mod:`stonks.lab.heatmap`, 22.5). Every
+cell joins the run's trials before the suite sees the count (P2), the
+winner stays the tuner's, and the plateau report is laid over the map.
 """
 
 from __future__ import annotations
@@ -31,9 +36,12 @@ from stonks.core.protocols import (
     Tuner,
 )
 from stonks.lab.dataset import LabDataset
+from stonks.lab.heatmap import HeatmapOptions, ParameterHeatmap, pick_axes, plateau_overlay
 from stonks.lab.manifest import build_manifest, collect_seeds
+from stonks.lab.parallel import ParallelSettings
 from stonks.lab.preflight import PreflightError, PreflightReport, run_preflight
 from stonks.lab.survival.base import SurvivalSuite, TuningSetup
+from stonks.lab.survival.plateau import PlateauOptions
 from stonks.lab.trials import (
     LabRunContext,
     LabRunSpec,
@@ -43,7 +51,7 @@ from stonks.lab.trials import (
     new_run_id,
     trials_from_tuning,
 )
-from stonks.lab.tuning.base import tune_and_fit
+from stonks.lab.tuning.base import fix_params, tune_and_fit
 from stonks.lab.universe_data import prepare_dataset
 from stonks.logging import get_logger
 from stonks.strategies.base import strategy_data_tickers
@@ -115,6 +123,8 @@ class LabRunResult:
     manifest: dict[str, Any] = field(default_factory=dict)
     #: The BL-37 preflight report (``None`` when turned off or it crashed).
     preflight: PreflightReport | None = None
+    #: The parameter heatmap around the tuned set (22.5), when asked for.
+    heatmap: ParameterHeatmap | None = None
 
     @property
     def artifact_meta(self) -> dict[str, Any]:
@@ -128,6 +138,8 @@ class LabRunResult:
             "manifest": self.manifest,
         }
         meta.update(self.ic_meta)
+        if self.heatmap is not None:
+            meta["heatmap"] = self.heatmap.to_dict()
         return meta
 
     @property
@@ -160,6 +172,8 @@ class LabRunner:
         preflight: bool = True,
         strict_preflight: bool = False,
         data_ensurer: Any = None,
+        heatmap: HeatmapOptions | None = None,
+        parallel: ParallelSettings | None = None,
     ) -> None:
         """``ledger`` persists runs and trials (``None``: in-memory only);
         ``settings`` feeds the manifest's config hash and default costs.
@@ -167,7 +181,8 @@ class LabRunner:
         run, warnings are logged); ``strict_preflight`` makes every
         warning an error. ``data_ensurer`` (a
         :class:`~stonks.ingest.ensure.DataEnsurer`, opt in) fetches the
-        universe's missing bars before the preflight."""
+        universe's missing bars before the preflight. ``heatmap`` sweeps two
+        parameters after tuning on ``parallel`` workers (module doc)."""
         self._tuner = tuner
         self._objective = objective
         self._suite = suite
@@ -177,6 +192,8 @@ class LabRunner:
         self._preflight = preflight
         self._strict_preflight = strict_preflight
         self._data_ensurer = data_ensurer
+        self._heatmap = heatmap
+        self._parallel = parallel
 
     def run(
         self,
@@ -192,6 +209,8 @@ class LabRunner:
         that re-tune keep them pinned, plus the strategy's non-tunable params.
         ``hypothesis`` / ``premortem`` are recorded before tuning starts."""
         class_path = f"{strategy_cls.__module__}:{strategy_cls.__name__}"
+        if self._heatmap is not None:  # a bad axis name fails before any work
+            pick_axes(strategy_cls.parameter_spec(), self._heatmap, set(fixed_params or {}))
         dataset, ensured = prepare_dataset(
             dataset, ensurer=self._data_ensurer, strategy=strategy_cls
         )
@@ -261,6 +280,9 @@ class LabRunner:
             fixed_params=dict(fixed_params or {}),
         )
         strategy, tuned = tune_and_fit(strategy_cls, dataset, setup, setup.fixed_params)
+        heatmap: ParameterHeatmap | None = None
+        if self._heatmap is not None:
+            tuned, heatmap = self._sweep(strategy_cls, dataset, setup, tuned, run_id)
         trials, matrix = trials_from_tuning(tuned)
         if self._ledger is not None:
             self._ledger.record_trials(run_id, trials, matrix)
@@ -297,6 +319,8 @@ class LabRunner:
                 bind_run(ctx)
 
         reports = self._suite.run(strategy, suite_dataset(dataset, strategy))
+        if heatmap is not None:
+            heatmap = self._overlay(heatmap, strategy_cls, setup, reports)
         # RS-39: an empty suite tested nothing, so it can't pass
         verdict = "pass" if reports and all(r.passed for r in reports) else "fail"
 
@@ -321,6 +345,63 @@ class LabRunner:
             n_trials_run=len(trials),
             n_trials_class=n_class,
             manifest=manifest,
+            heatmap=heatmap,
+        )
+
+    def _sweep(
+        self,
+        strategy_cls: type[Strategy],
+        dataset: LabDataset,
+        setup: TuningSetup,
+        tuned: Any,
+        run_id: str,
+    ) -> tuple[Any, ParameterHeatmap | None]:
+        """The heatmap around the tuned set and ``tuned`` with the sweep's
+        trials appended (they count, P2; the winner is unchanged)."""
+        from stonks.lab.heatmap import sweep_heatmap
+
+        assert self._heatmap is not None
+        space = fix_params(strategy_cls.parameter_spec(), setup.fixed_params)
+        if pick_axes(space, self._heatmap) is None:
+            _log.info("lab.heatmap.skipped", run_id=run_id, reason="fewer than two tunables")
+            return tuned, None
+        seed = collect_seeds(self._tuner, []).get("tuner")
+        heatmap, cells = sweep_heatmap(
+            strategy_cls,
+            space,
+            tuned.best_params,
+            dataset,
+            self._objective,
+            self._heatmap,
+            parallel=self._parallel,
+            seed=seed if isinstance(seed, int) else 0,
+        )
+        _log.info(
+            "lab.heatmap.done",
+            run_id=run_id,
+            x=heatmap.x,
+            y=heatmap.y,
+            cells=len(cells),
+            fast=heatmap.fast,
+        )
+        history = [*tuned.history, *((c.params, c.score) for c in cells)]
+        trials = None if tuned.trials is None else [*tuned.trials, *cells]
+        return dataclasses.replace(tuned, history=history, trials=trials), heatmap
+
+    def _overlay(
+        self,
+        heatmap: ParameterHeatmap,
+        strategy_cls: type[Strategy],
+        setup: TuningSetup,
+        reports: list[SurvivalReport] | Any,
+    ) -> ParameterHeatmap:
+        """``heatmap`` with the plateau report laid over it, when the suite ran one."""
+        report = next((r for r in reports if r.test_id == "plateau"), None)
+        test = next((t for t in self._suite.tests if getattr(t, "id", None) == "plateau"), None)
+        step = getattr(getattr(test, "options", None), "step", None)
+        space = fix_params(strategy_cls.parameter_spec(), setup.fixed_params)
+        return plateau_overlay(
+            heatmap, report, space, step=float(step) if step is not None else PlateauOptions().step
         )
 
     def _run_preflight(
