@@ -1,6 +1,8 @@
 # Strategies
 
-Every strategy the lab can name, grouped by family. The list comes from `stonks.lab.catalog`: each public class in `strategies/examples/` plus four wrappers, 29 in all. All are long-only. Short signals mean "flat".
+Every strategy the lab can name, grouped by family. The list comes from `stonks.lab.catalog`: each public class in `strategies/examples/` plus the wrappers, 33 in all. All are long-only by default, so short signals mean "flat".
+
+Four strategies can short: `ewmac_trend`, `tsmom` and the two long/short strategies below. Set `"short_mode": "short"` in their params. A short then opens only in a book that allows shorts (a portfolio with `allow_short`, or a lab dataset with `shorting`). Anywhere else the short legs are dropped. See [short selling](../design/shorting.md).
 
 ## Run one
 
@@ -41,6 +43,15 @@ uv run stonks lab run quant_momentum --start 2020-01-01 --end 2025-01-01 --prese
 | `ewmac_trend` | Carver's EWMAC forecasts at several speeds, per instrument. Equity, crypto, commodity. |
 | `tsmom` | Time-series momentum: each instrument against its own past return. Equity, crypto, commodity. |
 | `ath_trend` | Buys weekly closes at all-time highs, exits on a wide ATR trailing stop. Equity and crypto. |
+
+## Long/short
+
+Both are long-only until `short_mode` is `short`.
+
+| Id | What it does |
+|----|--------------|
+| `ls_momentum` | Jegadeesh and Titman: long the top 12-1 momentum names, short the bottom ones, half the gross on each leg, monthly rebalance. |
+| `pairs_reversion` | Pairs trading after Gatev, Goetzmann and Rouwenhorst, and Chan. Long the cheap leg and short the rich one when a mean-reverting spread stretches past its entry z-score. Pairs are set as `A.US:B.US`. |
 
 ## neurotrader888 indicators ([details](nt888-indicators.md))
 
@@ -102,9 +113,11 @@ A constructor turns the strategies' signals into target weights (`portfolio/`). 
 | Name | Sizing |
 |------|--------|
 | `single_winner` (default) | The strategy with the best pick takes the book and its own `decide` makes the orders. |
-| `equal_weight_top_n` | Equal weight across the N best positive scores. |
+| `equal_weight_top_n` | Equal weight across the N best positive scores. In long/short mode also shorts the `n_short` lowest z-scores. |
 | `inverse_vol` | Weight proportional to 1/volatility across the top N, scaled to a gross limit. |
-| `vol_target` | Carver's position sizing from forecasts to a volatility target. |
+| `vol_target` | Carver's position sizing from forecasts to a volatility target. In long/short mode a negative forecast is a short. |
 | `atr_parity` | Equal daily risk per position: weight = risk factor x price / ATR. |
+
+Every constructor takes `long_only`, `max_gross`, `min_net`, `max_net` and `neutral` (`none`, `dollar` or `beta`). A book that may short runs its constructor with `long_only = false`. Gross may then go above 1.0 (up to 4.0), net stays inside `[min_net, max_net]`, and `dollar` or `beta` shrinks the bigger leg until the legs match. `beta` works on `equal_weight_top_n` and `vol_target`. A book that cannot short always runs long-only at no more than 1.0 gross.
 
 A portfolio picks its constructor in `portfolios.construction_json`; a backtest in `BacktestConfig.construction`. A global `[production.construction]` table is not read from the config file yet.

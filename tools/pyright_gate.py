@@ -10,6 +10,10 @@ numbers are not part of the key, so moving code does not trip the gate.
     uv run python -m tools.pyright_gate --update   # accept the current errors
 
 Run ``--update`` after fixing errors so the baseline only shrinks.
+
+Packages in ``strict`` under ``[tool.pyright]`` run in strict mode and may
+carry no errors at all: an error there fails the gate even when the
+baseline lists it, and ``--update`` refuses to baseline it (BL-49).
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ import argparse
 import json
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +44,21 @@ def error_counts(report: dict[str, Any], root: Path = ROOT) -> dict[str, int]:
         key = f"{rel}::{diag.get('rule', 'error')}"
         counts[key] = counts.get(key, 0) + 1
     return dict(sorted(counts.items()))
+
+
+def strict_paths(root: Path = ROOT) -> list[str]:
+    """The ``strict`` entries of ``[tool.pyright]`` in ``pyproject.toml``."""
+    data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    return [str(p).rstrip("/") for p in data.get("tool", {}).get("pyright", {}).get("strict", [])]
+
+
+def strict_errors(counts: dict[str, int], strict: list[str]) -> dict[str, int]:
+    """Errors in files under a strict path (these are never baselined)."""
+    return {
+        k: n
+        for k, n in counts.items()
+        if any(k.split("::", 1)[0].startswith(p + "/") for p in strict)
+    }
 
 
 def compare(
@@ -70,10 +90,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--baseline", type=Path, default=BASELINE)
     parser.add_argument("--report", type=Path, help="pyright --outputjson file (default: run it)")
     parser.add_argument("--update", action="store_true", help="write the current errors")
+    parser.add_argument(
+        "--strict", action="append", help="a strict path (default: [tool.pyright] strict)"
+    )
     args = parser.parse_args(argv)
 
     report = json.loads(args.report.read_text()) if args.report else _run_pyright()
     counts = error_counts(report)
+    strict = strict_errors(counts, args.strict if args.strict else strict_paths())
+    if strict:
+        print("pyright errors under a strict path (never baselined; fix them):")
+        for key, n in strict.items():
+            print(f"  {key} {n}")
+        return 1
     if args.update:
         args.baseline.write_text(json.dumps(counts, indent=2, sort_keys=True) + "\n")
         print(f"pyright baseline: {sum(counts.values())} error(s) in {args.baseline.name}")

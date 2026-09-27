@@ -1,11 +1,12 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 
-/** The Lab's three screens, as links so each has its own address. */
+/** The Lab's screens, as links so each has its own address. */
 export const LAB_SECTIONS = [
   { path: '/lab', label: 'Backtest and lab run', exact: true },
   { path: '/lab/sweeps', label: 'Sweep', exact: false },
   { path: '/lab/signal-ic', label: 'Signal IC', exact: false },
+  { path: '/lab/ledger', label: 'Trial ledger', exact: false },
 ] as const;
 
 @Component({

@@ -19,6 +19,7 @@ export const routes: Routes = [
   },
   { path: '', pathMatch: 'full', loadChildren: () => import('./pages/home/home.routes') },
   { path: 'profile', loadChildren: () => import('./pages/profile/profile.routes') },
+  { path: 'insights', loadChildren: () => import('./pages/insights/insights.routes') },
   {
     path: 'admin/users',
     canActivate: [adminGuard],

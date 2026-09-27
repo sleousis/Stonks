@@ -91,6 +91,11 @@ so a strategy sees a bar of any interval only once it has closed at the
 decision (RS-03): a daily bar stays hidden during its own session in an
 intraday run, on 24/7 markets too.
 
+Strategies never get the lake itself (BL-49): each decision bar hands them
+a ``stonks.store.pit.PointInTimeLake`` of that bar, so every read (bars,
+statements, macro, metadata, membership) stops at the decision even when a
+strategy asks for more. The views of one run share a ``PitSession``.
+
 Point-in-time membership (RS-05, P14)
 -------------------------------------
 With ``BacktestConfig.universe_id`` set, the engine reads that universe's
@@ -112,7 +117,8 @@ agree) the engine:
   the broker sees one close or one open per order;
 - keeps only the closing legs of strategies without ``supports_short``, and
   passes negative scores of strategies that support shorts to the
-  construction pipeline (``|score| > threshold``);
+  construction pipeline, or to the strategy's own ``decide`` as picks
+  (``|score| > threshold``);
 - calls ``broker.accrue`` on every bar after the closes are set (borrow
   fees and debit interest; a no-op without shorts or debit cash, so it runs
   for every book);
@@ -138,7 +144,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
@@ -155,17 +161,24 @@ from stonks.backtest.fills import (
     lagged_market_stats,
     market_stats_from_row,
 )
-from stonks.backtest.report import BacktestReport, compute_report, periods_per_year
+from stonks.backtest.report import (
+    BacktestReport,
+    ExposurePoint,
+    ShortBookReport,
+    compute_report,
+    periods_per_year,
+)
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.corporate_actions import CorporateActionsProvider, Split
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy
 from stonks.core.timeutil import as_datetime, day_end, day_start
-from stonks.core.types import AssetClass, Order
+from stonks.core.types import AssetClass, Order, Portfolio
 from stonks.execution.orders import SideToken, classify, classify_all
 from stonks.logging import get_logger
 from stonks.store.corporate_actions import LakeCorporateActions
 from stonks.store.lake import DuckDBLake
+from stonks.store.pit import PitSession
 
 if TYPE_CHECKING:
     # The pipeline imports ``stonks.config``, which imports the lab and so
@@ -260,6 +273,11 @@ class Backtester:
         self._fill_seq = 0
         self._membership: dict[str, list[tuple[date, date | None]]] | None = None
         self._raw_closes: dict[str, dict[date, float]] = {}
+        # BL-49: strategies read the lake through a point-in-time view of
+        # the current decision bar; the views of one run share a session.
+        self._pit = PitSession(lake)
+        #: Typed ``Any``: strategies take it where they take a lake.
+        self._view: Any = None
         #: The target book of every pipeline decision, by bar.
         self.target_books: dict[datetime, TargetBook] = {}
         #: The close each order was decided at, by client id (TCA, BL-32:
@@ -272,6 +290,7 @@ class Backtester:
     def run(self) -> BacktestReport:
         self._decided_at, self._roots, self._parts = {}, {}, {}
         self._equity, self._attribution, self._fill_owner, self._fill_seq = [], {}, {}, 0
+        self._pit = PitSession(self._lake)
         self.target_books = {}
         self.decision_prices = {}
         self.forced_orders = []
@@ -299,6 +318,7 @@ class Backtester:
         equity_curve: list[float] = []
         last_close: dict[str, float] = {}
         pending: list[Order] = []
+        exposure: list[ExposurePoint] = []
 
         bars_since_rebalance: int | None = None
         for as_of, bars in bars_by_ts.items():
@@ -339,17 +359,29 @@ class Backtester:
             equity_dates.append(as_of)
             equity_curve.append(portfolio.total_value(marks))
             self._equity.append((as_of, equity_curve[-1]))
+            if self._config.allow_short:
+                exposure.append(_exposure(as_of, portfolio, marks, equity_curve[-1]))
 
         if pending:
             _log.debug("unfilled_orders_at_end", count=len(pending))
         strategy_id = ",".join(s.id for s in self._strategies) or "empty"
-        return compute_report(
+        report = compute_report(
             strategy_id,
             equity_dates,
             equity_curve,
             periods_per_year=periods_per_year(self._config.interval, set(asset_classes.values())),
             corporate_actions=applied,
             sessions_per_year=calendar_for_universe(set(asset_classes.values())).sessions_per_year,
+        )
+        if not self._config.allow_short:
+            return report
+        return replace(
+            report,
+            short_book=ShortBookReport(
+                financing=tuple(getattr(self._broker, "financing", ())),
+                forced_orders=tuple(self.forced_orders),
+                exposure=tuple(exposure),
+            ),
         )
 
     # ---- internals ----------------------------------------------------------
@@ -566,6 +598,8 @@ class Backtester:
             return self._decide_at(as_of, prices)
 
     def _decide_at(self, as_of: datetime, prices: dict[str, float]) -> list[Order]:
+        # kept until the next decision: wrappers recall it in ``decide``
+        self._view = self._pit.at(as_of, decision_interval=self._config.interval)
         members = self._members_on(as_of)
         tradable = [t for t in self._config.universe if members is None or t in members]
         if self._config.construction_settings is not None:
@@ -672,10 +706,12 @@ class Backtester:
         is prefixed with ``"<index>:"`` so the broker's idempotency check
         can't drop one instance's order as a duplicate of the other's."""
         picks_by_strategy: list[list[tuple[float, str]]] = [[] for _ in self._strategies]
+        threshold = self._config.threshold
         for index, strategy in enumerate(self._strategies):
+            shorts = self._config.allow_short and getattr(strategy, "supports_short", False)
             for ticker in tradable:
-                r = strategy.estimate_return(ticker, as_of, self._lake)
-                if r is not None and r > self._config.threshold:
+                r = strategy.estimate_return(ticker, as_of, self._view)
+                if r is not None and (r > threshold or (shorts and r < -threshold)):
                     picks_by_strategy[index].append((r, ticker))
 
         portfolio = self._broker.fetch_portfolio()
@@ -719,7 +755,7 @@ class Backtester:
             scores: dict[str, float] = {}
             shorts = self._config.allow_short and getattr(strategy, "supports_short", False)
             for ticker in tradable:
-                r = strategy.estimate_return(ticker, as_of, self._lake)
+                r = strategy.estimate_return(ticker, as_of, self._view)
                 if r is not None and (
                     r > self._config.threshold or (shorts and r < -self._config.threshold)
                 ):
@@ -873,3 +909,15 @@ def _as_date(value) -> date:
     if isinstance(value, date):
         return value
     return pd.Timestamp(value).date()
+
+
+def _exposure(
+    as_of: datetime, portfolio: Portfolio, marks: Mapping[str, float], equity: float
+) -> ExposurePoint:
+    """Long and short value as fractions of ``equity`` (0 when it is not
+    positive)."""
+    if not equity > 0:
+        return ExposurePoint(as_of, 0.0, 0.0)
+    return ExposurePoint(
+        as_of, portfolio.long_value(marks) / equity, portfolio.short_value(marks) / equity
+    )

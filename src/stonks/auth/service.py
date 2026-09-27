@@ -858,6 +858,13 @@ class AuthService:
         ip: str | None = None,
     ) -> UserAuthInfo:
         require(principal, Permission.USERS_MANAGE)
+        return self._create_user(
+            principal.actor, email=email, display_name=display_name, role=role, password=password
+        )
+
+    def _create_user(
+        self, actor: str, *, email: str, display_name: str, role: Role, password: str
+    ) -> UserAuthInfo:
         email = normalize_email(email or "")
         if "@" not in email:
             raise ValidationError("a valid email is required")
@@ -870,9 +877,7 @@ class AuthService:
                 pass
             else:
                 raise ConflictError("a user with that email already exists")
-            user = repo.create(
-                display_name=display_name, role=Role(role), actor=principal.actor, email=email
-            )
+            user = repo.create(display_name=display_name, role=Role(role), actor=actor, email=email)
             state.execute(
                 "UPDATE users SET password_hash = ?, password_changed_at = ? WHERE id = ?",
                 [password_hash, _iso(self._now()), user.id],
@@ -892,6 +897,17 @@ class AuthService:
         (the repository also pauses auto subscriptions). The last active
         admin can't be demoted or disabled."""
         require(principal, Permission.USERS_MANAGE)
+        return self._update_user(principal.actor, user_id, role=role, status=status, ip=ip)
+
+    def _update_user(
+        self,
+        actor: str,
+        user_id: str,
+        *,
+        role: Role | None = None,
+        status: Literal["active", "disabled"] | None = None,
+        ip: str | None = None,
+    ) -> UserAuthInfo:
         with self._state() as state, state.transaction():
             repo = UserRepository(state)
             user = self._human(repo, user_id)
@@ -908,7 +924,7 @@ class AuthService:
             if role is not None and Role(role) is not user.role:
                 state.execute("UPDATE users SET role = ? WHERE id = ?", [Role(role).value, user_id])
                 AuditLog(state).record(
-                    principal.actor,
+                    actor,
                     "user.role",
                     "user",
                     user_id,
@@ -916,7 +932,7 @@ class AuthService:
                     ip=ip,
                 )
             if status is not None and status != user.status:
-                repo.set_status(user_id, status, actor=principal.actor)
+                repo.set_status(user_id, status, actor=actor)
                 if status == "disabled":
                     self._revoke_all(state, user_id)
                     state.execute(
@@ -945,6 +961,9 @@ class AuthService:
         """Clear a user's second factor (lost phone and codes). They enrol
         again at the next login. Sessions and API tokens are revoked."""
         require(principal, Permission.USERS_MANAGE)
+        self._reset_mfa(principal.actor, user_id, ip=ip)
+
+    def _reset_mfa(self, actor: str, user_id: str, *, ip: str | None = None) -> None:
         with self._state() as state, state.transaction():
             self._human(UserRepository(state), user_id)
             state.execute(
@@ -955,7 +974,7 @@ class AuthService:
             state.execute("DELETE FROM recovery_codes WHERE user_id = ?", [user_id])
             self._revoke_all(state, user_id)
             self._revoke_tokens(state, user_id)
-            AuditLog(state).record(principal.actor, "auth.mfa.reset", "user", user_id, ip=ip)
+            AuditLog(state).record(actor, "auth.mfa.reset", "user", user_id, ip=ip)
 
     @staticmethod
     def _human(repo: UserRepository, user_id: str) -> User:
@@ -1008,6 +1027,46 @@ class AuthService:
             self._set_password(state, owner.id, new_hash)
             AuditLog(state).record(actor, "auth.bootstrap", "user", owner.id)
             return repo.get(owner.id)
+
+    # Shell access implies admin: these act for the operator, by email, and
+    # skip the step-up a browser session needs (there is no session).
+
+    def create_user_from_shell(
+        self,
+        *,
+        email: str,
+        display_name: str,
+        role: Role,
+        password: str,
+        actor: str = "service:cli",
+    ) -> UserAuthInfo:
+        return self._create_user(
+            actor, email=email, display_name=display_name, role=role, password=password
+        )
+
+    def update_user_from_shell(
+        self,
+        email: str,
+        *,
+        role: Role | None = None,
+        status: Literal["active", "disabled"] | None = None,
+        actor: str = "service:cli",
+    ) -> UserAuthInfo:
+        return self._update_user(actor, self._id_by_email(email), role=role, status=status)
+
+    def reset_mfa_from_shell(self, email: str, *, actor: str = "service:cli") -> str:
+        """Clear a person's second factor from the shell: the way back in for
+        a sole admin who lost the authenticator and the recovery codes."""
+        user_id = self._id_by_email(email)
+        self._reset_mfa(actor, user_id)
+        return user_id
+
+    def _id_by_email(self, email: str) -> str:
+        with self._state() as state:
+            try:
+                return UserRepository(state).get_by_email(normalize_email(email or "")).id
+            except NotFound:
+                raise NotFoundError("no user with that email") from None
 
     def set_password_by_email(
         self, email: str, password: str, *, actor: str = "service:cli"

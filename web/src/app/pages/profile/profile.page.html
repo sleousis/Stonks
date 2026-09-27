@@ -1,6 +1,6 @@
 <app-page-header
   title="Profile"
-  description="Your account, password, recovery codes and API tokens."
+  description="Your account, password, recovery codes, portfolios and API tokens."
 >
   <button actions type="button" class="btn" (click)="signOut()">Sign out</button>
 </app-page-header>
@@ -152,6 +152,9 @@
   </div>
 
   <div class="column span-6">
+    <!-- Portfolios ------------------------------------------------------------->
+    <app-portfolios-panel />
+
     <!-- API tokens ------------------------------------------------------------->
     <section class="panel" aria-labelledby="tokens-title">
       <div class="panel-head">

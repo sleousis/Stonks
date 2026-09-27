@@ -289,9 +289,9 @@ outside `shared/chart/lightweight-chart-engine.ts`.
   [summary]="summary()" [series]="series()" [height]="300" />
 ```
 
-Series: `{ id, label, kind: 'line' | 'area', color: 'brass' | 'primary' | 'gain' | 'loss' | 'muted', pane?: 0 | 1, format?: 'money' | 'percent' | 'number', points: { time, value }[] }`.
+Series: `{ id, label, kind: 'line' | 'area', color: 'brass' | 'primary' | 'gain' | 'loss' | 'muted' | 'violet', pane?: 0 | 1, format?: 'money' | 'percent' | 'number', points: { time, value }[] }`.
 `time` is `YYYY-MM-DD` for daily data or an ISO timestamp. Equity is a
-`primary` line in pane 0 (`brass` only for a live portfolio); drawdown is a `loss` area in pane 1. Always pass a one or two
+`primary` line in pane 0 (`brass` only for a live portfolio); drawdown is a `loss` area in pane 1. Comparison lines (other strategies on the shadow chart) use `violet`, never amber or brass. Always pass a one or two
 sentence `summary` (the canvas is invisible to screen readers). Tests use
 `provideFakeChart()` from `src/testing/fake-chart.ts`.
 
@@ -321,7 +321,14 @@ folds the rest into "All figures".
 ### Lab form
 
 The lab-run form sends a named suite (`preset`: quick, standard,
-promotion) unless the trader picks custom tests (`survival_tests`).
+promotion) unless the trader picks custom tests (`survival_tests`). The
+tests each suite runs come from `GET /api/lab/survival-presets`
+(`suitesFromPresets` in `pages/lab/lab-requests.ts`); the console's own
+lists stand in only while that loads. With stored universes, "Run on"
+picks one instead of typed tickers (`universe_id`), and "Fetch missing
+data first" sends `ensure_data`: the server fetches the missing prices in
+a data job before tuning, and the result says so when `ensure_job_id` is
+set.
 Registering defaults to `register_if_passes` (the promotion suite, a
 required hypothesis); "Always" sends `register_strategy`. Walk-forward,
 MCPT and the per-test "advanced options" start blank, meaning "the test's
@@ -332,14 +339,23 @@ options schema gives labels, defaults, bounds and choices
 change. Field errors show next to the field, and the advanced panel opens
 when one of its fields is wrong.
 
-The Lab has three screens, linked at the top of each: Backtest and lab run
-(`/lab`), Sweep (`/lab/sweeps`) and Signal IC (`/lab/signal-ic`). A sweep
+The Lab has four screens, linked at the top of each: Backtest and lab run
+(`/lab`), Sweep (`/lab/sweeps`), Signal IC (`/lab/signal-ic`) and Trial
+ledger (`/lab/ledger`). A sweep
 runs every strategy, or the ones picked, on typed tickers or a saved
 universe, and `<app-sweep-result>` ranks the rows best first. Signal IC
 shows how well a strategy's scores ranked the moves that followed, per
 look-ahead (`<app-signal-ic-result>`). Both follow the job with
 `<app-job-progress>` and show a failed result load inline with Retry
 (`pages/lab/job-follower.ts`). The Lab history lists and opens them too.
+
+The trial ledger lists every recorded lab run from `GET /api/lab/ledger`
+(server-paged, filtered by `?strategy=`): strategy, hypothesis, trials run
+and failed, best score and verdict. `/lab/ledger/:runId` shows one run from
+`GET /api/lab/ledger/{run_id}`: the hypothesis and premortem, the data,
+every trial, and the strategy's trial count across all runs, with one line
+on why it matters (more trials make a good result more likely to be luck).
+A lab run's result links to it.
 
 ### Formatting and copy
 
@@ -393,8 +409,8 @@ Tickers open `/data?instrument=<id>`.
 
 | Page | Route | What it does |
 |---|---|---|
-| Halts | `/ops/halts` | Active and past halts, the kill switch (global or one portfolio, reason, flatten), Resume and Clear |
-| Schedule and backups | `/ops/schedule` | Jobs with next and last run, recent runs and Run now. Backup jobs and Back up now |
+| Halts | `/ops/halts` | Active and past halts, the kill switch (global or one portfolio, reason, buys only), Resume and Clear |
+| Schedule and backups | `/ops/schedule` | Jobs with next and last run, recent runs and Run now. Every backup on disk with its size, Back up now, Verify and a staged Restore (admins) |
 | Data quality | `/ops/data-quality` | Statement audit flags, filtered by ticker and severity |
 | Universes | `/universes`, `/universes/:id` | List, create (JSON spec or CSV), index history import, members on a date, Refresh and Ensure data |
 
@@ -414,14 +430,22 @@ Tickers open `/data?instrument=<id>`.
 - Refresh, Ensure data and Back up now return a job. Pages follow it with
   `JobsService.track()` and show `<app-job-progress>`.
 - Run now on a tick job needs the job name typed, like a tick.
+- **Run checks now** on Health (admins, `operations.run`) calls
+  `POST /api/health/run`. It asks first, because stale data or a stuck run
+  opens the operational halt and passing checks clear it. Then it reloads
+  the report and `HaltStateService`.
 - The backup list comes from `GET /api/backups`: every backup on disk,
   also those made from the command line, with its size. Verify is
   `POST /api/backups/{id}/verify`. Restore is
   `POST /api/backups/{id}/restore` with `{"confirmation": "RESTORE <id>"}`
-  and a fresh second factor. It returns a job. The restore is staged: the
-  server restores into a new folder and never touches the live data. The
-  job result (`GET /api/backups/restores/{job_id}/result`) says where the
-  data went and how to switch to it.
+  and a fresh second factor (`StepUpService.ensure()` first, and the
+  session interceptor asks again on 403 `step_up_required`). It returns a
+  job. The restore is staged: the server restores into a new folder and
+  never touches the live data. The job result
+  (`GET /api/backups/restores/{job_id}/result`) says where the data went
+  and how to switch to it, shown above the list with Verify's outcome.
+  Only admins load the list (`operations.run`, and `backups.restore` for
+  Restore).
 - `GET /api/schedule` also returns `market`: the calendar, `is_open`, and
   `today` and `next` sessions, each with `pre_open` (30 minutes before the
   open), `open` and `close` in UTC. `today` is null on days the market is
@@ -465,10 +489,50 @@ Tickers open `/data?instrument=<id>`.
 - **Dialogs** are built on `app-sheet` (`shared/ui/sheet.ts`) with
   `app-typed-confirm`.
 - **Settings** has "Your account" for everyone and "System" (broker, risk
-  policy, data sources, cost models) for admins only.
+  policy, data sources, cost models) for admins only. Alert settings have
+  **Send a test notification** (`POST /api/notifications/test`): it goes to
+  every channel you turned on, skips quiet hours, and the toast says how
+  many deliveries went out and on which channels.
 - **Toasts.** Success and info leave after a few seconds and pause while
   hovered or focused. Errors stay until dismissed. The toast layer is a
   manual popover in the top layer, so toasts over a modal stay usable.
+
+## Insights and risk
+
+| Page | Route | What it does |
+|---|---|---|
+| Insights | `/insights` | The picked portfolio's value, beta, exposure and largest holding, where the money sits (asset class, sector, currency or holding), returns over periods, risk, which strategies agree with each holding, and the snapshot history |
+| Risk | `/insights/risk` | Each measure against its limit, today's VaR and ES with how often the model missed, each strategy sleeve with its alpha-decay check, and the daily history as a chart and a table |
+
+```mermaid
+flowchart LR
+  I[Insights: GET /api/insights] --> R[Risk screen]
+  P[GET /api/risk/policy] --> R
+  L[GET /api/risk/live] --> R
+  S[GET /api/risk/snapshots] --> R
+```
+
+- Both screens read the portfolio picked in the session strip (a synced
+  broker account too) through `api/insights.service.ts` and
+  `api/risk.service.ts`. `<app-insights-nav>` links them.
+- **Insights** reads `GET /api/insights`, `GET /api/insights/agreement` and
+  `GET /api/portfolio/snapshots` (server paged). Each stance is a word and a
+  mark (agrees, disagrees, has no view), never colour alone. Admins
+  (`portfolio.totals`) also get "All portfolios" from
+  `GET /api/insights/totals`: sums only, never holdings. The headline value
+  is brass only for a live portfolio.
+- **Risk** puts each reading next to its limit in `limitRows()`
+  (`pages/insights/limit-rows.ts`): largest holding, open positions,
+  largest sector, asset-class weights, gross and net exposure, volatility
+  and drawdown from `GET /api/insights`, against `GET /api/risk/policy`,
+  and the VaR violation ratio from `GET /api/risk/live` against its 0.5 to
+  1.5 band. At 80% of a limit a row reads "Near the limit". The status is
+  always written out next to the meter. The limits shown are the system
+  ones, and a trader's own settings can make them tighter.
+- The chart draws the last 200 readings (`GET /api/risk/snapshots`, 95%
+  VaR and ES in pane 0, the day's loss in pane 1). The table below it is
+  server paged.
+- New glossary terms: violation ratio, alpha decay and concentration.
 
 ## Permissions
 
@@ -503,6 +567,38 @@ LIVE stamp, and shows only with two or more portfolios.
 No CLI commands, config keys, environment variables or raw ids in trader
 copy. `npm run lint` runs `scripts/check-copy.mjs`, which fails on
 `stonks <command>`, `STONKS_*`, `[section]` config keys and "command line".
+
+### Words across surfaces
+
+The console uses trader words. The API, CLI and MCP keep the system's
+names. This is the mapping, so a trader, an operator and an agent can talk
+about the same thing.
+
+| Console word | API | CLI | MCP |
+|---|---|---|---|
+| Trading run | `/api/ticks` | `stonks tick` | `run_tick`, `list_ticks`, `get_tick` |
+| Paper trading (stage "Paper", nav "Shadow") | status `shadow`, `/api/shadow/...` | `registry shadow` | `shadow_strategy`, `list_shadow_pnl` |
+| Go live, Live | status `active`, `.../promote` | `registry promote` | `promote_strategy` |
+| Back to paper trading | `.../shadow` | `registry shadow` | `shadow_strategy` |
+| Stop (a strategy) | status `retired`, `.../retire` | `registry retire` | `retire_strategy` |
+| Strategies | `/api/strategies` | `stonks registry` | `*_strategy`, `list_strategies` |
+| Follow a strategy | `POST /api/subscriptions` | none | `subscribe` |
+| Trade costs | `/api/tca` | `stonks tca` | `get_tca_summary`, `list_trade_journal`, `get_order_tca` |
+| Kill switch, "Buys only" | `POST /api/halts/kill`, `buys_only` | `halts kill --buys-only` | `engage_kill_switch` (`buys_only`) |
+| Signal IC | `/api/lab/signal-ic` | `stonks lab ic` | `run_signal_ic` |
+| Trial ledger | `/api/lab/ledger` | none | `list_ledger_runs`, `get_ledger_run` |
+| Notifications (feed) | `/api/notifications` | `python -m stonks.notify` | `list_notifications` |
+| Alerts (Health page) | `/api/alerts` | none | `list_alerts` |
+
+"Buys only" was called `flatten` before 1.0. It never closed a position,
+so the old name was misleading. The API, the CLI (`--flatten`) and MCP
+still accept `flatten` as a deprecated alias. No kill switch closes
+positions: exits go through the strategies that hold them.
+
+Notifications and alerts are two feeds on purpose: notifications are
+yours (signals, fills, halts on your books, pushed to your devices), and
+alerts are system events for the Health page (failed runs, stale data),
+which admins also see without a single recipient.
 
 ## Install and notifications (PWA)
 
@@ -689,7 +785,7 @@ automate it.
   Ctrl+K / Cmd+K opens the command palette (ARIA combobox: the input keeps
   focus, arrows move `aria-activedescendant`, Enter runs, Escape closes and
   returns focus); `?` lists every shortcut; `g` then a key jumps between
-  pages (`g d` dashboard, `g s` strategies, `g w` shadow, `g o` orders, `g u`
+  pages (`g d` dashboard, `g e` insights, `g s` strategies, `g w` shadow, `g o` orders, `g u`
   studio, `g l` lab, `g a` data, `g g` go-live, `g h` health, `g ,`
   settings); `n b` new backtest, `n t` dry-run tick. Single-key shortcuts can
   be switched off in the cheat sheet (WCAG 2.1.4); Ctrl+K always works.
@@ -780,18 +876,28 @@ flowchart LR
   runs from the last 24 hours), and my
   strategies with an on/off switch and a notify, paper or auto switch. Auto
   stays disabled with the reason until 20 paper days and the server's other
-  checks pass, then asks for the step-up and a typed confirm.
+  checks pass, then asks for the step-up and a typed confirm. "Follow a
+  strategy" leads to the strategy list.
+- **Follow** (`pages/strategies/follow-panel.ts`): the strategy page of a
+  live or paper strategy has a Follow panel. Pick "Signals only" (notify) or
+  "Paper trading" in one of your portfolios, then `POST /api/subscriptions`
+  (`portfolio.trade`). Auto is never offered: it is switched on later from
+  Today. Once you follow it, the panel says how and links to Today.
   The server routes exist now: `GET /api/subscriptions` (each row has
   `paper_days_completed`, `paper_days_required`, `auto_blockers` and
   `paused_reason`), `POST /api/subscriptions` and
   `PATCH /api/subscriptions/{id}` with `{enabled?, mode?, reason?}`. Auto
   answers 403 `step_up_required` without a fresh second factor, and 409
   `auto_blocked` with `blockers` while the checklist fails.
-  `GET /api/portfolios` lists your portfolios, and
-  `GET /api/portfolios/trading-modes` says for each one whether it trades
-  paper or live money and through which broker.
-- **Profile** (`pages/profile/`): password, new recovery codes and API
-  tokens (a new token is shown once). **Settings** adds alert settings per
+  `GET /api/portfolios` lists your portfolios, each with `trading` (paper
+  or live). The console reads the PAPER or LIVE stamp from there, not from
+  `GET /api/portfolios/trading-modes` (MCP uses that one).
+- **Profile** (`pages/profile/`): password, new recovery codes, your
+  portfolios and API tokens (a new token is shown once). "Your portfolios"
+  lists each with its PAPER or LIVE stamp, renames one
+  (`PATCH /api/portfolios/{id}`) and opens a new paper portfolio with an
+  optional starting cash (`POST /api/portfolios`, both `portfolio.manage`).
+  The portfolio picker reloads after each change. **Settings** adds alert settings per
   type and channel and quiet hours next to the push opt-in.
   `GET /api/notifications/preferences` has `channel_defaults`: whether each
   channel is on when you never set it, and whether it stands in for push.
@@ -800,7 +906,10 @@ flowchart LR
   `GET /api/alerts` shows only your alerts (admins also see the admin
   audience).
 - **Users** (`pages/admin-users/`): add a person, change role, disable or
-  enable, reset their authenticator.
+  enable, reset their authenticator, and reset their password (a sheet
+  with the new password and their email typed to confirm). A password reset
+  signs them out and stops their API tokens. Every change asks for a fresh
+  code.
 
 Checked at 375px in Chromium: no sideways scroll and 44px targets on sign-in,
 set-up, home (trader and admin), profile, settings and users.

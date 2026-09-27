@@ -44,7 +44,7 @@ interface Row {
     <section class="panel" aria-labelledby="home-strategies">
       <div class="panel-head">
         <h2 id="home-strategies">My strategies</h2>
-        <a routerLink="/strategies" class="more">Browse strategies</a>
+        <a routerLink="/strategies" class="more">Follow a strategy</a>
       </div>
       @if (subs.error(); as err) {
         <app-error-state
@@ -57,8 +57,10 @@ interface Row {
       } @else if (rows().length === 0) {
         <app-empty-state
           title="You follow no strategies yet"
-          message="Pick one from the strategy list to get its signals here."
-        />
+          message="Open a strategy and press Follow to get its signals here, or paper trade it."
+        >
+          <a routerLink="/strategies" class="btn btn-primary">Follow a strategy</a>
+        </app-empty-state>
       } @else {
         <ul class="list">
           @for (row of rows(); track row.sub.id) {

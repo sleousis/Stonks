@@ -8,6 +8,7 @@ from typing import Annotated, Any, Literal
 
 import anyio
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.types import ToolAnnotations
 from pydantic import BaseModel, ConfigDict, Field
 
 from stonks.mcp.tools.common import (
@@ -39,6 +40,11 @@ from stonks.mcp.tools.common import (
 
 TERMINAL_JOB_STATUSES = frozenset({"succeeded", "failed", "cancelled"})
 
+#: Stops work (a destructive act), and stopping twice changes nothing.
+CANCEL = ToolAnnotations(
+    read_only_hint=False, destructive_hint=True, idempotent_hint=True, open_world_hint=False
+)
+
 #: Typed result route per job kind (``{id}`` is the validated job id). A
 #: kind missing here (e.g. studio jobs) reports the job's own ``result``.
 RESULT_ROUTES: dict[str, str] = {
@@ -48,12 +54,45 @@ RESULT_ROUTES: dict[str, str] = {
     "tick": "/api/ticks/jobs/{id}/result",
     "signal_ic": "/api/lab/signal-ic/{id}/result",
     "lab_ensure": "/api/lab/ensure/{id}/result",
+    "lab_sweep": "/api/lab/sweeps/{id}/result",
     "universe_refresh": "/api/universes/refresh/{id}/result",
     "universe_ensure": "/api/universes/ensure/{id}/result",
 }
 
 
 Metric = Literal["sharpe", "cagr", "final_return"]
+
+OptionalTickers = Annotated[
+    list[str] | None, Field(description="instrument ids, or give universe_id")
+]
+UniverseId = Annotated[
+    str | None,
+    Field(
+        pattern=r"^[a-z0-9][a-z0-9_.-]{0,63}$",
+        description="a stored universe (see list_universes): its point-in-time members, "
+        "delisted names included, instead of typed tickers",
+    ),
+]
+EnsureData = Annotated[
+    bool,
+    Field(
+        description="fetch the bars the run needs that the lake lacks first (a lab_ensure "
+        "job the run waits for, and its id is ensure_job_id in the result)"
+    ),
+]
+Preflight = Annotated[
+    bool | None,
+    Field(description="check the data before tuning (missing bars, gaps). Default [lab] preflight"),
+]
+StrictPreflight = Annotated[
+    bool | None,
+    Field(description="treat preflight warnings as errors. Default [lab] strict_preflight"),
+]
+
+
+def _need_universe(universe: list[str] | None, universe_id: str | None) -> None:
+    if not universe and not universe_id:
+        raise ToolError("give universe (tickers) or universe_id")
 
 
 class _Options(BaseModel):
@@ -118,9 +157,10 @@ def register(t: ToolContext) -> None:
 
     @server.tool(annotations=JOB)
     async def run_backtest(
-        universe: Tickers,
         start: IsoDate,
         end: IsoDate,
+        universe: OptionalTickers = None,
+        universe_id: UniverseId = None,
         strategy_id: Annotated[
             str | None, Field(description="registered strategy id (or use class_path)")
         ] = None,
@@ -145,13 +185,16 @@ def register(t: ToolContext) -> None:
         ] = None,
         benchmark: Benchmark = None,
     ) -> dict[str, Any]:
-        """Queue a backtest of one strategy over a universe and date window.
-        Returns the job; use wait_for_job to get the metrics and equity curve.
-        Simulated only: never places real orders."""
+        """Queue a backtest of one strategy over typed tickers (universe) or a
+        stored universe (universe_id) and a date window. Returns the job. Use
+        wait_for_job to get the metrics and equity curve. Simulated only:
+        never places real orders."""
+        _need_universe(universe, universe_id)
         body = drop_none(
             {
                 "strategy": strategy_ref(strategy_id, class_path, params),
                 "universe": universe,
+                "universe_id": universe_id,
                 "start": iso(start),
                 "end": iso(end),
                 "interval": interval,
@@ -169,9 +212,13 @@ def register(t: ToolContext) -> None:
     @server.tool(annotations=JOB)
     async def run_lab(
         class_path: Annotated[str, Field(description="catalog class path to tune")],
-        universe: Tickers,
         start: IsoDate,
         end: IsoDate,
+        universe: OptionalTickers = None,
+        universe_id: UniverseId = None,
+        ensure_data: EnsureData = False,
+        preflight: Preflight = None,
+        strict_preflight: StrictPreflight = None,
         survival_tests: Annotated[
             list[SurvivalTestName] | None,
             Field(description="survival suite; server default when omitted"),
@@ -204,12 +251,19 @@ def register(t: ToolContext) -> None:
         """Queue a lab run: tune a strategy class, fit, run the survival suite and
         give a pass/fail verdict. Returns the job; use wait_for_job for the result.
         Every run and trial is recorded in the trial ledger (with the hypothesis).
+        Give typed tickers (universe) or a stored universe (universe_id), and
+        ensure_data=true to fetch missing bars first.
         Registering (register_strategy, or register_if_passes to register only a
         passing run) needs confirm=true (preview otherwise)."""
+        _need_universe(universe, universe_id)
         body = drop_none(
             {
                 "strategy": {"class_path": class_path},
                 "universe": universe,
+                "universe_id": universe_id,
+                "ensure_data": ensure_data or None,
+                "preflight": preflight,
+                "strict_preflight": strict_preflight,
                 "start": iso(start),
                 "end": iso(end),
                 "survival_tests": survival_tests,
@@ -233,6 +287,84 @@ def register(t: ToolContext) -> None:
             }
         )
         return await queue_lab_run(t, "/api/lab/runs", body, confirm)
+
+    @server.tool(annotations=JOB)
+    async def run_sweep(
+        start: IsoDate,
+        end: IsoDate,
+        universe: OptionalTickers = None,
+        universe_id: UniverseId = None,
+        strategies: Annotated[
+            list[str] | None,
+            Field(
+                max_length=200,
+                description="strategy ids (e.g. momentum), class names or module:Class. "
+                "default every catalogued strategy",
+            ),
+        ] = None,
+        exclude: Annotated[
+            list[str] | None, Field(max_length=200, description="strategies to leave out")
+        ] = None,
+        preset: SurvivalPreset = None,
+        survival_tests: Annotated[
+            list[SurvivalTestName] | None,
+            Field(description="survival suite for every strategy, the server default when omitted"),
+        ] = None,
+        tuner: TunerName = "random",
+        objective: ObjectiveName = "sharpe",
+        budget: Annotated[int, Field(ge=1, le=1000, description="tuner trials each")] = 20,
+        train_ratio: Annotated[float, Field(gt=0, lt=1)] = 0.7,
+        interval: str = "1d",
+        seed: int = 0,
+        cost_model: LabCostModel = None,
+        benchmark: Benchmark = None,
+        embargo_bars: EmbargoBars = None,
+        preflight: Preflight = None,
+        strict_preflight: StrictPreflight = None,
+        hypothesis: Hypothesis = None,
+        premortem: Premortem = None,
+    ) -> dict[str, Any]:
+        """Queue a sweep: a lab run of every strategy (or the ones named) on
+        the same tickers or stored universe and window, ranked best first.
+        A strategy with a ticker parameter runs once per ticker. Returns the
+        job, and wait_for_job gives the ranked rows. Every trial is counted in
+        the trial ledger. A sweep never registers a strategy: register the
+        one you like with run_lab."""
+        _need_universe(universe, universe_id)
+        body = drop_none(
+            {
+                "universe": universe,
+                "universe_id": universe_id,
+                "strategies": strategies,
+                "exclude": exclude,
+                "start": iso(start),
+                "end": iso(end),
+                "preset": preset,
+                "survival_tests": survival_tests,
+                "tuner": tuner,
+                "objective": objective,
+                "budget": budget,
+                "train_ratio": train_ratio,
+                "interval": interval,
+                "seed": seed,
+                "cost_model": cost_model,
+                "benchmark": benchmark,
+                "embargo_bars": embargo_bars,
+                "preflight": preflight,
+                "strict_preflight": strict_preflight,
+                "hypothesis": hypothesis,
+                "premortem": premortem,
+            }
+        )
+        return await t.post("/api/lab/sweeps", body)
+
+    @server.tool(annotations=CANCEL)
+    async def cancel_job(job_id: str) -> dict[str, Any]:
+        """Stop one of your background jobs: a queued job never starts, and a
+        running lab run stops at its next trial (it ends cancelled). Other
+        running jobs cannot be interrupted (409). Ticks and ingests need an
+        admin."""
+        return await t.post(f"/api/jobs/{seg(job_id)}/cancel")
 
     @server.tool(annotations=JOB)
     async def run_signal_ic(

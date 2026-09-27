@@ -255,6 +255,8 @@ class AssetClassCostModel:
         if adv <= 0:
             return s.max_impact_bps, 0.0
         size = trade.quantity / adv
+        if not math.isfinite(size):  # an ADV too small to divide by (BL-49)
+            return s.max_impact_bps, 0.0
         if s.impact_model == "sqrt_vol":
             return min(s.impact_gamma * sigma * _BPS * math.sqrt(size), s.max_impact_bps), 0.0
         p = s.istar
@@ -264,6 +266,8 @@ class AssetClassCostModel:
         temporary = p.b1 * i_star * p.pov**p.a4
         permanent = (1.0 - p.b1) * i_star
         total = temporary + permanent
+        if not math.isfinite(total):
+            return s.max_impact_bps * p.b1, s.max_impact_bps * (1.0 - p.b1)
         if total > s.max_impact_bps:
             scale = s.max_impact_bps / total
             return temporary * scale, permanent * scale

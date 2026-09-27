@@ -343,7 +343,7 @@ flowchart TB
 | Audit | `audit_log` for all actions, `status_changes` for strategy lifecycle | everyone, append-only |
 
 - `risk_halts` (W3.2) gets `portfolio_id` (NULL = global) from the start; `clear_halt(kind, portfolio_id, principal, reason)`.
-- The kill switch (12.6, extended) is a `risk_halts` row of kind `kill` at the matching scope (global, user or portfolio); the tick checks global, user and portfolio before placing anything. Sells and covers still go through when the user chooses "flatten".
+- The kill switch (12.6, extended) is a `risk_halts` row of kind `kill` at the matching scope (global, user or portfolio); the tick checks global, user and portfolio before placing anything. Sells and covers still go through when the user chooses "buys only" (`buys_only`, once called `flatten`). No kill switch closes positions.
 - `audit_log (id, actor, action, target_kind, target_id, portfolio_id, details_json, ip, created_at)`, append-only through triggers like `status_changes`. Every cross-user admin read writes a row.
 
 ## 10. Security and privacy

@@ -60,10 +60,10 @@ uv run stonks golive check <id>
 uv run stonks tick [--dry-run] [--as-of YYYY-MM-DD] [--tickers AAPL.US,MSFT.US]
 uv run stonks health [--notify]   # also opens or clears the global operational halt
 uv run stonks halts list [--all]
-uv run stonks halts kill --scope global|user|portfolio [--portfolio ID] [--flatten] --reason "..."
+uv run stonks halts kill --scope global|user|portfolio [--portfolio ID] [--buys-only] --reason "..."
 uv run stonks halts resume ID --reason "..."   # asks you to type RESUME TRADING
 uv run stonks halts clear ID --reason "..."    # circuit-breaker or operational halt
-uv run stonks pnl [--since YYYY-MM-DD] [--strategy <shadow-id>]
+uv run stonks pnl [--since YYYY-MM-DD] [--strategy <shadow-id>] [--portfolio ID]
 uv run stonks report [--backtest <job-or-strategy> --start ... --end ...]
 uv run stonks tca summary|journal|order|note|edit-note|refresh   # transaction costs and the trade journal
 
@@ -74,6 +74,11 @@ uv run stonks mcp                # MCP server over the running API
 # Operations
 uv run stonks schedule run|next|runs|run-now JOB|check|metrics
 uv run stonks backup backup|verify|restore|list|prune
+
+# People (the shell is admin, and passwords come from a no-echo prompt)
+uv run stonks users bootstrap|reset-password|list
+uv run stonks users create --email E --name N [--role viewer|trader|admin]
+uv run stonks users set-role|disable|enable|reset-2fa --email E   # reset-2fa: sole-admin lockout
 
 # Operator entry points
 uv run python -m stonks.notify vapid-keygen|test --user EMAIL|deliver

@@ -34,7 +34,7 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
-from typing import Any
+from typing import Any, cast
 
 import requests
 from alpaca.common.exceptions import APIError
@@ -123,7 +123,7 @@ class AlpacaBroker:
         # client_id -> (booked qty, booked notional) for reconcile() deltas.
         self._booked: dict[str, tuple[float, float]] = {}
         self._open: set[str] = set()
-        self._assets: dict[str, dict] = {}
+        self._assets: dict[str, dict[str, Any]] = {}
         self._account_ok = False
 
     @classmethod
@@ -268,7 +268,7 @@ class AlpacaBroker:
     def cancel_all_orders(self) -> int:
         """Cancel every open order on the account; returns how many Alpaca
         accepted for cancellation."""
-        responses = self._call("cancel_orders", self._client.cancel_orders) or []
+        responses: list[Any] = self._call("cancel_orders", self._client.cancel_orders) or []
         cancelled = sum(1 for r in responses if int(r.get("status", 0)) // 100 == 2)
         _log.info("alpaca.orders.cancel_all", cancelled=cancelled)
         return cancelled
@@ -285,7 +285,7 @@ class AlpacaBroker:
             raise OrderRejectedError(f"Alpaca account status is {account.status!r}, not ACTIVE")
         self._account_ok = True
 
-    def _asset(self, symbol: str) -> dict:
+    def _asset(self, symbol: str) -> dict[str, Any]:
         cached = self._assets.get(symbol)
         if cached is not None:
             return cached
@@ -346,7 +346,9 @@ class AlpacaBroker:
             )
         return symbol
 
-    def _submit(self, order: Order, request: MarketOrderRequest | LimitOrderRequest) -> dict:
+    def _submit(
+        self, order: Order, request: MarketOrderRequest | LimitOrderRequest
+    ) -> dict[str, Any]:
         try:
             return self._call("submit_order", self._client.submit_order, request)
         except _DuplicateClientOrderId:
@@ -389,13 +391,13 @@ class AlpacaBroker:
         limit_price = _fit_limit_price(float(order.limit_price), asset, crypto, order.side)
         return LimitOrderRequest(limit_price=limit_price, **common), qty
 
-    def _fetch_order(self, client_id: str) -> dict | None:
+    def _fetch_order(self, client_id: str) -> dict[str, Any] | None:
         try:
             return self._call("get_order", self._client.get_order_by_client_id, client_id)
         except _NotFound:
             return None
 
-    def _book_delta(self, state: BrokerOrderState, raw: dict) -> Fill | None:
+    def _book_delta(self, state: BrokerOrderState, raw: dict[str, Any]) -> Fill | None:
         booked_qty, booked_notional = self._booked.get(state.client_id, (0.0, 0.0))
         fill = delta_fill(
             state,
@@ -411,7 +413,7 @@ class AlpacaBroker:
         return fill
 
     @staticmethod
-    def _to_state(raw: dict) -> BrokerOrderState:
+    def _to_state(raw: dict[str, Any]) -> BrokerOrderState:
         filled_qty = float(raw.get("filled_qty") or 0.0)
         avg = raw.get("filled_avg_price")
         return BrokerOrderState(
@@ -480,7 +482,7 @@ def map_status(alpaca_status: str, filled_quantity: float) -> OrderStatus:
     return "partially_filled" if filled_quantity > 0 else "pending"
 
 
-def fill_time(raw: dict) -> datetime:
+def fill_time(raw: dict[str, Any]) -> datetime:
     return _parse_ts(raw.get("filled_at")) or _parse_ts(raw.get("updated_at")) or datetime.now(UTC)
 
 
@@ -488,7 +490,7 @@ def _is_short_sale(order: Order) -> bool:
     return order.side == "sell" and order.position_effect == "open"
 
 
-def _fit_quantity(order: Order, asset: dict, crypto: bool) -> float:
+def _fit_quantity(order: Order, asset: dict[str, Any], crypto: bool) -> float:
     """Floor the quantity to what the asset accepts; never round *up* (a sell
     must not exceed the holding, a buy must not exceed the sized budget)."""
     qty = Decimal(str(order.quantity))
@@ -515,7 +517,7 @@ def _fit_quantity(order: Order, asset: dict, crypto: bool) -> float:
     return float(fitted)
 
 
-def _fit_limit_price(price: float, asset: dict, crypto: bool, side: str) -> float:
+def _fit_limit_price(price: float, asset: dict[str, Any], crypto: bool, side: str) -> float:
     """Snap a limit price onto the tick grid, never to a worse price than
     requested: buys round down, sells round up."""
     increment = _decimal(asset.get("price_increment")) if crypto else None
@@ -537,7 +539,7 @@ def _decimal(value: Any) -> Decimal | None:
     return d if d > 0 and math.isfinite(d) else None
 
 
-def _to_account(raw: dict) -> BrokerAccount:
+def _to_account(raw: dict[str, Any]) -> BrokerAccount:
     def num(key: str) -> float:
         value = raw.get(key)
         return float(value) if value not in (None, "") else 0.0
@@ -570,7 +572,7 @@ def _parse_ts(value: Any) -> datetime | None:
     return ts.astimezone(UTC) if ts.tzinfo is not None else ts.replace(tzinfo=UTC)
 
 
-def _require_ts(raw: dict, key: str) -> datetime:
+def _require_ts(raw: dict[str, Any], key: str) -> datetime:
     ts = _parse_ts(raw.get(key))
     if ts is None:
         raise BrokerError(f"Alpaca clock response has no valid {key!r}")
@@ -579,7 +581,8 @@ def _require_ts(raw: dict, key: str) -> datetime:
 
 def _status_code(exc: APIError) -> int | None:
     try:
-        return exc.status_code
+        code: Any = getattr(exc, "status_code", None)
+        return cast(int | None, code)
     except Exception:
         return None
 

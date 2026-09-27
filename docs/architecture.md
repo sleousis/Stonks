@@ -215,6 +215,6 @@ Switch: set `[lake.bars] backend = "parquet"`, stop `stonks serve`, run `uv run 
 
 ## More
 
-- [Operations](operations.md), [deploy](deploy.md), [runbooks](runbooks/)
+- [Operations](operations.md), [deploy](deploy.md), [capacity](capacity.md), [runbooks](runbooks/)
 - [Principles](principles.md), [strategies](strategies/README.md), [web console](ui.md), [universes and on-demand data](universes.md)
 - Block notes (history and details): [ingestion](blocks/01_ingestion.md), [storage](blocks/02_storage.md), [lab](blocks/03_strategy_lab.md), [registry](blocks/04_strategy_store.md), [tick](blocks/05_production_tick.md)

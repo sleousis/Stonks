@@ -196,6 +196,9 @@ export const TICK_FILLS_LIMIT = 200;
               [rowKey]="fillKey"
               [pageSize]="25"
             >
+              <ng-template appCell="side" [appCellOf]="fills.value().items" let-f>
+                <app-side-tag [side]="f.side" />
+              </ng-template>
               <ng-template appCell="order_client_id" [appCellOf]="fills.value().items" let-f>
                 <a class="cell-link" [routerLink]="['/trades/orders', f.order_client_id]"
                   >View order</a

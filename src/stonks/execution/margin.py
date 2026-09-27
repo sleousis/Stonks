@@ -56,7 +56,7 @@ class MarginSettings(BaseModel):
     model: MarginModelName = "cash"
     rates: MarginRates = MarginRates()
     #: Per-asset-class rates that replace ``rates`` for that class.
-    overrides: dict[AssetClass, MarginRates] = Field(default_factory=dict)
+    overrides: dict[AssetClass, MarginRates] = Field(default_factory=dict[AssetClass, MarginRates])
     #: Annual interest on negative cash (a margin loan).
     debit_rate_annual: float = Field(default=0.0, ge=0.0)
 

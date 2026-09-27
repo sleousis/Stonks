@@ -79,11 +79,12 @@ def test_kill_global_then_list_then_resume_with_the_typed_phrase(runner, workdir
     assert [a["action"] for a in audit][-2:] == ["kill_switch.engage", "kill_switch.resume"]
 
 
-def test_kill_a_portfolio_with_flatten_stops_buys_only(runner, workdir):
+@pytest.mark.parametrize("flag", ["--buys-only", "--flatten"])
+def test_kill_a_portfolio_with_buys_only_stops_buys_only(runner, workdir, flag):
     result = runner.invoke(
         app,
-        ["halts", "kill", "--scope", "portfolio", "--portfolio", "pf_default", "--flatten",
-         "--reason", "flatten"],
+        ["halts", "kill", "--scope", "portfolio", "--portfolio", "pf_default", flag,
+         "--reason", "exit"],
     )  # fmt: skip
     assert result.exit_code == 0, result.output
     [row] = _rows(workdir, "SELECT portfolio_id, halt FROM risk_halts")

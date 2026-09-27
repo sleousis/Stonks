@@ -5,7 +5,9 @@ Reads a ``BacktestReport`` and, when present, its ``benchmark``
 ``stonks.backtest.benchmark.BenchmarkResult``). Shows the equity curve
 against the benchmark, both drawdowns, a rolling Sharpe, the top drawdowns,
 a monthly returns grid, the trade statistics from the ledger and the
-benchmark statistics.
+benchmark statistics. A long/short backtest (``report.short_book``, roadmap
+16.4) adds its long, short and net exposure over time, the financing it
+paid, the orders the engine forced and the P&L of each leg.
 
 The data helpers are pure functions; rendering follows ``reporting.html``'s
 rule (every data value is escaped where it is placed into markup) and emits
@@ -25,7 +27,7 @@ import numpy as np
 
 from stonks.backtest import metrics
 from stonks.reporting.charts import line_chart
-from stonks.reporting.html import CSS, e, num, pct, table, tile
+from stonks.reporting.html import CSS, e, money, num, pct, table, tile
 
 __all__ = [
     "DrawdownPeriod",
@@ -272,6 +274,37 @@ def _bench_table(bench: Any) -> str:
     return table(["statistic", "value"], rows, "no benchmark")
 
 
+def _short_book_html(book: Any, title: str) -> str:
+    """The long/short section: exposure chart plus a statistics table."""
+    points = list(book.exposure)
+    dates = _plot_dates([p.timestamp for p in points])
+    chart = line_chart(
+        [
+            ("long", list(zip(dates, [p.long for p in points], strict=True)), "s1"),
+            ("short", list(zip(dates, [-p.short for p in points], strict=True)), "neg"),
+            ("net", list(zip(dates, [p.net for p in points], strict=True)), "s2"),
+        ],
+        title=f"Exposure: {title}",
+        fmt=lambda v: f"{v:.0%}",
+    )
+    rows = [
+        ["Borrow fees", money(book.borrow_fees)],
+        ["Debit interest", money(book.debit_interest)],
+        ["Financing paid", money(book.financing_total)],
+        ["Margin calls", str(book.n_margin_calls)],
+        ["Recalls", str(book.n_recalls)],
+        ["Largest gross", pct(book.max_gross)],
+        ["Largest short", pct(book.max_short)],
+        ["Average net", pct(book.mean_net)],
+        ["Long trades", str(book.n_long_trades)],
+        ["Long P&L", money(book.long_pnl)],
+        ["Short trades", str(book.n_short_trades)],
+        ["Short P&L", money(book.short_pnl)],
+    ]
+    stats = table(["statistic", "value"], ([e(k), e(v)] for k, v in rows), "no short book")
+    return f"<h3>Long and short book</h3>{chart}{stats}"
+
+
 def render_tear_sheet(sheet: TearSheet) -> str:
     """One ``<section>`` for ``sheet``."""
     report = sheet.report
@@ -313,6 +346,8 @@ def render_tear_sheet(sheet: TearSheet) -> str:
         [("rolling Sharpe", rolling_sharpe(dates, curve, periods_per_year=ppy), "s1")],
         title=f"Rolling {ROLLING_SHARPE_BARS}-bar Sharpe: {sheet.title}",
     )
+    book = getattr(report, "short_book", None)
+    short_html = _short_book_html(book, sheet.title) if book is not None else ""
     return (
         '<section class="tearsheet">'
         f"<h2>{e(sheet.title)}</h2>"
@@ -325,6 +360,7 @@ def render_tear_sheet(sheet: TearSheet) -> str:
         f"<h3>Monthly returns</h3>{_grid_table(report, bench)}"
         f"<h3>Trade statistics</h3>{_trade_table(report)}"
         f"<h3>Benchmark statistics</h3>{bench_html}"
+        f"{short_html}"
         "</section>"
     )
 

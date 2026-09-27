@@ -519,9 +519,21 @@ def with_trades(
     )
     # Tulchinsky's daily turnover, on the curve's own calendar (RS-32).
     turnover_daily = stats.turnover_annual / report.sessions_per_year
+    short_book = report.short_book
+    if short_book is not None:
+        longs = [t for t in trades if t.side == "long"]
+        shorts = [t for t in trades if t.side == "short"]
+        short_book = replace(
+            short_book,
+            long_pnl=float(sum(t.pnl for t in longs)),
+            short_pnl=float(sum(t.pnl for t in shorts)),
+            n_long_trades=len(longs),
+            n_short_trades=len(shorts),
+        )
     return replace(
         report,
         trades=tuple(trades),
         trade_stats=stats,
         fitness=metrics.fitness(report.sharpe, report.cagr, turnover_daily),
+        short_book=short_book,
     )

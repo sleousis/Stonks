@@ -145,6 +145,7 @@
   --chart-line: var(--color-primary);
   --chart-line-2: var(--color-accent);
   --chart-grid: #e2e7ec;
+  --chart-violet: #6a3fa0; // a categorical line, never brass or amber
   --chart-text: var(--color-ink-3);
 }
 
@@ -190,6 +191,7 @@
   --shadow-2: 0 16px 40px rgb(0 0 0 / 55%), 0 2px 8px rgb(0 0 0 / 40%);
   --shadow-ticket: 0 1px 0 rgb(0 0 0 / 35%), 0 10px 24px -12px rgb(0 0 0 / 70%);
   --chart-grid: #1e2934;
+  --chart-violet: #b9a0e8;
 }
 
 @media (prefers-color-scheme: dark) {

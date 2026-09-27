@@ -42,6 +42,14 @@ Its defaults are 63 days and 20 trades, and it adds:
   recorded a non-zero cost model), ``hypothesis_recorded`` and
   ``backtest_min_trades`` (the ``oos`` or ``mc_trades`` trade count).
 
+A strategy that shorts (its artifact's ``short_mode`` is ``short``,
+roadmap 16.4) gets one more check, ``short_borrow_costs``: its latest
+``cost_stress`` report must show the lab charged a realistic borrow fee
+(``borrow_fee_rate`` at least ``min_borrow_fee_annual``, default
+:data:`MIN_BORROW_FEE_ANNUAL`) and that the edge survived three times that
+fee (``sharpe_borrow_stress > 0``). A long-only strategy's report is
+unchanged.
+
 Every check reports a value and a limit. :attr:`GoLiveReport.checklist`
 carries the promotion context (trial count, DSR, PBO, benchmark excess,
 premortem, hypothesis) for the reviewer; it doesn't change the verdict.
@@ -78,6 +86,9 @@ _DAYS_PER_YEAR = 365.25  # matches BacktestReport's CAGR annualization
 #: Cost-model inputs of which at least one must be non-zero
 #: (``max_impact_bps`` is only a cap, so it doesn't count).
 _COST_INPUTS = frozenset({"fee_flat", "fee_bps", "half_spread_bps", "impact_bps"})
+#: Lowest annual equity borrow fee that counts as a realistic validation of
+#: a short strategy (general collateral runs about 0.25 % to 0.5 % a year).
+MIN_BORROW_FEE_ANNUAL = 0.0025
 
 
 class IncubationPolicy(GoLivePolicy):
@@ -131,6 +142,13 @@ class PaperPeriod:
     meta: dict[str, Any] = field(default_factory=dict)
     #: The strategy class's ``hypothesis`` attribute (BL-26); "" when none.
     strategy_hypothesis: str = ""
+    #: The artifact's ``params.json``; ``{}`` when missing.
+    params: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def shorts(self) -> bool:
+        """The strategy was registered with ``short_mode = "short"``."""
+        return self.params.get("short_mode") == "short"
 
     def report(self, test_id: str) -> SurvivalReport | None:
         """The latest stored survival report for ``test_id``."""
@@ -261,6 +279,7 @@ def load_paper_period(
         reports=reports,
         meta=_artifact_meta(handle.artifact_path),
         strategy_hypothesis=_class_hypothesis(handle.class_path),
+        params=_artifact_json(handle.artifact_path, "params.json"),
     )
 
 
@@ -298,6 +317,8 @@ def gate_checks(period: PaperPeriod, policy: GoLivePolicy) -> list[GoLiveCheck]:
         _min_trades_check(period, policy),
         _survival_check(period, policy),
     ]
+    if period.shorts:
+        checks.append(_short_borrow_check(period, policy))
     if inc is not None:
         checks += [
             _mc_band_check(period),
@@ -598,6 +619,33 @@ def _backtest_trades_check(period: PaperPeriod, inc: IncubationPolicy) -> GoLive
     )
 
 
+def _short_borrow_check(period: PaperPeriod, policy: GoLivePolicy) -> GoLiveCheck:
+    """A short strategy was validated with realistic borrow costs."""
+    name = "short_borrow_costs"
+    need = float(getattr(policy, "min_borrow_fee_annual", MIN_BORROW_FEE_ANNUAL))
+    if period.report("cost_stress") is None:
+        return GoLiveCheck(
+            name=name, passed=False, value=None, limit=need, detail="no cost_stress report"
+        )
+    fee = period.metric("cost_stress", "borrow_fee_rate")
+    stressed = period.metric("cost_stress", "sharpe_borrow_stress")
+    if fee is None or stressed is None:
+        return GoLiveCheck(
+            name=name,
+            passed=False,
+            value=None,
+            limit=need,
+            detail="validated without borrow costs: the lab dataset did not short",
+        )
+    failures = []
+    if fee < need:
+        failures.append(f"borrow fee {fee:.2%} a year < {need:.2%}")
+    if not stressed > 0:
+        failures.append(f"Sharpe at the borrow stress {stressed:.2f} <= 0")
+    detail = "; ".join(failures) or f"borrow fee {fee:.2%} a year, stressed Sharpe {stressed:.2f}"
+    return GoLiveCheck(name=name, passed=not failures, value=fee, limit=need, detail=detail)
+
+
 # ---- helpers ------------------------------------------------------------------
 
 
@@ -672,8 +720,13 @@ def _nonzero_cost_inputs(costs: Any) -> list[str]:
 
 def _artifact_meta(artifact_path: Path) -> dict[str, Any]:
     """The artifact's ``meta.json``; ``{}`` when missing or unreadable."""
+    return _artifact_json(artifact_path, "meta.json")
+
+
+def _artifact_json(artifact_path: Path, name: str) -> dict[str, Any]:
+    """A JSON object file of the artifact; ``{}`` when missing or unreadable."""
     try:
-        loaded = json.loads((Path(artifact_path) / "meta.json").read_text())
+        loaded = json.loads((Path(artifact_path) / name).read_text())
     except (OSError, ValueError):
         return {}
     return loaded if isinstance(loaded, dict) else {}

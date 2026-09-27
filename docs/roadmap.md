@@ -7,12 +7,12 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | Phase | Status |
 |-------|--------|
 | 1 to 8 | Done, except 5.4 end-to-end tests (now 13.14). 8.4 moved to 11.8. |
-| 9 | Waves 1 to 4 done. Wave 5: 9.5.1 to 9.5.5 done, 9.5.6 open. Details under Phase 9. |
+| 9 | Waves 1 to 5 done. Details under Phase 9. |
 | 10 | Done: 10.1 to 10.5. |
 | 11 | Done except parts of 11.6. 11.8 is this docs refresh. |
 | 12 | Mostly done. Open: three runbooks (tick failed, broker unreachable, disk full). |
 | 13 | Partly done: PWA and push, command palette, in-app help, accessibility and locale. The rest is planned. |
-| 14 | Done except 14.9 lab offload. |
+| 14 | Done. |
 | 15 | Mostly done: design, data model, connection seam, insights, automation modes, notifications, home screen. The tick trades one book per portfolio. Open: order placement for real providers. |
 | 16 | 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. |
 | 17 | Planned. |
@@ -203,7 +203,7 @@ Integration 1: realistic costs by default (BL-13), `[lab.parallel]`, the CLI and
 | 9.5.3 Latent regimes (BL-46) | Markov-switching regime filter; VIX term-structure condition. | `features/regimes.py`, `strategies/latent_regime.py`, `features/regime_vix.py`, `ingest/sources/yahoo.py` |
 | 9.5.4 Live monitoring (BL-47) | VaR/ES with violation ratio, alpha-decay monitor, correlation-to-pool test. | `production/risk_metrics.py`, `production/decay.py`, `lab/survival/pool_correlation.py`, `store/migrations_sqlite/019_risk_snapshots.sql` |
 | 9.5.5 Stress (BL-48) | Crisis windows, stress simulation, `VolForecaster` with GARCH (arch, wrapped). | `lab/survival/crisis.py`, `lab/survival/stress.py`, `features/vol_forecast.py` |
-| 9.5.6 Engineering guards (BL-49) | Point-in-time lake proxy, universe membership in engine and ranker, pyright, Hypothesis property tests, vectorised pre-screen. | `store/pit.py`, `lab/vectorized.py`, `pyrightconfig.json`, `backtest/engine.py`, `production/ranker.py`, `.github/workflows/ci.yml`, `tests/property/*` |
+| 9.5.6 Engineering guards (BL-49) | Done. Strategies read the lake through `PointInTimeLake` (`store/pit.py`) in the engine, the ranker and the scoring workers: every read stops at the decision, raw SQL raises. A planted-future test runs every catalogued strategy (`tests/unit/test_pit_catalog.py`). The engine already honoured membership (RS-05); the ranker now skips non-members of a stored tick universe. `lab/vectorized.py`: an opt-in `PrescreenTuner` that ranks a big grid with a fast approximate backtest and runs full backtests only on the best, with a parity test against the engine for `Momentum`. Hypothesis property tests in `tests/property/` (they found a NaN fill price in the sqrt_vol and I-Star impact models, now fixed). `core/` and `execution/` pass pyright strict, and the gate refuses any baseline error under a strict path. | `store/pit.py`, `lab/vectorized.py`, `pyproject.toml` `[tool.pyright]`, `tools/pyright_gate.py`, `backtest/engine.py`, `production/ranker.py`, `tests/property/*` |
 
 ## Phase 10: Repository, docs and data scale
 
@@ -283,7 +283,7 @@ What a trader needs to use the console daily without the CLI.
 
 ## Phase 14: Hosting and maintenance
 
-**Status:** done except 14.9 lab offload. See `docs/deploy.md`.
+**Status:** done. See `docs/deploy.md` and `docs/capacity.md`.
 
 Decided: one small always-on cloud VM (for example Hetzner Cloud or DigitalOcean). Heavy lab runs stay on the owner's 32-core PC or a temporary bigger VM.
 
@@ -297,8 +297,8 @@ Decided: one small always-on cloud VM (for example Hetzner Cloud or DigitalOcean
 | 14.6 Monitoring and alerting | External uptime check, dead-man pings from the scheduler (healthchecks.io or Uptime Kuma), disk, memory and CPU alerts, log retention, all routed to the existing webhook alerts. |
 | 14.7 Secrets management | Secrets only in the VM's environment (or a secrets file encrypted with sops), rotated on a schedule; never in images or the repo. |
 | 14.8 Maintenance routine | Dependabot or Renovate for Python, npm, Docker and GitHub Actions updates with CI gating; a monthly patch window; database migrations run automatically on deploy with a backup first. |
-| 14.9 Lab offload | Run heavy lab jobs on the 32-core PC or an on-demand large VM against a read-only copy of the Parquet bars, then send results back to the server's registry. |
-| 14.10 Cost and capacity | A sizing guide (CPU, RAM, disk for the lake), monthly cost estimate, and alerts before the disk fills. |
+| 14.9 Lab offload | Done. A `LabExecutor` seam: in process (the default) or a lab worker (`python -m stonks.lab.offload worker`, the optional `lab-worker` Compose service with its own CPU and memory limits). The API queues lab runs, sweeps and Studio lab runs in the state DB (migration 025) and publishes a read-only lake snapshot, the worker runs them with the same handlers and writes results to the same job rows. Heartbeats, cancel, lost-worker recovery, a `lab_queue` health check and `stonks_lab_*` metrics. Open: a queue over the API, so a worker on another machine (the 32-core PC) can pull jobs. |
+| 14.10 Cost and capacity | Done. `docs/capacity.md`: measured tick, lab, storage, memory and API latency numbers, VM sizes and cost ranges for 1, 5 and 20 traders, and the limits. `tools/benchmark.py` and `tools/api_load.py` reproduce them. Disk alerts come from `check-host.sh` (14.6). |
 
 ## Phase 15: Accounts, connected brokers and automation modes
 
@@ -324,14 +324,14 @@ Every trader gets a simple experience: connect a broker for insights, pick strat
 
 ## Phase 16: Short selling
 
-**Status:** 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. Design and what changed from it: `docs/design/shorting.md`. A short book's paper broker charges borrow fees and debit interest for every day since the stored accrual date (migration 023, `production/financing.py`). Still open: the margin-call notification, a lake table of borrow rates, and broker-reported borrow.
+**Status:** 16.1 to 16.4 done, off by default. Design and what changed from it: `docs/design/shorting.md`. A short book's paper broker charges borrow fees and debit interest for every day since the stored accrual date (migration 023, `production/financing.py`). Still open: the margin-call notification, a lake table of borrow rates, and broker-reported borrow.
 
 | WP | Scope |
 |----|-------|
 | 16.1 Engine and broker | Negative positions in the portfolio, an order position effect (open or close, split at zero), short fills in the simulated broker, borrow costs, margin requirements, and short-sale availability checks. Opt-in per strategy and per portfolio; long-only behaviour stays identical by default. |
 | 16.2 Risk rules for shorts | Gross and net exposure limits, per-position short caps, and squeeze protection (stop on adverse moves), as registered risk rules. |
-| 16.3 Strategies that short | Let strategies emit short signals behind an opt-in; re-enable the short legs of the neurotrader888 ports and the long/short books from the book research. |
-| 16.4 Validation for shorts | Backtests, permutation tests and reports handle long/short books; borrow-cost stress tests. |
+| 16.3 Strategies that short | Done. A `short_mode` param on short-capable strategies (off by default). The ranker keeps short scores for books that may short. `equal_weight_top_n` and `vol_target` have long/short modes with gross and net limits and dollar or beta neutrality. EWMAC and TSMOM short down trends, and two new strategies trade long/short: `ls_momentum` and `pairs_reversion`. The neurotrader888 short legs are not re-enabled yet. |
+| 16.4 Validation for shorts | Done. The backtest report shows financing, forced orders, exposure over time and long and short P&L. The trade Monte Carlo and runs test read short round trips. `cost_stress` multiplies borrow fees and adds a 3x borrow stress, `stress` adds a short-squeeze scenario, and go-live checks that a short strategy was validated with realistic borrow costs. |
 
 ## Phase 17: Options
 
@@ -381,7 +381,9 @@ CI enforces each gate at today's value where it is still below the target, so it
 | Coverage `execution/` | 95 | 96.8 | floor 95 |
 | Coverage `auth/` | 95 | 98.5 | floor 95 |
 | Coverage `portfolio/` | 95 | 96.5 | floor 95 |
-| Pyright basic over `src/stonks` | 0 errors | 493 errors, all in the baseline (14 added in step 7: pandas typing noise in untouched files after the statsmodels and arch dependencies came in; errors in new code were fixed) | `tools/pyright_gate.py` fails on any error not in `tools/pyright-baseline.json` |
+| Pyright strict over `core/` and `execution/` | 0 errors | 0 | `strict` in `[tool.pyright]`; `tools/pyright_gate.py` fails on any error under a strict path, baselined or not |
+| Pyright basic over `src/stonks` | 0 errors | 489 errors, all in the baseline (9.5.6 fixed 4 and added none) | `tools/pyright_gate.py` fails on any error not in `tools/pyright-baseline.json` |
+| Property tests (Hypothesis) | every money-path invariant | orders, ledger, fills, costs, risk rules, price adjustment | `tests/property/`, derandomized in CI (`HYPOTHESIS_PROFILE=deep` for 5000 examples) |
 | Surviving mutants on the money paths | under 10% | 19.8% over six targets (the risk rules still to run in full) | `tools/mutation.py`, weekly and manual (`.github/workflows/mutation.yml`) |
 | Ruff | no ignore without a comment | met | `[tool.ruff.lint]`, every ignore says why |
 | End to end, desktop and 375px phone | every journey passes | 26 passed (13 per viewport), 0 xfail, no known app issue | `uv run pytest -m e2e tests/e2e`, `.github/workflows/e2e.yml` |
@@ -401,7 +403,7 @@ First mutation run per target (cosmic-ray, mutants inside type annotations skipp
 
 "Mutants run" includes incompetent ones (code that no longer runs), which count neither way. The rate is survived over killed plus survived: 205 of 1036, 19.8%. The first run found a real gap: the non-default portfolio branch of `make_client_id` had no unit test (now covered, 47.6% to 9.5%). The risk rules have about 2500 mutants, too many for a local run. The weekly job measures them. Next: kill the surviving fills, orders and ledger mutants with tests until every target is under 10%.
 
-Pyright strict plan. Strict mode comes one package at a time, smallest first, each in its own change that also shrinks the baseline: `core/`, then `execution/`, `auth/`, `portfolio/` and last `production/`. Each step adds the package to `strict` in `[tool.pyright]`. Most strict errors are unknown types from untyped libraries (pandas, alpaca-py, exchange_calendars, pywebpush), so each step adds `pandas-stubs` or a typed wrapper at the seam and uses `dict[str, Any]` instead of bare `dict`. The basic-mode baseline is burned down alongside: pandas `itertuples()` rows, constructor settings read from the base class, and pydantic models built with no arguments.
+Pyright strict plan. Strict mode comes one package at a time, smallest first, each in its own change that also shrinks the baseline: `core/` and `execution/` (done, BL-49), then `auth/`, `portfolio/` and last `production/`. Each step adds the package to `strict` in `[tool.pyright]`. Most strict errors are unknown types from untyped libraries (pandas, alpaca-py, exchange_calendars, pywebpush), so each step adds `pandas-stubs` or a typed wrapper at the seam and uses `dict[str, Any]` instead of bare `dict`. The basic-mode baseline is burned down alongside: pandas `itertuples()` rows, constructor settings read from the base class, and pydantic models built with no arguments.
 
 ## Execution order
 

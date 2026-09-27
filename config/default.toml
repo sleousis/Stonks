@@ -147,6 +147,8 @@ max_bar_age_days = 4
 stuck_tick_minutes = 60
 stuck_ingest_minutes = 180
 ingest_failure_lookback_hours = 24
+# Lab worker jobs queued this long with no live worker are unhealthy (14.9).
+stuck_lab_queue_minutes = 30
 
 [backtest.costs]
 # Transaction costs for lab runs, backtests and simulated tick fills
@@ -232,6 +234,20 @@ matrix = false                     # also run the train x test matrix (--wf-matr
 max_workers = 0
 # BLAS/OpenMP threads per worker (the pool is the parallelism).
 blas_threads = 1
+
+[lab.offload]
+# Where heavy lab jobs run (roadmap 14.9, docs/deploy.md). "in_process": in
+# the API, as always. "worker": queued in the state DB for a separate lab
+# worker (python -m stonks.lab.offload worker) that reads a read-only lake
+# snapshot. Env: STONKS_LAB_EXECUTOR.
+executor = "in_process"
+kinds = ["lab_run", "lab_sweep", "studio_lab_run"]
+# snapshot_dir = "data/lab_snapshots"   # omit: <lake dir>/lab_snapshots
+snapshot_max_age_minutes = 60
+keep_snapshots = 2
+poll_seconds = 2
+heartbeat_seconds = 10
+lease_seconds = 120
 
 [audit]
 # Statement audit tolerances (BL-36): relative gaps above which

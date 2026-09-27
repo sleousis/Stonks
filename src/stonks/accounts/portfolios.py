@@ -105,6 +105,20 @@ class PortfolioRepository:
             )
         return self.get(scope, portfolio_id)
 
+    def rename(self, scope: Scope, portfolio_id: str, name: str) -> Portfolio:
+        before = self.get(scope, portfolio_id)
+        with self._state.transaction():
+            self._state.execute("UPDATE portfolios SET name = ? WHERE id = ?", [name, portfolio_id])
+            self._audit.record(
+                scope.actor,
+                "portfolio.rename",
+                "portfolio",
+                portfolio_id,
+                portfolio_id=portfolio_id,
+                details={"from": before.name, "to": name},
+            )
+        return self.get(scope, portfolio_id)
+
     def set_status(self, scope: Scope, portfolio_id: str, status: PortfolioStatus) -> Portfolio:
         before = self.get(scope, portfolio_id)
         with self._state.transaction():

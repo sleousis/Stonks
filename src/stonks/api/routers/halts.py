@@ -60,8 +60,9 @@ def engage_kill_switch(
     body: KillSwitchRequest, request: Request, halts: HaltsDep, principal: PrincipalDep
 ) -> HaltView:
     """Stop new orders: every portfolio (``global``, admins only), all of
-    yours (``user``) or one of yours (``portfolio``). ``flatten`` stops buys
-    only, so sells and exits still go through. Returns the open kill switch
+    yours (``user``) or one of yours (``portfolio``). ``buys_only`` stops
+    buys only, so sells and exits still go through and no position is
+    closed (``flatten`` is its deprecated name). Returns the open kill switch
     when one is already on at that scope."""
     return halts.engage_kill(principal, body, ip=client_ip(request))
 

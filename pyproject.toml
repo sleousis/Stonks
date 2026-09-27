@@ -46,6 +46,7 @@ packages = ["src/stonks"]
 dev = [
     "axe-playwright-python>=0.1.8",
     "httpx2>=2.13.1",
+    "hypothesis>=6.168.1",
     "pyright>=1.1.414",
     "pytest>=8.3",
     "pytest-cov>=5.0",
@@ -132,7 +133,10 @@ known-first-party = ["stonks", "tests", "tools"]
 # TT-02: basic mode over src/stonks. CI fails only on errors that are not in
 # tools/pyright-baseline.json (see tools/pyright_gate.py). Plan: strict mode
 # for core, production, execution, auth and portfolio (docs/roadmap.md 18.3).
+# Packages listed in ``strict`` are checked in strict mode and may carry no
+# baseline errors at all (the gate refuses them).
 include = ["src/stonks"]
+strict = ["src/stonks/core", "src/stonks/execution"]
 typeCheckingMode = "basic"
 pythonVersion = "3.12"
 # Analyse as Linux everywhere, so a Windows dev box and CI agree on the

@@ -43,7 +43,7 @@ def register(t: ToolContext) -> None:
         scope: KillScope,
         reason: Annotated[str, Field(min_length=1, max_length=500, description="audited")],
         portfolio_id: str | None = None,
-        flatten: Annotated[
+        buys_only: Annotated[
             bool,
             Field(
                 description="stop buys and cancel working buy orders only: sells and exits "
@@ -51,19 +51,23 @@ def register(t: ToolContext) -> None:
             ),
         ] = False,
         confirm: Confirm = False,
+        flatten: Annotated[
+            bool, Field(description="deprecated name of buys_only (it never closed a position)")
+        ] = False,
     ) -> dict[str, Any]:
         """Stop new orders at once and cancel the orders still working at the
         broker. Without confirm=true returns a preview and changes nothing.
         Resuming is done in the console or the CLI with a typed confirmation
         and a fresh 2FA code."""
+        buys_only = buys_only or flatten
         body = drop_none(
-            {"scope": scope, "portfolio_id": portfolio_id, "flatten": flatten, "reason": reason}
+            {"scope": scope, "portfolio_id": portfolio_id, "buys_only": buys_only, "reason": reason}
         )
         if not confirm:
             what = (
                 "buys and cancels working buy orders (sells and exits still go through, "
                 "and no position is closed)"
-                if flatten
+                if buys_only
                 else "every new order and cancels working orders"
             )
             target = {

@@ -13,7 +13,7 @@ from typing import Annotated, Any, Literal
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import Field
 
-from stonks.mcp.guards import draft_preview
+from stonks.mcp.guards import CONFIRM_HINT, draft_preview
 from stonks.mcp.tools.common import (
     EDIT,
     GUARDED_CREATE,
@@ -43,6 +43,7 @@ from stonks.mcp.tools.common import (
     Tickers,
     ToolContext,
     TunerName,
+    add_alias,
     drop_none,
     iso,
     queue_lab_run,
@@ -62,6 +63,12 @@ ROUTE_READS: tuple[RouteRead, ...] = (
         "/api/studio/schema",
         "JSON Schema of a Studio rule spec (version 1): indicators, entry/exit "
         "conditions, ranking. Use it to write a draft's spec.",
+    ),
+    RouteRead(
+        "get_studio_capabilities",
+        "/api/studio/capabilities",
+        "What the Studio allows on this server: whether code drafts are allowed (an operator "
+        "setting MCP cannot change) and the draft kinds you can create.",
     ),
 )
 
@@ -148,7 +155,7 @@ def register(t: ToolContext) -> None:
         return await t.post(draft_path(draft_id, "validate"), body, hints=HINTS)
 
     @server.tool(annotations=JOB)
-    async def backtest_draft(
+    async def run_draft_backtest(
         draft_id: str,
         universe: Tickers,
         start: IsoDate,
@@ -182,7 +189,7 @@ def register(t: ToolContext) -> None:
         return await t.post(draft_path(draft_id, "backtests"), body, hints=HINTS)
 
     @server.tool(annotations=JOB)
-    async def lab_run_draft(
+    async def run_draft_lab(
         draft_id: str,
         universe: Tickers,
         start: IsoDate,
@@ -237,6 +244,32 @@ def register(t: ToolContext) -> None:
             }
         )
         return await queue_lab_run(t, draft_path(draft_id, "lab-runs"), body, confirm, HINTS)
+
+    add_alias(t, run_draft_backtest, JOB)
+    add_alias(t, run_draft_lab, JOB)
+
+    @server.tool(annotations=STATUS_CHANGE)
+    async def delete_draft(draft_id: str, confirm: Confirm = False) -> dict[str, Any]:
+        """Delete one of your Studio drafts. A strategy already registered
+        from it stays registered. Without confirm=true returns a preview
+        (the draft's name, kind and status) and deletes nothing."""
+        draft = await t.get(draft_path(draft_id), hints=HINTS)
+        summary = {k: draft.get(k) for k in ("id", "name", "kind", "status")}
+        if not confirm:
+            warnings = ["deletes the draft and its spec, and this cannot be undone"]
+            if draft.get("registered_strategy_id"):
+                warnings.append(
+                    f"strategy {draft['registered_strategy_id']} registered from it stays"
+                )
+            return {
+                "preview": True,
+                "applied": False,
+                "draft": summary,
+                "warnings": warnings,
+                "next_step": CONFIRM_HINT,
+            }
+        await t.delete(draft_path(draft_id), hints=HINTS)
+        return {"preview": False, "applied": True, "deleted": summary}
 
     async def guarded(
         draft_id: str,

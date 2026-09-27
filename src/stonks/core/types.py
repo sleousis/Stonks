@@ -83,7 +83,7 @@ class Fill:
 @dataclass
 class Portfolio:
     cash: float
-    positions: dict[str, float] = field(default_factory=dict)
+    positions: dict[str, float] = field(default_factory=dict[str, float])
 
     def apply_fill(self, fill: Fill) -> None:
         current = self.positions.get(fill.ticker, 0.0)
@@ -151,7 +151,7 @@ def _finite(value: Any) -> bool:
 
 @dataclass(frozen=True)
 class Features:
-    values: Mapping[str, float] = field(default_factory=dict)
+    values: Mapping[str, float] = field(default_factory=dict[str, float])
 
     def get(self, name: str, default: Any = None) -> Any:
         return self.values.get(name, default)

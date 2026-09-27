@@ -4,7 +4,7 @@ import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
 import { CATALOG, MOMENTUM } from '../../../testing/lab-fixtures';
-import type { LabRunRequest, MeView } from '../../api/models';
+import type { LabRunRequest, MeView, SurvivalPresetInfo, UniverseView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { LabRunFormView } from './lab-run-form';
@@ -27,6 +27,8 @@ describe('LabRunFormView', () => {
 
   afterEach(() => controller.verify());
 
+  let presets: SurvivalPresetInfo[] = [];
+
   async function create(me: MeView = TRADER, catalogStatus = 200): Promise<void> {
     const loading = TestBed.inject(SessionService).load();
     (await nextRequest(controller, '/api/auth/me')).flush(me);
@@ -40,6 +42,7 @@ describe('LabRunFormView', () => {
     if (catalogStatus === 200) req.flush(SURVIVAL_TEST_CATALOG);
     else
       req.flush({ title: 'x', status: catalogStatus }, { status: catalogStatus, statusText: 'x' });
+    (await nextRequest(controller, '/api/lab/survival-presets')).flush(presets);
     await tick();
     fixture.detectChanges();
   }
@@ -113,6 +116,35 @@ describe('LabRunFormView', () => {
     await tick();
     fixture.detectChanges();
     expect(el.querySelector('#lr-opt-oos-min_psr')).not.toBeNull();
+  });
+
+  it("lists the server's tests for a named suite", async () => {
+    presets = [{ name: 'quick', tests: ['oos', 'drift'], options: {} }];
+    await create();
+    presets = [];
+    expect(el.querySelector('.suite-tests')?.textContent ?? el.textContent).toContain('Drift');
+  });
+
+  it('runs on a stored universe and can fetch missing data first', async () => {
+    const universe: UniverseView = { id: 'sp500', kind: 'index', name: 'S&P 500', spec: {} };
+    await create();
+    fixture.componentRef.setInput('universes', [universe]);
+    fixture.detectChanges();
+    expect(el.querySelector('#lr-ensure-hint')).toBeNull();
+    const pick = el.querySelector<HTMLSelectElement>('#lr-universe')!;
+    pick.value = 'sp500';
+    pick.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    // The typed tickers step aside for the universe.
+    expect(el.querySelector('#lr-tickers')).toBeNull();
+    el.querySelector<HTMLInputElement>('input[aria-describedby="lr-ensure-hint"]')!.click();
+    fixture.detectChanges();
+    el.querySelector<HTMLInputElement>(`input[value="${MOMENTUM.class_path}"]`)!.click();
+    fixture.detectChanges();
+    submit();
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0]).toMatchObject({ universe_id: 'sp500', ensure_data: true });
+    expect(emitted[0]).not.toHaveProperty('universe');
   });
 
   it('uses plain labels for the search settings', async () => {

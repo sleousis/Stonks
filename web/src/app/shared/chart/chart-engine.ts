@@ -15,10 +15,12 @@ export interface ChartPoint {
 /**
  * Named line colours, each read from a design token. `brass` is the real
  * portfolio, `gain`/`loss` carry meaning (drawdown), `muted` a benchmark;
- * `primary`, `info`, `warn` and `ink` are categorical, for lines that only
- * need telling apart (see CATEGORICAL_LINES).
+ * `primary`, `info`, `violet` and `ink` are categorical, for lines that only
+ * need telling apart (see CATEGORICAL_LINES). `warn` is amber, too close to
+ * brass, so peer lines never use it.
  */
-export type ChartColor = 'brass' | 'primary' | 'gain' | 'loss' | 'muted' | 'info' | 'warn' | 'ink';
+export type ChartColor =
+  'brass' | 'primary' | 'gain' | 'loss' | 'muted' | 'info' | 'warn' | 'violet' | 'ink';
 export type ChartValueFormat = 'money' | 'percent' | 'number';
 
 export interface ChartSeries {
@@ -42,10 +44,10 @@ export interface ChartSeries {
  */
 export const CATEGORICAL_LINES: readonly { color: ChartColor; dashed: boolean }[] = [
   { color: 'primary', dashed: false },
-  { color: 'warn', dashed: false },
+  { color: 'violet', dashed: false },
   { color: 'ink', dashed: false },
   { color: 'info', dashed: true },
-  { color: 'warn', dashed: true },
+  { color: 'violet', dashed: true },
   { color: 'ink', dashed: true },
 ];
 

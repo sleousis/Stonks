@@ -144,6 +144,29 @@ def test_pnl_since_filters_rows(runner, workdir):
     assert "2026-01-02" in result.output
 
 
+def test_pnl_reads_one_portfolio(runner, workdir):
+    _snap(workdir, "t1", "2026-01-01T15:00:00+00:00", 10_000.0)
+    state = SqliteState(workdir / "data" / "state.sqlite")
+    try:
+        state.execute(
+            "INSERT INTO portfolios (id, owner_id, name, kind, base_currency, created_at)"
+            " VALUES ('pf_other', 'usr_owner', 'Other', 'simulated', 'USD', 'x')"
+        )
+        state.execute("INSERT INTO tick_runs (id, started_at, status) VALUES ('t9', 'x', 'ok')")
+        state.execute(
+            "INSERT INTO portfolio_snapshots (tick_id, portfolio_id, taken_at, cash,"
+            " positions_json, total_value) VALUES ('t9', 'pf_other',"
+            " '2026-02-03T15:00:00+00:00', 5, '{}', 5)"
+        )
+    finally:
+        state.close()
+    other = runner.invoke(app, ["pnl", "--portfolio", "pf_other"])
+    assert other.exit_code == 0, other.output
+    assert "2026-02-03" in other.output and "2026-01-01" not in other.output
+    assert "pf_other" in other.output
+    assert "2026-01-01" in runner.invoke(app, ["pnl"]).output
+
+
 def test_pnl_without_snapshots(runner, workdir):
     result = runner.invoke(app, ["pnl"])
     assert result.exit_code == 0, result.output

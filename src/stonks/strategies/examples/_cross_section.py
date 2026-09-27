@@ -49,11 +49,16 @@ def parse_universe(spec: str) -> list[str]:
 def lake_universe(lake: Any, asset_classes: Iterable[str]) -> list[str]:
     """Tickers with daily bars in ``lake``, minus those whose known asset
     class is outside ``asset_classes`` (unknown classes are kept)."""
-    rows = lake.sql(
-        "SELECT DISTINCT ticker FROM bars WHERE interval = ? ORDER BY ticker",
-        [Interval.DAY_1.code],
-    )
-    tickers = [str(t) for t in rows["ticker"]]
+    reader: Any = getattr(lake, "bar_tickers", None)
+    if callable(reader):  # a typed read, so a point-in-time lake allows it (BL-49)
+        names: Any = reader(Interval.DAY_1)
+        tickers = [str(t) for t in names]
+    else:
+        rows = lake.sql(
+            "SELECT DISTINCT ticker FROM bars WHERE interval = ? ORDER BY ticker",
+            [Interval.DAY_1.code],
+        )
+        tickers = [str(t) for t in rows["ticker"]]
     known = lake.get_asset_classes(tickers) if tickers else {}
     allowed = set(asset_classes)
     return [t for t in tickers if t not in known or known[t] in allowed]
@@ -99,9 +104,11 @@ def orders_from_constructor(
     *,
     strategy_id: str,
     buffer_fraction: float = 0.0,
+    allow_short: bool = False,
 ) -> list[Order]:
     """Size ``inp`` with ``constructor`` and diff the target book into
-    orders (sells first; buys never spend more than cash plus proceeds)."""
+    orders (sells first; buys never spend more than cash plus proceeds).
+    ``allow_short`` diffs signed targets (roadmap 16.3)."""
     book = constructor.target_weights(inp)
     if book.meta.get("unfunded"):
         _log.info("strategy.unfunded", strategy_id=strategy_id, tickers=book.meta["unfunded"])
@@ -112,4 +119,5 @@ def orders_from_constructor(
         buffer_fraction=buffer_fraction,
         as_of=inp.as_of,
         strategy_id=strategy_id,
+        allow_short=allow_short,
     )

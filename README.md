@@ -32,6 +32,7 @@ Tests: `uv run pytest -n auto` (no network needed).
 - [API docs](https://sleousis.github.io/Stonks/): REST and MCP reference, generated from the code.
 - [Architecture](docs/architecture.md) and [operations](docs/operations.md).
 - [Deploy guide](docs/deploy.md): one server with Docker Compose.
+- [Capacity and cost](docs/capacity.md): measured sizes, VM sizes and limits.
 - [Strategies](docs/strategies/README.md) and [principles](docs/principles.md).
 - [Roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 - [Contributing](CONTRIBUTING.md) and [security](SECURITY.md).

@@ -127,12 +127,13 @@ A tick killed mid-run (container stop, out of memory, reboot) leaves its `tick_r
 | `stuck_ingest_runs` | An ingest has been `running` for more than N minutes. | `stuck_ingest_minutes` (180) |
 | `ingest_failures` | An ingest failed in the last N hours. | `ingest_failure_lookback_hours` (24) |
 | `var_violations` | A portfolio's rolling 95% VaR violation ratio is outside 0.5 to 1.5, after at least 60 scored days. It never opens a halt. | see Live risk below |
+| `lab_queue` | Lab worker jobs waited more than N minutes with no live worker, or a running one lost its worker. It never opens a halt. | `stuck_lab_queue_minutes` (30) |
 
 The API serves `GET /api/health` (liveness, used by Docker and Caddy) and `GET /api/health/report` (the full report). The report only reads: it lists open halts but never opens or clears one, whatever tickers it is asked about. `POST /api/health/run` (admins, `operations.run`) runs the checks and syncs the operational halt, recorded under the caller. The `api` scheduler backend uses it.
 
 `GET /api/ticks` and `GET /api/ticks/{id}` show everyone each tick's status, counts, winner and shadow results. Orders, clipped orders, stale buys, halts and per-portfolio details show only for your own portfolios, admins included. `?portfolio_id=` picks one of yours. The MCP tools `list_ticks` and `get_tick` read the same.
 
-`python -m stonks.scheduling metrics` prints Prometheus text from the state DB: tick counts, duration and last success; orders by status and rejections; API jobs and queue depth; each scheduled job's last success, last status and next run; the scheduler heartbeat. `--data-age` adds universe data age buckets but opens the lake, so use it only when `stonks serve` is not running.
+`python -m stonks.scheduling metrics` prints Prometheus text from the state DB: tick counts, duration and last success; orders by status and rejections; API jobs and queue depth; each scheduled job's last success, last status and next run; the scheduler heartbeat. `GET /metrics` adds the lab worker queue (see below). `--data-age` adds universe data age buckets but opens the lake, so use it only when `stonks serve` is not running.
 
 `stonks serve` serves the same set, data age included, at `GET /metrics`. Scrapes from a loopback peer need no token. From anywhere else they need the scrape-only bearer token `STONKS_METRICS_TOKEN`. The API token is not accepted there, so Prometheus never holds an admin credential. `STONKS_METRICS_ALLOW_LOOPBACK=false` requires the token on loopback too.
 
@@ -141,6 +142,31 @@ A useful alert: `time() - stonks_scheduled_job_last_success_timestamp_seconds{jo
 Over HTTP, `GET /api/health/live` (the process, plus the scheduler when `stonks serve` hosts it) and `GET /api/health/ready` (state migrated, lake present) are open to everyone, like `GET /api/health`. They answer 200 with each check's name and `ok`, or 503 naming the failing checks; details go to the log, not the response.
 
 With `[scheduler] backend = "in_process"`, `stonks serve` starts the scheduler with the app and stops it (after the running job) on shutdown. `GET /api/schedule` lists the jobs, their next fire and recent runs; `POST /api/schedule/{job}/run-now` (token, audited as `schedule.run_now`) starts a `manual:` run in the background.
+
+## Lab worker
+
+With `[lab.offload] executor = "worker"` (env `STONKS_LAB_EXECUTOR=worker`) the API queues lab runs, sweeps and Studio lab runs for a separate process instead of running them. Setup and the flow are in [deploy.md](deploy.md#10-lab-offload).
+
+```bash
+python -m stonks.lab.offload worker          # run until SIGTERM (the lab-worker service)
+python -m stonks.lab.offload worker --once   # at most one job, then exit
+python -m stonks.lab.offload status          # queue and workers as JSON, exit 1 when unhealthy
+python -m stonks.lab.offload snapshot        # publish a lake copy now (only while serve is down)
+```
+
+| Metric | Meaning |
+|--------|---------|
+| `stonks_lab_queue_jobs{status}` | Worker jobs queued and running. |
+| `stonks_lab_queue_oldest_queued_seconds` | How long the oldest queued job has waited. |
+| `stonks_lab_queue_stale_running` | Running jobs whose worker stopped sending heartbeats. |
+| `stonks_lab_workers_alive` | Workers with a heartbeat in the last `lease_seconds`. |
+| `stonks_lab_worker_jobs_total{outcome}` | Jobs finished by workers: succeeded, failed, cancelled. |
+
+A useful alert: `stonks_lab_queue_oldest_queued_seconds > 1800 and stonks_lab_workers_alive == 0`.
+
+- A worker writes a heartbeat every `heartbeat_seconds` (10). A running job with no heartbeat for `lease_seconds` (120) fails as `worker lost`. The next worker poll does that.
+- Stopping the worker cancels its running job at the next checkpoint. Restarting the API leaves queued worker jobs alone.
+- Snapshots live in `<lake dir>/lab_snapshots`. The newest two are kept, plus any a worker still reads.
 
 ## Backups and restore
 
@@ -269,10 +295,10 @@ flowchart LR
 - The breaker limits live in `[production.risk.rules.circuit_breaker]` (`max_month_loss`, `max_week_loss`, `max_drawdown_halt`, `cooldown`). They are off until set. The same rule runs in backtests.
 - Breaker halts block buys. Sells and exits still go through.
 - The gate also runs on a tick that trades nothing, so a breaker trip is recorded and notified the day it happens.
-- The kill switch has three scopes: `global` (admins), `user` (all your portfolios) and `portfolio` (one of yours). It stops every order, or only buys with `flatten`.
+- The kill switch has three scopes: `global` (admins), `user` (all your portfolios) and `portfolio` (one of yours). It stops every order, or only buys with `buys_only` (sells and exits still go through, and no position is closed). `flatten` is the old, deprecated name of `buys_only` and still works.
 - A `user` kill switch covers every portfolio you own, `pf_default` included when you are its owner.
-- Engaging stop-all while a `flatten` kill switch is on escalates it to stop everything. The old row closes with "escalated to all" and a new one opens. Engaging `flatten` never weakens a stop-all.
-- Engaging also cancels the orders your portfolios still have working at an external broker (only buys with `flatten`), and books the result. A failed cancel is logged and audited but never undoes the halt. Engage again to retry.
+- Engaging stop-all while a buys-only kill switch is on escalates it to stop everything. The old row closes with "escalated to all" and a new one opens. Engaging buys-only never weakens a stop-all.
+- Engaging also cancels the orders your portfolios still have working at an external broker (only buys with `buys_only`), and books the result. A failed cancel is logged and audited but never undoes the halt. Engage again to retry.
 - Resume the kill switch with `POST /api/halts/{id}/resume` and the text `RESUME TRADING`. Clear other halts with `POST /api/halts/{id}/clear` and a reason.
 - Every action writes an `audit_log` row. Every clear also writes a `risk_reset` row in `status_changes`.
 - A trip sends a `risk` notification to the portfolio owner, or to the admins for a global halt.

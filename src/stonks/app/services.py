@@ -34,12 +34,14 @@ from stonks.app.stream_tokens import IssuedStreamToken, StreamTokenSigner
 from stonks.app.studio import RuleStrategySource, StudioService, user_strategies_dir
 from stonks.app.subscriptions import SubscriptionService
 from stonks.app.ticks import TickService
+from stonks.app.trial_ledger import TrialLedgerService
 from stonks.app.universes import UniverseService
 from stonks.app.user_strategies import UserStrategyFinder, install, uninstall
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.auth.service import AuthService
 from stonks.config import configured_secrets
+from stonks.lab.offload.executor import make_lab_executor
 from stonks.logging import get_logger
 from stonks.production.tick import recover_interrupted_ticks
 
@@ -188,6 +190,7 @@ class Services:
     auth: AuthService
     subscriptions: SubscriptionService
     insights: InsightsService
+    ledger: TrialLedgerService
     _user_finder: UserStrategyFinder | None = field(default=None, repr=False)
 
     @classmethod
@@ -203,6 +206,13 @@ class Services:
             JobStore(settings.state.path),
             max_workers=settings.api.max_concurrent_jobs,
             secrets=lambda: _configured_secrets(context),
+            # Roadmap 14.9: heavy lab jobs may run in a lab worker process.
+            lab_executor=make_lab_executor(
+                settings.lab.offload,
+                state_path=settings.state.path,
+                lake_path=settings.lake.path,
+                open_lake=context.lake,
+            ),
         )
         catalog = CatalogService(
             sources=list(strategy_sources)
@@ -244,6 +254,7 @@ class Services:
             auth=_auth_service(context),
             subscriptions=SubscriptionService(context),
             insights=InsightsService(context, portfolio),
+            ledger=TrialLedgerService(context),
         )
         services.schedule.bind(services)
         return services
