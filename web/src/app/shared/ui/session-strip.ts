@@ -11,15 +11,20 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
-import type { MarketSessionsView } from '../../api/models';
+import type { MarketSessionsView, ScheduledJobView } from '../../api/models';
 import { SessionService } from '../../core/auth/session.service';
 import { formatTime, formatWeekday } from '../../core/format/format';
 import { HaltStateService } from '../../core/halts/halt-state.service';
+import { StopTradingService } from '../../core/halts/stop-trading.service';
 import { TradingDayService } from '../../core/schedule/trading-day.service';
-import { haltSummary } from '../../core/halts/halt-view';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
-import { humanize } from './param-form/param-spec';
-import { nextJob } from '../../core/schedule/job-labels';
+import {
+  TRADING_RUN_ACTION,
+  jobLabel,
+  nextJob,
+  nextTradingRun,
+} from '../../core/schedule/job-labels';
+import { KillSheet } from './kill-sheet';
 import { PortfolioPicker } from './portfolio-picker';
 
 /** How often the strip re-reads the schedule (the countdown ticks every second). */
@@ -125,22 +130,33 @@ export function sessionPhase(market: MarketSessionsView, now: number): SessionPh
   return nextOpen();
 }
 
+/** "16:45" for today, "Mon 16:45" for another day. */
+function runTime(iso: string, now: number): string {
+  const sameDay =
+    Math.abs(Date.parse(iso) - now) < 86_400_000 &&
+    formatWeekday(iso) === formatWeekday(new Date(now).toISOString());
+  return sameDay ? formatTime(iso) : `${formatWeekday(iso)} ${formatTime(iso)}`;
+}
+
 /**
  * The trading day, on every page: the market phase (pre-open, open, closed)
- * with a track from pre-open to the close, the next scheduled run with a
- * live countdown, and the halt state. It turns red while a kill switch is
- * on (amber for a breaker) and links to the halts page. It also holds the
- * portfolio picker when the user has more than one portfolio.
+ * with a track from pre-open to the close, the next trading run with a live
+ * countdown (UX-08), and the halt state. It turns red while a kill switch is
+ * on (amber for a breaker). It holds the portfolio picker when the user has
+ * more than one portfolio, and the Stop trading control (UX-01): one tap
+ * opens the kill switch sheet, with a brass ring when the shown portfolio
+ * trades real money. While a kill switch is on the control turns into
+ * Resume, which leads to the halts page.
  */
 @Component({
   selector: 'app-session-strip',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, PortfolioPicker],
+  imports: [RouterLink, PortfolioPicker, KillSheet],
   template: `
     @let halt = halted();
     @let day = phase();
     <div aria-live="polite">
-      @if (halt || next() || day || portfolios.hasChoice()) {
+      @if (halt || next() || noRun() || day || portfolios.hasChoice() || canKill()) {
         <div class="strip" [attr.data-tone]="halt?.tone ?? 'calm'">
           @if (halt) {
             <p class="halt" role="region" aria-label="Trading halted">
@@ -171,7 +187,9 @@ export function sessionPhase(market: MarketSessionsView, now: number): SessionPh
                 </div>
               }
             }
-            <app-portfolio-picker />
+            @if (portfolios.hasChoice()) {
+              <span class="pick"><app-portfolio-picker /></span>
+            }
             @if (next(); as n) {
               <a
                 class="next"
@@ -179,16 +197,51 @@ export function sessionPhase(market: MarketSessionsView, now: number): SessionPh
                 [attr.aria-label]="nextLabel()"
                 [attr.title]="n.trigger"
               >
-                <span class="muted">Next</span>
                 <span class="job">{{ n.label }}</span>
                 <span class="at num muted">{{ n.at }}</span>
                 <span class="clock num" aria-hidden="true">{{ n.in }}</span>
               </a>
+            } @else if (noRun()) {
+              <a class="next none muted" routerLink="/ops/schedule">No trading run scheduled</a>
+            }
+            @if (other(); as o) {
+              <a class="other muted" routerLink="/ops/schedule" [attr.aria-label]="o.aria">
+                Then {{ o.label }} <span class="num">{{ o.at }}</span>
+              </a>
+            }
+            @if (canKill()) {
+              @if (killOn()) {
+                <a
+                  class="stop resume"
+                  routerLink="/ops/halts"
+                  aria-label="Resume trading on the Halts page"
+                >
+                  <span class="stop-mark" aria-hidden="true"></span>
+                  Resume
+                </a>
+              } @else {
+                <button
+                  type="button"
+                  class="stop"
+                  [class.live]="live()"
+                  aria-haspopup="dialog"
+                  (click)="sheetOpen.set(true)"
+                >
+                  <span class="stop-mark" aria-hidden="true"></span>
+                  Stop trading
+                </button>
+              }
             }
           </div>
         </div>
       }
     </div>
+    @if (canKill()) {
+      <!-- Loaded once the page is idle (or at the first tap), so it is ready before it is needed. -->
+      @defer (on idle; when sheetOpen()) {
+        <app-kill-sheet [(open)]="sheetOpen" />
+      }
+    }
   `,
   styles: `
     @use 'breakpoints' as bp;
@@ -265,6 +318,7 @@ export function sessionPhase(market: MarketSessionsView, now: number): SessionPh
       align-items: baseline;
       flex-wrap: wrap;
       gap: 0 var(--space-2);
+      min-width: 0;
       margin: 0;
     }
     .lamp {
@@ -329,10 +383,14 @@ export function sessionPhase(market: MarketSessionsView, now: number): SessionPh
       background: var(--color-ink);
       transition: left var(--dur-slow) var(--ease);
     }
+    .pick {
+      display: inline-flex;
+      min-width: 0;
+      max-width: 100%;
+    }
 
     .next {
       display: inline-flex;
-      align-items: baseline;
       gap: var(--space-2);
       min-height: 32px;
       margin-left: auto;
@@ -340,7 +398,8 @@ export function sessionPhase(market: MarketSessionsView, now: number): SessionPh
       color: inherit;
       text-decoration: none;
     }
-    .next:hover .job {
+    .next:hover .job,
+    .next.none:hover {
       text-decoration: underline;
     }
     .job {
@@ -355,9 +414,74 @@ export function sessionPhase(market: MarketSessionsView, now: number): SessionPh
       text-align: center;
       font-weight: var(--weight-semibold);
     }
+    /* Admins: the next system job, quieter than the trading run. */
+    .other {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      min-height: 32px;
+      color: var(--color-ink-3);
+      font-size: var(--text-xs);
+      text-decoration: none;
+    }
+    .other:hover {
+      text-decoration: underline;
+    }
+
+    /* Stop trading: always one tap away. Red outline, a solid square mark,
+       and the brass ring when the shown portfolio trades real money. */
+    .stop {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      min-height: 32px;
+      padding: 0 var(--space-3);
+      border: 1.5px solid var(--color-loss);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface);
+      color: var(--color-loss);
+      font: inherit;
+      font-weight: var(--weight-bold);
+      white-space: nowrap;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .next ~ .stop,
+    .none ~ .stop {
+      margin-left: 0;
+    }
+    .stop:hover {
+      background: var(--color-loss-soft);
+    }
+    .stop.live {
+      box-shadow:
+        0 0 0 2px var(--color-surface),
+        var(--ring-live);
+    }
+    .stop-mark {
+      width: 10px;
+      height: 10px;
+      flex: none;
+      border-radius: 1px;
+      background: currentColor;
+    }
+    .stop.resume {
+      border-color: currentColor;
+      background: var(--color-loss);
+      color: var(--color-surface);
+    }
+    .stop.resume .stop-mark {
+      width: 0;
+      height: 0;
+      border-radius: 0;
+      background: none;
+      border-block: 5px solid transparent;
+      border-left: 9px solid currentColor;
+    }
     @include bp.coarse {
       .strip-link,
-      .next {
+      .next,
+      .stop {
         min-height: var(--touch-min);
       }
     }
@@ -366,22 +490,37 @@ export function sessionPhase(market: MarketSessionsView, now: number): SessionPh
         margin-bottom: var(--space-4);
       }
       .strip-link,
-      .next {
+      .next,
+      .stop {
         min-height: var(--touch-min);
       }
       .strip-link {
         width: 100%;
+      }
+      /* Phase and Stop share the top line; the rest wraps below. */
+      .phase {
+        order: 1;
+        flex: 1 1 0;
+      }
+      .stop {
+        order: 2;
+        margin-left: auto;
       }
       .track {
         flex-basis: 100%;
         max-width: none;
         order: 3;
       }
-      .at {
-        display: none;
+      .pick {
+        order: 4;
       }
       .next {
+        order: 5;
         margin-left: 0;
+      }
+      .at,
+      .other {
+        display: none;
       }
     }
   `,
@@ -397,35 +536,68 @@ export class SessionStrip {
   private readonly market = this.day.market;
   private readonly now = signal(Date.now());
 
-  protected readonly halted = computed(() => haltSummary(this.halts.active()));
+  protected readonly halted = this.halts.summary;
+  protected readonly killOn = this.halts.killOn;
+  /** Traders and admins can stop trading; viewers never see the control. */
+  protected readonly canKill = computed(() => this.session.can('killswitch.user'));
+  /** Real money on the shown portfolio: the Stop control wears the brass ring. */
+  protected readonly live = this.portfolios.live;
+  protected readonly sheetOpen = inject(StopTradingService).open;
 
   protected readonly phase = computed(() => {
     const market = this.market();
     return market ? sessionPhase(market, this.now()) : null;
   });
 
+  /** The next trading run: the countdown that matters to a trader (UX-08). */
   protected readonly next = computed(() => {
     const now = this.now();
-    const job = nextJob(this.jobs(), now);
+    const job = nextTradingRun(this.jobs(), now);
     if (!job?.next_run_at) return null;
     return {
-      label: humanize(job.name),
-      at: formatTime(job.next_run_at),
+      label: jobLabel(job),
+      at: runTime(job.next_run_at, now),
       in: countdown(Date.parse(job.next_run_at) - now),
       trigger: job.trigger_text || null,
     };
   });
 
+  /** The schedule loaded and holds no trading run: say so plainly. */
+  protected readonly noRun = computed(() => this.day.loaded() && !this.next());
+
+  /** Admins also see the next system job, quieter, before the trading run. */
+  protected readonly other = computed(() => {
+    if (!this.session.isAdmin()) return null;
+    const now = this.now();
+    const job = nextJob(this.systemJobs(), now);
+    if (!job?.next_run_at) return null;
+    // Only worth a line when it comes first; later jobs sit behind the schedule link.
+    const tradingAt = nextTradingRun(this.jobs(), now)?.next_run_at;
+    if (tradingAt && Date.parse(job.next_run_at) >= Date.parse(tradingAt)) return null;
+    const at = runTime(job.next_run_at, now);
+    const label = jobLabel(job);
+    return { label, at, aria: `Next system job: ${label} at ${at}. Open the schedule.` };
+  });
+
+  private readonly systemJobs = computed<readonly ScheduledJobView[]>(() =>
+    this.jobs().filter((j) => j.action !== TRADING_RUN_ACTION),
+  );
+
   /** Screen readers get a stable label; the ticking clock is hidden from them. */
   protected readonly nextLabel = computed(() => {
     const n = this.next();
-    return n ? `Next scheduled run: ${n.label} at ${n.at}. Open the schedule.` : null;
+    return n ? `Next trading run at ${n.at}. Open the schedule.` : null;
   });
 
   constructor() {
     // Nothing is asked of the API before sign-in (BUG-1).
     effect(() => {
-      if (this.session.canRead()) untracked(() => void this.load());
+      if (this.session.canRead()) {
+        untracked(() => {
+          void this.load();
+          void this.portfolios.load();
+        });
+      }
     });
     const clock = setInterval(() => this.now.set(Date.now()), 1000);
     const poll = this.pollMs > 0 ? setInterval(() => void this.load(), this.pollMs) : null;

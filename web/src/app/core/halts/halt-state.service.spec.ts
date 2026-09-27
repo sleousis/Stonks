@@ -2,11 +2,15 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { DestroyRef, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
-import type { HaltView } from '../../api/models';
+import type { HaltView, MeView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
+import { HaltsService } from '../../api/halts.service';
 import { nextRequest, page, tick } from '../../../testing/http';
+import { TRADER } from '../../../testing/auth-fixtures';
+import { book } from '../../../testing/portfolio-fixtures';
 import { SessionService } from '../auth/session.service';
-import { HALT_POLL_MS, HaltStateService, haltScopeText } from './halt-state.service';
+import { PortfolioContextService } from '../portfolio/portfolio-context.service';
+import { HALT_POLL_MS, HaltStateService } from './halt-state.service';
 
 const KILL = {
   id: 1,
@@ -24,6 +28,8 @@ describe('HaltStateService', () => {
   let state: HaltStateService;
   let destroy: () => void;
   const canRead = signal(true);
+  const me = signal<MeView | null>(TRADER);
+  const options = signal([book({ id: 'pf_default', name: 'Main book', is_default: true })]);
 
   beforeEach(() => {
     canRead.set(true);
@@ -32,7 +38,8 @@ describe('HaltStateService', () => {
         ...provideApi(),
         provideHttpClientTesting(),
         { provide: HALT_POLL_MS, useValue: 5 },
-        { provide: SessionService, useValue: { canRead } },
+        { provide: SessionService, useValue: { canRead, me } },
+        { provide: PortfolioContextService, useValue: { options } },
       ],
     });
     http = TestBed.inject(HttpTestingController);
@@ -51,12 +58,14 @@ describe('HaltStateService', () => {
     await tick();
     expect(state.active().length).toBe(2);
     expect(state.kills().map((k) => k.id)).toEqual([1]);
+    expect(state.killOn()).toBe(true);
 
     // The next poll clears it.
     await tick(10);
     for (const r of http.match((x) => x.url.split('?')[0] === '/api/halts')) r.flush(page([]));
     await tick();
     expect(state.kills()).toEqual([]);
+    expect(state.killOn()).toBe(false);
   });
 
   it('keeps the last state when a read fails', async () => {
@@ -88,11 +97,38 @@ describe('HaltStateService', () => {
     expect(state.kills().length).toBe(1);
   });
 
-  it('names the scope', () => {
-    expect(haltScopeText(KILL)).toBe('Portfolio pf_default');
-    expect(haltScopeText({ scope: 'global', portfolio_id: null, user_id: null })).toBe('Global');
-    expect(haltScopeText({ scope: 'user', portfolio_id: null, user_id: 'usr_a' })).toBe(
-      'User usr_a',
-    );
+  it('names the portfolio in the summary, never its id (UX-17)', async () => {
+    (await nextRequest(http, '/api/halts')).flush(page([KILL]));
+    await tick();
+    expect(state.summary()!.text).toContain('Portfolio Main book');
+    expect(state.summary()!.text).not.toContain('pf_');
+  });
+});
+
+describe('HaltStateService sequence guard (UX-52)', () => {
+  it('out-of-order refreshes keep the newest', async () => {
+    const answers: ((v: HaltView[]) => void)[] = [];
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: HALT_POLL_MS, useValue: 0 },
+        { provide: SessionService, useValue: { canRead: () => true, me: () => TRADER } },
+        { provide: PortfolioContextService, useValue: { options: () => [] } },
+        {
+          provide: HaltsService,
+          useValue: {
+            list: () => new Promise<HaltView[]>((resolve) => answers.push(resolve)),
+          },
+        },
+      ],
+    });
+    const state = TestBed.inject(HaltStateService);
+    const older = state.refresh(); // started while the kill switch was on
+    const newer = state.refresh(); // started after it was resumed
+    answers[1]([]);
+    await newer;
+    answers[0]([KILL]);
+    await older;
+    expect(state.active()).toEqual([]);
+    expect(state.killOn()).toBe(false);
   });
 });

@@ -12,6 +12,11 @@ export interface PaletteCommand {
   keywords?: readonly string[];
   /** Shown on the right, e.g. the keyboard shortcut "g d". */
   hint?: string;
+  /**
+   * Hidden when this returns false (a page or action the user may not use).
+   * It may read signals: the palette re-checks when they change.
+   */
+  visible?: () => boolean;
   run: () => void | Promise<void>;
 }
 
@@ -28,7 +33,10 @@ export interface PaletteCommand {
 export class CommandRegistry {
   private readonly byId = signal<ReadonlyMap<string, PaletteCommand>>(new Map());
 
+  /** Every registered command, hidden ones included. */
   readonly commands = computed(() => [...this.byId().values()]);
+  /** The commands this user may run now (reactive to `visible`). */
+  readonly available = computed(() => this.commands().filter((c) => c.visible?.() ?? true));
 
   /** Adds commands; returns a function that removes them (also run on `destroyRef`). */
   register(commands: readonly PaletteCommand[], destroyRef?: DestroyRef): () => void {

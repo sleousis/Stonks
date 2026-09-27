@@ -1,14 +1,16 @@
 <app-page-header
   title="Halts"
   description="Halts stop new orders before they reach the broker. The kill switch is the manual one."
+  [class.kill-on]="killOn()"
 >
+  <app-updated-ago [at]="auto.updatedAt()" />
   <button
     actions
     type="button"
     class="btn"
     [disabled]="halts.isLoading()"
     [attr.aria-busy]="halts.isLoading()"
-    (click)="halts.reload()"
+    (click)="auto.refresh()"
   >
     {{ halts.isLoading() ? 'Refreshing…' : 'Refresh' }}
   </button>
@@ -18,7 +20,7 @@
   <!-- Active ---------------------------------------------------------------->
   <section class="panel span-12" aria-labelledby="active-title">
     <div class="panel-head">
-      <h2 id="active-title">Active halts</h2>
+      <h2 id="active-title">Active halts <app-help-tip term="Circuit breaker" /></h2>
       @if (halts.hasValue()) {
         @if (killOn()) {
           <app-status-pill status="error" tone="negative" label="Kill switch on" />
@@ -83,9 +85,9 @@
   </section>
 
   <!-- Kill switch ----------------------------------------------------------->
-  <section class="panel span-12 kill" aria-labelledby="kill-title">
+  <section class="panel span-12 kill" [class.live]="anyLive()" aria-labelledby="kill-title">
     <div class="panel-head">
-      <h2 id="kill-title">Kill switch</h2>
+      <h2 id="kill-title">Kill switch <app-help-tip term="Kill switch" /></h2>
     </div>
     <form class="panel-body" novalidate (submit)="$event.preventDefault(); engage()">
       <p class="muted intro">
@@ -116,6 +118,16 @@
               (change)="scope.set('portfolio')"
             />
             One portfolio
+          </label>
+          <label class="check">
+            <input
+              type="radio"
+              name="kill-scope"
+              value="user"
+              [checked]="scope() === 'user'"
+              (change)="scope.set('user')"
+            />
+            All your portfolios
           </label>
           @if (canKill() && !canKillGlobal()) {
             <p class="hint">Only admins can stop every portfolio at once.</p>
@@ -175,7 +187,8 @@
             [checked]="buysOnly()"
             (change)="buysOnly.set($any($event.target).checked)"
           />
-          Buys only: stop buys, let sells and exits through. No position is closed.
+          Stop new buys only. Sells and exits still go out, and no position is closed.
+          <app-help-tip term="Stop new buys only" />
         </label>
       </div>
       <div class="form-actions">
@@ -219,3 +232,4 @@
 </div>
 
 <app-status-change-dialog />
+<app-resume-sheet />

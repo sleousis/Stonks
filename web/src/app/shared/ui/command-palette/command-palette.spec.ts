@@ -8,7 +8,7 @@ import { ShortcutsService } from '../../../core/commands/shortcuts.service';
 import { ToastService } from '../../../core/notify/toast.service';
 import { nextRequest, tick } from '../../../../testing/http';
 import { STRATEGY_METADATA } from '../../../../testing/strategy-fixtures';
-import { CommandPalette, jobLabel, jobPath } from './command-palette';
+import { CommandPalette, jobKindLabel, jobPath } from './command-palette';
 
 const STRATEGIES = {
   items: [
@@ -236,7 +236,13 @@ describe('job routing', () => {
     expect(jobPath('lab_run')).toBe('/lab');
     expect(jobPath('ingest')).toBe('/data');
     expect(jobPath('other')).toBe('/');
-    expect(jobLabel('lab_run')).toBe('Lab run');
-    expect(jobLabel('data_sync')).toBe('Data sync');
+    expect(jobKindLabel('lab_run')).toBe('Lab run');
+    expect(jobKindLabel('data_sync')).toBe('Data sync');
+  });
+
+  it('names jobs in trader words, never Tick or Ingest (UX-41)', () => {
+    expect(jobKindLabel('tick')).toBe('Trading run');
+    expect(jobKindLabel('ingest')).toBe('Data update');
+    expect(jobKindLabel('connections_sync')).toBe('Broker sync');
   });
 });
