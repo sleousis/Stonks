@@ -264,7 +264,8 @@ def test_a_risk_breach_restarts_the_paper_count(state, alice, portfolios, subs):
     pf = portfolios.create(alice, name="Book")
     sub = subs.subscribe(alice, strategy_id="s_active", portfolio_id=pf.id, mode=Mode.PAPER)
     seed_paper_days(state, sub.id, 5, portfolio_id=pf.id)
-    seed_paper_days(state, sub.id, 1, start=date(2026, 1, 6), breached=True, portfolio_id=pf.id)
+    # five weekdays from Thu 1 Jan end on Wed 7 Jan; the breach comes after
+    seed_paper_days(state, sub.id, 1, start=date(2026, 1, 8), breached=True, portfolio_id=pf.id)
     assert subs.get(alice, sub.id).paper_days_completed == 0
 
 

@@ -44,10 +44,10 @@ def test_a_run_round_trips_and_a_rerun_of_the_same_tick_replaces_it(state):
 
 
 def test_paper_days_count_distinct_trading_days(state):
-    for day in (2, 3, 5):
+    for day in (2, 5, 6):  # Fri, Mon, Tue
         record_run(state, _run(day))
-    record_run(state, _run(5, tick="tick_5_rerun"))  # a same-day re-run
-    record_run(state, _run(6, subs=("sub_b",)))  # someone else's day
+    record_run(state, _run(6, tick="tick_6_rerun"))  # a same-day re-run
+    record_run(state, _run(7, subs=("sub_b",)))  # someone else's day
     assert paper_days_completed(state, "sub_a") == 3
 
 
@@ -62,6 +62,28 @@ def test_errors_do_not_count_and_a_breach_restarts_the_count(state):
 
 
 def test_runs_before_a_reset_do_not_count(state):
-    for day in (2, 3, 4):
+    for day in (5, 6, 7):
         record_run(state, _run(day))
-    assert paper_days_completed(state, "sub_a", since="2026-01-03T22:00:00+00:00") == 1
+    assert paper_days_completed(state, "sub_a", since="2026-01-06T22:00:00+00:00") == 1
+
+
+# ---- BE-27: paper days cannot be gamed ------------------------------------------------------
+
+
+def test_be27_weekend_future_and_fully_halted_runs_are_not_paper_days(state):
+    record_run(state, _run(2))  # Fri: counts
+    record_run(state, _run(3))  # Sat: no session
+    record_run(state, _run(5, halted="all"))  # Mon, halted: nothing traded
+    record_run(state, _run(6, halted="buys"))  # Tue, reduce-only: still a day
+    future = PortfolioRun(
+        tick_id="tick_future",
+        portfolio_id="pf_default",
+        as_of=date(2099, 1, 5),
+        mode="paper",
+        status="ok",
+        paper_subscriptions=("sub_a",),
+        started_at="2026-01-07T21:00:00+00:00",
+        finished_at="2026-01-07T21:00:05+00:00",
+    )
+    record_run(state, future)
+    assert paper_days_completed(state, "sub_a") == 2

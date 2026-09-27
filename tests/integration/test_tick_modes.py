@@ -423,3 +423,19 @@ def test_be18_a_retired_strategys_paper_holdings_are_sold_then_the_subscription_
         [world.sim],
     )
     assert "UP.US" not in snap["positions_json"]
+
+
+# ---- BE-27: no future ticks ---------------------------------------------------------------
+
+
+def test_be27_a_future_tick_is_refused_unless_it_is_a_dry_run(world):
+    from stonks.production.tick import BackdatedTickError, FutureTickError
+
+    future = date(2099, 1, 5)
+    with pytest.raises(FutureTickError):
+        world.tick(future)
+    assert issubclass(FutureTickError, BackdatedTickError)
+    assert world.state.count_rows("tick_runs") == 0
+    world.tick(future, dry_run=True)  # a dry run may look ahead
+    world.tick(DAY1)  # and real ticks still run
+    assert world.orders(world.sim)

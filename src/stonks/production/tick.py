@@ -172,7 +172,14 @@ _VOL_HISTORY_BARS = 260
 class BackdatedTickError(ValueError):
     """A non-dry-run tick was asked to trade a date earlier than the latest
     portfolio snapshot. Trading it would apply today's portfolio to an old
-    date and write a new "latest" snapshot that belongs in the past."""
+    date and write a new "latest" snapshot that belongs in the past.
+    Entrypoints treat every refused tick date as this error."""
+
+
+class FutureTickError(BackdatedTickError):
+    """A non-dry-run tick was asked to trade a date after today (UTC). Its
+    snapshot would block every real tick until that date, and its run
+    would count as a paper day that never happened (BE-27)."""
 
 
 @dataclass(frozen=True)
@@ -364,6 +371,12 @@ def run_tick(
     log = _log.bind(tick_id=tick_id, as_of=as_of.isoformat(), dry_run=dry_run)
     plan = plan or TickPlan.default(settings)
     if not dry_run:
+        today = utc_today()
+        if as_of > today:
+            raise FutureTickError(
+                f"as_of {as_of.isoformat()} is after today ({today.isoformat()}); "
+                "only a dry run may look ahead"
+            )
         _refuse_backdated(state, as_of, log, [b.portfolio_id for b in plan.books])
 
     state.execute(
@@ -1002,14 +1015,18 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         exit_owner=exit_owner,
         client_id=make_id,
     )
-    # BE-18: a retired strategy of this book exits its own holdings, whatever
-    # the others decided for those tickers, then its subscription ends.
+    # BE-18: a retired strategy exits its own holdings, whatever the others
+    # decided for those tickers, then its subscription ends. A subscription
+    # book exits only its own members; the legacy book any retired owner.
+    members = None if book.legacy else set(book.spec.strategy_weights or {})
     retired = sorted(
-        s for s in (book.spec.strategy_weights or {}) if run.statuses.get(s) == "retired"
+        sid
+        for sid, st in run.statuses.items()
+        if st == "retired" and (members is None or sid in members)
     )
     retired_owned: dict[str, str] = {}
     exits: list[Order] = []
-    if retired and run.scoped:
+    if retired and run.scoped and held:
         owners = _holding_owners(state, portfolio_id, held, book_input.prior_attribution)
         retired_owned = {t: sid for t, sid in owners.items() if sid in retired}
         exits = [

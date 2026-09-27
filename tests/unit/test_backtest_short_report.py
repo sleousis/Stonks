@@ -89,14 +89,15 @@ def test_borrow_fees_in_the_report_hand_checked(lake):
     book = report.short_book
     assert isinstance(book, ShortBookReport)
     # The short of 10 x 100 opens at the second bar's open (Tue 2 Jan). Each
-    # bar charges the calendar days since the last accrual, so it pays from
-    # Mon 1 Jan to Tue 16 Jan: 15 days of 1,000 x 3.6 % / 360 = 0.10 a day.
-    assert book.borrow_fees == pytest.approx(15 * 0.10)
+    # bar charges, before its fills, the calendar days since the last
+    # accrual, so it pays for the nights it was held (BE-29): Tue 2 Jan to
+    # Tue 16 Jan, 14 days of 1,000 x 3.6 % / 360 = 0.10 a day.
+    assert book.borrow_fees == pytest.approx(14 * 0.10)
     assert book.debit_interest == 0.0
     assert book.financing_total == pytest.approx(book.borrow_fees)
     assert sum(-e.amount for e in book.financing) == pytest.approx(book.borrow_fees)
     # the fees are the only loss: the price never moved
-    assert report.equity_curve[-1] == pytest.approx(100_000.0 - 15 * 0.10)
+    assert report.equity_curve[-1] == pytest.approx(100_000.0 - 14 * 0.10)
 
 
 def test_exposure_over_time(lake):

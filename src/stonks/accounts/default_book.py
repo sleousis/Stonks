@@ -12,7 +12,9 @@ This is the one place a subscription is created in ``auto`` without the
 auto gate: it keeps what the install already did, it grants nothing new.
 The row is audited as ``service:system``. A subscription the owner already
 has (in any mode, enabled or not) is left alone, so a strategy the owner
-turned off for the default book stays off.
+turned off for the default book stays off. One the system turned off (the
+tick ends a retired strategy's subscription once it is flat) is turned
+back on.
 """
 
 from __future__ import annotations
@@ -48,10 +50,16 @@ def ensure_default_subscription(state: SqliteState, strategy_id: str, mode: Mode
         if not owner:
             return None
         exists = state.sql(
-            "SELECT 1 FROM subscriptions WHERE portfolio_id = ? AND strategy_id = ?",
+            "SELECT id, enabled FROM subscriptions WHERE portfolio_id = ? AND strategy_id = ?",
             [DEFAULT_PORTFOLIO_ID, strategy_id],
         )
         if exists:
+            row = exists[0]
+            if not row["enabled"] and _system_ended(state, row["id"]):
+                # the tick ended it when the strategy retired (BE-18); a
+                # promotion follows the strategy again, as before
+                _reenable(state, row["id"])
+                return row["id"]
             return None
         sub_id = f"sub_{uuid.uuid4().hex[:12]}"
         now = iso_now()
@@ -69,6 +77,31 @@ def ensure_default_subscription(state: SqliteState, strategy_id: str, mode: Mode
             details={"strategy_id": strategy_id, "mode": mode.value, "reason": "default_book"},
         )
     return sub_id
+
+
+def _system_ended(state: SqliteState, sub_id: str) -> bool:
+    """The subscription's last enable or disable was the system's."""
+    rows = state.sql(
+        "SELECT actor FROM audit_log WHERE target_kind = 'subscription' AND target_id = ?"
+        " AND action IN ('subscription.enable', 'subscription.disable')"
+        " ORDER BY id DESC LIMIT 1",
+        [sub_id],
+    )
+    return bool(rows) and rows[0]["actor"] == SYSTEM_ACTOR
+
+
+def _reenable(state: SqliteState, sub_id: str) -> None:
+    state.execute(
+        "UPDATE subscriptions SET enabled = 1, updated_at = ? WHERE id = ?", [iso_now(), sub_id]
+    )
+    AuditLog(state).record(
+        SYSTEM_ACTOR,
+        "subscription.enable",
+        "subscription",
+        sub_id,
+        portfolio_id=DEFAULT_PORTFOLIO_ID,
+        details={"reason": "default_book"},
+    )
 
 
 def align_default_book(state: SqliteState, broker_kind: str) -> list[str]:
