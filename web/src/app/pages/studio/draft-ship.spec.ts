@@ -7,7 +7,7 @@ import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { LIFECYCLE } from '../../shared/governance-labels';
-import { nextRequest, tick } from '../../../testing/http';
+import { nextRequest, page, tick } from '../../../testing/http';
 import {
   answerDialog,
   dialogForm,
@@ -107,9 +107,18 @@ describe('DraftShip', () => {
     (await nextRequest(controller, '/api/strategies/studio_rsi_dip_buyer/golive')).flush(
       goLiveReport('studio_rsi_dip_buyer', true),
     );
+    // The go-live ticket reads the broker and who follows it, like the strategy page.
+    (await nextRequest(controller, '/api/brokers')).flush({
+      kind: 'simulated',
+      paper: true,
+      allow_live: false,
+      credentials_configured: false,
+    });
+    (await nextRequest(controller, '/api/subscriptions')).flush(page([]));
     await tick(5);
     fixture.detectChanges();
     expect(dialogForm(el)?.textContent).toContain('Go-live check passed');
+    expect(el.querySelector('app-mode-stamp')?.textContent).toContain('PAPER');
     expect(isHoldDialog(el)).toBe(true);
     answerDialog(fixture, { reason: 'Shadow run looked right' });
 

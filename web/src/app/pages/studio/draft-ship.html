@@ -9,20 +9,7 @@
     }
   </div>
 
-  <ol class="steps" aria-label="Lifecycle">
-    @for (step of steps; track step.id) {
-      <li
-        [attr.data-state]="stepState(step.id)"
-        [attr.aria-current]="stepState(step.id) === 'current' ? 'step' : null"
-      >
-        <span class="dot" aria-hidden="true"></span>
-        <span class="step-text">
-          <span class="step-label">{{ step.label }}</span>
-          <span class="step-detail">{{ step.detail }}</span>
-        </span>
-      </li>
-    }
-  </ol>
+  <app-stage-bar compact [strategyId]="strategyId()" [status]="barStatus()" />
 
   <div class="panel-body body">
     @switch (stage()) {
@@ -80,7 +67,7 @@
           }}
         </p>
         <div class="links">
-          <a class="btn btn-ghost" routerLink="/shadow">Watch paper trading</a>
+          <a class="btn btn-ghost" routerLink="/paper">Watch paper trading</a>
           <a class="btn btn-ghost" [routerLink]="['/strategies', strategyId()]"
             >Open the strategy</a
           >
