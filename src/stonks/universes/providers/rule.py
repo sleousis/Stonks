@@ -4,8 +4,10 @@ At each rebalance date between ``start`` and ``end`` (default: the refresh
 date) the filters of :class:`~stonks.lab.universe.UniverseRule` pick the
 members from what the lake knew on that date: listed and not yet
 delisted, average daily dollar volume, last price, asset class, sector
-and exchange. A name is a member from the rebalance date it qualified on
-until the next rebalance date it failed. The rule reads only bars and
+and exchange. The spec is a screen (:mod:`stonks.screener`), so metric
+bounds, an order and a top N apply on each date too. A name is a member
+from the rebalance date it qualified on until the next rebalance date it
+failed. The rule reads only bars and
 instrument rows already in the lake, so ingest (or ensure) the candidate
 data first.
 """
@@ -15,24 +17,20 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import model_validator
 
-from stonks.lab.universe import UniverseRule, resolve
+from stonks.screener.engine import screen_tickers
+from stonks.screener.spec import ScreenSpec
 from stonks.universes.base import Materialized, MembershipSpan, RefreshContext, UniverseProvider
 
 Rebalance = Literal["weekly", "monthly", "quarterly"]
 
 
-class RuleSpec(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RuleSpec(ScreenSpec):
+    """A screen (:class:`~stonks.screener.spec.ScreenSpec`: the rule's
+    filters, metric bounds, an order and a top N) run at each rebalance
+    date from ``start`` to ``end``."""
 
-    min_adv: float | None = Field(default=None, ge=0)
-    min_price: float | None = Field(default=None, ge=0)
-    asset_classes: list[Literal["equity", "crypto", "commodity", "bond"]] | None = None
-    sectors: list[str] | None = None
-    exclude_sectors: list[str] = Field(default_factory=list)
-    exchanges: list[str] | None = None
-    adv_window_bars: int = Field(default=20, ge=1, le=2520)
     rebalance: Rebalance = "monthly"
     start: date
     end: date | None = None
@@ -42,17 +40,6 @@ class RuleSpec(BaseModel):
         if self.end is not None and self.end < self.start:
             raise ValueError("end must be on or after start")
         return self
-
-    def rule(self) -> UniverseRule:
-        return UniverseRule(
-            min_adv=self.min_adv,
-            asset_classes=tuple(self.asset_classes) if self.asset_classes is not None else None,
-            exclude_sectors=tuple(self.exclude_sectors),
-            adv_window_bars=self.adv_window_bars,
-            min_price=self.min_price,
-            sectors=tuple(self.sectors) if self.sectors is not None else None,
-            exchanges=tuple(self.exchanges) if self.exchanges is not None else None,
-        )
 
 
 def rebalance_dates(start: date, end: date, every: Rebalance) -> list[date]:
@@ -90,14 +77,13 @@ class RuleProvider(UniverseProvider):
         end = spec.end or ctx.as_of
         if end < spec.start:
             raise ValueError(f"the rule starts on {spec.start}, after the refresh date {end}")
-        rule = spec.rule()
         dates = rebalance_dates(spec.start, end, spec.rebalance)
         # the last evaluation holds through ``end``; open ended without one
         close = end + timedelta(days=1) if spec.end is not None else None
         opened: dict[str, date] = {}
         spans: list[MembershipSpan] = []
         for day in dates:
-            members = set(resolve(ctx.lake, rule, day))
+            members = set(screen_tickers(ctx.lake, spec, day))
             for ticker in [t for t in opened if t not in members]:
                 spans.append(MembershipSpan(ticker, opened.pop(ticker), day))
             for ticker in members:
