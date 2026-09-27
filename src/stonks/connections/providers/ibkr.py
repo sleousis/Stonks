@@ -308,7 +308,12 @@ class IbkrConnection(BrokerConnection):
         for e in self._call("executions", broker.client.executions):
             if e.account and e.account != account_id:
                 continue
-            act = _execution_activity(e, account_id, self._ticker(broker, e.contract))
+            act = _execution_activity(
+                e,
+                account_id,
+                self._ticker(broker, e.contract),
+                price=broker.to_major(e.price, e.contract),
+            )
             if act.trade_date is None or act.trade_date >= since:
                 found[act.provider_activity_id] = act
         for act in self._flex_activities(account_id):
@@ -372,7 +377,12 @@ class IbkrConnection(BrokerConnection):
 # ---- activity mapping ---------------------------------------------------------------------
 
 
-def _execution_activity(e: IbExecution, account_id: str, ticker: str | None) -> Activity:
+def _execution_activity(
+    e: IbExecution, account_id: str, ticker: str | None, *, price: float | None = None
+) -> Activity:
+    """An execution as an activity. ``price`` is the execution price in the
+    currency's major unit (IBKR's over the price magnifier, roadmap 19.16)."""
+    price = float(e.price) if price is None else price
     sign = 1.0 if e.side.upper() in ("BOT", "BUY") else -1.0
     qty = sign * float(e.shares)
     fee = abs(e.commission) if e.commission is not None else None
@@ -384,8 +394,8 @@ def _execution_activity(e: IbExecution, account_id: str, ticker: str | None) -> 
         raw_symbol=e.contract.local_symbol or e.contract.symbol,
         ticker=ticker,
         quantity=qty,
-        price=float(e.price),
-        amount=-qty * float(e.price) - (fee or 0.0),
+        price=price,
+        amount=-qty * price - (fee or 0.0),
         fee=fee,
         currency=e.contract.currency,
     )

@@ -111,6 +111,7 @@ class FakeIbGateway:
         self.lookups: list[IbContractQuery] = []
         self.cancels: list[int] = []
         self.global_cancels = 0
+        self.what_ifs: list[tuple[IbContract, IbOrderRequest]] = []
 
     # ---- scripting -----------------------------------------------------------------
 
@@ -350,6 +351,7 @@ class FakeIbGateway:
 
     def what_if(self, contract: IbContract, order: IbOrderRequest) -> IbWhatIf:
         self._need_connection()
+        self.what_ifs.append((contract, order))
         if self.what_if_timeout:
             raise TimeoutError("what-if timed out")
         if self.what_if_result is not None:
