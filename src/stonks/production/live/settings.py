@@ -11,7 +11,7 @@ sets it by hand (``production.live.allocation``).
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LiveSettings(BaseModel):
@@ -23,3 +23,11 @@ class LiveSettings(BaseModel):
     #: drift. ``false`` treats any position or order Stonks did not make as
     #: drift (roadmap 19.5).
     allow_manual_trades: bool = True
+    #: Reconciliation checks in a row that could not reach the broker, on
+    #: this many distinct sessions, before the portfolio's auto
+    #: subscriptions pause. A shorter outage only skips the day (19.5).
+    outage_pause_after_sessions: int = Field(default=2, ge=1)
+    #: The start-of-day check cancels day and opening-auction orders still
+    #: working from an earlier session, so yesterday's decision never
+    #: fills late.
+    cancel_stale_orders: bool = True

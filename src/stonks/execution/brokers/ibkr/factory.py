@@ -2,7 +2,8 @@
 
 :func:`connect_ibkr` picks the gateway (by name, by the portfolio it
 serves, or the only one), gives the process role its fixed API client id
-(``[brokers.ibkr] client_ids``: tick 11, sync 12, health 13), and wires the
+(``[brokers.ibkr] client_ids``: tick 11, sync 12, health 13,
+reconcile 14), and wires the
 contract cache and the ``orderRef`` lookup to the state DB when one is
 given. Nothing connects until the broker is first used, so a gateway that
 is down fails that call, nothing else.
@@ -27,7 +28,7 @@ from stonks.execution.brokers.ibkr.contracts import (
 from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig, IbkrGatewayConfig
 from stonks.store.state import SqliteState
 
-Role = Literal["tick", "sync", "health"]
+Role = Literal["tick", "sync", "health", "reconcile"]
 ClientFactory = Callable[[IbEndpoint], IbClient]
 
 
