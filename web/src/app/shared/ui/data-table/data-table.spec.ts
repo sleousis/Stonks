@@ -41,6 +41,28 @@ describe('DataTable', () => {
     expect(el.querySelector('caption')?.textContent).toContain('Test table');
   });
 
+  it('shows a column through its own display text but sorts on the value', async () => {
+    const columns: TableColumn<Row>[] = [
+      { key: 'ticker', label: 'Ticker' },
+      {
+        key: 'value',
+        label: 'Value',
+        format: 'number',
+        display: (r) => `${r.value} units`,
+      },
+    ];
+    const { fixture, el } = await render({ columns });
+    const valueCells = () =>
+      [...el.querySelectorAll('tbody tr')].map((tr) =>
+        tr.querySelectorAll('td')[1].textContent?.trim(),
+      );
+    expect(valueCells()).toEqual(['2 units', '10 units', '–']);
+    el.querySelectorAll<HTMLButtonElement>('th button')[1].click();
+    await fixture.whenStable();
+    // Numbers sort high first: 10 before 2, not "2 units" before "10 units".
+    expect(valueCells()[0]).toBe('10 units');
+  });
+
   it('names its scroll region apart from the panel heading it repeats (A11Y-2)', async () => {
     const { el } = await render({ caption: 'Stored universes' });
     const region = el.querySelector('[role="region"]');
