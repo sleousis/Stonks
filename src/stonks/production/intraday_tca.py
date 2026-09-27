@@ -233,12 +233,16 @@ class MinuteBars:
         rows: list[tuple[datetime, float, float, float | None]] = []
         if stop >= start:
             frame = self._read(ticker, start, stop)
-            for r in frame.itertuples(index=False):
-                ts = _utc(pd.Timestamp(r.timestamp).to_pydatetime())
+            for r in frame.to_dict("records"):
+                when = pd.Timestamp(r["timestamp"]).to_pydatetime()
+                if not isinstance(when, datetime):  # NaT
+                    continue
+                ts = _utc(when)
                 if self.end is not None and ts > self.end:
                     continue
-                volume = None if r.volume is None or pd.isna(r.volume) else float(r.volume)
-                rows.append((ts, float(r.open), float(r.close), volume))
+                raw = r.get("volume")
+                volume = None if raw is None or pd.isna(raw) else float(raw)
+                rows.append((ts, float(r["open"]), float(r["close"]), volume))
         rows.sort(key=lambda row: row[0])
         self._cache[key] = rows
         return rows
