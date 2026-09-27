@@ -401,6 +401,27 @@ def test_metrics_render():
     assert snap["state"] == "stopped" and snap["events"]["trade"] == 1
 
 
+def test_health_round_trips_through_its_snapshot():
+    from stonks.streaming.health import Gap, StreamHealth
+
+    h = StreamHealth(source="eodhd", state="streaming", connects=2, bars_written=5)
+    h.last_event_at = at(3)
+    h.backfills_ok = 1
+    h.add_gap(Gap(at(0), at(2), "disconnect", backfilled=True))
+    back = StreamHealth.from_snapshot(h.snapshot())
+    assert back.snapshot() == h.snapshot()
+    assert back.gaps_total["disconnect"] == 1
+
+
+def test_health_from_a_bad_snapshot_is_idle():
+    from stonks.streaming.health import StreamHealth
+
+    back = StreamHealth.from_snapshot({"state": "weird", "gaps": [{"start": None}]})
+    assert back.state == "idle"
+    assert back.source == "unknown"
+    assert not back.gaps
+
+
 def test_backoff_grows_caps_and_jitters():
     b = Backoff(StreamBackoffSettings(initial_seconds=1, max_seconds=5, jitter=0))
     assert [b.next_delay() for _ in range(5)] == [1, 2, 4, 5, 5]
