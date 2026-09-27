@@ -50,6 +50,7 @@ describe('Nav', () => {
       'Today',
       'Strategies',
       'Orders',
+      'Approvals',
       'Charts',
       'Watchlists',
       'Insights',

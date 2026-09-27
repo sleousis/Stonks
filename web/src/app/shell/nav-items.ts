@@ -31,6 +31,14 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { path: '/', label: 'Today', key: 'm', group: 'Main', keywords: ['home'] },
   { path: '/strategies', label: 'Strategies', key: 's', group: 'Main', keywords: ['follow'] },
   { path: '/orders', label: 'Orders', key: 'o', group: 'Main', keywords: ['trades', 'fills'] },
+  {
+    path: '/tickets',
+    label: 'Approvals',
+    key: 'y',
+    group: 'Main',
+    permission: 'portfolio.trade',
+    keywords: ['tickets', 'approve', 'order tickets'],
+  },
   { path: '/charts', label: 'Charts', key: 'z', group: 'Main', keywords: ['price'] },
   { path: '/watchlists', label: 'Watchlists', key: 'x', group: 'Main', keywords: ['tickers'] },
   {

@@ -61,7 +61,9 @@ describe('FollowPanel', () => {
     expect(values).toEqual(['notify', 'paper']);
     // The same words as Today's mode switch (UX-31).
     const labels = [...el.querySelectorAll('.mode strong')].map((s) => s.textContent!.trim());
-    expect(labels).toEqual(MODES.filter((m) => m.value !== 'auto').map((m) => m.label));
+    expect(labels).toEqual(
+      MODES.filter((m) => m.value === 'notify' || m.value === 'paper').map((m) => m.label),
+    );
     expect(el.textContent).not.toContain('Auto');
   });
 

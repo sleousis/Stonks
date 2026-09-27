@@ -6,7 +6,7 @@ import { NAV_GROUPS, NAV_ITEMS, type NavItem, navItemVisible, navViewer } from '
 
 /**
  * Main navigation (UX-10). The trader's pages sit on top with nothing to
- * open: Today, Strategies, Orders, Charts, Watchlists, Insights and
+ * open: Today, Strategies, Orders, Approvals, Charts, Watchlists, Insights and
  * Notifications. Research follows (paper trading, the leaderboard and the
  * build tools for those who can use them), then System for admins. Account
  * pages live in the account menu by the user's name.

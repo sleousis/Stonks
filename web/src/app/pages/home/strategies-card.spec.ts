@@ -56,7 +56,9 @@ describe('StrategiesCard', () => {
   it('keeps auto disabled with the reason until 20 paper days', async () => {
     const el = await render([sub({ paper_days_completed: 12 })]);
     expect(radio(el, 'auto').disabled).toBe(true);
-    expect(el.textContent).toContain('Auto unlocks after 20 paper trading days. 12 of 20 done.');
+    expect(el.textContent).toContain(
+      'Approve each trade and Auto unlock after 20 paper trading days. 12 of 20 done.',
+    );
   });
 
   it('switches notify and paper straight away', async () => {
@@ -116,6 +118,36 @@ describe('StrategiesCard', () => {
     expect(options.ticket?.lines.map((l) => l.label)).toEqual(['Strategy', 'Portfolio', 'Mode']);
     expect(options.ticket?.lines[2].value).toBe('Auto');
     controller.expectNone('/api/subscriptions/sub_1');
+  });
+
+  it('keeps approve each trade locked with auto until the gate passes (19.8)', async () => {
+    const el = await render([sub({ paper_days_completed: 12 })]);
+    expect(radio(el, 'approve').disabled).toBe(true);
+    expect(radio(el, 'approve').getAttribute('aria-describedby')).toBe('auto-why-sub_1');
+  });
+
+  it('turns on approve each trade after a step-up and a ticket, no typed name', async () => {
+    const stepUp = vi.spyOn(TestBed.inject(StepUpService), 'ensure').mockResolvedValue(true);
+    const confirm = vi.spyOn(TestBed.inject(ConfirmService), 'confirm').mockResolvedValue(true);
+    const el = await render([sub()]);
+    radio(el, 'approve').click();
+    const req = await nextRequest(controller, '/api/subscriptions/sub_1', 'PATCH');
+    expect(stepUp).toHaveBeenCalled();
+    const options = confirm.mock.calls[0][0];
+    expect(options.typedConfirmation).toBeUndefined();
+    expect(options.ticket?.live).toBe(true);
+    expect(options.ticket?.lines[2].value).toBe('Approve each trade');
+    expect(req.request.body).toEqual({ mode: 'approve' });
+    req.flush(sub({ mode: 'approve' }));
+    await tick();
+    fixture.detectChanges();
+    expect(radio(el, 'approve').checked).toBe(true);
+    expect(el.textContent).toContain('Each waits for your approval');
+  });
+
+  it('from approve, auto is open once the gate passed', async () => {
+    const el = await render([sub({ mode: 'approve' })]);
+    expect(radio(el, 'auto').disabled).toBe(false);
   });
 
   it('re-enabling an auto subscription asks for step-up and confirm, cancel sends no PATCH (UX-02)', async () => {

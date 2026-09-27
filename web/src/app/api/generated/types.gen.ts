@@ -5136,6 +5136,28 @@ export type PageTickRun = {
 };
 
 /**
+ * Page[TicketView]
+ */
+export type PageTicketView = {
+    /**
+     * Items
+     */
+    items: Array<TicketView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[TokenView]
  */
 export type PageTokenView = {
@@ -5581,6 +5603,36 @@ export type PortfolioRename = {
      * Name
      */
     name: string;
+};
+
+/**
+ * PortfolioSubmitView
+ */
+export type PortfolioSubmitView = {
+    /**
+     * Failed
+     */
+    failed: number;
+    /**
+     * Held
+     */
+    held: number;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Reason
+     */
+    reason: string | null;
+    /**
+     * Sent
+     */
+    sent: number;
+    /**
+     * Status
+     */
+    status: 'ok' | 'partial' | 'skipped' | 'error';
 };
 
 /**
@@ -7910,7 +7962,7 @@ export type SubscribeRequest = {
     /**
      * Mode
      */
-    mode?: 'notify' | 'paper' | 'auto';
+    mode?: 'notify' | 'paper' | 'approve' | 'auto';
     /**
      * Portfolio Id
      */
@@ -7936,7 +7988,7 @@ export type SubscriptionUpdate = {
     /**
      * Mode
      */
-    mode?: 'notify' | 'paper' | 'auto' | null;
+    mode?: 'notify' | 'paper' | 'approve' | 'auto' | null;
     /**
      * Reason
      */
@@ -7970,7 +8022,7 @@ export type SubscriptionView = {
     /**
      * Mode
      */
-    mode: 'notify' | 'paper' | 'auto';
+    mode: 'notify' | 'paper' | 'approve' | 'auto';
     /**
      * Paper Days Completed
      */
@@ -8832,6 +8884,225 @@ export type TickSummary = {
      */
     winner_strategy_id?: string | null;
     [key: string]: unknown;
+};
+
+/**
+ * TicketApproval
+ */
+export type TicketApproval = {
+    /**
+     * Ticket Ids
+     */
+    ticket_ids: Array<string>;
+};
+
+/**
+ * TicketList
+ */
+export type TicketList = {
+    /**
+     * Items
+     */
+    items: Array<TicketView>;
+};
+
+/**
+ * TicketRejection
+ */
+export type TicketRejection = {
+    /**
+     * Reason
+     */
+    reason: string;
+};
+
+/**
+ * TicketSubmitResult
+ */
+export type TicketSubmitResult = {
+    /**
+     * Expired
+     */
+    expired: number;
+    /**
+     * Failed
+     */
+    failed: number;
+    /**
+     * Portfolios
+     */
+    portfolios: Array<PortfolioSubmitView>;
+    /**
+     * Sent
+     */
+    sent: number;
+    /**
+     * Settled
+     */
+    settled: number;
+};
+
+/**
+ * TicketSummary
+ *
+ * Tickets waiting for you, for the badge in the menu.
+ */
+export type TicketSummary = {
+    /**
+     * Awaiting Approval
+     */
+    awaiting_approval: number;
+    /**
+     * By Portfolio
+     */
+    by_portfolio: {
+        [key: string]: number;
+    };
+};
+
+/**
+ * TicketView
+ *
+ * One order ticket: the order a live book decided, why, and what
+ * became of it.
+ */
+export type TicketView = {
+    /**
+     * As Of
+     *
+     * The day the book decided.
+     */
+    as_of: string;
+    /**
+     * Client Id
+     *
+     * The order the ticket becomes at the broker.
+     */
+    client_id: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Decided At
+     */
+    decided_at: string | null;
+    /**
+     * Decided By
+     */
+    decided_by: string | null;
+    /**
+     * Decision Reason
+     */
+    decision_reason: string | null;
+    /**
+     * Expires At
+     *
+     * The submit deadline: unsent, it expires.
+     */
+    expires_at: string;
+    /**
+     * Hold
+     *
+     * Why it waits for a person (approve mode, or a runaway run).
+     */
+    hold: 'approve_mode' | 'runaway' | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Limit Price
+     */
+    limit_price: number | null;
+    /**
+     * Notional
+     *
+     * quantity x (limit, else the reference price).
+     */
+    notional: number | null;
+    /**
+     * Order Type
+     */
+    order_type: string;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Portfolio Name
+     */
+    portfolio_name: string;
+    /**
+     * Position Effect
+     */
+    position_effect: 'open' | 'close' | null;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Reason
+     *
+     * Signal score, rank, target weight, trigger.
+     */
+    reason: {
+        [key: string]: unknown;
+    };
+    /**
+     * Reference Price
+     *
+     * The price the book decided at.
+     */
+    reference_price: number | null;
+    /**
+     * Rules
+     *
+     * The risk and account rules that touched it.
+     */
+    rules: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
+     * Side
+     */
+    side: 'buy' | 'sell';
+    /**
+     * Status
+     */
+    status: 'awaiting_approval' | 'approved' | 'rejected' | 'expired' | 'submitted' | 'filled' | 'unfilled' | 'cancelled' | 'failed';
+    /**
+     * Status Reason
+     */
+    status_reason: string | null;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string | null;
+    /**
+     * Submit After
+     */
+    submit_after: string;
+    /**
+     * Submitted At
+     */
+    submitted_at: string | null;
+    /**
+     * Tick Id
+     */
+    tick_id: string | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * What If
+     *
+     * The broker's preview: commission and margin (when it has one).
+     */
+    what_if: {
+        [key: string]: unknown;
+    } | null;
 };
 
 /**
@@ -19035,6 +19306,285 @@ export type CreateTelegramLinkCodeResponses = {
 };
 
 export type CreateTelegramLinkCodeResponse = CreateTelegramLinkCodeResponses[keyof CreateTelegramLinkCodeResponses];
+
+export type ListTicketsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Status
+         */
+        status?: 'awaiting_approval' | 'approved' | 'rejected' | 'expired' | 'submitted' | 'filled' | 'unfilled' | 'cancelled' | 'failed' | null;
+        /**
+         * Portfolio Id
+         */
+        portfolio_id?: string | null;
+        /**
+         * Tick Id
+         */
+        tick_id?: string | null;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/tickets';
+};
+
+export type ListTicketsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListTicketsError = ListTicketsErrors[keyof ListTicketsErrors];
+
+export type ListTicketsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageTicketView;
+};
+
+export type ListTicketsResponse = ListTicketsResponses[keyof ListTicketsResponses];
+
+export type ApproveTicketsData = {
+    body: TicketApproval;
+    path?: never;
+    query?: never;
+    url: '/api/tickets/approve';
+};
+
+export type ApproveTicketsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ApproveTicketsError = ApproveTicketsErrors[keyof ApproveTicketsErrors];
+
+export type ApproveTicketsResponses = {
+    /**
+     * Successful Response
+     */
+    200: TicketList;
+};
+
+export type ApproveTicketsResponse = ApproveTicketsResponses[keyof ApproveTicketsResponses];
+
+export type SubmitTicketsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/tickets/submit';
+};
+
+export type SubmitTicketsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SubmitTicketsError = SubmitTicketsErrors[keyof SubmitTicketsErrors];
+
+export type SubmitTicketsResponses = {
+    /**
+     * Successful Response
+     */
+    200: TicketSubmitResult;
+};
+
+export type SubmitTicketsResponse = SubmitTicketsResponses[keyof SubmitTicketsResponses];
+
+export type GetTicketSummaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/tickets/summary';
+};
+
+export type GetTicketSummaryErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetTicketSummaryError = GetTicketSummaryErrors[keyof GetTicketSummaryErrors];
+
+export type GetTicketSummaryResponses = {
+    /**
+     * Successful Response
+     */
+    200: TicketSummary;
+};
+
+export type GetTicketSummaryResponse = GetTicketSummaryResponses[keyof GetTicketSummaryResponses];
+
+export type GetTicketData = {
+    body?: never;
+    path: {
+        /**
+         * Ticket Id
+         */
+        ticket_id: string;
+    };
+    query?: never;
+    url: '/api/tickets/{ticket_id}';
+};
+
+export type GetTicketErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetTicketError = GetTicketErrors[keyof GetTicketErrors];
+
+export type GetTicketResponses = {
+    /**
+     * Successful Response
+     */
+    200: TicketView;
+};
+
+export type GetTicketResponse = GetTicketResponses[keyof GetTicketResponses];
+
+export type RejectTicketData = {
+    body: TicketRejection;
+    path: {
+        /**
+         * Ticket Id
+         */
+        ticket_id: string;
+    };
+    query?: never;
+    url: '/api/tickets/{ticket_id}/reject';
+};
+
+export type RejectTicketErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RejectTicketError = RejectTicketErrors[keyof RejectTicketErrors];
+
+export type RejectTicketResponses = {
+    /**
+     * Successful Response
+     */
+    200: TicketView;
+};
+
+export type RejectTicketResponse = RejectTicketResponses[keyof RejectTicketResponses];
 
 export type ListTicksData = {
     body?: never;

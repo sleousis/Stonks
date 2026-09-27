@@ -15,7 +15,7 @@ describe('autoBlockedReason', () => {
         }),
       ),
     ).toBe(
-      'Auto unlocks after 20 paper trading days. 12 of 20 done. The portfolio is not a broker portfolio.',
+      'Approve each trade and Auto unlock after 20 paper trading days. 12 of 20 done. The portfolio is not a broker portfolio.',
     );
   });
 
