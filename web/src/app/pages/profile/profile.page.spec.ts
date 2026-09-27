@@ -42,6 +42,7 @@ describe('ProfilePage', () => {
     fixture = TestBed.createComponent(ProfilePage);
     fixture.detectChanges();
     (await nextRequest(controller, '/api/auth/tokens')).flush(page(tokens));
+    (await nextRequest(controller, '/api/portfolios')).flush(page([]));
     await tick();
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
@@ -124,7 +125,7 @@ describe('ProfilePage', () => {
   it('creates a token and shows it once', async () => {
     const el = await render();
     type(el, '#token-name', 'ci');
-    el.querySelectorAll<HTMLFormElement>('form')[1].dispatchEvent(new Event('submit'));
+    el.querySelector('#token-name')!.closest('form')!.dispatchEvent(new Event('submit'));
     const req = await nextRequest(controller, '/api/auth/tokens', 'POST');
     expect(req.request.body).toEqual({ name: 'ci', scopes: ['read'], expires_in_days: 90 });
     req.flush({ token: 'stk_new_secret', info: { ...TOKEN, id: 'tok_2', name: 'ci' } });
@@ -139,7 +140,7 @@ describe('ProfilePage', () => {
     type(el, '#token-name', 'ci');
     const read = el.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
     read.click();
-    el.querySelectorAll<HTMLFormElement>('form')[1].dispatchEvent(new Event('submit'));
+    el.querySelector('#token-name')!.closest('form')!.dispatchEvent(new Event('submit'));
     fixture.detectChanges();
     expect(el.textContent).toContain('Pick at least one scope.');
     controller.expectNone({ method: 'POST', url: '/api/auth/tokens' });
