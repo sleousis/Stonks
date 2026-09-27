@@ -57,6 +57,7 @@ def test_catalog_strategy_tear_sheet(runner, env):
     assert html.startswith("<!doctype html>")
     assert "Tear sheet" in html and "Strategy vs benchmark" in html
     assert "EW CAGR" in html  # "auto" falls back to the equal-weight universe
+    assert "Factor attribution" in html  # 22.4: the market line for two names
 
 
 def test_registered_strategy_tear_sheet_with_a_named_benchmark(runner, env):

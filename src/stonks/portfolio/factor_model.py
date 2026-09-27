@@ -167,13 +167,16 @@ def _design(b: np.ndarray, factor_names: Sequence[str]) -> tuple[np.ndarray, lis
 
 def cross_section_returns(returns: pd.Series, exposures: pd.DataFrame) -> dict[str, float]:
     """One bar's factor returns: ``returns`` (index tickers) regressed on
-    ``[1, exposures]`` over the names that have a return. Empty when there
-    are too few names (fewer than factors plus two)."""
+    ``[1, exposures]`` over the names that have a return. With fewer names
+    than factors plus three only the market (the mean return) is given;
+    with no name, nothing."""
     r = pd.to_numeric(returns, errors="coerce").astype(float)
     r = r[np.isfinite(r)]
+    if r.empty:
+        return {}
     b = exposures.reindex(r.index).fillna(0.0)
     if len(r) < b.shape[1] + 3:
-        return {}
+        return {MARKET: float(r.mean())}
     design, labels = _design(b.to_numpy(dtype=float), [str(c) for c in b.columns])
     coef, *_ = np.linalg.lstsq(design, r.to_numpy(), rcond=None)
     return dict(zip(labels, coef.tolist(), strict=True))
