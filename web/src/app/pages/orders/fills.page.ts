@@ -15,6 +15,7 @@ import { autoRefresh } from '../../shared/auto-refresh';
 import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
+import { SideTag } from '../../shared/ui/side-tag';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 
 const PAGE_SIZE = 50;
@@ -22,6 +23,7 @@ const PAGE_SIZE = 50;
 /** Columns shared with the tick drill-down. */
 export const FILL_COLUMNS: TableColumn<FillView>[] = [
   { key: 'ticker', label: 'Ticker', mobile: 'title' },
+  { key: 'side', label: 'Side' },
   { key: 'quantity', label: 'Qty', format: 'number' },
   { key: 'price', label: 'Price', format: 'money' },
   { key: 'value', label: 'Value', format: 'money', value: (f) => f.quantity * f.price },
@@ -35,7 +37,7 @@ export const FILL_COLUMNS: TableColumn<FillView>[] = [
 @Component({
   selector: 'app-fills-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, DataTable, TableCell, LoadingState, EmptyState, ErrorState],
+  imports: [RouterLink, DataTable, TableCell, LoadingState, EmptyState, ErrorState, SideTag],
   template: `
     <section class="panel" aria-labelledby="fills-title">
       <div class="panel-head">
@@ -123,6 +125,9 @@ export const FILL_COLUMNS: TableColumn<FillView>[] = [
             [initialSort]="{ key: 'filled_at', dir: 'desc' }"
             (pageChange)="offset.set($event.offset)"
           >
+            <ng-template appCell="side" [appCellOf]="p.items" let-f>
+              <app-side-tag [side]="f.side" />
+            </ng-template>
             <ng-template appCell="tick_id" [appCellOf]="p.items" let-f>
               @if (f.tick_id) {
                 <a class="cell-link" [routerLink]="['/orders/ticks', f.tick_id]">View run</a>

@@ -13,6 +13,7 @@ function fill(i: number): FillView {
     id: i,
     order_client_id: `2026-09-25:momentum-v3:T${i}.US:buy`,
     ticker: `T${i}.US`,
+    side: i % 2 ? 'sell' : 'buy',
     quantity: 10,
     price: 101.5,
     fee: 0.25,
@@ -56,6 +57,8 @@ describe('FillsPage', () => {
     expect(orderLink?.textContent?.trim()).toBe('View order');
     expect(el.querySelector('a[href="/orders/ticks/t1"]')?.textContent?.trim()).toBe('View run');
     expect(el.textContent).not.toContain('2026-09-25:momentum-v3');
+    const side = [...el.querySelectorAll('td')].find((td) => td.dataset['label'] === 'Side');
+    expect(side?.querySelector('app-side-tag .tag')?.getAttribute('data-side')).toBe('buy');
     const price = [...el.querySelectorAll('td')].find((td) => td.dataset['label'] === 'Price');
     expect(price?.classList).toContain('num');
   });
