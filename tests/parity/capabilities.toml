@@ -490,6 +490,15 @@ console = "getAlpacaStatus"
 cli = { limited = "admin diagnostic, Alpaca is not in use" }
 mcp = { limited = "admin diagnostic, Alpaca is not in use" }
 
+[[capability]]
+id = "brokers.gateways"
+domain = "trading"
+title = "IB Gateway health and the auto books it paused"
+routes = ["GET /api/brokers/gateways"]
+console = "getBrokerGateways"
+cli = { limited = "the scheduler's broker health job logs each check" }
+mcp = { limited = "read tools land with the live stages (roadmap 19.9)" }
+
 # ---- portfolio and P&L ------------------------------------------------------------
 
 [[capability]]
@@ -1367,9 +1376,9 @@ mcp = { limited = "an operator check before switching models" }
 [[capability]]
 id = "live.settings.read"
 domain = "trading"
-title = "Read a live portfolio's allocation and account profile"
-routes = ["GET /api/portfolios/{portfolio_id}/live/allocation", "GET /api/portfolios/{portfolio_id}/live/account-profile"]
-console = { limited = "the console form lands with the go-live page (roadmap 19.9)" }
+title = "Read a live portfolio's allocation, account profile and live rules"
+routes = ["GET /api/portfolios/{portfolio_id}/live/allocation", "GET /api/portfolios/{portfolio_id}/live/account-profile", "GET /api/portfolios/{portfolio_id}/live/rules"]
+console = ["getLiveAllocation", "getAccountProfile", "getLiveRules"]
 cli = { limited = "owner settings live in the console, the API has them now" }
 mcp = { limited = "read tools land with the live stages (roadmap 19.9)" }
 
@@ -1378,6 +1387,6 @@ id = "live.settings.write"
 domain = "trading"
 title = "Set a live portfolio's allocation and account profile (step-up)"
 routes = ["PUT /api/portfolios/{portfolio_id}/live/allocation", "PUT /api/portfolios/{portfolio_id}/live/account-profile"]
-console = { limited = "the console form lands with the go-live page (roadmap 19.9)" }
+console = ["setLiveAllocation", "setAccountProfile"]
 cli = { limited = "needs a fresh second factor, done in the web app" }
 mcp = { limited = "needs a fresh second factor, done in the web app" }

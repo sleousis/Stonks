@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from stonks.api.deps import PrincipalDep, ServicesDep
+from stonks.api.deps import PrincipalDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
+from stonks.app.broker_gateways import GatewayHealthService, GatewayHealthView
 from stonks.app.brokers import AlpacaStatus, BrokerInfo
+from stonks.auth import Permission
 
 router = APIRouter(prefix="/api/brokers", tags=["brokers"], responses=PROBLEM_RESPONSES)
 
@@ -23,3 +25,16 @@ def get_alpaca_status(services: ServicesDep, principal: PrincipalDep) -> AlpacaS
     ``[brokers].kind`` is ``alpaca``; missing keys or API errors come back
     as ``connected=false`` with the reason."""
     return services.brokers.alpaca_status(principal)
+
+
+@router.get(
+    "/gateways",
+    response_model=GatewayHealthView,
+    operation_id="getBrokerGateways",
+    dependencies=needs(Permission.READ),
+)
+def get_broker_gateways(services: ServicesDep, principal: PrincipalDep) -> GatewayHealthView:
+    """Each IB Gateway the broker health check watches: connected or not,
+    the last good check, and the auto subscriptions it paused. Portfolio
+    names and paused books show for your own portfolios only."""
+    return GatewayHealthService(services.context).gateways(principal)

@@ -15,13 +15,15 @@ writes an ``audit_log`` row.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from stonks.accounts import NotFound, owned_portfolio
-from stonks.accounts.rules import AccountProfile
+from stonks.accounts import NotFound, owned_portfolio, tighter_of
+from stonks.accounts.models import Portfolio
+from stonks.accounts.rules import AccountProfile, registered_account_rules
 from stonks.accounts.rules.profiles import ProfileError, get_profile, set_profile
 from stonks.app.context import AppContext
 from stonks.app.errors import NotFoundError, ValidationError
@@ -73,6 +75,49 @@ class AccountProfileBody(BaseModel):
 
 class AccountProfileView(AccountProfileBody):
     portfolio_id: str
+
+
+#: The live safeguards and protections, in the order the tick runs them.
+LIVE_RULES: tuple[str, ...] = (
+    "capital_ramp",
+    "live_notional_caps",
+    "price_band",
+    "account_rules",
+    "max_orders_per_run",
+    "stop_cooldown",
+    "stop_guard",
+    "losing_lock",
+)
+
+
+class LiveRuleView(BaseModel):
+    #: The risk rule's name (``capital_ramp``, ``price_band``, ...).
+    name: str
+    #: Whether the rule acts on this portfolio's live book.
+    on: bool
+    #: The rule's settings as this portfolio follows them.
+    settings: dict[str, Any]
+
+
+class AccountRuleView(BaseModel):
+    #: The account rule's name (``settled_cash``, ``pdt``, ...).
+    name: str
+    #: Whether it applies to the portfolio's account profile (``false``
+    #: while no profile is set).
+    applies: bool
+
+
+class LiveRulesView(BaseModel):
+    portfolio_id: str
+    #: Every live safeguard and protection with its state.
+    safeguards: list[LiveRuleView]
+    #: Whether the account rules engine is on for this portfolio.
+    account_rules_on: bool
+    #: Whether the owner set an account profile. Without one, a live book
+    #: with the account rules on opens nothing.
+    profile_set: bool
+    #: Every account rule and whether it applies to the profile.
+    account_rules: list[AccountRuleView]
 
 
 class LiveService:
@@ -143,12 +188,53 @@ class LiveService:
                 raise ValidationError(str(exc)) from exc
         return _profile_view(saved)
 
+    def rules(self, principal: Principal, portfolio_id: str) -> LiveRulesView:
+        """Which live safeguards and account rules act on this portfolio,
+        read from the policy its book follows (the system policy tightened
+        by the owner's limits and the portfolio's own). Read only."""
+        require(principal, Permission.READ)
+        with self._ctx.state() as state:
+            portfolio = self._portfolio(state, principal, portfolio_id)
+            owner = state.sql(
+                "SELECT risk_policy_json FROM users WHERE id = ?", [portfolio.owner_id]
+            )
+            profile = get_profile(state, portfolio_id)
+        owner_risk = json.loads(owner[0]["risk_policy_json"] or "{}") if owner else {}
+        policy = tighter_of(
+            self._ctx.settings.production.risk, owner_risk or None, portfolio.risk_policy
+        )
+        safeguards = [
+            LiveRuleView(
+                name=name,
+                on=bool(policy.enabled and getattr(policy.rules, name).active),
+                settings=getattr(policy.rules, name).model_dump(mode="json"),
+            )
+            for name in LIVE_RULES
+        ]
+        applying = (
+            {r.name for r in registered_account_rules(profile)} if profile is not None else set()
+        )
+        return LiveRulesView(
+            portfolio_id=portfolio_id,
+            safeguards=safeguards,
+            account_rules_on=next(r.on for r in safeguards if r.name == "account_rules"),
+            profile_set=profile is not None,
+            account_rules=[
+                AccountRuleView(name=r.name, applies=r.name in applying)
+                for r in registered_account_rules()
+            ],
+        )
+
     @staticmethod
-    def _owned(state: SqliteState, principal: Principal, portfolio_id: str) -> str:
+    def _portfolio(state: SqliteState, principal: Principal, portfolio_id: str) -> Portfolio:
         try:
-            return owned_portfolio(state, principal.scope, portfolio_id).id
+            return owned_portfolio(state, principal.scope, portfolio_id)
         except NotFound as exc:
             raise NotFoundError(str(exc)) from exc
+
+    @classmethod
+    def _owned(cls, state: SqliteState, principal: Principal, portfolio_id: str) -> str:
+        return cls._portfolio(state, principal, portfolio_id).id
 
 
 def _profile_view(p: AccountProfile) -> AccountProfileView:

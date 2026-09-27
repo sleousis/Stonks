@@ -78,6 +78,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 |--------|------|---------|------|---------|----------|
 | GET | `/api/brokers` | Get Broker Info | sign-in |  | [BrokerInfo](#brokerinfo) |
 | GET | `/api/brokers/alpaca/status` | Get Alpaca Status | sign-in |  | [AlpacaStatus](#alpacastatus) |
+| GET | `/api/brokers/gateways` | Get Broker Gateways | `data.read` |  | [GatewayHealthView](#gatewayhealthview) |
 
 ## catalog endpoints
 
@@ -198,6 +199,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | PUT | `/api/portfolios/{portfolio_id}/live/account-profile` | Set Account Profile | `live.manage` | [AccountProfileBody](#accountprofilebody) | [AccountProfileView](#accountprofileview) |
 | GET | `/api/portfolios/{portfolio_id}/live/allocation` | Get Live Allocation | sign-in |  | [LiveAllocationView](#liveallocationview) |
 | PUT | `/api/portfolios/{portfolio_id}/live/allocation` | Set Live Allocation | `live.manage` | [LiveAllocationUpdate](#liveallocationupdate) | [LiveAllocationView](#liveallocationview) |
+| GET | `/api/portfolios/{portfolio_id}/live/rules` | Get Live Rules | `data.read` |  | [LiveRulesView](#liverulesview) |
 
 ## market endpoints
 
@@ -454,6 +456,13 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | `jurisdiction` | "us" \| "eu" \| "uk" | yes |  |
 | `portfolio_id` | string | yes |  |
 | `wash_sale_mode` | "warn" \| "block" | no |  |
+
+### AccountRuleView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `applies` | boolean | yes |  |
+| `name` | string | yes |  |
 
 ### AccountRulesSettings
 
@@ -1135,6 +1144,33 @@ One go-live check that failed (``GoLiveCheck`` without ``passed``).
 | `quote_currency` | string | yes |  |
 | `rate` | number \| null | yes |  |
 
+### GatewayHealthView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `configured` | boolean | yes |  |
+| `gateways` | list[[GatewayView](#gatewayview)] | yes |  |
+
+### GatewayView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `checked` | boolean | yes |  |
+| `connected` | boolean | yes |  |
+| `consecutive_failures` | integer | yes |  |
+| `detail` | string \| null | yes |  |
+| `down_since` | string \| null | yes |  |
+| `fault` | string \| null | yes |  |
+| `gateway` | string | yes |  |
+| `last_check_at` | string \| null | yes |  |
+| `last_ok_at` | string \| null | yes |  |
+| `latency_ms` | number \| null | yes |  |
+| `mode` | "paper" \| "live" | yes |  |
+| `paused_at` | string \| null | yes |  |
+| `paused_books` | list[[PausedBookView](#pausedbookview)] | yes |  |
+| `paused_elsewhere` | integer | yes |  |
+| `your_portfolios` | list[string] | yes |  |
+
 ### GoLiveCheckView
 
 | Field | Type | Required | Description |
@@ -1663,6 +1699,24 @@ One recorded lab run: what was tested, why, and how it came out.
 | `max_order_notional` | number \| null | no |  |
 | `max_user_day_notional` | number \| null | no |  |
 
+### LiveRuleView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes |  |
+| `on` | boolean | yes |  |
+| `settings` | object | yes |  |
+
+### LiveRulesView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `account_rules` | list[[AccountRuleView](#accountruleview)] | yes |  |
+| `account_rules_on` | boolean | yes |  |
+| `portfolio_id` | string | yes |  |
+| `profile_set` | boolean | yes |  |
+| `safeguards` | list[[LiveRuleView](#liveruleview)] | yes |  |
+
 ### LoginRequest
 
 | Field | Type | Required | Description |
@@ -2059,6 +2113,7 @@ An order to propose. The server prices it and checks it; a person approves it in
 | `quantity` | number | yes |  |
 | `replaces_client_id` | string \| null | no |  |
 | `side` | string | yes |  |
+| `state` | string \| null | no |  |
 | `status` | string | yes |  |
 | `status_reason` | string \| null | no |  |
 | `strategy_id` | string \| null | yes |  |
@@ -2440,6 +2495,16 @@ The model book's result. Every figure is null without two days.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `new_password` | string | yes |  |
+
+### PausedBookView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `portfolio_id` | string | yes |  |
+| `portfolio_name` | string | yes |  |
+| `reason` | string | yes |  |
+| `strategy_id` | string | yes |  |
+| `subscription_id` | string | yes |  |
 
 ### PendingActionView
 

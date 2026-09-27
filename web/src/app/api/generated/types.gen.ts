@@ -77,6 +77,20 @@ export type AccountProfileView = {
 };
 
 /**
+ * AccountRuleView
+ */
+export type AccountRuleView = {
+    /**
+     * Applies
+     */
+    applies: boolean;
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
  * AccountRulesSettings
  */
 export type AccountRulesSettings = {
@@ -1932,6 +1946,86 @@ export type FxRateView = {
 };
 
 /**
+ * GatewayHealthView
+ */
+export type GatewayHealthView = {
+    /**
+     * Configured
+     */
+    configured: boolean;
+    /**
+     * Gateways
+     */
+    gateways: Array<GatewayView>;
+};
+
+/**
+ * GatewayView
+ */
+export type GatewayView = {
+    /**
+     * Checked
+     */
+    checked: boolean;
+    /**
+     * Connected
+     */
+    connected: boolean;
+    /**
+     * Consecutive Failures
+     */
+    consecutive_failures: number;
+    /**
+     * Detail
+     */
+    detail: string | null;
+    /**
+     * Down Since
+     */
+    down_since: string | null;
+    /**
+     * Fault
+     */
+    fault: string | null;
+    /**
+     * Gateway
+     */
+    gateway: string;
+    /**
+     * Last Check At
+     */
+    last_check_at: string | null;
+    /**
+     * Last Ok At
+     */
+    last_ok_at: string | null;
+    /**
+     * Latency Ms
+     */
+    latency_ms: number | null;
+    /**
+     * Mode
+     */
+    mode: 'paper' | 'live';
+    /**
+     * Paused At
+     */
+    paused_at: string | null;
+    /**
+     * Paused Books
+     */
+    paused_books: Array<PausedBookView>;
+    /**
+     * Paused Elsewhere
+     */
+    paused_elsewhere: number;
+    /**
+     * Your Portfolios
+     */
+    your_portfolios: Array<string>;
+};
+
+/**
  * GoLiveCheckView
  */
 export type GoLiveCheckView = {
@@ -3456,6 +3550,52 @@ export type LiveNotionalCapsSettings = {
 };
 
 /**
+ * LiveRuleView
+ */
+export type LiveRuleView = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * On
+     */
+    on: boolean;
+    /**
+     * Settings
+     */
+    settings: {
+        [key: string]: unknown;
+    };
+};
+
+/**
+ * LiveRulesView
+ */
+export type LiveRulesView = {
+    /**
+     * Account Rules
+     */
+    account_rules: Array<AccountRuleView>;
+    /**
+     * Account Rules On
+     */
+    account_rules_on: boolean;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Profile Set
+     */
+    profile_set: boolean;
+    /**
+     * Safeguards
+     */
+    safeguards: Array<LiveRuleView>;
+};
+
+/**
  * LoginRequest
  */
 export type LoginRequest = {
@@ -4428,6 +4568,10 @@ export type OrderView = {
      */
     side: string;
     /**
+     * State
+     */
+    state?: string | null;
+    /**
      * Status
      */
     status: string;
@@ -5371,6 +5515,32 @@ export type PasswordResetRequest = {
      * New Password
      */
     new_password: string;
+};
+
+/**
+ * PausedBookView
+ */
+export type PausedBookView = {
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Portfolio Name
+     */
+    portfolio_name: string;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string;
+    /**
+     * Subscription Id
+     */
+    subscription_id: string;
 };
 
 /**
@@ -11322,6 +11492,47 @@ export type GetAlpacaStatusResponses = {
 
 export type GetAlpacaStatusResponse = GetAlpacaStatusResponses[keyof GetAlpacaStatusResponses];
 
+export type GetBrokerGatewaysData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/brokers/gateways';
+};
+
+export type GetBrokerGatewaysErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetBrokerGatewaysError = GetBrokerGatewaysErrors[keyof GetBrokerGatewaysErrors];
+
+export type GetBrokerGatewaysResponses = {
+    /**
+     * Successful Response
+     */
+    200: GatewayHealthView;
+};
+
+export type GetBrokerGatewaysResponse = GetBrokerGatewaysResponses[keyof GetBrokerGatewaysResponses];
+
 export type ListAssetClassesData = {
     body?: never;
     path?: never;
@@ -15758,6 +15969,52 @@ export type SetLiveAllocationResponses = {
 };
 
 export type SetLiveAllocationResponse = SetLiveAllocationResponses[keyof SetLiveAllocationResponses];
+
+export type GetLiveRulesData = {
+    body?: never;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/live/rules';
+};
+
+export type GetLiveRulesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetLiveRulesError = GetLiveRulesErrors[keyof GetLiveRulesErrors];
+
+export type GetLiveRulesResponses = {
+    /**
+     * Successful Response
+     */
+    200: LiveRulesView;
+};
+
+export type GetLiveRulesResponse = GetLiveRulesResponses[keyof GetLiveRulesResponses];
 
 export type ListPriceAlertsData = {
     body?: never;

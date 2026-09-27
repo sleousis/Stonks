@@ -140,6 +140,24 @@
         "title": "AccountProfileView",
         "type": "object"
       },
+      "AccountRuleView": {
+        "properties": {
+          "applies": {
+            "title": "Applies",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "applies"
+        ],
+        "title": "AccountRuleView",
+        "type": "object"
+      },
       "AccountRulesSettings": {
         "additionalProperties": false,
         "properties": {
@@ -3585,6 +3603,169 @@
         "title": "FxRateView",
         "type": "object"
       },
+      "GatewayHealthView": {
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "gateways": {
+            "items": {
+              "$ref": "#/components/schemas/GatewayView"
+            },
+            "title": "Gateways",
+            "type": "array"
+          }
+        },
+        "required": [
+          "configured",
+          "gateways"
+        ],
+        "title": "GatewayHealthView",
+        "type": "object"
+      },
+      "GatewayView": {
+        "properties": {
+          "checked": {
+            "title": "Checked",
+            "type": "boolean"
+          },
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "consecutive_failures": {
+            "title": "Consecutive Failures",
+            "type": "integer"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "down_since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Down Since"
+          },
+          "fault": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fault"
+          },
+          "gateway": {
+            "title": "Gateway",
+            "type": "string"
+          },
+          "last_check_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Check At"
+          },
+          "last_ok_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Ok At"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "mode": {
+            "enum": [
+              "paper",
+              "live"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "paused_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused At"
+          },
+          "paused_books": {
+            "items": {
+              "$ref": "#/components/schemas/PausedBookView"
+            },
+            "title": "Paused Books",
+            "type": "array"
+          },
+          "paused_elsewhere": {
+            "title": "Paused Elsewhere",
+            "type": "integer"
+          },
+          "your_portfolios": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Your Portfolios",
+            "type": "array"
+          }
+        },
+        "required": [
+          "gateway",
+          "mode",
+          "connected",
+          "checked",
+          "last_check_at",
+          "last_ok_at",
+          "down_since",
+          "consecutive_failures",
+          "fault",
+          "detail",
+          "latency_ms",
+          "paused_at",
+          "your_portfolios",
+          "paused_books",
+          "paused_elsewhere"
+        ],
+        "title": "GatewayView",
+        "type": "object"
+      },
       "GoLiveCheckView": {
         "properties": {
           "detail": {
@@ -6616,6 +6797,69 @@
         "title": "LiveNotionalCapsSettings",
         "type": "object"
       },
+      "LiveRuleView": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "on": {
+            "title": "On",
+            "type": "boolean"
+          },
+          "settings": {
+            "additionalProperties": true,
+            "title": "Settings",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "on",
+          "settings"
+        ],
+        "title": "LiveRuleView",
+        "type": "object"
+      },
+      "LiveRulesView": {
+        "properties": {
+          "account_rules": {
+            "items": {
+              "$ref": "#/components/schemas/AccountRuleView"
+            },
+            "title": "Account Rules",
+            "type": "array"
+          },
+          "account_rules_on": {
+            "title": "Account Rules On",
+            "type": "boolean"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "profile_set": {
+            "title": "Profile Set",
+            "type": "boolean"
+          },
+          "safeguards": {
+            "items": {
+              "$ref": "#/components/schemas/LiveRuleView"
+            },
+            "title": "Safeguards",
+            "type": "array"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "safeguards",
+          "account_rules_on",
+          "profile_set",
+          "account_rules"
+        ],
+        "title": "LiveRulesView",
+        "type": "object"
+      },
       "LoginRequest": {
         "properties": {
           "email": {
@@ -8374,6 +8618,17 @@
             "title": "Side",
             "type": "string"
           },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -9791,6 +10046,39 @@
           "new_password"
         ],
         "title": "PasswordResetRequest",
+        "type": "object"
+      },
+      "PausedBookView": {
+        "properties": {
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "portfolio_name": {
+            "title": "Portfolio Name",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          },
+          "subscription_id": {
+            "title": "Subscription Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subscription_id",
+          "portfolio_id",
+          "portfolio_name",
+          "strategy_id",
+          "reason"
+        ],
+        "title": "PausedBookView",
         "type": "object"
       },
       "PendingActionView": {
@@ -21311,6 +21599,84 @@
         ]
       }
     },
+    "/api/brokers/gateways": {
+      "get": {
+        "description": "Each IB Gateway the broker health check watches: connected or not,\nthe last good check, and the auto subscriptions it paused. Portfolio\nnames and paused books show for your own portfolios only.",
+        "operationId": "getBrokerGateways",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayHealthView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Broker Gateways",
+        "tags": [
+          "brokers"
+        ],
+        "x-permission": "data.read"
+      }
+    },
     "/api/catalog/asset-classes": {
       "get": {
         "operationId": "listAssetClasses",
@@ -30599,6 +30965,96 @@
           "live"
         ],
         "x-permission": "live.manage"
+      }
+    },
+    "/api/portfolios/{portfolio_id}/live/rules": {
+      "get": {
+        "description": "Which live safeguards and account rules act on this portfolio, as its\nbook follows them. Read only: the limits are set by the admin and your\nown risk limits.",
+        "operationId": "getLiveRules",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveRulesView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Live Rules",
+        "tags": [
+          "live"
+        ],
+        "x-permission": "data.read"
       }
     },
     "/api/price-alerts": {
