@@ -13,7 +13,7 @@ import math
 from collections.abc import Sequence
 from datetime import date, datetime, timedelta
 from functools import cached_property
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
@@ -86,18 +86,16 @@ class ScreenData:
             self.as_of - timedelta(days=BAR_LOOKBACK_DAYS), datetime.min.time()
         )
         end = datetime.combine(self.as_of + timedelta(days=1), datetime.min.time())
+        fresh = datetime.combine(self.as_of - timedelta(days=STALE_DAYS), datetime.min.time())
         df = self.lake.con.execute(
             """SELECT ticker, CAST(timestamp AS DATE) AS day, close, adj_close, volume
                  FROM bars
                 WHERE interval = ? AND ticker = ANY(?) AND timestamp >= ? AND timestamp < ?
+              QUALIFY max(timestamp) OVER (PARTITION BY ticker) >= ?
                 ORDER BY ticker, timestamp""",
-            [str(Interval.DAY_1), self.tickers, start, end],
+            [str(Interval.DAY_1), self.tickers, start, end, fresh],
         ).df()
-        if df.empty:
-            return pd.DataFrame(columns=cols)
-        last = df.groupby("ticker")["day"].transform("max")
-        fresh = pd.to_datetime(last) >= pd.Timestamp(self.as_of - timedelta(days=STALE_DAYS))
-        return df[fresh].reset_index(drop=True)
+        return df if not df.empty else pd.DataFrame(columns=cols)
 
     @cached_property
     def adjusted(self) -> dict[str, np.ndarray]:
@@ -108,7 +106,7 @@ class ScreenData:
             return {}
         price = df["adj_close"].where(df["adj_close"].notna(), df["close"])
         frame = df.assign(price=price).dropna(subset=["price"])
-        return {t: g["price"].to_numpy(dtype=float) for t, g in frame.groupby("ticker")}
+        return {str(t): g["price"].to_numpy(dtype=float) for t, g in frame.groupby("ticker")}
 
     @cached_property
     def last_close(self) -> dict[str, float]:
@@ -137,16 +135,16 @@ class ScreenData:
             return pd.DataFrame()
         df = self._statement("income_statement", _INCOME_COLS)
         for ticker, rows in df.groupby("ticker"):
-            q = rows[rows["frequency"] == "Q"]
-            a = rows[rows["frequency"] == "A"]
+            q = cast(pd.DataFrame, rows.loc[rows["frequency"] == "Q"])
+            a = cast(pd.DataFrame, rows.loc[rows["frequency"] == "A"])
             now, prior = _trailing(q, 0), _trailing(q, 4)
             if now is None and not a.empty:
                 now = a.iloc[0][list(_INCOME_COLS)].astype(float)
                 prior = a.iloc[1][list(_INCOME_COLS)].astype(float) if len(a) > 1 else None
             if now is None:
                 continue
-            row = {c: float(now[c]) for c in _INCOME_COLS}
-            row["revenue_prior"] = float(prior["revenue"]) if prior is not None else math.nan
+            row = {c: _num(now, c) for c in _INCOME_COLS}
+            row["revenue_prior"] = _num(prior, "revenue") if prior is not None else math.nan
             out[str(ticker)] = row
         return pd.DataFrame.from_dict(out, orient="index")
 
@@ -207,6 +205,10 @@ class ScreenData:
             [self.tickers, self.as_of, self.as_of - timedelta(days=365)],
         ).fetchall()
         return finite(dict(rows))
+
+
+def _num(values: pd.Series, key: str) -> float:
+    return float(cast(Any, values[key]))
 
 
 def _trailing(quarters: pd.DataFrame, skip: int) -> pd.Series | None:
