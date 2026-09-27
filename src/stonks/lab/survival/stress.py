@@ -187,12 +187,30 @@ class StressTest:
     class Options(BaseModel):
         model_config = ConfigDict(extra="forbid")
 
-        n_paths: int = Field(default=200, ge=2)
-        method: Literal["block_bootstrap", "garch_fhs"] = "block_bootstrap"
-        block: float = Field(default=20.0, ge=1.0)
-        source: Literal["full", "val"] = "full"
-        min_p5_sharpe: float = -0.5
-        max_drawdown_limit: float = Field(default=-0.3, le=0.0)
+        n_paths: int = Field(
+            default=200,
+            ge=2,
+            description="Simulated versions of history to replay the strategy on.",
+        )
+        method: Literal["block_bootstrap", "garch_fhs"] = Field(
+            default="block_bootstrap",
+            description="block_bootstrap reshuffles runs of real days. garch_fhs also varies volatility.",
+        )
+        block: float = Field(
+            default=20.0, ge=1.0, description="Average run of real days copied together, in bars."
+        )
+        source: Literal["full", "val"] = Field(
+            default="full",
+            description="Draw days from all history up to the window end, or only from the window.",
+        )
+        min_p5_sharpe: float = Field(
+            default=-0.5, description="The worst 5 percent of paths must keep a Sharpe above this."
+        )
+        max_drawdown_limit: float = Field(
+            default=-0.3,
+            le=0.0,
+            description="Deepest fall allowed on the worst 5 percent of paths, as a negative fraction.",
+        )
         max_workers: int | None = Field(default=None, ge=1)
         seed: int = 0
 

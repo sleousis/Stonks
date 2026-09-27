@@ -256,8 +256,8 @@ def _day_return(closes: Mapping[str, pd.Series], ticker: str, prev: date, day: d
     if s is None or s.empty:
         return 0.0
     idx = np.array([pd.Timestamp(x).date() for x in s.index])
-    before = s[idx <= prev]
-    after = s[idx <= day]
+    before = s.loc[idx <= prev]
+    after = s.loc[idx <= day]
     if before.empty or after.empty or not before.iloc[-1] > 0:
         return 0.0
     return float(after.iloc[-1] / before.iloc[-1] - 1.0)

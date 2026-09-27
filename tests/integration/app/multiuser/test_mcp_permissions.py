@@ -293,6 +293,8 @@ CASES: dict[str, Case] = {
     ),
     "get_risk_policy": _c("GET", "/api/risk/policy"),
     "get_pnl": _c("GET", "/api/pnl", lambda i: {"portfolio_id": i["portfolio"]}),
+    "live_risk": _c("GET", "/api/risk/live", lambda i: {"portfolio_id": i["portfolio"]}),
+    "risk_snapshots": _c("GET", "/api/risk/snapshots", lambda i: {"portfolio_id": i["portfolio"]}),
     "list_shadow_decisions": _c("GET", "/api/shadow/decisions"),
     "list_shadow_pnl": _c("GET", "/api/shadow/pnl"),
     "get_shadow_pnl": _c(

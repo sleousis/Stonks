@@ -159,7 +159,7 @@ class LatentRegimeFilter(InnerStrategyWrapper):
             int(self.params["fit_bars"]) + 1,
         )
         if bars is not None and not bars.empty:
-            bars = bars[as_datetime(start) <= bars["timestamp"]]
+            bars = bars.loc[bars["timestamp"] >= as_datetime(start)]
         closes = np.empty(0) if bars is None or bars.empty else bars["close"].to_numpy(dtype=float)
         if not self._fit_on(closes):
             _log.warning(

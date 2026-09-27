@@ -226,8 +226,10 @@ class ProductionConfig(BaseModel):
     health: HealthConfig = HealthConfig()
     # ``[production.construction]``: the global constructor and no-trade
     # buffer (default ``single_winner``, today's behaviour); a portfolio's
-    # ``construction_json`` is merged on top.
-    construction: ConstructionSettings = ConstructionSettings()
+    # ``construction_json`` is merged on top. A factory, so importing this
+    # module does not run constructor discovery (which imports
+    # ``portfolio.pipeline`` and, through it, ``production.risk``).
+    construction: ConstructionSettings = Field(default_factory=ConstructionSettings)
     # Which strategies keep a model book: "shadow" (only shadow strategies)
     # or "all" non-retired ones (design section 5).
     model_books: Literal["shadow", "all"] = "shadow"
@@ -489,7 +491,7 @@ class Settings(BaseSettings):
     logging: LoggingConfig = LoggingConfig()
     brokers: BrokersConfig = Field(default_factory=BrokersConfig)
     sources: SourcesConfig = SourcesConfig()
-    production: ProductionConfig = ProductionConfig()
+    production: ProductionConfig = Field(default_factory=ProductionConfig)
     notify: NotifyConfig = NotifyConfig()
     api: ApiConfig = Field(default_factory=ApiConfig)
     auth: AuthConfig = AuthConfig()

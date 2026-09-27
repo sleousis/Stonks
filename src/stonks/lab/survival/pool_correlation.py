@@ -85,12 +85,25 @@ class PoolCorrelationTest:
     class Options(BaseModel):
         model_config = ConfigDict(extra="forbid")
 
-        max_correlation: float = Field(0.7, gt=0.0, le=1.0)
+        max_correlation: float = Field(
+            0.7,
+            gt=0.0,
+            le=1.0,
+            description="Highest return correlation allowed with any active strategy.",
+        )
         #: A correlated candidate passes when its IR beats the member's by this share.
-        ir_margin: float = Field(0.1, ge=0.0)
-        window: Literal["val", "full"] = "val"
+        ir_margin: float = Field(
+            0.1,
+            ge=0.0,
+            description="A correlated strategy still passes when its Sharpe is this share better.",
+        )
+        window: Literal["val", "full"] = Field(
+            "val", description="Compare returns on the held-out window or on the whole window."
+        )
         #: Fewest paired daily returns a correlation needs.
-        min_bars: int = Field(20, ge=3)
+        min_bars: int = Field(
+            20, ge=3, description="Fewest shared daily returns needed to measure a correlation."
+        )
 
     @classmethod
     def build(cls, options: PoolCorrelationTest.Options) -> PoolCorrelationTest:
