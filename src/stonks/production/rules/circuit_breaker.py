@@ -48,12 +48,12 @@ class CircuitBreakerSettings(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     #: Loss from the month's first snapshot that halts buys; ``None`` is off.
-    max_month_loss: float | None = Field(None, gt=0.0, lt=1.0)
+    max_month_loss: float | None = Field(default=None, gt=0.0, lt=1.0)
     #: Loss over ``week_sessions`` snapshots that halts buys; ``None`` is off.
-    max_week_loss: float | None = Field(None, gt=0.0, lt=1.0)
+    max_week_loss: float | None = Field(default=None, gt=0.0, lt=1.0)
     #: Drawdown from the peak that halts buys until cleared; ``None`` is off.
-    max_drawdown_halt: float | None = Field(None, gt=0.0, lt=1.0)
-    week_sessions: int = Field(5, ge=1, le=60)
+    max_drawdown_halt: float | None = Field(default=None, gt=0.0, lt=1.0)
+    week_sessions: int = Field(default=5, ge=1, le=60)
     cooldown: Cooldown = "rest_of_month"
 
     @property

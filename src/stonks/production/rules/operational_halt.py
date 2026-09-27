@@ -28,7 +28,7 @@ class OperationalHaltSettings(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     #: Calendar days the newest bar may lag ``as_of``; ``None`` is off.
-    max_bar_age_days: int | None = Field(None, ge=1)
+    max_bar_age_days: int | None = Field(default=None, ge=1)
 
     @property
     def active(self) -> bool:

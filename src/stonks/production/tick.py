@@ -1161,6 +1161,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         placed += 1
         outcomes.append((order, "pending", None))
         try:
+            assert isinstance(broker, OrderStateSource)  # checked when the broker opened
             synced = reconcile_order(broker, state, order.client_id, reject_unknown=False)
         except Exception as exc:
             log.warning("tick.order.sync_failed", client_id=order.client_id, error=str(exc))
@@ -1584,9 +1585,9 @@ def _holding_owners(
     last attribution, else the strategy behind its latest fill here."""
     owners: dict[str, str] = {}
     for ticker in held:
-        shares = prior.get(ticker)
+        shares: Mapping[str, float] = prior.get(ticker) or {}
         if shares:
-            owners[ticker] = min(shares, key=lambda sid: (-abs(shares[sid]), sid))
+            owners[ticker] = min(shares, key=lambda sid, s=shares: (-abs(s[sid]), sid))
     rest = [t for t in held if t not in owners]
     if rest:
         marks = ",".join("?" for _ in rest)
@@ -2148,7 +2149,10 @@ def _arrival(broker: Broker, fill: Fill) -> float | None:
     """The pre-cost price a simulated fill was priced from (the close it
     filled at): its arrival price for TCA. Unknown for other brokers."""
     reference = getattr(broker, "reference_price", None)
-    return reference(fill.order_client_id) if callable(reference) else None
+    if not callable(reference):
+        return None
+    value = reference(fill.order_client_id)
+    return float(value) if isinstance(value, int | float) else None
 
 
 def _record_fill(

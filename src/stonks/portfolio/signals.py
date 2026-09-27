@@ -103,10 +103,16 @@ def _rank(strategy_id: str, s: pd.Series, ctx: SignalContext) -> pd.Series:
 @register_normalizer("signed_rank")
 def _signed_rank(strategy_id: str, s: pd.Series, ctx: SignalContext) -> pd.Series:
     out = pd.Series(0.0, index=s.index)
-    for side, sign in ((s[s > 0], 1.0), (-s[s < 0], -1.0)):
-        if side.empty:
+    positive: pd.Series = s.loc[s > 0]
+    negative: pd.Series = -s.loc[s < 0]
+    for side, sign in ((positive, 1.0), (negative, -1.0)):
+        if len(side) == 0:
             continue
-        ranked = cs_rank(side) if len(side) >= MIN_CROSS_SECTION else pd.Series(1.0, side.index)
+        ranked = (
+            pd.Series(cs_rank(side), index=side.index)
+            if len(side) >= MIN_CROSS_SECTION
+            else pd.Series(1.0, index=side.index)
+        )
         out.loc[side.index] = sign * ranked.astype(float)
     return out
 
