@@ -30,6 +30,7 @@ dependencies = [
     "cvxpy>=1.9.3",
     "statsmodels>=0.15.0",
     "arch>=8.0.0",
+    "optuna>=5.0.0",
 ]
 
 [project.scripts]

@@ -83,6 +83,9 @@ class TrialOutcome:
     index: np.ndarray | None = None
     status: Literal["ok", "failed"] = "ok"
     error: str | None = None
+    #: Named parts of the score, when the objective has several (a
+    #: multi-metric objective); a Pareto tuner reads them.
+    metrics: Mapping[str, float] | None = None
 
     @property
     def n_bars(self) -> int:
@@ -105,6 +108,7 @@ class TrialOutcome:
             and self.error == other.error
             and _same_array(self.returns, other.returns)
             and _same_array(self.index, other.index)
+            and _same_metrics(self.metrics, other.metrics)
         )
 
     __hash__ = None  # type: ignore[assignment]  # mutable payload (arrays)
@@ -112,6 +116,12 @@ class TrialOutcome:
 
 def _same_float(a: float, b: float) -> bool:
     return a == b or (math.isnan(a) and math.isnan(b))
+
+
+def _same_metrics(a: Mapping[str, float] | None, b: Mapping[str, float] | None) -> bool:
+    if a is None or b is None:
+        return a is None and b is None
+    return a.keys() == b.keys() and all(_same_float(a[k], b[k]) for k in a)
 
 
 def _same_array(a: np.ndarray | None, b: np.ndarray | None) -> bool:

@@ -31,6 +31,7 @@ from stonks.mcp.tools.common import (
     TestOptions,
     Tickers,
     ToolContext,
+    SamplerName,
     TunerName,
     drop_none,
     iso,
@@ -224,6 +225,12 @@ def register(t: ToolContext) -> None:
             Field(description="survival suite; server default when omitted"),
         ] = None,
         tuner: TunerName = "random",
+        sampler: Annotated[
+            SamplerName, Field(description="optuna tuner: tpe, nsga2 (Pareto over multi) or random")
+        ] = "tpe",
+        prune: Annotated[
+            bool, Field(description="optuna tuner: stop trials whose fast score trails")
+        ] = False,
         objective: ObjectiveName = "sharpe",
         budget: Annotated[int, Field(ge=1, le=1000, description="tuner trials")] = 20,
         train_ratio: Annotated[float, Field(gt=0, lt=1)] = 0.7,
@@ -268,6 +275,8 @@ def register(t: ToolContext) -> None:
                 "end": iso(end),
                 "survival_tests": survival_tests,
                 "tuner": tuner,
+                "sampler": sampler if tuner == "optuna" else None,
+                "prune": prune or None,
                 "objective": objective,
                 "budget": budget,
                 "train_ratio": train_ratio,
