@@ -200,3 +200,33 @@ def test_long_client_id_goes_out_hashed():
         order(client_id="c" * 60, decision_price=10.0), SPEC, account="DU1", settings=SETTINGS
     )
     assert req.order_ref.startswith(HASH_PREFIX)
+
+
+def test_a_protective_stop_goes_out_gtc_in_its_oca_group():
+    req = to_ib_order(
+        order(
+            order_type="stop",
+            side="sell",
+            stop_price=90.0,
+            time_in_force="gtc",
+            position_effect="close",
+            oca_group="stk-oca-1",
+        ),
+        SPEC,
+        account="DU1",
+        settings=SETTINGS,
+    )
+    assert (req.order_type, req.tif, req.aux_price) == ("STP", "GTC", 90.0)
+    assert (req.oca_group, req.oca_type) == ("stk-oca-1", 2)
+
+
+def test_an_exit_shares_the_stop_group_and_an_order_without_one_has_none():
+    exit_req = to_ib_order(
+        order(side="sell", decision_price=100.0, position_effect="close", oca_group="g"),
+        SPEC,
+        account="DU1",
+        settings=SETTINGS,
+    )
+    assert (exit_req.oca_group, exit_req.oca_type) == ("g", 2)
+    plain = to_ib_order(order(decision_price=100.0), SPEC, account="DU1", settings=SETTINGS)
+    assert (plain.oca_group, plain.oca_type) == (None, None)

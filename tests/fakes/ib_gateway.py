@@ -106,6 +106,8 @@ class FakeIbGateway:
         self._next_order_id = 1
         self._next_perm = 900_000
         self._next_exec = 1
+        #: OCA group per perm id (orders sent with ``oca_group``)
+        self._oca: dict[int, str] = {}
         # what the gateway saw
         self.sent: list[tuple[IbContract, IbOrderRequest]] = []
         self.lookups: list[IbContractQuery] = []
@@ -159,7 +161,28 @@ class FakeIbGateway:
         avg = (before + quantity * price) / filled
         status = "Filled" if filled >= t.total_quantity - 1e-9 else "Submitted"
         self._put(replace(t, filled=filled, avg_fill_price=avg, status=status))
+        self._reduce_oca(t.perm_id, quantity)
         return exec_id
+
+    def _reduce_oca(self, perm_id: int, quantity: float) -> None:
+        """OCA type 2: the other open orders of the group shrink by the
+        filled quantity, and one with nothing left is cancelled."""
+        group = self._oca.get(perm_id)
+        if group is None:
+            return
+        for perm, other in list(self._trades.items()):
+            if perm == perm_id or self._oca.get(perm) != group or other.status in TERMINAL:
+                continue
+            left = other.total_quantity - quantity
+            if left <= other.filled + 1e-9:
+                self._put(replace(other, status="Cancelled"))
+            else:
+                self._put(replace(other, total_quantity=left))
+
+    def trigger_stop(self, order_ref: str, price: float) -> str:
+        """The market reached a working stop: it fills in full at ``price``."""
+        t = self.trade(order_ref)
+        return self.fill(order_ref, t.total_quantity - t.filled, price)
 
     def report_commission(self, exec_id: str, amount: float, currency: str = "USD") -> None:
         for i, e in enumerate(self._executions):
@@ -301,6 +324,8 @@ class FakeIbGateway:
         )
         self._next_order_id += 1
         self._put(trade)
+        if order.oca_group:
+            self._oca[trade.perm_id] = order.oca_group
         if rejection:
             raise IbApiError(rejection[0], rejection[1], req_id=trade.order_id)
         fault, self.submit_fault = self.submit_fault, None

@@ -35,6 +35,15 @@ they're running in a backtest or in paper-mode production. Key properties:
 
 Long-only by default: a sell beyond the held quantity is rejected.
 
+Resting stops (roadmap 19.10): a ``stop`` or ``stop_limit`` order with
+``time_in_force="gtc"`` does not fill when placed. It rests until
+``cancel_order`` removes it or ``trigger_resting`` finds a bar (the prices,
+highs and lows of the last ``set_prices``) that reaches it: a sell stop
+when the low touches it, a buy stop when the high does, at the stop or at
+a gapped open (``backtest.fills.triggered_price``). A resting stop only
+closes: it never sells more than is held long or buys more than is short,
+and one with nothing left to close is dropped.
+
 Short selling and margin (roadmap 16.1, ``docs/design/shorting.md``)
 --------------------------------------------------------------------
 With a ``margin`` model other than ``cash`` (``RegTMargin``) the broker
@@ -64,7 +73,7 @@ was withdrawn (sources with history only).
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from typing import Literal
 
@@ -79,6 +88,7 @@ from stonks.backtest.fills import (
     ImmediateFillModel,
     MarketStats,
     MarketStatsSpec,
+    triggered_price,
 )
 from stonks.core.interval import Interval
 from stonks.core.types import AssetClass, Fill, Order, Portfolio
@@ -145,6 +155,8 @@ class SimulatedBroker:
         self._fills_order: list[Fill] = []
         self._reference_prices: dict[str, float] = {}
         self._unfilled: dict[str, float] = {}
+        #: Good till cancelled stops waiting for a bar that reaches them.
+        self._resting: dict[str, Order] = {}
         #: (settlement date, proceeds) of sales not yet settled.
         self._unsettled: list[tuple[np.datetime64, float]] = []
         #: The bar interval (``set_interval``) and one bar's length in days.
@@ -275,6 +287,10 @@ class SimulatedBroker:
         # idempotency: same client_id returns the previously-recorded fill
         if order.client_id in self._fills_by_client_id:
             return self._fills_by_client_id[order.client_id]
+        if _rests(order):
+            self._resting.setdefault(order.client_id, order)
+            self._unfilled[order.client_id] = 0.0
+            return None
 
         open_ = self._prices.get(order.ticker)
         if open_ is None or open_ <= 0:
@@ -298,9 +314,12 @@ class SimulatedBroker:
                 filled=decision.quantity,
                 carry=decision.carry,
             )
-        price = decision.price
-        quantity = decision.quantity
+        return self._execute(order, decision.price, decision.quantity)
 
+    def _execute(self, order: Order, price: float, quantity: float) -> Fill | None:
+        """Fill ``quantity`` of ``order`` at reference ``price`` (before
+        costs), within cash, margin and the held position."""
+        requested = quantity
         cost = self._cost(order, price, quantity)
         held = self._portfolio.positions.get(order.ticker, 0.0)
         close_qty = quantity
@@ -330,7 +349,7 @@ class SimulatedBroker:
                 _log.debug(
                     "buy_scaled_to_cash",
                     client_id=order.client_id,
-                    requested=decision.quantity,
+                    requested=requested,
                     filled=quantity,
                 )
         else:  # sell
@@ -368,6 +387,41 @@ class SimulatedBroker:
         self._fills_order.append(fill)
         self._reference_prices[order.client_id] = price
         return fill
+
+    # ---- resting stops (roadmap 19.10) -------------------------------------------
+
+    def resting_orders(self) -> tuple[Order, ...]:
+        """The good till cancelled stops still waiting, oldest first."""
+        return tuple(self._resting.values())
+
+    def cancel_order(self, client_id: str) -> bool:
+        """Cancel a resting stop. ``False`` when there is none."""
+        return self._resting.pop(client_id, None) is not None
+
+    def trigger_resting(self) -> list[Fill]:
+        """Fill every resting stop the current bar reaches (see the module
+        doc). Returns the new fills, oldest stop first."""
+        fills: list[Fill] = []
+        for client_id, order in list(self._resting.items()):
+            open_ = self._prices.get(order.ticker)
+            if open_ is None or open_ <= 0:
+                continue
+            price = triggered_price(
+                order, open_, self._highs.get(order.ticker), self._lows.get(order.ticker)
+            )
+            if price is None:
+                continue
+            del self._resting[client_id]
+            held = self._portfolio.positions.get(order.ticker, 0.0)
+            room = held if order.side == "sell" else -held
+            quantity = min(order.quantity, room)
+            if quantity <= 0:
+                _log.debug("stop_dropped", client_id=client_id, reason="nothing_to_close")
+                continue
+            fill = self._execute(replace(order, quantity=quantity), price, quantity)
+            if fill is not None:
+                fills.append(fill)
+        return fills
 
     def unfilled_quantity(self, client_id: str) -> float:
         """Quantity of ``client_id`` the fill model deferred to a later bar
@@ -669,6 +723,11 @@ class SimulatedBroker:
 
     def reconcile(self) -> list[Fill]:
         return list(self._fills_order)
+
+
+def _rests(order: Order) -> bool:
+    """A good till cancelled stop rests until a bar reaches it."""
+    return order.order_type in ("stop", "stop_limit") and order.time_in_force == "gtc"
 
 
 def _day(value: date) -> date:

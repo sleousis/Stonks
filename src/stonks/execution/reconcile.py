@@ -531,7 +531,18 @@ def order_live_values(order: Order, columns: frozenset[str]) -> dict[str, Any]:
         values["time_in_force"] = order.time_in_force
     if order.outside_rth and "outside_rth" in columns:
         values["outside_rth"] = 1
+    if order.oca_group is not None and "oca_group" in columns:  # migration 034
+        values["oca_group"] = order.oca_group
+    if is_protective_stop(order) and "protective" in columns:
+        values["protective"] = 1
     return values
+
+
+def is_protective_stop(order: Order) -> bool:
+    """A stop order placed to protect a position (roadmap 19.10): its
+    decision context names the ``stop`` trigger."""
+    context = order.decision_context or {}
+    return order.order_type in ("stop", "stop_limit") and context.get("trigger") == "stop"
 
 
 def fill_live_values(fill: Fill, columns: frozenset[str]) -> dict[str, Any]:

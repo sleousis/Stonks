@@ -10717,6 +10717,11 @@
             ],
             "title": "Placed By"
           },
+          "protective": {
+            "default": false,
+            "title": "Protective",
+            "type": "boolean"
+          },
           "quantity": {
             "title": "Quantity",
             "type": "number"
@@ -10762,6 +10767,17 @@
             ],
             "title": "Status Reason"
           },
+          "stop_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Price"
+          },
           "strategy_id": {
             "anyOf": [
               {
@@ -10787,6 +10803,17 @@
           "ticker": {
             "title": "Ticker",
             "type": "string"
+          },
+          "time_in_force": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time In Force"
           },
           "updated_at": {
             "title": "Updated At",
@@ -14224,6 +14251,39 @@
         "title": "PromotionChecklistView",
         "type": "object"
       },
+      "ProtectiveStopSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "atr_multiple": {
+            "default": 3.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 50.0,
+            "title": "Atr Multiple",
+            "type": "number"
+          },
+          "atr_window": {
+            "default": 14,
+            "maximum": 250.0,
+            "minimum": 2.0,
+            "title": "Atr Window",
+            "type": "integer"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "fallback_pct": {
+            "default": 0.1,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Fallback Pct",
+            "type": "number"
+          }
+        },
+        "title": "ProtectiveStopSettings",
+        "type": "object"
+      },
       "ProviderView": {
         "properties": {
           "auth_flow": {
@@ -15701,6 +15761,12 @@
                 "delayed_band_pct": 0.01,
                 "nbbo_band_pct": 0.01
               },
+              "protective_stops": {
+                "atr_multiple": 3.0,
+                "atr_window": 14,
+                "enabled": false,
+                "fallback_pct": 0.1
+              },
               "risk_per_position": {
                 "atr_multiple": 3.0
               },
@@ -15715,11 +15781,8 @@
               "squeeze_guard": {
                 "spike_bars": 5
               },
-              "stop_cooldown": {
-                "count_losses": true
-              },
+              "stop_cooldown": {},
               "stop_guard": {
-                "count_losses": true,
                 "window_days": 7
               },
               "style_exposure": {
@@ -16324,6 +16387,15 @@
               "nbbo_band_pct": 0.01
             }
           },
+          "protective_stops": {
+            "$ref": "#/components/schemas/ProtectiveStopSettings",
+            "default": {
+              "atr_multiple": 3.0,
+              "atr_window": 14,
+              "enabled": false,
+              "fallback_pct": 0.1
+            }
+          },
           "risk_per_position": {
             "$ref": "#/components/schemas/RiskPerPositionSettings",
             "default": {
@@ -16355,14 +16427,11 @@
           },
           "stop_cooldown": {
             "$ref": "#/components/schemas/StopCooldownSettings",
-            "default": {
-              "count_losses": true
-            }
+            "default": {}
           },
           "stop_guard": {
             "$ref": "#/components/schemas/StopGuardSettings",
             "default": {
-              "count_losses": true,
               "window_days": 7
             }
           },
@@ -18374,9 +18443,15 @@
             "title": "Cooldown Days"
           },
           "count_losses": {
-            "default": true,
-            "title": "Count Losses",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count Losses"
           }
         },
         "title": "StopCooldownSettings",
@@ -18386,9 +18461,15 @@
         "additionalProperties": false,
         "properties": {
           "count_losses": {
-            "default": true,
-            "title": "Count Losses",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count Losses"
           },
           "max_stops": {
             "anyOf": [

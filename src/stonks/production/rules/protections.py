@@ -11,8 +11,11 @@ Three registered rules that read the book's recent closed trades
   for the strategy all lost is locked for ``lock_days`` after the last one.
 
 A stop-out is an exit by a stop order (``decision_context.trigger ==
-"stop"``). Until broker-side stops exist (19.10), ``count_losses = true``
-(the default) also counts any losing exit. An order built for the whole
+"stop"``, the protective stops of 19.10). ``count_losses`` decides whether
+any losing exit counts too: ``None`` (the default) counts losses only while
+the book has no protective stops (``protective_stops.enabled`` off), so
+once real broker stops exist only their fills count. ``true`` always counts
+losses and ``false`` never does. An order built for the whole
 portfolio (no strategy, or the ``portfolio`` constructor) is checked
 against every strategy's trades.
 
@@ -42,7 +45,7 @@ class StopCooldownSettings(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     cooldown_days: int | None = Field(default=None, ge=1)
-    count_losses: bool = True
+    count_losses: bool | None = None
 
     @property
     def active(self) -> bool:
@@ -54,7 +57,7 @@ class StopGuardSettings(BaseModel):
 
     max_stops: int | None = Field(default=None, ge=1)
     window_days: int = Field(default=7, ge=1)
-    count_losses: bool = True
+    count_losses: bool | None = None
 
     @property
     def active(self) -> bool:
@@ -77,6 +80,15 @@ def _trades_for(order: Order, ctx: RiskContext) -> list[ClosedTrade]:
     if order.strategy_id in _WHOLE_BOOK:
         return trades
     return [t for t in trades if t.strategy_id == order.strategy_id]
+
+
+def _counts_losses(count_losses: bool | None, ctx: RiskContext) -> bool:
+    """Whether a losing exit counts as a stop-out. Automatic (``None``):
+    only while the book places no protective stops of its own."""
+    if count_losses is not None:
+        return count_losses
+    stops = settings_of(ctx.policy, "protective_stops")
+    return not (stops is not None and stops.enabled)
 
 
 def _is_stop(trade: ClosedTrade, count_losses: bool) -> bool:
@@ -129,12 +141,11 @@ class StopCooldown(_Protection):
     ) -> str | None:
         assert settings.cooldown_days is not None
         since = decision_day(ctx) - timedelta(days=settings.cooldown_days)
+        losses = _counts_losses(settings.count_losses, ctx)
         stops = [
             t
             for t in trades
-            if t.ticker == order.ticker
-            and t.exit_day > since
-            and _is_stop(t, settings.count_losses)
+            if t.ticker == order.ticker and t.exit_day > since and _is_stop(t, losses)
         ]
         if not stops:
             return None
@@ -153,7 +164,8 @@ class StopGuard(_Protection):
     ) -> str | None:
         assert settings.max_stops is not None
         since = decision_day(ctx) - timedelta(days=settings.window_days)
-        count = sum(1 for t in trades if t.exit_day > since and _is_stop(t, settings.count_losses))
+        losses = _counts_losses(settings.count_losses, ctx)
+        count = sum(1 for t in trades if t.exit_day > since and _is_stop(t, losses))
         if count < settings.max_stops:
             return None
         who = order.strategy_id if order.strategy_id not in _WHOLE_BOOK else "the book"

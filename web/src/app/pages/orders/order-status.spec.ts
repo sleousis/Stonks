@@ -1,7 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 
 import type { OrderView } from '../../api/models';
-import { ORDER_STATUS_OPTIONS, OrderStatus, orderReason, orderStatusView } from './order-status';
+import {
+  ORDER_STATUS_OPTIONS,
+  OrderStatus,
+  orderReason,
+  orderStatusView,
+  stopWords,
+} from './order-status';
 
 describe('orderStatusView', () => {
   it('maps the order lifecycle to pill tones', () => {
@@ -134,5 +140,32 @@ describe('OrderStatus', () => {
     fixture.componentRef.setInput('showNote', false);
     fixture.detectChanges();
     expect(el.querySelector('.note')).toBeNull();
+  });
+});
+
+describe('stopWords', () => {
+  const money = (v: number) => `$${v.toFixed(2)}`;
+
+  it('names a protective stop and when it trades', () => {
+    expect(
+      stopWords({ side: 'sell', order_type: 'stop', stop_price: 90.5, protective: true }, money),
+    ).toEqual({
+      label: 'Protective stop',
+      trigger: 'Sells if the price falls to $90.50.',
+      lasts: 'Works at the broker until the position closes, and follows its size.',
+    });
+    expect(
+      stopWords({ side: 'buy', order_type: 'stop', stop_price: 110, protective: true }, money)
+        ?.trigger,
+    ).toBe('Buys back if the price rises to $110.00.');
+  });
+
+  it('keeps other orders plain', () => {
+    expect(
+      stopWords({ side: 'buy', order_type: 'market', stop_price: null, protective: false }, money),
+    ).toBeNull();
+    expect(
+      stopWords({ side: 'sell', order_type: 'stop', stop_price: 5, protective: false }, money),
+    ).toMatchObject({ label: 'Stop order', lasts: null });
   });
 });

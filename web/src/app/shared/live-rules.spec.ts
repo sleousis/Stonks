@@ -18,6 +18,7 @@ describe('live rule words', () => {
       'stop_cooldown',
       'stop_guard',
       'losing_lock',
+      'protective_stops',
     ]);
     for (const name of [
       'restricted',

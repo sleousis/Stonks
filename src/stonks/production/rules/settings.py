@@ -15,6 +15,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from stonks.production.rules._account_settings import AccountRulesSettings, longer_cycles
+from stonks.production.rules._stop_settings import ProtectiveStopSettings
 from stonks.production.rules.borrow_check import BorrowCheckSettings
 from stonks.production.rules.capital_ramp import CapitalRampSettings
 from stonks.production.rules.circuit_breaker import CircuitBreakerSettings, Cooldown
@@ -63,6 +64,7 @@ __all__ = [
     "OptionMaxLossSettings",
     "PortfolioVolSettings",
     "PriceBandSettings",
+    "ProtectiveStopSettings",
     "RiskPerPositionSettings",
     "RuleSettings",
     "SectorCapSettings",
@@ -114,6 +116,9 @@ class RuleSettings(BaseModel):
     losing_lock: LosingLockSettings = LosingLockSettings()
     # Style factor exposure cap (roadmap 22.4), off by default.
     style_exposure: StyleExposureSettings = StyleExposureSettings()
+    # Broker-side protective stops (roadmap 19.10), off by default. Not a
+    # risk rule: ``production.live.stops`` places them.
+    protective_stops: ProtectiveStopSettings = ProtectiveStopSettings()
 
 
 def _min_optional(a: float | None, b: float | None) -> float | None:
@@ -137,6 +142,13 @@ def _max_optional(a: float | None, b: float | None) -> float | None:
 def _either(a: bool, b: bool) -> bool:
     """Switching a guard on is tighter."""
     return a or b
+
+
+def _more_counting(a: bool | None, b: bool | None) -> bool | None:
+    """``count_losses``: always counting losses (``True``) is the tightest,
+    then the automatic choice (``None``), then never (``False``)."""
+    rank = {True: 2, None: 1, False: 0}
+    return a if rank[a] >= rank[b] else b
 
 
 def _keep_base(a: Any, b: Any) -> Any:
@@ -243,10 +255,16 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
         "wash_sale_window_days": max,
         "short_disclosure_threshold": min,
     },
-    "stop_cooldown": {"cooldown_days": _max_optional, "count_losses": _either},
-    "stop_guard": {"max_stops": _min_optional, "window_days": max, "count_losses": _either},
+    "stop_cooldown": {"cooldown_days": _max_optional, "count_losses": _more_counting},
+    "stop_guard": {"max_stops": _min_optional, "window_days": max, "count_losses": _more_counting},
     "losing_lock": {"max_consecutive_losses": _min_optional, "lock_days": max},
     "style_exposure": {"max_abs_exposure": _min_optional, "styles": union_styles},
+    "protective_stops": {
+        "enabled": _either,
+        "atr_multiple": min,
+        "atr_window": _keep_base,
+        "fallback_pct": min,
+    },
 }
 
 

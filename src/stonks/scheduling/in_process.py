@@ -371,3 +371,12 @@ def in_process_live_submit(ctx: RunContext) -> JobOutcome:
     from stonks.scheduling.local import live_submit_action
 
     return live_submit_action(ctx)
+
+
+@IN_PROCESS_ACTIONS.register("live_stops")
+def in_process_live_stops(ctx: RunContext) -> JobOutcome:
+    """Protective stops live in the state DB and at the broker, so every
+    backend syncs them the same way (the lake only for the ATR, read only)."""
+    from stonks.scheduling.local import live_stops_action
+
+    return live_stops_action(ctx)

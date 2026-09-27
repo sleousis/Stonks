@@ -87,7 +87,11 @@ LIVE_RULES: tuple[str, ...] = (
     "stop_cooldown",
     "stop_guard",
     "losing_lock",
+    "protective_stops",
 )
+#: Live settings that are not risk rules, so the risk layer's own on and off
+#: does not apply: ``protective_stops`` places stops and drops no order.
+_NOT_RULES = frozenset({"protective_stops"})
 
 
 class LiveRuleView(BaseModel):
@@ -206,7 +210,9 @@ class LiveService:
         safeguards = [
             LiveRuleView(
                 name=name,
-                on=bool(policy.enabled and getattr(policy.rules, name).active),
+                on=bool(
+                    (policy.enabled or name in _NOT_RULES) and getattr(policy.rules, name).active
+                ),
                 settings=getattr(policy.rules, name).model_dump(mode="json"),
             )
             for name in LIVE_RULES

@@ -17,6 +17,9 @@ Rules, from ``docs/design/live-trading.md`` section 2:
 - ``stop`` needs ``stop_price``. ``gtc`` is only for stops. Opening-auction
   (``opg``) orders are market or limit only.
 - ``outside_rth`` is refused in this phase. ``account`` is always set.
+- An order with an ``oca_group`` (a protective stop and the exits of its
+  position, roadmap 19.10) goes out with OCA type 2: a fill of one reduces
+  the others by the filled quantity, and IBKR blocks an overfill.
 """
 
 from __future__ import annotations
@@ -37,6 +40,9 @@ HASH_PREFIX = "stk-"
 _HASH_CHARS = 20
 
 _TIF: dict[TimeInForce, IbTif] = {"day": "DAY", "gtc": "GTC", "opg": "OPG", "ioc": "IOC"}
+#: IBKR's OCA type: reduce the other orders by the filled quantity, with
+#: overfill protection (block).
+OCA_REDUCE_WITH_BLOCK = 2
 
 
 def broker_ref(client_id: str, max_length: int) -> str:
@@ -146,4 +152,6 @@ def to_ib_order(
         limit_price=limit,
         aux_price=aux,
         outside_rth=False,
+        oca_group=order.oca_group,
+        oca_type=OCA_REDUCE_WITH_BLOCK if order.oca_group else None,
     )

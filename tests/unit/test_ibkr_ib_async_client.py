@@ -388,3 +388,10 @@ def test_shortability_streams_generic_tick_236_then_cancels(pair):
         (1, "236", False),
     ]
     assert ib.mkt_cancels == [265598, 1]
+
+
+def test_to_order_carries_the_oca_group():
+    o = to_order(_req(oca_group="stk-oca-1", oca_type=2))
+    assert (o.ocaGroup, o.ocaType) == ("stk-oca-1", 2)
+    plain = to_order(_req())
+    assert plain.ocaGroup == ""

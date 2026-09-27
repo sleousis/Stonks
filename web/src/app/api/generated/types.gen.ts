@@ -5677,6 +5677,10 @@ export type OrderView = {
      */
     placed_by?: string | null;
     /**
+     * Protective
+     */
+    protective?: boolean;
+    /**
      * Quantity
      */
     quantity: number;
@@ -5701,6 +5705,10 @@ export type OrderView = {
      */
     status_reason?: string | null;
     /**
+     * Stop Price
+     */
+    stop_price?: number | null;
+    /**
      * Strategy Id
      */
     strategy_id: string | null;
@@ -5712,6 +5720,10 @@ export type OrderView = {
      * Ticker
      */
     ticker: string;
+    /**
+     * Time In Force
+     */
+    time_in_force?: string | null;
     /**
      * Updated At
      */
@@ -7790,6 +7802,28 @@ export type PromotionChecklistView = {
 };
 
 /**
+ * ProtectiveStopSettings
+ */
+export type ProtectiveStopSettings = {
+    /**
+     * Atr Multiple
+     */
+    atr_multiple?: number;
+    /**
+     * Atr Window
+     */
+    atr_window?: number;
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Fallback Pct
+     */
+    fallback_pct?: number;
+};
+
+/**
  * ProviderView
  */
 export type ProviderView = {
@@ -8794,6 +8828,7 @@ export type RuleSettings = {
     option_max_loss?: OptionMaxLossSettings;
     portfolio_vol?: PortfolioVolSettings;
     price_band?: PriceBandSettings;
+    protective_stops?: ProtectiveStopSettings;
     risk_per_position?: RiskPerPositionSettings;
     sector_cap?: SectorCapSettings;
     short_caps?: ShortCapsSettings;
@@ -9851,7 +9886,7 @@ export type StopCooldownSettings = {
     /**
      * Count Losses
      */
-    count_losses?: boolean;
+    count_losses?: boolean | null;
 };
 
 /**
@@ -9861,7 +9896,7 @@ export type StopGuardSettings = {
     /**
      * Count Losses
      */
-    count_losses?: boolean;
+    count_losses?: boolean | null;
     /**
      * Max Stops
      */

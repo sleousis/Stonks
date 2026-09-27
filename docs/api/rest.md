@@ -2586,15 +2586,18 @@ An order to propose. The server prices it and checks it; a person approves it in
 | `order_type` | string | yes |  |
 | `origin` | "strategy" \| "manual" | no |  |
 | `placed_by` | string \| null | no |  |
+| `protective` | boolean | no |  |
 | `quantity` | number | yes |  |
 | `replaces_client_id` | string \| null | no |  |
 | `side` | string | yes |  |
 | `state` | string \| null | no |  |
 | `status` | string | yes |  |
 | `status_reason` | string \| null | no |  |
+| `stop_price` | number \| null | no |  |
 | `strategy_id` | string \| null | yes |  |
 | `tick_id` | string \| null | yes |  |
 | `ticker` | string | yes |  |
+| `time_in_force` | string \| null | no |  |
 | `updated_at` | string | yes |  |
 
 ### Page_AlertView_
@@ -3379,6 +3382,15 @@ What a reviewer reads before promoting; it doesn't change the verdict. ``None`` 
 | `pbo` | number \| null | no |  |
 | `premortem` | string \| null | no |  |
 
+### ProtectiveStopSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `atr_multiple` | number | no |  |
+| `atr_window` | integer | no |  |
+| `enabled` | boolean | no |  |
+| `fallback_pct` | number | no |  |
+
 ### ProviderView
 
 | Field | Type | Required | Description |
@@ -3749,6 +3761,7 @@ Type: "viewer" \| "trader" \| "admin"
 | `option_max_loss` | [OptionMaxLossSettings](#optionmaxlosssettings) | no |  |
 | `portfolio_vol` | [PortfolioVolSettings](#portfoliovolsettings) | no |  |
 | `price_band` | [PriceBandSettings](#pricebandsettings) | no |  |
+| `protective_stops` | [ProtectiveStopSettings](#protectivestopsettings) | no |  |
 | `risk_per_position` | [RiskPerPositionSettings](#riskperpositionsettings) | no |  |
 | `sector_cap` | [SectorCapSettings](#sectorcapsettings) | no |  |
 | `short_caps` | [ShortCapsSettings](#shortcapssettings) | no |  |
@@ -4159,13 +4172,13 @@ One audited status change or intervention (BL-24).
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `cooldown_days` | integer \| null | no |  |
-| `count_losses` | boolean | no |  |
+| `count_losses` | boolean \| null | no |  |
 
 ### StopGuardSettings
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `count_losses` | boolean | no |  |
+| `count_losses` | boolean \| null | no |  |
 | `max_stops` | integer \| null | no |  |
 | `window_days` | integer | no |  |
 
