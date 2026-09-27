@@ -150,6 +150,31 @@ flowchart LR
 - The lake has one writer. `python -m stonks.streaming run` opens the lake itself, so it cannot run next to `stonks serve` on the DuckDB bar table. The Parquet bar store, or running the stream inside the process that owns the lake (21.2.5), avoids that.
 - Not yet: the quality checker on streamed bars (the REST ingest keeps it), a scheduler job that starts the runner at the open (21.2.5), and the stream health on the API metrics endpoint (21.3.4).
 
+## 8a. What 21.2.4 built
+
+`engine/sessions.py` holds the session rules as pure functions. It imports nothing from the driver, so the event driver, the intraday backtest and replay all call the same code.
+
+- `session_state(at, ticker, calendar=..., rules=..., halts=...)` returns a `SessionState`: the phase, the session, the halt if any, and `can_open`, `can_close`, `must_flatten`, `reason` and `minutes_to_close`.
+- Phases, first match wins:
+
+| Phase | When | Entries | Exits |
+|---|---|---|---|
+| `closed` | outside regular hours, holidays, unknown calendar | no | no |
+| `halted` | the ticker has an active trading halt | no | no |
+| `flatten` | last `flatten_minutes`, only with `flatten_at_close` | no | yes, and close everything |
+| `closing` | last `entry_cutoff_minutes` | no | yes |
+| `opening` | first `entry_delay_minutes` | no | yes |
+| `regular` | the rest of the session | yes | yes |
+
+- `SessionRules` is a frozen pydantic model: `entry_delay_minutes` (5), `entry_cutoff_minutes` (10), `flatten_at_close` (off) and `flatten_minutes` (5). Zero minutes turns an edge off. It is not wired into `config.py` yet. The engine process (21.2.5) or the book settings will carry it.
+- Sessions come from `scheduling/calendar.py`. The edges are measured from each session's own open and close in UTC, so early closes and DST need no special case. A 24/7 calendar has no edges.
+- Trading halts are data. `TradingHalt(ticker, start, end, reason)` with reason `luld`, `exchange`, `regulatory`, `news`, `stale` or `other`, and `end = None` while it lasts. `HaltTable` is an immutable value with `active`, `add` and `resume`. A halted ticker gets no orders at all, exits included, because the exchange would not take them.
+- `SessionRulebook(rules, halts=...)` picks the calendar per ticker (by asset class, else by exchange suffix) and caches sessions per day. A ticker with no known calendar is `closed`.
+- `gate_orders(orders, positions, state_for)` classifies orders against positions (`execution.orders.classify_all`) and keeps what the session allows. An order that crosses zero is split, so its closing leg survives an entry block (P28).
+- `flatten_orders(positions, state_for, prices=..., collar_bps=...)` builds closing day orders in the flatten window: marketable limits when a price is known, else market orders. Client ids use the session date and the strategy id `flatten`, so a repeat on the next bar does not double up.
+- Tests (`tests/unit/test_engine_sessions.py`) cover every phase, the NYSE early close on 2026-11-27, the 2026-07-03 holiday, both 2026 DST changes, 24/7 crypto, halts with and without an end, and the order gate and flatten orders.
+- Not yet: feeding halts from a live source (LULD messages, the stale data gate of 21.3.2) and per-book settings.
+
 ## 9. Work packages
 
 Shared files (`config.py`, `config/default.toml`, `cli.py`, router mounts, the MCP server, `pyproject.toml`, the docs) change only in the integration step after each wave.
