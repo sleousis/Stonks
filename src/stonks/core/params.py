@@ -84,7 +84,7 @@ def _is_bool(value: Any) -> bool:
     return isinstance(value, bool) or type(value).__name__ in ("bool_", "bool")
 
 
-def _check_numeric_bounds(name: str, value: int | float, bounds: Any) -> None:
+def _check_numeric_bounds(name: str, value: Real, bounds: Any) -> None:
     if bounds is None:
         return
     lo, hi = bounds

@@ -112,7 +112,7 @@ class Interval:
 
     @classmethod
     def parse(cls, code: str) -> Interval:
-        if not isinstance(code, str):
+        if not isinstance(code, str):  # pyright: ignore[reportUnnecessaryIsInstance]  # runtime guard for untyped callers
             raise TypeError(f"Interval code must be str, got {type(code).__name__}")
         raw = code.strip()
         if raw.endswith("M") and raw[:-1].isdigit():

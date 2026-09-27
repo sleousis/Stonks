@@ -21,7 +21,6 @@
   "src/stonks/connections/__main__.py::reportOptionalMemberAccess": 1,
   "src/stonks/connections/providers/snaptrade.py::reportArgumentType": 1,
   "src/stonks/connections/providers/snaptrade.py::reportOptionalMemberAccess": 4,
-  "src/stonks/core/params.py::reportArgumentType": 2,
   "src/stonks/features/cross_section.py::reportOptionalMemberAccess": 1,
   "src/stonks/features/forecast.py::reportAttributeAccessIssue": 2,
   "src/stonks/features/forecast.py::reportReturnType": 3,

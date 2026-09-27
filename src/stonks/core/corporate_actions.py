@@ -67,7 +67,9 @@ class CorporateActions:
     """Events per ticker, each list sorted by ex-date (splits before
     dividends on the same ex-date)."""
 
-    by_ticker: dict[str, tuple[CorporateAction, ...]] = field(default_factory=dict)
+    by_ticker: dict[str, tuple[CorporateAction, ...]] = field(
+        default_factory=dict[str, tuple[CorporateAction, ...]]
+    )
 
     @classmethod
     def from_events(cls, events: Iterable[CorporateAction]) -> CorporateActions:
