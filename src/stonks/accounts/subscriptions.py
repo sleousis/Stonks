@@ -25,6 +25,7 @@ Mode rules (design section 4, decision 2026-09-26):
 from __future__ import annotations
 
 import json
+import math
 import uuid
 from collections.abc import Mapping
 from dataclasses import replace
@@ -34,6 +35,7 @@ from typing import Any
 from stonks.accounts.audit import AuditLog, iso_now
 from stonks.accounts.book import partial_risk_policy
 from stonks.accounts.models import (
+    MAX_WEIGHT,
     MIN_PAPER_DAYS_FOR_AUTO,
     AccountsError,
     AutoGateRefused,
@@ -114,8 +116,17 @@ class SubscriptionRepository:
             owned_portfolio(self._state, scope, portfolio_id)
         elif mode.needs_portfolio:
             raise AccountsError(f"{mode.value} mode needs a portfolio")
-        if not weight >= 0:
-            raise AccountsError(f"weight must be >= 0, got {weight}")
+        if not (math.isfinite(weight) and 0 <= weight <= MAX_WEIGHT):
+            raise AccountsError(f"weight must be finite and in [0, {MAX_WEIGHT:g}], got {weight}")
+        if weight == 0 and mode.needs_portfolio and portfolio_id is not None:
+            others = self._state.sql(
+                "SELECT 1 FROM subscriptions WHERE portfolio_id = ? AND enabled = 1"
+                " AND mode IN ('paper', 'auto') AND weight > 0 LIMIT 1",
+                [portfolio_id],
+            )
+            if not others:
+                # BE-41: a book whose weights sum to 0 cannot be built
+                raise AccountsError("weight 0 would leave the portfolio's weights summing to 0")
         sub_id = f"sub_{uuid.uuid4().hex[:12]}"
         now = iso_now()
         with self._state.transaction():

@@ -17,6 +17,8 @@ DEFAULT_PORTFOLIO_ID = "pf_default"
 #: Trading days a subscription must complete in paper mode, without breaking
 #: its risk limits, before it may switch to auto (decision 2026-09-26).
 MIN_PAPER_DAYS_FOR_AUTO = 20
+#: Largest subscription weight (a share of the book's risk budget, BE-41).
+MAX_WEIGHT = 100.0
 
 UserKind = Literal["human", "service"]
 UserStatus = Literal["active", "disabled"]

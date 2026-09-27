@@ -12,6 +12,7 @@ from stonks.accounts.book import BookSpec, merge_construction, tighter_of
 from stonks.accounts.models import (
     DEFAULT_OWNER_ID,
     DEFAULT_PORTFOLIO_ID,
+    MAX_WEIGHT,
     MIN_PAPER_DAYS_FOR_AUTO,
     AccountsError,
     AuditEntry,
@@ -31,6 +32,7 @@ from stonks.accounts.users import UserRepository
 __all__ = [
     "DEFAULT_OWNER_ID",
     "DEFAULT_PORTFOLIO_ID",
+    "MAX_WEIGHT",
     "MIN_PAPER_DAYS_FOR_AUTO",
     "AccountsError",
     "AuditEntry",

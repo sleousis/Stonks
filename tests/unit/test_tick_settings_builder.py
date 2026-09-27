@@ -133,7 +133,7 @@ def test_the_plan_comes_from_subscriptions_unless_switched_off(tmp_path, monkeyp
         assert build_tick_runtime(off, ["A.US"]).plan_for(state) is None
         seen = {}
 
-        def fake_load(st, tick_settings, traders=None):
+        def fake_load(st, tick_settings, traders=None, dry_run=False):
             seen["args"] = (st, tick_settings)
             seen["traders"] = traders
             return "plan"

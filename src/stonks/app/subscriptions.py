@@ -9,6 +9,10 @@ repository (design section 4, decision 2026-09-26).
   an active strategy, an active broker portfolio and at least
   ``MIN_PAPER_DAYS_FOR_AUTO`` paper trading days without a risk breach
   (409 ``auto_blocked`` with every blocker).
+- Turning a disabled or paused auto subscription back on (``enabled:
+  true``) restarts real orders, so it asks for the same step-up and runs
+  the same checklist (UX-02). A paused one is resumed. Turning it off
+  needs neither.
 """
 
 from __future__ import annotations
@@ -21,6 +25,7 @@ from typing import Any, ClassVar, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from stonks.accounts import (
+    MAX_WEIGHT,
     MIN_PAPER_DAYS_FOR_AUTO,
     AccountsError,
     AutoGateRefused,
@@ -80,8 +85,8 @@ class SubscribeRequest(BaseModel):
     portfolio_id: str | None = Field(default=None, max_length=64)
     #: New subscriptions start in ``notify`` or ``paper``; ``auto`` is refused (409).
     mode: ModeName = "notify"
-    #: The strategy's share of the portfolio's risk budget.
-    weight: float = Field(default=1.0, ge=0)
+    #: The strategy's share of the portfolio's risk budget (finite, at most 100).
+    weight: float = Field(default=1.0, ge=0, le=MAX_WEIGHT, allow_inf_nan=False)
 
 
 class SubscriptionUpdate(BaseModel):
@@ -146,6 +151,20 @@ class SubscriptionService:
                 if mode is Mode.AUTO and (sub.mode is not Mode.AUTO or sub.auto_paused):
                     require(principal, Permission.AUTO_ENABLE)
                 sub = repo.set_mode(scope, sub.id, mode, reason=request.reason)
+            restarts = (
+                request.enabled is True
+                and sub.mode is Mode.AUTO
+                and (not sub.enabled or sub.auto_paused)
+            )
+            if restarts:
+                # UX-02: back on in auto means real orders again: the same
+                # step-up and checklist as switching to auto.
+                require(principal, Permission.AUTO_ENABLE)
+                blockers = repo.auto_blockers(scope, sub.id)
+                if blockers:
+                    raise AutoBlocked(blockers)
+                if sub.auto_paused:
+                    sub = repo.set_mode(scope, sub.id, Mode.AUTO, reason=request.reason)
             if request.enabled is not None:
                 change = repo.enable if request.enabled else repo.disable
                 sub = change(scope, sub.id, reason=request.reason)

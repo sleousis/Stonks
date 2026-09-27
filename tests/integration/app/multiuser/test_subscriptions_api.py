@@ -212,3 +212,99 @@ def test_auto_needs_a_step_up_then_the_paper_record(app, client, settings, peopl
     ok = client.patch(url, json={"mode": "auto", "reason": "ready"}, headers=alice["headers"])
     assert ok.status_code == 200, ok.text
     assert ok.json()["mode"] == "auto" and ok.json()["auto_blockers"] == []
+
+
+def _auto_subscription(app, client, settings, alice) -> tuple[str, str]:
+    pf = _portfolio(settings, alice, "Live", kind="broker")
+    with SqliteState(settings.state.path) as state:
+        link_connection(state, pf)
+    sub = client.post(
+        "/api/subscriptions",
+        json={"strategy_id": "bah_active", "portfolio_id": pf, "mode": "paper"},
+        headers=alice["headers"],
+    ).json()
+    with SqliteState(settings.state.path) as state:
+        seed_paper_days(state, sub["id"], 20, portfolio_id=pf)
+    allow_step_up(app)
+    url = f"/api/subscriptions/{sub['id']}"
+    assert client.patch(url, json={"mode": "auto"}, headers=alice["headers"]).status_code == 200
+    app.dependency_overrides.clear()
+    return url, pf
+
+
+@pytest.mark.parametrize("state_before", ["disabled", "paused"])
+def test_ux02_turning_an_auto_subscription_back_on_needs_a_step_up(
+    app, client, settings, people, state_before
+):
+    alice = people["alice"]
+    url, _ = _auto_subscription(app, client, settings, alice)
+    sub_id = url.rsplit("/", 1)[1]
+    with SqliteState(settings.state.path) as state:
+        if state_before == "disabled":
+            state.execute("UPDATE subscriptions SET enabled = 0 WHERE id = ?", [sub_id])
+        else:
+            state.execute(
+                "UPDATE subscriptions SET paused_reason = 'broker_error: x' WHERE id = ?", [sub_id]
+            )
+    token = client.patch(url, json={"enabled": True}, headers=alice["headers"])
+    assert token.status_code == 403 and token.json()["code"] == "step_up_required"
+    with SqliteState(settings.state.path) as state:
+        row = state.sql("SELECT enabled, paused_reason FROM subscriptions WHERE id = ?", [sub_id])
+    # nothing changed
+    if state_before == "disabled":
+        assert not row[0]["enabled"]
+    else:
+        assert row[0]["paused_reason"] == "broker_error: x"
+
+    allow_step_up(app)
+    on = client.patch(url, json={"enabled": True}, headers=alice["headers"])
+    assert on.status_code == 200, on.text
+    assert on.json()["enabled"] is True and on.json()["paused_reason"] is None
+
+
+def test_ux02_turning_auto_back_on_runs_the_checklist(app, client, settings, people):
+    alice = people["alice"]
+    url, _ = _auto_subscription(app, client, settings, alice)
+    sub_id = url.rsplit("/", 1)[1]
+    with SqliteState(settings.state.path) as state:
+        state.execute("UPDATE subscriptions SET enabled = 0 WHERE id = ?", [sub_id])
+        state.execute("UPDATE broker_connections SET status = 'error'")
+    allow_step_up(app)
+    refused = client.patch(url, json={"enabled": True}, headers=alice["headers"])
+    assert refused.status_code == 409 and refused.json()["code"] == "auto_blocked"
+    with SqliteState(settings.state.path) as state:
+        assert state.sql("SELECT enabled FROM subscriptions WHERE id = ?", [sub_id])[0][0] == 0
+
+
+def test_ux02_turning_auto_off_needs_no_step_up(app, client, settings, people):
+    alice = people["alice"]
+    url, _ = _auto_subscription(app, client, settings, alice)
+    off = client.patch(url, json={"enabled": False}, headers=alice["headers"])
+    assert off.status_code == 200 and off.json()["enabled"] is False
+
+
+# ---- BE-41: weights ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("weight", ["Infinity", "NaN", "1e308", "101"])
+def test_be41_a_weight_must_be_finite_and_bounded(client, settings, people, weight):
+    alice = people["alice"]
+    pf = _portfolio(settings, alice, "Book")
+    body = f'{{"strategy_id": "bah_active", "portfolio_id": "{pf}", "mode": "paper", "weight": {weight}}}'
+    made = client.post(
+        "/api/subscriptions",
+        content=body,
+        headers={**alice["headers"], "Content-Type": "application/json"},
+    )
+    assert made.status_code == 422, made.text
+
+
+def test_be41_a_book_whose_weights_sum_to_zero_is_refused(client, settings, people):
+    alice = people["alice"]
+    pf = _portfolio(settings, alice, "Book")
+    zero = client.post(
+        "/api/subscriptions",
+        json={"strategy_id": "bah_active", "portfolio_id": pf, "mode": "paper", "weight": 0},
+        headers=alice["headers"],
+    )
+    assert zero.status_code == 422, zero.text
