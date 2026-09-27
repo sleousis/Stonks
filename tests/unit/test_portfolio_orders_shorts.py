@@ -97,3 +97,9 @@ def test_a_long_only_target_set_matches_the_long_only_route() -> None:
     assert [(o.client_id, o.side, o.quantity) for o in both] == [
         (o.client_id, o.side, o.quantity) for o in long_only
     ]
+
+
+def test_be45_an_unpriced_short_holding_stops_the_sizing() -> None:
+    # Q is short with no price: the liability is unknown, so equity is too.
+    book = Portfolio(cash=2_000.0, positions={"Q": -50.0})
+    assert _orders({"X": 0.3}, book, buffer_fraction=0.0) == []

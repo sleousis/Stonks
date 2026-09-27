@@ -16,8 +16,8 @@ Long/short modes (``long_only=False``, roadmap 16.3):
 
 - ``equal_weight_top_n`` also shorts the ``n_short`` (default ``n``) most
   negative combined scores, every position at ``max_gross / names``. Its
-  signals are then z-scores, so a score below the cross-section mean is a
-  short.
+  signals are then signed ranks, so only a score below 0 is a short
+  (BE-15).
 - ``vol_target`` keeps negative forecasts as short weights.
 
 Both read betas, so ``neutral`` may be ``"dollar"`` or ``"beta"``.
@@ -123,11 +123,13 @@ class SingleWinner(PortfolioConstructor):
             return self.finalize({}, meta={"winner_strategy_id": None, "picks": []})
         winner = ranked[0][1]
         picks = [(r, t) for r, sid, t in ranked if sid == winner]
-        tradable = [t for _, t in picks if inp.tradable(t)]
-        weights = {t: self.settings.max_gross / len(tradable) for t in tradable}
+        tradable = [(r, t) for r, t in picks if inp.tradable(t)]
+        # signed by score: a short pick is a negative weight (BE-50)
+        each = self.settings.max_gross / max(len(tradable), 1)
+        weights = {t: math.copysign(each, r) for r, t in tradable}
         return self.finalize(
             weights,
-            attribution={t: {winner: 1.0} for t in tradable},
+            attribution={t: {winner: 1.0} for _, t in tradable},
             meta={"winner_strategy_id": winner, "picks": picks},
         )
 
@@ -147,11 +149,13 @@ class EqualWeightTopN(PortfolioConstructor):
 
     Signals are percentile ranks (RS-06): the pipeline passes only scores
     above the threshold, so every input is a buy, and a z-score would clip
-    the below-mean half to 0 in long-only mode. In long/short mode the
-    ``n_short`` most negative z-scores are shorts (see the module doc)."""
+    the below-mean half to 0 in long-only mode. In long/short mode signals
+    are signed ranks and the ``n_short`` most negative are shorts: only a
+    name the strategies score below 0 is shorted, never the weakest of the
+    names they expect to rise (BE-15)."""
 
     signal_method = "rank"
-    long_short_signal_method = "zscore"
+    long_short_signal_method = "signed_rank"
     beta_aware = True
     Settings = EqualWeightSettings
 

@@ -141,6 +141,7 @@ class LabWorker:
         self.cpus = cpus or os.cpu_count() or 1
         self._current: JobContext | None = None
         self._registered = False
+        self._stopping = False
 
     @property
     def snapshots(self) -> LakeSnapshots:
@@ -188,11 +189,23 @@ class LabWorker:
                 outcome = self.runner.run_claimed(job_id, ctx)
         finally:
             self._current = None
+        if (
+            outcome == "cancelled"
+            and self._stopping
+            and not self.queue.cancel_requested(job_id)
+            and self.queue.requeue(job_id, self.worker_id)
+        ):
+            # stopped by a shutdown, not a user: another worker (or this
+            # one after its restart) runs it again (BE-42)
+            log.info("lab_worker.job_requeued", reason="worker stopping")
+            return
         self.queue.worker_done(self.worker_id, outcome)  # type: ignore[arg-type]
         log.info("lab_worker.job_finished", outcome=outcome)
 
     def request_stop(self) -> None:
-        """Ask the running job (if any) to stop at its next checkpoint."""
+        """Stop the running job (if any) at its next checkpoint and hand it
+        back to the queue."""
+        self._stopping = True
         if self._current is not None:
             self._current.request_cancel()
 

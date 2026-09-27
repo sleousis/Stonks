@@ -18,20 +18,6 @@ from tests.fixtures.governance import seed_status
 AS_OF = date(2026, 3, 20)
 
 
-@pytest.fixture
-def tick_env(tmp_path, lake_trending):
-    state = SqliteState(tmp_path / "state.sqlite")
-    state.migrate()
-    registry = StrategyRegistry(state=state, artifacts_dir=tmp_path / "artifacts")
-    sid = registry.register(
-        BuyAndHold({"ticker": "UP.US", "allocation": 1.0}),
-        reports=[SurvivalReport(test_id="oos", passed=True, metrics={})],
-    )
-    seed_status(registry, sid, "active")
-    yield lake_trending, state, registry
-    state.close()
-
-
 def _summary(state, tick_id):
     row = state.sql("SELECT summary_json FROM tick_runs WHERE id = ?", [tick_id])[0]
     return json.loads(row["summary_json"])

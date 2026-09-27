@@ -5,7 +5,7 @@ a strategy (params + optional fitted state + survival reports + metadata).
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from stonks.core.protocols import SurvivalReport
@@ -82,6 +82,7 @@ def test_bundle_saved_meta_contains_iso_timestamp(tmp_path):
         reports=[],
     ).save()
     meta = json.loads((base / "meta.json").read_text())
-    # should parse as ISO-format UTC datetime
-    datetime.fromisoformat(meta["created_at"].replace("Z", "+00:00"))
-    _ = datetime.now(UTC)
+    # parses as an ISO-format UTC datetime, stamped around now
+    created = datetime.fromisoformat(meta["created_at"].replace("Z", "+00:00"))
+    assert created.utcoffset() == timedelta(0)
+    assert abs((datetime.now(UTC) - created).total_seconds()) < 60

@@ -78,8 +78,18 @@ describe('SettingsPage', () => {
       timezone: 'UTC',
       webhook: null,
     });
+    (await nextRequest(http, '/api/risk/limits')).flush(limitsView({}));
     await tick();
     fixture.detectChanges();
+  }
+
+  function limitsView(mine: Record<string, number>) {
+    return {
+      system: RISK,
+      mine,
+      effective: { ...RISK, ...mine },
+      ignored: [],
+    };
   }
 
   function button(text: string): HTMLButtonElement {
@@ -239,6 +249,41 @@ describe('SettingsPage', () => {
     button('Test token').click();
     fixture.detectChanges();
     expect(el.textContent).toContain('Save a token first');
+    http.verify();
+  });
+
+  it('saves your own risk limits, percents as fractions', async () => {
+    await setup(TRADER);
+    const input = el.querySelector<HTMLInputElement>('#limit-max_weight_per_ticker')!;
+    input.value = '20';
+    input.dispatchEvent(new Event('input'));
+    const positions = el.querySelector<HTMLInputElement>('#limit-max_open_positions')!;
+    positions.value = '8';
+    positions.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    button('Save limits').click();
+    const req = await nextRequest(http, '/api/risk/limits', 'PUT');
+    expect(req.request.body).toEqual({
+      limits: { max_weight_per_ticker: 0.2, max_open_positions: 8 },
+    });
+    req.flush(limitsView({ max_weight_per_ticker: 0.2, max_open_positions: 8 }));
+    await tick();
+    fixture.detectChanges();
+    expect(el.querySelector<HTMLInputElement>('#limit-max_weight_per_ticker')!.value).toBe('20');
+    http.verify();
+  });
+
+  it('refuses a percent over 100 before sending', async () => {
+    await setup(TRADER);
+    const input = el.querySelector<HTMLInputElement>('#limit-cash_buffer_fraction')!;
+    input.value = '150';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    button('Save limits').click();
+    await tick();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Cash to keep is a percent, at most 100.');
+    http.expectNone('/api/risk/limits');
     http.verify();
   });
 });

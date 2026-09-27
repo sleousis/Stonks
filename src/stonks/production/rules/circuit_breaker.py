@@ -34,7 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from stonks.core.types import Order
 from stonks.production.rules import RiskAdjustment, RiskContext, RiskRule, register_rule
-from stonks.production.rules._common import scale_buys, settings_of
+from stonks.production.rules._common import book_value, scale_opens, settings_of
 
 BreakerKind = Literal["month_loss", "week_loss", "drawdown"]
 Cooldown = Literal["rest_of_month", "none"]
@@ -48,12 +48,12 @@ class CircuitBreakerSettings(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     #: Loss from the month's first snapshot that halts buys; ``None`` is off.
-    max_month_loss: float | None = Field(None, gt=0.0, lt=1.0)
+    max_month_loss: float | None = Field(default=None, gt=0.0, lt=1.0)
     #: Loss over ``week_sessions`` snapshots that halts buys; ``None`` is off.
-    max_week_loss: float | None = Field(None, gt=0.0, lt=1.0)
+    max_week_loss: float | None = Field(default=None, gt=0.0, lt=1.0)
     #: Drawdown from the peak that halts buys until cleared; ``None`` is off.
-    max_drawdown_halt: float | None = Field(None, gt=0.0, lt=1.0)
-    week_sessions: int = Field(5, ge=1, le=60)
+    max_drawdown_halt: float | None = Field(default=None, gt=0.0, lt=1.0)
+    week_sessions: int = Field(default=5, ge=1, le=60)
     cooldown: Cooldown = "rest_of_month"
 
     @property
@@ -187,9 +187,12 @@ class CircuitBreaker(RiskRule):
         as_of = ctx.as_of or (curve[-1][0] if curve else None)
         if as_of is None:
             return list(orders), []
-        curve.append((as_of, ctx.portfolio.total_value(dict(ctx.prices))))
+        value = book_value(ctx)
+        if value is None:  # a holding has no mark: no fake drawdown (BE-45)
+            return list(orders), []
+        curve.append((as_of, value))
         trips = breaker_trips(curve, as_of, settings)
         if not trips:
             return list(orders), []
         reason = "circuit breaker: " + "; ".join(t.reason for t in trips)
-        return scale_buys(orders, ctx, 0.0, self.name, reason)
+        return scale_opens(orders, ctx, 0.0, self.name, reason)

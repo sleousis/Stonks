@@ -6,6 +6,8 @@ import { formatLongDay } from '../../core/format/format';
 import { FillsTape } from './fills-tape';
 import { PageHeader } from '../../shared/ui/page-header';
 import { PortfolioCard } from './portfolio-card';
+import { SetupCard } from './setup-card';
+import { WatchlistFilter } from '../../shared/ui/watchlist-filter';
 import { SignalsCard } from './signals-card';
 import { StrategiesCard } from './strategies-card';
 import { TotalsCard } from './totals-card';
@@ -27,9 +29,15 @@ import { TotalsCard } from './totals-card';
     TotalsCard,
     SignalsCard,
     StrategiesCard,
+    SetupCard,
+    WatchlistFilter,
   ],
   template: `
-    <app-page-header [title]="greeting()" [description]="dateLine()" />
+    <app-page-header [title]="greeting()" [description]="dateLine()">
+      <app-watchlist-filter actions ariaLabel="Show fills and signals for" />
+    </app-page-header>
+
+    <app-setup-card class="setup" />
 
     @if (session.status() === 'open') {
       <p class="banner">
@@ -79,6 +87,9 @@ import { TotalsCard } from './totals-card';
     }
     .strategies {
       grid-area: strategies;
+    }
+    .setup:not(:empty) {
+      margin-bottom: var(--space-4);
     }
     .banner {
       margin-bottom: var(--space-4);

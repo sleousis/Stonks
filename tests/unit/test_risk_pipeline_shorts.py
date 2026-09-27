@@ -165,3 +165,32 @@ def test_single_winner_splits_at_zero_and_drops_unwanted_short_legs() -> None:
         strategies=lambda s: _LongOnly(sell),
     )
     assert [(o.position_effect, o.quantity) for o in long_only.orders] == [("close", 10.0)]
+
+
+def test_be50_a_single_winner_short_is_attributed_to_its_strategy() -> None:
+    held = Portfolio(cash=1_000.0, positions={"X": 10.0})
+    sell = [Order("raw:X", "X", "sell", 15.0), Order("raw:Y", "Y", "sell", 5.0)]
+    result = build_orders(
+        {"s": {"X": 1.0}},
+        BookInput(portfolio=held, allow_short=True),
+        MarketView(as_of=AS_OF, prices=PRICES),
+        strategies=lambda s: _Shorter(sell),
+    )
+    # the opening legs belong to the winner; the close of X is not a new share
+    assert result.attribution == {"X": {"s": 1.0}, "Y": {"s": 1.0}}
+
+
+def test_be50_single_winner_weights_follow_the_score_sign() -> None:
+    from stonks.portfolio.base import ConstructionInput, get_constructor
+
+    # a threshold below 0 ranks the negative pick too
+    constructor = get_constructor("single_winner", long_only=False, max_gross=1.0, threshold=-1.0)
+    book = constructor.target_weights(
+        ConstructionInput(
+            signals={"s": {"X": 0.5, "Y": -0.4}},
+            portfolio=Portfolio(cash=1_000.0),
+            prices=PRICES,
+            as_of=AS_OF,
+        )
+    )
+    assert book.weights["X"] > 0 > book.weights["Y"]

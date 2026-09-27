@@ -32,6 +32,14 @@ class Explained(BuyAndHold):
         return {"text": f"{ticker} is the one asset this benchmark holds.", "held_since": "day 1"}
 
 
+class FirstDayOnly(BuyAndHold):
+    """Likes its ticker on DAY1 only (module scope for the registry)."""
+
+    def estimate_return(self, ticker, as_of, lake):
+        day = as_of.date() if hasattr(as_of, "date") else as_of
+        return super().estimate_return(ticker, as_of, lake) if day <= DAY1 else None
+
+
 class BadlyExplained(BuyAndHold):
     def explain(self, ticker, as_of, lake):
         raise RuntimeError("no words")
@@ -160,3 +168,40 @@ def test_record_signals_skips_strategies_already_recorded(env):
         "x now scores UP.US"
     )
     assert signals_mod.events_for(state, DAY1, []) == []
+
+
+# ---- BE-16, BE-17: exits reach notify subscribers, once ------------------------------------
+
+
+def test_be17_an_exit_is_written_once_across_empty_days(env):
+    lake, state, _ = env
+    days = [DAY1, DAY2, DAY3, date(2026, 3, 20)]
+    for i, (day, scores) in enumerate(zip(days, [{"A.US": 0.1}, {}, {}, {}], strict=True)):
+        record_signals(state, lake, {"s1": scores}, {}, tick_id=f"t{i}", as_of=day)
+    kinds = [(d, e.ticker, e.kind) for d in days for e in events_for(state, d, ["s1"])]
+    assert kinds == [(DAY1, "A.US", "entry"), (DAY2, "A.US", "exit")]
+    # a re-run of an empty day writes nothing twice
+    assert record_signals(state, lake, {"s1": {}}, {}, tick_id="t9", as_of=DAY3) == {}
+
+
+def test_be16_notify_subscribers_get_the_exit_notice(env):
+    lake, state, registry = env
+    reports = [SurvivalReport(test_id="oos", passed=True, metrics={})]
+    registry.register(
+        FirstDayOnly({"ticker": "UP.US", "allocation": 0.5}), reports=reports, strategy_id="once"
+    )
+    seed_status(registry, "once", "active")
+    carol = Scope.for_user(
+        UserRepository(state).create(display_name="C", role=Role.TRADER, actor="t")
+    )
+    SubscriptionRepository(state).subscribe(carol, strategy_id="once", mode=Mode.NOTIFY)
+    for day in (DAY1, DAY2):
+        plan = load_tick_plan(state, SETTINGS)
+        run_tick(state, lake, registry, SETTINGS, as_of=day, plan=plan)
+    titles = [
+        r["title"]
+        for r in state.sql(
+            "SELECT title FROM notification_outbox WHERE category = 'signal' ORDER BY id"
+        )
+    ]
+    assert titles == ["UP.US: entry signal", "UP.US: exit signal"]

@@ -146,3 +146,40 @@ def test_current_ignores_a_missing_or_broken_marker(tmp_path):
         '{"dir": "gone", "created_at": "2026-01-01T00:00:00+00:00"}', encoding="utf-8"
     )
     assert LakeSnapshots(root).current() is None
+
+
+# ---- universe changes make the snapshot stale (BE-19) ---------------------------------
+
+
+def _membership_write(lake) -> None:
+    import pandas as pd
+
+    lake.upsert_universe_membership(
+        pd.DataFrame([{"universe_id": "u1", "ticker": "A.US", "start_date": "2020-01-01"}])
+    )
+
+
+def _definition_write(lake) -> None:
+    from stonks.universes import UniverseDefinition, UniverseStore
+
+    UniverseStore(lake).save(UniverseDefinition(id="u1", kind="list", spec={"tickers": ["A.US"]}))
+
+
+def _index_write(lake) -> None:
+    from datetime import date
+
+    from stonks.universes import UniverseStore
+    from stonks.universes.base import IndexHistory
+
+    UniverseStore(lake).save_index_history(
+        IndexHistory(index_id="idx", as_of=date(2026, 1, 2), constituents=("A.US",))
+    )
+
+
+@pytest.mark.parametrize("write", [_membership_write, _definition_write, _index_write])
+def test_a_universe_change_makes_the_snapshot_stale(lake, tmp_path, write):
+    snaps = LakeSnapshots(tmp_path / "snaps")
+    info = snaps.publish(lake)
+    assert not snaps.is_stale(info, lake, 60)
+    write(lake)
+    assert snaps.is_stale(info, lake, 60)

@@ -163,3 +163,25 @@ def test_a_backtest_can_run_on_a_stored_universe(settings, services):
         services.lab.submit_backtest(BacktestRequest(**{**body, "universe_id": "nope"}))
     with pytest.raises(ValueError, match="universe"):
         BacktestRequest(**{k: v for k, v in body.items() if k != "universe_id"})
+
+
+# ---- health over a configured universe id (BE-06) -------------------------------------
+
+
+def test_health_resolves_a_configured_universe_id(services, settings):
+    _store_universe(settings, "mine", ["UP.US", "FLAT.US"])
+    settings.production.universe = "mine"
+    names = {c.name for c in services.operations.health_report().checks}
+    freshness = {n for n in names if n.startswith("freshness:")}
+    assert freshness == {"freshness:UP.US", "freshness:FLAT.US"}
+
+
+def test_health_with_an_unresolved_universe_id_opens_no_halt(services, settings):
+    from stonks.store.state import SqliteState
+
+    settings.production.universe = "never_refreshed"
+    view = services.operations.run_health([])
+    assert not [c for c in view.checks if c.name.startswith("freshness:")]
+    with SqliteState(settings.state.path) as state:
+        rows = state.sql("SELECT id FROM risk_halts WHERE cleared_at IS NULL")
+    assert rows == []

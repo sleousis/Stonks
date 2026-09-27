@@ -7,11 +7,9 @@ from __future__ import annotations
 import json
 
 import pytest
-from fastapi.testclient import TestClient
 
-from stonks.api import create_app
 from stonks.api.openapi import render_openapi
-from tests.integration.app.test_api import AUTH, LOOPBACK
+from tests.integration.app.test_api import AUTH
 
 #: Reference lists whose size is set by the code, not by use.
 CATALOGS = {
@@ -69,14 +67,6 @@ def test_every_paged_route_takes_limit_and_offset():
         props = spec["components"]["schemas"][ref.split("/")[-1]]["properties"]
         assert set(props) >= {"items", "total", "limit", "offset"}, path
         assert {"limit", "offset"} <= route["params"], path
-
-
-@pytest.fixture
-def client(settings, seeded, fake_source):
-    settings.api.allowed_hosts = ["testserver"]
-    app = create_app(settings, source_factory=lambda: fake_source)
-    with TestClient(app, client=LOOPBACK) as c:
-        yield c
 
 
 @pytest.mark.parametrize("path", PAGED)

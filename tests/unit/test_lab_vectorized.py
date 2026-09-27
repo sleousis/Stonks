@@ -201,6 +201,25 @@ def test_the_tuner_runs_full_backtests_only_on_the_best_screened(lake):
     assert min(kept) >= max(d for d in dropped if not math.isnan(d))
 
 
+class _Drawdown(_Sharpe):
+    direction = "minimize"
+
+
+def test_a_minimising_objective_still_keeps_the_screens_best(lake):
+    """BE-58: the screen score is a Sharpe (higher is better) whatever the
+    objective's direction, so a minimising objective keeps the top of it."""
+    _Sharpe.calls = []
+    dataset = LabDataset(lake=lake, universe=TICKERS, start=DAYS[0].date(), end=DAYS[-1].date())
+    tuner = PrescreenTuner(grid_size=4, max_candidates=100, cost_bps=0.0)
+    result = tuner.tune(_TwoAxis, _TwoAxis.parameter_spec(), _Drawdown(), dataset, budget=3)
+    pairs = list(zip(tuner.last_screen, result.trials, strict=True))
+    kept = [s.score for s, t in pairs if t.status == "ok"]
+    dropped = [s.score for s, t in pairs if t.status != "ok" and not math.isnan(s.score)]
+    assert min(kept) >= max(dropped)
+    # the winner is still picked on full scores, in the objective's direction
+    assert result.best_score == min(t.score for t in result.trials if t.status == "ok")
+
+
 def test_a_strategy_without_target_positions_falls_back_to_the_grid(lake):
     from tests.fixtures.parallel_lab import NoisyParamStrategy
 

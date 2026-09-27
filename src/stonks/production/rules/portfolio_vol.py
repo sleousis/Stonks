@@ -1,8 +1,9 @@
 """Portfolio volatility target (BL-27; Carver's risk overlay).
 
 The book after the tick's orders is ``h + s * d``: ``h`` the holdings once
-the sells go through, ``d`` the proposed opening buys, both as signed
-weights of the value before the tick. Buys are scaled by the largest
+the sells go through, ``d`` the proposed opening orders (buys and short
+sales, BE-05), both as signed weights of the value before the tick. They
+are scaled by the largest
 ``s`` in ``[0, 1]`` that keeps
 
 - the ex-ante annual volatility ``sqrt(w' S w)`` at or under ``vol_cap``
@@ -12,7 +13,7 @@ weights of the value before the tick. Buys are scaled by the largest
   at 1) at or under ``shock_cap``, tag ``correlation_shock``.
 
 Both are convex in ``s``, so the largest feasible ``s`` is found by
-bisection; when the holdings alone breach a cap, opening buys are dropped.
+bisection; when the holdings alone breach a cap, opening orders are dropped.
 Returns are taken on the union of the tickers' bar dates with closes
 carried forward, and annualised with the most bars per year among the
 asset classes involved (365 once crypto is in, else 252). A pair without
@@ -44,10 +45,11 @@ from stonks.production.rules import (
 from stonks.production.rules._common import (
     adjustment,
     history,
-    is_opening_buy,
+    is_opening_order,
     largest_scale,
+    marks,
     positions_after_sells,
-    scale_buys,
+    scale_opens,
     settings_of,
 )
 
@@ -85,12 +87,15 @@ class PortfolioVol(RiskRule):
         settings: PortfolioVolSettings | None = settings_of(ctx.policy, self.name)
         if settings is None or not settings.active:
             return list(orders), []
-        equity = ctx.portfolio.total_value(dict(ctx.prices))
-        buys = [o for o in orders if is_opening_buy(o, ctx) and _price(ctx, o.ticker)]
+        buys = [o for o in orders if is_opening_order(o, ctx) and _price(ctx, o.ticker)]
         if not buys:
             return list(orders), []
+        prices = marks(ctx)
+        if prices is None:  # a holding has no mark: the book can't be sized (BE-45)
+            return list(orders), []
+        equity = ctx.portfolio.total_value(prices)
         if equity <= 0:
-            return scale_buys(orders, ctx, 0.0, self.name, "no positive portfolio value")
+            return scale_opens(orders, ctx, 0.0, self.name, "no positive portfolio value")
 
         closes = _closes(ctx, {*ctx.portfolio.positions, *(o.ticker for o in buys)})
         returns = np.log(closes).diff()
@@ -117,10 +122,11 @@ class PortfolioVol(RiskRule):
 
         usable = [t for t in returns.columns if counts[t] >= MIN_RETURNS]
         held = positions_after_sells(orders, ctx)
-        h = np.array([held.get(t, 0.0) * _price(ctx, t) / equity for t in usable])
+        h = np.array([held.get(t, 0.0) * prices.get(t, 0.0) / equity for t in usable])
         d = np.zeros(len(usable))
         for order in buys:
-            d[usable.index(order.ticker)] += order.quantity * _price(ctx, order.ticker) / equity
+            signed = order.quantity if order.side == "buy" else -order.quantity
+            d[usable.index(order.ticker)] += signed * _price(ctx, order.ticker) / equity
         cov = _covariance(returns[usable]) * _periods(ctx, usable)
         sigma = np.sqrt(np.diag(cov))
 
@@ -144,9 +150,9 @@ class PortfolioVol(RiskRule):
             return kept, adjustments
         reason = (
             f"forecast {tag.replace('_', ' ')} {f(1.0):.2%} > cap {cap:.2%}; "
-            f"opening buys scaled by {scale:.4f}"
+            f"opening orders scaled by {scale:.4f}"
         )
-        scaled, adj = scale_buys(kept, ctx, scale, tag, reason, only={o.ticker for o in buys})
+        scaled, adj = scale_opens(kept, ctx, scale, tag, reason, only={o.ticker for o in buys})
         return scaled, adjustments + adj
 
 

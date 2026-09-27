@@ -54,7 +54,7 @@ Enforced: `backtest/trades.py` keeps the trade ledger (BL-02). A backtest trades
 
 **P12. No look-ahead, ever.**
 Why: one leaked bar or one early statement invalidates the whole result (McKinney; Graham and Dodd, via Gray and Carlisle's point-in-time rules; Hamilton, who warns that smoothed regime probabilities use future data).
-Enforced: fills happen at the next bar's open (`backtest/engine.py`), statements are read by `filing_date`, and macro data carries publication lags. A strategy sees a bar only after it closes (`core.interval.visible_cutoff`, RS-03). Strategies never get the lake itself (BL-49): the backtest engine, the tick's ranker and its scoring workers hand them a `PointInTimeLake` (`store/pit.py`) of the decision bar. It clamps every read (bars, statements by filing date, macro prints, dated metadata, universe membership) to the decision, even when the strategy asks for more, and raw `sql()` raises. `tests/unit/test_pit_catalog.py` plants future bars, statements, macro prints, share counts, splits, dividends, yields, TVL and a new ticker, and checks every catalogued strategy answers the same, also when asked about a later day by mistake. `tests/unit/test_strategy_lookahead.py` covers intraday decisions against daily reads.
+Enforced: fills happen at the next bar's open (`backtest/engine.py`), statements are read from the day after their `filing_date` (a filing may land after the close, BE-22), and macro data carries publication lags. A strategy sees a bar only after it closes (`core.interval.visible_cutoff`, RS-03). Strategies never get the lake itself (BL-49): the backtest engine, the tick's ranker and its scoring workers hand them a `PointInTimeLake` (`store/pit.py`) of the decision bar. It clamps every read (bars, statements by filing date, macro prints, dated metadata, universe membership) to the decision, even when the strategy asks for more, and raw `sql()` raises. `tests/unit/test_pit_catalog.py` plants future bars, statements, macro prints, share counts, splits, dividends, yields, TVL and a new ticker, and checks every catalogued strategy answers the same, also when asked about a later day by mistake. `tests/unit/test_strategy_lookahead.py` covers intraday decisions against daily reads.
 
 **P13. Signals and returns use split- and dividend-adjusted prices.**
 Why: a 4:1 split looks like a 75% crash and ignored dividends understate total return, so both corrupt signals and equity curves (Chan; Clenow; Wilcox and Crittenden).
@@ -76,7 +76,7 @@ Enforced: BL-22 adds a `benchmark_relative` survival test that reports beta, alp
 
 **P17. A new strategy must bring something the pool lacks.**
 Why: many weak, uncorrelated streams beat one strong one. A candidate that correlates at 0.7 or more with an existing strategy adds cost and no breadth (Tulchinsky; Meucci; Dalio, via Schwager).
-Enforced: the `pool_correlation` survival test (`lab/survival/pool_correlation.py`, BL-47) fails a candidate above 0.7 correlation with an active strategy unless its IR is 10% better. It is opt in, not in a preset yet. BL-12 attributes P&L per strategy, and the `risk_monitor` hook scores each strategy sleeve daily.
+Enforced: the `pool_correlation` survival test (`lab/survival/pool_correlation.py`, BL-47) fails a candidate above 0.7 correlation with an active strategy unless its IR is 10% better. Each member is backtested on its own recorded universe, and the test fails when the pool is not empty but no member could be compared. It is opt in, not in a preset yet. BL-12 attributes P&L per strategy, and the `risk_monitor` hook scores each strategy sleeve daily.
 
 ## 4. Costs and execution realism
 
@@ -156,7 +156,7 @@ Enforced: today `MacroRegimeFilter` and `FeatureRegimeFilter` (`strategies/macro
 
 **P35. Every strategy must be seen through at least one crisis before promotion, where data allows.**
 Why: a backtest that skips a crash is lying, and risk models fail exactly when they're needed (Kindleberger; Danielsson).
-Enforced: the `crisis` test (in the `promotion` preset) compares the drawdown in each named crisis window with the benchmark's and reports `crisis_coverage`. The `stress` test replays 200 simulated validation windows (BL-48). The EODHD free tier's one-year limit makes this a data requirement (BL-37 preflight).
+Enforced: the `crisis` test (in the `promotion` preset) compares the drawdown in each named crisis window with the benchmark's and reports `crisis_coverage`. A covered window with no benchmark bars fails, and a window the tuner saw is reported as in sample (`crisis_coverage_oos` counts only the others). The `stress` test replays 200 simulated validation windows (BL-48). The EODHD free tier's one-year limit makes this a data requirement (BL-37 preflight).
 
 **P36. Diversification is not a crash hedge: correlations go to one in panics.**
 Why: contagion (Kindleberger; Harris on liquidity vanishing).
@@ -204,7 +204,7 @@ Enforced: `lab/parallel.py` is the one process pool for tuners, folds, permutati
 
 **P46. Every lab result can be reproduced.**
 Why: a verdict you can't rerun can't be trusted or debugged (Slatkin; Strimpel; López de Prado).
-Enforced: today `RandomTuner` is seeded (`lab/tuning/random.py:19-25`). BL-06 records the git SHA, a config hash, a data fingerprint and the seeds. The data fingerprint hashes open, high, low, close, adjusted close and volume, 550 days of warm-up history, and every split and dividend row.
+Enforced: today `RandomTuner` is seeded (`lab/tuning/random.py:19-25`). BL-06 records the git SHA, a config hash, a data fingerprint and the seeds. The data fingerprint hashes open, high, low, close, adjusted close and volume, 550 days of warm-up history, and every split and dividend row, for the universe, each strategy's reference tickers and the benchmark. An intraday run also hashes the daily bars.
 
 **P47. Third-party libraries sit behind our seams, and statistics use numpy and scipy.**
 Why: vendor types must not leak (CLAUDE.md). The ADIA Lab reference code shows that PSR, DSR and PBO need nothing heavier.

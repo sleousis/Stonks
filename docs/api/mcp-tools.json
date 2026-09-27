@@ -338,6 +338,50 @@
     },
     {
       "annotations": {
+        "destructive": false,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Start a watchlist of yours. Names are unique per person. Needs a\ntrading token.",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "description": "the list's name",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "tickers": {
+            "anyOf": [
+              {
+                "description": "instrument ids, kept once and in order",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tickers"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "create_watchlistArguments",
+        "type": "object"
+      },
+      "name": "create_watchlist",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
         "destructive": true,
         "idempotent": true,
         "open_world": false,
@@ -787,6 +831,96 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "A price chart's data for one ticker: OHLCV bars (the latest\n``limit`` in the window), your fills of it (side, quantity, price)\nin one of your portfolios, and every strategy's signal events for it\n(entry, exit, increase, decrease) with the plain reason.",
+      "input_schema": {
+        "properties": {
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "End"
+          },
+          "interval": {
+            "default": "1d",
+            "title": "Interval",
+            "type": "string"
+          },
+          "limit": {
+            "default": 750,
+            "maximum": 5000,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Start"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "only this strategy's signals",
+            "title": "Strategy Id"
+          },
+          "ticker": {
+            "description": "instrument id, e.g. AAPL.US or BTC-USD.CC",
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "title": "get_chartArguments",
+        "type": "object"
+      },
+      "name": "get_chart",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "External accounts on one of your connections, each with the\nportfolio that mirrors it (null when not linked).",
       "input_schema": {
         "properties": {
@@ -1049,6 +1183,40 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Every strategy ranked by its risk-adjusted paper result (the\nmodel book the tick keeps for it): total return, CAGR, Sharpe,\nSortino, worst drawdown, trades in the model book and in real books,\nsurvival tests passed and the go-live verdict.",
+      "input_schema": {
+        "properties": {
+          "include_retired": {
+            "default": false,
+            "title": "Include Retired",
+            "type": "boolean"
+          },
+          "sort": {
+            "default": "sharpe",
+            "description": "rank by paper Sharpe, total return, drawdown or trades",
+            "enum": [
+              "sharpe",
+              "return",
+              "drawdown",
+              "trades"
+            ],
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        "title": "get_leaderboardArguments",
+        "type": "object"
+      },
+      "name": "get_leaderboard",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "One recorded lab run with every trial (parameters, score, status)\nand the trial count of its strategy class across all runs.",
       "input_schema": {
         "properties": {
@@ -1093,6 +1261,22 @@
         "type": "object"
       },
       "name": "get_live_risk",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Your own risk limits next to the system policy, what your\nportfolios follow (the system tightened by yours) and any of yours\nthat are looser than the system and so change nothing.",
+      "input_schema": {
+        "properties": {},
+        "title": "get_my_risk_limitsArguments",
+        "type": "object"
+      },
+      "name": "get_my_risk_limits",
       "needs_confirm": false
     },
     {
@@ -1502,6 +1686,30 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "One strategy on one page: paper figures and value curve, monthly\nreturns, recent model-book trades, survival verdicts, the go-live\nreport and the status history.",
+      "input_schema": {
+        "properties": {
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_id"
+        ],
+        "title": "get_tear_sheetArguments",
+        "type": "object"
+      },
+      "name": "get_tear_sheet",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "One production tick run with the orders it placed in your\nportfolios (or in ``portfolio_id`` only).",
       "input_schema": {
         "properties": {
@@ -1595,6 +1803,30 @@
         "type": "object"
       },
       "name": "get_universe_members",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "One of your watchlists with its tickers.",
+      "input_schema": {
+        "properties": {
+          "watchlist_id": {
+            "title": "Watchlist Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "watchlist_id"
+        ],
+        "title": "get_watchlistArguments",
+        "type": "object"
+      },
+      "name": "get_watchlist",
       "needs_confirm": false
     },
     {
@@ -3022,6 +3254,22 @@
         "type": "object"
       },
       "name": "list_universes",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Your watchlists (named ticker lists), oldest first.",
+      "input_schema": {
+        "properties": {},
+        "title": "list_watchlistsArguments",
+        "type": "object"
+      },
+      "name": "list_watchlists",
       "needs_confirm": false
     },
     {
@@ -5461,6 +5709,61 @@
       },
       "name": "update_subscription",
       "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Rename one of your watchlists, replace its tickers, or both.",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          },
+          "tickers": {
+            "anyOf": [
+              {
+                "description": "instrument ids, kept once and in order",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tickers"
+          },
+          "watchlist_id": {
+            "title": "Watchlist Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "watchlist_id"
+        ],
+        "title": "update_watchlistArguments",
+        "type": "object"
+      },
+      "name": "update_watchlist",
+      "needs_confirm": false
     },
     {
       "annotations": {

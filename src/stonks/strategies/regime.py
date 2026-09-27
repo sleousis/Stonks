@@ -9,14 +9,15 @@ The filter holds ``n`` conditions from :mod:`stonks.features.regime_conditions`
 trend, and any condition a later module registers). On each bar it counts
 how many trigger. Risk off when at least ``k`` do. Then ``mode`` decides:
 
-- ``block_new_buys``: the inner strategy runs as usual but its buys are
-  dropped. Sells pass, and held names stay in the ranking, so the inner
-  does not dump them just because the gate is shut.
-- ``exit_all``: no picks and every long is sold.
-- ``scale``: buy quantities are multiplied by the share of conditions that
-  did not trigger (all triggered means no buys).
+- ``block_new_buys``: the inner strategy runs as usual but its opening
+  orders (buys and short sales) are dropped. Closes pass, and held names
+  stay in the ranking, so the inner does not dump them just because the
+  gate is shut.
+- ``exit_all``: no picks, every long is sold and every short covered.
+- ``scale``: opening quantities are multiplied by the share of conditions
+  that did not trigger (all triggered means no new positions).
 
-Sells always pass. A condition that can't be judged (no data, too little
+Closes (sells of longs, covers of shorts) always pass (BE-14). A condition that can't be judged (no data, too little
 history, stale data) counts as not triggered, or as triggered with
 ``when_unknown="trigger"``. Every condition reads only data dated on or
 before ``as_of``.
@@ -40,7 +41,14 @@ from typing import Any
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
 from stonks.features.regime_conditions import ConditionContext, RegimeCondition, build_condition
-from stonks.strategies._common import LakeBarCaches, as_datetime, iso, sell_all_longs
+from stonks.strategies._common import (
+    LakeBarCaches,
+    as_datetime,
+    close_all,
+    closes_only,
+    iso,
+    split_effects,
+)
 from stonks.strategies._wrapping import InnerStrategyWrapper, inner_param_specs
 
 DEFAULT_CONDITIONS: list[dict[str, Any]] = [{"kind": "price_trend", "ticker": "SPY.US"}]
@@ -224,15 +232,15 @@ class RegimeFilter(InnerStrategyWrapper):
             return self._inner.decide(my_picks, portfolio, prices, as_of)
         mode = self.params["mode"]
         if mode == "exit_all":
-            return sell_all_longs(self.id, portfolio, as_of)
+            return close_all(self.id, portfolio, as_of)
         orders = self._inner.decide(my_picks, portfolio, prices, as_of)
         if mode == "block_new_buys":
-            return [o for o in orders if o.side != "buy"]
+            return closes_only(orders, portfolio)
         hits, n = self.triggered_count(as_of, lake)
         share = (n - hits) / n
         out: list[Order] = []
-        for order in orders:
-            if order.side != "buy":
+        for order in split_effects(orders, portfolio):
+            if order.position_effect == "close":
                 out.append(order)
             elif share > 0:
                 out.append(dataclasses.replace(order, quantity=order.quantity * share))

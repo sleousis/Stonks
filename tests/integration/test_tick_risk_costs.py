@@ -9,30 +9,12 @@ from datetime import date
 import pytest
 
 from stonks.backtest.costs import AssetClassCosts, CostModelSettings
-from stonks.core.protocols import SurvivalReport
 from stonks.production.risk import RiskPolicy
 from stonks.production.tick import TickSettings, run_tick
-from stonks.registry.store import StrategyRegistry
-from stonks.store.state import SqliteState
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
-from tests.fixtures.governance import seed_status
 
 AS_OF = date(2026, 3, 20)
 COSTS = CostModelSettings(default=AssetClassCosts(fee_bps=100.0))  # 1% of notional
-
-
-@pytest.fixture
-def tick_env(tmp_path, lake_trending):
-    state = SqliteState(tmp_path / "state.sqlite")
-    state.migrate()
-    registry = StrategyRegistry(state=state, artifacts_dir=tmp_path / "artifacts")
-    sid = registry.register(
-        BuyAndHold({"ticker": "UP.US", "allocation": 1.0}),
-        reports=[SurvivalReport(test_id="oos", passed=True, metrics={})],
-    )
-    seed_status(registry, sid, "active")
-    yield lake_trending, state, registry
-    state.close()
 
 
 def test_tick_cash_buffer_survives_cost_model_fees(tick_env):

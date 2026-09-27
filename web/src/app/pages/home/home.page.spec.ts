@@ -83,6 +83,17 @@ describe('HomePage', () => {
     (await nextRequest(controller, '/api/ticks')).flush(page([]));
   }
 
+  /** Signed-in people also get their watchlists and the first-run guide. */
+  async function flushPersonal() {
+    (await nextRequest(controller, '/api/watchlists')).flush(page([]));
+    (await nextRequest(controller, '/api/onboarding')).flush({
+      steps: [],
+      complete: true,
+      dismissed: false,
+      show: false,
+    });
+  }
+
   async function flushTape() {
     (await nextRequest(controller, '/api/orders/fills')).flush(page([]));
     (await nextRequest(controller, '/api/orders')).flush(page([]));
@@ -102,6 +113,7 @@ describe('HomePage', () => {
     (await nextRequest(controller, '/api/portfolio')).flush(PORTFOLIO);
     (await nextRequest(controller, '/api/pnl')).flush(PNL);
     await flushCommon();
+    await flushPersonal();
     await flushTape();
     await tick();
     fixture.detectChanges();
@@ -131,6 +143,7 @@ describe('HomePage', () => {
     });
     (await nextRequest(controller, '/api/portfolios')).flush(page([]));
     await flushCommon();
+    await flushPersonal();
     await tick();
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
@@ -168,6 +181,7 @@ describe('HomePage', () => {
     fixture.detectChanges();
     (await nextRequest(controller, '/api/portfolios')).flush(page([]));
     await flushCommon();
+    await flushPersonal();
     await tick();
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;

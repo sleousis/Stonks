@@ -1,7 +1,7 @@
 # Trader console (web UI)
 
 The Angular app in `web/` is the trader console: sign-in, a simple home,
-profile, admin users, and the advanced pages (dashboard, strategies, studio,
+profile, the first-run guide, watchlists, charts, the leaderboard and tear sheets, admin users, and the advanced pages (dashboard, strategies, studio,
 lab, data, universes, orders, shadow, go-live, halts, schedule and backups,
 data quality, health and settings). It talks only to the
 REST API (`src/stonks/api/`) through a client generated from the checked-in
@@ -281,7 +281,7 @@ protected readonly columns: TableColumn<OrderView>[] = [
 
 ### Charts
 
-Use `<app-time-series-chart>` only; never import `lightweight-charts`
+Use `<app-time-series-chart>` for lines and `<app-price-chart>` for candles (see [Trader workspace](#trader-workspace-phase-13)). Never import `lightweight-charts`
 outside `shared/chart/lightweight-chart-engine.ts`.
 
 ```html
@@ -534,6 +534,64 @@ flowchart LR
   server paged.
 - New glossary terms: violation ratio, alpha decay and concentration.
 
+## Trader workspace (Phase 13)
+
+| Page | Route | What it does |
+|---|---|---|
+| Get set up | `/welcome` | The first-run guide: five steps, each can be skipped, kept per user on the server. Admins also see the install checklist |
+| Watchlists | `/watchlists` | Your own ticker lists: create, edit, delete, open in the lab, chart a ticker |
+| Charts | `/charts`, `/charts/:ticker` | Daily candles, volume, moving averages, your fills (B and S) and strategy signals, with the fills and signals listed below |
+| Leaderboard | `/leaderboard` | Strategies ranked by risk-adjusted paper result, each linking to its tear sheet |
+| Tear sheet | `/strategies/:id/tearsheet` | Paper figures and curve, monthly returns, recent trades, survival verdicts, go-live check, status history |
+
+```mermaid
+flowchart LR
+  T[Today: setup card] --> W[/welcome]
+  W --> P[Portfolio] & L[Watchlist] & F[Follow] & A[Alerts]
+  L --> C[/charts/:ticker]
+  L --> Lab[/lab?tickers=...]
+  B[/leaderboard] --> S[/strategies/:id/tearsheet]
+```
+
+- **First-run guide.** `GET /api/onboarding` returns each step as `done`,
+  `skipped` or `todo`, and `derived` when the data shows it done (a second
+  factor, a portfolio, a watchlist, a subscription, a push device).
+  `PUT /api/onboarding/steps/{step}` stores a skip or a done mark
+  (`todo` clears it), `PUT /api/onboarding` closes or reopens the guide.
+  `<app-setup-card>` shows on Today while `show` is true. Admins read
+  `GET /api/onboarding/system` (`operations.run`): data source key, first
+  data load, a backup on disk, a running scheduler, each with a link to fix it.
+  Profile links back to the guide.
+- **Watchlists.** `WatchlistContextService` (`core/watchlists/`) holds your
+  lists and the one picked as a filter, remembered per browser.
+  `<app-watchlist-filter>` ("Show") sits in the Today and chart headers;
+  Today keeps fills and signals of the picked list's tickers (a signal's
+  ticker is read from its title). "Open in the lab" goes to
+  `/lab?tickers=A,B`, and both lab forms start from those tickers.
+- **Charts.** `GET /api/charts/{ticker}` returns the bars, your fills in the
+  picked portfolio (none without one) and every strategy's signal events.
+  `<app-price-chart>` (`shared/chart/price-chart.ts`) draws them through
+  `ChartEngine.createPrice`: candles in gain and loss colours, volume in grey
+  along the bottom, overlays, markers (B below, S above, dots for signals).
+  Moving averages are computed in the page (`pages/charts/chart-data.ts`)
+  over 199 extra bars so the 200-day line starts at the left edge. The wheel
+  scrolls the page; zoom with the range buttons, a pinch or the price axis.
+- **Leaderboard and tear sheets.** `GET /api/strategies/leaderboard?sort=`
+  (`sharpe`, `return`, `drawdown`, `trades`) and
+  `GET /api/strategies/{id}/tearsheet`. Paper value is a `primary` line,
+  never brass. The stage words come from `shared/governance-labels.ts`.
+- **Risk limits.** `<app-risk-limits-panel>` in Settings reads
+  `GET /api/risk/limits` (system, yours, what you follow, ignored) and saves
+  with `PUT /api/risk/limits` (`portfolio.manage`). Percents are typed 0 to
+  100 and sent as fractions. A limit looser than the system one is kept but
+  changes nothing, and the panel says so.
+- **CSV downloads.** `<app-export-button kind="...">` calls
+  `ExportsService.download()`, which asks the generated client for a blob
+  (`responseType: 'blob'`) over the session, then saves it through a
+  temporary link. Orders and fills (Orders page), the journal (Trade costs),
+  P&L and snapshots (Insights) and lab trials (trial ledger, and one run).
+  A failure toasts the API's reason.
+
 ## Permissions
 
 The console hides or disables what the signed-in user may not do, so nobody
@@ -589,6 +647,12 @@ about the same thing.
 | Trial ledger | `/api/lab/ledger` | none | `list_ledger_runs`, `get_ledger_run` |
 | Notifications (feed) | `/api/notifications` | `python -m stonks.notify` | `list_notifications` |
 | Alerts (Health page) | `/api/alerts` | none | `list_alerts` |
+| Get set up (first-run guide) | `/api/onboarding` | none | none |
+| Watchlists | `/api/watchlists` | none | `list_watchlists`, `get_watchlist`, `create_watchlist`, `update_watchlist` |
+| Charts | `/api/charts/{ticker}` | none | `get_chart` |
+| Leaderboard, tear sheet | `/api/strategies/leaderboard`, `.../tearsheet` | none | `get_leaderboard`, `get_tear_sheet` |
+| Your risk limits | `/api/risk/limits` | none | `get_my_risk_limits` |
+| Download CSV | `/api/exports/*` | none | none |
 
 "Buys only" was called `flatten` before 1.0. It never closed a position,
 so the old name was misleading. The API, the CLI (`--flatten`) and MCP
@@ -785,7 +849,7 @@ automate it.
   Ctrl+K / Cmd+K opens the command palette (ARIA combobox: the input keeps
   focus, arrows move `aria-activedescendant`, Enter runs, Escape closes and
   returns focus); `?` lists every shortcut; `g` then a key jumps between
-  pages (`g d` dashboard, `g e` insights, `g s` strategies, `g w` shadow, `g o` orders, `g u`
+  pages (`g d` dashboard, `g e` insights, `g z` charts, `g x` watchlists, `g b` leaderboard, `g s` strategies, `g w` shadow, `g o` orders, `g u`
   studio, `g l` lab, `g a` data, `g g` go-live, `g h` health, `g ,`
   settings); `n b` new backtest, `n t` dry-run tick. Single-key shortcuts can
   be switched off in the cheat sheet (WCAG 2.1.4); Ctrl+K always works.

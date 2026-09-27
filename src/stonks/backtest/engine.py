@@ -322,7 +322,13 @@ class Backtester:
 
         bars_since_rebalance: int | None = None
         for as_of, bars in bars_by_ts.items():
-            # 0. corporate actions going ex on this bar, before its fills
+            # 0. financing for the nights since the last bar, before this bar's
+            #    events and fills change the book: whoever held overnight pays
+            #    (BE-29), at the last marks
+            if callable(accrue):
+                accrue(as_of)
+
+            # 0b. corporate actions going ex on this bar, before its fills
             pending = self._apply_corporate_actions(schedule, bars, as_of, pending, applied)
 
             # 1. fill orders queued on a previous bar at this bar's open
@@ -334,8 +340,6 @@ class Backtester:
                 last_close[ticker] = bar.close
             marks = dict(last_close)
             self._broker.set_prices(marks, as_of=as_of)
-            if callable(accrue):
-                accrue(as_of)
 
             # 3. rebalance cadence — counted in bars, not calendar days, so
             # this is identical for daily and intraday intervals.
@@ -528,15 +532,20 @@ class Backtester:
         its root's decision time)."""
         if not self._config.allow_short:
             return pending
-        positions = self._broker.fetch_portfolio().positions
+        # one running position map for every pending order (BE-13)
+        positions = dict(self._broker.fetch_portfolio().positions)
         out: list[Order] = []
         for order in pending:
-            if order.position_effect is not None:
-                out.append(order)
-                continue
-            for leg in classify(order, positions.get(order.ticker, 0.0)):
+            legs = (
+                [order]
+                if order.position_effect is not None
+                else classify(order, positions.get(order.ticker, 0.0))
+            )
+            for leg in legs:
                 if leg.client_id != order.client_id and order.client_id in self._decided_at:
                     self._decided_at[leg.client_id] = self._decided_at[order.client_id]
+                signed = leg.quantity if leg.side == "buy" else -leg.quantity
+                positions[leg.ticker] = positions.get(leg.ticker, 0.0) + signed
                 out.append(leg)
         return out
 
@@ -715,6 +724,10 @@ class Backtester:
                     picks_by_strategy[index].append((r, ticker))
 
         portfolio = self._broker.fetch_portfolio()
+        # BE-13: each strategy's orders are classified against the positions
+        # the earlier strategies' orders leave, so two long-only strategies
+        # selling one holding never both get a close leg.
+        running = dict(portfolio.positions)
         orders: list[Order] = []
         for index, strategy in enumerate(self._strategies):
             picks = picks_by_strategy[index]
@@ -723,9 +736,12 @@ class Backtester:
             if self._config.allow_short and not getattr(strategy, "supports_short", False):
                 decided = [
                     o
-                    for o in classify_all(decided, portfolio.positions)
+                    for o in classify_all(decided, running)
                     if not (o.side == "sell" and o.position_effect == "open")
                 ]
+            for order in decided:
+                signed = order.quantity if order.side == "buy" else -order.quantity
+                running[order.ticker] = running.get(order.ticker, 0.0) + signed
             orders.extend(
                 replace(order, client_id=f"{index}:{order.client_id}") for order in decided
             )

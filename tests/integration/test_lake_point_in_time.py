@@ -72,30 +72,31 @@ def test_statement_history_adds_available_date(lake):
     df = lake.get_statement_history("income_statement", "A.US", missing_filing_lag_days=90)
     assert list(df["period_end"]) == sorted(df["period_end"])
     avail = dict(zip(df["period_end"], df["available_date"], strict=True))
-    assert avail[date(2024, 3, 31)] == date(2024, 5, 2)
+    # the day after the filing date (BE-22)
+    assert avail[date(2024, 3, 31)] == date(2024, 5, 3)
     assert avail[date(2024, 6, 30)] == date(2024, 9, 28)  # + 90 days
     assert avail[date(2024, 9, 30)] == date(2024, 9, 30)  # clamped
-    assert avail[date(2023, 12, 31)] == date(2024, 2, 20)
+    assert avail[date(2023, 12, 31)] == date(2024, 2, 21)
     assert set(df["ticker"]) == {"A.US"}
     assert "revenue" in df.columns
 
 
 def test_statements_as_of_hides_unfiled_rows(lake):
-    df = lake.get_statements_as_of("income_statement", "A.US", date(2024, 5, 1))
-    assert list(df["period_end"]) == [date(2023, 12, 31)]
     df = lake.get_statements_as_of("income_statement", "A.US", date(2024, 5, 2))
+    assert list(df["period_end"]) == [date(2023, 12, 31)]
+    df = lake.get_statements_as_of("income_statement", "A.US", date(2024, 5, 3))
     # newest first
     assert list(df["period_end"]) == [date(2024, 3, 31), date(2023, 12, 31)]
 
 
-def test_a_statement_is_known_from_its_filing_day(lake):
-    # A daily as_of is read after the close, and orders fill at the next
-    # open, so a report filed after the close of 2 May can be traded on
-    # 3 May: using it on 2 May is not look-ahead (review DS-06).
-    before = lake.get_statements_as_of("income_statement", "A.US", date(2024, 5, 1))
-    assert date(2024, 3, 31) not in set(before["period_end"])
+def test_a_statement_is_known_from_the_day_after_its_filing(lake):
+    # A filing dated 2 May may be accepted up to the evening, after the
+    # daily tick has run, so the run on 2 May must not use it. The run on
+    # 3 May may (BE-22, reversing the DS-06 reading).
     on = lake.get_statements_as_of("income_statement", "A.US", date(2024, 5, 2))
-    assert date(2024, 3, 31) in set(on["period_end"])
+    assert date(2024, 3, 31) not in set(on["period_end"])
+    after = lake.get_statements_as_of("income_statement", "A.US", date(2024, 5, 3))
+    assert date(2024, 3, 31) in set(after["period_end"])
 
 
 def test_a_restated_statement_moves_to_its_new_filing_date(lake):
@@ -116,7 +117,7 @@ def test_a_restated_statement_moves_to_its_new_filing_date(lake):
     # the restatement: never visible early
     between = lake.get_statements_as_of("income_statement", "A.US", date(2024, 7, 1))
     assert date(2024, 3, 31) not in set(between["period_end"])
-    after = lake.get_statements_as_of("income_statement", "A.US", date(2024, 8, 1))
+    after = lake.get_statements_as_of("income_statement", "A.US", date(2024, 8, 2))
     row = after[after["period_end"] == date(2024, 3, 31)].iloc[0]
     assert row["revenue"] == 90.0 and row["net_income"] == 10.0
 
@@ -160,8 +161,10 @@ def test_statements_as_of_filters_frequency(lake):
 def test_statements_as_of_accepts_datetimes(lake):
     from datetime import datetime
 
-    df = lake.get_statements_as_of("income_statement", "A.US", datetime(2024, 5, 2, 16, 0))
+    df = lake.get_statements_as_of("income_statement", "A.US", datetime(2024, 5, 3, 16, 0))
     assert date(2024, 3, 31) in set(df["period_end"])
+    df = lake.get_statements_as_of("income_statement", "A.US", datetime(2024, 5, 2, 16, 0))
+    assert date(2024, 3, 31) not in set(df["period_end"])
 
 
 def test_statement_helpers_reject_unknown_tables(lake):

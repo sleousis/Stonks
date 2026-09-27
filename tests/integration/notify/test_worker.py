@@ -5,6 +5,7 @@ and recovers rows a crashed worker left claimed."""
 from __future__ import annotations
 
 import threading
+import time
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -257,4 +258,7 @@ def test_run_forever_stops_on_the_event(state, clock, push):
     worker = DeliveryWorker(state, {"webpush": push}, SETTINGS, clock=clock)
     stop = threading.Event()
     stop.set()
-    worker.run_forever(stop, interval_seconds=0.01)  # returns at once
+    started = time.monotonic()
+    worker.run_forever(stop, interval_seconds=10.0)  # returns at once
+    assert time.monotonic() - started < 5.0
+    assert push.sent == []

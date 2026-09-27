@@ -86,6 +86,7 @@
           [intervals]="intervalList()"
           [costModels]="costModelList()"
           [preset]="preset()"
+          [tickers]="tickerList()"
           [busy]="starting()"
           (submitted)="startBacktest($event)"
         />
@@ -106,6 +107,7 @@
           [intervals]="intervalList()"
           [universes]="universeList()"
           [preset]="preset()"
+          [tickers]="tickerList()"
           [busy]="starting()"
           (submitted)="startLabRun($event)"
         />

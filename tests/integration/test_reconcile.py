@@ -11,17 +11,8 @@ from stonks.core.types import Fill, Order, Portfolio
 from stonks.execution.brokers import AlpacaBroker
 from stonks.execution.brokers.base import BrokerOrderState, OrderStateSource
 from stonks.execution.reconcile import ReconcileSummary, reconcile_orders
-from stonks.store.state import SqliteState
 
 T0 = datetime(2026, 1, 5, 15, 30, tzinfo=UTC)
-
-
-@pytest.fixture
-def state(tmp_path):
-    s = SqliteState(tmp_path / "state.sqlite")
-    s.migrate()
-    yield s
-    s.close()
 
 
 def insert_order(state, client_id, *, status="pending", ticker="AAPL.US", side="buy", qty=10.0):

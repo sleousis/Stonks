@@ -11,7 +11,10 @@ Stonks has three kinds of tests.
 
 ```bash
 uv run pytest -n auto          # the default suite, no network, no browser
+uv run pytest -n auto -m "not slow"   # a quicker loop: skips the tests marked slow
 ```
+
+Tests that take several seconds carry `@pytest.mark.slow`. They still run by default and in CI.
 
 ## End to end in one command
 

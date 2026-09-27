@@ -14,8 +14,8 @@ stay halved until the drawdown is back under 5%. The tick is stateless,
 so the level is rebuilt by replaying the whole curve: the same curve
 always gives the same size.
 
-Only buys that open or grow a long position are scaled; sells and covers
-pass. Off unless a schedule is set.
+Only opening orders are scaled: buys that open or grow a long and short
+sales (BE-05). Sells of longs and covers pass. Off unless a schedule is set.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 from stonks.core.types import Order
 from stonks.production.rules import RiskAdjustment, RiskContext, RiskRule, register_rule
-from stonks.production.rules._common import scale_buys, settings_of
+from stonks.production.rules._common import book_value, scale_opens, settings_of
 
 Schedule = tuple[tuple[float, float], ...]
 
@@ -100,7 +100,10 @@ class DrawdownScaling(RiskRule):
         if settings is None or settings.schedule is None:
             return list(orders), []
         curve = [v for d, v in ctx.equity_curve if ctx.as_of is None or d <= ctx.as_of]
-        curve.append(ctx.portfolio.total_value(dict(ctx.prices)))
+        value = book_value(ctx)
+        if value is None:  # a holding has no mark: no fake drawdown (BE-45)
+            return list(orders), []
+        curve.append(value)
         scale, dd = drawdown_scale(curve, settings.schedule)
-        reason = f"drawdown {dd:.2%} from peak {max(curve):.2f}; buys sized at {scale}"
-        return scale_buys(orders, ctx, scale, self.name, reason)
+        reason = f"drawdown {dd:.2%} from peak {max(curve):.2f}; opening orders sized at {scale}"
+        return scale_opens(orders, ctx, scale, self.name, reason)

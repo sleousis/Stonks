@@ -476,3 +476,104 @@ def test_the_second_risk_pass_never_places_a_forced_sell_twice(env):
     assert state.sql("SELECT 1 FROM orders WHERE side = 'buy' AND ticker = 'FLAT.US'")
     rows = state.sql("SELECT client_id FROM orders WHERE side = 'sell'")
     assert [r["client_id"] for r in rows] == ["2026-03-20:risk.max_holding:UP.US:sell"]
+
+
+def test_be10_after_the_upgrade_the_live_default_book_still_orders(env):
+    """Migration 022 subscribed ``pf_default`` in paper (010 made it a
+    simulated portfolio). On an external-broker install the tick turns
+    those system rows to auto, so the live account keeps trading."""
+    from stonks.accounts import DEFAULT_PORTFOLIO_ID, Mode
+    from stonks.accounts.default_book import ensure_default_subscription
+    from stonks.production.tick import load_tick_plan
+
+    lake, state, registry, sid, client, factory, _ = env
+    sub_id = ensure_default_subscription(state, sid, Mode.PAPER)  # what 022 wrote
+    plan = load_tick_plan(state, SETTINGS)
+    [book] = [b for b in plan.books if b.portfolio_id == DEFAULT_PORTFOLIO_ID]
+    assert book.mode == "auto"
+    [row] = state.sql("SELECT mode FROM subscriptions WHERE id = ?", [sub_id])
+    assert row["mode"] == "auto"
+    [audit] = state.sql(
+        "SELECT * FROM audit_log WHERE action = 'subscription.mode' AND target_id = ?", [sub_id]
+    )
+    assert audit["actor"] == "service:system"
+
+    run_tick(state, lake, registry, SETTINGS, as_of=AS_OF, broker_factory=factory, plan=plan)
+    assert len(client.submitted) == 1
+
+
+def test_be10_an_owner_chosen_paper_row_stays_paper_and_a_dry_run_writes_nothing(env):
+    from stonks.accounts import Mode, Scope, SubscriptionRepository
+    from stonks.accounts.default_book import ensure_default_subscription
+    from stonks.accounts.users import UserRepository
+    from stonks.production.tick import load_tick_plan
+
+    _, state, _, sid, _, _, _ = env
+    sub_id = ensure_default_subscription(state, sid, Mode.PAPER)
+    load_tick_plan(state, SETTINGS, dry_run=True)
+    assert state.sql("SELECT mode FROM subscriptions WHERE id = ?", [sub_id])[0][0] == "paper"
+    assert not state.sql("SELECT 1 FROM portfolios WHERE paper_of IS NOT NULL")
+
+    owner = Scope.for_user(UserRepository(state).get("usr_owner"))
+    subs = SubscriptionRepository(state)
+    subs.set_mode(owner, sub_id, Mode.NOTIFY)
+    subs.set_mode(owner, sub_id, Mode.PAPER)
+    load_tick_plan(state, SETTINGS)
+    assert state.sql("SELECT mode FROM subscriptions WHERE id = ?", [sub_id])[0][0] == "paper"
+
+
+def test_be10_a_live_default_with_holdings_and_no_auto_strategy_alerts(env):
+    from stonks.notify import Notifier
+    from stonks.production.tick import load_tick_plan
+
+    lake, state, registry, _, _, factory, _ = env
+    state.execute(
+        "INSERT INTO tick_runs (id, started_at, status) VALUES ('t0', '2026-03-19', 'ok')"
+    )
+    state.execute(
+        "INSERT INTO portfolio_snapshots (tick_id, as_of, taken_at, cash, positions_json,"
+        " total_value, portfolio_id) VALUES ('t0', '2026-03-19', '2026-03-19T21:00:00+00:00',"
+        " 100.0, '{\"UP.US\": 5.0}', 900.0, 'pf_default')"
+    )
+    plan = load_tick_plan(state, SETTINGS)
+    [notice] = plan.notices
+    assert "pf_default" in notice
+
+    class Capture(Notifier):
+        def __init__(self) -> None:
+            self.sent: list = []
+
+        def _send(self, notification) -> None:
+            self.sent.append(notification)
+
+    capture = Capture()
+    run_tick(state, lake, registry, SETTINGS, as_of=AS_OF, broker_factory=factory, plan=plan,
+             notifier=capture)  # fmt: skip
+    assert any(n.title == "default book unmanaged" for n in capture.sent)
+
+
+def test_be24_a_sync_failure_after_submit_leaves_the_row_pending_for_the_next_tick(
+    env, monkeypatch
+):
+    _, state, _, sid, client, _, _ = env
+
+    def broken_sync(*args, **kwargs):
+        raise BrokerError("order lookup failed")
+
+    monkeypatch.setattr(tick_mod, "reconcile_order", broken_sync)
+    result = _tick(env)
+    assert result.status == "ok" and result.orders_placed == 1
+    [row] = _orders(state)
+    assert (row["client_id"], row["status"]) == (_cid(sid), "pending")
+
+    # the broker filled it; the next tick's reconcile books it, never resubmits
+    monkeypatch.undo()
+    client.orders[_cid(sid)].update(
+        status="filled", filled_qty=client.orders[_cid(sid)]["qty"], filled_avg_price="190"
+    )
+    _tick(env, as_of=date(2026, 3, 23))
+    assert [o.client_order_id for o in client.submitted].count(_cid(sid)) == 1
+    row = next(r for r in _orders(state) if r["client_id"] == _cid(sid))
+    assert row["status"] == "filled"
+    fills = state.sql("SELECT 1 FROM fills WHERE order_client_id = ?", [_cid(sid)])
+    assert len(fills) == 1

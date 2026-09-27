@@ -1,0 +1,144 @@
+<app-page-header
+  title="Watchlists"
+  description="Your own ticker lists. Open one in the lab, chart its tickers, or show only it on Today."
+/>
+
+<div class="layout">
+  <section class="panel create" aria-labelledby="new-title">
+    <div class="panel-head">
+      <h2 id="new-title">New watchlist</h2>
+    </div>
+    <form class="panel-body form-grid" (submit)="create($event)">
+      <div class="field">
+        <label for="wl-name">Name</label>
+        <input
+          id="wl-name"
+          class="input"
+          maxlength="80"
+          placeholder="e.g. Tech leaders"
+          [disabled]="!canEdit()"
+          [value]="newName()"
+          (input)="newName.set($any($event.target).value)"
+        />
+      </div>
+      <div class="field">
+        <label for="wl-tickers">Tickers</label>
+        <textarea
+          id="wl-tickers"
+          class="input tickers"
+          rows="3"
+          autocapitalize="characters"
+          spellcheck="false"
+          placeholder="AAPL.US, MSFT.US"
+          aria-describedby="wl-tickers-hint"
+          [disabled]="!canEdit()"
+          [value]="newTickers()"
+          (input)="newTickers.set($any($event.target).value)"
+        ></textarea>
+        <span class="hint" id="wl-tickers-hint">Separate with commas, spaces or new lines.</span>
+      </div>
+      @if (newError(); as e) {
+        <p class="error" role="alert">{{ e }}</p>
+      }
+      <div class="actions">
+        <button type="submit" class="btn btn-primary" [disabled]="creating() || !canEdit()">
+          Save watchlist
+        </button>
+        <app-permission-note permission="portfolio.manage" />
+      </div>
+    </form>
+  </section>
+
+  <div class="lists">
+    @if (lists.error(); as err) {
+      <app-error-state
+        title="Could not load your watchlists"
+        [error]="err"
+        (retry)="lists.reload()"
+      />
+    } @else if (!lists.hasValue()) {
+      <app-loading-state label="Loading watchlists" [rows]="3" />
+    } @else if (lists.value().length === 0) {
+      <app-empty-state
+        title="No watchlists yet"
+        message="Save the tickers you follow. Today and the charts can then show only them."
+      />
+    } @else {
+      @for (w of lists.value(); track w.id) {
+        <section class="panel list" [attr.aria-labelledby]="'wl-' + w.id">
+          @if (editing()?.id === w.id) {
+            <form class="panel-body form-grid" (submit)="save($event)">
+              <div class="field">
+                <label [for]="'wl-edit-name-' + w.id">Name</label>
+                <input
+                  class="input"
+                  maxlength="80"
+                  [id]="'wl-edit-name-' + w.id"
+                  [value]="editing()!.name"
+                  (input)="patchEdit({ name: $any($event.target).value })"
+                />
+              </div>
+              <div class="field">
+                <label [for]="'wl-edit-tickers-' + w.id">Tickers</label>
+                <textarea
+                  class="input tickers"
+                  rows="3"
+                  autocapitalize="characters"
+                  spellcheck="false"
+                  [id]="'wl-edit-tickers-' + w.id"
+                  [value]="editing()!.tickers"
+                  (input)="patchEdit({ tickers: $any($event.target).value })"
+                ></textarea>
+              </div>
+              @if (editError(); as e) {
+                <p class="error" role="alert">{{ e }}</p>
+              }
+              <div class="actions">
+                <button type="submit" class="btn btn-primary" [disabled]="saving()">
+                  Save changes
+                </button>
+                <button type="button" class="btn btn-ghost" (click)="editing.set(null)">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          } @else {
+            <div class="panel-head">
+              <h2 [id]="'wl-' + w.id">{{ w.name }}</h2>
+              <span class="muted num">{{ w.tickers.length }} tickers</span>
+            </div>
+            <div class="panel-body">
+              @if (w.tickers.length) {
+                <ul class="chips" [attr.aria-label]="'Tickers in ' + w.name">
+                  @for (t of w.tickers; track t) {
+                    <li>
+                      <a
+                        class="chip num"
+                        [routerLink]="['/charts', t]"
+                        [attr.aria-label]="'Chart of ' + t"
+                        >{{ t }}</a
+                      >
+                    </li>
+                  }
+                </ul>
+              } @else {
+                <p class="muted">No tickers yet. Edit the list to add some.</p>
+              }
+              <div class="actions">
+                @if (w.tickers.length) {
+                  <a class="btn" routerLink="/lab" [queryParams]="labLink(w)">Open in the lab</a>
+                }
+                @if (canEdit()) {
+                  <button type="button" class="btn btn-ghost" (click)="edit(w)">Edit</button>
+                  <button type="button" class="btn btn-ghost danger" (click)="remove(w)">
+                    Delete
+                  </button>
+                }
+              </div>
+            </div>
+          }
+        </section>
+      }
+    }
+  </div>
+</div>

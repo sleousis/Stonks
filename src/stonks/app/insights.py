@@ -22,7 +22,12 @@ import pandas as pd
 from pydantic import BaseModel, Field
 
 from stonks.app.context import AppContext
-from stonks.app.portfolio import DEFAULT_CURRENCY, PortfolioService
+from stonks.app.portfolio import (
+    DEFAULT_CURRENCY,
+    TOTALS_PORTFOLIOS_SQL,
+    PortfolioService,
+    totals_suppressed,
+)
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.insights import (
@@ -111,6 +116,9 @@ class InsightsTotalsView(BaseModel):
     total_value: float
     asset_class: list[AllocationSlice]
     exposure: Exposure
+    #: True when too few other people own books for the sums to hide
+    #: anyone's numbers: the money figures are then empty (BE-43).
+    suppressed: bool = False
 
 
 @dataclass(frozen=True)
@@ -201,25 +209,24 @@ class InsightsService:
         """Asset-class allocation and exposure summed over every active book."""
         require(principal, Permission.PORTFOLIO_TOTALS)
         with self._ctx.state() as state:
-            rows = state.sql(
-                "SELECT p.id, p.owner_id FROM portfolios p WHERE p.status = 'active'"
-                " AND EXISTS (SELECT 1 FROM portfolio_snapshots s WHERE s.portfolio_id = p.id)"
-                " ORDER BY p.id"
-            )
+            rows = state.sql(TOTALS_PORTFOLIOS_SQL)
+        owners = {str(r["owner_id"]) for r in rows}
+        hidden = totals_suppressed(owners, principal.user_id)
         cash = 0.0
         holdings: list[Holding] = []
-        for r in rows:
+        for r in [] if hidden else rows:
             book = self._load(r["id"]).book
             cash += book.cash
             holdings.extend(book.holdings)
         combined = Book(cash=cash, holdings=tuple(holdings))
         return InsightsTotalsView(
             portfolios=len(rows),
-            owners=len({r["owner_id"] for r in rows}),
+            owners=len(owners),
             cash=cash,
             total_value=combined.total_value,
-            asset_class=allocation(combined, "asset_class"),
+            asset_class=[] if hidden else allocation(combined, "asset_class"),
             exposure=exposure(combined, betas={}, benchmark=None),
+            suppressed=hidden,
         )
 
     # ---- loading ---------------------------------------------------------------

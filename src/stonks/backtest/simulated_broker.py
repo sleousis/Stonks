@@ -567,11 +567,24 @@ class SimulatedBroker:
         and fit the excess equity left after the closing part."""
         margin = self._margin
         assert margin is not None
+        requested = quantity
         sign = 1.0 if order.side == "buy" else -1.0
         closable = max(-held, 0.0) if sign > 0 else max(held, 0.0)
+        if order.position_effect == "open" and closable > 0:
+            # classified against a position that has since changed side:
+            # filling it would first close that position (BE-13)
+            _log.debug("order_rejected", client_id=order.client_id, reason="open_on_wrong_side")
+            return None
         close_qty = min(quantity, closable)
-        if quantity - close_qty <= _DUST * quantity:
-            close_qty = quantity
+        if close_qty > 0 and quantity - close_qty <= _DUST * quantity:
+            # float dust past the holding: fill exactly the holding (BE-31)
+            quantity = close_qty
+        if order.position_effect == "close":
+            # a close never opens the other side (BE-13)
+            if close_qty <= 0:
+                _log.debug("order_rejected", client_id=order.client_id, reason="nothing_to_close")
+                return None
+            quantity = close_qty
         open_qty = quantity - close_qty
         if open_qty > 0 and sign < 0:
             open_qty = self._borrowable(order, open_qty)
@@ -605,7 +618,7 @@ class SimulatedBroker:
         if total <= 0:
             _log.debug("order_rejected", client_id=order.client_id, reason="insufficient_margin")
             return None
-        if total != quantity:
+        if total != requested:
             cost = self._cost(order, price, total)
         return total, close_qty, cost
 

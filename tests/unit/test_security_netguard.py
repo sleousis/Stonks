@@ -36,7 +36,9 @@ from stonks.security.netguard import (
 )
 def test_ip_literal_reads_every_numeric_form(host, expected):
     got = ip_literal(host)
-    assert (str(got) if got is not None else None) == expected
+    # Compare addresses, not text: Python 3.12 and 3.13 format an
+    # IPv4-mapped IPv6 address differently.
+    assert got == (ipaddress.ip_address(expected) if expected is not None else None)
 
 
 @pytest.mark.parametrize(
@@ -122,3 +124,29 @@ def test_pinned_session_verifies_certificates_when_verify_is_not_given():
     pool = session.get_adapter(request.url).get_connection_with_tls_context(request, verify=None)
     assert pool.cert_reqs == "CERT_REQUIRED"
     assert pool.assert_hostname == "hooks.example"
+
+
+# ---- NAT64 and IPv4-compatible addresses (BE-39) ---------------------------------------
+
+
+@pytest.mark.parametrize(
+    "host",
+    ["64:ff9b::a9fe:a9fe", "64:ff9b::a00:1", "::7f00:1", "64:ff9b:1::a9fe:a9fe", "::a9fe:a9fe"],
+)
+def test_nat64_and_ipv4_compatible_forms_of_private_addresses_are_refused(host):
+    from stonks.security.netguard import UnsafeAddress, check_public_host, resolve_public
+
+    with pytest.raises(UnsafeAddress):
+        check_public_host(host)
+
+    def resolver(name, port, *args):
+        return [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", (host, port, 0, 0))]
+
+    with pytest.raises(UnsafeAddress):
+        resolve_public("evil.example.com", 443, resolver=resolver)
+
+
+def test_a_nat64_form_of_a_public_address_is_still_public():
+    from stonks.security.netguard import check_public_host
+
+    check_public_host("64:ff9b::101:101")  # 1.1.1.1 through the NAT64 prefix

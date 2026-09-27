@@ -22,6 +22,7 @@ import {
   type ChartValueFormat,
   type CrosshairReadout,
 } from './chart-engine';
+import { readChartTheme } from './chart-theme';
 
 /**
  * Time-series chart (equity, drawdown, prices) behind the ChartEngine seam.
@@ -257,26 +258,7 @@ export class TimeSeriesChart {
   }
 
   private readTheme(): ChartTheme {
-    const css = this.doc.defaultView?.getComputedStyle(this.doc.documentElement);
-    const v = (name: string, fallback: string) => css?.getPropertyValue(name).trim() || fallback;
-    return {
-      background: v('--color-surface', '#ffffff'),
-      text: v('--color-ink-3', '#5f6b78'),
-      grid: v('--chart-grid', '#e3e8ed'),
-      border: v('--color-border', '#d3dae1'),
-      font: v('--font-sans', 'system-ui'),
-      colors: {
-        brass: v('--color-brass', '#a26d12'),
-        primary: v('--color-primary', '#22477a'),
-        gain: v('--color-gain', '#17784a'),
-        loss: v('--color-loss', '#b8342a'),
-        muted: v('--color-ink-3', '#5f6b78'),
-        info: v('--color-info', '#2a5db0'),
-        warn: v('--color-warn', '#8f5d00'),
-        violet: v('--chart-violet', '#6a3fa0'),
-        ink: v('--color-ink-2', '#45515e'),
-      },
-    };
+    return readChartTheme(this.doc);
   }
 }
 

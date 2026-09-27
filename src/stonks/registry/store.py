@@ -205,6 +205,13 @@ class StrategyRegistry:
             )
             if cur.rowcount != 1:  # pragma: no cover - guarded by the transaction
                 raise GovernanceError(f"strategy {strategy_id!r} changed status concurrently")
+            if current == "active":
+                # BE-01: auto trades only an active strategy. Its running auto
+                # subscriptions pause in this same transaction. Imported here:
+                # the registry sits below production.
+                from stonks.production.auto_pause import pause_auto_for_strategy
+
+                pause_auto_for_strategy(self._state, strategy_id, status)
             return change
 
     def record_intervention(

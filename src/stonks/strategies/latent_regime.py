@@ -10,9 +10,9 @@ default) and, on every bar, runs the Hamilton filter over the last
 the most volatile state is above ``threshold`` the market is risk off,
 and ``mode`` decides what happens:
 
-- ``block_new_buys``: the inner strategy runs as usual but its buys are
-  dropped. Sells pass.
-- ``exit_all``: no picks, and every long is sold.
+- ``block_new_buys``: the inner strategy runs as usual but its opening
+  orders (buys and short sales) are dropped. Closes pass (BE-14).
+- ``exit_all``: no picks, every long is sold and every short covered.
 
 Point in time (P12): ``fit(dataset)`` estimates the model on the train
 window only (at most its last ``fit_bars`` bars). A filter that was never
@@ -40,7 +40,7 @@ from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
 from stonks.features.regimes import MIN_FIT_RETURNS, MarkovSwitchingRegime
 from stonks.logging import get_logger
-from stonks.strategies._common import LakeBarCaches, as_datetime, iso, sell_all_longs
+from stonks.strategies._common import LakeBarCaches, as_datetime, close_all, closes_only, iso
 from stonks.strategies._wrapping import InnerStrategyWrapper, inner_param_specs
 
 _MODEL_FILE = "regime_model.json"
@@ -233,9 +233,9 @@ class LatentRegimeFilter(InnerStrategyWrapper):
         if lake is None or not self.is_risk_off(as_of, lake):
             return self._inner.decide(my_picks, portfolio, prices, as_of)
         if self.params["mode"] == "exit_all":
-            return sell_all_longs(self.id, portfolio, as_of)
+            return close_all(self.id, portfolio, as_of)
         orders = self._inner.decide(my_picks, portfolio, prices, as_of)
-        return [o for o in orders if o.side != "buy"]
+        return closes_only(orders, portfolio)
 
     # ---- persistence ----------------------------------------------------------------
 

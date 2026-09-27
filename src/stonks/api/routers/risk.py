@@ -5,10 +5,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from stonks.api.deps import PageDep, PortfolioIdDep, ServicesDep
+from stonks.api.deps import PageDep, PortfolioIdDep, PrincipalDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.app.pagination import Page
+from stonks.app.risk_limits import RiskLimitsService, RiskLimitsUpdate, RiskLimitsView
 from stonks.app.risk_monitor import RiskMonitorService, RiskSnapshotView, RiskSummaryView
+from stonks.auth import Permission
 from stonks.config import RiskPolicy
 
 router = APIRouter(prefix="/api/risk", tags=["risk"], responses=PROBLEM_RESPONSES)
@@ -26,6 +28,28 @@ def get_risk_policy(services: ServicesDep) -> RiskPolicy:
     """The ``[production.risk]`` limits applied between a strategy's orders
     and the broker."""
     return services.operations.risk_policy()
+
+
+@router.get("/limits", response_model=RiskLimitsView, operation_id="getMyRiskLimits")
+def get_my_risk_limits(services: ServicesDep, principal: PrincipalDep) -> RiskLimitsView:
+    """Your own risk limits next to the system policy, and what your
+    portfolios follow: the system policy tightened by yours."""
+    return RiskLimitsService(services.context).get(principal)
+
+
+@router.put(
+    "/limits",
+    response_model=RiskLimitsView,
+    operation_id="setMyRiskLimits",
+    dependencies=needs(Permission.PORTFOLIO_MANAGE),
+)
+def set_my_risk_limits(
+    body: RiskLimitsUpdate, services: ServicesDep, principal: PrincipalDep
+) -> RiskLimitsView:
+    """Replace your own risk limits (a partial risk policy). They can only
+    make the system limits stricter; a looser value is listed in
+    ``ignored``. Audited."""
+    return RiskLimitsService(services.context).set(principal, body)
 
 
 @router.get("/live", response_model=RiskSummaryView, operation_id="getLiveRisk")

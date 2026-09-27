@@ -45,6 +45,7 @@ def build_ingest_pipeline(
         quality=BarQualityChecker(settings.ingest.quality, calendar=TickerSessionCalendar()),
         fallback=_fallback(settings, source, source_factory),
         notifier=notifier if notifier is not None else notifier_from_settings(settings),
+        adjustment_tolerance=settings.ensure.adjustment_tolerance,
     )
 
 

@@ -1,0 +1,16 @@
+# Optional local hooks (TT-20): `uvx pre-commit install` once, then ruff runs
+# on every commit. They use the project's own ruff through uv, so the
+# version matches CI.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --force-exclude
+        language: system
+        types_or: [python, pyi]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format --force-exclude --check
+        language: system
+        types_or: [python, pyi]

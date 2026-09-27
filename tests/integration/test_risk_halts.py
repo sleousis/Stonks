@@ -18,17 +18,8 @@ from stonks.production.halts import (
     trip_halt,
 )
 from stonks.production.health import HealthCheck, HealthReport
-from stonks.store.state import SqliteState
 
 DAY = date(2025, 6, 10)
-
-
-@pytest.fixture
-def state(tmp_path):
-    s = SqliteState(tmp_path / "state.sqlite")
-    s.migrate()
-    yield s
-    s.close()
 
 
 def test_a_trip_is_idempotent_while_open(state):

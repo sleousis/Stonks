@@ -8,7 +8,6 @@ from datetime import date
 import pytest
 
 from stonks.production.pnl import daily_pnl, load_pnl
-from stonks.store.state import SqliteState
 
 
 def test_daily_pnl_math():
@@ -57,14 +56,6 @@ def test_daily_pnl_zero_value_does_not_divide_by_zero():
     rows = daily_pnl([(date(2026, 1, 1), 0.0), (date(2026, 1, 2), 10.0)])
     assert rows[1].daily_return is None
     assert rows[1].cumulative_return is None
-
-
-@pytest.fixture
-def state(tmp_path):
-    s = SqliteState(tmp_path / "state.sqlite")
-    s.migrate()
-    yield s
-    s.close()
 
 
 def _snap(state, tick_id, taken_at, value):

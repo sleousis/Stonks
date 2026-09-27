@@ -21,11 +21,17 @@ def seed_paper_days(
     breached: bool = False,
     portfolio_id: str = "pf_default",
 ) -> None:
-    """``n`` completed paper days of ``subscription_id``, one per calendar
-    day from ``start``, by ticks that started now."""
+    """``n`` completed paper days of ``subscription_id``, one per weekday
+    from ``start`` (weekends are not paper days, BE-27), by ticks that
+    started now."""
     now = iso_now()
-    for i in range(n):
-        day = start + timedelta(days=i)
+    days: list[date] = []
+    day = start
+    while len(days) < n:
+        if day.weekday() < 5:
+            days.append(day)
+        day += timedelta(days=1)
+    for day in days:
         record_run(
             state,
             PortfolioRun(

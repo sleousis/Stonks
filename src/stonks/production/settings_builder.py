@@ -34,13 +34,16 @@ class TickRuntime:
     #: ``[production].books_from_subscriptions``.
     books_from_subscriptions: bool = True
 
-    def plan_for(self, state: SqliteState) -> TickPlan | None:
+    def plan_for(self, state: SqliteState, *, dry_run: bool = False) -> TickPlan | None:
         """The books to trade: one per portfolio from its subscriptions when
         ``books_from_subscriptions`` is on, else ``None`` (the tick's
-        default single book over every active strategy)."""
+        default single book over every active strategy). A dry run's plan
+        writes nothing."""
         if not self.books_from_subscriptions:
             return None
-        return load_tick_plan(state, self.settings, traders=connection_traders(state))
+        return load_tick_plan(
+            state, self.settings, traders=connection_traders(state), dry_run=dry_run
+        )
 
 
 def connection_traders(state: SqliteState) -> TraderFactory:

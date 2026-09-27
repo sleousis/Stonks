@@ -1051,3 +1051,111 @@ routes = []
 console = { limited = "n/a: these commands start the servers" }
 cli = ["stonks serve", "stonks mcp"]
 mcp = { limited = "n/a: these commands start the servers" }
+
+# ---- trader workspace (roadmap 13) ------------------------------------------------------------
+
+[[capability]]
+id = "onboarding.guide"
+domain = "accounts"
+title = "The first-run guide: your steps, skip or finish them, close the guide"
+routes = ["GET /api/onboarding", "PUT /api/onboarding", "PUT /api/onboarding/steps/{step}"]
+console = ["getOnboarding", "updateOnboarding", "updateOnboardingStep"]
+cli = { limited = "the first-run guide is a console flow for people" }
+mcp = { limited = "the first-run guide is a console flow for people" }
+
+[[capability]]
+id = "onboarding.system"
+domain = "ops"
+title = "Admin install checklist: data source key, first data load, backup, scheduler"
+routes = ["GET /api/onboarding/system"]
+console = "getSystemChecklist"
+cli = { limited = "stonks health and stonks db info show the same facts" }
+mcp = { limited = "an install checklist for the admin's first run, get_health_report covers operations" }
+
+[[capability]]
+id = "watchlists.read"
+domain = "data"
+title = "Your watchlists"
+routes = ["GET /api/watchlists", "GET /api/watchlists/{watchlist_id}"]
+console = ["listWatchlists", "getWatchlist"]
+cli = { limited = "personal lists live in the console and MCP" }
+mcp = ["list_watchlists", "get_watchlist"]
+
+[[capability]]
+id = "watchlists.write"
+domain = "data"
+title = "Create, rename and edit a watchlist"
+routes = ["POST /api/watchlists", "PATCH /api/watchlists/{watchlist_id}"]
+console = ["createWatchlist", "updateWatchlist"]
+cli = { limited = "personal lists live in the console and MCP" }
+mcp = ["create_watchlist", "update_watchlist"]
+
+[[capability]]
+id = "watchlists.delete"
+domain = "data"
+title = "Delete a watchlist"
+routes = ["DELETE /api/watchlists/{watchlist_id}"]
+console = "deleteWatchlist"
+cli = { limited = "personal lists live in the console and MCP" }
+mcp = { limited = "deleting a list stays with a person" }
+
+[[capability]]
+id = "charts"
+domain = "data"
+title = "A price chart: bars, your fills and strategy signals of one ticker"
+routes = ["GET /api/charts/{ticker}"]
+console = "getChart"
+cli = { limited = "a chart is visual, research reads live in the console and MCP" }
+mcp = "get_chart"
+
+[[capability]]
+id = "strategies.leaderboard"
+domain = "strategies"
+title = "Strategy leaderboard ranked by risk-adjusted paper results"
+routes = ["GET /api/strategies/leaderboard"]
+console = "getLeaderboard"
+cli = { limited = "stonks registry list and stonks pnl show the parts" }
+mcp = "get_leaderboard"
+
+[[capability]]
+id = "strategies.tearsheet"
+domain = "strategies"
+title = "One strategy's tear sheet from stored results"
+routes = ["GET /api/strategies/{strategy_id}/tearsheet"]
+console = "getTearSheet"
+cli = { limited = "stonks report writes the backtest tear sheet file" }
+mcp = "get_tear_sheet"
+
+[[capability]]
+id = "risk.my_limits"
+domain = "risk"
+title = "Your own risk limits next to the system policy"
+routes = ["GET /api/risk/limits"]
+console = "getMyRiskLimits"
+cli = { limited = "personal limits live in the console and MCP" }
+mcp = "get_my_risk_limits"
+
+[[capability]]
+id = "risk.my_limits.set"
+domain = "risk"
+title = "Change your own risk limits (tighten only)"
+routes = ["PUT /api/risk/limits"]
+console = "setMyRiskLimits"
+cli = { limited = "personal limits are set in the console" }
+mcp = { limited = "risk limits stay with a person" }
+
+[[capability]]
+id = "exports.csv"
+domain = "portfolio"
+title = "CSV downloads: orders, fills, journal, snapshots, P&L and lab trials"
+routes = [
+  "GET /api/exports/orders",
+  "GET /api/exports/fills",
+  "GET /api/exports/journal",
+  "GET /api/exports/snapshots",
+  "GET /api/exports/pnl",
+  "GET /api/exports/lab-trials",
+]
+console = ["exportOrders", "exportFills", "exportJournal", "exportSnapshots", "exportPnl", "exportLabTrials"]
+cli = { limited = "files download in the console, the CLI prints the same rows" }
+mcp = { limited = "CSV files are downloads, the list tools return the same rows" }

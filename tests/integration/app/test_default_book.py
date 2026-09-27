@@ -75,6 +75,22 @@ def test_an_existing_subscription_is_kept_as_it_is(settings, seeded):
         assert [(s["id"], s["enabled"]) for s in _subs(state, sid)] == [(first, 0)]
 
 
+def test_be18_a_subscription_the_system_ended_follows_a_new_promotion(settings, seeded):
+    from stonks.accounts.scope import Scope
+    from stonks.accounts.subscriptions import SubscriptionRepository
+
+    sid = seeded["shadow_id"]
+    with SqliteState(settings.state.path) as state:
+        first = ensure_default_subscription(state, sid, Mode.PAPER)
+        # the tick ended it when the strategy retired and went flat
+        SubscriptionRepository(state).disable(Scope.service("system"), first, reason="retired")
+    change_status(AppContext(settings), sid, "active", actor="t", reason=REASON, override=True)
+    with SqliteState(settings.state.path) as state:
+        assert [(s["id"], s["enabled"]) for s in _subs(state, sid)] == [(first, 1)]
+        actions = [(a["actor"], a["action"]) for a in _audit(state, first)]
+    assert actions[-1] == ("service:system", "subscription.enable")
+
+
 def test_a_refused_promotion_subscribes_nothing(settings, seeded):
     from stonks.app.errors import ConflictError
 

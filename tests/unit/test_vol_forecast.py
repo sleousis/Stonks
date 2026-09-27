@@ -92,6 +92,24 @@ def test_har_tracks_a_volatility_jump():
     assert f.forecast() > 0.01
 
 
+def test_ewma_never_reads_later_returns():
+    """BE-59: each bar's EWMA vol is known before that bar, the seed too."""
+    r = np.random.default_rng(5).normal(0, 0.01, 200)
+    later = np.concatenate([r, [0.5]])  # a crash after the sample
+    np.testing.assert_allclose(
+        EwmaVol().fit(later).conditional_vol()[: len(r)], EwmaVol().fit(r).conditional_vol()
+    )
+
+
+def test_har_warm_up_never_reads_later_returns():
+    r = np.random.default_rng(6).normal(0, 0.01, 200)
+    later = np.concatenate([r, [0.5]])
+    head = HarRv.LAGS[2]
+    np.testing.assert_allclose(
+        HarRv().fit(later).conditional_vol()[:head], HarRv().fit(r).conditional_vol()[:head]
+    )
+
+
 def test_unfitted_and_bad_input():
     for cls in (EwmaVol, GarchVol, HarRv):
         with pytest.raises(RuntimeError):

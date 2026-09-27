@@ -19,6 +19,7 @@ from stonks.production.rules import (
     clip,
     register_rule,
 )
+from stonks.production.rules._common import is_opening
 
 
 @register_rule
@@ -57,7 +58,10 @@ class RequirePrice(OrderRule):
     def check(
         self, order: Order, qty: float, book: RiskBook, ctx: RiskContext, record: Recorder
     ) -> float | None:
-        if order.side == "buy" and _price(order, ctx) is None:
+        # any opening order (a buy or a short sale) needs a price to be
+        # sized; a close without one still goes (BE-05)
+        price = ctx.prices.get(order.ticker)
+        if is_opening(order, book.positions) and not (price and price > 0):
             record(order, "no_price", 0.0, "no current price; cannot size the order")
             return None
         return qty

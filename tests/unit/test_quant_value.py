@@ -388,11 +388,15 @@ def test_a_statement_filed_after_as_of_is_invisible(tmp_path):
         before = s.extract_features("A.US", REBALANCE, lake).values
         assert before["years_used"] == 3
         assert before["ebit_tev"] == pytest.approx(100.0 / (1000.0 + 100.0 - 100.0))
-        # Filing dates have no time of day: mid-session on the filing day
-        # the report is not yet known.
+        # Filing dates have no time of day: neither mid-session nor the
+        # daily decision on the filing day knows the report (BE-22).
         midday = s.extract_features("A.US", datetime(2024, 7, 15, 12, 0), lake).values
         assert midday["years_used"] == 3
-        after = s.extract_features("A.US", date(2024, 7, 15), lake).values
+        on_the_day = s.extract_features("A.US", date(2024, 7, 15), lake).values
+        assert on_the_day["years_used"] == 3
+        next_morning = s.extract_features("A.US", datetime(2024, 7, 16, 10, 0), lake).values
+        assert next_morning["years_used"] == 4
+        after = s.extract_features("A.US", date(2024, 7, 16), lake).values
         assert after["years_used"] == 4
         assert after["ebit_tev"] == pytest.approx(900.0 / 1000.0)
     finally:

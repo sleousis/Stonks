@@ -10,14 +10,19 @@ the candidate's own class and params is the candidate itself and is left
 out.
 
 The pool is the registry's active list: the ``registry`` handed to the
-constructor, else the one ``load_settings()`` points at. An empty pool
-passes: there is nothing to be redundant with. A member that fails to load
-or backtest is skipped and named in the notes. Pool backtests run one after
-another (the pool is a handful of strategies).
+constructor, else the one ``load_settings()`` points at. Each member is
+backtested on its own universe (the one its lab run recorded in the
+artifact's manifest), else the candidate's. An empty pool passes: there is
+nothing to be redundant with. A member that fails to load or backtest, or
+that has too few paired returns, is skipped and named in the notes; when
+the pool is not empty but no member could be compared, the test fails with
+"insufficient data" (P17 fails closed, BE-26). Pool backtests run one
+after another (the pool is a handful of strategies).
 """
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from collections.abc import Sequence
 from typing import Any, Literal
@@ -32,7 +37,9 @@ from stonks.logging import get_logger
 
 _log = get_logger("stonks.lab.survival.pool_correlation")
 
-Member = tuple[str, Strategy]
+#: ``(id, strategy)`` or ``(id, strategy, universe)``; without a universe
+#: the member is backtested on the candidate's.
+Member = tuple[str, Strategy] | tuple[str, Strategy, Sequence[str] | None]
 
 
 def _returns(report: Any) -> pd.Series:
@@ -70,13 +77,37 @@ def _configured_pool() -> list[Member]:
 
 
 def _registry_pool(registry: Any) -> list[Member]:
+    """Every active strategy with the universe its lab run recorded. One
+    that fails to load stays in the pool as ``None``, so it counts as a
+    member that could not be compared."""
     out: list[Member] = []
     for handle in registry.list_active():
         try:
-            out.append((handle.id, registry.load(handle.id)))
+            out.append((handle.id, registry.load(handle.id), _recorded_universe(registry, handle)))
         except Exception as exc:
             _log.warning("pool_correlation.load_failed", strategy_id=handle.id, error=str(exc))
+            out.append((handle.id, None, None))  # type: ignore[arg-type]
     return out
+
+
+def _recorded_universe(registry: Any, handle: Any) -> list[str] | None:
+    """The universe in the artifact's lab manifest, ``None`` when absent."""
+    from stonks.registry.artifact import ArtifactBundle
+
+    try:
+        path = registry.resolve_artifact_path(str(handle.artifact_path))
+        dataset = ArtifactBundle.load(path).meta.get("manifest", {}).get("dataset", {})
+    except Exception:  # no bundle or no manifest: use the candidate's universe
+        return None
+    universe = dataset.get("universe") if isinstance(dataset, dict) else None
+    return [str(t) for t in universe] if universe else None
+
+
+def _member_context(context: Any, universe: Sequence[str] | None) -> Any:
+    """``context`` over the member's own universe, when it has one."""
+    if not universe or list(universe) == list(context.universe):
+        return context
+    return dataclasses.replace(context, universe=list(universe), universe_id=None)
 
 
 class PoolCorrelationTest:
@@ -138,7 +169,11 @@ class PoolCorrelationTest:
 
     def run(self, strategy: Strategy, context: Any) -> SurvivalReport:
         window = context.val_window if self.window == "val" else context.full_window
-        members = [(sid, m) for sid, m in self._members() if not _same(m, strategy)]
+        members = [
+            (m[0], m[1], m[2] if len(m) > 2 else None)  # type: ignore[misc]
+            for m in self._members()
+            if not _same(m[1], strategy)
+        ]
         candidate = _returns(run_backtest(strategy, context, window, benchmark=None))
         candidate_ir = _ir(candidate)
         metrics: dict[str, float] = {
@@ -155,10 +190,15 @@ class PoolCorrelationTest:
             )
         blockers: list[str] = []
         skipped: list[str] = []
+        compared = 0
         worst = -math.inf
-        for sid, member in members:
+        for sid, member, universe in members:
+            if member is None:  # failed to load
+                skipped.append(sid)
+                continue
             try:
-                theirs = _returns(run_backtest(member, context, window, benchmark=None))
+                ctx = _member_context(context, universe)
+                theirs = _returns(run_backtest(member, ctx, window, benchmark=None))
             except Exception as exc:
                 _log.warning("pool_correlation.backtest_failed", strategy_id=sid, error=str(exc))
                 skipped.append(sid)
@@ -170,6 +210,7 @@ class PoolCorrelationTest:
                 skipped.append(sid)
                 continue
             corr = float(np.corrcoef(paired.iloc[:, 0], paired.iloc[:, 1])[0, 1])
+            compared += 1
             metrics[f"correlation:{sid}"] = corr
             worst = max(worst, corr)
             if corr > self.max_correlation and not self._beats(candidate_ir, member_ir):
@@ -183,4 +224,12 @@ class PoolCorrelationTest:
             notes += "; too close to " + ", ".join(blockers)
         if skipped:
             notes += "; skipped " + ", ".join(skipped)
+        metrics["pool_compared"] = float(compared)
+        if compared == 0:
+            return SurvivalReport(
+                test_id=self.id,
+                passed=False,
+                metrics=metrics,
+                notes=f"insufficient data: no pool member could be compared; {notes}",
+            )
         return SurvivalReport(test_id=self.id, passed=not blockers, metrics=metrics, notes=notes)

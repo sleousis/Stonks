@@ -37,12 +37,6 @@ def app(settings, seeded, fake_source):
     return create_app(settings, services=services)
 
 
-@pytest.fixture
-def client(app):
-    with TestClient(app, client=LOOPBACK) as c:
-        yield c
-
-
 def _wait_job(client: TestClient, job_id: str, timeout: float = 120) -> dict:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:

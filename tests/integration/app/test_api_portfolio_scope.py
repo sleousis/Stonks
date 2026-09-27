@@ -117,13 +117,16 @@ def test_admins_cannot_read_a_traders_holdings(app, people):
         assert c.get("/api/portfolio", headers=AUTH).status_code == 200
 
 
-def test_admins_see_aggregate_totals_only(app, people):
+def test_admins_see_aggregate_totals_only(app, people, settings):
+    carol = add_user(settings.state.path, "carol@example.com")
+    _book(settings.state.path, carol, "Carol", 333.0, {"FLAT.US": 2})
     with TestClient(app, client=REMOTE, base_url=BASE) as c:
         totals = c.get("/api/portfolio/totals", headers=AUTH)
         assert totals.status_code == 200, totals.text
         body = totals.json()
-        assert body["portfolios"] >= 2 and body["owners"] >= 2
-        assert body["cash"] >= 111.0 + 222.0
+        assert body["portfolios"] >= 3 and body["owners"] >= 3
+        assert body["suppressed"] is False
+        assert body["cash"] >= 111.0 + 222.0 + 333.0
         assert "UP.US" not in totals.text and "DOWN.US" not in totals.text
         assert c.get("/api/portfolio/totals", headers=people["alice"]).status_code == 403
 
@@ -132,3 +135,37 @@ def test_portfolio_reads_need_a_credential_even_on_loopback(app):
     with TestClient(app, client=LOOPBACK, base_url=BASE) as c:
         for url in READS:
             assert c.get(url).status_code == 401, url
+
+
+def test_totals_hide_money_below_three_other_owners(app, people):
+    """BE-43: with two other traders the admin could subtract their way to
+    one person's numbers, so the money figures are withheld."""
+    with TestClient(app, client=REMOTE, base_url=BASE) as c:
+        for url in ("/api/portfolio/totals", "/api/insights/totals"):
+            body = c.get(url, headers=AUTH).json()
+            assert body["suppressed"] is True, url
+            assert body["cash"] == 0.0 and body["total_value"] == 0.0, url
+
+
+def test_a_paper_account_does_not_count_as_another_portfolio(app, people, settings):
+    """BE-43: a broker book's paper copy is the same person's book."""
+    path = settings.state.path
+    with SqliteState(path) as state:
+        owner = state.sql("SELECT owner_id FROM portfolios WHERE id = ?", [people["pf_a"]])
+    paper = _book(path, owner[0]["owner_id"], "Alice paper", 50.0, {})
+    with SqliteState(path) as state:
+        state.execute("UPDATE portfolios SET paper_of = ? WHERE id = ?", [people["pf_a"], paper])
+    with TestClient(app, client=REMOTE, base_url=BASE) as c:
+        before = c.get("/api/portfolio/totals", headers=AUTH).json()
+        insights = c.get("/api/insights/totals", headers=AUTH).json()
+    names = {r["id"] for r in _active(path)} - {paper}
+    assert before["portfolios"] == len(names)
+    assert insights["portfolios"] == len(names)
+
+
+def _active(path):
+    with SqliteState(path) as state:
+        return state.sql(
+            "SELECT p.id FROM portfolios p WHERE p.status = 'active' AND EXISTS ("
+            "SELECT 1 FROM portfolio_snapshots s WHERE s.portfolio_id = p.id)"
+        )

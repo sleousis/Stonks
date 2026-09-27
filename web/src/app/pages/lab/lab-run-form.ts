@@ -75,6 +75,8 @@ export class LabRunFormView {
   readonly universes = input<readonly UniverseView[]>([]);
   /** A registered strategy to re-run: its class (the tuner searches the parameters again). */
   readonly preset = input<StrategyPreset | null>(null);
+  /** Tickers to start from (a watchlist opened in the lab). */
+  readonly tickers = input<string | null>(null);
   readonly busy = input(false);
   readonly submitted = output<LabRunRequest>();
 
@@ -95,10 +97,13 @@ export class LabRunFormView {
     this.presets.hasValue() ? suitesFromPresets(this.presets.value()) : SUITES,
   );
   protected readonly pickable = PICKABLE_TESTS;
-  protected readonly form = linkedSignal<StrategyPreset | null, LabRunForm>({
-    source: this.preset,
-    computation: (preset) => {
-      const form = defaultLabRunForm();
+  protected readonly form = linkedSignal<
+    { preset: StrategyPreset | null; tickers: string | null },
+    LabRunForm
+  >({
+    source: () => ({ preset: this.preset(), tickers: this.tickers() }),
+    computation: ({ preset, tickers }) => {
+      const form = { ...defaultLabRunForm(), tickers: tickers ?? '' };
       const known = preset && this.classes().some((c) => c.class_path === preset.classPath);
       return known ? { ...form, classPath: preset.classPath } : form;
     },

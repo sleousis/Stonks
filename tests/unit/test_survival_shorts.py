@@ -100,6 +100,7 @@ def test_lab_backtest_of_a_short_dataset_reports_its_short_book(lake):
 # ---- cost stress ----------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_cost_stress_charges_borrow_fees_on_a_short_book(lake):
     test = CostStressTest(max_workers=1)
     report = test.run(_short_strategy(), _dataset(lake, ShortingSettings()))
@@ -112,6 +113,7 @@ def test_cost_stress_charges_borrow_fees_on_a_short_book(lake):
     assert m["sharpe_borrow_stress"] <= m["sharpe_1x"] + 1e-9
 
 
+@pytest.mark.slow
 def test_cost_stress_of_a_long_only_dataset_has_no_borrow_metrics(lake):
     report = CostStressTest(max_workers=1).run(_short_strategy(), _dataset(lake, None))
     assert "sharpe_borrow_stress" not in report.metrics
@@ -140,6 +142,7 @@ def test_squeeze_bars_hand_checked():
     assert squeeze_bars(bars, 9, 0.5, 2)["close"].tolist() == [100.0] * 5
 
 
+@pytest.mark.slow
 def test_stress_runs_the_squeeze_on_a_short_book(lake):
     options = StressTest.Options(n_paths=2, max_workers=1, max_squeeze_drawdown=-0.001)
     report = StressTest(options).run(_short_strategy(), _dataset(lake, ShortingSettings()))

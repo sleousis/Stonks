@@ -154,3 +154,16 @@ async def test_mcp_tools_read_the_snapshots(loopback_client):
         assert live["as_of"] == "2026-03-20" and live["portfolio"]["value"] == 1000.0
         page = await call(mcp, "risk_snapshots", {"limit": 5})
         assert page["total"] == 1
+
+
+def test_be51_the_service_judges_with_the_configured_band(settings, seeded):
+    from stonks.app.risk_monitor import RiskMonitorService
+    from stonks.production.monitor_settings import RiskMonitorSettings
+
+    with SqliteState(settings.state.path) as state:
+        write_snapshot(state, _snap("pf_default", "2026-03-20", ratio=1.0))
+    service = RiskMonitorService(AppContext(settings))
+    assert service.latest("pf_default").portfolio.ratio_out_of_band is False
+    settings.production.risk_monitor = RiskMonitorSettings(ratio_low=1.5, ratio_high=2.0)
+    service = RiskMonitorService(AppContext(settings))
+    assert service.latest("pf_default").portfolio.ratio_out_of_band is True

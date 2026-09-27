@@ -147,6 +147,12 @@ READ_TOOLS = {
     "list_survival_tests",
     "list_survival_presets",
     "get_studio_capabilities",
+    "get_chart",
+    "get_leaderboard",
+    "get_tear_sheet",
+    "list_watchlists",
+    "get_watchlist",
+    "get_my_risk_limits",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
@@ -163,9 +169,10 @@ JOB_TOOLS = {
     "run_sweep",
     "add_journal_note",
     "mark_notifications_read",
+    "create_watchlist",
 }
 # Overwrite a draft's fields; no confirm (a draft is never traded).
-EDIT_TOOLS = {"update_draft", "edit_journal_note", "cancel_job"}
+EDIT_TOOLS = {"update_draft", "edit_journal_note", "cancel_job", "update_watchlist"}
 GUARDED_TOOLS = {
     "create_universe",
     "refresh_universe",

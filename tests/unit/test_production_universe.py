@@ -15,16 +15,6 @@ from stonks.production.universe import (
 from stonks.universes import UniverseDefinition, UniverseStore, refresh_universe
 
 
-@pytest.fixture
-def lake(tmp_path):
-    from stonks.store.lake import DuckDBLake
-
-    lk = DuckDBLake(tmp_path / "lake.duckdb")
-    lk.migrate()
-    yield lk
-    lk.close()
-
-
 def test_a_list_is_returned_as_given(lake):
     assert resolve_tick_universe(lake, ["B.US", "A.US", "B.US"], date(2025, 1, 1)) == [
         "B.US",

@@ -81,6 +81,7 @@ from stonks.lab.parallel import (
 from stonks.logging import get_logger
 from stonks.stats.hac import newey_west_se
 from stonks.store.corporate_actions import LakeCorporateActions
+from stonks.strategies._common import decision_interval
 from stonks.strategies.base import strategy_data_tickers
 
 _log = get_logger("stonks.lab.signal_eval")
@@ -272,11 +273,14 @@ def _unpicklable(strategy: Any, dataset: Any, *objects: Any) -> str | None:
 def _score_ticker(strategy: Strategy, dataset: Any, task: tuple[str, list[datetime]]) -> np.ndarray:
     ticker, stamps = task
     out = np.full(len(stamps), np.nan)
-    for k, as_of in enumerate(stamps):
-        value = strategy.estimate_return(ticker, as_of, dataset.lake)
-        if value is not None:
-            v = float(value)
-            out[k] = v if math.isfinite(v) else np.nan
+    # each score decides on a bar of the dataset's interval, so it sees a
+    # daily close only after that day ends (RS-03, BE-21)
+    with decision_interval(getattr(dataset, "interval", None)):
+        for k, as_of in enumerate(stamps):
+            value = strategy.estimate_return(ticker, as_of, dataset.lake)
+            if value is not None:
+                v = float(value)
+                out[k] = v if math.isfinite(v) else np.nan
     return out
 
 

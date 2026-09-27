@@ -8,22 +8,12 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 
-import pytest
-
 from stonks.config import HealthConfig
 from stonks.production.halts import list_halts, run_health
 from stonks.production.tick import INTERRUPTED_ERROR, recover_interrupted_ticks
 from stonks.store.state import SqliteState
 
 NOW = datetime(2026, 4, 3, 21, 0, tzinfo=UTC)
-
-
-@pytest.fixture
-def state(tmp_path):
-    s = SqliteState(tmp_path / "state.sqlite")
-    s.migrate()
-    yield s
-    s.close()
 
 
 def _running(state, tick_id: str, started: datetime) -> None:
@@ -51,6 +41,48 @@ def test_running_rows_are_closed_as_interrupted(state):
     assert _row(state, "tick_done")["status"] == "ok"
     # idempotent
     assert recover_interrupted_ticks(state, now=NOW) == []
+
+
+def _owned(state, tick_id: str, started: datetime, host: str, pid: int) -> None:
+    state.execute(
+        "INSERT INTO tick_runs (id, started_at, status, summary_json) VALUES (?, ?, 'running', ?)",
+        [
+            tick_id,
+            started.isoformat(timespec="seconds"),
+            json.dumps({"owner": {"host": host, "pid": pid}}),
+        ],
+    )
+
+
+def test_be44_a_tick_whose_process_is_alive_survives_recovery(state):
+    import os
+    import socket
+
+    here = socket.gethostname()
+    from stonks.production import tick as tick_mod
+
+    _owned(state, "tick_live", NOW - timedelta(minutes=5), here, os.getpid())
+    _owned(state, "tick_mine_dead", NOW - timedelta(minutes=5), here, os.getpid())
+    tick_mod._RUNNING.add("tick_live")  # a tick this process runs right now
+    _owned(state, "tick_dead", NOW - timedelta(minutes=5), here, 2**30)
+    _owned(state, "tick_elsewhere", NOW - timedelta(hours=1), "other-host", 1)
+    _owned(state, "tick_abandoned", NOW - timedelta(days=1), "other-host", 1)
+    try:
+        closed = sorted(recover_interrupted_ticks(state, now=NOW))
+    finally:
+        tick_mod._RUNNING.discard("tick_live")
+    assert closed == ["tick_abandoned", "tick_dead", "tick_mine_dead"]
+    assert _row(state, "tick_live")["status"] == "running"
+    assert _row(state, "tick_elsewhere")["status"] == "running"
+
+
+def test_be44_a_running_tick_records_its_owner(state, lake_trending, tmp_path):
+    import os
+
+    from stonks.production.tick import tick_owner
+
+    owner = tick_owner()
+    assert owner["pid"] == os.getpid() and owner["host"]
 
 
 def test_after_recovery_the_next_health_run_clears_the_buy_halt(state, lake_trending):

@@ -187,3 +187,30 @@ def test_a_crossing_order_is_split_when_it_fills(tmp_path) -> None:
         ("sell", 10.0),
     ]
     assert broker.fetch_portfolio().positions == {"X.US": -10.0}
+
+
+@pytest.mark.parametrize(
+    ("short_day", "cover_day", "nights"),
+    [(3, 4, 3), (4, 5, 1)],  # held Fri to Mon: 3 nights; Mon to Tue: 1 night
+)
+def test_be29_borrow_is_charged_for_the_nights_actually_held(
+    tmp_path, short_day, cover_day, nights
+) -> None:
+    # 3.6 %/yr on 10 x 50 = 500 is 0.05 a night. Decisions fill next open.
+    lake = _lake(tmp_path, closes=[50.0] * 8)
+    borrow = FlatBorrow(overrides={"X.US": BorrowQuote("easy", 0.036)})
+    script = {DAYS[short_day]: ("sell", 10.0), DAYS[cover_day]: ("buy", 10.0)}
+    _, broker, _ = _run(lake, Scripted(script), borrow=borrow)
+    assert sum(e.amount for e in broker.financing) == pytest.approx(-0.05 * nights)
+
+
+def test_be13_two_long_only_strategies_selling_one_holding_end_flat(tmp_path) -> None:
+    lake = _lake(tmp_path, closes=[100.0] * 8)
+    a = LongOnlyScripted({DAYS[0]: ("buy", 10.0), DAYS[2]: ("sell", 10.0)})
+    b = LongOnlyScripted({DAYS[2]: ("sell", 10.0)})
+    broker = SimulatedBroker(
+        Portfolio(cash=10_000.0), margin=RegTMargin(), borrow=FREE, allow_short=True
+    )
+    config = BacktestConfig(start=DAYS[0], end=DAYS[-1], universe=["X.US"], allow_short=True)
+    Backtester([a, b], broker, lake, config).run()
+    assert broker.fetch_portfolio().positions == {}

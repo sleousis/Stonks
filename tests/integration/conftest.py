@@ -5,9 +5,14 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
+from stonks.core.protocols import SurvivalReport
 from stonks.ingest.pipeline import _rows_to_df
 from stonks.ingest.schemas import TickerProfile
+from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
+from stonks.store.state import SqliteState
+from stonks.strategies.examples.buy_and_hold import BuyAndHold
+from tests.fixtures.governance import seed_status
 
 
 @pytest.fixture
@@ -56,3 +61,19 @@ def lake_trending(tmp_path):
     )
     yield lake
     lake.close()
+
+
+@pytest.fixture
+def tick_env(tmp_path, lake_trending):
+    """``(lake, state, registry)`` with one active BuyAndHold on UP.US
+    (BE-25). Modules that seed other strategies override it."""
+    state = SqliteState(tmp_path / "state.sqlite")
+    state.migrate()
+    registry = StrategyRegistry(state=state, artifacts_dir=tmp_path / "artifacts")
+    sid = registry.register(
+        BuyAndHold({"ticker": "UP.US", "allocation": 1.0}),
+        reports=[SurvivalReport(test_id="oos", passed=True, metrics={})],
+    )
+    seed_status(registry, sid, "active")
+    yield lake_trending, state, registry
+    state.close()

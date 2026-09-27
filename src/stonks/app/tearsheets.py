@@ -52,7 +52,11 @@ def tear_sheet_request(
     if window.start is None or window.end is None:
         raise ValidationError(f"{target!r} is not a backtest job: pass --start and --end")
     universe = list(window.universe)
+    universe_id: str | None = None
     if not universe:
+        configured = context.settings.production.universe
+        # A universe id keeps its membership gate (point in time, BE-07).
+        universe_id = configured if isinstance(configured, str) else None
         with context.lake() as lake:
             try:
                 universe = window_tickers(
@@ -74,6 +78,7 @@ def tear_sheet_request(
         return BacktestRequest(
             strategy=ref,
             universe=universe,
+            universe_id=universe_id,
             start=window.start,
             end=window.end,
             benchmark=window.benchmark,

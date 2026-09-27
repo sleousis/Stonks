@@ -73,8 +73,54 @@ export interface ChartHandle {
   destroy(): void;
 }
 
+/** One OHLC bar with its volume (`time` as for ChartPoint). */
+export interface Candle {
+  time: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number | null;
+}
+
+/**
+ * A mark on a bar: your fill (`buy` below the bar, `sell` above it) or a
+ * strategy's signal (`entry` below, `exit` above, `change` on the bar).
+ * `text` is one or two characters (B, S).
+ */
+export interface PriceMarker {
+  time: string;
+  kind: 'buy' | 'sell' | 'entry' | 'exit' | 'change';
+  text: string;
+}
+
+export interface PriceChartData {
+  candles: readonly Candle[];
+  /** Lines over the candles (moving averages), pane 0. */
+  overlays: readonly ChartSeries[];
+  markers: readonly PriceMarker[];
+  /** Volume bars along the bottom of the price pane. */
+  showVolume: boolean;
+}
+
+export interface PriceReadout {
+  time: string | null;
+  candle: Candle | null;
+  /** Overlay id -> value at the crosshair. */
+  overlays: ReadonlyMap<string, number> | null;
+}
+
+export interface PriceChartHandle {
+  setData(data: PriceChartData): void;
+  setTheme(theme: ChartTheme): void;
+  onCrosshair(listener: (readout: PriceReadout) => void): void;
+  destroy(): void;
+}
+
 export interface ChartEngine {
   create(container: HTMLElement, theme: ChartTheme): ChartHandle;
+  /** A candlestick chart with volume, overlays and markers. */
+  createPrice(container: HTMLElement, theme: ChartTheme): PriceChartHandle;
 }
 
 /** Loads the engine lazily so the charting library stays out of the main bundle. */

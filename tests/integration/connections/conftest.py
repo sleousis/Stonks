@@ -13,7 +13,6 @@ from stonks.connections.ratelimit import reset_limiters
 from stonks.connections.service import ConnectionService
 from stonks.connections.settings import ConnectionsConfig
 from stonks.security import KeyRing, SecretBox, generate_key
-from stonks.store.state import SqliteState
 
 ADMIN = Scope.service("system")
 
@@ -34,14 +33,6 @@ def _clean_fakes():
     yield
     fake.FAKE_BOOKS.clear()
     reset_limiters()
-
-
-@pytest.fixture
-def state(tmp_path):
-    s = SqliteState(tmp_path / "state.sqlite")
-    s.migrate()
-    yield s
-    s.close()
 
 
 @pytest.fixture

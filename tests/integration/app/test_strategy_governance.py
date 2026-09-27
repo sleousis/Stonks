@@ -5,9 +5,7 @@ carry metadata and history."""
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
 
-from stonks.api import create_app
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
 from stonks.app.strategies import change_status
 from stonks.config import GoLivePolicy
@@ -15,18 +13,10 @@ from stonks.core.protocols import SurvivalReport
 from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
-from tests.integration.app.test_api import AUTH, LOOPBACK
+from tests.integration.app.test_api import AUTH
 from tests.paper_seed import TICK_ID, days, oos, seed_shadow
 
 LONG_REASON = "owner override: incubation cut short, see ticket 42"
-
-
-@pytest.fixture
-def client(settings, seeded, fake_source):
-    settings.api.allowed_hosts = ["testserver"]
-    app = create_app(settings, source_factory=lambda: fake_source)
-    with TestClient(app, client=LOOPBACK) as c:
-        yield c
 
 
 @pytest.fixture

@@ -4,7 +4,7 @@ policy, the full health report and real / shadow P&L."""
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from pydantic import BaseModel
@@ -17,6 +17,7 @@ from stonks.app.serialize import finite
 from stonks.config import HealthConfig, RiskPolicy
 from stonks.production.halts import HEALTH_ACTOR, read_health, run_health
 from stonks.production.pnl import PnlRow, load_pnl
+from stonks.production.universe import EmptyUniverseError, production_tickers
 
 
 class PnlRowView(BaseModel):
@@ -80,6 +81,16 @@ class HealthReportView(BaseModel):
     thresholds: HealthConfig
 
 
+def _health_universe(lake: Any, configured: Any, tickers: Sequence[str] | None) -> list[str]:
+    """``tickers``, else ``[production].universe`` resolved on today (a
+    list, or a universe id's members). A universe that resolves to nothing
+    checks no freshness, so it never opens the operational halt (BE-06)."""
+    try:
+        return production_tickers(lake, configured, datetime.now(UTC).date(), tickers=tickers)
+    except EmptyUniverseError:
+        return []
+
+
 class OperationsService:
     def __init__(self, context: AppContext) -> None:
         self._ctx = context
@@ -96,8 +107,8 @@ class OperationsService:
         or, by default, ``[production].universe``. Read-only: it lists open
         halts but never opens or clears one (TO-03)."""
         p = self._ctx.settings.production
-        universe = list(tickers) if tickers else list(p.universe)
         with self._ctx.state() as state, self._ctx.lake() as lake:
+            universe = _health_universe(lake, p.universe, tickers)
             report = read_health(state, lake, universe, p.health)
         return _health_view(report, p.health)
 
@@ -109,8 +120,8 @@ class OperationsService:
         Callers are trusted (the scheduler, an admin through
         ``operations.run``)."""
         p = self._ctx.settings.production
-        universe = list(tickers) if tickers else list(p.universe)
         with self._ctx.state() as state, self._ctx.lake() as lake:
+            universe = _health_universe(lake, p.universe, tickers)
             report = run_health(state, lake, universe, p.health, actor=actor)
         return _health_view(report, p.health)
 

@@ -47,6 +47,8 @@ export class BacktestFormView {
   readonly costModels = input<readonly CostModelPreset[]>([]);
   /** A registered strategy to start from (class and parameters). */
   readonly preset = input<StrategyPreset | null>(null);
+  /** Tickers to start from (a watchlist opened in the lab). */
+  readonly tickers = input<string | null>(null);
   readonly busy = input(false);
   readonly submitted = output<BacktestRequest>();
 
@@ -54,10 +56,13 @@ export class BacktestFormView {
   /** May this user start lab jobs? Otherwise the button is off with a note. */
   protected readonly canRun = computed(() => this.session.can('lab.run'));
 
-  protected readonly form = linkedSignal<StrategyPreset | null, BacktestForm>({
-    source: this.preset,
-    computation: (preset) => {
-      const form = defaultBacktestForm();
+  protected readonly form = linkedSignal<
+    { preset: StrategyPreset | null; tickers: string | null },
+    BacktestForm
+  >({
+    source: () => ({ preset: this.preset(), tickers: this.tickers() }),
+    computation: ({ preset, tickers }) => {
+      const form = { ...defaultBacktestForm(), tickers: tickers ?? '' };
       const cls = preset && this.classes().find((c) => c.class_path === preset.classPath);
       return cls
         ? { ...form, classPath: cls.class_path, params: presetParamValues(cls, preset.params) }

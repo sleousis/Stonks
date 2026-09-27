@@ -127,3 +127,59 @@ def test_the_default_pool_is_the_registry_active_list(lake, tmp_path):
         report = test.run(_bah("TWIN.US", 0.8), _dataset(lake))
     assert report.metrics["pool_size"] == 1.0
     assert "member_ir:bah_win" in report.metrics
+
+
+# ---- nothing compared is not a pass (BE-26) -------------------------------------------
+
+
+class _Broken(BuyAndHold):
+    def estimate_return(self, ticker, as_of, lake):
+        raise RuntimeError("boom")
+
+
+def test_a_pool_whose_only_member_fails_to_backtest_fails(lake):
+    report = PoolCorrelationTest(pool=[("broken", _Broken({"ticker": "IND.US"}))]).run(
+        _bah("WIN.US"), _dataset(lake)
+    )
+    assert report.passed is False
+    assert "insufficient data" in report.notes
+
+
+def test_a_member_that_never_trades_the_window_is_not_a_pass(lake):
+    report = PoolCorrelationTest(pool=[("ghost", _bah("NONE.US"))]).run(
+        _bah("WIN.US"), _dataset(lake)
+    )
+    assert report.passed is False and "insufficient data" in report.notes
+
+
+def test_a_member_is_backtested_on_its_own_universe(lake):
+    """A member registered on TWIN.US is compared on TWIN.US even when the
+    candidate's universe lacks it."""
+    candidate_only = LabDataset(
+        lake=lake, universe=["WIN.US"], start=DAYS[0], end=DAYS[-1], interval=Interval.DAY_1
+    )
+    test = PoolCorrelationTest(pool=[("bah_twin", _bah("TWIN.US"), ["TWIN.US"])])
+    report = test.run(_bah("WIN.US"), candidate_only)
+    assert report.metrics["correlation:bah_twin"] > 0.7
+
+
+def test_the_registry_pool_reads_each_members_universe(lake, tmp_path):
+    from stonks.registry.artifact import update_meta
+
+    with SqliteState(tmp_path / "state.sqlite") as state:
+        state.migrate()
+        registry = StrategyRegistry(state=state, artifacts_dir=tmp_path / "artifacts")
+        registry.register(_bah("TWIN.US", 0.5), [], "bah_twin")
+        registry.set_status(
+            "bah_twin", "active", actor="test", reason="seeded as the active pool", override=True
+        )
+        handle = registry.list_active()[0]
+        update_meta(
+            registry.resolve_artifact_path(str(handle.artifact_path)),
+            {"manifest": {"dataset": {"universe": ["TWIN.US"]}}},
+        )
+        candidate_only = LabDataset(
+            lake=lake, universe=["WIN.US"], start=DAYS[0], end=DAYS[-1], interval=Interval.DAY_1
+        )
+        report = PoolCorrelationTest(registry=registry).run(_bah("WIN.US"), candidate_only)
+    assert report.metrics["correlation:bah_twin"] > 0.7

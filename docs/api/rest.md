@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [connections](#connections-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tca](#tca-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints)
+Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tca](#tca-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
 
 ## alerts endpoints
 
@@ -73,6 +73,12 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | GET | `/api/catalog/intervals` | List Intervals | sign-in |  | list[[IntervalInfo](#intervalinfo)] |
 | GET | `/api/catalog/strategies` | List Strategy Classes | sign-in |  | list[[StrategyClassInfo](#strategyclassinfo)] |
 
+## charts endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/charts/{ticker}` | Get Chart | sign-in |  | [ChartView](#chartview) |
+
 ## connections endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
@@ -87,6 +93,17 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | GET | `/api/connections/{connection_id}/accounts` | List Accounts | sign-in |  | [Page_BrokerAccountView_](#page_brokeraccountview_) |
 | POST | `/api/connections/{connection_id}/link` | Link Account | `portfolio.manage` | [LinkAccountRequest](#linkaccountrequest) | [LinkResultView](#linkresultview) |
 | POST | `/api/connections/{connection_id}/sync` | Sync Connection | `portfolio.manage` |  | [SyncResultView](#syncresultview) |
+
+## exports endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/exports/fills` | Fills as CSV | sign-in |  | `text/csv` |
+| GET | `/api/exports/journal` | Trade journal as CSV | sign-in |  | `text/csv` |
+| GET | `/api/exports/lab-trials` | Lab trial results as CSV | `lab.run` |  | `text/csv` |
+| GET | `/api/exports/orders` | Orders as CSV | sign-in |  | `text/csv` |
+| GET | `/api/exports/pnl` | Daily P&L as CSV | sign-in |  | `text/csv` |
+| GET | `/api/exports/snapshots` | Portfolio snapshots as CSV | sign-in |  | `text/csv` |
 
 ## halts endpoints
 
@@ -173,6 +190,15 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | POST | `/api/notifications/test` | Send Test | `data.read` |  | [TestNotificationView](#testnotificationview) |
 | PUT | `/api/notifications/webhook` | Set Webhook | `notifications.manage` | [WebhookUpdate](#webhookupdate) | [PreferencesView](#preferencesview) |
 
+## onboarding endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/onboarding` | Get Onboarding | sign-in |  | [OnboardingView](#onboardingview) |
+| PUT | `/api/onboarding` | Update Onboarding | `data.read` | [OnboardingUpdate](#onboardingupdate) | [OnboardingView](#onboardingview) |
+| PUT | `/api/onboarding/steps/{step}` | Update Onboarding Step | `data.read` | [StepUpdate](#stepupdate) | [OnboardingView](#onboardingview) |
+| GET | `/api/onboarding/system` | Get System Checklist | `operations.run` |  | [SystemChecklistView](#systemchecklistview) |
+
 ## orders endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
@@ -212,6 +238,8 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
+| GET | `/api/risk/limits` | Get My Risk Limits | sign-in |  | [RiskLimitsView](#risklimitsview) |
+| PUT | `/api/risk/limits` | Set My Risk Limits | `portfolio.manage` | [RiskLimitsUpdate](#risklimitsupdate) | [RiskLimitsView](#risklimitsview) |
 | GET | `/api/risk/live` | Get Live Risk | sign-in |  | [RiskSummaryView](#risksummaryview) |
 | GET | `/api/risk/policy` | Get Risk Policy | sign-in |  | [RiskPolicy](#riskpolicy) |
 | GET | `/api/risk/snapshots` | List Risk Snapshots | sign-in |  | [Page_RiskSnapshotView_](#page_risksnapshotview_) |
@@ -248,6 +276,7 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
 | GET | `/api/strategies` | List Strategies | sign-in |  | [Page_StrategySummary_](#page_strategysummary_) |
+| GET | `/api/strategies/leaderboard` | Get Leaderboard | sign-in |  | [LeaderboardView](#leaderboardview) |
 | GET | `/api/strategies/summary` | Strategy Summary | sign-in |  | [StrategyStatusCounts](#strategystatuscounts) |
 | GET | `/api/strategies/{strategy_id}` | Get Strategy | sign-in |  | [StrategyDetail](#strategydetail) |
 | GET | `/api/strategies/{strategy_id}/golive` | Get Golive | sign-in |  | [GoLiveReport](#golivereport) |
@@ -255,6 +284,7 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | POST | `/api/strategies/{strategy_id}/promote` | Promote | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
 | POST | `/api/strategies/{strategy_id}/retire` | Retire | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
 | POST | `/api/strategies/{strategy_id}/shadow` | Shadow | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
+| GET | `/api/strategies/{strategy_id}/tearsheet` | Get Tear Sheet | sign-in |  | [TearSheetView](#tearsheetview) |
 
 ## studio endpoints
 
@@ -317,6 +347,16 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | POST | `/api/universes/{universe_id}/ensure` | Ensure Data | `lab.run` | [EnsureDataRequest](#ensuredatarequest) | [Job](#job) |
 | GET | `/api/universes/{universe_id}/members` | Get Members | sign-in |  | [UniverseMembers](#universemembers) |
 | POST | `/api/universes/{universe_id}/refresh` | Refresh Universe | `lab.run` |  | [Job](#job) |
+
+## watchlists endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/watchlists` | List Watchlists | sign-in |  | [Page_WatchlistView_](#page_watchlistview_) |
+| POST | `/api/watchlists` | Create Watchlist | `portfolio.manage` | [WatchlistCreate](#watchlistcreate) | [WatchlistView](#watchlistview) |
+| GET | `/api/watchlists/{watchlist_id}` | Get Watchlist | sign-in |  | [WatchlistView](#watchlistview) |
+| PATCH | `/api/watchlists/{watchlist_id}` | Update Watchlist | `portfolio.manage` | [WatchlistUpdate](#watchlistupdate) | [WatchlistView](#watchlistview) |
+| DELETE | `/api/watchlists/{watchlist_id}` | Delete Watchlist | `portfolio.manage` |  |  |
 
 ## Schemas
 
@@ -538,6 +578,39 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `channel` | string | yes |  |
 | `default_enabled` | boolean | yes |  |
 | `fallback` | boolean | yes |  |
+
+### ChartFillView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `filled_at` | date-time | yes |  |
+| `order_client_id` | string | yes |  |
+| `price` | number | yes |  |
+| `quantity` | number | yes |  |
+| `side` | string \| null | yes |  |
+| `strategy_id` | string \| null | yes |  |
+
+### ChartSignalView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `kind` | string | yes |  |
+| `reason` | string \| null | yes |  |
+| `strategy_id` | string | yes |  |
+| `strength` | number \| null | yes |  |
+
+### ChartView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `bars` | list[[BarView](#barview)] | yes |  |
+| `fills` | list[[ChartFillView](#chartfillview)] | yes |  |
+| `interval` | string | yes |  |
+| `portfolio_id` | string \| null | yes |  |
+| `signals` | list[[ChartSignalView](#chartsignalview)] | yes |  |
+| `ticker` | string | yes |  |
+| `truncated` | boolean | yes |  |
 
 ### CircuitBreakerSettings
 
@@ -1080,6 +1153,7 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers, sect
 | `exposure` | [Exposure](#exposure) | yes |  |
 | `owners` | integer | yes |  |
 | `portfolios` | integer | yes |  |
+| `suppressed` | boolean | no |  |
 | `total_value` | number | yes |  |
 
 ### InsightsView
@@ -1245,6 +1319,29 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `run_id` | string | no |  |
 | `survival_reports` | list[[SurvivalReportView](#survivalreportview)] | yes |  |
 | `verdict` | "pass" \| "fail" | yes |  |
+
+### LeaderboardRow
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `book_trades` | integer | yes |  |
+| `class_path` | string | yes |  |
+| `golive_passed` | boolean \| null | yes |  |
+| `live_since` | date-time \| null | yes |  |
+| `paper` | [PaperFigures](#paperfigures) | yes |  |
+| `rank` | integer | yes |  |
+| `status` | string | yes |  |
+| `strategy_id` | string | yes |  |
+| `survival_passed` | integer | yes |  |
+| `survival_total` | integer | yes |  |
+
+### LeaderboardView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date \| null | yes |  |
+| `rows` | list[[LeaderboardRow](#leaderboardrow)] | yes |  |
+| `sort` | "sharpe" \| "return" \| "drawdown" \| "trades" | yes |  |
 
 ### LedgerRunDetail
 
@@ -1456,6 +1553,13 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `recovery_codes` | list[string] \| null | no |  |
 | `recovery_codes_left` | integer | yes |  |
 
+### MonthlyReturn
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `month` | string | yes |  |
+| `value` | number \| null | yes |  |
+
 ### NetExposureSettings
 
 | Field | Type | Required | Description |
@@ -1468,6 +1572,29 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `note` | string | yes |  |
+
+### OnboardingStepView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `derived` | boolean | yes |  |
+| `id` | "account" \| "portfolio" \| "data" \| "follow" \| "alerts" | yes |  |
+| `state` | "done" \| "skipped" \| "todo" | yes |  |
+
+### OnboardingUpdate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `dismissed` | boolean | yes |  |
+
+### OnboardingView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `complete` | boolean | yes |  |
+| `dismissed` | boolean | yes |  |
+| `show` | boolean | yes |  |
+| `steps` | list[[OnboardingStepView](#onboardingstepview)] | yes |  |
 
 ### OperationalHaltSettings
 
@@ -1763,6 +1890,33 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
 
+### Page_WatchlistView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[WatchlistView](#watchlistview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### PaperFigures
+
+The model book's result. Every figure is null without two days.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cagr` | number \| null | yes |  |
+| `days` | integer | yes |  |
+| `first_day` | date \| null | yes |  |
+| `latest_day` | date \| null | yes |  |
+| `latest_value` | number \| null | yes |  |
+| `max_drawdown` | number \| null | yes |  |
+| `sharpe` | number \| null | yes |  |
+| `sortino` | number \| null | yes |  |
+| `total_return` | number \| null | yes |  |
+| `trades` | integer | yes |  |
+| `volatility` | number \| null | yes |  |
+
 ### ParameterInfo
 
 | Field | Type | Required | Description |
@@ -1881,6 +2035,7 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers and n
 | `cash` | number | yes |  |
 | `owners` | integer | yes | People who own those portfolios. |
 | `portfolios` | integer | yes | Active portfolios with at least one snapshot. |
+| `suppressed` | boolean | no | True when too few other people own books for the sums to hide anyone's numbers: cash and value then read 0. |
 | `total_value` | number | yes | Sum of each book's value at its latest snapshot. |
 
 ### PortfolioView
@@ -2100,6 +2255,21 @@ One order the risk policy clipped or dropped.
 | `rule` | string | yes |  |
 | `side` | string | yes |  |
 | `ticker` | string | yes |  |
+
+### RiskLimitsUpdate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `limits` | object | yes |  |
+
+### RiskLimitsView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `effective` | [RiskPolicy](#riskpolicy) | yes |  |
+| `ignored` | list[string] | yes |  |
+| `mine` | object | yes |  |
+| `system` | [RiskPolicy](#riskpolicy) | yes |  |
 
 ### RiskPerPositionSettings
 
@@ -2483,6 +2653,12 @@ One audited status change or intervention (BL-24).
 | `reason` | string | yes |  |
 | `to_status` | string \| null | yes |  |
 
+### StepUpdate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `state` | "done" \| "skipped" \| "todo" | yes |  |
+
 ### StrategyClassInfo
 
 | Field | Type | Required | Description |
@@ -2706,6 +2882,21 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 | `portfolios` | list[[PortfolioSyncView](#portfoliosyncview)] | yes |  |
 | `status` | "ok" \| "partial" \| "error" | yes |  |
 
+### SystemCheckView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `detail` | string | yes |  |
+| `done` | boolean | yes |  |
+| `id` | "data_source" \| "first_ingest" \| "backup" \| "scheduler" | yes |  |
+
+### SystemChecklistView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `checks` | list[[SystemCheckView](#systemcheckview)] | yes |  |
+| `complete` | boolean | yes |  |
+
 ### TcaGroupView
 
 Costs of a group of orders, weighted by notional, in bps.
@@ -2736,6 +2927,20 @@ Costs of a group of orders, weighted by notional, in bps.
 | `portfolio_id` | string | yes |  |
 | `since` | date \| null | yes |  |
 | `until` | date \| null | yes |  |
+
+### TearSheetView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `book_trades` | integer | yes |  |
+| `curve` | list[[PnlRowView](#pnlrowview)] | yes |  |
+| `golive` | [GoLiveReport](#golivereport) \| null | yes |  |
+| `live_since` | date-time \| null | yes |  |
+| `monthly_returns` | list[[MonthlyReturn](#monthlyreturn)] | yes |  |
+| `paper` | [PaperFigures](#paperfigures) | yes |  |
+| `recent_trades` | list[[ShadowDecisionView](#shadowdecisionview)] | yes |  |
+| `status_history` | list[[StatusChangeView](#statuschangeview)] | yes |  |
+| `strategy` | [StrategyDetail](#strategydetail) | yes |  |
 
 ### TestNotificationView
 
@@ -3017,6 +3222,32 @@ Walk-forward settings. ``test_days=None`` splits the dataset's validation window
 | `seed` | integer \| null | no |  |
 | `test_days` | integer \| null | no |  |
 | `train_days` | integer \| null | no |  |
+
+### WatchlistCreate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes |  |
+| `tickers` | list[string] | no |  |
+
+### WatchlistUpdate
+
+Rename, replace the tickers, or both. Unset fields stay.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string \| null | no |  |
+| `tickers` | list[string] \| null | no |  |
+
+### WatchlistView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `created_at` | date-time | yes |  |
+| `id` | string | yes |  |
+| `name` | string | yes |  |
+| `tickers` | list[string] | yes |  |
+| `updated_at` | date-time | yes |  |
 
 ### WebhookUpdate
 

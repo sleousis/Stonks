@@ -264,3 +264,178 @@ def test_a_dry_run_writes_no_runs_and_pauses_nothing(world):
     world.tick(DAY1, dry_run=True)
     assert world.state.count_rows("portfolio_runs") == 0
     assert world.subs.get(world.bob, world.bob_auto).paused_reason is None
+
+
+# ---- BE-01: auto only while the strategy is active --------------------------------------
+
+
+def test_be01_a_demotion_pauses_auto_and_the_tick_places_nothing_at_the_broker(world):
+    world.registry.set_status("bh_up", "shadow", actor="service:system", reason="quit rule")
+    auto = world.subs.get(world.bob, world.bob_auto)
+    assert auto.mode is Mode.AUTO
+    assert auto.paused_reason == "strategy_not_active: shadow"
+    [audit] = world.state.sql("SELECT * FROM audit_log WHERE action = 'subscription.auto_paused'")
+    assert audit["target_id"] == world.bob_auto and audit["actor"] == "service:system"
+    [notice] = world.state.sql("SELECT * FROM notification_outbox WHERE category = 'risk'")
+    assert notice["user_id"] == world.bob.user_id
+
+    world.tick(DAY1)
+    assert world.book.orders == {}
+    assert world.orders(world.live) == []
+    # a paper subscription on a shadow strategy keeps trading
+    [alice_order] = world.orders(world.sim)
+    assert alice_order["strategy_id"] == "bh_up"
+
+
+def test_be01_the_tick_refuses_and_pauses_an_auto_subscription_on_an_inactive_strategy(world):
+    # e.g. a strategy demoted before the pause existed: its auto row still runs
+    world.registry.set_status("bh_up", "retired", actor="t", reason="gone for good")
+    world.state.execute("UPDATE subscriptions SET paused_reason = NULL WHERE id = ?",
+                        [world.bob_auto])  # fmt: skip
+    result = world.tick(DAY1)
+    assert world.book.orders == {}
+    assert world.orders(world.live) == []
+    assert world.subs.get(world.bob, world.bob_auto).paused_reason == (
+        "strategy_not_active: retired"
+    )
+    [live] = [r for r in result.portfolios if r.portfolio_id == world.live]
+    assert live.summary.get("auto_paused") == [world.bob_auto]
+
+
+def test_be01_a_dry_run_pauses_nothing_for_an_inactive_strategy(world):
+    world.registry.set_status("bh_up", "shadow", actor="t", reason="quit rule")
+    world.state.execute("UPDATE subscriptions SET paused_reason = NULL WHERE id = ?",
+                        [world.bob_auto])  # fmt: skip
+    world.tick(DAY1, dry_run=True)
+    assert world.book.orders == {}
+    assert world.subs.get(world.bob, world.bob_auto).paused_reason is None
+
+
+# ---- BE-02: an auto book trades only what it owns ----------------------------------------
+
+
+def _momentum_auto(world):
+    from stonks.strategies.examples.momentum import Momentum
+
+    reports = [SurvivalReport(test_id="oos", passed=True, metrics={})]
+    params = {"lookback_days": 5, "skip_days": 0, "threshold": 0.0, "allocation": 0.5}
+    world.registry.register(Momentum(params), reports=reports, strategy_id="mom")
+    seed_status(world.registry, "mom", "active")
+    world.state.execute("UPDATE subscriptions SET strategy_id = 'mom' WHERE id = ?",
+                        [world.bob_auto])  # fmt: skip
+
+
+def test_be02_an_auto_book_never_sells_the_users_own_holdings(world):
+    from stonks.connections.base import ExternalPosition
+
+    _momentum_auto(world)
+    [account] = world.book.accounts
+    world.book.positions = {
+        account.id: [
+            ExternalPosition(raw_symbol="FLAT", ticker="FLAT.US", quantity=10, price=50.0),
+            ExternalPosition(raw_symbol="UP", ticker="UP.US", quantity=5, price=150.0),
+        ]
+    }
+    world.tick(DAY1)
+    placed = [(o.ticker, o.side) for o in world.book.orders.values()]
+    assert ("FLAT.US", "sell") not in placed
+    # momentum picks UP: the book buys its own UP even though Bob holds some
+    assert placed == [("UP.US", "buy")]
+    [bought] = world.book.orders.values()
+
+    world.tick(DAY2)  # the book holds its UP now: nothing new, still no FLAT sell
+    assert [(o.ticker, o.side) for o in world.book.orders.values()] == placed
+    held = {p.ticker: p.quantity for p in world.book.positions[account.id]}
+    assert held == {"FLAT.US": 10, "UP.US": 5 + bought.quantity}
+    # the snapshot still marks the whole account
+    [snap] = world.state.sql(
+        "SELECT positions_json FROM portfolio_snapshots WHERE portfolio_id = ?"
+        " ORDER BY as_of DESC LIMIT 1",
+        [world.live],
+    )
+    assert "FLAT.US" in snap["positions_json"]
+
+
+# ---- BE-03: a scoped tick trades only its scope ---------------------------------------------
+
+
+@pytest.mark.parametrize("own_universe", [False, True])
+def test_be03_a_scoped_tick_never_orders_outside_its_scope(world, own_universe):
+    import json
+    from dataclasses import replace
+
+    from stonks.strategies.examples.momentum import Momentum
+
+    reports = [SurvivalReport(test_id="oos", passed=True, metrics={})]
+    params = {"lookback_days": 5, "skip_days": 0, "threshold": 0.0, "allocation": 0.5}
+    world.registry.register(Momentum(params), reports=reports, strategy_id="mom")
+    seed_status(world.registry, "mom", "active")
+    world.state.execute("UPDATE subscriptions SET strategy_id = 'mom' WHERE id = ?",
+                        [world.alice_paper])  # fmt: skip
+    if own_universe:
+        world.state.execute("UPDATE portfolios SET universe = ? WHERE id = ?",
+                            [json.dumps(UNIVERSE), world.sim])  # fmt: skip
+    world.tick(DAY1)
+    [bought] = world.orders(world.sim)
+    assert bought["ticker"] == "UP.US"
+
+    scoped = replace(SETTINGS, universe=["DOWN.US"], scoped=True)
+    plan = load_tick_plan(world.state, scoped, traders=world.traders)
+    run_tick(world.state, world.lake, world.registry, scoped, as_of=DAY2, plan=plan)
+    day2 = [o for o in world.orders(world.sim) if o["client_id"].startswith("2026-03-18")]
+    assert all(o["ticker"] == "DOWN.US" for o in day2), day2
+
+
+def test_be52_a_dry_run_plan_writes_no_paper_account(world):
+    plan = load_tick_plan(world.state, SETTINGS, traders=world.traders, dry_run=True)
+    assert paper_account_id(world.live) in {b.portfolio_id for b in plan.books}
+    assert not world.state.sql("SELECT 1 FROM portfolios WHERE paper_of IS NOT NULL")
+    run_tick(world.state, world.lake, world.registry, SETTINGS, as_of=DAY1, plan=plan,
+             dry_run=True)  # fmt: skip
+    assert not world.state.sql("SELECT 1 FROM portfolios WHERE paper_of IS NOT NULL")
+
+
+# ---- BE-18: a retired strategy's holdings are exited, then its subscription ends -----------
+
+
+def test_be18_a_retired_strategys_paper_holdings_are_sold_then_the_subscription_ends(world):
+    # Alice's book also follows bh_down, which keeps its own holding
+    world.subs.subscribe(world.alice, strategy_id="bh_down", mode=Mode.PAPER,
+                         portfolio_id=world.sim)  # fmt: skip
+    world.tick(DAY1)
+    bought = {o["ticker"] for o in world.orders(world.sim)}
+    assert "UP.US" in bought
+    world.registry.set_status("bh_up", "retired", actor="t", reason="no edge left")
+
+    world.tick(DAY2)
+    day2 = [o for o in world.orders(world.sim) if o["client_id"].startswith("2026-03-18")]
+    sells = [(o["ticker"], o["side"], o["strategy_id"]) for o in day2 if o["side"] == "sell"]
+    assert sells == [("UP.US", "sell", "bh_up")]
+    assert world.subs.get(world.alice, world.alice_paper).enabled is False
+    [audit] = world.state.sql(
+        "SELECT * FROM audit_log WHERE action = 'subscription.disable' AND target_id = ?",
+        [world.alice_paper],
+    )
+    assert audit["actor"] == "service:system"
+    [snap] = world.state.sql(
+        "SELECT positions_json FROM portfolio_snapshots WHERE portfolio_id = ?"
+        " ORDER BY as_of DESC, id DESC LIMIT 1",
+        [world.sim],
+    )
+    assert "UP.US" not in snap["positions_json"]
+
+
+# ---- BE-27: no future ticks ---------------------------------------------------------------
+
+
+def test_be27_a_future_tick_is_refused_unless_it_is_a_dry_run(world):
+    from stonks.production.tick import BackdatedTickError, FutureTickError
+
+    future = date(2099, 1, 5)
+    with pytest.raises(FutureTickError):
+        world.tick(future)
+    assert issubclass(FutureTickError, BackdatedTickError)
+    assert world.state.count_rows("tick_runs") == 0
+    world.tick(future, dry_run=True)  # a dry run may look ahead
+    world.tick(DAY1)  # and real ticks still run
+    assert world.orders(world.sim)

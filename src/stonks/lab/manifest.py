@@ -190,16 +190,70 @@ def data_fingerprint(dataset: Any) -> dict[str, Any]:
     ``stock_splits`` and ``dividends`` row up to the window end (they change
     adjusted prices, fills and cash). So a corrected open, a new split or a
     changed warm-up bar changes the hash (RS-18, P46). Tickers with no bars
-    get ``count = 0``."""
+    get ``count = 0``.
+
+    ``tickers`` covers the universe. ``references`` covers every other
+    ticker the run reads: each strategy's reference tickers (a regime
+    filter's index, a reference market) and the benchmark. An intraday run
+    also reads daily bars (regime filters, daily features), so ``daily``
+    hashes them for every ticker (BE-28)."""
+    from stonks.lab.dataset import data_tickers
+
     start, end = dataset.full_window
     interval = _interval_code(dataset)
     universe = sorted(set(dataset.universe))
-    first_day = _as_date(start) - timedelta(days=FINGERPRINT_WARMUP_DAYS)
+    references = sorted(set(data_tickers(dataset)) - set(universe))
+    everyone = universe + references
     stop = _as_date(end) + timedelta(days=1)
+    bars = _bars_hashes(dataset.lake, everyone, interval, _as_date(start), stop)
+    actions = _actions_hashes(dataset.lake, everyone, stop)
+
+    def entries(names: list[str], hashes: dict[str, dict[str, Any]]) -> dict[str, Any]:
+        out: dict[str, dict[str, Any]] = {}
+        for t in names:
+            out[t] = dict(hashes.get(t, _NO_BARS))
+            if t in actions:
+                out[t]["actions_hash"] = actions[t]
+        return out
+
+    body: dict[str, Any] = {
+        "window": [str(start), str(end)],
+        "warmup_days": FINGERPRINT_WARMUP_DAYS,
+        "interval": interval,
+        "tickers": entries(universe, bars),
+        "references": entries(references, bars),
+    }
+    if _is_intraday(interval):
+        daily = _bars_hashes(dataset.lake, everyone, "1d", _as_date(start), stop)
+        body["daily"] = {t: dict(daily.get(t, _NO_BARS)) for t in everyone}
+    digest = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
+    return {**body, "hash": digest}
+
+
+_NO_BARS: dict[str, Any] = {"count": 0, "first": None, "last": None, "bars_hash": None}
+
+
+def _is_intraday(code: str) -> bool:
+    from stonks.core.interval import Interval
+
+    try:
+        return Interval.parse(code).is_intraday
+    except ValueError:
+        return False
+
+
+def _bars_hashes(
+    lake: Any, tickers: list[str], interval: str, start: date, stop: date
+) -> dict[str, dict[str, Any]]:
+    """Per ticker with bars: count and first stamp in the window, last
+    stamp, and a hash of every bar from the warm-up start to ``stop``."""
+    if not tickers:
+        return {}
+    first_day = start - timedelta(days=FINGERPRINT_WARMUP_DAYS)
     row_sql = " || '|' || ".join(
         f"COALESCE(CAST({c} AS VARCHAR), '')" for c in ("timestamp", *_BAR_COLUMNS)
     )
-    df = dataset.lake.sql(
+    df = lake.sql(
         f"""
         SELECT ticker,
                COUNT(*) FILTER (WHERE timestamp >= ?) AS n,
@@ -210,38 +264,24 @@ def data_fingerprint(dataset: Any) -> dict[str, Any]:
         WHERE ticker = ANY(?) AND interval = ? AND timestamp >= ? AND timestamp < ?
         GROUP BY ticker
         """,
-        [_as_date(start), _as_date(start), universe, interval, first_day, stop],
+        [start, start, tickers, interval, first_day, stop],
     )
-    actions = _actions_hashes(dataset.lake, universe, stop)
-    found = {row.ticker: row for row in df.itertuples(index=False)}
-    tickers: dict[str, dict[str, Any]] = {}
-    for t in universe:
-        row = found.get(t)
-        tickers[t] = (
-            {
-                "count": int(row.n),
-                "first": _iso(row.first_ts),
-                "last": _iso(row.last_ts),
-                "bars_hash": str(row.bars_hash),
-            }
-            if row is not None
-            else {"count": 0, "first": None, "last": None, "bars_hash": None}
-        )
-        if t in actions:
-            tickers[t]["actions_hash"] = actions[t]
-    body = {
-        "window": [str(start), str(end)],
-        "warmup_days": FINGERPRINT_WARMUP_DAYS,
-        "interval": interval,
-        "tickers": tickers,
+    return {
+        str(row.ticker): {
+            "count": int(row.n),
+            "first": _iso(row.first_ts),
+            "last": _iso(row.last_ts),
+            "bars_hash": str(row.bars_hash),
+        }
+        for row in df.itertuples(index=False)
     }
-    digest = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
-    return {**body, "hash": digest}
 
 
 def _actions_hashes(lake: Any, universe: list[str], stop: date) -> dict[str, str]:
     """Per ticker, a hash of its split and dividend rows dated before
     ``stop`` (tickers with none are left out)."""
+    if not universe:
+        return {}
     df = lake.sql(
         """
         SELECT ticker, md5(string_agg(row, ',' ORDER BY row)) AS h FROM (

@@ -16,6 +16,7 @@ from stonks.mcp.tools import (
     subscriptions,
     tca,
     universes,
+    workspace,
 )
 from stonks.mcp.tools.common import ToolContext
 
@@ -32,6 +33,7 @@ MODULES = (
     insights,
     risk,
     notifications,
+    workspace,
 )
 
 

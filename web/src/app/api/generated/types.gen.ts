@@ -591,6 +591,96 @@ export type ChannelDefaultView = {
 };
 
 /**
+ * ChartFillView
+ */
+export type ChartFillView = {
+    /**
+     * Filled At
+     */
+    filled_at: string;
+    /**
+     * Order Client Id
+     */
+    order_client_id: string;
+    /**
+     * Price
+     */
+    price: number;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Side
+     */
+    side: string | null;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string | null;
+};
+
+/**
+ * ChartSignalView
+ */
+export type ChartSignalView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Reason
+     */
+    reason: string | null;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string;
+    /**
+     * Strength
+     */
+    strength: number | null;
+};
+
+/**
+ * ChartView
+ */
+export type ChartView = {
+    /**
+     * Bars
+     */
+    bars: Array<BarView>;
+    /**
+     * Fills
+     */
+    fills: Array<ChartFillView>;
+    /**
+     * Interval
+     */
+    interval: string;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string | null;
+    /**
+     * Signals
+     */
+    signals: Array<ChartSignalView>;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Truncated
+     */
+    truncated: boolean;
+};
+
+/**
  * CircuitBreakerSettings
  */
 export type CircuitBreakerSettings = {
@@ -2051,6 +2141,10 @@ export type InsightsTotalsView = {
      */
     portfolios: number;
     /**
+     * Suppressed
+     */
+    suppressed?: boolean;
+    /**
      * Total Value
      */
     total_value: number;
@@ -2557,6 +2651,67 @@ export type LabRunView = {
      * Verdict
      */
     verdict: 'pass' | 'fail';
+};
+
+/**
+ * LeaderboardRow
+ */
+export type LeaderboardRow = {
+    /**
+     * Book Trades
+     */
+    book_trades: number;
+    /**
+     * Class Path
+     */
+    class_path: string;
+    /**
+     * Golive Passed
+     */
+    golive_passed: boolean | null;
+    /**
+     * Live Since
+     */
+    live_since: string | null;
+    paper: PaperFigures;
+    /**
+     * Rank
+     */
+    rank: number;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string;
+    /**
+     * Survival Passed
+     */
+    survival_passed: number;
+    /**
+     * Survival Total
+     */
+    survival_total: number;
+};
+
+/**
+ * LeaderboardView
+ */
+export type LeaderboardView = {
+    /**
+     * As Of
+     */
+    as_of: string | null;
+    /**
+     * Rows
+     */
+    rows: Array<LeaderboardRow>;
+    /**
+     * Sort
+     */
+    sort: 'sharpe' | 'return' | 'drawdown' | 'trades';
 };
 
 /**
@@ -3105,6 +3260,20 @@ export type MfaView = {
 };
 
 /**
+ * MonthlyReturn
+ */
+export type MonthlyReturn = {
+    /**
+     * Month
+     */
+    month: string;
+    /**
+     * Value
+     */
+    value: number | null;
+};
+
+/**
  * NetExposureSettings
  */
 export type NetExposureSettings = {
@@ -3126,6 +3295,56 @@ export type NoteRequest = {
      * Note
      */
     note: string;
+};
+
+/**
+ * OnboardingStepView
+ */
+export type OnboardingStepView = {
+    /**
+     * Derived
+     */
+    derived: boolean;
+    /**
+     * Id
+     */
+    id: 'account' | 'portfolio' | 'data' | 'follow' | 'alerts';
+    /**
+     * State
+     */
+    state: 'done' | 'skipped' | 'todo';
+};
+
+/**
+ * OnboardingUpdate
+ */
+export type OnboardingUpdate = {
+    /**
+     * Dismissed
+     */
+    dismissed: boolean;
+};
+
+/**
+ * OnboardingView
+ */
+export type OnboardingView = {
+    /**
+     * Complete
+     */
+    complete: boolean;
+    /**
+     * Dismissed
+     */
+    dismissed: boolean;
+    /**
+     * Show
+     */
+    show: boolean;
+    /**
+     * Steps
+     */
+    steps: Array<OnboardingStepView>;
 };
 
 /**
@@ -3857,6 +4076,80 @@ export type PageUserView = {
 };
 
 /**
+ * Page[WatchlistView]
+ */
+export type PageWatchlistView = {
+    /**
+     * Items
+     */
+    items: Array<WatchlistView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * PaperFigures
+ *
+ * The model book's result. Every figure is null without two days.
+ */
+export type PaperFigures = {
+    /**
+     * Cagr
+     */
+    cagr: number | null;
+    /**
+     * Days
+     */
+    days: number;
+    /**
+     * First Day
+     */
+    first_day: string | null;
+    /**
+     * Latest Day
+     */
+    latest_day: string | null;
+    /**
+     * Latest Value
+     */
+    latest_value: number | null;
+    /**
+     * Max Drawdown
+     */
+    max_drawdown: number | null;
+    /**
+     * Sharpe
+     */
+    sharpe: number | null;
+    /**
+     * Sortino
+     */
+    sortino: number | null;
+    /**
+     * Total Return
+     */
+    total_return: number | null;
+    /**
+     * Trades
+     */
+    trades: number;
+    /**
+     * Volatility
+     */
+    volatility: number | null;
+};
+
+/**
  * ParameterInfo
  */
 export type ParameterInfo = {
@@ -4159,6 +4452,12 @@ export type PortfolioTotalsView = {
      * Active portfolios with at least one snapshot.
      */
     portfolios: number;
+    /**
+     * Suppressed
+     *
+     * True when too few other people own books for the sums to hide anyone's numbers: cash and value then read 0.
+     */
+    suppressed?: boolean;
     /**
      * Total Value
      *
@@ -4720,6 +5019,36 @@ export type RiskAdjustmentView = {
      * Ticker
      */
     ticker: string;
+};
+
+/**
+ * RiskLimitsUpdate
+ */
+export type RiskLimitsUpdate = {
+    /**
+     * Limits
+     */
+    limits: {
+        [key: string]: unknown;
+    };
+};
+
+/**
+ * RiskLimitsView
+ */
+export type RiskLimitsView = {
+    effective: RiskPolicy;
+    /**
+     * Ignored
+     */
+    ignored: Array<string>;
+    /**
+     * Mine
+     */
+    mine: {
+        [key: string]: unknown;
+    };
+    system: RiskPolicy;
 };
 
 /**
@@ -5761,6 +6090,16 @@ export type StatusChangeView = {
 };
 
 /**
+ * StepUpdate
+ */
+export type StepUpdate = {
+    /**
+     * State
+     */
+    state: 'done' | 'skipped' | 'todo';
+};
+
+/**
  * StrategyClassInfo
  */
 export type StrategyClassInfo = {
@@ -6387,6 +6726,38 @@ export type SyncResultView = {
 };
 
 /**
+ * SystemCheckView
+ */
+export type SystemCheckView = {
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Done
+     */
+    done: boolean;
+    /**
+     * Id
+     */
+    id: 'data_source' | 'first_ingest' | 'backup' | 'scheduler';
+};
+
+/**
+ * SystemChecklistView
+ */
+export type SystemChecklistView = {
+    /**
+     * Checks
+     */
+    checks: Array<SystemCheckView>;
+    /**
+     * Complete
+     */
+    complete: boolean;
+};
+
+/**
  * TcaGroupView
  *
  * Costs of a group of orders, weighted by notional, in bps.
@@ -6474,6 +6845,39 @@ export type TcaSummaryView = {
      * Until
      */
     until: string | null;
+};
+
+/**
+ * TearSheetView
+ */
+export type TearSheetView = {
+    /**
+     * Book Trades
+     */
+    book_trades: number;
+    /**
+     * Curve
+     */
+    curve: Array<PnlRowView>;
+    golive: GoLiveReport | null;
+    /**
+     * Live Since
+     */
+    live_since: string | null;
+    /**
+     * Monthly Returns
+     */
+    monthly_returns: Array<MonthlyReturn>;
+    paper: PaperFigures;
+    /**
+     * Recent Trades
+     */
+    recent_trades: Array<ShadowDecisionView>;
+    /**
+     * Status History
+     */
+    status_history: Array<StatusChangeView>;
+    strategy: StrategyDetail;
 };
 
 /**
@@ -7227,6 +7631,62 @@ export type WalkForwardConfig = {
      * Train Days
      */
     train_days?: number | null;
+};
+
+/**
+ * WatchlistCreate
+ */
+export type WatchlistCreate = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Tickers
+     */
+    tickers?: Array<string>;
+};
+
+/**
+ * WatchlistUpdate
+ *
+ * Rename, replace the tickers, or both. Unset fields stay.
+ */
+export type WatchlistUpdate = {
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Tickers
+     */
+    tickers?: Array<string> | null;
+};
+
+/**
+ * WatchlistView
+ */
+export type WatchlistView = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Tickers
+     */
+    tickers: Array<string>;
+    /**
+     * Updated At
+     */
+    updated_at: string;
 };
 
 /**
@@ -8770,6 +9230,83 @@ export type ListStrategyClassesResponses = {
 
 export type ListStrategyClassesResponse = ListStrategyClassesResponses[keyof ListStrategyClassesResponses];
 
+export type GetChartData = {
+    body?: never;
+    path: {
+        /**
+         * Ticker
+         *
+         * instrument id, e.g. AAPL.US
+         */
+        ticker: string;
+    };
+    query?: {
+        /**
+         * Interval
+         */
+        interval?: string;
+        /**
+         * Start
+         */
+        start?: string | null;
+        /**
+         * End
+         */
+        end?: string | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise).
+         */
+        portfolio_id?: string | null;
+        /**
+         * Strategy Id
+         *
+         * only this strategy's signals
+         */
+        strategy_id?: string | null;
+    };
+    url: '/api/charts/{ticker}';
+};
+
+export type GetChartErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetChartError = GetChartErrors[keyof GetChartErrors];
+
+export type GetChartResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChartView;
+};
+
+export type GetChartResponse = GetChartResponses[keyof GetChartResponses];
+
 export type ListConnectionsData = {
     body?: never;
     path?: never;
@@ -9243,6 +9780,298 @@ export type SyncConnectionResponses = {
 };
 
 export type SyncConnectionResponse = SyncConnectionResponses[keyof SyncConnectionResponses];
+
+export type ExportFillsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/exports/fills';
+};
+
+export type ExportFillsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ExportFillsError = ExportFillsErrors[keyof ExportFillsErrors];
+
+export type ExportFillsResponses = {
+    /**
+     * A CSV file with a header row
+     */
+    200: Blob | File;
+};
+
+export type ExportFillsResponse = ExportFillsResponses[keyof ExportFillsResponses];
+
+export type ExportJournalData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/exports/journal';
+};
+
+export type ExportJournalErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ExportJournalError = ExportJournalErrors[keyof ExportJournalErrors];
+
+export type ExportJournalResponses = {
+    /**
+     * A CSV file with a header row
+     */
+    200: Blob | File;
+};
+
+export type ExportJournalResponse = ExportJournalResponses[keyof ExportJournalResponses];
+
+export type ExportLabTrialsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Run Id
+         *
+         * one lab run; default every run
+         */
+        run_id?: string | null;
+    };
+    url: '/api/exports/lab-trials';
+};
+
+export type ExportLabTrialsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ExportLabTrialsError = ExportLabTrialsErrors[keyof ExportLabTrialsErrors];
+
+export type ExportLabTrialsResponses = {
+    /**
+     * A CSV file with a header row
+     */
+    200: Blob | File;
+};
+
+export type ExportLabTrialsResponse = ExportLabTrialsResponses[keyof ExportLabTrialsResponses];
+
+export type ExportOrdersData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/exports/orders';
+};
+
+export type ExportOrdersErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ExportOrdersError = ExportOrdersErrors[keyof ExportOrdersErrors];
+
+export type ExportOrdersResponses = {
+    /**
+     * A CSV file with a header row
+     */
+    200: Blob | File;
+};
+
+export type ExportOrdersResponse = ExportOrdersResponses[keyof ExportOrdersResponses];
+
+export type ExportPnlData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Since
+         */
+        since?: string | null;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/exports/pnl';
+};
+
+export type ExportPnlErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ExportPnlError = ExportPnlErrors[keyof ExportPnlErrors];
+
+export type ExportPnlResponses = {
+    /**
+     * A CSV file with a header row
+     */
+    200: Blob | File;
+};
+
+export type ExportPnlResponse = ExportPnlResponses[keyof ExportPnlResponses];
+
+export type ExportSnapshotsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/exports/snapshots';
+};
+
+export type ExportSnapshotsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ExportSnapshotsError = ExportSnapshotsErrors[keyof ExportSnapshotsErrors];
+
+export type ExportSnapshotsResponses = {
+    /**
+     * A CSV file with a header row
+     */
+    200: Blob | File;
+};
+
+export type ExportSnapshotsResponse = ExportSnapshotsResponses[keyof ExportSnapshotsResponses];
 
 export type ListHaltsData = {
     body?: never;
@@ -11231,6 +12060,10 @@ export type SendTestNotificationErrors = {
      */
     422: ProblemDetails;
     /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
      * Service Unavailable
      */
     503: ProblemDetails;
@@ -11287,6 +12120,177 @@ export type SetNotificationWebhookResponses = {
 };
 
 export type SetNotificationWebhookResponse = SetNotificationWebhookResponses[keyof SetNotificationWebhookResponses];
+
+export type GetOnboardingData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/onboarding';
+};
+
+export type GetOnboardingErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetOnboardingError = GetOnboardingErrors[keyof GetOnboardingErrors];
+
+export type GetOnboardingResponses = {
+    /**
+     * Successful Response
+     */
+    200: OnboardingView;
+};
+
+export type GetOnboardingResponse = GetOnboardingResponses[keyof GetOnboardingResponses];
+
+export type UpdateOnboardingData = {
+    body: OnboardingUpdate;
+    path?: never;
+    query?: never;
+    url: '/api/onboarding';
+};
+
+export type UpdateOnboardingErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type UpdateOnboardingError = UpdateOnboardingErrors[keyof UpdateOnboardingErrors];
+
+export type UpdateOnboardingResponses = {
+    /**
+     * Successful Response
+     */
+    200: OnboardingView;
+};
+
+export type UpdateOnboardingResponse = UpdateOnboardingResponses[keyof UpdateOnboardingResponses];
+
+export type UpdateOnboardingStepData = {
+    body: StepUpdate;
+    path: {
+        /**
+         * Step
+         *
+         * the step to mark
+         */
+        step: 'account' | 'portfolio' | 'data' | 'follow' | 'alerts';
+    };
+    query?: never;
+    url: '/api/onboarding/steps/{step}';
+};
+
+export type UpdateOnboardingStepErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type UpdateOnboardingStepError = UpdateOnboardingStepErrors[keyof UpdateOnboardingStepErrors];
+
+export type UpdateOnboardingStepResponses = {
+    /**
+     * Successful Response
+     */
+    200: OnboardingView;
+};
+
+export type UpdateOnboardingStepResponse = UpdateOnboardingStepResponses[keyof UpdateOnboardingStepResponses];
+
+export type GetSystemChecklistData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/onboarding/system';
+};
+
+export type GetSystemChecklistErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetSystemChecklistError = GetSystemChecklistErrors[keyof GetSystemChecklistErrors];
+
+export type GetSystemChecklistResponses = {
+    /**
+     * Successful Response
+     */
+    200: SystemChecklistView;
+};
+
+export type GetSystemChecklistResponse = GetSystemChecklistResponses[keyof GetSystemChecklistResponses];
 
 export type ListOrdersData = {
     body?: never;
@@ -12043,6 +13047,88 @@ export type GetVapidKeyResponses = {
 
 export type GetVapidKeyResponse = GetVapidKeyResponses[keyof GetVapidKeyResponses];
 
+export type GetMyRiskLimitsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/risk/limits';
+};
+
+export type GetMyRiskLimitsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetMyRiskLimitsError = GetMyRiskLimitsErrors[keyof GetMyRiskLimitsErrors];
+
+export type GetMyRiskLimitsResponses = {
+    /**
+     * Successful Response
+     */
+    200: RiskLimitsView;
+};
+
+export type GetMyRiskLimitsResponse = GetMyRiskLimitsResponses[keyof GetMyRiskLimitsResponses];
+
+export type SetMyRiskLimitsData = {
+    body: RiskLimitsUpdate;
+    path?: never;
+    query?: never;
+    url: '/api/risk/limits';
+};
+
+export type SetMyRiskLimitsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SetMyRiskLimitsError = SetMyRiskLimitsErrors[keyof SetMyRiskLimitsErrors];
+
+export type SetMyRiskLimitsResponses = {
+    /**
+     * Successful Response
+     */
+    200: RiskLimitsView;
+};
+
+export type SetMyRiskLimitsResponse = SetMyRiskLimitsResponses[keyof SetMyRiskLimitsResponses];
+
 export type GetLiveRiskData = {
     body?: never;
     path?: never;
@@ -12632,6 +13718,60 @@ export type ListStrategiesResponses = {
 
 export type ListStrategiesResponse = ListStrategiesResponses[keyof ListStrategiesResponses];
 
+export type GetLeaderboardData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Sort
+         *
+         * rank by paper Sharpe, total return, drawdown or trades
+         */
+        sort?: 'sharpe' | 'return' | 'drawdown' | 'trades';
+        /**
+         * Include Retired
+         *
+         * also list stopped strategies
+         */
+        include_retired?: boolean;
+    };
+    url: '/api/strategies/leaderboard';
+};
+
+export type GetLeaderboardErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetLeaderboardError = GetLeaderboardErrors[keyof GetLeaderboardErrors];
+
+export type GetLeaderboardResponses = {
+    /**
+     * Successful Response
+     */
+    200: LeaderboardView;
+};
+
+export type GetLeaderboardResponse = GetLeaderboardResponses[keyof GetLeaderboardResponses];
+
 export type GetStrategySummaryData = {
     body?: never;
     path?: never;
@@ -12973,6 +14113,52 @@ export type ShadowStrategyResponses = {
 };
 
 export type ShadowStrategyResponse = ShadowStrategyResponses[keyof ShadowStrategyResponses];
+
+export type GetTearSheetData = {
+    body?: never;
+    path: {
+        /**
+         * Strategy Id
+         */
+        strategy_id: string;
+    };
+    query?: never;
+    url: '/api/strategies/{strategy_id}/tearsheet';
+};
+
+export type GetTearSheetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetTearSheetError = GetTearSheetErrors[keyof GetTearSheetErrors];
+
+export type GetTearSheetResponses = {
+    /**
+     * Successful Response
+     */
+    200: TearSheetView;
+};
+
+export type GetTearSheetResponse = GetTearSheetResponses[keyof GetTearSheetResponses];
 
 export type GetStudioCapabilitiesData = {
     body?: never;
@@ -14803,3 +15989,234 @@ export type RefreshUniverseResponses = {
 };
 
 export type RefreshUniverseResponse = RefreshUniverseResponses[keyof RefreshUniverseResponses];
+
+export type ListWatchlistsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/watchlists';
+};
+
+export type ListWatchlistsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListWatchlistsError = ListWatchlistsErrors[keyof ListWatchlistsErrors];
+
+export type ListWatchlistsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageWatchlistView;
+};
+
+export type ListWatchlistsResponse = ListWatchlistsResponses[keyof ListWatchlistsResponses];
+
+export type CreateWatchlistData = {
+    body: WatchlistCreate;
+    path?: never;
+    query?: never;
+    url: '/api/watchlists';
+};
+
+export type CreateWatchlistErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CreateWatchlistError = CreateWatchlistErrors[keyof CreateWatchlistErrors];
+
+export type CreateWatchlistResponses = {
+    /**
+     * Successful Response
+     */
+    201: WatchlistView;
+};
+
+export type CreateWatchlistResponse = CreateWatchlistResponses[keyof CreateWatchlistResponses];
+
+export type DeleteWatchlistData = {
+    body?: never;
+    path: {
+        /**
+         * Watchlist Id
+         */
+        watchlist_id: string;
+    };
+    query?: never;
+    url: '/api/watchlists/{watchlist_id}';
+};
+
+export type DeleteWatchlistErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type DeleteWatchlistError = DeleteWatchlistErrors[keyof DeleteWatchlistErrors];
+
+export type DeleteWatchlistResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteWatchlistResponse = DeleteWatchlistResponses[keyof DeleteWatchlistResponses];
+
+export type GetWatchlistData = {
+    body?: never;
+    path: {
+        /**
+         * Watchlist Id
+         */
+        watchlist_id: string;
+    };
+    query?: never;
+    url: '/api/watchlists/{watchlist_id}';
+};
+
+export type GetWatchlistErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetWatchlistError = GetWatchlistErrors[keyof GetWatchlistErrors];
+
+export type GetWatchlistResponses = {
+    /**
+     * Successful Response
+     */
+    200: WatchlistView;
+};
+
+export type GetWatchlistResponse = GetWatchlistResponses[keyof GetWatchlistResponses];
+
+export type UpdateWatchlistData = {
+    body: WatchlistUpdate;
+    path: {
+        /**
+         * Watchlist Id
+         */
+        watchlist_id: string;
+    };
+    query?: never;
+    url: '/api/watchlists/{watchlist_id}';
+};
+
+export type UpdateWatchlistErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type UpdateWatchlistError = UpdateWatchlistErrors[keyof UpdateWatchlistErrors];
+
+export type UpdateWatchlistResponses = {
+    /**
+     * Successful Response
+     */
+    200: WatchlistView;
+};
+
+export type UpdateWatchlistResponse = UpdateWatchlistResponses[keyof UpdateWatchlistResponses];
