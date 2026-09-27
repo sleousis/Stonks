@@ -4506,6 +4506,28 @@ export type PageLedgerRunView = {
 };
 
 /**
+ * Page[LotPickView]
+ */
+export type PageLotPickView = {
+    /**
+     * Items
+     */
+    items: Array<LotPickView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[OrderDraftView]
  */
 export type PageOrderDraftView = {
@@ -4865,6 +4887,28 @@ export type PageTradingModeView = {
      * Items
      */
     items: Array<TradingModeView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[TurnView]
+ */
+export type PageTurnView = {
+    /**
+     * Items
+     */
+    items: Array<TurnView>;
     /**
      * Limit
      */
@@ -9543,7 +9587,18 @@ export type ListAssistantTurnsData = {
          */
         conversation_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/assistant/conversations/{conversation_id}/turns';
 };
 
@@ -9574,11 +9629,9 @@ export type ListAssistantTurnsError = ListAssistantTurnsErrors[keyof ListAssista
 
 export type ListAssistantTurnsResponses = {
     /**
-     * Response Listassistantturns
-     *
      * Successful Response
      */
-    200: Array<TurnView>;
+    200: PageTurnView;
 };
 
 export type ListAssistantTurnsResponse = ListAssistantTurnsResponses[keyof ListAssistantTurnsResponses];
@@ -17824,6 +17877,16 @@ export type ListTaxLotPicksData = {
          * One of your portfolios (404 otherwise). Default: your own book.
          */
         portfolio_id?: string | null;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
     };
     url: '/api/tax/lots/picks';
 };
@@ -17855,11 +17918,9 @@ export type ListTaxLotPicksError = ListTaxLotPicksErrors[keyof ListTaxLotPicksEr
 
 export type ListTaxLotPicksResponses = {
     /**
-     * Response Listtaxlotpicks
-     *
      * Successful Response
      */
-    200: Array<LotPickView>;
+    200: PageLotPickView;
 };
 
 export type ListTaxLotPicksResponse = ListTaxLotPicksResponses[keyof ListTaxLotPicksResponses];

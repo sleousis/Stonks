@@ -613,7 +613,7 @@ def ingest_fx(
         callback=_validate_source,
     ),
 ) -> None:
-    """Pull daily FX rates into ``fx_rates`` (roadmap 20.5). Each pair is
+    """Pull daily FX rates into ``fx_rates``. Each pair is
     one unit of the ``ingest_runs`` row, so a bad pair never blocks the rest."""
     from stonks.ingest.fx import parse_pairs
 

@@ -25,7 +25,7 @@ from stonks.app.assistant import (
     TurnView,
     event_view,
 )
-from stonks.app.pagination import Page
+from stonks.app.pagination import Page, page_of
 from stonks.assistant.loop import AssistantEvent
 from stonks.auth import Permission
 
@@ -93,15 +93,15 @@ def delete_conversation(
 
 @router.get(
     "/conversations/{conversation_id}/turns",
-    response_model=list[TurnView],
+    response_model=Page[TurnView],
     operation_id="listAssistantTurns",
 )
 def list_turns(
-    conversation_id: str, services: ServicesDep, principal: PrincipalDep
-) -> list[TurnView]:
+    conversation_id: str, services: ServicesDep, principal: PrincipalDep, page: PageDep
+) -> Page[TurnView]:
     """The trace of one of your conversations: each turn's model, prompt
     version, tool calls and results, and the order drafts it made."""
-    return services.assistant.turns(principal, conversation_id)
+    return page_of(services.assistant.turns(principal, conversation_id), page)
 
 
 @router.delete(

@@ -13,7 +13,7 @@ from typing import Any
 import typer
 from rich.console import Console
 
-app = typer.Typer(help="Tax settings and yearly tax exports (roadmap 20.5)", no_args_is_help=True)
+app = typer.Typer(help="Tax settings and yearly tax exports", no_args_is_help=True)
 
 _USER = typer.Option(
     None, "--user", help="act as this user (email or id); default: the operator (service:cli)"

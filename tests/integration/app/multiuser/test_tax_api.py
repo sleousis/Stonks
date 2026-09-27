@@ -164,7 +164,7 @@ def test_specific_lot_picks(client, people, book):
     assert ok.status_code == 200, ok.text
     assert [p["buy_fill_id"] for p in ok.json()] == [f["o2"]]
     listed = client.get("/api/tax/lots/picks", params=q, headers=alice).json()
-    assert len(listed) == 1
+    assert len(listed["items"]) == 1 and listed["total"] == 1
     rows = _rows(
         client.get("/api/tax/exports/gains", params=q | {"year": 2025}, headers=alice).text
     )

@@ -148,7 +148,7 @@ uv run python -m stonks.security keygen
 - Per-class profiles (007): `crypto_profiles`, `bond_profiles`, `bond_yield_history`, `commodity_contracts`. No FK enforcement.
 - `macro_indicators (country_iso, indicator, observation_date, period, country_name, value)` (009): ISO alpha-3 country, `lower_snake_case` indicator (open set), `period` in {annual, quarterly, monthly} or NULL.
 - `defi_tvl (chain, observation_date, tvl_usd, source)` (011).
-- 017 and 018: reserved for the options work. `fx_rates (base_currency, quote_currency, observation_date, rate, source)` (019): daily FX closes, `rate` = quote units per one base unit. Read through `stonks.fx.FxRates` (latest on or before the day, inverse pair, cross through USD). See `docs/tax.md`.
+- `fx_rates (base_currency, quote_currency, observation_date, rate, source)` (019): daily FX closes, `rate` = quote units per one base unit. Read through `stonks.fx.FxRates` (latest on or before the day, inverse pair, cross through USD). See `docs/tax.md`.
 - `lake_settings (key, value)` (012): today only `bars_backend`.
 - `quarantined_bars (id, run_id, ticker, timestamp, interval, OHLCV, reasons, source, quarantined_at)` and `ingest_runs.quality_json` (013).
 - `ingest_runs (id, source, kind, started_at, finished_at, tickers_ok, tickers_failed, status, error, quality_json)`.
@@ -173,7 +173,7 @@ uv run python -m stonks.security keygen
 - 020: `signals`, `signal_events`, `portfolio_runs`, `portfolios.paper_of` (a broker portfolio's paper account), `subscriptions.paper_since`, `users.risk_policy_json`.
 - 021: `orders.position_effect` (`open` or `close`). 022: a `pf_default` subscription for every active strategy. 023: `financing_accruals`, `financing_charges`.
 - 025: lab offload queue (`jobs.executor`, `lab_workers`). 026: `onboarding_steps`, `onboarding_status` (first-run guide) and `watchlists` (per-user ticker lists).
-- 027: reserved for Phase 19. 028: `orders.origin` (`strategy` or `manual`), `manual_reason`, `placed_by`, `replaces_client_id`; `price_alert_rules`, `price_alert_state`, `price_alert_events`; `telegram_links`, `telegram_link_codes`, `telegram_bot_state`; `assistant_conversations`, `assistant_messages`, `assistant_pending_actions`; `portfolio_tax_settings`, `tax_lot_picks`; `order_drafts`, `assistant_turns`, `assistant_freezes`, `portfolio_cash_flows`.
+- 028: `orders.origin` (`strategy` or `manual`), `manual_reason`, `placed_by`, `replaces_client_id`; `price_alert_rules`, `price_alert_state`, `price_alert_events`; `telegram_links`, `telegram_link_codes`, `telegram_bot_state`; `assistant_conversations`, `assistant_messages`, `assistant_pending_actions`; `portfolio_tax_settings`, `tax_lot_picks`; `order_drafts`, `assistant_turns`, `assistant_freezes`, `portfolio_cash_flows`.
 
 ## Conventions to match
 

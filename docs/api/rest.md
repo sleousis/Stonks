@@ -35,7 +35,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | DELETE | `/api/assistant/conversations/{conversation_id}` | Delete Conversation | `data.read` |  |  |
 | POST | `/api/assistant/conversations/{conversation_id}/actions/{action_id}` | Decide Action | `data.read` | [ActionDecision](#actiondecision) | SSE of [AssistantEventView](#assistanteventview) |
 | POST | `/api/assistant/conversations/{conversation_id}/messages` | Send Message | `data.read` | [MessageCreate](#messagecreate) | SSE of [AssistantEventView](#assistanteventview) |
-| GET | `/api/assistant/conversations/{conversation_id}/turns` | List Turns | sign-in |  | list[[TurnView](#turnview)] |
+| GET | `/api/assistant/conversations/{conversation_id}/turns` | List Turns | sign-in |  | [Page_TurnView_](#page_turnview_) |
 | DELETE | `/api/assistant/freeze` | Clear Freeze | `killswitch.resume` |  |  |
 | GET | `/api/assistant/status` | Assistant Status | sign-in |  | [AssistantStatusView](#assistantstatusview) |
 
@@ -362,7 +362,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 |--------|------|---------|------|---------|----------|
 | GET | `/api/tax/exports/dividends` | Dividends and withholding as CSV | sign-in |  | `text/csv` |
 | GET | `/api/tax/exports/gains` | Realized gains per lot as CSV | sign-in |  | `text/csv` |
-| GET | `/api/tax/lots/picks` | List Tax Lot Picks | sign-in |  | list[[LotPickView](#lotpickview)] |
+| GET | `/api/tax/lots/picks` | List Tax Lot Picks | sign-in |  | [Page_LotPickView_](#page_lotpickview_) |
 | PUT | `/api/tax/lots/picks` | Set Tax Lot Picks | `portfolio.manage` | [LotPicksUpdate](#lotpicksupdate) | list[[LotPickView](#lotpickview)] |
 | GET | `/api/tax/settings` | Get Tax Settings | sign-in |  | [TaxSettingsView](#taxsettingsview) |
 | PUT | `/api/tax/settings` | Update Tax Settings | `portfolio.manage` | [TaxSettingsUpdate](#taxsettingsupdate) | [TaxSettingsView](#taxsettingsview) |
@@ -2081,6 +2081,15 @@ An order to propose. The server prices it and checks it; a person approves it in
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
 
+### Page_LotPickView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[LotPickView](#lotpickview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
 ### Page_OrderDraftView_
 
 | Field | Type | Required | Description |
@@ -2230,6 +2239,15 @@ An order to propose. The server prices it and checks it; a person approves it in
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[TradingModeView](#tradingmodeview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_TurnView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[TurnView](#turnview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |

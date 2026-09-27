@@ -10,9 +10,17 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Query, Request, Response
 from pydantic import BaseModel
 
-from stonks.api.deps import PortfolioIdDep, PrincipalDep, ServicesDep, client_ip, needs
+from stonks.api.deps import (
+    PageDep,
+    PortfolioIdDep,
+    PrincipalDep,
+    ServicesDep,
+    client_ip,
+    needs,
+)
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.app.errors import ValidationError
+from stonks.app.pagination import Page, page_of
 from stonks.app.tax import (
     LotPicksUpdate,
     LotPickView,
@@ -74,12 +82,15 @@ def update_tax_settings(
     return _service(services).update_settings(principal, portfolio_id, body, ip=client_ip(request))
 
 
-@router.get("/lots/picks", response_model=list[LotPickView], operation_id="listTaxLotPicks")
+@router.get("/lots/picks", response_model=Page[LotPickView], operation_id="listTaxLotPicks")
 def list_tax_lot_picks(
-    services: ServicesDep, portfolio_id: PortfolioIdDep, sell_fill_id: int | None = None
-) -> list[LotPickView]:
+    services: ServicesDep,
+    portfolio_id: PortfolioIdDep,
+    page: PageDep,
+    sell_fill_id: int | None = None,
+) -> Page[LotPickView]:
     """The specific lots each sell closes (used with lot_method specific)."""
-    return _service(services).picks(portfolio_id, sell_fill_id)
+    return page_of(_service(services).picks(portfolio_id, sell_fill_id), page)
 
 
 @router.put(

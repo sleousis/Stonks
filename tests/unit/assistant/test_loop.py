@@ -218,8 +218,9 @@ def test_timeout_on_a_tool(store):
     loop, _, _ = _loop(
         store,
         [Script(calls=(call("get_portfolio"),)), Script(text="x")],
-        bridge=FakeBridge(delay=1.0),
-        timeout_seconds=0.1,
+        # generous margins: under a loaded test run the store's writes take time
+        bridge=FakeBridge(delay=5.0),
+        timeout_seconds=1.0,
     )
     events = _run(loop.send(conv.id, "x"))
     results = [e.data for e in events if e.kind == "tool_result"]

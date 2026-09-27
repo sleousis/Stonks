@@ -8346,6 +8346,37 @@
         "title": "Page[LedgerRunView]",
         "type": "object"
       },
+      "Page_LotPickView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LotPickView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[LotPickView]",
+        "type": "object"
+      },
       "Page_OrderDraftView_": {
         "properties": {
           "items": {
@@ -8871,6 +8902,37 @@
           "offset"
         ],
         "title": "Page[TradingModeView]",
+        "type": "object"
+      },
+      "Page_TurnView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TurnView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[TurnView]",
         "type": "object"
       },
       "Page_UniverseView_": {
@@ -17663,6 +17725,36 @@
               "title": "Conversation Id",
               "type": "string"
             }
+          },
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -17670,11 +17762,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/TurnView"
-                  },
-                  "title": "Response Listassistantturns",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_TurnView_"
                 }
               }
             },
@@ -34878,6 +34966,36 @@
               "description": "One of your portfolios (404 otherwise). Default: your own book.",
               "title": "Portfolio Id"
             }
+          },
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -34885,11 +35003,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/LotPickView"
-                  },
-                  "title": "Response Listtaxlotpicks",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_LotPickView_"
                 }
               }
             },
