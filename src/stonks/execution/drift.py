@@ -22,12 +22,25 @@ positions and orders can drift (ownership by attribution,
 Items that are not material (a stuck order at the end of the day, a
 missing commission, an order still ``unknown``) raise an alert but never
 open a halt.
+
+Roadmap 19.15 adds two comparisons of the end-of-day check:
+
+- **Cash.** The owner's own trades move the same cash, so only the change
+  Stonks can explain is compared: its own fills and fees, dividends on its
+  positions and any other flow the broker's statement names. What is left
+  beyond a tolerance is a ``cash`` or ``settled_cash`` item. It only warns
+  unless the owner makes it material.
+- **Broker statement.** The statement (IBKR Flex) is the official record.
+  Its executions of Stonks' own orders must match the booked fills. A
+  missing or extra execution, or a different quantity, is drift. A
+  different commission warns.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
+from datetime import date
 from typing import Any, Literal, cast
 
 from stonks.execution.brokers.base import BrokerOpenOrder, OrderState
@@ -35,14 +48,23 @@ from stonks.execution.brokers.base import BrokerOpenOrder, OrderState
 __all__ = [
     "DRIFT_KINDS",
     "WORKING",
+    "BookedFill",
+    "BrokerStatement",
+    "CashField",
+    "CashFlows",
     "DriftItem",
     "DriftKind",
     "DriftStatus",
     "LedgerOrder",
+    "StatementCash",
+    "StatementExecution",
+    "cash_drift",
+    "cash_tolerance",
     "eod_items",
     "order_drift",
     "position_drift",
     "report_status",
+    "statement_drift",
 ]
 
 DriftKind = Literal[
@@ -53,11 +75,18 @@ DriftKind = Literal[
     "missing_order",
     "order_state",
     "unknown_execution",
+    "statement_missing_execution",
+    "statement_extra_execution",
+    "statement_quantity",
     # not material: alert only
     "unresolved_order",
     "stuck_order",
     "commission_missing",
     "stale_order",
+    "statement_commission",
+    # alert only, unless ``cash_is_drift`` makes them material
+    "cash",
+    "settled_cash",
 ]
 DRIFT_KINDS: tuple[str, ...] = (
     "position_qty",
@@ -66,11 +95,18 @@ DRIFT_KINDS: tuple[str, ...] = (
     "missing_order",
     "order_state",
     "unknown_execution",
+    "statement_missing_execution",
+    "statement_extra_execution",
+    "statement_quantity",
     "unresolved_order",
     "stuck_order",
     "commission_missing",
     "stale_order",
+    "statement_commission",
+    "cash",
+    "settled_cash",
 )
+CashField = Literal["cash", "settled_cash"]
 #: ``clean``: nothing unexplained. ``warn``: only items that alert.
 #: ``drift``: at least one material item.
 DriftStatus = Literal["clean", "warn", "drift"]
@@ -275,6 +311,198 @@ def eod_items(
         for exec_id in missing_commission
     ]
     return sorted(items, key=lambda i: (i.kind, i.key))
+
+
+# ---- cash (roadmap 19.15) --------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CashFlows:
+    """The cash movements over a window that Stonks can explain, in the
+    account's base currency. Money in is positive."""
+
+    #: Stonks' own fills: a buy pays, a sale receives.
+    trades: float = 0.0
+    #: Stonks' own commissions (a cost is negative).
+    fees: float = 0.0
+    #: Dividends on Stonks' positions.
+    dividends: float = 0.0
+    #: Other flows the broker's statement names: the owner's own trades,
+    #: dividends on the owner's holdings, interest, deposits, fees.
+    external: float = 0.0
+
+    @property
+    def total(self) -> float:
+        return self.trades + self.fees + self.dividends + self.external
+
+
+def cash_tolerance(equity: float, *, minimum: float, fraction: float) -> float:
+    """The larger of a floor in currency units and a fraction of the
+    account's net liquidation value."""
+    return max(minimum, fraction * abs(equity))
+
+
+def cash_drift(
+    field: CashField,
+    currency: str,
+    before: float,
+    after: float,
+    flows: CashFlows,
+    *,
+    tolerance: float,
+    material: bool = False,
+) -> list[DriftItem]:
+    """One item when the broker's change in ``field`` (``after - before``)
+    differs from what Stonks explains by more than ``tolerance``."""
+    change = after - before
+    residual = change - flows.total
+    if abs(residual) <= tolerance + _EPS:
+        return []
+    label = "settled cash" if field == "settled_cash" else "cash"
+    detail = (
+        f"the broker's {label} moved {change:+.2f} {currency}, Stonks explains "
+        f"{flows.total:+.2f} (trades {flows.trades:+.2f}, fees {flows.fees:+.2f}, "
+        f"dividends {flows.dividends:+.2f}, other known flows {flows.external:+.2f}), "
+        f"{residual:+.2f} unexplained"
+    )
+    item = DriftItem(
+        kind=field, key=currency, ours=flows.total, broker=change, material=material, detail=detail
+    )
+    return [item]
+
+
+# ---- broker statement (roadmap 19.15) ----------------------------------------------------
+
+
+@dataclass(frozen=True)
+class StatementExecution:
+    """One execution in the broker's official statement, vendor free.
+    ``quantity`` is signed (a sale is negative). ``commission`` is a cost
+    (positive). ``cash`` is the trade's signed cash before commission."""
+
+    exec_id: str
+    quantity: float
+    symbol: str = ""
+    order_ref: str | None = None
+    trade_date: date | None = None
+    settle_date: date | None = None
+    cash: float | None = None
+    commission: float | None = None
+    commission_currency: str | None = None
+    currency: str | None = None
+
+
+@dataclass(frozen=True)
+class StatementCash:
+    """One cash movement in the statement. ``kind`` is ``dividend`` for
+    dividends and payments in lieu, else ``other``."""
+
+    kind: Literal["dividend", "other"]
+    amount: float
+    date: date | None
+    settle_date: date | None = None
+    currency: str | None = None
+    symbol: str | None = None
+
+
+@dataclass(frozen=True)
+class BrokerStatement:
+    """The broker's official record of an account from ``from_date`` to
+    ``to_date``, both included."""
+
+    account_id: str
+    from_date: date | None
+    to_date: date | None
+    executions: tuple[StatementExecution, ...] = ()
+    cash: tuple[StatementCash, ...] = ()
+
+
+@dataclass(frozen=True)
+class BookedFill:
+    """A fill the ledger booked from a broker execution. ``quantity`` is
+    signed. ``fee`` is ``None`` while no commission is booked."""
+
+    exec_id: str
+    ticker: str
+    quantity: float
+    fee: float | None
+    fee_currency: str | None
+
+
+def statement_drift(
+    executions: Sequence[StatementExecution],
+    booked: Sequence[BookedFill],
+    *,
+    commission_tolerance: float,
+) -> list[DriftItem]:
+    """The statement's executions of Stonks' own orders against the fills
+    the ledger booked over the same days."""
+    listed = {e.exec_id: e for e in executions}
+    mine = {f.exec_id: f for f in booked}
+    items: list[DriftItem] = []
+    for exec_id, e in listed.items():
+        f = mine.get(exec_id)
+        if f is None:
+            items.append(
+                DriftItem(
+                    kind="statement_missing_execution",
+                    key=exec_id,
+                    ours=None,
+                    broker=e.quantity,
+                    material=True,
+                    detail=f"the statement lists an execution of {e.symbol or 'an order'} "
+                    "of ours that the ledger never booked",
+                )
+            )
+            continue
+        if abs(f.quantity - e.quantity) > _EPS:
+            items.append(
+                DriftItem(
+                    kind="statement_quantity",
+                    key=exec_id,
+                    ours=f.quantity,
+                    broker=e.quantity,
+                    material=True,
+                    detail=f"the ledger booked {f.quantity:g} {f.ticker}, "
+                    f"the statement says {e.quantity:g}",
+                )
+            )
+        items += _commission_item(e, f, commission_tolerance)
+    for exec_id, f in mine.items():
+        if exec_id not in listed:
+            items.append(
+                DriftItem(
+                    kind="statement_extra_execution",
+                    key=exec_id,
+                    ours=f.quantity,
+                    broker=None,
+                    material=True,
+                    detail=f"the ledger booked a {f.ticker} fill the statement does not list",
+                )
+            )
+    return sorted(items, key=lambda i: (not i.material, i.kind, i.key))
+
+
+def _commission_item(e: StatementExecution, f: BookedFill, tolerance: float) -> list[DriftItem]:
+    if e.commission is None:
+        return []
+    if f.fee is None:
+        detail = f"no commission booked yet, the statement says {e.commission:g}"
+    elif e.commission_currency and f.fee_currency and e.commission_currency != f.fee_currency:
+        return []
+    elif abs(e.commission - f.fee) <= tolerance + _EPS:
+        return []
+    else:
+        detail = f"the ledger booked a commission of {f.fee:g}, the statement says {e.commission:g}"
+    item = DriftItem(
+        kind="statement_commission",
+        key=e.exec_id,
+        ours=f.fee,
+        broker=e.commission,
+        material=False,
+        detail=detail,
+    )
+    return [item]
 
 
 def report_status(items: Iterable[DriftItem]) -> DriftStatus:
