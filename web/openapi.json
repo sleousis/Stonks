@@ -6531,6 +6531,144 @@
         "title": "Opinion",
         "type": "object"
       },
+      "OptionGreekLimitsSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "max_dollar_delta": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Dollar Delta"
+          },
+          "max_dollar_gamma": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Dollar Gamma"
+          },
+          "max_position_dollar_delta": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Position Dollar Delta"
+          },
+          "max_position_vega": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Position Vega"
+          },
+          "max_theta": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Theta"
+          },
+          "max_vega": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Vega"
+          }
+        },
+        "title": "OptionGreekLimitsSettings",
+        "type": "object"
+      },
+      "OptionMarginSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "cash_buffer": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Cash Buffer",
+            "type": "number"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "method": {
+            "default": "reg_t",
+            "enum": [
+              "reg_t",
+              "risk_based"
+            ],
+            "title": "Method",
+            "type": "string"
+          }
+        },
+        "title": "OptionMarginSettings",
+        "type": "object"
+      },
+      "OptionMaxLossSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "max_loss_per_group": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Loss Per Group"
+          },
+          "max_loss_total": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Loss Total"
+          }
+        },
+        "title": "OptionMaxLossSettings",
+        "type": "object"
+      },
       "OrderView": {
         "properties": {
           "broker_order_id": {
@@ -9394,12 +9532,25 @@
               "max_holding": {},
               "net_exposure": {},
               "operational_halt": {},
+              "option_greek_limits": {},
+              "option_margin": {
+                "cash_buffer": 0.0,
+                "enabled": false,
+                "method": "reg_t"
+              },
+              "option_max_loss": {},
               "portfolio_vol": {},
               "risk_per_position": {
                 "atr_multiple": 3.0
               },
               "sector_cap": {},
               "short_caps": {},
+              "short_option_guard": {
+                "approval_level": 2,
+                "cash_secured": true,
+                "enabled": false,
+                "min_dte": 0
+              },
               "squeeze_guard": {
                 "spike_bars": 5
               }
@@ -9925,6 +10076,22 @@
             "$ref": "#/components/schemas/OperationalHaltSettings",
             "default": {}
           },
+          "option_greek_limits": {
+            "$ref": "#/components/schemas/OptionGreekLimitsSettings",
+            "default": {}
+          },
+          "option_margin": {
+            "$ref": "#/components/schemas/OptionMarginSettings",
+            "default": {
+              "cash_buffer": 0.0,
+              "enabled": false,
+              "method": "reg_t"
+            }
+          },
+          "option_max_loss": {
+            "$ref": "#/components/schemas/OptionMaxLossSettings",
+            "default": {}
+          },
           "portfolio_vol": {
             "$ref": "#/components/schemas/PortfolioVolSettings",
             "default": {}
@@ -9942,6 +10109,15 @@
           "short_caps": {
             "$ref": "#/components/schemas/ShortCapsSettings",
             "default": {}
+          },
+          "short_option_guard": {
+            "$ref": "#/components/schemas/ShortOptionGuardSettings",
+            "default": {
+              "approval_level": 2,
+              "cash_secured": true,
+              "enabled": false,
+              "min_dte": 0
+            }
           },
           "squeeze_guard": {
             "$ref": "#/components/schemas/SqueezeGuardSettings",
@@ -10518,6 +10694,48 @@
           }
         },
         "title": "ShortCapsSettings",
+        "type": "object"
+      },
+      "ShortOptionGuardSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_level": {
+            "default": 2,
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Approval Level",
+            "type": "integer"
+          },
+          "cash_secured": {
+            "default": true,
+            "title": "Cash Secured",
+            "type": "boolean"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "max_short_contracts": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Short Contracts"
+          },
+          "min_dte": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Min Dte",
+            "type": "integer"
+          }
+        },
+        "title": "ShortOptionGuardSettings",
         "type": "object"
       },
       "ShortfallView": {

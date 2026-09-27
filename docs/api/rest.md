@@ -1611,6 +1611,32 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `stance` | "agree" \| "disagree" \| "no_view" \| "not_applicable" \| "error" | yes |  |
 | `strategy_id` | string | yes |  |
 
+### OptionGreekLimitsSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_dollar_delta` | number \| null | no |  |
+| `max_dollar_gamma` | number \| null | no |  |
+| `max_position_dollar_delta` | number \| null | no |  |
+| `max_position_vega` | number \| null | no |  |
+| `max_theta` | number \| null | no |  |
+| `max_vega` | number \| null | no |  |
+
+### OptionMarginSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cash_buffer` | number | no |  |
+| `enabled` | boolean | no |  |
+| `method` | "reg_t" \| "risk_based" | no |  |
+
+### OptionMaxLossSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_loss_per_group` | number \| null | no |  |
+| `max_loss_total` | number \| null | no |  |
+
 ### OrderView
 
 | Field | Type | Required | Description |
@@ -2376,10 +2402,14 @@ Type: "viewer" \| "trader" \| "admin"
 | `max_holding` | [MaxHoldingSettings](#maxholdingsettings) | no |  |
 | `net_exposure` | [NetExposureSettings](#netexposuresettings) | no |  |
 | `operational_halt` | [OperationalHaltSettings](#operationalhaltsettings) | no |  |
+| `option_greek_limits` | [OptionGreekLimitsSettings](#optiongreeklimitssettings) | no |  |
+| `option_margin` | [OptionMarginSettings](#optionmarginsettings) | no |  |
+| `option_max_loss` | [OptionMaxLossSettings](#optionmaxlosssettings) | no |  |
 | `portfolio_vol` | [PortfolioVolSettings](#portfoliovolsettings) | no |  |
 | `risk_per_position` | [RiskPerPositionSettings](#riskperpositionsettings) | no |  |
 | `sector_cap` | [SectorCapSettings](#sectorcapsettings) | no |  |
 | `short_caps` | [ShortCapsSettings](#shortcapssettings) | no |  |
+| `short_option_guard` | [ShortOptionGuardSettings](#shortoptionguardsettings) | no |  |
 | `squeeze_guard` | [SqueezeGuardSettings](#squeezeguardsettings) | no |  |
 
 ### RuleTemplateView
@@ -2506,6 +2536,16 @@ How one shadow strategy was evaluated during the tick.
 |-------|------|----------|-------------|
 | `max_short_total` | number \| null | no |  |
 | `max_short_weight` | number \| null | no |  |
+
+### ShortOptionGuardSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `approval_level` | integer | no |  |
+| `cash_secured` | boolean | no |  |
+| `enabled` | boolean | no |  |
+| `max_short_contracts` | number \| null | no |  |
+| `min_dte` | integer | no |  |
 
 ### ShortfallView
 
