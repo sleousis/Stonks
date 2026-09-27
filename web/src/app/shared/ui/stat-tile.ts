@@ -48,7 +48,7 @@ export type StatTone = 'gain' | 'loss' | '';
         <p class="value">{{ finalText() }}</p>
       }
       @if (detail()) {
-        <p class="detail num" [class]="detailTone()">{{ detail() }}</p>
+        <p class="detail" [class]="detailTone()">{{ detail() }}</p>
       }
     }
   `,
@@ -97,6 +97,7 @@ export type StatTone = 'gain' | 'loss' | '';
     .detail {
       margin-top: var(--space-1);
       font-size: var(--text-sm);
+      font-variant-numeric: tabular-nums;
       color: var(--color-ink-3);
       white-space: normal;
     }

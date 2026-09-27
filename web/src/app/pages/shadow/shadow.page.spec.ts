@@ -139,7 +139,8 @@ describe('ShadowPage', () => {
       { time: '2026-09-02', value: 100 },
       { time: '2026-09-03', value: 110 },
     ]);
-    expect(series?.[0].color).toBe('brass');
+    // Brass means real money: a paper portfolio's line stays grey.
+    expect(series?.[0].color).toBe('muted');
   });
 
   it('lists each shadow strategy against the real portfolio with a go-live link', async () => {

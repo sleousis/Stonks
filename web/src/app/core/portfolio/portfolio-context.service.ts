@@ -51,6 +51,8 @@ export class PortfolioContextService {
       (list.length === 1 ? list[0] : null)
     );
   });
+  /** Real money: the shown portfolio trades live. Brass is for this only. */
+  readonly live = computed(() => this.current()?.trading === 'live');
   /** Worth showing a picker: more than one portfolio to choose from. */
   readonly hasChoice = computed(() => this.optionsSignal().length > 1);
 

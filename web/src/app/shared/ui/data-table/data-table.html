@@ -46,7 +46,7 @@
             <td
               [attr.data-label]="col.label"
               [class.end]="alignEnd(col)"
-              [class.num]="isNumeric(col)"
+              [class.num]="isFigure(col)"
               [class.cell-title]="col.mobile === 'title'"
               [class.hide-phone]="col.mobile === 'hide'"
               [class]="tone(row, col)"

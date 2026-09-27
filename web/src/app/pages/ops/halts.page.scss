@@ -49,9 +49,16 @@ fieldset.scope {
   }
 }
 
-// The kill switch is the one red control on the page.
+// The kill switch is the one red control on the page, and it stops real
+// money: a brass ring sits around the button (brass means real money).
 .kill {
-  border-left: 3px solid var(--color-loss);
+  border-left: var(--border-live) solid var(--color-loss);
+
+  .btn-danger {
+    box-shadow:
+      0 0 0 2px var(--color-surface),
+      0 0 0 4px var(--color-live);
+  }
 }
 
 .cell-action {

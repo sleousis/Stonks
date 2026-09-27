@@ -233,7 +233,9 @@ tbody tr:last-child td {
     &::before {
       content: attr(data-label);
       color: var(--color-ink-3);
+      font-family: var(--font-sans);
       font-size: var(--text-xs);
+      letter-spacing: normal;
     }
   }
 
