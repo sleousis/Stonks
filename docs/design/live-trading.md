@@ -2,7 +2,7 @@
 
 Design for roadmap Phase 19. It takes Stonks from simulated paper trading to real orders at Interactive Brokers (IBKR), in stages, with a gate between each stage.
 
-Status: wave 1 built (19.1 broker seam, 19.4 gateway deployment, 19.6 live safeguards, 19.7 account rules), then the IBKR adapter (19.2) and tickets, approve mode and submit (19.8). The rest is planned.
+Status: wave 1 built (19.1 broker seam, 19.4 gateway deployment, 19.6 live safeguards, 19.7 account rules), then the IBKR adapter (19.2), tickets, approve mode and submit (19.8), and stages, gates and preview (19.9). The rest is planned.
 
 Owner decisions (2026-09-27):
 
@@ -722,7 +722,7 @@ The IBKR adapter lives in `execution/brokers/ibkr/`. Where it differs from secti
 - **Submits.** `place_order` never returns a fill. Fills come from executions. It first looks the client id up by `orderRef` (open orders, completed orders, executions) and sends nothing when IBKR knows it. A submit that drops or times out raises `OrderOutcomeUnknownError` (`execution/brokers/base.py`). The caller marks the order `unknown` and reconciliation finds it. A 103 (duplicate order id) re-checks by `orderRef` before it reports an error.
 - **Order shape.** A market order with a `decision_price` goes out as a collared limit (`[brokers.ibkr.orders] collar_bps`, 100 by default). A market close with no reference goes out as `MKT`. An opening market order with no reference is refused. Stops default to `DAY`. `order_ref_max_length` is 40 until the live contract test measures what the gateway keeps.
 - **Order states.** A cancelled opening-auction order with no fill reads as `expired`, a cancel by hand included. An order known only from its executions reads as `unknown`, so reconciliation settles it.
-- **Account check.** It runs after every connect. The stage check (`live_small` or higher) waits for the stages of 19.9. Live orders need `allow_live`. Reads do not.
+- **Account check.** It runs after every connect. Live orders need `allow_live`. Reads do not. The stage check came with 19.9 (section 14).
 - **Long only.** A short sale is refused until borrow checks land (19.3), since the first live account is a cash account.
 - **Contracts.** `broker_contracts` is SQLite migration 029, with `price_magnifier` next to the minimum tick. Prices are not converted by the magnifier yet: the live contract test checks the LSE price unit first. The lake lookup reads the ISIN, venue and currency from `instruments`.
 - **Health.** `broker_health` logs in through the adapter by default (`IbkrLoginProbe`, the health client id, one try within `probe_timeout_seconds`). `[brokers.ibkr.health] probe = "socket"` keeps the port-only check.
@@ -757,5 +757,35 @@ flowchart LR
 - **Submit window.** `[production.live.submit]`: `calendar` (XNYS), `window_minutes` (20) and `deadline_minutes` (2). A ticket may go out from the next open minus the window until the open minus the deadline, then it expires. The `live_submit` job fires at open minus 20 minutes on every backend, reads the real time (never the fire time) and is never caught up late.
 - **Submit steps.** Per portfolio: open the broker, `startup_reconcile` then `require_reconciled`, then the halts in force now (a halt of new orders holds every ticket, a halt of buys holds the opening ones). Each order row is committed `pending`, sent, then `submitted`. A rejection fails the ticket. A submit with no answer is `unknown` until reconciliation settles it.
 - **The tick.** An external book now runs `startup_reconcile` before it decides and noops (reason `orders_unreconciled`) while an order is `unknown`. It builds `RiskContext.live` with `build_live_context` (quotes for the held and signalled tickers, since the orders do not exist yet). The tick's order rows write the fine `state` with the status, a submit with no answer turns `unknown`, and a sent order turns `submitted`.
-- **Not yet.** The pre-open gap check at submit (19.5), the stage (`broker_paper` or `live`) in the live context (19.9: it is `live` for now), MCP and API tokens approving (never: step-up only), a CLI for tickets (the console approves, `stonks schedule run-now live_submit` sends), and a menu badge with the waiting count (the push and the Approvals page carry it).
+- **Not yet.** The pre-open gap check at submit (19.5), MCP and API tokens approving (never: step-up only), a CLI for tickets (the console approves, `stonks schedule run-now live_submit` sends), and a menu badge with the waiting count (the push and the Approvals page carry it).
+
+## 14. What 19.9 built
+
+Stages, gates and the preview. Where it differs from the sections above:
+
+```mermaid
+flowchart LR
+  T[tick] --> J[live_gate_days job<br/>close + 75 min]
+  J --> D[(live_gate_days)]
+  D --> W{last week clean?}
+  W -- no --> A[alert the owner<br/>stage and amount unchanged]
+  D --> R[gate report<br/>computed at each move up]
+  R --> P[move up: report passes,<br/>typed stage, fresh code]
+  P --> S[(portfolios.live_stage<br/>live_stage_changes)]
+  S --> I[IBKR adapter: live opens<br/>need live_small or up]
+```
+
+- **Stages.** `portfolios.live_stage` in {`sim_paper`, `broker_paper`, `live_small`, `live_scale`}, default `sim_paper`. `production/live/stages.py` is the only writer. Every change writes an append-only `live_stage_changes` row first, then an `audit_log` row, and a trigger refuses a stage write without its log row. Moving up goes one stage at a time with a passing gate report embedded in the row. Moving down goes to any lower stage with a reason.
+- **Who.** Moving up needs `live.manage` (a fresh second factor) and the target stage typed in `confirm`. The shell (`stonks live stage promote`) is trusted like `stonks users`: it asks for the typed stage and still needs a passing report. Moving down needs `portfolio.trade` only. MCP reads the stage and the gate report, and never changes them.
+- **No automatic moves.** Owner decisions win over section 1 and section 6: there is no ramp, no mandatory approve stage, and a dirty week, drift or a gate that breaks never demotes. A dirty week sends a normal-urgency push. The halts and the kill switch still stop trading.
+- **Gate days.** `live_gate_days` (migration 034), one row per portfolio past `sim_paper` per session, written by the `live_gate_days` job after the tick: orders sent, filled, rejected by the broker, refused by our own rules (read from the tick's risk adjustments, not failures), stuck, fills and fills with no commission, the session's mean TCA gap, the book's return and its model book's return, and drift. Uptime is not recorded yet: the gateway status table keeps only the latest check.
+- **Clean session.** No drift, no stuck order, every commission booked, and a rejection rate under `max_reject_rate` (2%). A clean week is `week_sessions` (5) clean sessions in a row.
+- **Model book.** `ShadowModelBook` weighs the model books (`shadow_portfolio_snapshots`) of the portfolio's approve and auto subscriptions. Active strategies keep one with `[production] model_books = "all"`. Tracking error is the annualised standard deviation of the daily return differences. It is reported, and gates only when `max_tracking_error` is set.
+- **Drift seam.** `DriftSource` reads the unexplained items of the session's last end-of-day `reconcile_reports` row. Until 19.5 creates that table it reads nothing, and the reconciliation check shows as "no data yet".
+- **Gate reports.** `gate_report` checks what the next stage needs, with the thresholds under `[production.live.stages]`. Gate 1 (to `broker_paper`): a broker link, a subscription, 20 paper days on each, every strategy active. Gate 2 (to `live_small`): 20 sessions in `broker_paper`, the last 20 clean, the allocation and the account profile set, a kill switch drill, tracking error. Gate 3 (to `live_scale`): 40 sessions in `live_small`, the last 30 clean, 30 filled orders, and the TCA gap's bootstrap 95% interval includes zero or sits below it. A check with no data yet (drift, drills, tracking) does not block. The rehearsal items of gate 1 in section 1 (re-authentication, restarts, drills) come with 19.11.
+- **Preview.** `production/live/preview.py` runs the tick as a dry run for the portfolio's live book with an `order_sink` that receives the decided orders. Every broker the tick opens is wrapped in `PreviewBroker`, which refuses to place or cancel anything. The preview asks the broker's `what_if` for each order and reports a failed one. Only a dry-run tick row is written. The gate report does not embed a preview yet.
+- **Live context.** `LiveContext.stage` is the stored stage.
+- **Adapter.** `IbkrBroker` takes a `stage_lookup` (`connect_ibkr` reads `portfolios.live_stage` of the portfolio it serves). At a live gateway an order that may open needs `live_small` or up, and an unknown stage refuses. Closes and cancels still go out, so a book moved down can wind down (P28).
+- **Profile lock.** The account profile cannot change while the portfolio is at `live_small` or up.
+- **Console.** The live settings page (`/profile/live/:id`) has a Stage card (the ladder, the checks, the last sessions, moving up and down, the changes) and an Order preview panel.
 
