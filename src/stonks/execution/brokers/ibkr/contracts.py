@@ -237,6 +237,33 @@ def ib_symbol(base: str, market: Market) -> str:
     return base.upper().replace("-", market.class_separator)
 
 
+def ticker_for_symbol(symbol: str, suffix: str) -> str | None:
+    """Our ticker for an IBKR ``symbol`` on the market of ``suffix``:
+    ``BRK B`` in the US is ``BRK-B.US``, ``BT.A`` in London ``BT-A.LSE``.
+    ``None`` when the market does not trade through IBKR here."""
+    market = MARKETS.get(suffix.upper())
+    clean = (symbol or "").strip().upper()
+    if market is None or not clean:
+        return None
+    base = clean.replace(market.class_separator, "-").replace(" ", "-")
+    return f"{base}.{suffix.upper()}"
+
+
+def ticker_for_contract(contract: IbContract) -> str | None:
+    """Our ticker for a stock contract IBKR reports (a position of a manual
+    trade, say), from its primary exchange and currency. ``None`` when it
+    is not a stock or its market is not one we trade ("not covered")."""
+    if contract.sec_type != "STK":
+        return None
+    venue = (contract.primary_exchange or "").upper()
+    if venue in US_PRIMARY.values() or (not venue and contract.currency == "USD"):
+        return ticker_for_symbol(contract.symbol, "US")
+    for suffix, market in MARKETS.items():
+        if market.primary_exchange is not None and market.primary_exchange == venue:
+            return ticker_for_symbol(contract.symbol, suffix)
+    return None
+
+
 def build_query(
     ticker: str, profile: InstrumentProfile | None, *, by_isin: bool
 ) -> IbContractQuery:

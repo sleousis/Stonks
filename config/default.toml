@@ -334,6 +334,14 @@ timeout_seconds = 30
 max_retries = 3
 retry_backoff_seconds = 1.0
 
+[sources.ibkr_borrow]
+# IBKR's public short stock files for `stonks ingest borrow` (roadmap 19.3).
+# The login is IBKR's shared public one, not your account.
+host = "ftp2.interactivebrokers.com"
+user = "shortstock"
+timeout_seconds = 30
+markets = ["usa"]
+
 [brokers]
 # Broker `stonks tick` (CLI and API) trades through. "simulated" (default)
 # fills in memory against the last portfolio snapshot and needs no keys.

@@ -1700,6 +1700,16 @@ class DuckDBLake:
     )
     _DEFI_TVL_COLS = ("chain", "observation_date", "tvl_usd", "source")
     _FX_RATE_COLS = ("base_currency", "quote_currency", "observation_date", "rate", "source")
+    _BORROW_RATE_COLS = (
+        "ticker",
+        "as_of",
+        "source",
+        "currency",
+        "isin",
+        "available_shares",
+        "fee_rate_annual",
+        "rebate_rate_annual",
+    )
     _MACRO_INDICATOR_COLS = (
         "country_iso",
         "indicator",
@@ -1966,6 +1976,82 @@ class DuckDBLake:
             params,
         ).fetchdf()
         return _dates_to_python(df, ("observation_date",))
+
+    def upsert_borrow_rates(self, df: pd.DataFrame) -> int:
+        """Upsert daily borrow rates keyed by ``(ticker, as_of, source)``
+        (roadmap 19.3). Last write wins, so a re-run is a no-op."""
+        if df.empty:
+            return 0
+        frame = df.copy()
+        for col in self._BORROW_RATE_COLS:
+            if col not in frame.columns:
+                frame[col] = None
+        return self._upsert(
+            frame,
+            table="borrow_rates",
+            cols=self._BORROW_RATE_COLS,
+            pk=("ticker", "as_of", "source"),
+        )
+
+    def get_borrow_rates(
+        self,
+        *,
+        as_of: Any = None,
+        tickers: Any = None,
+        source: str | None = None,
+    ) -> pd.DataFrame:
+        """Stored borrow rates, oldest first. ``as_of`` keeps one day,
+        ``tickers`` and ``source`` narrow the rows."""
+        clauses: list[str] = []
+        params: list[Any] = []
+        if as_of is not None:
+            clauses.append("as_of = ?")
+            params.append(_as_calendar_date(as_of))
+        if tickers is not None:
+            clauses.append("ticker = ANY(?)")
+            params.append(sorted({str(t) for t in tickers}))
+        if source is not None:
+            clauses.append("source = ?")
+            params.append(source)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        df = self.con.execute(
+            f"SELECT {', '.join(self._BORROW_RATE_COLS)} FROM borrow_rates{where}"
+            " ORDER BY as_of, ticker, source",
+            params,
+        ).fetchdf()
+        return _dates_to_python(df, ("as_of",))
+
+    def borrow_rate(
+        self,
+        ticker: str,
+        day: Any,
+        *,
+        source: str | None = None,
+        max_age_days: int | None = None,
+    ) -> dict[str, Any] | None:
+        """The latest borrow rate of ``ticker`` on or before ``day`` (of
+        ``source`` when given), or ``None``. With ``max_age_days``, a row
+        older than that many days before ``day`` counts as missing."""
+        when = _as_calendar_date(day)
+        clauses = ["ticker = ?", "as_of <= ?"]
+        params: list[Any] = [ticker, when]
+        if source is not None:
+            clauses.append("source = ?")
+            params.append(source)
+        if max_age_days is not None:
+            clauses.append("as_of >= ?")
+            params.append(when - timedelta(days=max_age_days))
+        cur = self.con.execute(
+            f"SELECT {', '.join(self._BORROW_RATE_COLS)} FROM borrow_rates"
+            f" WHERE {' AND '.join(clauses)} ORDER BY as_of DESC, source LIMIT 1",
+            params,
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        out = dict(zip(self._BORROW_RATE_COLS, row, strict=True))
+        out["as_of"] = _as_calendar_date(out["as_of"])
+        return out
 
     def upsert_institutional_holders(self, df: pd.DataFrame) -> int:
         return self._upsert_on_change(

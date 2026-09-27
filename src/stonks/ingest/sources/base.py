@@ -19,6 +19,7 @@ from stonks.ingest.calendar_schemas import DividendEventRow, EarningsEventRow, E
 from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.option_schemas import OptionQuoteRow
 from stonks.ingest.schemas import (
+    BorrowRateRow,
     DefiTvlRow,
     ExchangeInfo,
     FinancialStatementsBundle,
@@ -168,6 +169,17 @@ class DataSource(ABC):
         del since, until
         raise UnsupportedCapabilityError(
             f"{self.source_id} does not serve FX rates ({base}{quote})"
+        )
+
+    def fetch_borrow_rates(self, market: str) -> Iterable[BorrowRateRow]:
+        """Today's stock borrow terms for every stock of one ``market`` (a
+        source-defined name, e.g. ``usa``), roadmap 19.3.
+
+        Optional capability: the default raises
+        :class:`UnsupportedCapabilityError`, so a source without borrow
+        data shows up as a failed market instead of a silent empty run."""
+        raise UnsupportedCapabilityError(
+            f"{self.source_id} does not serve borrow rates ({market!r})"
         )
 
     # ---- event calendars (roadmap 20.7) ----------------------------------------

@@ -75,10 +75,24 @@ class DefiLlamaSourceConfig(BaseModel):
     retry_backoff_seconds: float = 1.0
 
 
+class IbkrBorrowSourceConfig(BaseModel):
+    """IBKR's public short stock files (``stonks ingest borrow``, roadmap
+    19.3). The FTP login is IBKR's shared public one, not an account."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    host: str = "ftp2.interactivebrokers.com"
+    user: str = "shortstock"
+    timeout_seconds: float = 30.0
+    #: The markets ``stonks ingest borrow`` pulls when none are named.
+    markets: tuple[str, ...] = ("usa",)
+
+
 class SourcesConfig(BaseModel):
     eodhd: EodhdSourceConfig = EodhdSourceConfig()
     yahoo: YahooSourceConfig = YahooSourceConfig()
     defillama: DefiLlamaSourceConfig = DefiLlamaSourceConfig()
+    ibkr_borrow: IbkrBorrowSourceConfig = IbkrBorrowSourceConfig()
 
 
 def _env_secret(name: str) -> SecretStr | None:
