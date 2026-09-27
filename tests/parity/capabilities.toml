@@ -858,6 +858,15 @@ console = "listRiskSnapshots"
 cli = { limited = "trader reads live in the console and MCP" }
 mcp = "list_risk_snapshots"
 
+[[capability]]
+id = "risk.intraday"
+domain = "risk"
+title = "Intraday P&L and risk snapshots of a portfolio for one day"
+routes = ["GET /api/risk/intraday"]
+console = { limited = "the live console panel of roadmap 21.3.4 reads it" }
+cli = { limited = "trader reads intraday P&L in the console and MCP" }
+mcp = "list_intraday_snapshots"
+
 # ---- schedule and ops -------------------------------------------------------------------
 
 [[capability]]

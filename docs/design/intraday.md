@@ -106,6 +106,7 @@ flowchart LR
 
 - **Strategies** (21.3.1, built): `intraday_orb`, `intraday_vwap_reversion` and `intraday_momentum` in `strategies/examples/`, each with a hypothesis card (P1). They read the regular session from the exchange calendar, decide on closed minute bars only and are flat before every close. The lab splits an intraday dataset by whole sessions, with an embargo of whole sessions (P9), and walk-forward folds count sessions. See `docs/strategies/intraday.md`.
 - **Risk** (21.3.2, built): registered `RiskRule`s and halts for the intraday loop (section 6).
+- **Live marks and P&L** (21.3.3, built): the latest mark per ticker, intraday P&L per book and strategy sleeve, and intraday risk snapshots every few minutes.
 - **Monitoring**: stream and engine health on the metrics endpoint, a dead-man on the engine heartbeat, event-to-order latency, a live panel in the console, and alerts.
 
 ## 4. Session rules
@@ -322,7 +323,7 @@ Shared files (`config.py`, `config/default.toml`, `cli.py`, router mounts, the M
 | 21.2.5 Engine process | The always-on process, scheduler jobs to start before the open and stop after the close, startup reconcile, restart and state recovery, the runner inside it. | `engine/process.py`, `scheduling/jobs.py` (jobs) |
 | 21.3.1 Intraday strategies | Opening range breakout, VWAP reversion and intraday momentum with hypothesis cards, lab windows by session. | `strategies/examples/intraday_*.py`, `lab/dataset.py` (session windows) |
 | 21.3.2 Intraday risk | The per-minute loss limit and `intraday_loss` halt kind, intraday drawdown scaling, orders per minute cap, the stale data gate, the kill switch per event. | `production/rules/intraday_*.py`, `production/intraday_halts.py`, `production/halts.py`, SQLite migration 042 (built) |
-| 21.3.3 Live marks and P&L | Minute marks from the stream, intraday P&L per book and strategy sleeve, intraday risk snapshots. | `production/intraday_pnl.py`, a new SQLite migration |
+| 21.3.3 Live marks and P&L (built) | Minute marks from the stream, intraday P&L per book and strategy sleeve, intraday risk snapshots. | `production/intraday_pnl.py`, SQLite migration 043 |
 | 21.3.4 Monitoring | Stream and engine metrics on `/metrics`, the engine dead-man, latency from event to order, alerts, a live panel in the console. | `scheduling/metrics.py`, `api/routers/stream.py`, `web/src/app/pages/live/*` |
 | 21.3.5 Intraday TCA | Spread from recorded quotes, arrival at the next minute, cost model calibration for minute trading. | `production/tca.py` (additions), `backtest/costs.py` (additions) |
 
@@ -384,3 +385,25 @@ flowchart LR
 - **Tests**: `tests/unit/engine/test_step.py` (the view stops at the closed bar, one scoring per bar for all books, client ids and decision fields, carried marks, opening edge, halts, flatten, the closing bar, exit owners from fills, a constructor book, shorts dropped, stale tickers) and `tests/unit/engine/test_intraday_backtest.py` (fills, equity curve and Sharpe equal to `Backtester` on the same minute bars for `single_winner` and `equal_weight_top_n`, one decision per bar close, no look-ahead, changing later bars leaves earlier fills alone, two runs and shuffled lake rows give the same fills, next-bar fills, session edges and flatten). The helper `tests/unit/engine/minute_lake.py` builds minute bars on real NYSE sessions and a toy minute momentum strategy.
 - No migration, no settings, no CLI.
 - Not yet: corporate actions, point-in-time membership, lagged market statistics for fills and short books in the intraday backtest (the bar backtester keeps them). The router of 21.2.3 replaces the fills handler. History-aware risk rules get no daily history in the step yet, so they skip.
+
+## 10. What 21.3.3 built
+
+```mermaid
+flowchart LR
+  RUN[StreamRunner] -- every event --> MB[MarkBook<br/>latest mark per ticker]
+  DRV[EventDriver] -- bar close --> TR[IntradayPnlTracker]
+  TR --> MB
+  ST[(portfolio_snapshots<br/>position_attribution<br/>orders, fills)] --> TR
+  TR -- every 5 minutes --> IS[(intraday_snapshots)]
+  IS --> SVC[IntradayPnlService] --> API[GET /api/risk/intraday] --> MCP[list_intraday_snapshots]
+```
+
+- `production/intraday_pnl.py`:
+  - `MarkBook`: the latest mark per ticker. A runner subscriber (call it with any event) and a driver handler. A trade sets the mark, a live quote its last trade or mid, a bar its close at the bar's end. A delayed quote and an older event never move it.
+  - `PositionLedger`: one day of one book at average cost. Start positions are priced at the prior close (`lake_reference_prices` reads the lake), or at their first mark when there is none. A fill that reduces a position realises P&L, one that goes through zero opens the rest at the fill price. `realised + unrealised - fees` equals the change in value.
+  - `IntradayPnlTracker`: a driver handler. On each bar close it marks the bars, books the day's fills whose time has come (so a replay never sees a later fill early, P12), and moves each book's high-water P&L. Every `snapshot_minutes` (5) and on `finish` it stores one row per book. A book is the whole portfolio or a strategy's sleeve (start positions from `position_attribution`, fills of the strategy's orders). The day's high is read back after a restart.
+  - `IntradayPnlSettings` (`enabled`, `snapshot_minutes`, `stale_mark_seconds`), to mount as `[production.intraday_pnl]` in the integration step.
+- SQLite migration 043: `intraday_snapshots`, one row per book and moment, unique on `(portfolio_id, strategy_id, at)`.
+- `app/intraday_pnl.py` (`IntradayPnlService`), `GET /api/risk/intraday` (`data.read`, scoped to your portfolios, paged, `day`, `strategy_id`, `all_books`) and the MCP tool `list_intraday_snapshots`.
+- Tests: the ledger math, and replays of recorded streams through the `replay` source and the driver (marks, fills in time, snapshots every five minutes, the high-water mark, restart, stale marks).
+- Not yet: the engine process (21.2.5) that registers the tracker, and the console panel (21.3.4). The trading day is the UTC date of the bar close, which fits US and European sessions.

@@ -139,6 +139,7 @@ READ_TOOLS = {
     "live_risk",
     "list_risk_snapshots",
     "risk_snapshots",
+    "list_intraday_snapshots",
     "get_tca_summary",
     "list_trade_journal",
     "get_order_tca",

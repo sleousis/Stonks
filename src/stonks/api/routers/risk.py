@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query
 
 from stonks.api.deps import PageDep, PortfolioIdDep, PrincipalDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
+from stonks.app.intraday_pnl import IntradayPnlService, IntradaySnapshotView
 from stonks.app.pagination import Page
 from stonks.app.risk_limits import RiskLimitsService, RiskLimitsUpdate, RiskLimitsView
 from stonks.app.risk_monitor import RiskMonitorService, RiskSnapshotView, RiskSummaryView
@@ -58,6 +59,40 @@ def get_live_risk(monitor: RiskMonitorDep, portfolio_id: PortfolioIdDep) -> Risk
     VaR and expected shortfall, the rolling violation ratio and Kupiec test,
     and per strategy sleeve the same plus the alpha-decay check (BL-47)."""
     return monitor.latest(portfolio_id)
+
+
+@router.get(
+    "/intraday",
+    response_model=Page[IntradaySnapshotView],
+    operation_id="listIntradaySnapshots",
+    dependencies=needs(Permission.READ),
+)
+def list_intraday_snapshots(
+    services: ServicesDep,
+    page: PageDep,
+    portfolio_id: PortfolioIdDep,
+    day: Annotated[
+        date | None, Query(description="the trading day; default the latest day with rows")
+    ] = None,
+    strategy_id: Annotated[
+        str | None,
+        Query(max_length=200, description="one strategy's sleeve; default the whole portfolio"),
+    ] = None,
+    all_books: Annotated[
+        bool, Query(description="every book: the whole portfolio and each sleeve")
+    ] = False,
+) -> Page[IntradaySnapshotView]:
+    """Intraday P&L and risk snapshots of one of your portfolios for one
+    day, newest first: realised and unrealised P&L from live marks, fees,
+    the drawdown from the day's high, exposure and mark freshness."""
+    return IntradayPnlService(services.context).list(
+        portfolio_id,
+        day=day,
+        strategy_id=strategy_id,
+        all_books=all_books,
+        limit=page.limit,
+        offset=page.offset,
+    )
 
 
 @router.get("/snapshots", response_model=Page[RiskSnapshotView], operation_id="listRiskSnapshots")
