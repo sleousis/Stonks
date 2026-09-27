@@ -184,6 +184,16 @@ def test_as06_a_job_records_its_owner_and_only_the_owner_or_an_admin_sees_it(cli
     assert result.status_code == 404
 
 
+def test_be56_a_tick_job_result_is_scoped_to_its_owner(client, app, people):
+    store = app.state.services.runner.store
+    job = store.create("tick", {}, owner_id=people["alice"]["id"])
+    bob = people["bob"]["headers"]
+    assert client.get(f"/api/ticks/jobs/{job.id}/result", headers=bob).status_code == 404
+    alice = people["alice"]["headers"]
+    # the owner sees it (409: it has no result yet)
+    assert client.get(f"/api/ticks/jobs/{job.id}/result", headers=alice).status_code == 409
+
+
 def test_as06_another_trader_cannot_cancel_a_job(client, app, people):
     store = app.state.services.runner.store
     queued = store.create("backtest", {}, owner_id=people["alice"]["id"])
