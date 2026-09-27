@@ -28,14 +28,16 @@ def evaluate(
 ) -> None:
     """Run the eval set: reading a portfolio, resolving a ticker before a
     draft, a planted prompt injection, research only, a strategy from plain
-    English, and the kill switch asking first. Exits 1 when a case fails."""
+    English, the kill switch asking first, and the research loop (hypothesis
+    first, the model's cutoff, trial and compute budgets, no registering).
+    Exits 1 when a case fails."""
     import anyio
 
-    from stonks.assistant.evals import CASES, fake_model_for, run_evals
+    from stonks.assistant.evals import ALL_CASES, fake_model_for, run_evals
     from stonks.assistant.model import OpenAICompatibleModel
     from stonks.assistant.settings import AssistantConfig
 
-    known = {c.name for c in CASES}
+    known = {c.name for c in ALL_CASES}
     unknown = sorted(set(case) - known)
     if unknown:
         raise typer.BadParameter(f"unknown case(s): {unknown}; known: {sorted(known)}")

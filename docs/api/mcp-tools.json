@@ -1818,6 +1818,33 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "One research session with every proposal: its hypothesis, whether\nit ran or why not, and its lab run in the trial ledger.",
+      "input_schema": {
+        "properties": {
+          "session_id": {
+            "description": "the rs_... id",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "get_research_sessionArguments",
+        "type": "object"
+      },
+      "name": "get_research_session",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "The [production.risk] limits applied between a strategy's orders and the broker (max weights, order caps, ...).",
       "input_schema": {
         "properties": {},
@@ -3314,6 +3341,38 @@
         "type": "object"
       },
       "name": "list_price_alerts",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Your AI research sessions, newest first: goal, budgets used, status.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          }
+        },
+        "title": "list_research_sessionsArguments",
+        "type": "object"
+      },
+      "name": "list_research_sessions",
       "needs_confirm": false
     },
     {
@@ -6174,6 +6233,105 @@
       },
       "name": "shadow_strategy",
       "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Start an AI research session: the assistant's model proposes lab\ntrials for the goal and runs them under the session's budgets. Every\nproposal is recorded with its hypothesis first, every trial is counted\nin the trial ledger, and validation windows start after the model's\ntraining cutoff. It never registers or promotes a strategy. Returns\nthe job; use wait_for_job, then get_research_session.",
+      "input_schema": {
+        "properties": {
+          "goal": {
+            "description": "what to look for",
+            "maxLength": 2000,
+            "minLength": 10,
+            "title": "Goal",
+            "type": "string"
+          },
+          "max_cpu_seconds": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "compute seconds, at most the setting",
+            "title": "Max Cpu Seconds"
+          },
+          "max_proposals": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "proposals, at most the setting",
+            "title": "Max Proposals"
+          },
+          "max_trials": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "tuning trials, at most the setting",
+            "title": "Max Trials"
+          },
+          "universe": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "instrument ids, or give universe_id",
+            "title": "Universe"
+          },
+          "universe_id": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "a stored universe",
+            "title": "Universe Id"
+          }
+        },
+        "required": [
+          "goal"
+        ],
+        "title": "start_researchArguments",
+        "type": "object"
+      },
+      "name": "start_research",
+      "needs_confirm": false
     },
     {
       "annotations": {

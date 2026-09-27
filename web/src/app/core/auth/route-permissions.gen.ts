@@ -60,6 +60,7 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'POST /api/assistant/conversations': 'data.read',
   'POST /api/assistant/conversations/{conversation_id}/actions/{action_id}': 'data.read',
   'POST /api/assistant/conversations/{conversation_id}/messages': 'data.read',
+  'POST /api/assistant/research': 'lab.run',
   'POST /api/auth/password': 'password.change',
   'POST /api/auth/recovery-codes': 'mfa.recovery_codes',
   'POST /api/auth/tokens': 'tokens.manage',

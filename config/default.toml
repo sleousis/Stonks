@@ -431,3 +431,18 @@ draft_ttl_minutes = 1440.0
 max_writes_per_minute = 5         # a burst freezes the assistant
 max_writes_per_hour = 40
 freeze_minutes = 60.0
+
+[assistant.research]
+# The AI research loop (roadmap 22.9): the assistant proposes hypotheses and
+# runs lab trials under these budgets, each counted in the trial ledger. It
+# never registers or promotes a strategy. Models remember prices from before
+# their training cutoff, so a proposal's validation window must start after
+# model_cutoff. Off until you set it for your model.
+# model_cutoff = "2023-12-31"
+max_trials = 200                  # tuning trials per session
+max_proposals = 10                # proposals per session, rejected ones too
+max_cpu_seconds = 3600.0          # lab wall time x lab workers per session
+max_budget_per_proposal = 50      # tuning trials per proposal
+survival_tests = ["oos", "deflated_sharpe", "pbo"]
+min_hypothesis_chars = 40
+min_premortem_chars = 20

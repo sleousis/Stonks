@@ -495,7 +495,7 @@ From the competitor study of 44 open-source projects (Qlib, alphalens, vectorbt,
 | 22.6 Model lifecycle | Scheduled retraining for ML strategies, model versions under one strategy id, new fits run as model books, swaps only through governance. |
 | 22.7 Forecast weights | Carver-style forecast weights estimated net of costs, and rules dropped when too costly for an instrument. Done: the `ForecastWeightEstimator` seam (`handcraft`, `bootstrap`, `equal`), the speed limit, the `forecast_blend` strategy and a tear sheet section. See [forecast weights](strategies/forecast-weights.md). |
 | 22.8 Factor library | An Alpha158-style factor set with a next-open label, plus the fundamentals scores as factors. |
-| 22.9 AI research loop | The assistant proposes hypotheses and runs lab trials under a budget, each counted in the trial ledger. |
+| 22.9 AI research loop | The assistant proposes hypotheses and runs lab trials under a budget, each counted in the trial ledger. Done: `assistant/research.py`, `POST /api/assistant/research`, the `start_research` MCP tool, SQLite `030_research_loop`, research cases in `stonks assistant eval`. Only validation windows after the model's training cutoff (`[assistant.research] model_cutoff`) count, budgets are enforced in code, and nothing registers. |
 
 ## Execution order
 

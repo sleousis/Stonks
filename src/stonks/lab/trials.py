@@ -103,6 +103,8 @@ class LabRunSpec:
     seed: int | None = None
     dataset: dict[str, Any] = field(default_factory=dict)
     manifest: dict[str, Any] = field(default_factory=dict)
+    #: The research session the run belongs to (roadmap 22.9), else None.
+    family: str | None = None
 
 
 @dataclass
@@ -119,6 +121,9 @@ class LabRunContext:
     trial_matrix: TrialMatrix | None
     n_trials_run: int
     n_trials_class: int
+    #: Trials of every run in the same research family (roadmap 22.9); 0
+    #: for a run outside any family.
+    n_trials_family: int = 0
 
 
 class TrialLedger:
@@ -135,8 +140,8 @@ class TrialLedger:
             """
             INSERT INTO lab_runs
                 (id, strategy_class, hypothesis, premortem, tuner, objective, budget, seed,
-                 dataset_json, manifest_json, started_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 dataset_json, manifest_json, started_at, family)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 rid,
@@ -150,6 +155,7 @@ class TrialLedger:
                 _dumps(spec.dataset),
                 _dumps(spec.manifest),
                 _iso_now(),
+                spec.family,
             ],
         )
         return rid
@@ -220,6 +226,39 @@ class TrialLedger:
             [strategy_class],
         )[0]
         return int(row[0])
+
+    def n_trials_family(self, family: str) -> int:
+        """Trials across every run of one research family (roadmap 22.9)."""
+        row = self.state.sql(
+            "SELECT COUNT(*) FROM lab_trials t JOIN lab_runs r ON r.id = t.run_id"
+            " WHERE r.family = ?",
+            [family],
+        )[0]
+        return int(row[0])
+
+    def unscored_runs(self, family: str) -> list[tuple[str, int]]:
+        """``(run_id, budget)`` of the family's runs with no recorded trial:
+        runs stopped or crashed before their trials were written."""
+        rows = self.state.sql(
+            "SELECT id, budget FROM lab_runs r WHERE family = ?"
+            " AND NOT EXISTS (SELECT 1 FROM lab_trials t WHERE t.run_id = r.id)"
+            " ORDER BY started_at, id",
+            [family],
+        )
+        return [(str(r["id"]), int(r["budget"] or 0)) for r in rows]
+
+    def count_unscored(self, family: str) -> int:
+        """Record each unscored run's whole budget as failed trials, so a
+        stopped run still counts every trial it may have tried (P2). Returns
+        the trials added."""
+        added = 0
+        for run_id, budget in self.unscored_runs(family):
+            placeholders = [
+                TrialRecord(i, {}, float("nan"), status="failed") for i in range(budget)
+            ]
+            self.record_trials(run_id, placeholders)
+            added += budget
+        return added
 
     def run(self, run_id: str) -> dict[str, Any] | None:
         rows = self.state.sql("SELECT * FROM lab_runs WHERE id = ?", [run_id])

@@ -542,7 +542,7 @@
             "type": "boolean"
           },
           "prompt_version": {
-            "default": "2026-09-27.2",
+            "default": "2026-09-27.3",
             "title": "Prompt Version",
             "type": "string"
           },
@@ -5910,6 +5910,11 @@
             "title": "N Trials Class",
             "type": "integer"
           },
+          "n_trials_family": {
+            "default": 0,
+            "title": "N Trials Family",
+            "type": "integer"
+          },
           "n_trials_run": {
             "default": 0,
             "title": "N Trials Run",
@@ -9318,6 +9323,37 @@
         "title": "Page[PushDeviceView]",
         "type": "object"
       },
+      "Page_ResearchSessionView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ResearchSessionView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[ResearchSessionView]",
+        "type": "object"
+      },
       "Page_RiskSnapshotView_": {
         "properties": {
           "items": {
@@ -12029,6 +12065,601 @@
           "recovery_codes"
         ],
         "title": "RecoveryCodesView",
+        "type": "object"
+      },
+      "ResearchProposalView": {
+        "properties": {
+          "arguments": {
+            "additionalProperties": true,
+            "description": "What the model proposed.",
+            "title": "Arguments",
+            "type": "object"
+          },
+          "best_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Score"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget"
+          },
+          "class_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Path"
+          },
+          "cpu_seconds": {
+            "title": "Cpu Seconds",
+            "type": "number"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "hypothesis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hypothesis"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "lab_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The run in the trial ledger.",
+            "title": "Lab Run Id"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "premortem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premortem"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it was rejected, stopped or failed.",
+            "title": "Reason"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "rejected",
+              "running",
+              "done",
+              "failed",
+              "stopped"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "trials": {
+            "title": "Trials",
+            "type": "integer"
+          },
+          "validation_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Start"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          }
+        },
+        "required": [
+          "id",
+          "seq",
+          "hypothesis",
+          "premortem",
+          "class_path",
+          "arguments",
+          "status",
+          "reason",
+          "validation_start",
+          "budget",
+          "lab_run_id",
+          "verdict",
+          "best_score",
+          "trials",
+          "cpu_seconds",
+          "outcome",
+          "created_at",
+          "finished_at"
+        ],
+        "title": "ResearchProposalView",
+        "type": "object"
+      },
+      "ResearchSessionDetailView": {
+        "properties": {
+          "cpu_seconds_used": {
+            "title": "Cpu Seconds Used",
+            "type": "number"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "goal": {
+            "title": "Goal",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "max_cpu_seconds": {
+            "title": "Max Cpu Seconds",
+            "type": "number"
+          },
+          "max_proposals": {
+            "title": "Max Proposals",
+            "type": "integer"
+          },
+          "max_trials": {
+            "title": "Max Trials",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "model_cutoff": {
+            "description": "The model's training cutoff: validation windows start after it.",
+            "format": "date",
+            "title": "Model Cutoff",
+            "type": "string"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "proposals": {
+            "items": {
+              "$ref": "#/components/schemas/ResearchProposalView"
+            },
+            "title": "Proposals",
+            "type": "array"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "stopped",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "stop_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Reason"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "trials_used": {
+            "title": "Trials Used",
+            "type": "integer"
+          },
+          "universe": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Universe",
+            "type": "array"
+          },
+          "universe_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Universe Id"
+          }
+        },
+        "required": [
+          "id",
+          "goal",
+          "universe",
+          "universe_id",
+          "model",
+          "model_cutoff",
+          "prompt_version",
+          "max_trials",
+          "max_proposals",
+          "max_cpu_seconds",
+          "trials_used",
+          "cpu_seconds_used",
+          "status",
+          "stop_reason",
+          "summary",
+          "job_id",
+          "created_at",
+          "started_at",
+          "finished_at",
+          "proposals"
+        ],
+        "title": "ResearchSessionDetailView",
+        "type": "object"
+      },
+      "ResearchSessionView": {
+        "properties": {
+          "cpu_seconds_used": {
+            "title": "Cpu Seconds Used",
+            "type": "number"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "goal": {
+            "title": "Goal",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "max_cpu_seconds": {
+            "title": "Max Cpu Seconds",
+            "type": "number"
+          },
+          "max_proposals": {
+            "title": "Max Proposals",
+            "type": "integer"
+          },
+          "max_trials": {
+            "title": "Max Trials",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "model_cutoff": {
+            "description": "The model's training cutoff: validation windows start after it.",
+            "format": "date",
+            "title": "Model Cutoff",
+            "type": "string"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "stopped",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "stop_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Reason"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "trials_used": {
+            "title": "Trials Used",
+            "type": "integer"
+          },
+          "universe": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Universe",
+            "type": "array"
+          },
+          "universe_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Universe Id"
+          }
+        },
+        "required": [
+          "id",
+          "goal",
+          "universe",
+          "universe_id",
+          "model",
+          "model_cutoff",
+          "prompt_version",
+          "max_trials",
+          "max_proposals",
+          "max_cpu_seconds",
+          "trials_used",
+          "cpu_seconds_used",
+          "status",
+          "stop_reason",
+          "summary",
+          "job_id",
+          "created_at",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "ResearchSessionView",
+        "type": "object"
+      },
+      "ResearchStart": {
+        "additionalProperties": false,
+        "description": "A research session: what to look for, on which universe, and budgets\nthat may only be lower than the configured ones.",
+        "properties": {
+          "goal": {
+            "description": "What to look for.",
+            "maxLength": 2000,
+            "minLength": 10,
+            "title": "Goal",
+            "type": "string"
+          },
+          "max_cpu_seconds": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "At most the setting.",
+            "title": "Max Cpu Seconds"
+          },
+          "max_proposals": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "At most the setting.",
+            "title": "Max Proposals"
+          },
+          "max_trials": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "At most the setting.",
+            "title": "Max Trials"
+          },
+          "universe": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Universe",
+            "type": "array"
+          },
+          "universe_id": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Universe Id"
+          }
+        },
+        "required": [
+          "goal"
+        ],
+        "title": "ResearchStart",
         "type": "object"
       },
       "RestoreRequest": {
@@ -19038,6 +19669,289 @@
           "assistant"
         ],
         "x-permission": "killswitch.resume"
+      }
+    },
+    "/api/assistant/research": {
+      "get": {
+        "description": "Your research sessions, newest first.",
+        "operationId": "listAssistantResearch",
+        "parameters": [
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ResearchSessionView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Research",
+        "tags": [
+          "assistant"
+        ]
+      },
+      "post": {
+        "description": "Start a research session: the assistant proposes lab trials for your\ngoal and runs them under the session's budgets. Every proposal is\nrecorded with its hypothesis before it runs, every trial is counted in\nthe trial ledger, and validation windows start after the model's\ntraining cutoff. It never registers or promotes a strategy. Follow the\njob, then read the session.",
+        "operationId": "startAssistantResearch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchStart"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Research",
+        "tags": [
+          "assistant"
+        ],
+        "x-permission": "lab.run"
+      }
+    },
+    "/api/assistant/research/{session_id}": {
+      "get": {
+        "description": "One of your research sessions with every proposal: its hypothesis,\nwhether it ran or why not, and its lab run in the trial ledger.",
+        "operationId": "getAssistantResearch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchSessionDetailView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Research",
+        "tags": [
+          "assistant"
+        ]
       }
     },
     "/api/assistant/status": {

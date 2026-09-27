@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from stonks.app.alerts import AlertService
 from stonks.app.assistant import AssistantService
+from stonks.app.assistant_research import ResearchService
 from stonks.app.backups import BackupService
 from stonks.app.brokers import BrokerConnector, BrokerService
 from stonks.app.catalog import CatalogService, LabCatalogSource, StrategySource
@@ -200,6 +201,7 @@ class Services:
     insights: InsightsService
     ledger: TrialLedgerService
     assistant: AssistantService
+    research: ResearchService
     telegram: TelegramService
     _user_finder: UserStrategyFinder | None = field(default=None, repr=False)
 
@@ -234,6 +236,7 @@ class Services:
         manual_orders = ManualOrdersService(context)
         lab = LabService(context, strategies, runner)
         portfolio = PortfolioService(context)
+        assistant = AssistantService(context)
         services = cls(
             context=context,
             runner=runner,
@@ -269,7 +272,17 @@ class Services:
             subscriptions=SubscriptionService(context),
             insights=InsightsService(context, portfolio),
             ledger=TrialLedgerService(context),
-            assistant=AssistantService(context),
+            assistant=assistant,
+            # Roadmap 22.9: the research loop runs as a job, so it is wired
+            # here with the other job kinds. It uses the assistant's model.
+            research=ResearchService(
+                context,
+                lab,
+                strategies,
+                catalog,
+                runner,
+                model_factory=lambda: assistant.model_factory,
+            ),
             telegram=TelegramService(context),
         )
         services.schedule.bind(services)

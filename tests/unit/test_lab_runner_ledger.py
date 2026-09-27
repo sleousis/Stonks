@@ -318,3 +318,26 @@ def test_trial_matrix_keeps_the_trial_dates():
     assert matrix.index[0] == idx[0] and matrix.index[-1] == late[-1]
     assert np.isnan(matrix.values[0, 1])  # trial 2 starts two days later
     assert matrix.values[2, 1] == 10.0
+
+
+def test_a_family_run_hands_the_suite_the_family_count(ledger):
+    """Roadmap 22.9: runs of one research session share a trial family."""
+    from stonks.lab.trials import LabRunSpec, TrialRecord
+
+    ledger.record_run(
+        LabRunSpec("other:Class", family="rs_x"), [TrialRecord(i, {}, 0.1) for i in range(5)]
+    )
+    probe = _BindRunTest()
+    result = _runner(_Tuner(n=3), tests=[probe], ledger=ledger).run(
+        BuyAndHold, _ds(), family="rs_x"
+    )
+    assert ledger.run(result.run_id)["family"] == "rs_x"
+    assert probe.ctx is not None and probe.ctx.n_trials_family == 8
+    assert result.n_trials_family == 8
+
+
+def test_a_run_outside_a_family_counts_no_family(ledger):
+    probe = _BindRunTest()
+    result = _runner(_Tuner(n=3), tests=[probe], ledger=ledger).run(BuyAndHold, _ds())
+    assert ledger.run(result.run_id)["family"] is None
+    assert probe.ctx is not None and probe.ctx.n_trials_family == 0

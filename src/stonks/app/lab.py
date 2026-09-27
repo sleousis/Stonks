@@ -634,6 +634,8 @@ class LabRunView(BaseModel):
     n_trials_run: int = 0
     #: Trials of this strategy class across every ledgered run (P2).
     n_trials_class: int = 0
+    #: Trials across the run's research session (roadmap 22.9), 0 outside one.
+    n_trials_family: int = 0
     #: The fitted strategy against its benchmark over the validation
     #: window; ``None`` when off or unpriced.
     benchmark: BenchmarkStatsView | None = None
@@ -676,6 +678,7 @@ class LabExecution:
             run_id=result.run_id,
             n_trials_run=result.n_trials_run,
             n_trials_class=result.n_trials_class,
+            n_trials_family=result.n_trials_family,
             benchmark=BenchmarkStatsView.of(self.benchmark) if self.benchmark else None,
             preflight=PreflightView.of(result.preflight) if result.preflight else None,
             heatmap=HeatmapView.of(result.heatmap) if result.heatmap is not None else None,
@@ -710,9 +713,14 @@ def execute_lab_run(
     fixed_params: Mapping[str, Any] | None = None,
     parallel: ParallelSettings | None = None,
     data_ensurer: Any = None,
+    family: str | None = None,
 ) -> LabExecution:
     """Tune ``cls`` on ``lake`` and run the survival suite; the one lab-run
     code path (see the module doc).
+
+    ``family`` names the research session the run belongs to (roadmap 22.9,
+    the assistant's research loop): trial-counting tests see the family's
+    trials too. Only in-process callers set it, never a request.
 
     ``state`` (an open ``SqliteState``) enables the trial ledger and is
     required to register. ``register`` replaces the plain registry
@@ -763,6 +771,7 @@ def execute_lab_run(
             fixed_params=fixed_params,
             hypothesis=request.hypothesis,
             premortem=request.premortem,
+            family=family,
         )
     except PreflightError as exc:  # the data can't support the run
         raise ValidationError(str(exc)) from None
@@ -1085,9 +1094,11 @@ class LabService:
         *,
         progress: JobContext | None = None,
         register: RegisterFn | None = None,
+        family: str | None = None,
     ) -> LabRunView:
         """Run :func:`execute_lab_run` for ``cls`` (``request.strategy`` is
-        not resolved here) on this context's lake and state."""
+        not resolved here) on this context's lake and state. ``family``:
+        see :func:`execute_lab_run`."""
         with self._ctx.lake() as lake, self._ctx.state() as state:
             execution = execute_lab_run(
                 self._ctx.settings,
@@ -1097,6 +1108,7 @@ class LabService:
                 state=state,
                 progress=progress,
                 register=register,
+                family=family,
             )
         return execution.view()
 

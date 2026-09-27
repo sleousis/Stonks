@@ -37,6 +37,9 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | POST | `/api/assistant/conversations/{conversation_id}/messages` | Send Message | `data.read` | [MessageCreate](#messagecreate) | SSE of [AssistantEventView](#assistanteventview) |
 | GET | `/api/assistant/conversations/{conversation_id}/turns` | List Turns | sign-in |  | [Page_TurnView_](#page_turnview_) |
 | DELETE | `/api/assistant/freeze` | Clear Freeze | `killswitch.resume` |  |  |
+| GET | `/api/assistant/research` | List Research | sign-in |  | [Page_ResearchSessionView_](#page_researchsessionview_) |
+| POST | `/api/assistant/research` | Start Research | `lab.run` | [ResearchStart](#researchstart) | [Job](#job) |
+| GET | `/api/assistant/research/{session_id}` | Get Research | sign-in |  | [ResearchSessionDetailView](#researchsessiondetailview) |
 | GET | `/api/assistant/status` | Assistant Status | sign-in |  | [AssistantStatusView](#assistantstatusview) |
 
 ## auth endpoints
@@ -1554,6 +1557,7 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `ensure_job_id` | string \| null | no |  |
 | `heatmap` | [HeatmapView](#heatmapview) \| null | no |  |
 | `n_trials_class` | integer | no |  |
+| `n_trials_family` | integer | no |  |
 | `n_trials_run` | integer | no |  |
 | `preflight` | [PreflightView](#preflightview) \| null | no |  |
 | `registered_strategy_id` | string \| null | yes |  |
@@ -2299,6 +2303,15 @@ An order to propose. The server prices it and checks it; a person approves it in
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
 
+### Page_ResearchSessionView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[ResearchSessionView](#researchsessionview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
 ### Page_RiskSnapshotView_
 
 | Field | Type | Required | Description |
@@ -2875,6 +2888,91 @@ The browser's ``PushSubscription.toJSON()`` plus its user agent.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `recovery_codes` | list[string] | yes |  |
+
+### ResearchProposalView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `arguments` | object | yes | What the model proposed. |
+| `best_score` | number \| null | yes |  |
+| `budget` | integer \| null | yes |  |
+| `class_path` | string \| null | yes |  |
+| `cpu_seconds` | number | yes |  |
+| `created_at` | date-time | yes |  |
+| `finished_at` | date-time \| null | yes |  |
+| `hypothesis` | string \| null | yes |  |
+| `id` | string | yes |  |
+| `lab_run_id` | string \| null | yes | The run in the trial ledger. |
+| `outcome` | object \| null | yes |  |
+| `premortem` | string \| null | yes |  |
+| `reason` | string \| null | yes | Why it was rejected, stopped or failed. |
+| `seq` | integer | yes |  |
+| `status` | "rejected" \| "running" \| "done" \| "failed" \| "stopped" | yes |  |
+| `trials` | integer | yes |  |
+| `validation_start` | date \| null | yes |  |
+| `verdict` | string \| null | yes |  |
+
+### ResearchSessionDetailView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cpu_seconds_used` | number | yes |  |
+| `created_at` | date-time | yes |  |
+| `finished_at` | date-time \| null | yes |  |
+| `goal` | string | yes |  |
+| `id` | string | yes |  |
+| `job_id` | string \| null | yes |  |
+| `max_cpu_seconds` | number | yes |  |
+| `max_proposals` | integer | yes |  |
+| `max_trials` | integer | yes |  |
+| `model` | string | yes |  |
+| `model_cutoff` | date | yes | The model's training cutoff: validation windows start after it. |
+| `prompt_version` | string | yes |  |
+| `proposals` | list[[ResearchProposalView](#researchproposalview)] | yes |  |
+| `started_at` | date-time \| null | yes |  |
+| `status` | "queued" \| "running" \| "done" \| "stopped" \| "failed" | yes |  |
+| `stop_reason` | string \| null | yes |  |
+| `summary` | string \| null | yes |  |
+| `trials_used` | integer | yes |  |
+| `universe` | list[string] | yes |  |
+| `universe_id` | string \| null | yes |  |
+
+### ResearchSessionView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cpu_seconds_used` | number | yes |  |
+| `created_at` | date-time | yes |  |
+| `finished_at` | date-time \| null | yes |  |
+| `goal` | string | yes |  |
+| `id` | string | yes |  |
+| `job_id` | string \| null | yes |  |
+| `max_cpu_seconds` | number | yes |  |
+| `max_proposals` | integer | yes |  |
+| `max_trials` | integer | yes |  |
+| `model` | string | yes |  |
+| `model_cutoff` | date | yes | The model's training cutoff: validation windows start after it. |
+| `prompt_version` | string | yes |  |
+| `started_at` | date-time \| null | yes |  |
+| `status` | "queued" \| "running" \| "done" \| "stopped" \| "failed" | yes |  |
+| `stop_reason` | string \| null | yes |  |
+| `summary` | string \| null | yes |  |
+| `trials_used` | integer | yes |  |
+| `universe` | list[string] | yes |  |
+| `universe_id` | string \| null | yes |  |
+
+### ResearchStart
+
+A research session: what to look for, on which universe, and budgets that may only be lower than the configured ones.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `goal` | string | yes | What to look for. |
+| `max_cpu_seconds` | number \| null | no | At most the setting. |
+| `max_proposals` | integer \| null | no | At most the setting. |
+| `max_trials` | integer \| null | no | At most the setting. |
+| `universe` | list[string] | no |  |
+| `universe_id` | string \| null | no |  |
 
 ### RestoreRequest
 
