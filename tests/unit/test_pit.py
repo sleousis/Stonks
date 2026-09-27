@@ -211,8 +211,17 @@ def test_macro_prints_go_by_publication_date(pit):
     assert list(later["value"]) == [1.0]
 
 
+def test_a_share_count_is_hidden_until_it_could_be_published(lake, pit):
+    """BE-32: a share count dated D (a period date) is published with the
+    filing, weeks later: the view lags it by SHARE_COUNT_LAG_DAYS."""
+    from stonks.store.pit import SHARE_COUNT_LAG_DAYS
+
+    assert list(pit.get_shares_outstanding("A.US")["shares"]) == []
+    later = PointInTimeLake(lake, D + timedelta(days=SHARE_COUNT_LAG_DAYS))
+    assert list(later.get_shares_outstanding("A.US")["shares"]) == [10.0]
+
+
 def test_dated_metadata_stops_at_the_decision_day(pit):
-    assert list(pit.get_shares_outstanding("A.US")["shares"]) == [10.0]
     assert list(pit.get_dividends("A.US")["amount"]) == [0.5]
     actions = pit.get_corporate_actions(["A.US"])
     assert list(actions["kind"]) == ["dividend"]

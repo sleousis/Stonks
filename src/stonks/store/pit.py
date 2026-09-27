@@ -18,8 +18,11 @@ a daily decision). Then:
   (:attr:`PointInTimeLake.known_through`): statements by
   ``available_date`` (the day after the filing date, since a filing may
   land after the close: usable from the decision bar's start day, daily
-  or intraday), macro prints by publication date,
-  share counts, dividends, splits, bond yields and TVL by their day;
+  or intraday), macro prints by their period end plus the publication
+  lag the caller passes (0 by default: a daily close such as the VIX is
+  known when its day ends, but a monthly print needs the caller's lag),
+  share counts :data:`SHARE_COUNT_LAG_DAYS` after the period date they
+  carry, dividends, splits, bond yields and TVL by their day;
 - **universe membership** shows spans that started by then, and an exit
   dated later reads as still open (nobody knew it yet);
 - **names** (``bar_tickers``) are listed once their first bar is visible;
@@ -49,6 +52,9 @@ from stonks.core.timeutil import as_datetime
 __all__ = ["PitSession", "PointInTimeLake", "PointInTimeViolation"]
 
 # Bounds wide enough to cover every bar a lake can hold.
+#: Days a share count stays hidden after the period date it carries: a
+#: quarterly count is published with the 10-Q, up to about 45 days later.
+SHARE_COUNT_LAG_DAYS = 45
 _HISTORY_START = datetime(1900, 1, 1)
 _HISTORY_END = datetime(2200, 1, 1)
 
@@ -306,9 +312,12 @@ class PointInTimeLake:
         return _rows(full, _on_or_before(full[column], self._known))
 
     def _read_get_shares_outstanding(self, ticker: str) -> pd.DataFrame:
-        return self._dated(
-            ("shares", ticker), lambda: self._lake.get_shares_outstanding(ticker), "date"
-        )
+        """Share counts are dated by the period they describe and published
+        with the filing weeks later, so each is hidden for
+        :data:`SHARE_COUNT_LAG_DAYS` after its date (BE-32)."""
+        full = self._cached(("shares", ticker), lambda: self._lake.get_shares_outstanding(ticker))
+        cutoff = self._known - timedelta(days=SHARE_COUNT_LAG_DAYS)
+        return _rows(full, _on_or_before(full["date"], cutoff))
 
     def _read_get_dividends(self, ticker: str) -> pd.DataFrame:
         return self._dated(
