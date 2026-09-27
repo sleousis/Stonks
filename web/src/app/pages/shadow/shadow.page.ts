@@ -12,12 +12,14 @@ import { RouterLink } from '@angular/router';
 import type { PnlRowView, ShadowDecisionView, ShadowPnlSummary } from '../../api/models';
 import { PortfolioService } from '../../api/portfolio.service';
 import { ShadowService } from '../../api/shadow.service';
-import { formatPercent, toneClass } from '../../core/format/format';
+import { formatDate, formatNumber, formatPercent, toneClass } from '../../core/format/format';
 import { CATEGORICAL_LINES, type ChartSeries } from '../../shared/chart/chart-engine';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
 import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { keepLatest } from '../../shared/ui/data-table/keep-latest';
+import { strategyDisplayName } from '../../shared/strategy-names';
+import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { SideTag } from '../../shared/ui/side-tag';
 import { PageHeader } from '../../shared/ui/page-header';
 import { StatTile } from '../../shared/ui/stat-tile';
@@ -28,9 +30,9 @@ import { PortfolioContextService } from '../../core/portfolio/portfolio-context.
 
 const DECISIONS_PAGE = 50;
 /**
- * The chart draws at most this many shadow strategies, the ones with the best
- * return, each in its own categorical line style (brass stays the real
- * portfolio). The table still lists every one.
+ * The chart draws at most this many paper strategies, the ones with the best
+ * return, each in its own categorical line style (brass stays your portfolio
+ * when it trades real money). The table still lists every one.
  */
 export const SHADOW_CHART_MAX = CATEGORICAL_LINES.length;
 const ALL = '';
@@ -48,15 +50,19 @@ function sameIds(a: readonly string[] | undefined, b: readonly string[] | undefi
   return a.length === b.length && a.every((id, i) => id === b[i]);
 }
 
-/** A summary row joined with its comparison against the real portfolio. */
+/** A summary row joined with its comparison against your portfolio. */
 export interface ShadowRow extends ShadowPnlSummary {
+  /** The name to show (UX-27). */
+  name: string;
   comparison: ShadowComparison | null;
 }
 
 /**
- * Shadow strategies trade on paper next to the real portfolio. This page puts
- * each one against the real portfolio on one rebased chart, lists how far
- * ahead or behind it is, and links each to its go-live checks.
+ * The Paper trading page (`/paper`): strategies that trade on paper next to
+ * your portfolio. It puts each one against your portfolio on one chart,
+ * lists how far ahead or behind it is, and links each to its go-live check.
+ * Your portfolio is named "Your portfolio" with its PAPER or LIVE stamp,
+ * never "Real portfolio" on paper money (UX-26).
  */
 @Component({
   selector: 'app-shadow-page',
@@ -66,6 +72,7 @@ export interface ShadowRow extends ShadowPnlSummary {
     PageHeader,
     StatTile,
     StatusPill,
+    ModeStamp,
     DataTable,
     TableCell,
     TimeSeriesChart,
@@ -87,6 +94,10 @@ export class ShadowPage {
     loader: () => this.shadowApi.pnlSummaries({ limit: 100 }),
   });
   private readonly portfolioCtx = inject(PortfolioContextService);
+  /** Your portfolio trades real money: its line is brass and its stamp says LIVE. */
+  protected readonly live = this.portfolioCtx.live;
+  protected readonly name = strategyDisplayName;
+  protected readonly date = formatDate;
   protected readonly real = resource({
     params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
     loader: () => this.portfolioApi.pnl(),
@@ -119,6 +130,11 @@ export class ShadowPage {
   /** The last loaded series stay on the chart while a refresh loads. */
   private readonly seriesShown = keepLatest(this.series);
   protected readonly failedSeries = computed(() => this.seriesShown()?.failed ?? []);
+  protected readonly failedNames = computed(() =>
+    this.failedSeries()
+      .map((id) => strategyDisplayName(id))
+      .join(', '),
+  );
   protected readonly hiddenCount = computed(() =>
     this.summaries.hasValue()
       ? Math.max(0, this.summaries.value().items.length - (this.strategyIds()?.length ?? 0))
@@ -141,6 +157,7 @@ export class ShadowPage {
       const rows = byId.get(s.strategy_id);
       return {
         ...s,
+        name: strategyDisplayName(s.strategy_id),
         comparison: rows?.length ? compareToReal(s.strategy_id, rows, real) : null,
       };
     });
@@ -155,12 +172,12 @@ export class ShadowPage {
   });
   protected readonly leaderDetail = computed(() => {
     const c = this.leader()?.comparison;
-    return c ? `${formatPercent(c.excess, { signed: true })} vs real` : null;
+    return c ? `${formatPercent(c.excess, { signed: true })} vs your portfolio` : null;
   });
   protected readonly leaderTone = computed(() => toneClass(this.leader()?.comparison?.excess));
 
   // Chart -------------------------------------------------------------------
-  /** '' shows every shadow strategy; an id shows one, with its drawdown below. */
+  /** '' shows every paper strategy; an id shows one, with its drawdown below. */
   protected readonly focus = linkedSignal<string[] | undefined, string>({
     source: () => this.strategyIds(),
     computation: (ids, prev) => (prev && ids?.includes(prev.value) ? prev.value : ALL),
@@ -181,7 +198,7 @@ export class ShadowPage {
     const series: ChartSeries[] = [
       {
         id: 'real',
-        label: 'Real portfolio',
+        label: 'Your portfolio',
         kind: 'line',
         color: this.portfolioCtx.live() ? 'brass' : 'muted',
         format: 'number',
@@ -189,7 +206,7 @@ export class ShadowPage {
       },
       ...input.shadows.map<ChartSeries>((s) => ({
         id: `shadow:${s.id}`,
-        label: s.id,
+        label: strategyDisplayName(s.id),
         kind: 'line',
         color: style(s.id).color,
         dashed: style(s.id).dashed,
@@ -202,14 +219,12 @@ export class ShadowPage {
       const rows = this.shadowSeries().find((s) => s.id === focus)?.rows ?? [];
       series.push({
         id: 'drawdown',
-        label: `${focus} drawdown`,
+        label: `${strategyDisplayName(focus)} drawdown`,
         kind: 'area',
         color: 'loss',
         pane: 1,
         format: 'percent',
-        points: rows
-          .filter((r) => r.day >= input.baseDay!)
-          .map((r) => ({ time: r.day, value: r.drawdown })),
+        points: rows.map((r) => ({ time: r.day, value: r.drawdown })),
       });
     }
     return series;
@@ -218,20 +233,25 @@ export class ShadowPage {
   protected readonly chartSummary = computed(() => {
     const input = this.chartInput();
     if (!input.baseDay) return null;
-    const end = (points: { value: number }[]) => points.at(-1)?.value.toFixed(1) ?? '–';
-    const parts = input.shadows.map((s) => `${s.id} ${end(s.points)}`);
+    const end = (points: { value: number }[]) =>
+      formatNumber(points.at(-1)?.value ?? null, { digits: 1 });
+    const parts = input.shadows.map((s) => `${strategyDisplayName(s.id)} ${end(s.points)}`);
     return (
-      `Values rebased to 100 on ${input.baseDay}. Real portfolio ${end(input.real)}; ` +
-      `${parts.join(', ')}.`
+      `Your portfolio starts at 100 on ${formatDate(input.baseDay)} and ends at ` +
+      `${end(input.real)}. Each strategy starts on its own first day: ${parts.join(', ')}.`
     );
   });
 
   protected readonly chartDays = computed(() => this.chartInput().real.length);
   protected readonly baseDay = computed(() => this.chartInput().baseDay);
+  protected readonly baseDayText = computed(() => {
+    const day = this.baseDay();
+    return day ? formatDate(day) : null;
+  });
 
   // Summary table -----------------------------------------------------------
   protected readonly summaryColumns: TableColumn<ShadowRow>[] = [
-    { key: 'strategy_id', label: 'Strategy', mobile: 'title' },
+    { key: 'strategy_id', label: 'Strategy', mobile: 'title', value: (r) => r.name },
     {
       key: 'days',
       label: 'Days',
@@ -247,7 +267,7 @@ export class ShadowPage {
     },
     {
       key: 'real',
-      label: 'Real, same days',
+      label: 'Yours, same days',
       format: 'signedPercent',
       tone: true,
       mobile: 'hide',
@@ -255,7 +275,7 @@ export class ShadowPage {
     },
     {
       key: 'excess',
-      label: 'Vs real',
+      label: 'Vs yours',
       format: 'signedPercent',
       tone: true,
       value: (r) => r.comparison?.excess ?? null,
@@ -275,7 +295,7 @@ export class ShadowPage {
     },
     { key: 'total_value', label: 'Value', format: 'money', mobile: 'hide' },
     { key: 'status', label: 'Status', mobile: 'hide' },
-    { key: 'go_live', label: 'Go-live', sortable: false, align: 'end' },
+    { key: 'go_live', label: 'Go-live check', sortable: false, align: 'end' },
   ];
   protected readonly summaryKey = (r: ShadowRow) => r.strategy_id;
 
@@ -305,7 +325,7 @@ export class ShadowPage {
 
   protected readonly decisionColumns: TableColumn<ShadowDecisionView>[] = [
     { key: 'ticker', label: 'Ticker', mobile: 'title' },
-    { key: 'strategy_id', label: 'Strategy' },
+    { key: 'strategy_id', label: 'Strategy', value: (d) => strategyDisplayName(d.strategy_id) },
     { key: 'side', label: 'Side' },
     { key: 'quantity', label: 'Qty', format: 'number' },
     { key: 'price', label: 'Price', format: 'money' },

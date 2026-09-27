@@ -126,11 +126,11 @@ describe('ShadowPage', () => {
     }
   }
 
-  it('charts shadow and real rebased to 100 on the same day', async () => {
+  it('charts each strategy against your portfolio from its own first day', async () => {
     await flushAll();
     const series = chart.last;
     expect(series?.map((s) => s.id)).toEqual(['real', 'shadow:value-v1']);
-    // Real is rebased on the shadow's first day (210k), not its own first day.
+    // Your portfolio starts at 100 on the strategy's first day (210k).
     expect(series?.[0].points).toEqual([
       { time: '2026-09-02', value: 100 },
       { time: '2026-09-03', value: 104.761905 },
@@ -143,7 +143,7 @@ describe('ShadowPage', () => {
     expect(series?.[0].color).toBe('muted');
   });
 
-  it('lists each shadow strategy against the real portfolio with a go-live link', async () => {
+  it('lists each paper strategy against your portfolio with a go-live link', async () => {
     await flushAll();
     const summary = el.querySelector('section[aria-labelledby="summary-title"]');
     const text = summary?.textContent ?? '';
@@ -154,10 +154,34 @@ describe('ShadowPage', () => {
     const goLive = summary?.querySelector<HTMLAnchorElement>('a.go-live');
     expect(goLive?.getAttribute('href')).toBe('/go-live?strategy=value-v1');
 
-    expect(el.textContent).toContain('Leading vs real');
+    expect(el.textContent).toContain('Leading vs your portfolio');
   });
 
-  it('shows shadow decisions with links to their tick', async () => {
+  it('with a paper portfolio the page never says Real, and names it Your portfolio (UX-26)', async () => {
+    await flushAll();
+    expect(el.textContent).not.toMatch(/\bReal\b/);
+    expect(el.querySelector('.yours')!.textContent).toContain('Your portfolio');
+    expect(el.querySelector('.yours app-mode-stamp')!.textContent).toContain('PAPER');
+    expect(chart.last?.[0].label).toBe('Your portfolio');
+  });
+
+  it('uses trader words only (UX-09)', async () => {
+    await flushAll();
+    expect(el.querySelector('h1')!.textContent).toBe('Paper trading');
+    expect(el.textContent).not.toMatch(/shadow|promot|regist|retire/i);
+  });
+
+  it('shows strategy names, not ids, and a long name wraps in its tile (UX-27)', async () => {
+    const long = 'stocks_on_the_move_breakout_3fa9c21b';
+    await flushWith([summary(long, 0.1)]);
+    const tile = el.querySelector('app-stat-tile.tile-leader')!;
+    expect(tile.textContent).toContain('Stocks on the move breakout 3fa9');
+    expect(tile.classList).toContain('text');
+    const summaryTable = el.querySelector('section[aria-labelledby="summary-title"]')!;
+    expect(summaryTable.textContent).not.toContain(long);
+  });
+
+  it('shows paper decisions with links to their run', async () => {
     await flushAll();
     const decisions = el.querySelector('section[aria-labelledby="decisions-title"]');
     expect(decisions?.textContent).toContain('AAPL.US');
@@ -236,7 +260,7 @@ describe('ShadowPage', () => {
     expect(el.querySelector('app-updated-ago')?.textContent).toContain('Updated');
   });
 
-  it('explains the empty state when nothing is in shadow', async () => {
+  it('explains the empty state when nothing is on paper', async () => {
     for (let i = 0; i < 6; i++) {
       controller
         .match(() => true)
@@ -251,6 +275,6 @@ describe('ShadowPage', () => {
       fixture.detectChanges();
     }
     expect(el.textContent).toContain('Nothing to compare yet');
-    expect(el.textContent).toContain('No shadow strategies');
+    expect(el.textContent).toContain('No strategies on paper');
   });
 });

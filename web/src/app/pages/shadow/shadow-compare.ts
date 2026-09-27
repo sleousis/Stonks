@@ -78,27 +78,51 @@ export interface ComparisonSeries {
   points: ChartPoint[];
 }
 
+function firstDayOf(rows: readonly PnlRowView[]): string {
+  return rows.reduce((min, r) => (r.day < min ? r.day : min), rows[0].day);
+}
+
+/** The value of a series on `day`, or on the last day before it; null before it starts. */
+function valueOn(points: readonly ChartPoint[], day: string): number | null {
+  let value: number | null = null;
+  for (const p of points) {
+    if (p.time > day) break;
+    value = p.value;
+  }
+  return value;
+}
+
 /**
- * Series for one chart: the real portfolio and each shadow strategy, all
- * rebased to 100 on the same day (the latest first day among them), so every
- * line starts together and gaps between them are real out- or
- * under-performance.
+ * Series for one chart (UX-25). Your portfolio starts at 100 on the first
+ * paper day of any strategy. Each strategy starts on its own first day, at
+ * your portfolio's value that day, so a strategy that started yesterday
+ * never cuts the others' history short, and the gap between a strategy and
+ * your portfolio is how far ahead or behind it is since it started.
  */
 export function comparisonSeries(
   real: readonly PnlRowView[],
   shadows: readonly { id: string; rows: readonly PnlRowView[] }[],
 ): { baseDay: string | null; real: ChartPoint[]; shadows: ComparisonSeries[] } {
   const withData = shadows.filter((s) => s.rows.length > 0);
-  const firstDays = [real, ...withData.map((s) => s.rows)]
-    .filter((rows) => rows.length > 0)
-    .map((rows) => rows.reduce((min, r) => (r.day < min ? r.day : min), rows[0].day));
-  if (withData.length === 0 || firstDays.length === 0) {
-    return { baseDay: null, real: [], shadows: [] };
-  }
-  const baseDay = firstDays.reduce((max, d) => (d > max ? d : max));
+  if (withData.length === 0) return { baseDay: null, real: [], shadows: [] };
+  const earliest = withData.map((s) => firstDayOf(s.rows)).reduce((a, b) => (b < a ? b : a));
+  const realFirst = real.length ? firstDayOf(real) : null;
+  const baseDay = realFirst && realFirst > earliest ? realFirst : earliest;
+  const realPoints = normalizeTo100(real, baseDay);
   return {
     baseDay,
-    real: normalizeTo100(real, baseDay),
-    shadows: withData.map((s) => ({ id: s.id, points: normalizeTo100(s.rows, baseDay) })),
+    real: realPoints,
+    shadows: withData.map((s) => {
+      const own = firstDayOf(s.rows);
+      const start = own > baseDay ? own : baseDay;
+      const anchor = valueOn(realPoints, start) ?? 100;
+      return {
+        id: s.id,
+        points: normalizeTo100(s.rows, start).map((p) => ({
+          time: p.time,
+          value: Math.round(p.value * anchor * 1e4) / 1e6,
+        })),
+      };
+    }),
   };
 }

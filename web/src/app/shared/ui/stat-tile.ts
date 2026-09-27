@@ -23,13 +23,21 @@ export type StatTone = 'gain' | 'loss' | '';
  * slate rule for paper money or a brass one when `live` (real money). Pass
  * `amount` and `format` as well and it counts up to the figure.
  *
+ * A value made of words (a strategy name, a date) wraps instead of running
+ * off a narrow tile (UX-27); figures stay on one line.
+ *
  *   <app-stat-tile label="Value" featured [live]="isLive()" [amount]="total" [format]="money" />
  */
 @Component({
   selector: 'app-stat-tile',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [HelpTip],
-  host: { class: 'stat-tile', '[class.featured]': 'featured()', '[class.live]': 'live()' },
+  host: {
+    class: 'stat-tile',
+    '[class.featured]': 'featured()',
+    '[class.live]': 'live()',
+    '[class.text]': 'isText()',
+  },
   template: `
     <p class="label">
       {{ label() }}
@@ -94,6 +102,14 @@ export type StatTone = 'gain' | 'loss' | '';
     :host(.featured.live) .value {
       color: var(--color-live);
     }
+    :host(.text) .value {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+    :host(.featured.text) .value {
+      font-size: clamp(var(--text-lg), 9cqi, var(--text-2xl));
+      line-height: var(--leading-tight);
+    }
     .detail {
       margin-top: var(--space-1);
       font-size: var(--text-sm);
@@ -143,6 +159,9 @@ export class StatTile {
     const n = this.animated();
     return fmt && n !== null ? fmt(n) : this.finalText();
   });
+
+  /** Words, not a figure: two letters in a row ("Momentum 3fa9", "Sep 2"). */
+  protected readonly isText = computed(() => /\p{L}{2}/u.test(this.finalText() ?? ''));
 
   protected readonly helpTerm = computed(() => {
     const help = this.help();

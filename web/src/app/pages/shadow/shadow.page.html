@@ -1,7 +1,8 @@
 <app-page-header
-  title="Shadow"
-  description="Shadow strategies trade on paper next to the real portfolio. Compare them on the same days before sending one to go-live."
+  title="Paper trading"
+  description="Strategies that trade simulated money next to your portfolio. Compare them over the same days before one goes live."
 >
+  <p class="yours">Your portfolio <app-mode-stamp [live]="live()" /></p>
   <app-updated-ago [at]="auto.updatedAt()" />
   <button
     actions
@@ -16,26 +17,28 @@
 </app-page-header>
 
 <!-- Tiles ------------------------------------------------------------------>
-<section class="tiles" aria-label="Shadow summary">
+<section class="tiles" aria-label="Paper trading summary">
   <app-stat-tile
-    label="Shadow strategies"
+    label="On paper"
     [loading]="!summaries.hasValue() && !summaries.error()"
     [value]="summaries.hasValue() ? '' + summaries.value().total : '–'"
-    [detail]="summaries.hasValue() && summaries.value().total ? 'Trading on paper' : null"
+    [detail]="
+      summaries.hasValue() && summaries.value().total ? 'Strategies trading on paper' : null
+    "
   />
   <app-stat-tile
     class="tile-leader"
-    label="Leading vs real"
+    label="Leading vs your portfolio"
     featured
     [loading]="!seriesReady() && !series.error() && !summaries.error()"
-    [value]="leader()?.strategy_id ?? '–'"
+    [value]="leader()?.name ?? '–'"
     [detail]="leaderDetail()"
     [detailTone]="leaderTone()"
   />
   <app-stat-tile
     label="Compared since"
     [loading]="!seriesReady() && !series.error() && !summaries.error()"
-    [value]="baseDay() ?? '–'"
+    [value]="baseDayText() ?? '–'"
     [detail]="chartDays() ? chartDays() + ' days on the chart' : null"
   />
 </section>
@@ -44,7 +47,7 @@
   <!-- Chart ---------------------------------------------------------------->
   <section class="panel span-12" aria-labelledby="compare-title">
     <div class="panel-head">
-      <h2 id="compare-title">Shadow vs real, rebased to 100</h2>
+      <h2 id="compare-title">Paper strategies vs your portfolio</h2>
       @if ((strategyIds()?.length ?? 0) > 1) {
         <div class="head-tools">
           <label for="compare-focus">Show</label>
@@ -54,9 +57,9 @@
             [value]="focus()"
             (change)="focus.set($any($event.target).value)"
           >
-            <option value="">All shadow strategies</option>
+            <option value="">All paper strategies</option>
             @for (id of strategyIds(); track id) {
-              <option [value]="id" [selected]="id === focus()">{{ id }}</option>
+              <option [value]="id" [selected]="id === focus()">{{ name(id) }}</option>
             }
           </select>
         </div>
@@ -65,32 +68,28 @@
     <div class="panel-body">
       @if (summaries.error(); as err) {
         <app-error-state
-          title="Could not load shadow strategies"
+          title="Could not load paper strategies"
           [error]="err"
           (retry)="summaries.reload()"
         />
       } @else if (real.error(); as err) {
         <app-error-state
-          title="Could not load the real portfolio P&L"
+          title="Could not load your portfolio's P&L"
           [error]="err"
           (retry)="real.reload()"
         />
       } @else if (series.error(); as err) {
-        <app-error-state
-          title="Could not load shadow P&L"
-          [error]="err"
-          (retry)="series.reload()"
-        />
+        <app-error-state title="Could not load paper P&L" [error]="err" (retry)="series.reload()" />
       } @else if (
         !summaries.hasValue() ||
         !real.hasValue() ||
         (!seriesReady() && summaries.value().items.length > 0)
       ) {
-        <app-loading-state label="Loading shadow P&L" [rows]="6" />
+        <app-loading-state label="Loading paper P&L" [rows]="6" />
       } @else if (chartSeries().length === 0) {
         <app-empty-state
           title="Nothing to compare yet"
-          message="Move a strategy to shadow from Strategies. Its paper P&L starts with the next real trading run."
+          message="Start paper trading a strategy from its page. Its paper P&L starts with the next trading run."
         >
           <a class="btn" routerLink="/strategies">Open strategies</a>
         </app-empty-state>
@@ -98,16 +97,17 @@
         <app-time-series-chart
           [ariaLabel]="
             focus()
-              ? 'Real portfolio and ' + focus() + ' rebased to 100, with its drawdown below'
-              : 'Real portfolio and shadow strategies rebased to 100'
+              ? 'Your portfolio and ' + name(focus()) + ', with its drawdown below'
+              : 'Your portfolio and paper strategies'
           "
           [summary]="chartSummary()"
           [series]="chartSeries()"
           [height]="320"
         />
         <p class="chart-note">
-          Every line starts at 100 on {{ baseDay() }}, so the gap between lines is how far a shadow
-          strategy is ahead or behind the real portfolio over the same days.
+          Your portfolio starts at 100 on {{ baseDayText() }}. Each strategy starts on its own first
+          day at your portfolio's value that day, so the gap is how far it is ahead or behind since
+          it started.
           @if (hiddenCount()) {
             The chart shows the {{ strategyIds()?.length }} with the best return. The table below
             lists all of them.
@@ -115,7 +115,7 @@
         </p>
         @if (failedSeries().length) {
           <p class="chart-note warn" role="status">
-            Could not load {{ failedSeries().join(', ') }}. Refresh to try again.
+            Could not load {{ failedNames() }}. Refresh to try again.
           </p>
         }
       }
@@ -125,22 +125,22 @@
   <!-- Summary table -------------------------------------------------------->
   <section class="panel span-12" aria-labelledby="summary-title">
     <div class="panel-head">
-      <h2 id="summary-title">Shadow strategies</h2>
+      <h2 id="summary-title">Paper strategies</h2>
     </div>
     @if (summaries.error()) {
-      <p class="panel-body muted">The list is unavailable until shadow strategies load.</p>
+      <p class="panel-body muted">The list is unavailable until paper strategies load.</p>
     } @else if (!summaries.hasValue()) {
-      <app-loading-state label="Loading shadow strategies" [rows]="4" />
+      <app-loading-state label="Loading paper strategies" [rows]="4" />
     } @else if (rows().length === 0) {
       <app-empty-state
-        title="No shadow strategies"
-        message="A strategy in shadow trades on paper with every real tick. Move one to shadow from its strategy page."
+        title="No strategies on paper"
+        message="A paper strategy decides on every trading run without real orders. Start paper trading one from its strategy page."
       >
         <a class="btn" routerLink="/strategies">Open strategies</a>
       </app-empty-state>
     } @else {
       <app-data-table
-        caption="Shadow strategies against the real portfolio over the same days"
+        caption="Paper strategies against your portfolio over the same days"
         [rows]="rows()"
         [columns]="summaryColumns"
         [rowKey]="summaryKey"
@@ -148,7 +148,7 @@
         [pageSize]="0"
       >
         <ng-template appCell="strategy_id" [appCellOf]="rows()" let-r>
-          <a class="cell-link" [routerLink]="['/strategies', r.strategy_id]">{{ r.strategy_id }}</a>
+          <a class="cell-link" [routerLink]="['/strategies', r.strategy_id]">{{ r.name }}</a>
         </ng-template>
         <ng-template appCell="status" [appCellOf]="rows()" let-r>
           <app-status-pill [status]="r.status ?? 'shadow'" />
@@ -158,8 +158,8 @@
             class="btn go-live"
             routerLink="/go-live"
             [queryParams]="{ strategy: r.strategy_id }"
-            [attr.aria-label]="'Go-live checks for ' + r.strategy_id"
-            >Go-live <span aria-hidden="true">→</span></a
+            [attr.aria-label]="'Go-live check for ' + r.name"
+            >Check <span aria-hidden="true">→</span></a
           >
         </ng-template>
       </app-data-table>
@@ -169,7 +169,7 @@
   <!-- Decisions ------------------------------------------------------------>
   <section class="panel span-12" aria-labelledby="decisions-title">
     <div class="panel-head">
-      <h2 id="decisions-title">Shadow decisions</h2>
+      <h2 id="decisions-title">Paper decisions</h2>
       @if (decisionsPageShown(); as dp) {
         <span class="count num">{{ dp.total }} matching</span>
       }
@@ -177,7 +177,7 @@
     <form
       class="filters"
       role="search"
-      aria-label="Filter shadow decisions"
+      aria-label="Filter paper decisions"
       (submit)="$event.preventDefault()"
     >
       <div class="field">
@@ -188,11 +188,11 @@
           [value]="decisionStrategy()"
           (change)="decisionStrategy.set($any($event.target).value)"
         >
-          <option value="">All shadow strategies</option>
+          <option value="">All paper strategies</option>
           @if (summaries.hasValue()) {
             @for (s of summaries.value().items; track s.strategy_id) {
               <option [value]="s.strategy_id" [selected]="s.strategy_id === decisionStrategy()">
-                {{ s.strategy_id }}
+                {{ name(s.strategy_id) }}
               </option>
             }
           }
@@ -213,21 +213,21 @@
     @let dp = decisionsPageShown();
     @if (decisions.error(); as err) {
       <app-error-state
-        title="Could not load shadow decisions"
+        title="Could not load paper decisions"
         [error]="err"
         (retry)="decisions.reload()"
       />
     } @else if (!dp) {
-      <app-loading-state label="Loading shadow decisions" [rows]="5" />
+      <app-loading-state label="Loading paper decisions" [rows]="5" />
     } @else if (dp.items.length === 0) {
       <app-empty-state
-        title="No shadow decisions"
-        message="Each real trading run records what every shadow strategy would have traded. They appear here after the next run."
+        title="No paper decisions yet"
+        message="Each trading run records what every paper strategy would have traded. They appear here after the next run."
       />
     } @else {
       @for (k of [decisionKey()]; track k) {
         <app-data-table
-          caption="What shadow strategies would have traded, newest first"
+          caption="What paper strategies would have traded, newest first"
           [rows]="dp.items"
           [columns]="decisionColumns"
           [rowKey]="decisionRowKey"
