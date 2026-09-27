@@ -96,11 +96,8 @@ describe('TickRunner', () => {
     );
   const runButton = () => el.querySelector<HTMLButtonElement>('button[type="submit"]')!;
   const dryRunBox = () => el.querySelector<HTMLInputElement>('input[name="dryRun"]')!;
-  const ticketEl = () => el.querySelector('app-tick-ticket-dialog') as HTMLElement;
-  const ticketButton = (label: string) =>
-    [...ticketEl().querySelectorAll<HTMLButtonElement>('button')].find(
-      (b) => b.textContent?.trim() === label,
-    );
+  const ticketEl = dialogEl;
+  const ticketButton = dialogButton;
 
   it('starts with dry run on and the broker shown with its PAPER stamp', () => {
     expect(dryRunBox().checked).toBe(true);
@@ -187,7 +184,7 @@ describe('TickRunner', () => {
     expect(ticketEl().textContent).toContain('Trading run ticket');
     expect(ticketEl().querySelector('app-mode-stamp')?.textContent).toContain('PAPER');
     expect(ticketEl().textContent).toContain('All in the universe');
-    const typed = ticketEl().querySelector<HTMLInputElement>('#ticket-typed')!;
+    const typed = ticketEl().querySelector<HTMLInputElement>('#confirm-typed')!;
     expect(typed).not.toBeNull();
     expect(ticketButton('Start trading run')!.disabled).toBe(true);
 
@@ -219,5 +216,51 @@ describe('TickRunner', () => {
     ticketButton('Keep editing')!.click();
     await settle();
     expect(controller.match((r) => r.method === 'POST').length).toBe(0);
+  });
+
+  it('shows the ticket in the shared confirm sheet', async () => {
+    dryRunBox().click();
+    await settle();
+    runButton().click();
+    await settle();
+    expect(el.querySelector('app-tick-ticket-dialog')).toBeNull();
+    expect(ticketEl().querySelector('.ticket app-mode-stamp')?.textContent).toContain('PAPER');
+    ticketButton('Keep editing')!.click();
+    await settle();
+  });
+
+  it('dry run off plus a past date disables Start', async () => {
+    const date = el.querySelector<HTMLInputElement>('#tick-as-of')!;
+    date.value = '2020-01-02';
+    date.dispatchEvent(new Event('change'));
+    await settle();
+    expect(runButton().disabled).toBe(false);
+
+    dryRunBox().click();
+    await settle();
+    expect(runButton().disabled).toBe(true);
+    expect(el.textContent).toContain('A real run trades today');
+
+    date.value = '';
+    date.dispatchEvent(new Event('change'));
+    await settle();
+    expect(runButton().disabled).toBe(false);
+  });
+
+  it('follows the run with the shared job progress', async () => {
+    runButton().click();
+    await settle();
+    dialogButton('Start dry run')!.click();
+    await settle();
+    (await nextRequest(controller, '/api/ticks', 'POST')).flush(job('queued'));
+    await settle();
+    expect(el.querySelector('app-job-progress')?.textContent).toContain('Trading run:');
+    (await nextRequest(controller, '/api/jobs/job-1')).flush({
+      ...job('failed', 1),
+      error: 'broker down',
+    });
+    await settle();
+    expect(el.querySelectorAll('app-job-progress').length).toBe(1);
+    expect(el.textContent!.match(/broker down/g)?.length).toBe(1);
   });
 });

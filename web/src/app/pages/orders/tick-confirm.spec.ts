@@ -32,7 +32,7 @@ describe('tick confirmation', () => {
     expect(opts.confirmLabel).toBe('Start dry run');
   });
 
-  it('makes a real tick name the broker and require typing it', () => {
+  it('makes a real run name the broker and require typing it', () => {
     const opts = tickConfirmOptions(false, ALPACA_PAPER);
     expect(opts.title).toContain('alpaca paper');
     expect(opts.typedConfirmation).toBe('alpaca paper');
@@ -45,32 +45,41 @@ describe('tick confirmation', () => {
     expect(tickConfirmOptions(false, SIMULATED).message).not.toContain('real money');
   });
 
-  it('refuses a real tick without broker information', () => {
+  it('refuses a real run without broker information', () => {
     expect(() => tickConfirmOptions(false, null)).toThrow();
   });
 
-  it('shows a real run as a ticket stamped PAPER or LIVE', () => {
+  it('shows a real run as an order ticket stamped PAPER or LIVE', () => {
     const paper = tickTicket(ALPACA_PAPER, { asOf: '', tickers: '' });
-    expect(paper.live).toBe(false);
+    expect(paper.ticket?.live).toBe(false);
     expect(paper.typedConfirmation).toBe('alpaca paper');
+    expect(paper.tone).toBe('danger');
     expect(paper.confirmLabel).toBe('Start trading run');
-    expect(paper.lines.map((l) => [l.label, l.value])).toEqual([
+    expect(paper.cancelLabel).toBe('Keep editing');
+    expect(paper.ticket?.lines.map((l) => [l.label, l.value])).toEqual([
       ['Broker', 'alpaca paper'],
       ['As of', 'Today'],
       ['Tickers', 'All in the universe'],
-      ['Strategies', 'Every active strategy'],
+      ['Strategies', 'Every live strategy'],
     ]);
 
     const live = tickTicket(ALPACA_LIVE, { asOf: '2026-09-25', tickers: 'aapl.us msft.us' });
-    expect(live.live).toBe(true);
+    expect(live.ticket?.live).toBe(true);
     expect(live.message).toContain('real money');
-    expect(live.lines.find((l) => l.label === 'Tickers')?.value).toBe('AAPL.US, MSFT.US');
-    expect(live.lines.find((l) => l.label === 'As of')).toEqual({
-      label: 'As of',
-      value: '2026-09-25',
-      mono: true,
-    });
-    expect(tickTicket(SIMULATED, { asOf: '', tickers: '' }).live).toBe(false);
+    expect(live.ticket?.lines.find((l) => l.label === 'Tickers')?.value).toBe('AAPL.US, MSFT.US');
+    expect(live.ticket?.lines.find((l) => l.label === 'As of')?.value).toBe('2026-09-25');
+    expect(tickTicket(SIMULATED, { asOf: '', tickers: '' }).ticket?.live).toBe(false);
+  });
+
+  it('never says tick in what the trader reads', () => {
+    for (const opts of [
+      tickConfirmOptions(true, null),
+      tickConfirmOptions(false, ALPACA_LIVE),
+      tickTicket(ALPACA_LIVE, { asOf: '', tickers: '' }),
+    ]) {
+      expect(`${opts.title} ${opts.message}`).not.toMatch(/tick|shadow/i);
+    }
+    expect(() => tickConfirmOptions(false, null)).toThrow(/trading run/);
   });
 
   it('builds the request body from the form', () => {
