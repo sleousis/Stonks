@@ -50,6 +50,9 @@
 
   @if (insights.hasValue()) {
     @let i = insights.value();
+    @if (baseLine(); as line) {
+      <p class="base-line num">{{ line }}</p>
+    }
     @if (i.notes.length || i.unpriced.length || i.uncovered.length) {
       <ul class="notes" aria-label="About these numbers">
         @for (note of i.notes; track note) {
@@ -115,8 +118,9 @@
         } @else if (!insights.hasValue()) {
           <app-loading-state label="Loading returns" [rows]="5" />
         } @else {
-          <dl class="figures">
-            @for (p of insights.value().pnl; track p.period) {
+          @let iv = insights.value();
+          <dl class="figures returns">
+            @for (p of iv.pnl; track p.period) {
               <div>
                 <dt>{{ periodLabel(p) }}</dt>
                 <dd
@@ -129,11 +133,26 @@
                   } @else {
                     {{ signedMoney(p.change) }} ({{ pct(p.change_pct, true) }})
                   }
+                  <span class="twr">Return {{ twrText(p) }}</span>
                 </dd>
               </div>
             }
           </dl>
-          <p class="hint">Deposits and withdrawals count as change.</p>
+          <dl class="figures">
+            <div>
+              <dt>Money-weighted, per year <app-help-tip term="mwr" /></dt>
+              <dd class="num">{{ mwrText(iv.mwr) }}</dd>
+            </div>
+            <div>
+              <dt>Net deposits</dt>
+              <dd class="num">{{ signedMoney(iv.net_flows ?? 0) }}</dd>
+            </div>
+          </dl>
+          <p class="hint">
+            Change counts deposits and withdrawals. Return is time-weighted
+            <app-help-tip term="twr" />, so they are left out.
+            <a routerLink="/insights/cash-flows">Record a deposit or withdrawal</a>
+          </p>
         }
       </div>
     </section>

@@ -23,6 +23,7 @@ import { formatDateTime, formatMoney, formatNumber, formatPercent } from '../../
 import { DateTimePipe } from '../../shared/format.pipes';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
+import { baseCurrencyLine } from '../../shared/base-currency';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { HelpTip } from '../../shared/ui/help-tip';
@@ -197,6 +198,17 @@ export class InsightsPage {
   });
 
   protected readonly periodLabel = (p: PeriodPnl) => PERIOD_LABELS[p.period];
+  /** The time-weighted return of a period: deposits and withdrawals left out. */
+  protected readonly twrText = (p: PeriodPnl) => (p.twr == null ? 'n/a' : this.pct(p.twr, true));
+  /** The money-weighted return since the start, per year. */
+  protected readonly mwrText = (mwr: number | null | undefined) =>
+    mwr == null ? 'n/a' : this.pct(mwr, true);
+
+  /** The value in the portfolio's base currency, when it differs (or why it is missing). */
+  protected readonly baseLine = computed(() => {
+    if (!this.insights.hasValue()) return null;
+    return baseCurrencyLine(this.insights.value(), this.portfolioCtx.current()?.base_currency);
+  });
   protected readonly stance = STANCE;
   protected readonly agreementLine = agreementLine;
 

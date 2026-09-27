@@ -1,10 +1,12 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 
-/** The two insights screens, as links so each has its own address. */
+/** The insights screens, as links so each has its own address. */
 export const INSIGHTS_SECTIONS = [
   { path: '/insights', label: 'Overview', exact: true },
   { path: '/insights/risk', label: 'Risk', exact: false },
+  { path: '/insights/cash-flows', label: 'Cash flows', exact: false },
+  { path: '/insights/tax', label: 'Tax', exact: false },
 ] as const;
 
 @Component({
