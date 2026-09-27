@@ -1109,6 +1109,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             cost_model=settings.costs,
             volumes=book_prices.volumes,
             portfolio_id=portfolio_id,
+            overrides=tuple(book.spec.risk_overrides.values()),
         )
         if book.spec.allow_short:
             # the short rules read the book's own margin model and borrow
