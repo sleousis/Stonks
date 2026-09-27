@@ -57,6 +57,11 @@ class LiveSettings(BaseModel):
     #: this many distinct sessions, before the portfolio's auto
     #: subscriptions pause. A shorter outage only skips the day (19.5).
     outage_pause_after_sessions: int = Field(default=2, ge=1)
+    #: A short opening order for a name the borrow source marks hard to
+    #: borrow, or whose yearly borrow fee is at or above this fraction,
+    #: waits for a person as a ticket held ``hard_to_borrow``, even in an
+    #: auto book (roadmap 19.16).
+    hard_to_borrow_fee_rate: float = Field(default=0.03, ge=0.0)
     #: The start-of-day check cancels day and opening-auction orders still
     #: working from an earlier session, so yesterday's decision never
     #: fills late.

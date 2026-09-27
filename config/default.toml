@@ -152,6 +152,10 @@ allow_manual_trades = true
 # (order tickets, roadmap 19.8). Off: auto books send at once. Books with
 # an approve subscription, and runaway runs, always use tickets.
 submit_in_window = false
+# A short sale of a name the borrow source marks hard to borrow, or whose
+# yearly borrow fee is at or above this fraction, waits for a person as a
+# ticket, even in auto (roadmap 19.16).
+hard_to_borrow_fee_rate = 0.03
 
 [production.live.submit]
 calendar = "XNYS"

@@ -16,8 +16,10 @@ awaiting_approval --approve (step-up)--> approved --submit--> submitted --> fill
   so the submit path is the same for both modes and the table is the audit
   trail of what was sent and why.
 - **Held** tickets wait for a person: every order of an ``approve``
-  subscription (``hold = approve_mode``), and every close of a runaway run,
-  even in auto (``hold = runaway``).
+  subscription (``hold = approve_mode``), every close of a runaway run,
+  even in auto (``hold = runaway``), and every short opening order for a
+  hard to borrow name, even in auto (``hold = hard_to_borrow``, roadmap
+  19.16).
 - A ticket carries its order's client id, so it becomes that order at the
   broker and is idempotent like any order. One ticket per client id: a
   same-day re-run of the tick leaves the first ticket as it is.
@@ -38,6 +40,7 @@ from typing import Any, Literal, get_args
 
 from stonks.accounts.audit import AuditLog
 from stonks.core.types import Order
+from stonks.execution.borrow import BorrowSource, is_hard_to_borrow
 from stonks.logging import get_logger
 from stonks.production.live.settings import SubmitSettings
 from stonks.store.state import SqliteState
@@ -56,7 +59,7 @@ TicketStatus = Literal[
     "failed",
 ]
 #: Why a ticket waits for a person.
-Hold = Literal["approve_mode", "runaway"]
+Hold = Literal["approve_mode", "runaway", "hard_to_borrow"]
 
 TICKET_STATUSES: tuple[str, ...] = get_args(TicketStatus)
 #: Tickets nothing has been sent for yet.
@@ -222,16 +225,46 @@ def ticket_hold(
     approve_strategies: Collection[str],
     auto_strategies: Collection[str],
     runaway: bool,
+    hard_to_borrow: bool = False,
 ) -> Hold | None:
     """Why ``order`` waits for a person, or ``None``. A runaway run or halt
-    holds every order. A book with approve subscriptions holds every order
-    that is not one auto strategy's own (a constructor's blended order
-    included)."""
+    holds every order. A hard to borrow short sale waits, even in auto. A
+    book with approve subscriptions holds every order that is not one auto
+    strategy's own (a constructor's blended order included)."""
     if runaway:
         return "runaway"
+    if hard_to_borrow:
+        return "hard_to_borrow"
     if approve_strategies and order.strategy_id not in auto_strategies:
         return "approve_mode"
     return None
+
+
+def hard_to_borrow_orders(
+    orders: Sequence[Order],
+    borrow: BorrowSource | None,
+    day: date,
+    *,
+    fee_rate: float,
+) -> frozenset[str]:
+    """Client ids of the short opening orders whose name ``borrow`` marks
+    hard to borrow on ``day`` (:func:`~stonks.execution.borrow.is_hard_to_borrow`).
+    No source, or a source that fails, holds nothing: the broker's own
+    locate check still refuses a short it cannot borrow."""
+    if borrow is None:
+        return frozenset()
+    held: set[str] = set()
+    for order in orders:
+        if order.side != "sell" or order.position_effect != "open":
+            continue
+        try:
+            quote = borrow.quote(order.ticker, day)
+        except Exception as exc:
+            _log.warning("tickets.borrow_quote_failed", ticker=order.ticker, error=str(exc))
+            continue
+        if is_hard_to_borrow(quote, fee_rate=fee_rate):
+            held.add(order.client_id)
+    return frozenset(held)
 
 
 # ---- writes ------------------------------------------------------------------------

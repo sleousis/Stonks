@@ -411,6 +411,7 @@ A live book can decide after the close and send before the next open (roadmap 19
 - Books with an `approve` subscription (Approve each trade) always use tickets. Their owner gets a high-urgency push and approves each ticket on the Approvals page with a fresh code. Rejecting needs a reason.
 - `[production.live] submit_in_window = true` makes auto books use tickets too, already approved by `service:system`. Off by default. Turn it on for the IBKR stages.
 - A runaway run, or an open `runaway` halt, holds every order as a ticket for a person, even in auto.
+- A short sale of a hard to borrow name waits for a person too, even in auto. Hard means the borrow source says so (IBKR's shortable level is low) or the yearly fee is at or above `[production.live] hard_to_borrow_fee_rate` (0.03). With `submit_in_window` off, the rest of the book is still sent at once.
 - `live_submit` sends the approved tickets from the open minus `[production.live.submit] window_minutes` (20) until the open minus `deadline_minutes` (2). Unsent tickets then expire and the next tick decides afresh. The job is never caught up late.
 - Before sending, and before each tick decides, every open order is reconciled. While one is `unknown` (a submit that got no answer), that portfolio sends and decides nothing. A kill switch or halt in force at submit time holds the tickets it covers.
 - By hand: `POST /api/tickets/submit` (admins) or `stonks schedule run-now live_submit`. Either still sends only tickets inside their window.

@@ -4669,7 +4669,7 @@ One order ticket: the order a live book decided, why, and what became of it.
 | `decided_by` | string \| null | yes |  |
 | `decision_reason` | string \| null | yes |  |
 | `expires_at` | date-time | yes | The submit deadline: unsent, it expires. |
-| `hold` | "approve_mode" \| "runaway" \| null | yes | Why it waits for a person (approve mode, or a runaway run). |
+| `hold` | "approve_mode" \| "runaway" \| "hard_to_borrow" \| null | yes | Why it waits for a person (approve mode, a runaway run, or a hard to borrow short sale). |
 | `id` | string | yes |  |
 | `limit_price` | number \| null | yes |  |
 | `notional` | number \| null | yes | quantity x (limit, else the reference price). |

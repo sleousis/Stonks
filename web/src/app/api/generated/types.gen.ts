@@ -11248,9 +11248,9 @@ export type TicketView = {
     /**
      * Hold
      *
-     * Why it waits for a person (approve mode, or a runaway run).
+     * Why it waits for a person (approve mode, a runaway run, or a hard to borrow short sale).
      */
-    hold: 'approve_mode' | 'runaway' | null;
+    hold: 'approve_mode' | 'runaway' | 'hard_to_borrow' | null;
     /**
      * Id
      */

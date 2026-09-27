@@ -101,8 +101,11 @@ class TicketView(BaseModel):
     )
     reason: dict[str, Any] = Field(description="Signal score, rank, target weight, trigger.")
     rules: list[dict[str, Any]] = Field(description="The risk and account rules that touched it.")
-    hold: Literal["approve_mode", "runaway"] | None = Field(
-        description="Why it waits for a person (approve mode, or a runaway run)."
+    hold: Literal["approve_mode", "runaway", "hard_to_borrow"] | None = Field(
+        description=(
+            "Why it waits for a person (approve mode, a runaway run, or a hard to borrow"
+            " short sale)."
+        )
     )
     status: TicketStatusName
     submit_after: datetime

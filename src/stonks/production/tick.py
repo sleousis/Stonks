@@ -76,6 +76,7 @@ from stonks.backtest.simulated_broker import FinancingEvent, SimulatedBroker
 from stonks.core.interval import Interval
 from stonks.core.protocols import Broker, Strategy
 from stonks.core.types import Fill, Order, OrderStatus, Portfolio
+from stonks.execution.borrow import BorrowSource
 from stonks.execution.brokers.base import (
     BrokerKind,
     BrokerMode,
@@ -167,6 +168,7 @@ from stonks.production.shadow import (
 from stonks.production.signals import record_signals, signals_recorded
 from stonks.production.tca import annotate_orders, decision_values, tca_recorded
 from stonks.production.tickets import (
+    hard_to_borrow_orders,
     submit_window,
     sync_submitted,
     ticket_hold,
@@ -1357,15 +1359,33 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         runaway_reason(risk_adjustments) is not None or _runaway_halted(run, book)
     )
     ticket_summary: dict[str, int] | None = None
+    # 19.16: a short sale of a hard to borrow name waits for a person, even
+    # in auto. With tickets off, the rest of the book is still sent at once.
+    hard_to_borrow: frozenset[str] = frozenset()
+    if external and not dry_run and tickets_recorded(state):
+        hard_to_borrow = hard_to_borrow_orders(
+            sells,
+            _live_borrow(book, broker),
+            as_of,
+            fee_rate=run.settings.live.hard_to_borrow_fee_rate,
+        )
+        if hard_to_borrow:
+            log.info("tick.hard_to_borrow_held", client_ids=sorted(hard_to_borrow))
     if external and not dry_run and _writes_tickets(run, book, runaway):
         if buys:  # checked against the pre-sell cash, as at the broker
             second = apply_book_risk(buys, book_input, market, slice_policy)
             risk_adjustments.extend(second.adjustments)
             buys = second.orders
         ticket_summary = _write_book_tickets(
-            run, book, broker, [*sells, *buys], risk_adjustments, runaway
+            run, book, broker, [*sells, *buys], risk_adjustments, runaway, hard_to_borrow
         )
     else:
+        if hard_to_borrow:
+            held = [o for o in sells if o.client_id in hard_to_borrow]
+            sells = [o for o in sells if o.client_id not in hard_to_borrow]
+            ticket_summary = _write_book_tickets(
+                run, book, broker, held, risk_adjustments, runaway, hard_to_borrow
+            )
         # Sells first. The first risk pass counted their expected proceeds,
         # so buys are re-checked against the portfolio as it stands after
         # the sells: a rejected or unfilled sell must not fund a buy. (An
@@ -1485,6 +1505,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             **({"retired_subscriptions_ended": ended} if ended else {}),
             **({"open_order_conflicts": open_conflicts} if open_conflicts else {}),
             **({"tickets": ticket_summary} if ticket_summary is not None else {}),
+            **({"hard_to_borrow": sorted(hard_to_borrow)} if hard_to_borrow else {}),
             **halted(halt),
             **({"constructor": construction.method} if not book.legacy else {}),
             "orders_placed": placed,
@@ -1587,6 +1608,7 @@ def _write_book_tickets(
     orders: Sequence[Order],
     adjustments: Sequence[RiskAdjustment],
     runaway: bool,
+    hard_to_borrow: Collection[str] = (),
 ) -> dict[str, int]:
     """One ticket per order (an order already in the ledger is left out),
     with the rules that touched it and the broker's what-if answer. The
@@ -1604,7 +1626,11 @@ def _write_book_tickets(
         as_of=run.as_of,
         window=submit_window(run.as_of, run.settings.live.submit),
         hold=lambda o: ticket_hold(
-            o, approve_strategies=approve, auto_strategies=auto, runaway=runaway
+            o,
+            approve_strategies=approve,
+            auto_strategies=auto,
+            runaway=runaway,
+            hard_to_borrow=o.client_id in hard_to_borrow,
         ),
         now=datetime.now(UTC),
         rules=rules,
@@ -1619,6 +1645,16 @@ def _write_book_tickets(
         "awaiting_approval": awaiting,
         "approved": len(written) - awaiting,
     }
+
+
+def _live_borrow(book: TickBook, broker: Broker | None) -> BorrowSource | None:
+    """The borrow source a live book's short sales are checked against: the
+    broker's own (``IbkrBroker.borrow``, today's locate), else the book's
+    configured one (``borrow_check``, then ``squeeze_guard``)."""
+    own = getattr(broker, "borrow", None)
+    if isinstance(own, BorrowSource):
+        return own
+    return short_account(book.spec.risk)[1]
 
 
 def _what_if(broker: Broker | None, orders: Sequence[Order], log: Any) -> dict[str, dict[str, Any]]:
