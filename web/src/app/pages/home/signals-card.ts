@@ -24,7 +24,6 @@ import { autoRefresh } from '../../shared/auto-refresh';
 import { countdown } from '../../shared/ui/session-strip';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
-import { RunsPassed } from './runs-passed';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FEED_LIMIT = 100;
@@ -296,7 +295,7 @@ export class SignalsCard {
 
   /** Fresh through the session: every minute, and when a trading run starts (UX-12). */
   protected readonly auto = autoRefresh(() => [this.feed, this.ticks], {
-    triggers: [inject(RunsPassed).count],
+    triggers: [this.day.runsPassed],
   });
 
   private readonly now = signal(Date.now());

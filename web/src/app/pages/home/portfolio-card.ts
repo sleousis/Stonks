@@ -15,7 +15,7 @@ import { autoRefresh } from '../../shared/auto-refresh';
 import { NoBook } from '../../shared/ui/no-book';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
-import { RunsPassed } from './runs-passed';
+import { TradingDayService } from '../../core/schedule/trading-day.service';
 
 const TOP_HOLDINGS = 8;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -208,7 +208,7 @@ export class PortfolioCard {
 
   /** The value moves during the session: every minute, and when a trading run starts (UX-12). */
   protected readonly auto = autoRefresh(() => [this.portfolio, this.pnl], {
-    triggers: [inject(RunsPassed).count],
+    triggers: [inject(TradingDayService).runsPassed],
   });
 
   /** "Details" only when there is a portfolio to show details of. */

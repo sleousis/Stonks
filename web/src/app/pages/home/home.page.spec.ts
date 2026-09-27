@@ -283,7 +283,8 @@ describe('HomePage', () => {
       vi.advanceTimersByTime(10_000);
       expect(await askedAgain(fixture)).toEqual([]);
 
-      vi.advanceTimersByTime(15_000);
+      // The day service counts the run once its time has passed (its own spec covers when).
+      day['passed'].update((n) => n + 1);
       const paths = await askedAgain(fixture);
       expect(paths).toContain('/api/notifications');
       expect(paths).toContain('/api/orders/fills');

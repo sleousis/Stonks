@@ -12,7 +12,7 @@ import { WatchlistFilter } from '../../shared/ui/watchlist-filter';
 import { SignalsCard } from './signals-card';
 import { StrategiesCard } from './strategies-card';
 import { TotalsCard } from './totals-card';
-import { RunsPassed } from './runs-passed';
+import { TradingDayService } from '../../core/schedule/trading-day.service';
 
 /**
  * Today, the trader's home: my portfolio (admins see totals across traders
@@ -117,7 +117,7 @@ export class HomePage {
       const card = this.strategiesCard();
       return card ? [card['subs'] as Reloadable] : [];
     },
-    { triggers: [inject(RunsPassed).count] },
+    { triggers: [inject(TradingDayService).runsPassed] },
   );
 
   /** "Sunday 27 September" in the trader's locale, then what the page holds. */
