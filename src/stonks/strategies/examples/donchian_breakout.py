@@ -195,8 +195,8 @@ class DonchianBreakout(BaseStrategy):
 def _channel(closes: pd.Series, lookback: int) -> tuple[pd.Series, pd.Series, pd.Series]:
     """The channel over the prior ``lookback - 1`` closes and the raw
     breakout marks (1 above, -1 below, NaN inside)."""
-    upper = closes.rolling(lookback - 1).max().shift(1)
-    lower = closes.rolling(lookback - 1).min().shift(1)
+    upper = pd.Series(closes.rolling(lookback - 1).max().shift(1))
+    lower = pd.Series(closes.rolling(lookback - 1).min().shift(1))
     marks = pd.Series(np.full(len(closes), np.nan), index=closes.index)
     marks.loc[closes > upper] = 1.0
     marks.loc[closes < lower] = -1.0

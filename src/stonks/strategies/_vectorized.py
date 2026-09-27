@@ -58,7 +58,7 @@ def single_ticker_weights(
     if ticker not in closes.columns:
         raise ValueError(f"no closes for {ticker!r}")
     weights = pd.DataFrame(0.0, index=closes.index, columns=closes.columns)
-    column = closes[ticker].astype(float)
+    column = pd.Series(closes[ticker], dtype=float)
     on = np.nan_to_num(np.asarray(signal(column), dtype=float), nan=0.0) > 0
     weights.loc[on, ticker] = float(params.get("allocation", 1.0))
     return weights
@@ -75,12 +75,12 @@ def forecast_weights(
     names with a forecast and a sigma on a bar share the risk budget
     equally, and gross is capped at 1."""
     forecasts = pd.DataFrame(
-        {t: forecast(closes[t].dropna().astype(float)) for t in closes.columns},
+        {t: forecast(pd.Series(closes[t], dtype=float).dropna()) for t in closes.columns},
         index=closes.index,
     )
     if not allow_short:
         forecasts = forecasts.clip(lower=0.0).where(forecasts.notna())
-    log_returns = np.log(closes.astype(float)).diff()
+    log_returns = pd.DataFrame(np.log(closes.astype(float))).diff()
     sigma = ewma_vol(log_returns, span=_SIZING_VOL_SPAN) * math.sqrt(_DAILY_PERIODS)
     sigma = sigma.where(sigma > 0)
     eligible = forecasts.notna() & sigma.notna()

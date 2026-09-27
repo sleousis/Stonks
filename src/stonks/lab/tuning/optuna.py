@@ -95,7 +95,9 @@ def _axes(space: ParamSpace) -> list[_Axis]:
                 continue  # an open choice (a ticker): stays at its default
             choices = tuple(spec.bounds)
         else:
-            lo, hi = spec.bounds  # numeric
+            if spec.bounds is None:
+                raise ValueError(f"numeric parameter {spec.name!r} needs bounds")
+            lo, hi = spec.bounds
             dist: BaseDistribution = (
                 IntDistribution(int(lo), int(hi))
                 if spec.kind == "int"

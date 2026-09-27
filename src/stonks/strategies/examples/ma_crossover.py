@@ -103,6 +103,6 @@ class MACrossoverStrategy(SingleTickerLongFlat):
         def signal(column: pd.Series) -> np.ndarray:
             fast_ma = column.rolling(fast).mean()
             slow_ma = column.rolling(slow).mean()
-            return ((slow_ma > 0) & (fast_ma > slow_ma)).to_numpy(dtype=float)
+            return np.asarray((slow_ma > 0) & (fast_ma > slow_ma), dtype=float)
 
         return single_ticker_weights(closes, p, signal)
