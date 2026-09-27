@@ -1,4 +1,4 @@
-"""A point-in-time view of the lake (BL-49, principle P13).
+"""A point-in-time view of the lake (BL-49, principle P12).
 
 ``PointInTimeLake(lake, as_of)`` is a read-only proxy over a
 :class:`~stonks.store.lake.DuckDBLake` that clamps every read to what was
@@ -61,7 +61,7 @@ def _day(value: Any) -> date:
         return value.date()
     if isinstance(value, date):
         return value
-    return pd.Timestamp(value).date()
+    return as_datetime(pd.Timestamp(value).to_pydatetime()).date()
 
 
 def _on_or_before(column: pd.Series, day: date) -> pd.Series:
@@ -73,7 +73,7 @@ def _on_or_before(column: pd.Series, day: date) -> pd.Series:
 def _rows(frame: pd.DataFrame | None, mask: pd.Series) -> pd.DataFrame:
     if frame is None:
         return pd.DataFrame()
-    return frame[mask.to_numpy()].reset_index(drop=True)
+    return pd.DataFrame(frame.loc[mask.to_numpy()]).reset_index(drop=True)
 
 
 class PitSession:
@@ -127,7 +127,7 @@ _READERS: Mapping[str, str] = {
     "get_corporate_actions": "get_corporate_actions",
     "get_bond_yields": "get_bond_yields",
     "get_defi_tvl": "get_defi_tvl",
-    "members_as_of": "members_as_of",
+    "members_as_of": "members_between",
     "members_between": "members_between",
     "get_universe_membership": "get_universe_membership",
     "universe_ids": "universe_ids",
@@ -334,12 +334,12 @@ class PointInTimeLake:
     def _read_get_universe_membership(
         self, universe_id: str | None = None, tickers: list[str] | None = None
     ) -> pd.DataFrame:
-        frame = self._lake.get_universe_membership(universe_id, tickers)
+        frame: pd.DataFrame | None = self._lake.get_universe_membership(universe_id, tickers)
         if frame is None or frame.empty:
-            return frame
-        out = _rows(frame, _on_or_before(frame["start_date"], self._known))
+            return pd.DataFrame() if frame is None else frame
+        out = _rows(frame, _on_or_before(pd.Series(frame["start_date"]), self._known))
         # an exit after the decision was not known yet: the span reads open
-        unknown = ~_on_or_before(out["end_date"], self._known)
+        unknown = ~_on_or_before(pd.Series(out["end_date"]), self._known)
         out["end_date"] = out["end_date"].astype(object).where(~unknown, None)
         return out
 

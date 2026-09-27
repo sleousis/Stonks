@@ -441,9 +441,9 @@ class QuantValue(BaseStrategy):
         }
         if not excluded or not tickers or lake is None:
             return tickers
-        reader = getattr(lake, "instrument_sectors", None)
+        reader: Any = getattr(lake, "instrument_sectors", None)
         if callable(reader):  # a typed read, so a point-in-time lake allows it (BL-49)
-            rows = reader(tickers)
+            rows: Any = reader(tickers)
         else:
             rows = lake.sql(
                 "SELECT id, sector, gic_sector FROM instruments WHERE id = ANY(?)", [tickers]

@@ -49,9 +49,10 @@ def parse_universe(spec: str) -> list[str]:
 def lake_universe(lake: Any, asset_classes: Iterable[str]) -> list[str]:
     """Tickers with daily bars in ``lake``, minus those whose known asset
     class is outside ``asset_classes`` (unknown classes are kept)."""
-    reader = getattr(lake, "bar_tickers", None)
+    reader: Any = getattr(lake, "bar_tickers", None)
     if callable(reader):  # a typed read, so a point-in-time lake allows it (BL-49)
-        tickers = [str(t) for t in reader(Interval.DAY_1)]
+        names: Any = reader(Interval.DAY_1)
+        tickers = [str(t) for t in names]
     else:
         rows = lake.sql(
             "SELECT DISTINCT ticker FROM bars WHERE interval = ? ORDER BY ticker",

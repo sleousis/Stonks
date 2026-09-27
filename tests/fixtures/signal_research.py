@@ -119,6 +119,12 @@ class _LakeBars(BaseStrategy):
         return []
 
     def bars(self, ticker: str, lake: Any) -> pd.DataFrame:
+        # These fakes plant look-ahead on purpose (the lab tests must catch
+        # it), so they step around the engine's point-in-time view (BL-49)
+        # and read the whole lake. Real strategies never do this.
+        session = getattr(lake, "pit_session", None)
+        if session is not None:
+            lake = session.lake
         if lake is not self._lake:
             self._lake, self._bars = lake, {}
         if ticker not in self._bars:

@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import duckdb
 import pandas as pd
@@ -2089,10 +2089,10 @@ class DuckDBLake:
             "SELECT ticker, MIN(timestamp) AS first FROM bars WHERE interval = ? GROUP BY ticker",
             [interval.code],
         )
-        return {
-            str(t): pd.Timestamp(ts).to_pydatetime()
-            for t, ts in zip(rows["ticker"], rows["first"], strict=True)
-        }
+        out: dict[str, datetime] = {}
+        for t, ts in zip(rows["ticker"], rows["first"], strict=True):
+            out[str(t)] = cast(datetime, pd.Timestamp(ts).to_pydatetime())
+        return out
 
     def bar_tickers(self, interval: Interval) -> list[str]:
         """Tickers with bars at ``interval``, sorted."""

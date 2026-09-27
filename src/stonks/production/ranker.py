@@ -17,6 +17,12 @@ decide with one strategy, each later one gets a copy taken before the first
 decided, so state a ``decide`` keeps (entry prices, ...) never leaks from
 one portfolio into another.
 
+Point in time (BL-49): strategies score through a
+``stonks.store.pit.PointInTimeLake`` of the tick date, never the lake
+itself, and :attr:`SignalSet.lake_view` keeps that view alive for the
+``decide`` calls that follow. With ``universe_id`` (the tick trades a stored
+universe) a ticker that is not a member on the tick date is not scored.
+
 Shorts (roadmap 16.3): with ``allow_short`` the ranker also keeps the
 negative scores (``score < -threshold``) of strategies that support shorts,
 in :attr:`SignalSet.shorts`, apart from ``scores``. Long-only books read
@@ -33,10 +39,12 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Literal
 
+from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy
 from stonks.logging import get_logger
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
+from stonks.store.pit import PitSession
 
 _log = get_logger("stonks.production.ranker")
 
@@ -68,6 +76,8 @@ class SignalSet:
     shorts: Mapping[str, Mapping[str, float]] = field(default_factory=dict)
     #: The universe the scores are ordered by (merges keep this order).
     universe: tuple[str, ...] = ()
+    #: The point-in-time view the strategies scored through (BL-49).
+    lake_view: Any = field(default=None, compare=False, repr=False)
 
     def for_book(self, allow_short: bool) -> dict[str, dict[str, float]]:
         """The scores a book reads: ``scores`` for a long-only book, plus
@@ -102,6 +112,7 @@ class SignalSet:
             instances={**self.instances, **other.instances},
             shorts={**self.shorts, **other.shorts},
             universe=tuple(dict.fromkeys((*self.universe, *other.universe))),
+            lake_view=self.lake_view,
         )
 
 
@@ -116,8 +127,10 @@ class Ranker:
         workers: int = 1,
         min_parallel_estimates: int = 2000,
         allow_short: bool = False,
+        universe_id: str | None = None,
     ) -> None:
-        """``workers`` > 1 scores the strategies that opt in with
+        """``universe_id``: the stored universe the tick trades; names that
+        are not members on the tick date are not scored. ``workers`` > 1 scores the strategies that opt in with
         ``parallel_scoring`` in worker processes (``production.scoring``),
         once they need at least ``min_parallel_estimates`` estimates in all
         (below that a pool costs more than it saves). ``allow_short`` keeps
@@ -129,6 +142,7 @@ class Ranker:
         self._status = status
         self._lake = lake
         self._universe = list(universe)
+        self._universe_id = universe_id
         self._threshold = threshold
         #: The last :meth:`rank`'s per-strategy view.
         self.signals: SignalSet | None = None
@@ -140,6 +154,8 @@ class Ranker:
         return self.signals
 
     def rank(self, as_of: date) -> list[RankedPick]:
+        view = PitSession(self._lake).at(as_of, decision_interval=Interval.DAY_1)
+        universe = self._members(view, as_of)
         handles = self._registry.list_all(status=self._status)
         # Resolve asset classes once per tick. Tickers without an
         # ``instruments`` row are treated as "asset class unknown" and
@@ -148,8 +164,8 @@ class Ranker:
         # failed) to equity-only strategies, masking real ingestion
         # problems. To re-enable an unknown ticker, run
         # ``stonks ingest metadata`` for it.
-        asset_classes = self._lake.get_asset_classes(self._universe)
-        unknown_universe = [t for t in self._universe if t not in asset_classes]
+        asset_classes = self._lake.get_asset_classes(universe)
+        unknown_universe = [t for t in universe if t not in asset_classes]
         if unknown_universe:
             _log.warning(
                 "ranker.unknown_asset_class.skipped",
@@ -174,12 +190,14 @@ class Ranker:
                 )
                 continue
             instances[handle.id] = strategy
-        parallel = self._score_parallel(instances, as_of, asset_classes)
+        parallel = self._score_parallel(instances, as_of, asset_classes, universe)
         for sid, strategy in instances.items():
             if sid in parallel:
                 scores[sid] = parallel[sid]
             else:
-                scores[sid], short = self._score_one(sid, strategy, as_of, asset_classes)
+                scores[sid], short = self._score_one(
+                    sid, strategy, as_of, asset_classes, universe, view
+                )
                 if short:
                     shorts[sid] = short
         self.signals = SignalSet(
@@ -187,16 +205,38 @@ class Ranker:
             scores=scores,
             instances=instances,
             shorts=shorts,
-            universe=tuple(self._universe),
+            universe=tuple(universe),
+            lake_view=view,
         )
         return self.signals.ranked()
 
-    def _tickers_for(self, strategy: Strategy, asset_classes: Mapping[str, str]) -> list[str]:
+    def _members(self, view: Any, as_of: date) -> list[str]:
+        """The universe, less names that are not members of ``universe_id``
+        on ``as_of`` (read point in time)."""
+        if self._universe_id is None:
+            return list(self._universe)
+        try:
+            members = set(view.members_as_of(self._universe_id, as_of))
+        except AttributeError:
+            _log.warning("ranker.membership_unavailable", universe_id=self._universe_id)
+            return list(self._universe)
+        dropped = [t for t in self._universe if t not in members]
+        if dropped:
+            _log.info("ranker.not_members.skipped", universe_id=self._universe_id, tickers=dropped)
+        return [t for t in self._universe if t in members]
+
+    def _tickers_for(
+        self, strategy: Strategy, asset_classes: Mapping[str, str], universe: Sequence[str]
+    ) -> list[str]:
         allowed = set(getattr(strategy, "applicable_asset_classes", ("equity",)))
-        return [t for t in self._universe if asset_classes.get(t) in allowed]
+        return [t for t in universe if asset_classes.get(t) in allowed]
 
     def _score_parallel(
-        self, instances: Mapping[str, Strategy], as_of: date, asset_classes: Mapping[str, str]
+        self,
+        instances: Mapping[str, Strategy],
+        as_of: date,
+        asset_classes: Mapping[str, str],
+        universe: Sequence[str],
     ) -> dict[str, dict[str, float]]:
         """Scores of the opted-in strategies from worker processes, or
         ``{}`` when the pool isn't worth it (or fails: then the serial path
@@ -208,7 +248,7 @@ class Ranker:
         safe = {
             sid: s for sid, s in instances.items() if parallel_safe(s) and not self._shorts_for(s)
         }
-        tickers = {sid: self._tickers_for(s, asset_classes) for sid, s in safe.items()}
+        tickers = {sid: self._tickers_for(s, asset_classes, universe) for sid, s in safe.items()}
         if not safe or sum(len(t) for t in tickers.values()) < self._min_parallel:
             return {}
         try:
@@ -227,6 +267,8 @@ class Ranker:
         strategy: Strategy,
         as_of: date,
         asset_classes: Mapping[str, str],
+        universe: Sequence[str],
+        lake: Any,
     ) -> tuple[dict[str, float], dict[str, float]]:
         """``(scores above the threshold, short scores below -threshold)``;
         the second is empty unless this strategy may short here."""
@@ -234,12 +276,12 @@ class Ranker:
         shorting = self._shorts_for(strategy)
         out: dict[str, float] = {}
         shorts: dict[str, float] = {}
-        for ticker in self._universe:
+        for ticker in universe:
             ticker_class = asset_classes.get(ticker)
             if ticker_class is None or ticker_class not in allowed:
                 continue
             try:
-                r = strategy.estimate_return(ticker, as_of, self._lake)
+                r = strategy.estimate_return(ticker, as_of, lake)
             except Exception as exc:
                 _log.warning(
                     "ranker.estimate_return.failed",

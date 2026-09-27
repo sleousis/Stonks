@@ -91,6 +91,11 @@ so a strategy sees a bar of any interval only once it has closed at the
 decision (RS-03): a daily bar stays hidden during its own session in an
 intraday run, on 24/7 markets too.
 
+Strategies never get the lake itself (BL-49): each decision bar hands them
+a ``stonks.store.pit.PointInTimeLake`` of that bar, so every read (bars,
+statements, macro, metadata, membership) stops at the decision even when a
+strategy asks for more. The views of one run share a ``PitSession``.
+
 Point-in-time membership (RS-05, P14)
 -------------------------------------
 With ``BacktestConfig.universe_id`` set, the engine reads that universe's
@@ -139,7 +144,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
@@ -173,6 +178,7 @@ from stonks.execution.orders import SideToken, classify, classify_all
 from stonks.logging import get_logger
 from stonks.store.corporate_actions import LakeCorporateActions
 from stonks.store.lake import DuckDBLake
+from stonks.store.pit import PitSession
 
 if TYPE_CHECKING:
     # The pipeline imports ``stonks.config``, which imports the lab and so
@@ -267,6 +273,11 @@ class Backtester:
         self._fill_seq = 0
         self._membership: dict[str, list[tuple[date, date | None]]] | None = None
         self._raw_closes: dict[str, dict[date, float]] = {}
+        # BL-49: strategies read the lake through a point-in-time view of
+        # the current decision bar; the views of one run share a session.
+        self._pit = PitSession(lake)
+        #: Typed ``Any``: strategies take it where they take a lake.
+        self._view: Any = None
         #: The target book of every pipeline decision, by bar.
         self.target_books: dict[datetime, TargetBook] = {}
         #: The close each order was decided at, by client id (TCA, BL-32:
@@ -279,6 +290,7 @@ class Backtester:
     def run(self) -> BacktestReport:
         self._decided_at, self._roots, self._parts = {}, {}, {}
         self._equity, self._attribution, self._fill_owner, self._fill_seq = [], {}, {}, 0
+        self._pit = PitSession(self._lake)
         self.target_books = {}
         self.decision_prices = {}
         self.forced_orders = []
@@ -586,6 +598,8 @@ class Backtester:
             return self._decide_at(as_of, prices)
 
     def _decide_at(self, as_of: datetime, prices: dict[str, float]) -> list[Order]:
+        # kept until the next decision: wrappers recall it in ``decide``
+        self._view = self._pit.at(as_of, decision_interval=self._config.interval)
         members = self._members_on(as_of)
         tradable = [t for t in self._config.universe if members is None or t in members]
         if self._config.construction_settings is not None:
@@ -696,7 +710,7 @@ class Backtester:
         for index, strategy in enumerate(self._strategies):
             shorts = self._config.allow_short and getattr(strategy, "supports_short", False)
             for ticker in tradable:
-                r = strategy.estimate_return(ticker, as_of, self._lake)
+                r = strategy.estimate_return(ticker, as_of, self._view)
                 if r is not None and (r > threshold or (shorts and r < -threshold)):
                     picks_by_strategy[index].append((r, ticker))
 
@@ -741,7 +755,7 @@ class Backtester:
             scores: dict[str, float] = {}
             shorts = self._config.allow_short and getattr(strategy, "supports_short", False)
             for ticker in tradable:
-                r = strategy.estimate_return(ticker, as_of, self._lake)
+                r = strategy.estimate_return(ticker, as_of, self._view)
                 if r is not None and (
                     r > self._config.threshold or (shorts and r < -self._config.threshold)
                 ):

@@ -96,6 +96,7 @@ def build_tick_settings(
         bars_due=dict(bars_due) if bars_due else None,
         scoring_workers=p.scoring_workers or default_max_workers(),
         parallel_min_estimates=p.parallel_min_estimates,
+        universe_id=p.universe if isinstance(p.universe, str) and not scoped else None,
     )
 
 

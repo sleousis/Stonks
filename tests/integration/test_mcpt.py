@@ -23,6 +23,7 @@ from stonks.store.lake import DuckDBLake
 from stonks.strategies.base import BaseStrategy
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
 from stonks.strategies.examples.momentum import Momentum
+from tests.fixtures.pit import underlying
 
 
 @pytest.fixture
@@ -153,6 +154,7 @@ class _Spy(BaseStrategy):
     statements: dict[object, int] = {}
 
     def estimate_return(self, ticker, as_of, lake):
+        lake = underlying(lake)  # the permuted lake behind the engine's view
         key = lake  # the object, not id(): closed lakes get their ids reused
         _Spy.as_ofs.setdefault(key, []).append(as_of)
         if key not in _Spy.history:
@@ -242,6 +244,7 @@ def test_multi_ticker_permutations_keep_cross_asset_co_movement(lake_gbm):
             self._lakes: list = []
 
         def estimate_return(self, ticker, as_of, lake):
+            lake = underlying(lake)
             if not any(lake is x for x in self._lakes):
                 self._lakes.append(lake)
                 seen.append(
