@@ -19,20 +19,27 @@ import { safeNext } from '../../core/auth/auth.guards';
 import { AuthTokenService } from '../../core/auth/auth-token.service';
 import { SessionService } from '../../core/auth/session.service';
 import { errorMessage } from '../../core/http/api-error';
-import { NotificationPermissionService } from '../../core/pwa/notification-permission.service';
+import {
+  NotificationPermissionService,
+  type NotificationState,
+  type PushStatus,
+} from '../../core/pwa/notification-permission.service';
+import { CopyButton } from '../../shared/ui/copy-button';
 import { OneTimeSecret } from '../../shared/ui/one-time-secret';
 import { QrCode } from './qr-code';
 
 /**
- * - `password`: email and password (or an API token, for local dev).
+ * - `loading`: a reload mid sign-in, until the next step is known (UX-70).
+ * - `password`: email and password (an API token sits under "For scripts").
  * - `enrol`: first login, set up the authenticator app from a QR code.
  * - `verify`: a code from the app, or a recovery code.
  * - `codes`: the ten recovery codes, shown once.
  * - `push`: offer alerts on this device, once, after first login.
  */
-export type LoginStep = 'password' | 'enrol' | 'verify' | 'codes' | 'push';
+export type LoginStep = 'loading' | 'password' | 'enrol' | 'verify' | 'codes' | 'push';
 
 const HEADINGS: Record<LoginStep, string> = {
+  loading: 'Signing in',
   password: 'Sign in',
   enrol: 'Set up your authenticator',
   verify: 'Enter your code',
@@ -48,7 +55,7 @@ const HEADINGS: Record<LoginStep, string> = {
 @Component({
   selector: 'app-login-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, QrCode, OneTimeSecret],
+  imports: [ReactiveFormsModule, QrCode, OneTimeSecret, CopyButton],
   templateUrl: './login.page.html',
   styleUrl: './login.page.scss',
 })
@@ -75,7 +82,13 @@ export class LoginPage implements OnInit {
   protected readonly recoveryCodes = signal<string[]>([]);
   protected readonly savedCodes = signal(false);
   protected readonly useRecovery = signal(false);
-  protected readonly showTokenForm = signal(false);
+  /**
+   * The API-token form is for scripts and local work: folded away under
+   * "For scripts", open only when this server runs with open reads (dev).
+   */
+  protected readonly tokenPathOpen = computed(() => this.session.status() === 'open');
+  /** Why alerts did not turn on, after the trader asked (UX-46). */
+  protected readonly pushProblem = signal<string | null>(null);
 
   protected readonly passwordForm = this.fb.group({
     email: ['', [Validators.required, Validators.maxLength(320)]],
@@ -98,7 +111,11 @@ export class LoginPage implements OnInit {
 
   ngOnInit(): void {
     const known = this.session.step();
-    if (this.step() === 'code' || known) void this.startSecondFactor(known);
+    if (this.step() === 'code' || known) {
+      // Mid sign-in: show a short wait, not the password form, until the step is known.
+      this.current.set('loading');
+      void this.startSecondFactor(known);
+    }
   }
 
   protected async signIn(): Promise<void> {
@@ -155,9 +172,19 @@ export class LoginPage implements OnInit {
     }
   }
 
+  /** Continue only once alerts are really on; otherwise say why (UX-46). */
   protected async enablePush(): Promise<void> {
+    this.pushProblem.set(null);
     await this.push.enable();
-    if (!this.push.error()) await this.finish();
+    if (this.push.push() === 'on') {
+      await this.finish();
+      return;
+    }
+    this.pushProblem.set(
+      this.push.error()
+        ? `Alerts did not turn on. ${LATER}`
+        : pushProblemText(this.push.state(), this.push.push()),
+    );
   }
 
   protected skipPush(): void {
@@ -238,4 +265,19 @@ export class LoginPage implements OnInit {
       this.busy.set(false);
     }
   }
+}
+
+const LATER = 'You can turn them on later in Settings.';
+
+/** Why alerts are still off after the trader asked for them, in one line. */
+function pushProblemText(state: NotificationState, push: PushStatus): string {
+  if (state === 'denied') return `Alerts are blocked for this site in your browser. ${LATER}`;
+  if (push === 'waiting-for-server') {
+    return `This server cannot send alerts yet. Ask your admin. ${LATER}`;
+  }
+  if (push === 'no-worker') {
+    return `Alerts need the installed app or a secure connection. ${LATER}`;
+  }
+  if (state === 'unsupported') return `This browser cannot show alerts. ${LATER}`;
+  return `Your browser did not allow alerts. ${LATER}`;
 }

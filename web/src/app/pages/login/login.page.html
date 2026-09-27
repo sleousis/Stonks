@@ -11,6 +11,10 @@
     }
 
     @switch (current()) {
+      @case ('loading') {
+        <p class="lead" role="status">One moment…</p>
+      }
+
       @case ('password') {
         <form class="form" [formGroup]="passwordForm" (ngSubmit)="signIn()" novalidate>
           <div class="field">
@@ -57,61 +61,60 @@
           </button>
         </form>
 
-        <div class="alt">
-          <button
-            type="button"
-            class="btn btn-ghost"
-            [attr.aria-expanded]="showTokenForm()"
-            aria-controls="token-form"
-            (click)="showTokenForm.set(!showTokenForm())"
+        <details class="alt scripts" [open]="tokenPathOpen()">
+          <summary>For scripts</summary>
+          <form
+            id="token-form"
+            class="form"
+            [formGroup]="tokenForm"
+            (ngSubmit)="useToken()"
+            novalidate
           >
-            Use an API token instead
-          </button>
-          @if (showTokenForm()) {
-            <form
-              id="token-form"
-              class="form"
-              [formGroup]="tokenForm"
-              (ngSubmit)="useToken()"
-              novalidate
-            >
-              <div class="field">
-                <label for="login-token">API token</label>
-                <input
-                  id="login-token"
-                  class="input"
-                  type="password"
-                  formControlName="token"
-                  autocomplete="off"
-                  autocapitalize="off"
-                  spellcheck="false"
-                  aria-describedby="login-token-hint"
-                />
-                <span id="login-token-hint" class="hint">
-                  For local work and scripts. Kept in this tab only.
-                </span>
-              </div>
-              <button type="submit" class="btn wide" [disabled]="busy()">Use token</button>
-            </form>
-          }
-        </div>
+            <div class="field">
+              <label for="login-token">API token</label>
+              <input
+                id="login-token"
+                class="input"
+                type="password"
+                formControlName="token"
+                autocomplete="off"
+                autocapitalize="off"
+                spellcheck="false"
+                aria-describedby="login-token-hint"
+              />
+              <span id="login-token-hint" class="hint">
+                For local work and scripts. Kept in this tab only.
+              </span>
+            </div>
+            <button type="submit" class="btn wide" [disabled]="busy()">Use token</button>
+          </form>
+        </details>
       }
 
       @case ('enrol') {
         <ol class="steps">
+          <li>Get an authenticator app, such as Google Authenticator or 1Password.</li>
           <li>
-            Open an authenticator app on your phone, such as Google Authenticator or 1Password.
+            On this phone, tap Add to authenticator app. On a computer, scan the code with your
+            phone, or copy the key.
           </li>
-          <li>Scan this code, or type the key below.</li>
           <li>Enter the six digit code the app shows.</li>
         </ol>
         @if (enrolment(); as e) {
-          <div class="qr">
-            <app-qr-code [value]="e.otpauth_uri" label="QR code for your authenticator app" />
-            <p class="secret">
-              <span class="muted">Key</span>
-              <code>{{ groupedSecret() }}</code>
-            </p>
+          <div class="enrol">
+            <a class="btn app-link" [href]="e.otpauth_uri">Add to authenticator app</a>
+            <div class="qr">
+              <app-qr-code [value]="e.otpauth_uri" label="QR code for your authenticator app" />
+              <div class="secret">
+                <span class="muted" id="enrol-key-label">Key</span>
+                <code aria-labelledby="enrol-key-label">{{ groupedSecret() }}</code>
+                <app-copy-button
+                  [text]="e.secret"
+                  label="key"
+                  blockedText="Copy is blocked here. Select the key and copy it, or type it."
+                />
+              </div>
+            </div>
           </div>
         }
         <form class="form" [formGroup]="codeForm" (ngSubmit)="confirmEnrolment()" novalidate>
@@ -195,6 +198,7 @@
         <app-one-time-secret
           [values]="recoveryCodes()"
           label="Recovery codes"
+          filename="stonks-recovery-codes.txt"
           warning="Shown once. You cannot see these again."
         />
         <label class="check">
@@ -229,6 +233,10 @@
         @if (push.error(); as err) {
           <p class="alert" role="alert">{{ err }}</p>
         }
+        @if (pushProblem(); as problem) {
+          <p class="note" role="status">{{ problem }}</p>
+          <button type="button" class="btn btn-primary wide" (click)="skipPush()">Continue</button>
+        } @else {
         <div class="choices">
           @if (push.state() !== 'install-first') {
             <button
@@ -243,6 +251,7 @@
           }
           <button type="button" class="btn wide" (click)="skipPush()">Not now</button>
         </div>
+        }
       }
     }
   </section>
