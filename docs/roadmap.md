@@ -348,7 +348,7 @@ Every trader gets a simple experience: connect a broker for insights, pick strat
 
 ## Phase 17: Options
 
-**Status:** 17.1 to 17.5 done as research, off by default. Nothing in the tick, the console or MCP trades options. Design and what changed from it: `docs/design/options.md`. Still open: live options through Interactive Brokers (after Phase 19), options in the console and MCP, Treasury rates and dividends in pricing, and a paid chain history for real validation.
+**Status:** 17.1 to 17.6 done as research, off by default. Nothing in the tick, the console or MCP trades options. Design and what changed from it: `docs/design/options.md`. Still open: live options through Interactive Brokers (after Phase 19), Treasury rates and dividends in pricing, and a paid chain history for real validation.
 
 | WP | Scope |
 |----|-------|
@@ -357,6 +357,7 @@ Every trader gets a simple experience: connect a broker for insights, pick strat
 | 17.3 Backtesting options | Done. A separate options backtest (`backtest/options_engine.py`): an options ledger with multipliers and position groups, fills from the next day's quotes with a spread share, all-or-none combo orders, expiry with exercise by exception, physical and cash settlement, early assignment through an `AssignmentModel` with risk flags, and split and dividend handling. |
 | 17.4 Risk for options | Done. Portfolio and position Greeks, max loss of any structure, Reg T strategy-based and risk-based margin (`options/risk.py`), and four registered rules, all off: `option_greek_limits`, `option_max_loss`, `option_margin` and `short_option_guard`. They check a combo as one unit. |
 | 17.5 Options strategies | Done. `covered_call`, `cash_secured_put` (with the wheel), `protective_put`, `vertical_spread` and `vol_premium_condor`, each with a hypothesis, built from a structure registry and a leg selector. `stonks options backtest --validate` runs the survival tests that apply: out of sample PSR, deflated Sharpe, wider fills, missing quote days and doubled fees. |
+| 17.6 Options in the console and MCP | Done. `app/options.py` and `/api/options/*`: underlyings with stored chains, one chain with our implied vol and Greeks, the strategies and structures, a structure's payoff at expiry (`options/payoff.py`) and an options backtest as a job with its validation verdict. Reads need `data.read`, the job `lab.run`. Six MCP tools (`list_option_underlyings`, `get_option_chain`, `list_option_strategies`, `list_option_structures`, `get_option_payoff`, `run_options_backtest`). The console's Options page under Research shows the chain, a payoff diagram, the strategies and a backtest runner, and says nothing trades options. |
 
 ## Phase 18: Review, polish and prove it
 
