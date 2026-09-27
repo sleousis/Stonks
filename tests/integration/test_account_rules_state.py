@@ -89,6 +89,41 @@ def test_settlements_are_read_before_and_after_they_are_recorded(state):
     assert after == before
 
 
+def test_a_commission_in_another_currency_is_converted_before_it_enters_the_ledger(state):
+    from stonks.fx import FxRates
+
+    _fill(state, "c1", "buy", 10.0, 100.0, FRIDAY)
+    _fill(state, "c2", "sell", 10.0, 90.0, date(2026, 9, 28))
+    state.execute("UPDATE fills SET fee = 2.0, fee_currency = 'EUR'")
+    usd = lambda _t: "USD"  # noqa: E731
+    fx = FxRates([("EUR", "USD", date(2026, 9, 1), 1.5)])
+    got = load_settlements(
+        state, "pf_default", SETTINGS, currency_of=usd, as_of=date(2026, 9, 28), fx=fx
+    )
+    assert [(e.currency, e.amount) for e in got] == [("USD", -1003.0), ("USD", 897.0)]
+    assert (
+        record_settlements(
+            state, "pf_default", SETTINGS, currency_of=usd, as_of=date(2026, 9, 28), fx=fx
+        )
+        == 2
+    )
+    stored = state.sql("SELECT amount FROM settlement_ledger ORDER BY id")
+    assert [r["amount"] for r in stored] == [-1003.0, 897.0]
+
+
+def test_a_commission_with_no_rate_is_never_guessed_or_recorded(state):
+    _fill(state, "c2", "sell", 10.0, 90.0, date(2026, 9, 28))
+    state.execute("UPDATE fills SET fee = 2.0, fee_currency = 'EUR'")
+    usd = lambda _t: "USD"  # noqa: E731
+    got = load_settlements(state, "pf_default", SETTINGS, currency_of=usd, as_of=date(2026, 9, 28))
+    # Unsettled proceeds count in full (the stricter figure) until a rate exists.
+    assert [e.amount for e in got] == [900.0]
+    assert (
+        record_settlements(state, "pf_default", SETTINGS, currency_of=usd, as_of=date(2026, 9, 28))
+        == 0
+    )
+
+
 def test_day_trades_and_loss_sales_from_fills():
     fills = [
         ("AAPL.US", "buy", 10.0, 100.0, date(2026, 9, 22)),

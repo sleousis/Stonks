@@ -21,6 +21,7 @@ from stonks.accounts.rules import AccountRuleInputs, InstrumentFacts
 from stonks.accounts.rules.profiles import get_profile
 from stonks.accounts.rules.settlement import load_settlements
 from stonks.execution.brokers.base import LiveAccountState
+from stonks.fx import FxRates
 from stonks.production.rules._account_settings import AccountRulesSettings
 from stonks.store.state import SqliteState
 
@@ -128,6 +129,7 @@ def load_account_inputs(
     shortable: Mapping[str, float | None] | None = None,
     short_sale_restricted: frozenset[str] = frozenset(),
     currency_of: Callable[[str], str] | None = None,
+    fx: FxRates | None = None,
 ) -> AccountRuleInputs | None:
     """The inputs for ``portfolio_id`` on the execution session ``as_of``,
     or ``None`` when the portfolio has no account profile (then the
@@ -151,7 +153,9 @@ def load_account_inputs(
         instruments=facts,
         restricted=restricted_tickers(state, portfolio_id),
         kid_available=kid_flags(state, profile.jurisdiction),
-        settlements=load_settlements(state, portfolio_id, settings, currency_of=_ccy, as_of=as_of),
+        settlements=load_settlements(
+            state, portfolio_id, settings, currency_of=_ccy, as_of=as_of, fx=fx
+        ),
         day_trades=day_trades(fills, as_of, settings.pdt_window_days),
         opened_today=frozenset(t for t, side, _, _, day in fills if side == "buy" and day == as_of),
         loss_sales=loss_sales(fills, as_of, settings.wash_sale_window_days),

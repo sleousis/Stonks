@@ -518,7 +518,7 @@ flowchart LR
 ### Where the numbers come from
 
 - The broker is the source of truth for cash, settled cash, buying power and day trades remaining.
-- Our own counters (`settlement_ledger (portfolio_id, fill_id, currency, amount, trade_date, settle_date)`, day-trade count) exist to explain a refusal before IBKR sends it, and to catch drift. If ours and IBKR's disagree, the stricter one is used and the difference is reported as drift.
+- Our own counters (`settlement_ledger (portfolio_id, fill_id, currency, amount, trade_date, settle_date)`, day-trade count) exist to explain a refusal before IBKR sends it, and to catch drift. If ours and IBKR's disagree, the stricter one is used and the difference is reported as drift. A row holds the security's currency. A commission the broker reports in another currency is converted at the stored FX rate of the trade day first. With no rate the fee is left out, so sale proceeds count in full, and the row is recorded once a rate exists.
 
 ## 6. Reconciliation
 
