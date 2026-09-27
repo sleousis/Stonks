@@ -19,6 +19,7 @@ describe('InsightsPage', () => {
   let http: HttpTestingController;
   let el: HTMLElement;
   let admin: boolean;
+  let totalsBody: typeof TOTALS = TOTALS;
   const selected = signal<string | null>(null);
   const live = signal(false);
   const seen: string[] = [];
@@ -67,7 +68,7 @@ describe('InsightsPage', () => {
       case '/api/insights/agreement':
         return req.flush(AGREEMENT);
       case '/api/insights/totals':
-        return req.flush(TOTALS);
+        return req.flush(totalsBody);
       case '/api/portfolio/snapshots':
         return req.flush(SNAPSHOTS);
       default:
@@ -157,6 +158,19 @@ describe('InsightsPage', () => {
     expect(el.textContent).toContain('All portfolios');
     expect(el.textContent).toContain('$400,000.00');
     expect(el.textContent).toContain('People');
+  });
+
+  it('tells admins when totals are held back, not zeros', async () => {
+    admin = true;
+    totalsBody = { ...TOTALS, total_value: 0, cash: 0, suppressed: true };
+    try {
+      setup();
+      await flushAll();
+      expect(el.textContent).toContain('Totals appear once three or more traders have live money.');
+      expect(el.textContent).not.toContain('People');
+    } finally {
+      totalsBody = TOTALS;
+    }
   });
 
   it('keeps other panels when insights fail', async () => {

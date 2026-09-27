@@ -308,6 +308,11 @@
           <app-error-state title="Could not load totals" [error]="err" (retry)="totals.reload()" />
         } @else if (!totals.hasValue()) {
           <app-loading-state label="Loading totals" [rows]="3" />
+        } @else if (totals.value().suppressed) {
+          <p class="totals-held">Totals appear once three or more traders have live money.</p>
+          <p class="hint">
+            Paper accounts are left out, and sums of fewer people would show theirs.
+          </p>
         } @else {
           @let t = totals.value();
           <dl class="figures">

@@ -45,6 +45,22 @@ describe('TotalsCard', () => {
     expect(el.querySelector('.live-frame, .live')).toBeNull();
   });
 
+  it('says when totals are held back instead of showing zeros', async () => {
+    const { fixture, el } = await render();
+    (await nextRequest(http, '/api/portfolio/totals')).flush({
+      cash: 0,
+      total_value: 0,
+      portfolios: 2,
+      owners: 2,
+      suppressed: true,
+    });
+    await settle(fixture);
+    const text = el.textContent ?? '';
+    expect(text).toContain('Totals appear once three or more traders have live money.');
+    expect(text).not.toContain('$0.00');
+    expect(el.querySelector('app-stat-tile')).toBeNull();
+  });
+
   it('offers a retry when the totals fail', async () => {
     const { fixture, el } = await render();
     (await nextRequest(http, '/api/portfolio/totals')).flush(
