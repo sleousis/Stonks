@@ -102,6 +102,12 @@ def test_default_countries_follow_portfolio_currencies(state, users):
     repo.create(Scope.for_user(alice), name="Euro", base_currency="EUR")
     repo.create(Scope.for_user(alice), name="Pounds", base_currency="GBP")
     repo.create(Scope.for_user(alice), name="Euro 2", base_currency="EUR")
+    # made in the same second: pin their ages, the order is oldest first
+    for i, name in enumerate(("Euro", "Pounds", "Euro 2")):
+        state.execute(
+            "UPDATE portfolios SET created_at = ? WHERE owner_id = ? AND name = ?",
+            [f"2026-01-0{i + 1}T00:00:00", alice.id, name],
+        )
     assert default_countries(state, alice.id) == ("EU", "GB")
     prefs = EconomicAlertPrefStore(state).get(alice.id)
     assert (prefs.countries, prefs.countries_default, prefs.min_importance) == (
