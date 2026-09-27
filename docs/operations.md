@@ -448,6 +448,21 @@ Until broker-side stops exist, `count_losses = true` counts any losing exit as a
 
 Live orders carry a fine state in `orders.state`: `pending`, `submitted`, `accepted`, `partially_filled`, `filled`, `pending_cancel`, `cancelled`, `expired`, `rejected` or `unknown`. The `status` column follows it. An order whose submit or cancel timed out is `unknown`, and nothing is sent for it again until reconciliation finds it at the broker by client id. A submit window stays shut while any order of the portfolio is `unknown`.
 
+`uv run stonks live reconcile --portfolio <id>` syncs a portfolio's open orders and fills with its broker now, the way the tick and `live_submit` do before they act. It only reads the broker. It exits 1 while an order is still unknown.
+
+### Paper soak, drills and live tests
+
+Stage 1 is at least 20 trading days of the real schedule against the IBKR paper account (roadmap 19.11).
+
+```bash
+uv run stonks live soak-report --portfolio <id> [--days 20] [--end YYYY-MM-DD] [--model ID] [--json] [--strict]
+uv run stonks halts drill [--price 100] [--timeout 10] [--json-out drill.json]
+```
+
+- `live soak-report` reads the state DB only. Per portfolio it shows orders by outcome and the top rejection reasons, slippage against the decision price, fills against the model book (the portfolio's paper twin, or `--model`), gateway outage days and recoveries, `broker_drift` halts, and `reconcile_reports` rows when that table exists. It lists findings (too few days, unknown orders, over 5% rejects, mean slippage over 50 bps, fills that differ from the model book, an outage not recovered, drift). A soak with no finding is clean. `--strict` exits 1 when it is not.
+- `halts drill` is the kill switch dry run. It uses a scratch state DB and the simulated broker, never production data and never a real order. It places a far limit, engages the global kill switch through the halt service, and checks that the gates stop new orders and the working order is cancelled within the timeout. It exits 1 when a step fails. See [runbooks/kill-switch-drill.md](runbooks/kill-switch-drill.md) for the paper drill.
+- Live contract tests: `tests/integration/live/test_ibkr_live.py` with `STONKS_RUN_LIVE_TESTS=1`, `STONKS_IBKR_HOST`, `STONKS_IBKR_PORT` and a `DU` `STONKS_IBKR_ACCOUNT`. They check login and account, contracts, what-if, a far limit placed and cancelled, executions, a reconnect and quotes. They stop at once if the gateway manages any account that is not paper. No credential is read: the gateway holds the login.
+
 ### Account rules
 
 | Applies to | Rules |
@@ -708,4 +723,9 @@ cron does not know exchange holidays; on those days the tick finds no new bars a
 - [Data stale or bad](runbooks/data-stale.md)
 - [Back up and restore](runbooks/restore.md)
 - [Deploy failed](runbooks/deploy-failed.md)
+- [Broker outage](runbooks/broker-outage.md)
+- [Stuck or unknown order](runbooks/stuck-order.md)
+- [Drift between Stonks and the broker](runbooks/reconcile-drift.md)
+- [Gateway login expired](runbooks/gateway-reauth.md)
+- [Kill switch and drills](runbooks/kill-switch-drill.md)
 - IB Gateway set-up and the weekly login: `deploy/ibkr/README.md`

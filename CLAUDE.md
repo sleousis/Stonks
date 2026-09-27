@@ -76,6 +76,9 @@ uv run stonks halts list [--all]
 uv run stonks halts kill --scope global|user|portfolio [--portfolio ID] [--buys-only] --reason "..."
 uv run stonks halts resume ID --reason "..."   # asks you to type RESUME TRADING
 uv run stonks halts clear ID --reason "..."    # circuit-breaker or operational halt
+uv run stonks halts drill [--json-out F]       # kill switch dry run: scratch state, simulated broker
+uv run stonks live soak-report --portfolio ID [--days 20 --strict]   # paper soak summary
+uv run stonks live reconcile --portfolio ID    # sync open orders with the broker now (read only)
 uv run stonks pnl [--since YYYY-MM-DD] [--strategy <shadow-id>] [--portfolio ID]
 uv run stonks report [--backtest <job-or-strategy> --start ... --end ...]
 uv run stonks tca summary|journal|order|note|edit-note|refresh   # transaction costs and the trade journal

@@ -639,7 +639,7 @@ New pages in `docs/runbooks/`. They also close the open Phase 12 item "broker un
 
 Tests that need an open market skip outside regular hours.
 
-**Paper soak.** Stage 1 is the soak: at least 20 trading days of the real schedule against the paper account. `tools/live_soak.py` prints the gate 1 report from `live_gate_days`, `reconcile_reports` and the drill table. A nightly job keeps it current.
+**Paper soak.** Stage 1 is the soak: at least 20 trading days of the real schedule against the paper account. `stonks live soak-report` (`production/soak.py`) sums it up from the ledger, gateway notifications, `broker_drift` halts and `reconcile_reports` when that table exists. The gate 1 report (19.9) adds `live_gate_days` and the drill record.
 
 ## 9. Work packages
 
@@ -657,7 +657,7 @@ Each package owns the tests of its own modules. Shared files (`config.py`, `conf
 | 19.8 Tickets, approve mode and the submit job | `Mode.APPROVE`, `order_tickets`, decide versus submit for live books in the tick, the `live_submit` job, ticket API with step-up approval, the ticket view and push, MCP read-only tools. | `accounts/models.py`, `accounts/subscriptions.py`, `production/tickets.py`, `production/submit.py`, `production/tick.py`, `app/tickets.py`, `api/routers/tickets.py`, `web/src/app/tickets/*`, `store/migrations_sqlite/NNN_order_tickets.sql` |
 | 19.9 Stages, gates and preview | The stage state machine and `live_stage_changes`, `live_gate_days`, the gate reports, `stonks live stage` and `stonks live preview`, the go-live page section. | `production/live/stages.py`, `production/live/gates.py`, `production/live/preview.py`, `app/live.py`, `api/routers/live.py`, `web/src/app/golive/*`, `store/migrations_sqlite/NNN_live_stages.sql` |
 | 19.10 Protective stops | Stop placement after entry fills, resizing and cancelling, OCA groups, attribution of stop fills. | `production/live/stops.py` |
-| 19.11 Live tests, drills and runbooks | Live contract tests, `tools/live_soak.py`, `stonks halts drill` and `kill_switch_drills`, the five runbooks, the ops and deploy doc sections. | `tests/integration/live/test_ibkr_live.py`, `tools/live_soak.py`, `production/drills.py`, `docs/runbooks/{broker-outage,stuck-order,reconcile-drift,gateway-reauth,kill-switch-drill}.md` |
+| 19.11 Live tests, drills and runbooks | Live contract tests, `stonks live soak-report`, `stonks halts drill` (dry run, no `kill_switch_drills` table yet), the five runbooks, the ops and deploy doc sections. | `tests/integration/live/test_ibkr_live.py`, `production/soak.py`, `production/drills.py`, `docs/runbooks/{broker-outage,stuck-order,reconcile-drift,gateway-reauth,kill-switch-drill}.md` |
 | 19.12 Go live | Not code. Run stage 1 (20 days paper soak), gate 1, stage 2 in auto (approve mode optional), gate 2, then raise the allocation by hand. Each step has a logged reason. | operations only |
 
 Waves:
