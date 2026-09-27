@@ -16,6 +16,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 15 | Mostly done: design, data model, connection seam, insights, automation modes, notifications, home screen. The tick trades one book per portfolio. Open: order placement for real providers. |
 | 16 | 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. |
 | 17 | Planned. |
+| 19 | Planned. Design: `docs/design/live-trading.md`. |
 
 Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor-agnostic schemas, third-party libraries wrapped behind a seam). Live-network tests go under `tests/integration/live/` behind `@pytest.mark.live`.
 
@@ -414,6 +415,38 @@ First mutation run per target (cosmic-ray, mutants inside type annotations skipp
 
 Pyright strict plan. Strict mode comes one package at a time, smallest first, each in its own change that also shrinks the baseline: `core/` and `execution/` (done, BL-49), then `auth/`, `portfolio/` and last `production/`. Each step adds the package to `strict` in `[tool.pyright]`. Most strict errors are unknown types from untyped libraries (pandas, alpaca-py, exchange_calendars, pywebpush), so each step adds `pandas-stubs` or a typed wrapper at the seam and uses `dict[str, Any]` instead of bare `dict`. The basic-mode baseline is burned down alongside: pandas `itertuples()` rows, constructor settings read from the base class, and pydantic models built with no arguments.
 
+## Phase 19: Go live with real money
+
+**Status:** planned. Design: `docs/design/live-trading.md`.
+
+Stonks moves from simulated paper to real orders at Interactive Brokers, in stages. IB Gateway runs headless in Docker next to Stonks, and `ib_async` sits behind the `Broker` and `BrokerConnection` seams. Alpaca stays off. The IBKR login lives only in the gateway container's secret files. The account location is not decided, so account rules for the US and for the EU and UK are built and chosen per portfolio.
+
+| Stage | Broker | Gate to leave it |
+|-------|--------|------------------|
+| 0. Simulated paper | `SimulatedBroker` (today) | Go-live passed, 20 paper days, fake-gateway and live contract tests green, runbooks written. |
+| 1. Broker paper | IBKR paper account | 20 trading days, last 4 weeks clean, a weekly re-auth, a restart and a disconnect survived, kill switch and outage drills, no duplicate orders. |
+| 2. Live small | IBKR live account, 5% of allocated capital, tight caps, approve mode first | 8 weeks, last 6 clean, 30 or more live fills, TCA gap not above the cost model, 2 weeks in auto. |
+| 3. Scale up | Same, ramp 5, 10, 25, 50, 100% | Each step after 4 clean weeks. A dirty week steps down on its own. |
+
+A clean week has no unresolved reconciliation drift, no stuck orders, rejections under 2%, the gateway up for every submit window, no safeguard halt, and every fill with its commission. Stages move up only by a logged human action with a fresh second factor.
+
+| WP | Scope | Owns | Status |
+|----|-------|------|--------|
+| 19.1 Broker seam for live | Stop price, time in force and outside-hours fields on `Order`, new optional broker capabilities (global cancel, account state, what-if margin, executions, quotes), execution ids and fee currency on fills, `orders.broker_ref`. | `core/types.py`, `execution/brokers/base.py`, `execution/reconcile.py`, a new SQLite migration | planned |
+| 19.2 IBKR adapter | `IbClient` protocol over `ib_async`, session thread and reconnects, contract resolution with a `conId` cache, order mapping (`orderRef` idempotency, collared opening-auction limits, no outside hours), error mapping, account safety check, `FakeIbGateway`. | `execution/brokers/ibkr/*`, `tests/fakes/ib_gateway.py`, a new SQLite migration | planned |
+| 19.3 IBKR connection and borrow | `ibkr` provider with trade and short capabilities, sync, borrow quotes, daily borrow rates into the lake, optional Flex statements. | `connections/providers/ibkr.py`, `execution/brokers/ibkr/{borrow,flex}.py`, `ingest/sources/ibkr_borrow.py`, a new DuckDB migration | planned |
+| 19.4 Gateway deployment | `ibkr-paper` and `ibkr-live` Compose profiles on an internal network, Docker secrets, weekly re-auth reminder, broker health and metrics. | `deploy/compose.yaml`, `deploy/ibkr/*`, `production/broker_health.py`, `scheduling/metrics.py` | planned |
+| 19.5 Reconciliation and drift | Start-of-day, submit and end-of-day checks, drift reports, `broker_drift` halt, auto pause on drift, short outage versus fault. | `execution/drift.py`, `production/live/checks.py`, `production/auto_pause.py`, `production/halts.py`, a new SQLite migration | planned |
+| 19.6 Live safeguards | Capital ramp, per-order and per-day notional caps, fat-finger price bands against the last trade and NBBO, max orders per run with a `runaway` halt, `[production.live]` settings. | `production/rules/{__init__,capital_ramp,live_caps,price_band,max_orders}.py`, `production/rules/settings.py`, `production/live/{settings,quotes}.py` | planned |
+| 19.7 Account rules engine | Account profiles per portfolio, US rules (pattern day trader, settled cash, wash sales, Reg SHO), EU and UK rules (PRIIPs, short disclosure), settlement per market, buying power, FX funding, transaction taxes in the cost model. | `accounts/rules/*`, `production/rules/account_rules.py`, `backtest/costs.py`, a new SQLite migration | planned |
+| 19.8 Tickets, approve mode and submit | `approve` mode between paper and auto, order tickets with step-up approval in the console and by push, decide after the close and submit before the open for live books. | `accounts/{models,subscriptions}.py`, `production/{tickets,submit,tick}.py`, `app/tickets.py`, `api/routers/tickets.py`, `web/src/app/tickets/*`, a new SQLite migration | planned |
+| 19.9 Stages, gates and preview | Stage state machine and audit, daily gate metrics, gate reports, `stonks live stage` and `stonks live preview` (what-if, never transmits). | `production/live/{stages,gates,preview}.py`, `app/live.py`, `api/routers/live.py`, `web/src/app/golive/*`, a new SQLite migration | planned |
+| 19.10 Protective stops | Optional GTC broker-side stops after entries, resized and cancelled with the position. | `production/live/stops.py` | planned |
+| 19.11 Live tests, drills and runbooks | Live contract tests against the paper account, paper soak report, kill switch drill command, runbooks for broker outage, stuck order, drift, re-auth and drills. | `tests/integration/live/test_ibkr_live.py`, `tools/live_soak.py`, `production/drills.py`, `docs/runbooks/*` | planned |
+| 19.12 Go live | Run the stages and gates. Operations only. | none | planned |
+
+Waves: 19.1, 19.4, 19.6 and 19.7 first, then 19.2 and 19.8, then 19.3, 19.5, 19.9 and 19.10, then 19.11 and 19.12. The owner provides the IBKR account and its paper account, a secondary API username with IBKR Mobile for 2FA, market data subscriptions, the account type and client class, the capital to allocate, and 1 GB more VM memory per gateway.
+
 ## Execution order
 
 1. Wave 1 in parallel: backtest (1.2, 1.3, 3.5), lab (1.4, 1.5, 3.3), production (2.3, 2.4, 2.5), broker (2.1, 2.2), data (3.4), strategies (3.1, 3.2, 4.2), and the service layer plus REST API for existing features (5.1).
@@ -426,3 +459,4 @@ Pyright strict plan. Strict mode comes one package at a time, smallest first, ea
 8. Final review, fix, re-review.
 9. Phases 15 to 17 follow the design docs in `docs/design/` (`accounts-and-modes.md`, `shorting.md`, `options.md`). The first step of 15.2 (accounts data model, no behaviour change) lands **before W2.1 (9.2.1) is wired into the tick**, so W2.1 writes the tick once as a loop over portfolios with a `BookSpec` instead of rewriting it twice. The backend of 13.1 (login, roles, 2FA, tokens) runs as part of Phase 15; see the step plan in `accounts-and-modes.md` section 12.
 10. Phase 18 runs last: the review sweep starts as soon as the code is frozen for review, the fix waves follow each merge wave, and the release waits for every gate.
+11. Phase 19 follows `docs/design/live-trading.md`. Its code waves can start once Phase 18 has frozen the money paths, and real money waits for each stage gate.
