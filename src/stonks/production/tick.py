@@ -74,7 +74,7 @@ from stonks.accounts.paper import ensure_paper_account
 from stonks.backtest.costs import CostModel, CostModelSettings, FixedCostModel
 from stonks.backtest.simulated_broker import FinancingEvent, SimulatedBroker
 from stonks.core.interval import Interval
-from stonks.core.protocols import Broker
+from stonks.core.protocols import Broker, Strategy
 from stonks.core.types import Fill, Order, OrderStatus, Portfolio
 from stonks.execution.brokers.base import (
     BrokerKind,
@@ -151,9 +151,18 @@ from stonks.production.prices import PriceBook, held_tickers, load_history, load
 from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.ranker import Ranker, SignalSet, StrategyPool
 from stonks.production.risk import RiskPolicy, build_risk_context, needs_risk_context
-from stonks.production.shadow import evaluate_shadow_strategies, shadow_held_tickers
+from stonks.production.shadow import (
+    evaluate_books,
+    evaluate_shadow_strategies,
+    shadow_held_tickers,
+)
 from stonks.production.signals import record_signals, signals_recorded
 from stonks.production.tca import annotate_orders, decision_values, tca_recorded
+from stonks.production.version_books import (
+    VersionBook,
+    active_version_books,
+    version_held_tickers,
+)
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.pit import PitSession
@@ -1904,7 +1913,10 @@ def _shadow_phase(run: _TickRun) -> dict[str, Any]:
             shadow = run.signals.merged(shadow)
             statuses = ("active", "shadow")
         # Shadow portfolios may hold tickers outside the universe too.
-        shadow_held = shadow_held_tickers(state)
+        version_books = active_version_books(state, run.registry)
+        shadow_held = sorted(
+            {*shadow_held_tickers(state), *version_held_tickers(state, version_books)}
+        )
         shadow_actions = load_corporate_actions(lake, shadow_held)
         book = load_prices(
             lake,
@@ -1946,7 +1958,59 @@ def _shadow_phase(run: _TickRun) -> dict[str, Any]:
     except Exception as exc:
         log.error("tick.shadow_failed", error=str(exc), error_type=type(exc).__name__)
         return {"shadow_error": f"{type(exc).__name__}: {exc}"}
-    return {"shadow": [o.as_dict() for o in outcomes]}
+    summary: dict[str, Any] = {"shadow": [o.as_dict() for o in outcomes]}
+    if version_books:
+        summary.update(
+            _version_book_phase(run, version_books, book, shadow_held, shadow_actions, base_context)
+        )
+    return summary
+
+
+def _version_book_phase(
+    run: _TickRun,
+    books: Sequence[VersionBook],
+    book: Any,
+    held: Sequence[str],
+    actions: Any,
+    base_context: Any,
+) -> dict[str, Any]:
+    """Advance the model version books (roadmap 22.6): each candidate model
+    and the live one it competes with. Never raises."""
+    settings, state = run.settings, run.state
+    try:
+        loaders = {b.store.book_id: b.load for b in books}
+        signals = Ranker(
+            registry=run.registry,
+            lake=run.lake,
+            universe=settings.universe,
+            threshold=settings.threshold,
+            universe_id=settings.universe_id,
+            loaders=loaders,
+        ).score(as_of=run.as_of)
+
+        def strategy(bid: str) -> Strategy:
+            found = signals.instances.get(bid)
+            return found if found is not None else loaders[bid]()
+
+        outcomes = evaluate_books(
+            state,
+            [b.store for b in books],
+            signals.ranked(),
+            book.prices,
+            _asset_classes(run.lake, [*settings.universe, *held]),
+            run.as_of,
+            run.tick_id,
+            settings,
+            strategies=strategy,
+            buyable=book.fresh,
+            volumes=book.volumes,
+            corporate_actions=actions,
+            risk_context=base_context,
+        )
+    except Exception as exc:
+        run.log.error("tick.version_books_failed", error=str(exc), error_type=type(exc).__name__)
+        return {"model_versions_error": f"{type(exc).__name__}: {exc}"}
+    return {"model_versions": [o.as_dict() for o in outcomes]}
 
 
 def _record_signal_phase(run: _TickRun) -> None:

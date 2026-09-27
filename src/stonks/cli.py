@@ -2466,6 +2466,12 @@ from stonks.cli_cash_flows import app as cash_flows_app  # noqa: E402
 
 app.add_typer(cash_flows_app, name="cash-flows")
 
+# ---- model versions (roadmap 22.6) ---------------------------------------------
+
+from stonks.cli_model_versions import register as _register_model_versions  # noqa: E402
+
+_register_model_versions(registry_app)
+
 # ---- the assistant ------------------------------------------------------------
 
 from stonks.cli_assistant import app as assistant_app  # noqa: E402

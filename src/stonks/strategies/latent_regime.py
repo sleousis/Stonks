@@ -54,6 +54,7 @@ _log = get_logger("stonks.strategies.latent_regime")
 class LatentRegimeFilter(InnerStrategyWrapper):
     id = "latent_regime_filter"
     id_suffix = "latent_regime"
+    fits_itself = True
     hypothesis = (
         "Markets switch between a calm and a turbulent state, and the "
         "turbulent one is where trend and carry strategies lose most. A "

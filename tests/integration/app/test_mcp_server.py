@@ -174,6 +174,10 @@ READ_TOOLS = {
     "run_screen",
     "list_screens",
     "get_screen",
+    "list_model_versions",
+    "get_model_version_history",
+    "list_model_candidates",
+    "check_model_swap",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
@@ -196,6 +200,7 @@ JOB_TOOLS = {
     "draft_order",
     "start_research",
     "create_screen",
+    "retrain_models",
 }
 # Overwrite a draft's fields; no confirm (a draft is never traded).
 EDIT_TOOLS = {
@@ -230,6 +235,8 @@ GUARDED_TOOLS = {
     "delete_price_alert",
     "save_screen_as_universe",
     "delete_screen",
+    "swap_model_version",
+    "reject_model_version",
 }
 
 

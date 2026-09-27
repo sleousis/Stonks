@@ -26,6 +26,7 @@ from stonks.app.jobs import Job, JobRunner, JobStore
 from stonks.app.lab import LabService
 from stonks.app.manual_orders import ManualOrdersService
 from stonks.app.market import MarketDataService
+from stonks.app.model_versions import ModelVersionService
 from stonks.app.notifications import NotificationsAppService
 from stonks.app.operations import OperationsService
 from stonks.app.order_drafts import OrderDraftService
@@ -181,6 +182,7 @@ class Services:
     catalog: CatalogService
     portfolio: PortfolioService
     strategies: StrategyService
+    model_versions: ModelVersionService
     market: MarketDataService
     orders: OrdersService
     manual_orders: ManualOrdersService
@@ -253,6 +255,7 @@ class Services:
             catalog=catalog,
             portfolio=portfolio,
             strategies=strategies,
+            model_versions=ModelVersionService(context, runner),
             market=MarketDataService(context),
             orders=orders,
             manual_orders=manual_orders,

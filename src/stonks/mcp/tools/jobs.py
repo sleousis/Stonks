@@ -59,6 +59,7 @@ RESULT_ROUTES: dict[str, str] = {
     "lab_sweep": "/api/lab/sweeps/{id}/result",
     "universe_refresh": "/api/universes/refresh/{id}/result",
     "universe_ensure": "/api/universes/ensure/{id}/result",
+    "model_retrain": "/api/model-versions/jobs/{id}/result",
 }
 
 

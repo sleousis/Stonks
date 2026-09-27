@@ -18,7 +18,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 17 | Planned. |
 | 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7, with console screens. The IBKR adapter (19.2) done. Design: `docs/design/live-trading.md`. |
 | 20 | 20.1 to 20.6 done, backend and console. 20.7 and 20.8 in progress. |
-| 22 | 22.1, 22.2, 22.3, 22.5, 22.7, 22.8 and 22.9 done. 22.4 and 22.6 are next. Factors: `docs/factors.md`. |
+| 22 | 22.1, 22.2, 22.3, 22.5, 22.6, 22.7, 22.8 and 22.9 done. 22.4 is next. Factors: `docs/factors.md`. |
 
 Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor-agnostic schemas, third-party libraries wrapped behind a seam). Live-network tests go under `tests/integration/live/` behind `@pytest.mark.live`.
 
@@ -496,7 +496,7 @@ From the competitor study of 44 open-source projects (Qlib, alphalens, vectorbt,
 | 22.3 Factor tear sheets | Done. alphalens-style IC by sector, asset class and size, returns per quantile, factor alpha and beta, and a monthly IC heatmap, for any factor. `stonks factors tearsheet --html`, a tear sheet job in the API and MCP. |
 | 22.4 Factor risk model | A PCA then style-factor risk model as a CovarianceEstimator, a style-exposure RiskRule, and factor attribution in reports. |
 | 22.5 Sweeps and heatmaps | Vectorised sweeps for more strategies, with parameter heatmaps in reports and the console, linked to the plateau test. |
-| 22.6 Model lifecycle | Scheduled retraining for ML strategies, model versions under one strategy id, new fits run as model books, swaps only through governance. |
+| 22.6 Model lifecycle | Scheduled retraining for ML strategies, model versions under one strategy id, new fits run as model books, swaps only through governance. Done: the weekly `model_retrain` job on all three backends, candidate and live version books in the tick, the swap check and an audited swap (`stonks registry versions|retrain|swap-check|swap|reject`, REST and MCP). See `docs/model-lifecycle.md`. |
 | 22.7 Forecast weights | Carver-style forecast weights estimated net of costs, and rules dropped when too costly for an instrument. Done: the `ForecastWeightEstimator` seam (`handcraft`, `bootstrap`, `equal`), the speed limit, the `forecast_blend` strategy and a tear sheet section. See [forecast weights](strategies/forecast-weights.md). |
 | 22.8 Factor library | Done. An Alpha158-style factor set with a next-open label, plus the fundamentals scores as factors. `stonks factors dataset` exports features and the label for a model. |
 | 22.9 AI research loop | The assistant proposes hypotheses and runs lab trials under a budget, each counted in the trial ledger. Done: `assistant/research.py`, `POST /api/assistant/research`, the `start_research` MCP tool, SQLite `030_research_loop`, research cases in `stonks assistant eval`. Only validation windows after the model's training cutoff (`[assistant.research] model_cutoff`) count, budgets are enforced in code, and nothing registers. |

@@ -22,7 +22,9 @@ The actions call the same services as the CLI:
   ``service:scheduler`` (state DB only, so every backend runs it here);
 - ``broker_health``: probes each IB Gateway, stores its status, alerts and
   pauses auto after a long outage (roadmap 19.4, state DB only);
-- ``ibkr_reauth_reminder``: the Sunday push to approve the IBKR login.
+- ``ibkr_reauth_reminder``: the Sunday push to approve the IBKR login;
+- ``model_retrain``: refits strategies that learn from data into
+  candidate versions (roadmap 22.6).
 
 ``ingest_prices`` and ``tick`` are skipped when no instrument in the
 universe trades on the fire's date (asset classes read from the lake).
@@ -44,6 +46,8 @@ from stonks.scheduling.jobs import (
     ensure_window,
     job_is_scoped,
     job_universe,
+    retrain_body,
+    retrain_outcome,
     universes_outcome,
 )
 
@@ -295,6 +299,23 @@ def price_alerts_action(ctx: RunContext) -> JobOutcome:
     finally:
         state.close()
     return JobOutcome("succeeded", out.as_dict())
+
+
+@register_action("model_retrain")
+def model_retrain_action(ctx: RunContext) -> JobOutcome:
+    """Refit in this process, opening the stores like the CLI does."""
+    from stonks.app.context import AppContext
+    from stonks.app.model_versions import ModelVersionService, RetrainRequest
+    from stonks.scheduling.jobs import SCHEDULER_ACTOR
+
+    context = AppContext(ctx.settings)
+    try:
+        result = ModelVersionService(context).retrain(
+            RetrainRequest.model_validate(retrain_body(ctx)), actor=SCHEDULER_ACTOR
+        )
+    finally:
+        context.close()
+    return retrain_outcome(result.model_dump(mode="json"))
 
 
 @register_action("connections_sync")

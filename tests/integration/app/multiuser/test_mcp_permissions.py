@@ -502,6 +502,36 @@ CASES: dict[str, Case] = {
     "update_draft": _c(
         "PATCH", "/api/studio/drafts/{draft_id}", lambda i: {"draft_id": i["draft"], "name": "y"}
     ),
+    # model versions (roadmap 22.6)
+    "list_model_versions": _c(
+        "GET", "/api/strategies/{strategy_id}/versions", lambda i: {"strategy_id": "bah_active"}
+    ),
+    "get_model_version_history": _c(
+        "GET",
+        "/api/strategies/{strategy_id}/versions/history",
+        lambda i: {"strategy_id": "bah_active"},
+    ),
+    "list_model_candidates": _c("GET", "/api/model-versions/candidates"),
+    "check_model_swap": _c(
+        "GET",
+        "/api/strategies/{strategy_id}/versions/{version}/check",
+        lambda i: {"strategy_id": "bah_active", "version": 1},
+    ),
+    "retrain_models": _c(
+        "POST",
+        "/api/model-versions/retrain",
+        lambda i: {"strategy_ids": ["bah_active"], "confirm": True},
+    ),
+    "swap_model_version": _c(
+        "POST",
+        "/api/strategies/{strategy_id}/versions/{version}/swap",
+        lambda i: {"strategy_id": "bah_active", "version": 1, "confirm": True},
+    ),
+    "reject_model_version": _c(
+        "POST",
+        "/api/strategies/{strategy_id}/versions/{version}/reject",
+        lambda i: {"strategy_id": "bah_active", "version": 1, "reason": "x", "confirm": True},
+    ),
     # guarded writes, confirmed
     "promote_strategy": _c(
         "POST",

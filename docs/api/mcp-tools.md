@@ -13,6 +13,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`cancel_order`](#cancel_order) | guarded | yes |
 | [`change_order`](#change_order) | guarded | yes |
 | [`check_factor_expression`](#check_factor_expression) | read | no |
+| [`check_model_swap`](#check_model_swap) | read | no |
 | [`create_draft`](#create_draft) | job | no |
 | [`create_price_alert`](#create_price_alert) | job | no |
 | [`create_screen`](#create_screen) | job | no |
@@ -49,6 +50,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_leaderboard`](#get_leaderboard) | read | no |
 | [`get_ledger_run`](#get_ledger_run) | read | no |
 | [`get_live_risk`](#get_live_risk) | read | no |
+| [`get_model_version_history`](#get_model_version_history) | read | no |
 | [`get_my_risk_limits`](#get_my_risk_limits) | read | no |
 | [`get_news`](#get_news) | read | no |
 | [`get_order_tca`](#get_order_tca) | read | no |
@@ -87,6 +89,8 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_ingest_runs`](#list_ingest_runs) | read | no |
 | [`list_jobs`](#list_jobs) | read | no |
 | [`list_ledger_runs`](#list_ledger_runs) | read | no |
+| [`list_model_candidates`](#list_model_candidates) | read | no |
+| [`list_model_versions`](#list_model_versions) | read | no |
 | [`list_notifications`](#list_notifications) | read | no |
 | [`list_order_drafts`](#list_order_drafts) | read | no |
 | [`list_orders`](#list_orders) | read | no |
@@ -120,7 +124,9 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`promote_strategy`](#promote_strategy) | guarded | yes |
 | [`refresh_universe`](#refresh_universe) | guarded | yes |
 | [`register_draft`](#register_draft) | guarded | yes |
+| [`reject_model_version`](#reject_model_version) | guarded | yes |
 | [`retire_strategy`](#retire_strategy) | guarded | yes |
+| [`retrain_models`](#retrain_models) | guarded | yes |
 | [`risk_snapshots`](#risk_snapshots) | read | no |
 | [`run_backtest`](#run_backtest) | job | no |
 | [`run_draft_backtest`](#run_draft_backtest) | job | no |
@@ -137,6 +143,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`shadow_strategy`](#shadow_strategy) | guarded | yes |
 | [`start_research`](#start_research) | job | no |
 | [`subscribe`](#subscribe) | guarded | yes |
+| [`swap_model_version`](#swap_model_version) | guarded | yes |
 | [`sync_connection`](#sync_connection) | guarded | yes |
 | [`tca_summary`](#tca_summary) | read | no |
 | [`trade_journal`](#trade_journal) | read | no |
@@ -165,6 +172,20 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `expression` | string | yes |  |  |
+
+### `check_model_swap`
+
+The swap check of a candidate against the live version: model
+book days, drawdown and return against the live model over the same
+days, each with value, limit and pass or fail. Read it before
+swap_model_version: an override skips exactly these checks.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `strategy_id` | string | yes |  |  |
+| `version` | integer | yes |  | the model version number |
 
 ### `get_api_health`
 
@@ -423,6 +444,17 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `portfolio_id` | string \| null | no | `null` |  |
+
+### `get_model_version_history`
+
+A strategy's append-only version log (baseline, candidate, swap,
+reject, supersede, fail), with actor, reason and swap check result.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `strategy_id` | string | yes |  |  |
 
 ### `get_my_risk_limits`
 
@@ -828,6 +860,30 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `strategy_class` | string \| null | no | `null` | only runs of this module:Class |
 | `limit` | integer | no | `50` | page size |
+| `offset` | integer | no | `0` | rows to skip |
+
+### `list_model_candidates`
+
+Every candidate model version running as a model book, across strategies.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `limit` | integer | no | `100` | page size |
+| `offset` | integer | no | `0` | rows to skip |
+
+### `list_model_versions`
+
+A strategy's model versions, oldest first: the live one, candidates
+running as model books beside it, and archived, rejected or failed fits.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `strategy_id` | string | yes |  |  |
+| `limit` | integer | no | `100` | page size |
 | `offset` | integer | no | `0` | rows to skip |
 
 ### `list_notifications`
@@ -1921,6 +1977,21 @@ Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes*
 | `draft_id` | string | yes |  |  |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
+### `reject_model_version`
+
+Drop a candidate version: its model book stops and it can never
+swap in. Needs a reason. Without confirm=true returns a preview and
+changes nothing.
+
+Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `strategy_id` | string | yes |  |  |
+| `version` | integer | yes |  | the model version number |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+| `reason` | string \| null | no | `null` | why (logged in the audit trail); required for demotions and overrides |
+
 ### `retire_strategy`
 
 Retire a strategy: it stops being ranked or evaluated.
@@ -1933,6 +2004,22 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 | `strategy_id` | string | yes |  |  |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 | `reason` | string \| null | no | `null` | why (logged in the audit trail); required for demotions and overrides |
+
+### `retrain_models`
+
+Queue a retrain. Each fit becomes a candidate version that runs as
+a model book; nothing trades until a swap. Without confirm=true
+returns a preview and queues nothing.
+
+Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+| `strategy_ids` | list[string] \| null | no | `null` | refit only these (default: every strategy that learns from data) |
+| `as_of` | date \| null | no | `null` | YYYY-MM-DD, last day of the training window |
+| `force` | boolean | no | `false` | refit even when a recent fit exists |
+| `tickers` | list[string] \| null | no | `null` | tickers to fit on when a strategy records no lab universe |
 
 ### `run_draft_lab`
 
@@ -2075,6 +2162,23 @@ Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes*
 | `mode` | "notify" \| "paper" | no | `"notify"` | notify: signals only; paper: simulated orders on one of your portfolios |
 | `portfolio_id` | string \| null | no | `null` | one of your portfolios (needed for paper) |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
+### `swap_model_version`
+
+Make a candidate version live, so the next tick trades it. Needs a
+passing swap check, or override=true with a reason of at least 20
+characters, and the change is audited. Without confirm=true returns
+the swap check as a preview and changes nothing.
+
+Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `strategy_id` | string | yes |  |  |
+| `version` | integer | yes |  | the model version number |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+| `reason` | string \| null | no | `null` | why (logged in the audit trail); required for demotions and overrides |
+| `override` | boolean | no | `false` | swap without a passing swap check; needs a reason of at least 20 characters |
 
 ### `sync_connection`
 
