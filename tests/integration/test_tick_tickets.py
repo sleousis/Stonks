@@ -314,3 +314,26 @@ def test_a_disabled_owner_holds_every_ticket(world):
     world.state.execute("UPDATE users SET status = 'disabled' WHERE id = ?", [world.bob.user_id])
     assert _submit(world, IN_WINDOW).sent == 0
     assert world.book.orders == {}
+
+
+def test_a_ticket_whose_order_could_not_be_looked_up_is_not_marked_sent(world):
+    # a crash after the pending row and before the send, then the startup
+    # lookup of that row fails: the ticket must not turn submitted unsent
+    settings = replace(modes.SETTINGS, live=LiveSettings(submit_in_window=True))
+    _tick(world, DAY1, settings)
+    [ticket] = list_tickets(world.state, portfolio_ids=[world.live])
+    world.state.execute(
+        "INSERT INTO orders (client_id, ticker, side, quantity, order_type, status, state,"
+        " created_at, updated_at, portfolio_id) VALUES (?, ?, ?, ?, 'market',"
+        " 'pending', 'pending', 'x', 'x', ?)",
+        [ticket.client_id, ticket.ticker, ticket.side, ticket.quantity, world.live],
+    )
+
+    def blind(account):
+        return _Blind(world.traders(account), ticket.client_id)
+
+    result = _submit(world, IN_WINDOW, traders=blind)
+    assert result.sent == 0 and result.portfolios[0].status == "skipped"
+    assert list_tickets(world.state, portfolio_ids=[world.live])[0].status == "approved"
+    # the next lookup works: the broker never saw it, so it is sent now
+    assert _submit(world, IN_WINDOW + timedelta(minutes=1)).sent == 1

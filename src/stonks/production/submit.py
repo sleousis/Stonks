@@ -146,7 +146,16 @@ def _submit_portfolio(
         log.warning("submit.reconcile_failed", error=str(exc))
         return PortfolioSubmit(portfolio_id, "error", reason=f"{type(exc).__name__}: {exc}")
     if startup.summary.failed_orders:
-        log.warning("submit.reconcile_partial", failed=len(startup.summary.failed_orders))
+        # An order that could not be looked up may be a crashed send (a
+        # pending row the broker never saw) or one it has: the window waits
+        # until the startup reconciliation is clean (StartupReconcile.ok).
+        failed_ids = list(startup.summary.failed_orders)
+        log.warning("submit.reconcile_partial", failed=len(failed_ids))
+        return PortfolioSubmit(
+            portfolio_id,
+            "skipped",
+            reason=f"{len(failed_ids)} order(s) could not be looked up at the broker",
+        )
 
     owner = state.sql("SELECT owner_id FROM portfolios WHERE id = ?", [portfolio_id])
     halts = active_halts(
