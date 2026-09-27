@@ -86,7 +86,7 @@ describe('OptionsPage', () => {
     }
     switch (path) {
       case '/api/options/underlyings':
-        return req.flush(underlyings);
+        return req.flush({ items: underlyings, total: underlyings.length, limit: 100, offset: 0 });
       case '/api/options/strategies':
         return req.flush(STRATEGIES);
       case '/api/options/structures':

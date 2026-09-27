@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 
 import { SILENT_HEADERS } from '../core/http/interceptors';
-import { unwrap } from './api-call';
+import { allItems, unwrap } from './api-call';
 import {
   getOptionChain,
   getOptionPayoff,
@@ -21,7 +21,7 @@ import type { OptionPayoffRequest, OptionsBacktestRequest } from './models';
 @Injectable({ providedIn: 'root' })
 export class OptionsService {
   underlyings() {
-    return unwrap(listOptionUnderlyings());
+    return allItems((page) => unwrap(listOptionUnderlyings({ query: page })));
   }
 
   /** One expiry of a stored chain; the last stored day on or before `asOf`. */

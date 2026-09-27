@@ -12666,6 +12666,37 @@
         "title": "Page[ModelVersionView]",
         "type": "object"
       },
+      "Page_OptionUnderlyingView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OptionUnderlyingView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[OptionUnderlyingView]",
+        "type": "object"
+      },
       "Page_OrderDraftView_": {
         "properties": {
           "items": {
@@ -37380,16 +37411,44 @@
       "get": {
         "description": "Underlyings with stored option chains, and the days they cover.",
         "operationId": "listOptionUnderlyings",
+        "parameters": [
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/OptionUnderlyingView"
-                  },
-                  "title": "Response Listoptionunderlyings",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_OptionUnderlyingView_"
                 }
               }
             },

@@ -43,7 +43,7 @@ def client(settings, seeded, fake_source):
 
 def test_underlyings_and_a_chain_with_greeks(client):
     assert client.get("/api/options/underlyings").status_code == 401
-    listed = client.get("/api/options/underlyings", headers=AUTH).json()
+    listed = client.get("/api/options/underlyings", headers=AUTH).json()["items"]
     assert [u["underlying"] for u in listed] == ["UP.US"]
     up = listed[0]
     assert up["first_day"] == "2026-01-02" and up["last_day"] == "2026-03-31"

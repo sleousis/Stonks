@@ -283,7 +283,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | POST | `/api/options/payoff` | Get Payoff | `data.read` | [OptionPayoffRequest](#optionpayoffrequest) | [OptionPayoffView](#optionpayoffview) |
 | GET | `/api/options/strategies` | List Strategies | `data.read` |  | list[[OptionStrategyView](#optionstrategyview)] |
 | GET | `/api/options/structures` | List Structures | `data.read` |  | list[[OptionStructureView](#optionstructureview)] |
-| GET | `/api/options/underlyings` | List Underlyings | `data.read` |  | list[[OptionUnderlyingView](#optionunderlyingview)] |
+| GET | `/api/options/underlyings` | List Underlyings | `data.read` |  | [Page_OptionUnderlyingView_](#page_optionunderlyingview_) |
 
 ## orders endpoints
 
@@ -3020,6 +3020,15 @@ An order to propose. The server prices it and checks it; a person approves it in
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[ModelVersionView](#modelversionview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_OptionUnderlyingView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[OptionUnderlyingView](#optionunderlyingview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |

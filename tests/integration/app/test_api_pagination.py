@@ -24,6 +24,8 @@ CATALOGS = {
     "/api/studio/templates",
     "/api/calendars/alert-kinds",
     "/api/screener/metrics",
+    "/api/options/strategies",
+    "/api/options/structures",
 }
 
 #: Record lists that were plain lists before AS-17 (a route with no id in

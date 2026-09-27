@@ -6815,6 +6815,28 @@ export type PageModelVersionView = {
 };
 
 /**
+ * Page[OptionUnderlyingView]
+ */
+export type PageOptionUnderlyingView = {
+    /**
+     * Items
+     */
+    items: Array<OptionUnderlyingView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[OrderDraftView]
  */
 export type PageOrderDraftView = {
@@ -19389,7 +19411,18 @@ export type ListOptionStructuresResponse = ListOptionStructuresResponses[keyof L
 export type ListOptionUnderlyingsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/options/underlyings';
 };
 
@@ -19420,11 +19453,9 @@ export type ListOptionUnderlyingsError = ListOptionUnderlyingsErrors[keyof ListO
 
 export type ListOptionUnderlyingsResponses = {
     /**
-     * Response Listoptionunderlyings
-     *
      * Successful Response
      */
-    200: Array<OptionUnderlyingView>;
+    200: PageOptionUnderlyingView;
 };
 
 export type ListOptionUnderlyingsResponse = ListOptionUnderlyingsResponses[keyof ListOptionUnderlyingsResponses];

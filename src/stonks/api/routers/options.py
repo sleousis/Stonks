@@ -9,7 +9,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Response
 
-from stonks.api.deps import OptionalPrincipalDep, PrincipalDep, ServicesDep, needs
+from stonks.api.deps import OptionalPrincipalDep, PageDep, PrincipalDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.api.routers._jobs_common import JOB_CREATED, accepted
 from stonks.app.jobs import Job
@@ -24,6 +24,7 @@ from stonks.app.options import (
     OptionStructureView,
     OptionUnderlyingView,
 )
+from stonks.app.pagination import Page, page_of
 from stonks.auth import Permission
 
 router = APIRouter(prefix="/api/options", tags=["options"], responses=PROBLEM_RESPONSES)
@@ -33,13 +34,13 @@ _Underlying = Annotated[str, Path(min_length=1, max_length=32, pattern=r"^[A-Za-
 
 @router.get(
     "/underlyings",
-    response_model=list[OptionUnderlyingView],
+    response_model=Page[OptionUnderlyingView],
     operation_id="listOptionUnderlyings",
     dependencies=needs(Permission.READ),
 )
-def list_underlyings(services: ServicesDep) -> list[OptionUnderlyingView]:
+def list_underlyings(services: ServicesDep, page: PageDep) -> Page[OptionUnderlyingView]:
     """Underlyings with stored option chains, and the days they cover."""
-    return services.options.underlyings()
+    return page_of(services.options.underlyings(), page)
 
 
 @router.get(
