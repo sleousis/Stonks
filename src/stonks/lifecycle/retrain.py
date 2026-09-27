@@ -12,7 +12,11 @@ version, and a swap goes through governance later.
 - Fits fan out through the one lab pool (``lab.parallel.run_tasks``), on a
   read-only lake snapshot when more than one worker runs.
 - The universe and interval come from the lab run's manifest in the
-  artifact (``manifest.dataset``), else from the caller's universe.
+  artifact (``manifest.dataset``), else from the caller's universe. A lab
+  run on a stored universe (``universe_id``) is refit on that universe's
+  members over the new window, not on the tickers frozen in the manifest.
+- A version's ``train_end`` is the last day the fit saw: the day before
+  ``as_of``.
 - A fit that raises is kept as a ``failed`` version with its error; the
   other strategies still refit.
 - A strategy whose newest fit ended within ``min_days_between_fits`` days
@@ -112,6 +116,12 @@ class _FitTask:
     end: date
     out_dir: str
     version: int
+    universe_id: str | None = None
+
+    @property
+    def train_end(self) -> date:
+        """The fit's last day: the day before ``end`` (``as_of``)."""
+        return self.end - timedelta(days=1)
 
 
 def retrain_models(
@@ -145,7 +155,17 @@ def retrain_models(
             outcomes.append(RetrainOutcome(handle.id, "skipped", detail=skip))
             continue
         version, _rel, folder = versions.next_version(handle.id)
-        universe_, interval = _data_of(handle, universe)
+        universe_, interval, universe_id = _data_of(handle, universe)
+        if universe_id is not None:
+            members = _members(lake, universe_id, start, as_of)
+            if members is None:
+                outcomes.append(
+                    RetrainOutcome(
+                        handle.id, "skipped", detail=f"stored universe {universe_id!r} is unknown"
+                    )
+                )
+                continue
+            universe_ = members
         if not universe_:
             outcomes.append(RetrainOutcome(handle.id, "skipped", detail="no universe to fit on"))
             continue
@@ -160,6 +180,7 @@ def retrain_models(
                 end=as_of,
                 out_dir=str(folder),
                 version=version,
+                universe_id=universe_id,
             )
         )
     if tasks:
@@ -218,19 +239,34 @@ def _skip_reason(
     if force:
         return None
     ends = [v.train_end for v in versions.list(handle.id) if v.status != "failed" and v.train_end]
-    if ends and (as_of - max(ends)).days < settings.min_days_between_fits:
+    # train_end is the day before the fit's as_of: count days between fits
+    if ends and (as_of - max(ends)).days - 1 < settings.min_days_between_fits:
         return f"fitted up to {max(ends).isoformat()} already"
     return None
 
 
-def _data_of(handle: StrategyHandle, fallback: Sequence[str]) -> tuple[list[str], str]:
-    """The lab run's universe and interval from the artifact manifest, else
-    ``fallback`` at the daily interval."""
+def _data_of(handle: StrategyHandle, fallback: Sequence[str]) -> tuple[list[str], str, str | None]:
+    """The lab run's universe, interval and stored universe id from the
+    artifact manifest, else ``fallback`` at the daily interval."""
     meta = _read_json(handle.artifact_path / "meta.json")
     dataset = (meta.get("manifest") or {}).get("dataset") or {}
     universe = [str(t) for t in dataset.get("universe") or []]
     interval = str(dataset.get("interval") or Interval.DAY_1.code)
-    return (universe or list(fallback)), interval
+    raw_id = dataset.get("universe_id")
+    universe_id = raw_id if isinstance(raw_id, str) and raw_id else None
+    return (universe or list(fallback)), interval, universe_id
+
+
+def _members(lake: DuckDBLake, universe_id: str, start: date, end: date) -> list[str] | None:
+    """Members of the stored universe on any day of ``[start, end]`` (P14:
+    names that left or died inside the window stay in), or ``None`` when
+    the universe is unknown."""
+    from stonks.lab.universe import resolve_window
+
+    try:
+        return resolve_window(lake, universe_id, start, end)
+    except KeyError:
+        return None
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -297,7 +333,8 @@ def _fit_one(base: LabDataset, task: _FitTask) -> dict[str, Any]:
             interval=Interval.parse(task.interval),
             start=task.start,
             end=task.end,
-            train_end=task.end - timedelta(days=1),
+            train_end=task.train_end,
+            universe_id=task.universe_id,
             reference_tickers=(),
         ).with_references(strategy_data_tickers(strategy))
         strategy.fit(dataset)
@@ -309,8 +346,9 @@ def _fit_one(base: LabDataset, task: _FitTask) -> dict[str, Any]:
             params=dict(getattr(strategy, "params", task.params)),
             meta={
                 "model_version": task.version,
-                "train_window": [task.start.isoformat(), task.end.isoformat()],
+                "train_window": [task.start.isoformat(), task.train_end.isoformat()],
                 "universe": list(task.universe),
+                "universe_id": task.universe_id,
                 "interval": task.interval,
             },
         ).save()
@@ -343,7 +381,7 @@ def _record(
             task.version,
             rel,
             train_start=task.start,
-            train_end=task.end,
+            train_end=task.train_end,
             fit=result.get("fit") or {},
             actor=actor,
         )
@@ -357,7 +395,7 @@ def _record(
             task.version,
             rel,
             train_start=task.start,
-            train_end=task.end,
+            train_end=task.train_end,
             error=detail,
             actor=actor,
         )
@@ -369,5 +407,5 @@ def _record(
         version=task.version,
         detail=detail,
         train_start=task.start,
-        train_end=task.end,
+        train_end=task.train_end,
     )
