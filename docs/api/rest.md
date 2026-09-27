@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [model-versions](#model-versions-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [reconcile](#reconcile-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
+Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [model-versions](#model-versions-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [options](#options-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [reconcile](#reconcile-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
 
 ## alerts endpoints
 
@@ -267,6 +267,18 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | PUT | `/api/onboarding` | Update Onboarding | `data.read` | [OnboardingUpdate](#onboardingupdate) | [OnboardingView](#onboardingview) |
 | PUT | `/api/onboarding/steps/{step}` | Update Onboarding Step | `data.read` | [StepUpdate](#stepupdate) | [OnboardingView](#onboardingview) |
 | GET | `/api/onboarding/system` | Get System Checklist | `operations.run` |  | [SystemChecklistView](#systemchecklistview) |
+
+## options endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| POST | `/api/options/backtests` | Start Backtest | `lab.run` | [OptionsBacktestRequest](#optionsbacktestrequest) | [Job](#job) |
+| GET | `/api/options/backtests/{job_id}/result` | Get Backtest Result | `data.read` |  | [OptionsBacktestView](#optionsbacktestview) |
+| GET | `/api/options/chains/{underlying}` | Get Chain | `data.read` |  | [OptionChainView](#optionchainview) |
+| POST | `/api/options/payoff` | Get Payoff | `data.read` | [OptionPayoffRequest](#optionpayoffrequest) | [OptionPayoffView](#optionpayoffview) |
+| GET | `/api/options/strategies` | List Strategies | `data.read` |  | list[[OptionStrategyView](#optionstrategyview)] |
+| GET | `/api/options/structures` | List Structures | `data.read` |  | list[[OptionStructureView](#optionstructureview)] |
+| GET | `/api/options/underlyings` | List Underlyings | `data.read` |  | list[[OptionUnderlyingView](#optionunderlyingview)] |
 
 ## orders endpoints
 
@@ -1265,6 +1277,13 @@ What an ensure did. ``run_id`` is the ``ingest_runs`` row (``None`` when nothing
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `timestamp` | date-time | yes |  |
+| `value` | number | yes |  |
+
+### EquityPointView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `date` | date | yes |  |
 | `value` | number | yes |  |
 
 ### EventAlertKindView
@@ -2481,6 +2500,28 @@ Keep a ticker when ``min <= value <= max``. A ticker with no value for the metri
 | `stance` | "agree" \| "disagree" \| "no_view" \| "not_applicable" \| "error" | yes |  |
 | `strategy_id` | string | yes |  |
 
+### OptionChainRow
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `call` | [OptionQuoteView](#optionquoteview) \| null | no |  |
+| `put` | [OptionQuoteView](#optionquoteview) \| null | no |  |
+| `strike` | number | yes |  |
+
+### OptionChainView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `days_to_expiry` | integer \| null | no |  |
+| `expiries` | list[date] | yes |  |
+| `expiry` | date \| null | no |  |
+| `models` | list[string] | yes |  |
+| `rows` | list[[OptionChainRow](#optionchainrow)] | yes |  |
+| `spot` | number \| null | no |  |
+| `synthetic` | boolean | yes |  |
+| `underlying` | string | yes |  |
+
 ### OptionGreekLimitsSettings
 
 | Field | Type | Required | Description |
@@ -2506,6 +2547,115 @@ Keep a ticker when ``min <= value <= max``. A ticker with no value for the metri
 |-------|------|----------|-------------|
 | `max_loss_per_group` | number \| null | no |  |
 | `max_loss_total` | number \| null | no |  |
+
+### OptionPayoffRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date \| null | no |  |
+| `delta` | number \| null | no |  |
+| `dte` | integer | no |  |
+| `long_delta` | number \| null | no |  |
+| `short_delta` | number \| null | no |  |
+| `structure` | string | yes |  |
+| `underlying` | string | yes |  |
+| `wing_delta` | number \| null | no |  |
+
+### OptionPayoffView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `breakevens` | list[number] | yes |  |
+| `cost` | number | yes |  |
+| `legs` | list[[PayoffLegView](#payofflegview)] | yes |  |
+| `max_gain` | number \| null | no |  |
+| `max_loss` | number \| null | no |  |
+| `points` | list[[PayoffPointView](#payoffpointview)] | yes |  |
+| `spot` | number | yes |  |
+| `structure` | string | yes |  |
+| `synthetic` | boolean | yes |  |
+| `underlying` | string | yes |  |
+
+### OptionQuoteView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `ask` | number \| null | no |  |
+| `bid` | number \| null | no |  |
+| `contract_id` | string | yes |  |
+| `delta` | number \| null | no |  |
+| `gamma` | number \| null | no |  |
+| `iv` | number \| null | no |  |
+| `mark` | number \| null | no |  |
+| `open_interest` | number \| null | no |  |
+| `theta` | number \| null | no |  |
+| `vega` | number \| null | no |  |
+| `volume` | number \| null | no |  |
+
+### OptionStrategyView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `hypothesis` | string | yes |  |
+| `id` | string | yes |  |
+| `parameters` | list[[ParameterInfo](#parameterinfo)] | yes |  |
+| `structures` | list[string] | yes |  |
+
+### OptionStructureView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `holds_shares` | boolean | yes |  |
+| `name` | string | yes |  |
+| `params` | list[string] | yes |  |
+
+### OptionUnderlyingView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `contracts` | integer | yes |  |
+| `days` | integer | yes |  |
+| `first_day` | date | yes |  |
+| `last_day` | date | yes |  |
+| `sources` | list[string] | yes |  |
+| `synthetic` | boolean | yes |  |
+| `underlying` | string | yes |  |
+
+### OptionsBacktestRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cash` | number | no |  |
+| `end` | date | yes |  |
+| `params` | object | no |  |
+| `start` | date | yes |  |
+| `strategy` | string | yes |  |
+| `trials` | integer | no |  |
+| `underlyings` | list[string] | yes |  |
+| `validation` | boolean | no |  |
+
+### OptionsBacktestView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cagr` | number \| null | no |  |
+| `days` | integer | yes |  |
+| `end` | date | yes |  |
+| `equity` | list[[EquityPointView](#equitypointview)] | yes |  |
+| `fills` | integer | yes |  |
+| `final_return` | number \| null | no |  |
+| `max_drawdown` | number \| null | no |  |
+| `rejected` | integer | yes |  |
+| `rejection_reasons` | dict[str, integer] | yes |  |
+| `sharpe` | number \| null | no |  |
+| `sources` | list[string] | yes |  |
+| `start` | date | yes |  |
+| `strategy` | string | yes |  |
+| `synthetic` | boolean | yes |  |
+| `underlyings` | list[string] | yes |  |
+| `validation` | list[[SurvivalReportView](#survivalreportview)] | yes |  |
+| `verdict` | "passed" \| "failed" \| "not_run" | yes |  |
 
 ### OrderCancelRequest
 
@@ -3026,6 +3176,25 @@ The model book's result. Every figure is null without two days.
 | `reason` | string | yes |  |
 | `strategy_id` | string | yes |  |
 | `subscription_id` | string | yes |  |
+
+### PayoffLegView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `expiry` | date \| null | no |  |
+| `instrument` | string | yes |  |
+| `kind` | "option" \| "shares" | yes |  |
+| `price` | number | yes |  |
+| `quantity` | number | yes |  |
+| `right` | "call" \| "put" \| null | no |  |
+| `strike` | number \| null | no |  |
+
+### PayoffPointView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `profit` | number | yes |  |
+| `spot` | number | yes |  |
 
 ### PendingActionView
 

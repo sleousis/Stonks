@@ -2186,6 +2186,174 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "One expiry of a stored option chain with our implied vol and\nGreeks, calls and puts by strike. Theta is money per share per day,\nvega money per share per vol point.",
+      "input_schema": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "description": "YYYY-MM-DD",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "the last stored day on or before it; default latest",
+            "title": "As Of"
+          },
+          "expiry": {
+            "anyOf": [
+              {
+                "description": "YYYY-MM-DD",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "default: the expiry nearest 30 days out",
+            "title": "Expiry"
+          },
+          "underlying": {
+            "description": "instrument id, e.g. AAPL.US or BTC-USD.CC",
+            "title": "Underlying",
+            "type": "string"
+          }
+        },
+        "required": [
+          "underlying"
+        ],
+        "title": "get_option_chainArguments",
+        "type": "object"
+      },
+      "name": "get_option_chain",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "One unit of a structure picked from a stored chain, its legs and\nits profit at expiry over a range of underlying prices, with max\nloss, max gain (null: no bound) and breakevens.",
+      "input_schema": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "description": "YYYY-MM-DD",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "As Of"
+          },
+          "delta": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 1.0,
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "absolute target delta, e.g. 0.30",
+            "title": "Delta"
+          },
+          "dte": {
+            "default": 35,
+            "description": "target days to expiry",
+            "maximum": 400,
+            "minimum": 1,
+            "title": "Dte",
+            "type": "integer"
+          },
+          "long_delta": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 1.0,
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "absolute target delta, e.g. 0.30",
+            "title": "Long Delta"
+          },
+          "short_delta": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 1.0,
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "absolute target delta, e.g. 0.30",
+            "title": "Short Delta"
+          },
+          "structure": {
+            "description": "a name from list_option_structures",
+            "title": "Structure",
+            "type": "string"
+          },
+          "underlying": {
+            "description": "instrument id, e.g. AAPL.US or BTC-USD.CC",
+            "title": "Underlying",
+            "type": "string"
+          },
+          "wing_delta": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 1.0,
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "absolute target delta, e.g. 0.30",
+            "title": "Wing Delta"
+          }
+        },
+        "required": [
+          "underlying",
+          "structure"
+        ],
+        "title": "get_option_payoffArguments",
+        "type": "object"
+      },
+      "name": "get_option_payoff",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "One of your orders in full: decision price and context, arrival\nand fill prices, the shortfall split and the notes.",
       "input_schema": {
         "properties": {
@@ -3775,6 +3943,54 @@
         "type": "object"
       },
       "name": "list_notifications",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "The options strategy catalog: each strategy's hypothesis, the\nstructures it opens and its parameters.",
+      "input_schema": {
+        "properties": {},
+        "title": "list_option_strategiesArguments",
+        "type": "object"
+      },
+      "name": "list_option_strategies",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Structures a payoff can be drawn for, with the parameters each\nreads (dte, delta, long_delta, short_delta, wing_delta).",
+      "input_schema": {
+        "properties": {},
+        "title": "list_option_structuresArguments",
+        "type": "object"
+      },
+      "name": "list_option_structures",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Underlyings with stored option chains: first and last day, days,\ncontracts and sources. synthetic=true means generated chains, fine\nfor trying the tools but never evidence.",
+      "input_schema": {
+        "properties": {},
+        "title": "list_option_underlyingsArguments",
+        "type": "object"
+      },
+      "name": "list_option_underlyings",
       "needs_confirm": false
     },
     {
@@ -6701,6 +6917,88 @@
       },
       "name": "run_lab",
       "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Queue an options backtest on the stored chains, with its\nvalidation checks and a verdict. Returns the job; use wait_for_job\nfor the result. Research only: nothing trades options.",
+      "input_schema": {
+        "properties": {
+          "cash": {
+            "default": 100000.0,
+            "exclusiveMinimum": 0,
+            "title": "Cash",
+            "type": "number"
+          },
+          "end": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "strategy parameters; defaults otherwise",
+            "title": "Params"
+          },
+          "start": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "strategy": {
+            "description": "an id from list_option_strategies",
+            "title": "Strategy",
+            "type": "string"
+          },
+          "trials": {
+            "default": 1,
+            "description": "trials run so far, for the deflated Sharpe",
+            "minimum": 1,
+            "title": "Trials",
+            "type": "integer"
+          },
+          "underlyings": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Underlyings",
+            "type": "array"
+          },
+          "validation": {
+            "default": true,
+            "description": "also run out of sample, deflated Sharpe and stress checks",
+            "title": "Validation",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "strategy",
+          "underlyings",
+          "start",
+          "end"
+        ],
+        "title": "run_options_backtestArguments",
+        "type": "object"
+      },
+      "name": "run_options_backtest",
+      "needs_confirm": false
     },
     {
       "annotations": {

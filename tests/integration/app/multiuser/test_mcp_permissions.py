@@ -457,6 +457,22 @@ CASES: dict[str, Case] = {
         "/api/factors/tearsheets",
         lambda i: {"factor": "KMID", "universe": ["UP.US"]} | _WINDOW,
     ),
+    "run_options_backtest": _c(
+        "POST",
+        "/api/options/backtests",
+        lambda i: {"strategy": "covered_call", "underlyings": ["UP.US"]} | _WINDOW,
+    ),
+    "list_option_underlyings": _c("GET", "/api/options/underlyings"),
+    "get_option_chain": _c(
+        "GET", "/api/options/chains/{underlying}", lambda i: {"underlying": "UP.US"}
+    ),
+    "list_option_strategies": _c("GET", "/api/options/strategies"),
+    "list_option_structures": _c("GET", "/api/options/structures"),
+    "get_option_payoff": _c(
+        "POST",
+        "/api/options/payoff",
+        lambda i: {"underlying": "UP.US", "structure": "long_call"},
+    ),
     "list_factors": _c("GET", "/api/factors"),
     "get_factor": _c("GET", "/api/factors/{factor_id}", lambda i: {"factor_id": "KMID"}),
     "check_factor_expression": _c(

@@ -29,6 +29,7 @@ from stonks.app.market import MarketDataService
 from stonks.app.model_versions import ModelVersionService
 from stonks.app.notifications import NotificationsAppService
 from stonks.app.operations import OperationsService
+from stonks.app.options import OptionsService
 from stonks.app.order_drafts import OrderDraftService
 from stonks.app.orders import OrdersService
 from stonks.app.ownership import check_owner, owner_filter, owner_of
@@ -211,6 +212,7 @@ class Services:
     research: ResearchService
     telegram: TelegramService
     factors: FactorService
+    options: OptionsService
     calendars: CalendarService
     screener: ScreenerService
     _user_finder: UserStrategyFinder | None = field(default=None, repr=False)
@@ -298,6 +300,7 @@ class Services:
             ),
             telegram=TelegramService(context),
             factors=FactorService(context, runner),
+            options=OptionsService(context, runner),
             calendars=CalendarService(context, runner),
             screener=ScreenerService(context, universes),
         )

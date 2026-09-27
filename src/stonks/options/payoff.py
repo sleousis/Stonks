@@ -109,7 +109,8 @@ def expiry_payoff(legs: Sequence[PayoffLeg], *, spot: float, n_points: int = 81)
     values = [_profit(legs, s, cost) for s in kinks]
     lowest, highest = min(values), max(values)
     breakevens: list[float] = []
-    for (a, va), (b, vb) in zip(zip(kinks, values), zip(kinks[1:], values[1:]), strict=False):
+    for i in range(len(kinks) - 1):
+        a, b, va, vb = kinks[i], kinks[i + 1], values[i], values[i + 1]
         if va == 0.0 and a > 0:
             breakevens.append(a)
         elif va * vb < 0:

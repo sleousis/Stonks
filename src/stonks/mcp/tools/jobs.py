@@ -60,6 +60,7 @@ RESULT_ROUTES: dict[str, str] = {
     "universe_refresh": "/api/universes/refresh/{id}/result",
     "universe_ensure": "/api/universes/ensure/{id}/result",
     "model_retrain": "/api/model-versions/jobs/{id}/result",
+    "options_backtest": "/api/options/backtests/{id}/result",
 }
 
 
