@@ -414,7 +414,12 @@ def live_submit_action(ctx: RunContext) -> JobOutcome:
     try:
         if not tickets_recorded(state) or not open_ticket_count(state):
             return JobOutcome("skipped", {"reason": "no_open_tickets"})
-        result = submit_tickets(state, submit_broker_opener(ctx.settings, state))
+        result = submit_tickets(
+            state,
+            submit_broker_opener(ctx.settings, state),
+            risk=ctx.settings.production.risk,
+            live=ctx.settings.production.live,
+        )
     finally:
         state.close()
     detail = submit_detail(result)

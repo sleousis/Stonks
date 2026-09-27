@@ -17,7 +17,7 @@ import pytest
 import tests.integration.test_tick_modes as modes
 from stonks.connections.base import ProviderError
 from stonks.core.clock import FakeClock
-from stonks.production.halts import trip_halt
+from stonks.production.halts import clear_halt, list_halts, trip_halt
 from stonks.production.live.settings import LiveSettings
 from stonks.production.portfolio_runs import list_runs
 from stonks.production.submit import submit_tickets
@@ -193,8 +193,16 @@ def test_an_unknown_order_shuts_the_submit_window(world):
     assert result.sent == 0 and result.portfolios[0].status == "skipped"
     assert "unknown" in (result.portfolios[0].reason or "")
     assert world.book.orders == {}
-    # reconciliation resolves it (the broker never saw it), then the window opens
-    assert _submit(world, IN_WINDOW + timedelta(minutes=1)).sent == 1
+    # 19.14: the submit gate of 19.5 counts the lookup it could not make as
+    # drift, so it opens the portfolio's broker_drift halt of buys
+    [drift] = [h for h in list_halts(world.state) if h.kind == "broker_drift"]
+    assert drift.portfolio_id == world.live and drift.halt == "buys"
+    # reconciliation resolves it (the broker never saw it), but the halt
+    # holds the buy until a person clears it
+    held = _submit(world, IN_WINDOW + timedelta(minutes=1))
+    assert held.sent == 0 and held.portfolios[0].held == 1
+    clear_halt(world.state, drift.id, actor="user:bob", reason="looked at it")
+    assert _submit(world, IN_WINDOW + timedelta(minutes=2)).sent == 1
 
 
 def test_the_tick_waits_for_unknown_orders_before_deciding(world):
