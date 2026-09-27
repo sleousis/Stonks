@@ -120,6 +120,8 @@ READ_TOOLS = {
     "list_connections",
     "get_connection_accounts",
     "list_halts",
+    "list_reconcile_reports",
+    "get_reconcile_report",
     "list_statement_flags",
     "tca_summary",
     "trade_journal",

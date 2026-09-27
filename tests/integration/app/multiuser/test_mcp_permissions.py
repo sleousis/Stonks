@@ -349,6 +349,10 @@ CASES: dict[str, Case] = {
         lambda i: {"connection_id": i["connection"]},
     ),
     "list_halts": _c("GET", "/api/halts"),
+    "list_reconcile_reports": _c("GET", "/api/reconcile/reports"),
+    "get_reconcile_report": _c(
+        "GET", "/api/reconcile/reports/{report_id}", lambda i: {"report_id": "rec_nope"}
+    ),
     "tca_summary": _c("GET", "/api/tca/summary", lambda i: {"portfolio_id": i["portfolio"]}),
     "trade_journal": _c("GET", "/api/tca/journal", lambda i: {"portfolio_id": i["portfolio"]}),
     "order_tca": _c("GET", "/api/tca/orders/{client_id}", lambda i: {"client_id": "nope"}),
