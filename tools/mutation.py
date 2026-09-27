@@ -69,6 +69,11 @@ TARGETS: tuple[Target, ...] = (
     Target(
         "ledger_sync", "src/stonks/execution/reconcile.py", ("tests/integration/test_reconcile.py",)
     ),
+    Target(
+        "ibkr_orders",
+        "src/stonks/execution/brokers/ibkr/orders.py",
+        ("tests/unit/test_ibkr_orders.py",),
+    ),
 )
 
 
