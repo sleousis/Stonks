@@ -261,6 +261,10 @@ def _id_date(tick_id: str) -> str | None:
 
 def _row_to_view(row: Any, visible: set[str] | None) -> TickRunView:
     summary = row["summary_json"]
+    if summary is not None:
+        parsed = json.loads(summary)
+        parsed.pop("owner", None)  # the running row's host and process (BE-44)
+        summary = json.dumps(parsed) if parsed else None
     return TickRunView(
         id=row["id"],
         as_of=_as_of(row),

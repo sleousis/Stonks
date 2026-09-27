@@ -109,7 +109,7 @@ Each fire is one `scheduled_runs` row keyed by job and run key (session date, lo
 
 A failed run is not retried. It alerts; rerun it with `run-now`. A run interrupted by a crash is marked `failed` ("interrupted") at the next start. If the scheduler stops while an API job runs, the job keeps going in the API; check `GET /api/jobs/{id}` before rerunning.
 
-A tick killed mid-run (container stop, out of memory, reboot) leaves its `tick_runs` row at `running`, and the `stuck_ticks` check then holds the operational buy halt. The next start of the process that runs ticks (`stonks serve`, or the `local` scheduler) closes such rows as `error` ("interrupted"). The next health run then clears the halt. Run `stonks health` to clear it at once. A same-day rerun of the tick is safe.
+A tick killed mid-run (container stop, out of memory, reboot) leaves its `tick_runs` row at `running`, and the `stuck_ticks` check then holds the operational buy halt. The next start of the process that runs ticks (`stonks serve`, or the `local` scheduler) closes such rows as `error` ("interrupted"). Each running row names the host and process that run it, so a tick that is still running (a CLI tick, say) is left alone. A row from another host is closed once it is 12 hours old. The next health run then clears the halt. Run `stonks health` to clear it at once. A same-day rerun of the tick is safe.
 
 ### Dead-man checks
 

@@ -57,10 +57,13 @@ runs the default book only and writes the pre-accounts columns.
 from __future__ import annotations
 
 import json
+import os
+import socket
+import sys
 import uuid
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, Literal, get_args
 
 from stonks.accounts.book import BookSpec
@@ -379,8 +382,8 @@ def run_tick(
         _refuse_backdated(state, as_of, log, [b.portfolio_id for b in plan.books])
 
     state.execute(
-        "INSERT INTO tick_runs (id, started_at, status) VALUES (?, ?, 'running')",
-        [tick_id, started],
+        "INSERT INTO tick_runs (id, started_at, status, summary_json) VALUES (?, ?, 'running', ?)",
+        [tick_id, started, json.dumps({OWNER_KEY: tick_owner()})],
     )
 
     # Any failure past this point closes the tick as 'error' so the ledger
@@ -1336,19 +1339,85 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
 #: ``summary_json.error`` of a tick row closed by :func:`recover_interrupted_ticks`.
 INTERRUPTED_ERROR = "interrupted: the process running the tick stopped before it finished"
 
+#: ``summary_json`` key of a running tick: the host and process running it.
+OWNER_KEY = "owner"
+#: A running tick owned by another host is taken for dead after this long.
+FOREIGN_TICK_MAX_AGE = timedelta(hours=12)
+
+
+def tick_owner() -> dict[str, Any]:
+    """The host and process that run a tick (written on its running row)."""
+    return {"host": socket.gethostname(), "pid": os.getpid()}
+
+
+def _process_alive(pid: int) -> bool:
+    """Whether a process with ``pid`` runs on this host."""
+    if pid <= 0:
+        return False
+    if sys.platform == "win32":
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return False
+            return code.value == 259  # STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _owner_gone(summary: str | None, started_at: str, now: datetime) -> bool:
+    """A running row may be closed: it names no owner (written before
+    owners were recorded), its owner process on this host is gone, or its
+    owner is another host and the row is older than
+    :data:`FOREIGN_TICK_MAX_AGE` (BE-44)."""
+    try:
+        owner = json.loads(summary).get(OWNER_KEY) if summary else None
+    except (ValueError, AttributeError):
+        owner = None
+    if not isinstance(owner, dict):
+        return True
+    if owner.get("host") == socket.gethostname():
+        return not _process_alive(int(owner.get("pid") or 0))
+    try:
+        started = datetime.fromisoformat(started_at)
+    except ValueError:
+        return True
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=UTC)
+    return now - started > FOREIGN_TICK_MAX_AGE
+
 
 def recover_interrupted_ticks(state: SqliteState, *, now: datetime | None = None) -> list[str]:
-    """Close every ``tick_runs`` row still ``running`` as ``error`` (TO-06).
+    """Close every ``tick_runs`` row still ``running`` whose process is gone
+    as ``error`` (TO-06, BE-44).
 
-    Call only where no tick can be running: at the start of the process
-    that runs ticks (the API, whose tick jobs never outlive it, or the
-    ``local`` scheduler). A killed tick committed nothing past its last
-    transaction, so a same-day rerun repeats it safely (idempotent client
-    ids). Without this the stuck-tick health check fails for ever and the
-    operational halt blocks every buy. Returns the closed ids."""
-    at = (now or datetime.now(UTC)).isoformat(timespec="seconds")
-    rows = state.sql("SELECT id FROM tick_runs WHERE status = 'running' ORDER BY started_at")
-    ids = [r["id"] for r in rows]
+    Call at the start of the process that runs ticks (the API, whose tick
+    jobs never outlive it, or the ``local`` scheduler). A running row names
+    the host and process that run it: a row of a live process (a CLI tick
+    running right now) is left alone, and so is a young row of another
+    host. A killed tick committed nothing past its last transaction, so a
+    same-day rerun repeats it safely (idempotent client ids). Without this
+    the stuck-tick health check fails for ever and the operational halt
+    blocks every buy. Returns the closed ids."""
+    clock = now or datetime.now(UTC)
+    at = clock.isoformat(timespec="seconds")
+    rows = state.sql(
+        "SELECT id, started_at, summary_json FROM tick_runs WHERE status = 'running'"
+        " ORDER BY started_at"
+    )
+    ids = [r["id"] for r in rows if _owner_gone(r["summary_json"], r["started_at"], clock)]
     if not ids:
         return []
     summary = json.dumps({"error": INTERRUPTED_ERROR, "error_type": "Interrupted"})
