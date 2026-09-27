@@ -14,7 +14,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-app = typer.Typer(help="Event calendars and news (roadmap 20.7)", no_args_is_help=True)
+app = typer.Typer(help="Event calendars and news", no_args_is_help=True)
 
 _USER = typer.Option(None, "--user", help="act as this user (email or id); default: the owner")
 _SCOPE = typer.Option("holdings", "--scope", help="holdings | watchlists | tickers | all")
