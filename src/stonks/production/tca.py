@@ -64,7 +64,7 @@ _BPS = 10_000.0
 #: book); ``exit_no_pick``: the owner of the holdings exited with no pick;
 #: ``risk_rule``: a risk rule created it (e.g. a maximum holding time);
 #: ``manual``: a person placed it.
-DecisionTrigger = Literal["signal", "exit_no_pick", "risk_rule", "manual"]
+DecisionTrigger = Literal["signal", "exit_no_pick", "risk_rule", "manual", "stop"]
 
 #: How :func:`summarize` groups orders.
 GroupBy = Literal["all", "strategy", "ticker", "portfolio", "day", "week", "month"]

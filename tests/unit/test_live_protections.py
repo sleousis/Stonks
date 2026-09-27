@@ -157,3 +157,40 @@ def test_closed_trades_at_average_cost_long_and_short():
         (4, pytest.approx(5.0), False),
     ]
     assert out[0].loss and not out[1].loss
+
+
+# ---- 19.10: real broker stops replace "any losing exit" ------------------------------
+
+
+def test_with_protective_stops_on_only_real_stop_outs_count():
+    orders = [strat(buy("A.US", 1.0))]
+    stops_on = {"enabled": True}
+    loss = [trade("A.US", 1, -5.0)]
+    ctx = ctx_with(loss, stop_cooldown={"cooldown_days": 5}, protective_stops=stops_on)
+    assert rule("stop_cooldown").apply(orders, ctx)[0] == orders
+    stopped = [trade("A.US", 1, -5.0, stop=True)]
+    ctx = ctx_with(stopped, stop_cooldown={"cooldown_days": 5}, protective_stops=stops_on)
+    assert rule("stop_cooldown").apply(orders, ctx)[0] == []
+    guard = ctx_with(loss * 3, stop_guard={"max_stops": 2}, protective_stops=stops_on)
+    assert rule("stop_guard").apply(orders, guard)[0] == orders
+
+
+def test_count_losses_true_keeps_counting_losses_with_stops_on():
+    orders = [strat(buy("A.US", 1.0))]
+    ctx = ctx_with(
+        [trade("A.US", 1, -5.0)],
+        stop_cooldown={"cooldown_days": 5, "count_losses": True},
+        protective_stops={"enabled": True},
+    )
+    assert rule("stop_cooldown").apply(orders, ctx)[0] == []
+
+
+def test_count_losses_merges_towards_counting():
+    from stonks.production.rules.settings import RuleSettings, tighter_rule_settings
+
+    base = RuleSettings.model_validate({"stop_guard": {"max_stops": 2, "count_losses": False}})
+    auto = tighter_rule_settings(base, {"stop_guard": {"count_losses": None}})
+    assert auto.stop_guard.count_losses is None
+    always = tighter_rule_settings(auto, {"stop_guard": {"count_losses": True}})
+    assert always.stop_guard.count_losses is True
+    assert tighter_rule_settings(always, {"stop_guard": {"count_losses": False}}) == always
