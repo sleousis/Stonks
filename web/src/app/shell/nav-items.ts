@@ -34,6 +34,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { path: '/charts', label: 'Charts', key: 'z', group: 'Main', keywords: ['price'] },
   { path: '/watchlists', label: 'Watchlists', key: 'x', group: 'Main', keywords: ['tickers'] },
   {
+    path: '/calendar',
+    label: 'Calendar',
+    group: 'Main',
+    keywords: ['earnings', 'dividends', 'economic', 'news', 'sentiment'],
+  },
+  {
     path: '/insights',
     label: 'Insights',
     key: 'e',
