@@ -69,6 +69,10 @@ class Order:
     #: Allow a fill outside regular trading hours. Live adapters refuse
     #: ``True`` in Phase 19.
     outside_rth: bool = False
+    #: One-cancels-other group at a live broker (roadmap 19.10): a protective
+    #: stop and the exits of the same position share one, so a fill of one
+    #: shrinks the others and the position is never sold twice.
+    oca_group: str | None = None
 
     def __post_init__(self) -> None:
         if self.quantity <= 0:

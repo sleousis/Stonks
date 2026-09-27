@@ -353,3 +353,10 @@ def test_from_trade_without_fills():
     order = Order(orderId=1, action="BUY", totalQuantity=2, orderRef="")
     t = from_trade(Trade(AAPL, order, OrderStatus(orderId=1, status="Submitted", permId=4), [], []))
     assert (t.filled, t.reason, t.tif, t.order_ref, t.perm_id) == (0.0, None, None, "", 4)
+
+
+def test_to_order_carries_the_oca_group():
+    o = to_order(_req(oca_group="stk-oca-1", oca_type=2))
+    assert (o.ocaGroup, o.ocaType) == ("stk-oca-1", 2)
+    plain = to_order(_req())
+    assert plain.ocaGroup == ""

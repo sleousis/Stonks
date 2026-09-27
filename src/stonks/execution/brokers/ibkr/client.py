@@ -95,6 +95,10 @@ class IbOrderRequest:
     aux_price: float | None = None
     outside_rth: bool = False
     transmit: bool = True
+    #: One-cancels-other group (``ocaGroup``). ``oca_type`` 2: a fill of one
+    #: order reduces the others by the same quantity, with overfill blocked.
+    oca_group: str | None = None
+    oca_type: int | None = None
 
 
 @dataclass(frozen=True)

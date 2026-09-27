@@ -366,6 +366,9 @@ def to_order(req: IbOrderRequest) -> IbAsyncOrder:
         order.lmtPrice = req.limit_price
     if req.aux_price is not None:
         order.auxPrice = req.aux_price
+    if req.oca_group:
+        order.ocaGroup = req.oca_group
+        order.ocaType = req.oca_type or 2
     return order
 
 
