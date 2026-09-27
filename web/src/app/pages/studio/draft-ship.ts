@@ -83,7 +83,7 @@ export class DraftShip {
     const ok = await this.confirm.confirm({
       title: `Start paper trading ${d.name}?`,
       message:
-        'The saved rules become a registered strategy that trades on paper. It decides on every ' +
+        'The saved rules become a strategy that trades on paper. It decides on every ' +
         'run but places no real orders until you go live. Later edits to the draft do not change it.',
       confirmLabel: LIFECYCLE.paper.label,
     });

@@ -193,8 +193,8 @@ export class DraftPage {
     const err = this.validation.error();
     if (!err) return null;
     return err instanceof ApiError && err.isAuth
-      ? 'Enter the API token in Settings to check the rules against the API.'
-      : 'Could not reach the API to check the rules; local checks still apply.';
+      ? 'Sign in again to check the rules on the server. The checks in this page still run.'
+      : 'Could not reach the server to check the rules. The checks in this page still run.';
   });
 
   protected readonly smoke = signal<DraftValidation | null>(null);
@@ -253,8 +253,23 @@ export class DraftPage {
   }
 
   // ---- saving ----------------------------------------------------------------
-  /** Saves pending edits. Resolves true when nothing is left unsaved. */
-  async save(): Promise<boolean> {
+  /** The save request in flight, shared by Save, `ensureSaved` and `check()`. */
+  private inflight: Promise<boolean> | null = null;
+
+  /**
+   * Saves pending edits. Resolves true when what was sent is saved. Callers
+   * that arrive while a save runs share it instead of sending a second PATCH.
+   */
+  save(): Promise<boolean> {
+    if (this.inflight) return this.inflight;
+    const run = this.saveOnce().finally(() => {
+      if (this.inflight === run) this.inflight = null;
+    });
+    this.inflight = run;
+    return run;
+  }
+
+  private async saveOnce(): Promise<boolean> {
     const d = this.draft();
     if (!d) return false;
     if (!this.dirty()) return true;
@@ -263,22 +278,23 @@ export class DraftPage {
       this.toasts.error(this.paramsError() ?? '', 'Cannot save');
       return false;
     }
+    // Snapshot what is sent: edits typed during the request stay unsaved.
+    const sourceSent = this.source();
+    const paramsSent = this.paramsText();
+    const specSent = JSON.stringify(this.spec());
     this.saving.set(true);
     try {
       const body =
         d.kind === 'code'
-          ? {
-              source_code: this.source(),
-              spec: JSON.parse(this.paramsText()) as Record<string, unknown>,
-            }
-          : { spec: this.spec() as Record<string, unknown> };
+          ? { source_code: sourceSent, spec: JSON.parse(paramsSent) as Record<string, unknown> }
+          : { spec: JSON.parse(specSent) as Record<string, unknown> };
       const next = await this.studio.update(d.id, body);
       this.draft.set(next);
       if (d.kind === 'code') {
-        this.savedSource.set(next.source_code ?? '');
-        this.savedParams.set(this.paramsText());
+        this.savedSource.set(sourceSent);
+        this.savedParams.set(paramsSent);
       } else {
-        this.savedJson.set(JSON.stringify(this.spec()));
+        this.savedJson.set(specSent);
       }
       this.toasts.success(`Saved ${next.name}.`);
       return true;

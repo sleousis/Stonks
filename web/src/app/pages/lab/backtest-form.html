@@ -87,62 +87,13 @@
           <span class="hint" id="bt-rebalance-hint">Bars between rebalances.</span>
         }
       </div>
-      <div class="field span-2">
-        <label for="bt-cost">Cost model</label>
-        <select
-          id="bt-cost"
-          class="input"
-          aria-describedby="bt-cost-hint"
-          (change)="setCost($any($event.target).value)"
-        >
-          <option value="configured" [selected]="form().cost === 'configured'">
-            Default costs
-          </option>
-          @for (m of costModels(); track m.name) {
-            <option [value]="m.name" [selected]="form().cost === m.name">
-              Preset: {{ m.name }}
-            </option>
-          }
-          <option value="flat" [selected]="form().cost === 'flat'">Flat slippage and fee</option>
-        </select>
-        <span class="hint" id="bt-cost-hint">{{ costHint() }}</span>
-      </div>
-      @if (form().cost === 'flat') {
-        <div class="field">
-          <label for="bt-slippage">Slippage (bps)</label>
-          <input
-            id="bt-slippage"
-            class="input num"
-            type="number"
-            inputmode="decimal"
-            min="0"
-            step="any"
-            [value]="form().slippageBps ?? ''"
-            [attr.aria-invalid]="!!errors()['slippageBps']"
-            (input)="setNumber('slippageBps', $any($event.target).value)"
-          />
-          @if (errors()['slippageBps']; as e) {
-            <span class="error">{{ e }}</span>
-          }
-        </div>
-        <div class="field">
-          <label for="bt-fee">Fee per trade</label>
-          <input
-            id="bt-fee"
-            class="input num"
-            type="number"
-            inputmode="decimal"
-            min="0"
-            step="any"
-            [value]="form().feePerTrade ?? ''"
-            [attr.aria-invalid]="!!errors()['feePerTrade']"
-            (input)="setNumber('feePerTrade', $any($event.target).value)"
-          />
-          @if (errors()['feePerTrade']; as e) {
-            <span class="error">{{ e }}</span>
-          }
-        </div>
-      }
+      <app-cost-field
+        idPrefix="bt"
+        [value]="form()"
+        [costModels]="costModels()"
+        [errors]="errors()"
+        (patch)="patch($event)"
+      />
     </div>
   </fieldset>
 

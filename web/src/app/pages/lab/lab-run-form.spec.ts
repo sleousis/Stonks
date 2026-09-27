@@ -156,6 +156,75 @@ describe('LabRunFormView', () => {
       expect(text).not.toContain(jargon);
   });
 
+  describe('the Advanced fold (UX-30)', () => {
+    const advanced = () => el.querySelector<HTMLDetailsElement>('details.advanced')!;
+
+    it('seed, embargo and objective sit in a closed details, an error opens it', async () => {
+      await create();
+      expect(advanced().open).toBe(false);
+      for (const id of ['#lr-seed', '#lr-embargo', '#lr-objective', '#lr-budget', '#lr-tuner'])
+        expect(advanced().querySelector(id)).not.toBeNull();
+      // The trader's own choices stay in view.
+      for (const id of ['#lr-tickers', '#lr-hypothesis', '#lr-register', 'input[name="lr-suite"]'])
+        expect(advanced().querySelector(id)).toBeNull();
+
+      fillBasics();
+      type('#lr-embargo', '-3');
+      submit();
+      expect(emitted).toEqual([]);
+      expect(advanced().open).toBe(true);
+      expect(advanced().querySelector('summary')?.textContent).toContain('1 to fix');
+    });
+
+    it('stays closed when only a visible field is wrong', async () => {
+      await create();
+      submit();
+      expect(emitted).toEqual([]);
+      expect(advanced().open).toBe(false);
+    });
+  });
+
+  describe('paper trading choice', () => {
+    it('says it in trader words and picks the go-live suite', async () => {
+      await create();
+      const label = el.querySelector('#lr-register')!.closest('label')!;
+      expect(label.textContent).toContain('Start paper trading if it passes');
+      el.querySelector<HTMLInputElement>('#lr-register')!.click();
+      fixture.detectChanges();
+      fillBasics();
+      type('#lr-hypothesis', 'Slow money chases winners.');
+      submit();
+      expect(emitted[0]).toMatchObject({ preset: 'promotion', register_if_passes: true });
+    });
+
+    it('starts paper trading whatever the verdict only from Advanced', async () => {
+      await create();
+      el.querySelector<HTMLInputElement>('#lr-register-always')!.click();
+      fixture.detectChanges();
+      expect(el.querySelector<HTMLInputElement>('#lr-register')!.checked).toBe(true);
+      fillBasics();
+      type('#lr-hypothesis', 'x');
+      submit();
+      expect(emitted[0].register_strategy).toBe(true);
+      expect(emitted[0].register_if_passes).toBeUndefined();
+    });
+  });
+
+  it('starts from a prefill: a re-run or ?preset=promotion (UX-22, UX-28)', async () => {
+    await create();
+    fixture.componentRef.setInput('prefill', {
+      classPath: MOMENTUM.class_path,
+      tickers: 'NVDA.US',
+      suite: 'promotion',
+    });
+    fixture.detectChanges();
+    expect(
+      el.querySelector<HTMLInputElement>('input[name="lr-suite"][value="promotion"]')!.checked,
+    ).toBe(true);
+    submit();
+    expect(emitted[0]).toMatchObject({ universe: ['NVDA.US'], preset: 'promotion' });
+  });
+
   it('shows a note instead of Start to someone without lab access', async () => {
     await create({ ...TRADER, role: 'viewer', scopes: ['read'] });
     fillBasics();

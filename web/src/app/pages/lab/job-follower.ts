@@ -28,6 +28,8 @@ export class JobFollower<T> {
     this.handle.set(handle);
     this.result.set(null);
     this.error.set(null);
+    // A result still loading for the previous job is not this one's.
+    this.loading.set(false);
     const last = await handle.finished;
     if (this.jobId() !== jobId) return;
     if (last?.status === 'succeeded') await this.loadResult(jobId);
@@ -48,7 +50,8 @@ export class JobFollower<T> {
     } catch (err) {
       if (this.jobId() === jobId) this.error.set(err);
     } finally {
-      this.loading.set(false);
+      // A stale load never clears the spinner of the job followed since (UX-62).
+      if (this.jobId() === jobId) this.loading.set(false);
     }
   }
 }

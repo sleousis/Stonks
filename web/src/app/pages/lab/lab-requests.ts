@@ -1,5 +1,6 @@
 import type {
   BacktestRequest,
+  CostModelPreset,
   LabRunRequest,
   McptOptions,
   StrategyClassInfo,
@@ -43,11 +44,15 @@ export interface BenchmarkForm {
   benchmarkTicker: string;
 }
 
-export interface BacktestForm extends WindowForm, BenchmarkForm {
-  params: ParamValues;
+/** The cost field the Lab backtest and the Studio share (`cost-field.ts`). */
+export interface CostForm {
   cost: CostChoice;
   slippageBps: number | null;
   feePerTrade: number | null;
+}
+
+export interface BacktestForm extends WindowForm, BenchmarkForm, CostForm {
+  params: ParamValues;
   initialCash: number | null;
   rebalanceEveryBars: number | null;
 }
@@ -126,9 +131,9 @@ export const SUITES: readonly SuiteInfo[] = [
   },
   {
     id: 'promotion',
-    label: 'Promotion',
+    label: 'Go-live',
     description:
-      'Everything a strategy must survive before it may trade, including overfitting, Monte Carlo, other tickers, the benchmark and a 200-shuffle permutation test. Slow.',
+      'Everything the go-live check asks a strategy to pass, including overfitting, Monte Carlo, other tickers, the benchmark and a 200-shuffle permutation test. Slow.',
     tests: [
       'oos',
       'walk_forward',
@@ -294,11 +299,38 @@ export function backtestErrors(f: BacktestForm, cls: StrategyClassInfo | null): 
   if (!isNum(f.initialCash) || f.initialCash <= 0) e['initialCash'] = 'Enter a positive amount.';
   if (!isInt(f.rebalanceEveryBars) || f.rebalanceEveryBars < 1)
     e['rebalanceEveryBars'] = 'Enter a whole number of at least 1.';
+  return { ...e, ...costErrors(f) };
+}
+
+/** `slippageBps` / `feePerTrade` messages when flat costs are picked. */
+export function costErrors(f: CostForm): FormErrors {
+  const e: FormErrors = {};
   if (f.cost === 'flat') {
     if (!isNum(f.slippageBps) || f.slippageBps < 0) e['slippageBps'] = 'Enter 0 or more.';
     if (!isNum(f.feePerTrade) || f.feePerTrade < 0) e['feePerTrade'] = 'Enter 0 or more.';
   }
   return e;
+}
+
+/**
+ * The cost part of a backtest body. A preset and flat costs are mutually
+ * exclusive, and "configured" sends neither: the server then charges the
+ * costs the admin set up for backtests (P18: costs are on by default).
+ */
+export function costFields(
+  f: CostForm,
+): Pick<BacktestRequest, 'cost_model' | 'slippage_bps' | 'fee_per_trade'> {
+  if (f.cost === 'zero' || f.cost === 'realistic') return { cost_model: f.cost };
+  if (f.cost === 'flat')
+    return { slippage_bps: f.slippageBps ?? 0, fee_per_trade: f.feePerTrade ?? 0 };
+  return {};
+}
+
+/** One line under the cost field saying what the choice charges. */
+export function costHint(cost: CostChoice, presets: readonly CostModelPreset[]): string {
+  if (cost === 'configured') return 'The fees and slippage your admin set up for backtests.';
+  if (cost === 'flat') return 'A flat slippage on every fill and a fixed fee per trade.';
+  return presets.find((m) => m.name === cost)?.description ?? '';
 }
 
 /**
@@ -342,7 +374,7 @@ export function labRunErrors(
       e['mcptMaxP'] = 'Above 0 and at most 1.';
   }
   if (f.register && !f.hypothesis.trim())
-    e['hypothesis'] = 'Say why it should make money before registering it.';
+    e['hypothesis'] = 'Say why it should make money before it starts paper trading.';
   if (f.hypothesis.length > 4000) e['hypothesis'] = 'At most 4000 characters.';
   if (f.premortem.length > 4000) e['premortem'] = 'At most 4000 characters.';
   for (const [key, msg] of Object.entries(testOptionErrors(tests, f.testOptions, catalog))) {
@@ -367,12 +399,7 @@ export function buildBacktestRequest(
     initial_cash: f.initialCash ?? 10_000,
     rebalance_every_bars: f.rebalanceEveryBars ?? 1,
   };
-  // A preset and flat costs are mutually exclusive; "configured" sends neither.
-  if (f.cost === 'zero' || f.cost === 'realistic') body.cost_model = f.cost;
-  if (f.cost === 'flat') {
-    body.slippage_bps = f.slippageBps ?? 0;
-    body.fee_per_trade = f.feePerTrade ?? 0;
-  }
+  Object.assign(body, costFields(f));
   const benchmark = benchmarkValue(f);
   if (benchmark) body.benchmark = benchmark;
   return body;
@@ -442,6 +469,91 @@ export function buildLabRunRequest(
   const options = buildTestOptions(tests, f.testOptions, catalog);
   if (options) body.test_options = options;
   return body;
+}
+
+/**
+ * The form fields a stored lab-run request (a job's `params`) fills, for a
+ * prefilled re-run. Unknown or odd values are left out, so the form keeps
+ * its defaults there. Advanced per-test options are not carried over.
+ */
+export function formFromRequest(
+  request: LabRunRequest | Readonly<Record<string, unknown>>,
+): Partial<LabRunForm> {
+  const r = request as Readonly<Record<string, unknown>>;
+  const f: Partial<LabRunForm> = {};
+  const str = (v: unknown): v is string => typeof v === 'string';
+  const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  const strategy = r['strategy'];
+  if (strategy && typeof strategy === 'object') {
+    const cp = (strategy as Record<string, unknown>)['class_path'];
+    if (str(cp)) f.classPath = cp;
+  }
+  if (str(r['start'])) f.start = r['start'];
+  if (str(r['end'])) f.end = r['end'];
+  if (str(r['interval'])) f.interval = r['interval'];
+  if (str(r['universe_id']) && r['universe_id']) {
+    f.universeId = r['universe_id'];
+    f.ensureData = r['ensure_data'] === true;
+  } else if (Array.isArray(r['universe'])) {
+    f.tickers = r['universe'].filter(str).join(', ');
+  }
+  if (r['tuner'] === 'grid' || r['tuner'] === 'random') f.tuner = r['tuner'];
+  if (num(r['budget'])) f.budget = r['budget'];
+  if (num(r['seed'])) f.seed = r['seed'];
+  if (num(r['train_ratio'])) f.trainRatio = r['train_ratio'];
+  if (num(r['embargo_bars'])) f.embargoBars = r['embargo_bars'];
+  const objectives: readonly string[] = [
+    'sharpe',
+    'cagr',
+    'final_return',
+    'cv_sharpe',
+    'cv_cagr',
+    'cv_final_return',
+  ];
+  if (str(r['objective']) && objectives.includes(r['objective']))
+    f.objective = r['objective'] as LabRunForm['objective'];
+  const preset = r['preset'];
+  if (preset === 'quick' || preset === 'standard' || preset === 'promotion') {
+    f.suite = preset;
+  } else if (Array.isArray(r['survival_tests'])) {
+    f.suite = 'custom';
+    f.tests = r['survival_tests'].filter((t): t is SurvivalTestName => KNOWN_TESTS.has(t));
+  }
+  const benchmark = r['benchmark'];
+  if (benchmark === 'auto' || benchmark === 'EW' || benchmark === 'none') {
+    f.benchmark = benchmark;
+  } else if (str(benchmark) && benchmark) {
+    f.benchmark = 'ticker';
+    f.benchmarkTicker = benchmark;
+  }
+  if (r['register_if_passes'] === true || r['register_strategy'] === true) {
+    f.register = true;
+    f.registerIfPasses = r['register_if_passes'] === true;
+  }
+  if (str(r['hypothesis'])) f.hypothesis = r['hypothesis'];
+  if (str(r['premortem'])) f.premortem = r['premortem'];
+  const wf = r['walk_forward'];
+  if (wf && typeof wf === 'object') {
+    const w = wf as Record<string, unknown>;
+    if (num(w['n_splits'])) f.wfSplits = w['n_splits'];
+    if (num(w['test_days'])) f.wfTestDays = w['test_days'];
+    if (num(w['min_wfe'])) f.wfMinWfe = w['min_wfe'];
+    if (w['anchored'] === true) f.wfAnchored = true;
+    if (w['matrix'] === true) f.wfMatrix = true;
+  }
+  const mcpt = r['mcpt'];
+  if (mcpt && typeof mcpt === 'object') {
+    const m = mcpt as Record<string, unknown>;
+    if (num(m['n_permutations'])) f.mcptPermutations = m['n_permutations'];
+    if (num(m['max_p_value'])) f.mcptMaxP = m['max_p_value'];
+    const metrics: readonly string[] = ['profit_factor', 'sharpe', 'cagr', 'final_return'];
+    if (str(m['metric']) && metrics.includes(m['metric']))
+      f.mcptMetric = m['metric'] as LabRunForm['mcptMetric'];
+    if (m['retune'] === 'auto') f.mcptRetune = 'auto';
+    else if (m['retune'] === true) f.mcptRetune = 'yes';
+    else if (m['retune'] === false) f.mcptRetune = 'no';
+  }
+  return f;
 }
 
 /** Catalog grouped for the picker: by source package, then name. */

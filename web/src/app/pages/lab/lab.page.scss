@@ -180,3 +180,34 @@ progress {
     border-left-color: var(--color-loss);
   }
 }
+
+// Next step after a finished lab run (UX-22) --------------------------------
+.next-step {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  min-width: 0;
+}
+
+.next-text {
+  margin: 0;
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.next-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+
+  @include bp.phone {
+    .btn {
+      flex: 1 1 100%;
+    }
+  }
+}
