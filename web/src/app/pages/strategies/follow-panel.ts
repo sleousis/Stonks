@@ -134,7 +134,9 @@ export const FOLLOW_MODES: readonly { value: FollowMode; label: string; help: st
             >
               {{ busy() ? 'Following…' : 'Follow' }}
             </button>
-            <app-permission-note permission="portfolio.trade" />
+            @if (!canTrade()) {
+              <app-permission-note permission="portfolio.trade" />
+            }
           </div>
         </form>
       }
