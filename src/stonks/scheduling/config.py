@@ -101,7 +101,9 @@ def default_jobs() -> list[JobConfig]:
     ``model_retrain`` refits the strategies that learn from data every
     Saturday into candidate versions, and skips when there are none.
     ``live_submit`` (open minus 20 minutes) sends approved order tickets and
-    skips while none is open."""
+    skips while none is open. ``live_stops`` (open plus 30 minutes) places
+    the protective stops of the entries that just filled, and skips while no
+    live book turns stops on."""
     return [
         JobConfig(
             name="universes_refresh",
@@ -188,6 +190,15 @@ def default_jobs() -> list[JobConfig]:
             name="live_submit",
             action="live_submit",
             trigger=SessionTriggerConfig(anchor="open", offset_minutes=-20),
+            catch_up="none",
+        ),
+        # Protective stops for the entries the opening auction filled
+        # (roadmap 19.10). Skips while no live book turns stops on. A
+        # missed run waits for the evening tick, which syncs stops too.
+        JobConfig(
+            name="live_stops",
+            action="live_stops",
+            trigger=SessionTriggerConfig(anchor="open", offset_minutes=30),
             catch_up="none",
         ),
     ]

@@ -24,7 +24,9 @@ The actions call the same services as the CLI:
   pauses auto after a long outage (roadmap 19.4, state DB only);
 - ``ibkr_reauth_reminder``: the Sunday push to approve the IBKR login;
 - ``model_retrain``: refits strategies that learn from data into
-  candidate versions (roadmap 22.6).
+  candidate versions (roadmap 22.6);
+- ``live_stops``: protective stops for the entries the opening auction
+  filled, at every live book that turns them on (roadmap 19.10).
 
 ``ingest_prices`` and ``tick`` are skipped when no instrument in the
 universe trades on the fire's date (asset classes read from the lake).
@@ -417,6 +419,61 @@ def live_submit_action(ctx: RunContext) -> JobOutcome:
         state.close()
     detail = submit_detail(result)
     return JobOutcome("failed" if result.failed or detail["errors"] else "succeeded", detail)
+
+
+@register_action("live_stops")
+def live_stops_action(ctx: RunContext) -> JobOutcome:
+    """Place, resize and cancel the protective stops of every live book
+    after the opening auction (roadmap 19.10), so an entry that filled this
+    morning is protected before the evening tick. Skips while no live book
+    turns stops on and none has a working stop. The lake is opened read
+    only for the ATR. While another process holds it, stops are priced with
+    ``fallback_pct`` instead."""
+    from stonks.production.live.stops import live_books_of, stops_recorded, sync_live_books
+    from stonks.production.settings_builder import (
+        build_tick_settings,
+        connection_traders,
+        submit_broker_opener,
+    )
+    from stonks.production.tick import load_tick_plan
+    from stonks.store.state import SqliteState
+
+    state = SqliteState(ctx.settings.state.path)
+    try:
+        if not stops_recorded(state):
+            return JobOutcome("skipped", {"reason": "no_live_stops"})
+        tick_settings = build_tick_settings(ctx.settings, [])
+        plan = load_tick_plan(state, tick_settings, traders=connection_traders(state), dry_run=True)
+        books = live_books_of(plan, tick_settings)
+        working = state.sql(
+            "SELECT COUNT(*) AS n FROM orders WHERE protective = 1"
+            " AND status IN ('pending', 'partially_filled')"
+        )[0]["n"]
+        if not any(b.enabled for b in books) and not working:
+            return JobOutcome("skipped", {"reason": "no_live_stops"})
+        lake = _read_only_lake(ctx.settings)
+        try:
+            result = sync_live_books(
+                state, lake, books, submit_broker_opener(ctx.settings, state), as_of=ctx.fire.as_of
+            )
+        finally:
+            if lake is not None:
+                lake.close()
+    finally:
+        state.close()
+    errors = {pid: r["error"] for pid, r in result.items() if "error" in r}
+    detail = {"books": result, "errors": errors}
+    return JobOutcome("failed" if errors else "succeeded", detail)
+
+
+def _read_only_lake(settings: Any) -> Any:
+    """The lake opened read only, or ``None`` when another process holds it."""
+    from stonks.store.lake import DuckDBLake
+
+    try:
+        return DuckDBLake(settings.lake.path, read_only=True)
+    except Exception:
+        return None
 
 
 def submit_detail(result: Any) -> dict[str, Any]:

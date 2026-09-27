@@ -52,12 +52,17 @@ def test_default_jobs_build():
         "calendars_refresh",
         "model_retrain",
         "live_submit",
+        "live_stops",
     }
     tick = by_name["tick"]
     # 19.8: approved tickets go out before the open, never caught up late
     submit = by_name["live_submit"]
     assert submit.trigger == SessionTrigger("XNYS", "open", timedelta(minutes=-20))
     assert submit.catch_up == "none"
+    # 19.10: protective stops follow the entries the opening auction filled
+    stops = by_name["live_stops"]
+    assert stops.trigger == SessionTrigger("XNYS", "open", timedelta(minutes=30))
+    assert stops.catch_up == "none"
     assert tick.trigger == SessionTrigger("XNYS", "close", timedelta(minutes=45))
     assert tick.deadline == timedelta(minutes=60)
     assert tick.catch_up == "latest"

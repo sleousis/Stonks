@@ -633,6 +633,97 @@ def send_stop_plan(
     return sync
 
 
+@dataclass(frozen=True)
+class LiveBook:
+    """A book at a real broker, as the ``live_stops`` job sees it."""
+
+    portfolio_id: str
+    settings_for: SettingsFor
+    #: The book or one of its strategies turns stops on.
+    enabled: bool
+
+
+def live_books_of(plan: Any, settings: Any) -> list[LiveBook]:
+    """The books of a tick plan that trade at a real broker: the default
+    portfolio at an external ``[brokers].kind``, and every auto (or
+    approve) book traded through its connection."""
+    from stonks.production.tick import trades_live
+
+    out: list[LiveBook] = []
+    for book in plan.books:
+        connection = book.spec.broker == "connection" and book.mode == "auto" and book.account
+        if not (trades_live(book, settings) or connection):
+            continue
+        overrides = book.spec.risk_overrides
+        out.append(
+            LiveBook(
+                portfolio_id=book.portfolio_id,
+                settings_for=book_settings(book.spec.risk, overrides),
+                enabled=any_enabled(book.spec.risk, overrides),
+            )
+        )
+    return out
+
+
+def sync_live_books(
+    state: SqliteState,
+    lake: DuckDBLake | None,
+    books: Iterable[LiveBook],
+    open_broker: Callable[[str], object],
+    *,
+    as_of: date,
+    clock: Clock = SYSTEM_CLOCK,
+) -> dict[str, dict[str, Any]]:
+    """The ``live_stops`` job: after the opening auction, give the entries
+    that just filled their stops (and resize or cancel the rest) without
+    waiting for the evening tick. Per book: open the broker, reconcile every
+    open order (the startup gate: nothing is sent while one is unknown),
+    read the book's own positions, then send the plan. A halt of new orders
+    pauses it. One book's failure never stops the others."""
+    from stonks.execution.reconcile import startup_reconcile
+    from stonks.production.halts import active_halts
+    from stonks.production.ownership import managed_view, owned_positions
+
+    out: dict[str, dict[str, Any]] = {}
+    for book in books:
+        pid = book.portfolio_id
+        working = load_working_stops(state, pid)
+        if not book.enabled and not working:
+            continue
+        try:
+            broker = open_broker(pid)
+            if not isinstance(broker, OrderStateSource):
+                out[pid] = {"error": "the broker cannot look orders up by client id"}
+                continue
+            startup = startup_reconcile(broker, state, portfolio_id=pid, clock=clock)
+            if startup.unresolved:
+                out[pid] = {"skipped": "orders_unreconciled"}
+                continue
+            owner = state.sql("SELECT owner_id FROM portfolios WHERE id = ?", [pid])
+            halts = active_halts(
+                state, as_of, portfolio_id=pid, user_id=owner[0]["owner_id"] if owner else None
+            )
+            if any(h.halt == "all" for h in halts):
+                out[pid] = {"paused": "a halt holds new orders"}
+                continue
+            account = broker.fetch_portfolio()  # type: ignore[attr-defined]
+            view, _ = managed_view(account, owned_positions(state, pid))
+            plan = plan_book(
+                state,
+                lake,
+                portfolio_id=pid,
+                positions=view.positions,
+                settings_for=book.settings_for,
+                as_of=as_of,
+                working=working,
+            )
+            out[pid] = send_stop_plan(state, broker, plan, portfolio_id=pid, clock=clock).as_dict()
+        except Exception as exc:
+            _log.warning("stops.book_failed", portfolio_id=pid, error=str(exc))
+            out[pid] = {"error": f"{type(exc).__name__}: {exc}"}
+    return out
+
+
 def _cancel_at_broker(state: SqliteState, broker: object, c: StopCancel, clock: Clock) -> bool:
     cid = c.stop.client_id
     words = CANCEL_WORDS.get(c.reason, c.reason)
