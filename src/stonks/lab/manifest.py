@@ -168,6 +168,9 @@ def dataset_summary(dataset: Any) -> dict[str, Any] | None:
         universe_id = getattr(dataset, "universe_id", None)
         if isinstance(universe_id, str):
             summary["universe_id"] = universe_id
+        sessions = tuple(getattr(dataset, "window_sessions", ()) or ())
+        if sessions:  # windows split by session (roadmap 21.3.1)
+            summary["sessions"] = len(sessions)
         return summary
     except Exception:
         return None

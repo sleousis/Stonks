@@ -46,6 +46,26 @@ of 365.25 / 252 (weekends and holidays included), plus a three-day pad so
 a short embargo can never fall entirely on a weekend. The conversion is
 deliberately conservative: a 24/7 (crypto) universe gets a longer gap in
 bars than asked, never a shorter one.
+
+Windows by session (roadmap 21.3.1)
+-----------------------------------
+An intraday strategy trades inside one session, so its train and
+validation windows should hold whole sessions. ``sessions`` lists the
+trading sessions of the universe (``with_sessions`` reads them from the
+lake: the UTC days on which any universe ticker has a bar at the
+dataset's interval). With sessions set:
+
+- ``train_ratio`` splits the sessions inside the window, not calendar
+  days, and always leaves at least one validation session
+- the embargo is whole sessions (:func:`bars_to_sessions`: the sessions
+  that ``embargo_bars`` bars fill on the 6.5-hour exchange session, at
+  least one for any embargo), skipped after the last train session
+- walk-forward folds count sessions too (``lab.survival.walk_forward``)
+
+The lab turns this on for every intraday dataset (``lab.universe_data.
+prepare_dataset``). A dataset whose lake holds no bars keeps the calendar
+split. Sessions are plain dates, so a dataset with its lake detached still
+splits the same way in a worker process.
 """
 
 from __future__ import annotations
@@ -54,7 +74,7 @@ import dataclasses
 import math
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, Literal
 
 from stonks.backtest.benchmark import AUTO_BENCHMARK_TICKER, normalize_spec
@@ -90,6 +110,35 @@ def embargo_calendar_days(bars: int, interval: Interval) -> int:
         round(bars * sessions_per_year / EXCHANGE_SESSIONS.periods_per_year(interval), 9)
     )
     return math.ceil(round(sessions * _DAYS_PER_YEAR / sessions_per_year, 9)) + _EMBARGO_PAD_DAYS
+
+
+def bars_to_sessions(bars: int, interval: Interval) -> int:
+    """Whole exchange sessions that hold ``bars`` bars of ``interval`` (see
+    the module doc): 390 one-minute bars fill one session, a daily bar is
+    one session. 0 for no bars."""
+    if bars < 0:
+        raise ValueError(f"bars must be >= 0, got {bars}")
+    if bars == 0:
+        return 0
+    per_session = EXCHANGE_SESSIONS.periods_per_year(interval) / EXCHANGE_SESSIONS.sessions_per_year
+    return max(1, math.ceil(round(bars / per_session, 9)))
+
+
+def session_dates(
+    lake: Any, tickers: Iterable[str], interval: Interval, start: date, end: date
+) -> tuple[date, ...]:
+    """The UTC days in ``[start, end]`` on which any of ``tickers`` has a
+    bar at ``interval``, sorted (the sessions of the module doc)."""
+    days: set[date] = set()
+    lo = datetime.combine(start, time.min)
+    hi = datetime.combine(end, time.max)
+    for ticker in dict.fromkeys(tickers):
+        frame = lake.get_bars(ticker, interval, start=lo, end=hi)
+        if frame is None or frame.empty:
+            continue
+        stamps = frame["timestamp"]
+        days.update(d for d in (ts.date() for ts in stamps) if start <= d <= end)
+    return tuple(sorted(days))
 
 
 @dataclass
@@ -134,6 +183,9 @@ class LabDataset:
     #: Short selling for every backtest on this dataset (roadmap 16.4): the
     #: margin model and borrow fees. ``None`` (the default): long-only.
     shorting: ShortingSettings | None = None
+    #: Trading sessions of the universe (see the module doc). Empty: the
+    #: windows split by calendar days.
+    sessions: tuple[date, ...] = ()
     #: Stitched walk-forward OOS backtest, set by the walk-forward test for
     #: the tests after it (``mc_trades``). Never copied by ``replace``.
     stitched_oos_report: BacktestReport | None = field(
@@ -156,6 +208,11 @@ class LabDataset:
         if self.train_segments:
             self._check_segments()
             return
+        if self.sessions and len(self.window_sessions) < 2:
+            raise ValueError(
+                f"the window {self.start}..{self.end} holds "
+                f"{len(self.window_sessions)} trading session(s); a split by session needs 2"
+            )
         if self.embargo_bars > 0 and self.val_window[0] > self.end:
             raise ValueError(
                 f"an embargo of {self.embargo_bars} bars after {self.train_window[1]} "
@@ -187,6 +244,24 @@ class LabDataset:
         return dataclasses.replace(self, train_segments=tuple(segments))
 
     @property
+    def window_sessions(self) -> tuple[date, ...]:
+        """The ``sessions`` inside ``[start, end]`` (empty without sessions)."""
+        return tuple(s for s in self.sessions if self.start <= s <= self.end)
+
+    def with_sessions(self, sessions: Iterable[date] | None = None) -> LabDataset:
+        """This dataset split by session (see the module doc): ``sessions``,
+        or the days the universe has bars in the lake. Itself when there
+        are none."""
+        found = (
+            tuple(sorted(set(sessions)))
+            if sessions is not None
+            else session_dates(self.lake, self.universe, self.interval, self.start, self.end)
+        )
+        if not found or found == self.sessions:
+            return self
+        return dataclasses.replace(self, sessions=found)
+
+    @property
     def train_window(self) -> tuple[date, date]:
         if self.train_segments:
             # the longest segment (the latest on a tie): a strategy that
@@ -194,6 +269,10 @@ class LabDataset:
             return max(self.train_segments, key=lambda seg: ((seg[1] - seg[0]).days, seg[0]))
         if self.train_end is not None:
             return self.start, self.train_end
+        window = self.window_sessions
+        if len(window) >= 2:
+            k = min(len(window) - 1, max(1, int(len(window) * self.train_ratio)))
+            return self.start, window[k - 1]
         span_days = (self.end - self.start).days
         train_days = max(1, int(span_days * self.train_ratio))
         return self.start, self.start + timedelta(days=train_days)
@@ -201,6 +280,12 @@ class LabDataset:
     @property
     def val_window(self) -> tuple[date, date]:
         _, train_end = self.train_window
+        if self.sessions:
+            after = [s for s in self.window_sessions if s > train_end]
+            skip = bars_to_sessions(self.embargo_bars, self.interval)
+            if len(after) <= skip:  # no session left: an empty window
+                return self.end + timedelta(days=1), self.end
+            return after[skip], self.end
         gap = embargo_calendar_days(self.embargo_bars, self.interval)
         start = train_end + timedelta(days=1 + gap)
         return start, self.end
