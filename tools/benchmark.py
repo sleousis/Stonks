@@ -338,11 +338,15 @@ def bench_lab(
 
 
 def rss_bytes(pid: int) -> int | None:
-    """Resident memory of ``pid`` (psutil when installed, else the OS)."""
+    """Resident memory of ``pid`` and its children (psutil when installed,
+    else the OS, ``pid`` alone). Children count because a Windows venv
+    ``python.exe`` is a small launcher that starts the real interpreter."""
     try:
         import psutil  # type: ignore[import-not-found]
 
-        return int(psutil.Process(pid).memory_info().rss)
+        proc = psutil.Process(pid)
+        tree = [proc, *proc.children(recursive=True)]
+        return int(sum(p.memory_info().rss for p in tree))
     except ImportError:
         pass
     except Exception:

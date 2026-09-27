@@ -1,6 +1,6 @@
 # Deploy
 
-How to run Stonks on one small always-on cloud VM for several traders: create the server, set secrets, deploy, update, roll back, back up, restore and monitor. Covers Phases 12.7 to 12.9 and 14.1 to 14.8 of the [roadmap](roadmap.md).
+How to run Stonks on one small always-on cloud VM for several traders: create the server, set secrets, deploy, update, roll back, back up, restore and monitor. Covers Phases 12.7 to 12.9 and 14.1 to 14.10 of the [roadmap](roadmap.md). Sizes and costs: [capacity.md](capacity.md).
 
 ## The picture
 
@@ -14,10 +14,12 @@ flowchart LR
     C[Caddy :443<br/>HTTPS]
     A[api<br/>stonks serve<br/>REST + console]
     S[scheduler<br/>python -m stonks.scheduling]
+    W[lab-worker, optional<br/>python -m stonks.lab.offload]
     V[("data volume /data<br/>lake, Parquet bars,<br/>state, artifacts")]
     C --> A
     A --- V
     S --- V
+    W --- V
   end
   T1 --> C
   T2 --> C
@@ -28,13 +30,13 @@ flowchart LR
 ```
 
 - **One image** (`Dockerfile`) holds the API, the built console and the scheduler. It runs as a non-root user (uid 10001).
-- **Compose** (`deploy/compose.yaml`) runs three services: `api`, `scheduler` and `caddy`. Everything the app writes lives on one volume, `/data`, which sits on an attached block volume on the host (`/srv/stonks/data`).
+- **Compose** (`deploy/compose.yaml`) runs three services: `api`, `scheduler` and `caddy`, plus an optional `lab-worker` (see [10. Lab offload](#10-lab-offload)). Everything the app writes lives on one volume, `/data`, which sits on an attached block volume on the host (`/srv/stonks/data`).
 - **Private access** is the default: the server has no public port. Traders join the tailnet. Public HTTPS with Let's Encrypt is one setting away.
 
 | File | Purpose |
 |------|---------|
 | `Dockerfile`, `.dockerignore` | Multi-stage build: Node builds the console, uv installs the package, slim runtime with a healthcheck. |
-| `deploy/compose.yaml` | `api`, `scheduler`, `caddy`, plus a `restic` tool service (profile `backup`). |
+| `deploy/compose.yaml` | `api`, `scheduler`, `caddy`, an optional `lab-worker` (profile `lab-worker`), plus a `restic` tool service (profile `backup`). |
 | `deploy/compose.tailscale.yaml` | Lets Caddy get its `*.ts.net` certificate from Tailscale. |
 | `deploy/Caddyfile` | HTTPS, security headers, reverse proxy to the API. |
 | `deploy/.env.example` | Every setting and secret the server needs (placeholders). |
@@ -267,9 +269,51 @@ Prices change; check the provider pages. DigitalOcean's 2 vCPU / 4 GB droplet co
 
 Sizing:
 
-- **RAM.** The API and scheduler idle at a few hundred MB. Each lab or backtest job adds more (`[api].max_concurrent_jobs`, default 2). 4 GB is enough for several traders. Move to 8 GB if the monitor reports memory alerts during jobs.
-- **Disk.** Daily bars cost roughly 50 to 100 bytes a row: 5,000 tickers x 20 years is about 25 million rows, 1 to 3 GB. Intraday bars grow much faster. Keep the volume under 70 % full, since snapshots need room too. Grow it with `volume_size_gb` (or in the provider console), then `sudo resize2fs /dev/disk/by-label/stonks-data`.
-- **CPU.** Heavy lab sweeps belong on a bigger machine (Phase 14.9), not on this server.
+Measured sizes for 1, 5 and 20 traders, and how they were measured, are in [capacity.md](capacity.md). In short:
+
+- **RAM.** The API idles at a few hundred MB. Each lab or backtest job adds more (`[api].max_concurrent_jobs`, default 2). 4 GB is enough for a few traders. Move to 8 GB if the monitor reports memory alerts during jobs.
+- **Disk.** Daily bars cost about 12 KB per ticker-year in Parquet and 23 KB in the DuckDB table. Intraday bars grow much faster. Keep the volume under 70 % full, since snapshots need room too. Grow it with `volume_size_gb` (or in the provider console), then `sudo resize2fs /dev/disk/by-label/stonks-data`.
+- **CPU.** Run heavy lab work on the lab worker (next section) so it never slows the console.
+
+## 10. Lab offload
+
+Tuning, survival suites, sweeps and MCPT can keep every core busy for minutes. Inside the API they also compete with traders' requests. The lab worker runs them in their own container with their own limits.
+
+```mermaid
+flowchart LR
+  T[Trader] -->|POST /api/lab/runs| A[api]
+  A -->|1. publish if stale| SN[("lab_snapshots/<br/>read-only lake copy")]
+  A -->|2. jobs row, executor=worker| Q[("state.sqlite<br/>jobs queue")]
+  W[lab-worker] -->|3. claim| Q
+  W -->|4. read| SN
+  W -->|5. result, heartbeat| Q
+  A -->|6. result, events| T
+```
+
+1. The API gets a lab run, sweep or Studio lab run. When `STONKS_LAB_EXECUTOR=worker`, it does not run it. It writes the job row with `executor = worker`.
+2. First it makes sure a fresh read-only copy of the lake exists under `/data/lab_snapshots`. It builds a new one when an ingest or bar fetch finished since, or the copy is older than an hour. With Parquet bars the copy is small: the bar files are hard links.
+3. The worker claims the oldest queued job, opens the copy read-only and runs the same handler the API would. DuckDB allows one writer, and the worker never writes the lake.
+4. Progress, the result and registered strategies go to the real state DB and artifacts. The job row, its event stream and its result route work as before.
+5. Cancel works: the worker checks a flag at every heartbeat and stops at the next checkpoint. A worker that dies stops its heartbeat, and its job fails after two minutes.
+
+Turn it on:
+
+```bash
+# deploy/.env
+COMPOSE_PROFILES=scheduler,lab-worker
+STONKS_LAB_EXECUTOR=worker
+STONKS_LAB_WORKER_CPUS=2      # CPU limit, also the size of its process pool
+STONKS_LAB_WORKER_MEMORY=3g   # memory limit
+docker compose up -d
+```
+
+- The worker gets a quarter of the API's CPU weight, so the API wins when both are busy.
+- A lab run that must fetch missing data first (`ensure_data`) stays in the API, because the fetch writes the lake. Run `stonks universe ensure` first to offload it.
+- Run more workers to run more jobs at once: `docker compose up -d --scale lab-worker=2`. Each runs one job at a time.
+- For a big search, resize the VM for an hour (Hetzner and DigitalOcean resize in about a minute), raise `STONKS_LAB_WORKER_CPUS`, and resize back.
+- Watch it: `docker compose exec lab-worker python -m stonks.lab.offload status`, the `lab_queue` health check and the `stonks_lab_*` metrics ([operations.md](operations.md#lab-worker)).
+
+The worker must share the data folder with the API on a local disk: the queue is the SQLite state DB, and SQLite on a network file system is not safe. A worker on another machine (the 32-core PC) needs a queue over the API. That is not built yet.
 
 ## Public mode (no Tailscale)
 

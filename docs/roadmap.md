@@ -12,7 +12,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 11 | Done except parts of 11.6. 11.8 is this docs refresh. |
 | 12 | Mostly done. Open: three runbooks (tick failed, broker unreachable, disk full). |
 | 13 | Partly done: PWA and push, command palette, in-app help, accessibility and locale. The rest is planned. |
-| 14 | Done except 14.9 lab offload. |
+| 14 | Done. |
 | 15 | Mostly done: design, data model, connection seam, insights, automation modes, notifications, home screen. The tick trades one book per portfolio. Open: order placement for real providers. |
 | 16 | 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. |
 | 17 | Planned. |
@@ -283,7 +283,7 @@ What a trader needs to use the console daily without the CLI.
 
 ## Phase 14: Hosting and maintenance
 
-**Status:** done except 14.9 lab offload. See `docs/deploy.md`.
+**Status:** done. See `docs/deploy.md` and `docs/capacity.md`.
 
 Decided: one small always-on cloud VM (for example Hetzner Cloud or DigitalOcean). Heavy lab runs stay on the owner's 32-core PC or a temporary bigger VM.
 
@@ -297,8 +297,8 @@ Decided: one small always-on cloud VM (for example Hetzner Cloud or DigitalOcean
 | 14.6 Monitoring and alerting | External uptime check, dead-man pings from the scheduler (healthchecks.io or Uptime Kuma), disk, memory and CPU alerts, log retention, all routed to the existing webhook alerts. |
 | 14.7 Secrets management | Secrets only in the VM's environment (or a secrets file encrypted with sops), rotated on a schedule; never in images or the repo. |
 | 14.8 Maintenance routine | Dependabot or Renovate for Python, npm, Docker and GitHub Actions updates with CI gating; a monthly patch window; database migrations run automatically on deploy with a backup first. |
-| 14.9 Lab offload | Run heavy lab jobs on the 32-core PC or an on-demand large VM against a read-only copy of the Parquet bars, then send results back to the server's registry. |
-| 14.10 Cost and capacity | A sizing guide (CPU, RAM, disk for the lake), monthly cost estimate, and alerts before the disk fills. |
+| 14.9 Lab offload | Done. A `LabExecutor` seam: in process (the default) or a lab worker (`python -m stonks.lab.offload worker`, the optional `lab-worker` Compose service with its own CPU and memory limits). The API queues lab runs, sweeps and Studio lab runs in the state DB (migration 025) and publishes a read-only lake snapshot, the worker runs them with the same handlers and writes results to the same job rows. Heartbeats, cancel, lost-worker recovery, a `lab_queue` health check and `stonks_lab_*` metrics. Open: a queue over the API, so a worker on another machine (the 32-core PC) can pull jobs. |
+| 14.10 Cost and capacity | Done. `docs/capacity.md`: measured tick, lab, storage, memory and API latency numbers, VM sizes and cost ranges for 1, 5 and 20 traders, and the limits. `tools/benchmark.py` and `tools/api_load.py` reproduce them. Disk alerts come from `check-host.sh` (14.6). |
 
 ## Phase 15: Accounts, connected brokers and automation modes
 
