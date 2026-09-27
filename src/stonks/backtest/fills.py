@@ -43,12 +43,12 @@ Implementations
   the fills of an intraday book. It uses ``BarFillModel`` for order types
   and the participation cap of the minute's volume, and adds:
 
-  * **day orders** — an order that is not good till cancelled expires
+  * **day orders**: an order that is not good till cancelled expires
     when its fill bar is in a later session than its decision
-    (``BarQuote.new_session``). An IOC order never carries;
-  * **gap in bars** — the gap guard counts bars (``BarQuote.gap_bars``),
-    not calendar days;
-  * **half spread** — with a recorded quote (``bid`` and ``ask``) a buy
+    (``BarQuote.new_session``). An IOC order never carries.
+  * **gap in bars**: the gap guard counts bars (``BarQuote.gap_bars``),
+    not calendar days.
+  * **half spread**: with a recorded quote (``bid`` and ``ask``) a buy
     pays half the spread above the reference price and a sell half below,
     never past a limit. Without a quote nothing is added, and the cost
     model's class half spread applies as in the daily path. With recorded
@@ -205,7 +205,7 @@ class BarQuote:
     #: Length of one bar of the backtest interval in days; ``None`` unknown.
     bar_days: float | None = None
     # ---- intraday fields (roadmap 21.2.3). The daily model ignores them. ----
-    #: A recorded quote at the fill bar's open; ``None`` when unknown.
+    #: A recorded quote at the fill bar's open (``None`` when unknown).
     bid: float | None = None
     ask: float | None = None
     #: Bars from the decision bar's close to this bar's start (0 = the next bar).
@@ -337,7 +337,7 @@ class BarFillModel:
 
 
 class MinuteFillSettings(BaseModel):
-    """Settings for ``MinuteFillModel``; see the module docstring."""
+    """Settings for ``MinuteFillModel``. See the module docstring."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -346,7 +346,7 @@ class MinuteFillSettings(BaseModel):
     carry_unfilled: bool = True
     allow_zero_volume: bool = False
     honour_limits: bool = True
-    #: Most bars between the decision and the fill bar; ``None`` disables.
+    #: Most bars between the decision and the fill bar (``None`` disables).
     max_gap_bars: int | None = Field(5, ge=0)
     #: Day orders expire when the fill bar is in a later session.
     expire_at_session_end: bool = True

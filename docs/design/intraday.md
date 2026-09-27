@@ -2,7 +2,7 @@
 
 Design for roadmap Phase 21. It takes Stonks from one decision a day to decisions on minute bars, with live prices, a live event engine, intraday strategies, and the risk and monitoring an always-on loop needs.
 
-Status: 21.1 (streaming data) built. 21.2 and 21.3 are planned and split into small work packages (section 9).
+Status: 21.1 (streaming data) and 21.2.3 (the intraday router and fills, section 9) built. The rest of 21.2 and 21.3 is planned and split into small work packages (section 10).
 
 Owner decisions this page follows:
 
@@ -150,7 +150,62 @@ flowchart LR
 - The lake has one writer. `python -m stonks.streaming run` opens the lake itself, so it cannot run next to `stonks serve` on the DuckDB bar table. The Parquet bar store, or running the stream inside the process that owns the lake (21.2.5), avoids that.
 - Not yet: the quality checker on streamed bars (the REST ingest keeps it), a scheduler job that starts the runner at the open (21.2.5), and the stream health on the API metrics endpoint (21.3.4).
 
-## 9. Work packages
+## 9. The intraday router (21.2.3, built)
+
+The router is the only part of the engine that talks to a broker. One router serves one book: one portfolio and its broker.
+
+```mermaid
+flowchart LR
+  STEP[decision step<br/>engine/step.py] -- orders --> RT[IntradayRouter.route]
+  RT -- acks --> STEP
+  RT --> SM[(orders<br/>state machine)]
+  RT --> SIM[IntradaySimBroker]
+  RT --> IB[IbkrBroker<br/>intraday=True]
+  EV[bar close] --> ONB[IntradayRouter.on_bar_close]
+  ONB -->|next-bar fills| SIM
+  ONB --> REC[reconcile_orders<br/>executions and order state]
+  REC --> SM
+```
+
+**The interface the step calls.** `route(orders) -> tuple[RouteAck, ...]` (`engine/router.py`, the `OrderRouter` protocol). One ack per order, in order. `route` never raises for one order and never fills. An ack has the client id, the ticker, a status and the order's state in the ledger:
+
+| Status | Meaning |
+|---|---|
+| `sent` | At the broker now. |
+| `known` | The client id was routed before. Nothing is sent again. |
+| `rejected` | Refused by the router (not a day order) or by the broker. |
+| `unknown` | Sent with no answer. Reconciliation settles it by client id. |
+| `held` | Not sent: the router is not started, or the ticker waits for reconciliation. |
+
+`ack.accepted` is true for `sent` and `known`. Fills never come back in an ack. They reach the ledger on a later event.
+
+**Start.** `start()` runs `startup_reconcile` and `require_reconciled`. Until it passes, every order is `held`.
+
+**The state machine.** Each order is committed `pending`, sent, then `submitted`, then synced by client id (`accepted` once the broker lists it). A rejection ends it `rejected`. A submit with no answer is `unknown`, and nothing more is sent for that ticker until reconciliation settles it. Other tickers keep trading. A missing `decided_at` is set to the clock.
+
+**Day orders.** Every order goes out as a day order (`as_day_order`). No time in force means `day`, `ioc` stays, and `opg` or `gtc` are refused, since an intraday book ends with the session. `IbkrBroker(intraday=True)` checks the same rule again in `to_ib_order(intraday=True)`, so a day order is sent even though the daily default is the opening auction.
+
+**Per event.** Register the router on the driver at `ROUTER_PRIORITY` (-10), before the step. On each bar close it first lets the simulated broker fill its working orders against the new bars, then reconciles the book's open orders through `execution.reconcile.reconcile_orders`. Both brokers report executions and order state, so the execution path books one fill per execution id, with its fee, and a repeat books nothing. With no open order the reconcile is skipped.
+
+**The simulated intraday broker** (`engine/sim_broker.py`) behaves like a live broker:
+
+- `place_order` never fills. The order waits for the next bar of its ticker. A bar that began before the decision bar closed is never used (P21).
+- Each bar close runs every working order through `MinuteFillModel`. Cash, margin, short rules and the cost model come from a wrapped `SimulatedBroker`, and the cost model's fee is the execution's commission.
+- The session of a bar comes from the ticker's exchange calendar (`calendar_session_key`). A day order whose next bar is in a later session expires. `expire_open()` ends every working order at the close.
+- `on_quote` keeps the last recorded quote per ticker. Only a quote from before the fill bar's open is used.
+
+**Minute fills** (`backtest/fills.py`, `MinuteFillModel` and `MinuteFillSettings`). The daily `BarFillModel` is unchanged. The minute model uses it for order types and the participation cap, then adds:
+
+- the participation cap of the minute's volume, 10% by default (P20). A zero volume minute fills nothing and the order keeps working. `ioc` never carries,
+- a gap guard in bars (`max_gap_bars`, 5 by default), not calendar days,
+- day orders that expire in a new session,
+- the half spread of a recorded quote: a buy pays half the spread above the open, a sell half below, never past a limit. Without a quote nothing is added. With recorded quotes, set the cost model's class half spread to zero, or the spread is paid twice.
+
+`BarQuote` gains four optional fields (`bid`, `ask`, `gap_bars`, `new_session`) that the daily model ignores.
+
+Not yet: the kill switch and halts on every event (21.3.2), the price band collar for intraday limits (the IBKR collar applies), flatten orders at the close through the router (the session rules build them, the engine process sends them, 21.2.5), and the parity test of one recording through the backtest and live paths (21.2.2 and 21.2.5).
+
+## 10. Work packages
 
 Shared files (`config.py`, `config/default.toml`, `cli.py`, router mounts, the MCP server, `pyproject.toml`, the docs) change only in the integration step after each wave.
 
@@ -159,7 +214,7 @@ Shared files (`config.py`, `config/default.toml`, `cli.py`, router mounts, the M
 | 21.1 Streaming data | The `StreamingSource` seam and registry, EODHD websocket and IBKR sources, bar builder, writer, recorder, replayer and the supervised runner. | `core/stream.py`, `streaming/*` |
 | 21.2.1 Event driver | `EventDriver` over any `StreamingSource`, the `FakeClock` hand-off, bar-close dispatch, and `BarReplaySource` that turns lake bars into `StreamBar` events. | `engine/driver.py`, `streaming/sources/lake_bars.py` |
 | 21.2.2 Decision step | Decide on a bar close through `Strategy.decide` and a minute `PointInTimeLake`, then `build_orders` per book. The intraday backtest runs on the driver. | `engine/step.py`, `backtest/intraday.py` |
-| 21.2.3 Intraday router and fills | Orders through the state machine, next-bar fills with the participation cap and the half spread, day orders at IBKR, reconciliation of intraday fills. | `engine/router.py`, `backtest/fills.py` (additions), `execution/brokers/ibkr/orders.py` (day orders) |
+| 21.2.3 Intraday router and fills (done) | Orders through the state machine, next-bar fills with the participation cap and the half spread, day orders at IBKR, reconciliation of intraday fills. | `engine/router.py`, `engine/sim_broker.py`, `backtest/fills.py` (additions), `execution/brokers/ibkr/orders.py` (day orders) |
 | 21.2.4 Session rules | Regular hours only, no entries at the open and close edges, flatten before the close, per-ticker trading halts, early closes. | `engine/sessions.py` |
 | 21.2.5 Engine process | The always-on process, scheduler jobs to start before the open and stop after the close, startup reconcile, restart and state recovery, the runner inside it. | `engine/process.py`, `scheduling/jobs.py` (jobs) |
 | 21.3.1 Intraday strategies | Opening range breakout, VWAP reversion and intraday momentum with hypothesis cards, lab windows by session. | `strategies/examples/intraday_*.py`, `lab/dataset.py` (session windows) |
