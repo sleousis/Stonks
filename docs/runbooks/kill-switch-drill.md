@@ -20,6 +20,7 @@ uv run stonks halts kill --scope global --reason "what happened"
 - `--scope portfolio --portfolio <id>` stops one portfolio, `--scope user --user <email>` all of one person's.
 - By default it stops every order and cancels the working ones at the broker. `--buys-only` stops only buys and leaves sells and exits alone.
 - Engage again to retry a cancel that failed.
+- At IBKR it works while a tick runs (the API has its own client id). A stop-all kill that covers every portfolio of the gateway then uses IBKR's global cancel. A buys-only kill cannot cancel the running tick's orders: engage it again when the tick is done. See [deploy/ibkr/README.md](../../deploy/ibkr/README.md#client-ids-and-the-master-client).
 - Turn it off with `uv run stonks halts resume <halt-id> --reason "..."`. It asks you to type `RESUME TRADING`.
 
 ## Drill 1: the dry run
