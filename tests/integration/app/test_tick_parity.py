@@ -64,10 +64,9 @@ def services_for(fake_source):
 def test_api_and_cli_build_identical_tick_settings_and_notifier(
     configured, services_for, monkeypatch
 ):
-    cli_calls: list[dict] = []
-    api_calls: list[dict] = []
-    _spy(monkeypatch, cli, cli_calls)
-    _spy(monkeypatch, app_ticks, api_calls)
+    # both entrypoints run one code path (BE-66): the CLI's call comes first
+    calls: list[dict] = []
+    _spy(monkeypatch, app_ticks, calls)
     monkeypatch.setattr(cli, "_settings", lambda: configured)
 
     result = CliRunner().invoke(cli.app, ["tick", "--as-of", "2026-03-25"])
@@ -75,7 +74,7 @@ def test_api_and_cli_build_identical_tick_settings_and_notifier(
 
     services_for(configured).ticks.run(TickRequest(as_of=date(2026, 3, 25)))
 
-    [c], [a] = cli_calls, api_calls
+    [c, a] = calls
     assert a["settings"] == c["settings"]
     assert a["settings"].risk.max_open_positions == 1
     assert a["settings"].shadow_enabled is False
@@ -99,17 +98,16 @@ def test_api_and_cli_trade_the_same_books(
             )
         }
     )
-    cli_calls: list[dict] = []
-    api_calls: list[dict] = []
-    _spy(monkeypatch, cli, cli_calls)
-    _spy(monkeypatch, app_ticks, api_calls)
+    # both entrypoints run one code path (BE-66): the CLI's call comes first
+    calls: list[dict] = []
+    _spy(monkeypatch, app_ticks, calls)
     monkeypatch.setattr(cli, "_settings", lambda: configured)
 
     result = CliRunner().invoke(cli.app, ["tick", "--as-of", "2026-03-25"])
     assert result.exit_code == 0, result.output
     services_for(configured).ticks.run(TickRequest(as_of=date(2026, 3, 25)))
 
-    [c], [a] = cli_calls, api_calls
+    [c, a] = calls
     if from_subscriptions:
         assert isinstance(c["plan"], TickPlan) and c["plan"] == a["plan"]
     else:

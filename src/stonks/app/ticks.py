@@ -21,7 +21,7 @@ from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.core.types import AssetClass
 from stonks.production.settings_builder import build_tick_runtime
-from stonks.production.tick import BackdatedTickError, run_tick
+from stonks.production.tick import BackdatedTickError, TickResult, run_tick
 from stonks.production.universe import EmptyUniverseError, production_tickers
 from stonks.scheduling.calendar import bars_due
 
@@ -177,37 +177,8 @@ class TickService:
 
     def run(self, request: TickRequest) -> TickResultView:
         with self._ctx.state() as state, self._ctx.lake() as lake:
-            universe = self._universe(lake, request)
             registry = self._ctx.registry_on(state)
-            if request.asset_class is not None:
-                classes = lake.get_asset_classes(universe)
-                universe = [t for t in universe if classes.get(t) == request.asset_class]
-                if not universe:
-                    raise ValidationError(
-                        f"no instruments in the universe match asset_class={request.asset_class!r}"
-                    )
-            due = None
-            if request.bars_due_at is not None:
-                due = bars_due(
-                    universe, lake.get_asset_classes(universe), _utc(request.bars_due_at)
-                )
-            runtime = build_tick_runtime(
-                self._ctx.settings, universe, scoped=request.is_scoped, bars_due=due
-            )
-            try:
-                result = run_tick(
-                    state=state,
-                    lake=lake,
-                    registry=registry,
-                    settings=runtime.settings,
-                    as_of=request.as_of,
-                    dry_run=request.dry_run,
-                    notifier=runtime.notifier,
-                    broker_factory=runtime.broker_factory,
-                    plan=runtime.plan_for(state, dry_run=request.dry_run),
-                )
-            except BackdatedTickError as exc:
-                raise ConflictError(str(exc)) from None
+            result = execute_tick(self._ctx.settings, state, lake, registry, request)
         return TickResultView(
             tick_id=result.tick_id,
             status=result.status,
@@ -218,18 +189,58 @@ class TickService:
         )
 
     def _universe(self, lake: Any, request: TickRequest) -> list[str]:
-        """``request.tickers``, else ``[production].universe`` (a list, or a
-        universe id resolved on the tick's date)."""
-        as_of = request.as_of or datetime.now(UTC).date()
-        try:
-            return production_tickers(
-                lake, self._ctx.settings.production.universe, as_of, tickers=request.tickers
-            )
-        except EmptyUniverseError as exc:
-            raise ValidationError(str(exc)) from None
+        return request_universe(self._ctx.settings, lake, request)
 
     def _handle(self, params: dict[str, Any], ctx: JobContext) -> TickResultView:
         return self.run(TickRequest.model_validate(params))
+
+
+def request_universe(settings: Any, lake: Any, request: TickRequest) -> list[str]:
+    """``request.tickers``, else ``[production].universe`` (a list, or a
+    universe id resolved on the tick's date). ``ValidationError`` when empty."""
+    as_of = request.as_of or datetime.now(UTC).date()
+    try:
+        return production_tickers(
+            lake, settings.production.universe, as_of, tickers=request.tickers
+        )
+    except EmptyUniverseError as exc:
+        raise ValidationError(str(exc)) from None
+
+
+def execute_tick(
+    settings: Any, state: Any, lake: Any, registry: Any, request: TickRequest
+) -> TickResult:
+    """One tick as every entrypoint runs it (the API job and ``stonks tick``,
+    BE-66): the universe (with ``asset_class`` and the due bars), the
+    runtime from settings, the per-portfolio plan, then :func:`run_tick`.
+    ``ValidationError`` for an empty universe, ``ConflictError`` for a
+    refused date (backdated or in the future)."""
+    universe = request_universe(settings, lake, request)
+    if request.asset_class is not None:
+        classes = lake.get_asset_classes(universe)
+        universe = [t for t in universe if classes.get(t) == request.asset_class]
+        if not universe:
+            raise ValidationError(
+                f"no instruments in the universe match asset_class={request.asset_class!r}"
+            )
+    due = None
+    if request.bars_due_at is not None:
+        due = bars_due(universe, lake.get_asset_classes(universe), _utc(request.bars_due_at))
+    runtime = build_tick_runtime(settings, universe, scoped=request.is_scoped, bars_due=due)
+    try:
+        return run_tick(
+            state=state,
+            lake=lake,
+            registry=registry,
+            settings=runtime.settings,
+            as_of=request.as_of,
+            dry_run=request.dry_run,
+            notifier=runtime.notifier,
+            broker_factory=runtime.broker_factory,
+            plan=runtime.plan_for(state, dry_run=request.dry_run),
+        )
+    except BackdatedTickError as exc:
+        raise ConflictError(str(exc)) from None
 
 
 #: The tick's trading date as recorded on its portfolio snapshot (ticks that

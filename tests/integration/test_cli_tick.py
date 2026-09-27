@@ -132,6 +132,25 @@ def test_tick_with_tickers_override(runner, seeded):
     assert result.exit_code == 0, result.output
 
 
+def test_be66_the_cli_tick_runs_the_services_code_path(runner, seeded, monkeypatch):
+    import stonks.app.ticks as ticks_mod
+
+    seen = []
+    real = ticks_mod.execute_tick
+
+    def spy(settings, state, lake, registry, request):
+        seen.append(request)
+        return real(settings, state, lake, registry, request)
+
+    monkeypatch.setattr(ticks_mod, "execute_tick", spy)
+    result = runner.invoke(
+        app, ["tick", "--dry-run", "--as-of", "2026-03-20", "--tickers", "UP.US", "--full"]
+    )
+    assert result.exit_code == 0, result.output
+    [request] = seen
+    assert request.tickers == ["UP.US"] and request.is_scoped is False and request.dry_run
+
+
 def test_tick_asset_class_filter_keeps_matching(runner, seeded):
     """``--asset-class equity`` keeps the equity-only seeded universe."""
     result = runner.invoke(

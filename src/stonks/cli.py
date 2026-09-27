@@ -36,8 +36,6 @@ from stonks.ingest.wiring import build_ingest_pipeline
 from stonks.logging import configure_logging, get_logger
 from stonks.notify import notifier_from_settings
 from stonks.ops.commands import app as ops_app
-from stonks.production.settings_builder import build_tick_runtime
-from stonks.production.tick import BackdatedTickError, run_tick
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
@@ -952,54 +950,47 @@ def tick(
         "to have asset_class populated for the relevant tickers",
         callback=_validate_asset_class,
     ),
+    scoped: bool | None = typer.Option(
+        None,
+        "--scoped/--full",
+        help="trade only the tick's tickers and leave other holdings alone (--scoped), or "
+        "trade the whole book (--full); default: scoped when --tickers or --asset-class "
+        "narrow the universe",
+    ),
 ) -> None:
     """One-shot production tick. Score every active strategy on the
     universe, build each portfolio's orders with its constructor (the
     default single_winner lets the top strategy decide), execute them
     idempotently through the broker, and record everything in state.
-    Designed to be invoked by cron or systemd."""
-    settings = _settings()
+    Designed to be invoked by cron or systemd. Runs the same code path as
+    the API's tick job."""
+    from stonks.app.errors import ConflictError, ValidationError
+    from stonks.app.ticks import TickRequest, execute_tick
 
+    settings = _settings()
     configured = settings.production.universe
     if not _parse_tickers(tickers) and not configured:
         raise typer.BadParameter(
-            "production universe is empty — provide --tickers or set "
+            "production universe is empty: provide --tickers or set "
             "[production].universe in config/default.toml"
         )
-
-    # None → run_tick defaults to the UTC date (stored timestamps are UTC).
-    as_of_date = date.fromisoformat(as_of) if as_of else None
+    request = TickRequest(
+        dry_run=dry_run,
+        # None: run_tick uses the UTC date (stored timestamps are UTC).
+        as_of=date.fromisoformat(as_of) if as_of else None,
+        tickers=_parse_tickers(tickers) or None,
+        asset_class=asset_class,  # type: ignore[arg-type]
+        scoped=scoped,
+    )
     state, registry = _open_registry(settings)
     try:
         with _open_lake(settings.lake.path) as lake:
-            universe = _production_universe(lake, settings, as_of_date, tickers)
-            # Apply --asset-class inside the same lake connection that
-            # ``run_tick`` will use, so we don't open the lake twice.
-            if asset_class is not None:
-                classes = lake.get_asset_classes(universe)
-                universe = [t for t in universe if classes.get(t) == asset_class]
-                if not universe:
-                    raise typer.BadParameter(
-                        f"no instruments in the universe match --asset-class={asset_class!r}; "
-                        "ingest profiles first or relax the filter"
-                    )
-
-            # explicit tickers narrow the tick: other holdings are left alone
-            scoped = bool(_parse_tickers(tickers)) or asset_class is not None
-            runtime = build_tick_runtime(settings, universe, scoped=scoped)
             try:
-                result = run_tick(
-                    state=state,
-                    lake=lake,
-                    registry=registry,
-                    settings=runtime.settings,
-                    as_of=as_of_date,
-                    dry_run=dry_run,
-                    notifier=runtime.notifier,
-                    broker_factory=runtime.broker_factory,
-                    plan=runtime.plan_for(state, dry_run=dry_run),
-                )
-            except BackdatedTickError as exc:
+                result = execute_tick(settings, state, lake, registry, request)
+            except ValidationError as exc:
+                hint = "--asset-class" if asset_class is not None else "--tickers"
+                raise typer.BadParameter(str(exc), param_hint=hint) from None
+            except ConflictError as exc:
                 console.print(f"[red]{exc}[/red]")
                 raise typer.Exit(code=1) from None
     finally:
