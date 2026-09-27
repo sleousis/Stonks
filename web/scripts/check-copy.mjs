@@ -35,18 +35,29 @@ function walk(dir, out = []) {
   return out;
 }
 
+/**
+ * Drop HTML comments with a plain scan (no regex): a comment runs from
+ * `<!--` to the first `-->` or `--!>`, or to the end of the file.
+ */
+export function stripHtmlComments(source) {
+  let out = '';
+  let i = 0;
+  for (;;) {
+    const open = source.indexOf('<!--', i);
+    if (open === -1) return out + source.slice(i);
+    out += source.slice(i, open);
+    const ends = ['-->', '--!>']
+      .map((end) => [source.indexOf(end, open + 4), end.length])
+      .filter(([at]) => at !== -1);
+    if (ends.length === 0) return out;
+    const [at, len] = ends.reduce((a, b) => (b[0] < a[0] ? b : a));
+    i = at + len;
+  }
+}
+
 /** The text a trader can see: template text, or string literals outside comments. */
 export function visibleText(source, isHtml) {
-  if (isHtml) {
-    // Strip until stable, so a comment hidden inside another cannot survive.
-    let text = source;
-    let prev;
-    do {
-      prev = text;
-      text = text.replace(/<!--[\s\S]*?-->/g, '');
-    } while (text !== prev);
-    return text.replace(/<!--|-->/g, '');
-  }
+  if (isHtml) return stripHtmlComments(source);
   const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
   const strings = code.match(/'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`/g) ?? [];
   return strings.join('\n');
