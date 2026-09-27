@@ -197,6 +197,11 @@ def _seed_own_rows(app, path, user_id: str, role: Role, tag: str) -> dict[str, s
             " created_at, updated_at) VALUES (?, ?, 'bah_shadow', ?, 'paper', ?, ?)",
             [f"sub_{tag}", user_id, pid, now, now],
         )
+        state.execute(
+            "INSERT INTO watchlists (id, owner_id, name, tickers_json, created_at, updated_at)"
+            " VALUES (?, ?, ?, '[\"UP.US\"]', ?, ?)",
+            [f"wl_{tag.lower()}", user_id, f"{tag}LIST", now, now],
+        )
     job = services.runner.store.create("backtest", {"marker": f"{tag}JOB"}, owner_id=user_id)
     conn = services.connections.connect_with_keys(
         session_principal(user_id, role).scope,
@@ -208,6 +213,7 @@ def _seed_own_rows(app, path, user_id: str, role: Role, tag: str) -> dict[str, s
         "subscription": f"sub_{tag}",
         "job": job.id,
         "connection": conn.id,
+        "watchlist": f"wl_{tag.lower()}",
     }
 
 
@@ -360,6 +366,26 @@ CASES: dict[str, Case] = {
         "GET", "/api/insights/agreement", lambda i: {"portfolio_id": i["portfolio"]}
     ),
     "get_insights_totals": _c("GET", "/api/insights/totals"),
+    "get_chart": _c(
+        "GET",
+        "/api/charts/{ticker}",
+        lambda i: {"ticker": "UP.US", "portfolio_id": i["portfolio"]},
+    ),
+    "get_leaderboard": _c("GET", "/api/strategies/leaderboard"),
+    "get_tear_sheet": _c(
+        "GET", "/api/strategies/{strategy_id}/tearsheet", lambda i: {"strategy_id": "bah_active"}
+    ),
+    "list_watchlists": _c("GET", "/api/watchlists"),
+    "get_watchlist": _c(
+        "GET", "/api/watchlists/{watchlist_id}", lambda i: {"watchlist_id": i["watchlist"]}
+    ),
+    "get_my_risk_limits": _c("GET", "/api/risk/limits"),
+    "create_watchlist": _c("POST", "/api/watchlists", lambda i: {"name": "x", "tickers": ["=bad"]}),
+    "update_watchlist": _c(
+        "PATCH",
+        "/api/watchlists/{watchlist_id}",
+        lambda i: {"watchlist_id": i["watchlist"], "tickers": ["UP.US", "DOWN.US"]},
+    ),
     # research jobs (an inverted window: the API answers 422 once the permission passed)
     "run_backtest": _c(
         "POST",

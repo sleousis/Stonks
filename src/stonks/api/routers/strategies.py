@@ -6,6 +6,7 @@ from fastapi import APIRouter, Body, Depends, Query
 
 from stonks.api.deps import PageDep, PrincipalDep, ServicesDep, require_permission
 from stonks.api.errors import PROBLEM_RESPONSES
+from stonks.app.leaderboard import LeaderboardService, LeaderboardView, SortKey, TearSheetView
 from stonks.app.pagination import Page, page_of
 from stonks.app.strategies import (
     StatusChangeRequest,
@@ -44,6 +45,21 @@ def strategy_summary(services: ServicesDep) -> StrategyStatusCounts:
     return services.strategies.counts()
 
 
+@router.get("/leaderboard", response_model=LeaderboardView, operation_id="getLeaderboard")
+def get_leaderboard(
+    services: ServicesDep,
+    sort: Annotated[
+        SortKey, Query(description="rank by paper Sharpe, total return, drawdown or trades")
+    ] = "sharpe",
+    include_retired: Annotated[bool, Query(description="also list stopped strategies")] = False,
+) -> LeaderboardView:
+    """Every strategy ranked by its risk-adjusted paper result (the model
+    book the tick keeps for it): return, Sharpe, Sortino and worst
+    drawdown, trade counts, survival tests passed and the go-live verdict."""
+    board = LeaderboardService(services.context, services.strategies)
+    return board.leaderboard(sort=sort, include_retired=include_retired)
+
+
 @router.get("/{strategy_id}", response_model=StrategyDetail, operation_id="getStrategy")
 def get_strategy(strategy_id: str, services: ServicesDep) -> StrategyDetail:
     return services.strategies.get(strategy_id)
@@ -59,6 +75,14 @@ def get_strategy_history(
 ) -> Page[StatusChangeView]:
     """The strategy's audited status changes and interventions, oldest first."""
     return page_of(services.strategies.history(strategy_id), page)
+
+
+@router.get("/{strategy_id}/tearsheet", response_model=TearSheetView, operation_id="getTearSheet")
+def get_tear_sheet(strategy_id: str, services: ServicesDep) -> TearSheetView:
+    """One strategy on one page: paper figures and value curve, monthly
+    returns, recent model-book trades, survival verdicts, the go-live report
+    and the status history. Stored data only; backtests run in the lab."""
+    return LeaderboardService(services.context, services.strategies).tear_sheet(strategy_id)
 
 
 def _change(
