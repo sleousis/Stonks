@@ -9,7 +9,8 @@ the scripted messages of that feed.
 
 Scriptable per test: the messages per feed, dropping the connection after
 the script (``drop_after_script``), or after N messages on the first
-connection only (``drop_first_after``), and a wrong key. Sockets bind to
+connection only (``drop_first_after``, the next connection resumes there),
+and a wrong key. Sockets bind to
 127.0.0.1 only, which the hermetic test run allows.
 """
 
@@ -97,7 +98,10 @@ class FakeEodhdServer:
             symbols = [s.strip() for s in str(sub.get("symbols", "")).split(",") if s.strip()]
             with self._lock:
                 self.subscriptions.append((feed, symbols))
-            for i, msg in enumerate(self.script.get(feed, [])):
+            script = self.script.get(feed, [])
+            # a later connection resumes where the dropped one stopped
+            begin = 0 if first or self.drop_first_after is None else self.drop_first_after
+            for i, msg in enumerate(script[begin:], start=begin):
                 if first and self.drop_first_after is not None and i >= self.drop_first_after:
                     ws.close(code=1011)
                     return
