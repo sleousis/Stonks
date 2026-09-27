@@ -1,0 +1,172 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.stack {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+h3 {
+  font-size: var(--text-md);
+}
+
+// The way to real money: four steps, the brass ones move real money.
+.ladder {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+
+  @media (max-width: 720px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.step {
+  display: grid;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-2);
+  counter-increment: step;
+
+  &::before {
+    content: counter(step);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--color-ink-3);
+  }
+
+  &.done {
+    border-color: var(--color-gain);
+  }
+
+  &.live {
+    border-style: dashed;
+  }
+
+  &.here {
+    border-width: 2px;
+    border-color: var(--color-accent);
+    color: var(--color-ink);
+    background: var(--color-surface-2);
+  }
+
+  &.here.live {
+    border-style: solid;
+    border-color: var(--color-live);
+    background: var(--color-live-soft);
+  }
+}
+
+.step-name {
+  font-weight: var(--weight-semibold);
+}
+
+.step-means {
+  font-size: var(--text-sm);
+}
+
+.stage-note {
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-live);
+  border-radius: var(--radius-xs);
+  background: var(--color-live-soft);
+  color: var(--color-ink);
+}
+
+.gate {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+
+  dt {
+    font-size: var(--text-sm);
+    color: var(--color-ink-2);
+  }
+
+  dd {
+    margin: 0;
+    font-weight: var(--weight-semibold);
+  }
+}
+
+.checks,
+.days {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  > li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px var(--space-3);
+    align-items: center;
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  > li:last-child {
+    border-bottom: 0;
+  }
+}
+
+.check-name,
+.day-date {
+  font-weight: var(--weight-semibold);
+}
+
+.check-detail,
+.day-facts,
+.day-why {
+  grid-column: 1 / -1;
+  font-size: var(--text-sm);
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.day-why {
+  color: var(--color-warn);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.move-down,
+.history {
+  summary {
+    display: flex;
+    align-items: center;
+    min-height: var(--touch-min);
+    cursor: pointer;
+    color: var(--color-ink-2);
+  }
+
+  ul {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+    padding-left: var(--space-4);
+    overflow-wrap: anywhere;
+  }
+}

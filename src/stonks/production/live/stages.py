@@ -133,10 +133,10 @@ def change_stage(
         if direction == "promote":
             if target != now + 1:
                 raise StageError(
-                    f"promote one stage at a time: {current} leads to {next_stage(current)}"
+                    f"move up one stage at a time: {current} leads to {next_stage(current)}"
                 )
             if not gate_report:
-                raise StageError(f"promoting to {to_stage} needs a gate report")
+                raise StageError(f"moving up to {to_stage} needs a gate report")
             if gate_report.get("target") != to_stage:
                 raise StageError("the gate report is for another stage")
             if not gate_report.get("passed"):

@@ -35,6 +35,8 @@ import { PermissionNote } from '../../shared/ui/permission-note';
 import { Segmented } from '../../shared/ui/segmented';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { LivePreviewPanel } from './live-preview-panel';
+import { LiveStageCard } from './live-stage-card';
 
 const REASON_MAX = 500;
 
@@ -96,11 +98,12 @@ export function profileText(p: {
 }
 
 /**
- * Live settings of one real-money portfolio (`/profile/live/:id`): the
+ * Live settings of one real-money portfolio (`/profile/live/:id`): its
+ * stage on the way to real money with what moving up needs (19.9), the
  * allocation the owner lets Stonks trade, set by hand only, the account
- * profile that picks the account rules, and, read only, which live
- * safeguards and account rules act on it. Both changes need a fresh code
- * and are audited.
+ * profile that picks the account rules, which live safeguards and account
+ * rules act on it (read only), and the dry-run order preview. Every change
+ * needs a fresh code and is audited, except moving down a stage.
  */
 @Component({
   selector: 'app-live-settings-page',
@@ -115,6 +118,8 @@ export function profileText(p: {
     EmptyState,
     ErrorState,
     LoadingState,
+    LiveStageCard,
+    LivePreviewPanel,
   ],
   templateUrl: './live-settings.page.html',
   styleUrl: './live-settings.page.scss',

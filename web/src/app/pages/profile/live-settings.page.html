@@ -32,6 +32,13 @@
   </app-empty-state>
 } @else {
   <div class="page-grid">
+    <!-- Stage and its gate (19.9) ------------------------------------------->
+    <app-live-stage-card
+      class="span-12"
+      [portfolioId]="portfolio()!.id"
+      [portfolioName]="portfolio()!.name"
+    />
+
     <!-- Allocation ---------------------------------------------------------->
     <section class="panel live-frame span-6" aria-labelledby="allocation-title">
       <div class="panel-head">
@@ -323,5 +330,8 @@
         </div>
       }
     </section>
+
+    <!-- Order preview (19.9) ------------------------------------------------>
+    <app-live-preview-panel class="span-12" [portfolioId]="portfolio()!.id" />
   </div>
 }

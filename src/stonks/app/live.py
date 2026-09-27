@@ -436,13 +436,13 @@ class LiveService:
         self, principal: Principal, actor: str, portfolio_id: str, body: StagePromoteBody
     ) -> LiveStageView:
         if body.confirm.strip() != body.to_stage:
-            raise ValidationError(f"type {body.to_stage} to confirm the promotion")
+            raise ValidationError(f"type {body.to_stage} to confirm moving up")
         with self._ctx.state() as state:
             portfolio = self._portfolio(state, principal, portfolio_id)
             report = self._report(state, portfolio)
             if report.target != body.to_stage:
                 raise ConflictError(
-                    f"the portfolio is in {report.from_stage}: a promotion leads to"
+                    f"the portfolio is in {report.from_stage}: moving up leads to"
                     f" {report.target or 'nothing (the top stage)'}"
                 )
             if not report.passed:

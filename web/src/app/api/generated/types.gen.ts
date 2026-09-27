@@ -139,6 +139,36 @@ export type ActionDecision = {
 };
 
 /**
+ * AdjustmentView
+ */
+export type AdjustmentView = {
+    /**
+     * Adjusted Quantity
+     */
+    adjusted_quantity: number;
+    /**
+     * Original Quantity
+     */
+    original_quantity: number;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Rule
+     */
+    rule: string;
+    /**
+     * Side
+     */
+    side: string;
+    /**
+     * Ticker
+     */
+    ticker: string;
+};
+
+/**
  * AgreementView
  */
 export type AgreementView = {
@@ -2617,6 +2647,138 @@ export type FxRateView = {
 };
 
 /**
+ * GateCheckView
+ */
+export type GateCheckView = {
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Passed
+     */
+    passed: boolean | null;
+    /**
+     * Required
+     */
+    required?: unknown;
+    /**
+     * Value
+     */
+    value?: unknown;
+};
+
+/**
+ * GateDayView
+ */
+export type GateDayView = {
+    /**
+     * Clean
+     */
+    clean: boolean;
+    /**
+     * Drift Items
+     */
+    drift_items: number | null;
+    /**
+     * Fills
+     */
+    fills: number;
+    /**
+     * Fills Missing Commission
+     */
+    fills_missing_commission: number;
+    /**
+     * Live Return
+     */
+    live_return: number | null;
+    /**
+     * Model Return
+     */
+    model_return: number | null;
+    /**
+     * Orders Filled
+     */
+    orders_filled: number;
+    /**
+     * Orders Refused
+     */
+    orders_refused: number;
+    /**
+     * Orders Rejected
+     */
+    orders_rejected: number;
+    /**
+     * Orders Sent
+     */
+    orders_sent: number;
+    /**
+     * Reject Rate
+     */
+    reject_rate: number;
+    /**
+     * Session Date
+     */
+    session_date: string;
+    /**
+     * Stage
+     */
+    stage: 'sim_paper' | 'broker_paper' | 'live_small' | 'live_scale';
+    /**
+     * Stuck Orders
+     */
+    stuck_orders: number;
+    /**
+     * Tca Gap Bps
+     */
+    tca_gap_bps: number | null;
+    /**
+     * Tca Orders
+     */
+    tca_orders: number;
+};
+
+/**
+ * GateReportView
+ */
+export type GateReportView = {
+    /**
+     * Checks
+     */
+    checks: Array<GateCheckView>;
+    /**
+     * Computed At
+     */
+    computed_at: string;
+    /**
+     * From Stage
+     */
+    from_stage: 'sim_paper' | 'broker_paper' | 'live_small' | 'live_scale';
+    /**
+     * Metrics
+     */
+    metrics: {
+        [key: string]: unknown;
+    };
+    /**
+     * Passed
+     */
+    passed: boolean;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Target
+     */
+    target: 'sim_paper' | 'broker_paper' | 'live_small' | 'live_scale' | null;
+};
+
+/**
  * GatewayHealthView
  */
 export type GatewayHealthView = {
@@ -4395,6 +4557,57 @@ export type LiveNotionalCapsSettings = {
 };
 
 /**
+ * LivePreviewView
+ */
+export type LivePreviewView = {
+    account: PreviewAccountView | null;
+    /**
+     * Adjustments
+     */
+    adjustments: Array<AdjustmentView>;
+    /**
+     * Allocation
+     */
+    allocation: number | null;
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Notes
+     */
+    notes: Array<string>;
+    /**
+     * Orders
+     */
+    orders: Array<PreviewOrderView>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Reason
+     */
+    reason: string | null;
+    /**
+     * Stage
+     */
+    stage: 'sim_paper' | 'broker_paper' | 'live_small' | 'live_scale';
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Transmitted
+     */
+    transmitted: boolean;
+    /**
+     * What If Available
+     */
+    what_if_available: boolean;
+};
+
+/**
  * LiveRuleView
  */
 export type LiveRuleView = {
@@ -4438,6 +4651,36 @@ export type LiveRulesView = {
      * Safeguards
      */
     safeguards: Array<LiveRuleView>;
+};
+
+/**
+ * LiveStageView
+ */
+export type LiveStageView = {
+    /**
+     * Days
+     */
+    days: Array<GateDayView>;
+    /**
+     * History
+     */
+    history: Array<StageChangeView>;
+    /**
+     * Next Stage
+     */
+    next_stage: 'sim_paper' | 'broker_paper' | 'live_small' | 'live_scale' | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Real Money
+     */
+    real_money: boolean;
+    /**
+     * Stage
+     */
+    stage: 'sim_paper' | 'broker_paper' | 'live_small' | 'live_scale';
 };
 
 /**
@@ -7326,6 +7569,95 @@ export type PreflightView = {
 };
 
 /**
+ * PreviewAccountView
+ */
+export type PreviewAccountView = {
+    /**
+     * Account Type
+     */
+    account_type: string;
+    /**
+     * Available Funds
+     */
+    available_funds: number;
+    /**
+     * Buying Power
+     */
+    buying_power: number;
+    /**
+     * Cash
+     */
+    cash: number;
+    /**
+     * Currency
+     */
+    currency: string;
+    /**
+     * Equity
+     */
+    equity: number;
+    /**
+     * Settled Cash
+     */
+    settled_cash: number;
+};
+
+/**
+ * PreviewOrderView
+ */
+export type PreviewOrderView = {
+    /**
+     * Adjustments
+     */
+    adjustments: Array<AdjustmentView>;
+    /**
+     * Client Id
+     */
+    client_id: string;
+    /**
+     * Limit Price
+     */
+    limit_price: number | null;
+    /**
+     * Notional
+     */
+    notional: number | null;
+    /**
+     * Order Type
+     */
+    order_type: string;
+    /**
+     * Position Effect
+     */
+    position_effect: string | null;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Side
+     */
+    side: string;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Time In Force
+     */
+    time_in_force: string | null;
+    what_if: WhatIfView | null;
+    /**
+     * What If Error
+     */
+    what_if_error: string | null;
+};
+
+/**
  * PriceAlertCreate
  *
  * A rule on one ticker (``ticker``) or on one of your watchlists
@@ -9520,6 +9852,78 @@ export type SqueezeGuardSettings = {
      * Spike Pct
      */
     spike_pct?: number | null;
+};
+
+/**
+ * StageChangeView
+ */
+export type StageChangeView = {
+    /**
+     * Actor
+     */
+    actor: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Direction
+     */
+    direction: 'promote' | 'demote';
+    /**
+     * From Stage
+     */
+    from_stage: 'sim_paper' | 'broker_paper' | 'live_small' | 'live_scale';
+    /**
+     * Gate Report
+     */
+    gate_report: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * To Stage
+     */
+    to_stage: 'sim_paper' | 'broker_paper' | 'live_small' | 'live_scale';
+};
+
+/**
+ * StageDemoteBody
+ */
+export type StageDemoteBody = {
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * To Stage
+     */
+    to_stage: 'sim_paper' | 'broker_paper' | 'live_small' | 'live_scale';
+};
+
+/**
+ * StagePromoteBody
+ */
+export type StagePromoteBody = {
+    /**
+     * Confirm
+     */
+    confirm: string;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * To Stage
+     */
+    to_stage: 'sim_paper' | 'broker_paper' | 'live_small' | 'live_scale';
 };
 
 /**
@@ -11899,6 +12303,36 @@ export type WebhookUpdate = {
      * Url
      */
     url?: null;
+};
+
+/**
+ * WhatIfView
+ */
+export type WhatIfView = {
+    /**
+     * Commission
+     */
+    commission: number | null;
+    /**
+     * Commission Currency
+     */
+    commission_currency: string | null;
+    /**
+     * Equity With Loan After
+     */
+    equity_with_loan_after: number;
+    /**
+     * Initial Margin Change
+     */
+    initial_margin_change: number;
+    /**
+     * Maintenance Margin Change
+     */
+    maintenance_margin_change: number;
+    /**
+     * Warning
+     */
+    warning: string | null;
 };
 
 /**
@@ -19072,6 +19506,98 @@ export type SetLiveAllocationResponses = {
 
 export type SetLiveAllocationResponse = SetLiveAllocationResponses[keyof SetLiveAllocationResponses];
 
+export type GetLiveGateReportData = {
+    body?: never;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/live/gate-report';
+};
+
+export type GetLiveGateReportErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetLiveGateReportError = GetLiveGateReportErrors[keyof GetLiveGateReportErrors];
+
+export type GetLiveGateReportResponses = {
+    /**
+     * Successful Response
+     */
+    200: GateReportView;
+};
+
+export type GetLiveGateReportResponse = GetLiveGateReportResponses[keyof GetLiveGateReportResponses];
+
+export type PreviewLiveOrdersData = {
+    body?: never;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/live/preview';
+};
+
+export type PreviewLiveOrdersErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type PreviewLiveOrdersError = PreviewLiveOrdersErrors[keyof PreviewLiveOrdersErrors];
+
+export type PreviewLiveOrdersResponses = {
+    /**
+     * Successful Response
+     */
+    200: LivePreviewView;
+};
+
+export type PreviewLiveOrdersResponse = PreviewLiveOrdersResponses[keyof PreviewLiveOrdersResponses];
+
 export type GetLiveRulesData = {
     body?: never;
     path: {
@@ -19117,6 +19643,149 @@ export type GetLiveRulesResponses = {
 };
 
 export type GetLiveRulesResponse = GetLiveRulesResponses[keyof GetLiveRulesResponses];
+
+export type GetLiveStageData = {
+    body?: never;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: {
+        /**
+         * Days
+         */
+        days?: number;
+    };
+    url: '/api/portfolios/{portfolio_id}/live/stage';
+};
+
+export type GetLiveStageErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetLiveStageError = GetLiveStageErrors[keyof GetLiveStageErrors];
+
+export type GetLiveStageResponses = {
+    /**
+     * Successful Response
+     */
+    200: LiveStageView;
+};
+
+export type GetLiveStageResponse = GetLiveStageResponses[keyof GetLiveStageResponses];
+
+export type DemoteLiveStageData = {
+    body: StageDemoteBody;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/live/stage/demote';
+};
+
+export type DemoteLiveStageErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type DemoteLiveStageError = DemoteLiveStageErrors[keyof DemoteLiveStageErrors];
+
+export type DemoteLiveStageResponses = {
+    /**
+     * Successful Response
+     */
+    200: LiveStageView;
+};
+
+export type DemoteLiveStageResponse = DemoteLiveStageResponses[keyof DemoteLiveStageResponses];
+
+export type PromoteLiveStageData = {
+    body: StagePromoteBody;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/live/stage/promote';
+};
+
+export type PromoteLiveStageErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type PromoteLiveStageError = PromoteLiveStageErrors[keyof PromoteLiveStageErrors];
+
+export type PromoteLiveStageResponses = {
+    /**
+     * Successful Response
+     */
+    200: LiveStageView;
+};
+
+export type PromoteLiveStageResponse = PromoteLiveStageResponses[keyof PromoteLiveStageResponses];
 
 export type ListPriceAlertsData = {
     body?: never;

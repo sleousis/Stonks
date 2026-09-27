@@ -2,20 +2,33 @@ import { Injectable } from '@angular/core';
 
 import { unwrap } from './api-call';
 import {
+  demoteLiveStage,
   getAccountProfile,
   getBrokerGateways,
   getLiveAllocation,
+  getLiveGateReport,
   getLiveRules,
+  getLiveStage,
+  previewLiveOrders,
+  promoteLiveStage,
   setAccountProfile,
   setLiveAllocation,
 } from './generated/sdk.gen';
-import type { AccountProfileBody, AccountProfileView, LiveAllocationUpdate } from './models';
+import type {
+  AccountProfileBody,
+  AccountProfileView,
+  LiveAllocationUpdate,
+  StageDemoteBody,
+  StagePromoteBody,
+} from './models';
 
 /**
  * A live portfolio's owner settings (the allocation and the account
- * profile), the live rules that act on it, and the broker gateways'
- * health. Both writes need a fresh second factor: the session interceptor
- * asks for a code when the API answers 403 `step_up_required`.
+ * profile), the live rules that act on it, the broker gateways' health,
+ * and the live stage (roadmap 19.9): its gate report, promotion, demotion
+ * and the dry-run preview. The settings writes and a promotion need a
+ * fresh second factor: the session interceptor asks for a code when the
+ * API answers 403 `step_up_required`. A demotion and a preview do not.
  */
 @Injectable({ providedIn: 'root' })
 export class LiveService {
@@ -44,5 +57,26 @@ export class LiveService {
 
   gateways() {
     return unwrap(getBrokerGateways());
+  }
+
+  stage(portfolioId: string, days = 20) {
+    return unwrap(getLiveStage({ path: { portfolio_id: portfolioId }, query: { days } }));
+  }
+
+  gateReport(portfolioId: string) {
+    return unwrap(getLiveGateReport({ path: { portfolio_id: portfolioId } }));
+  }
+
+  promote(portfolioId: string, body: StagePromoteBody) {
+    return unwrap(promoteLiveStage({ path: { portfolio_id: portfolioId }, body }));
+  }
+
+  demote(portfolioId: string, body: StageDemoteBody) {
+    return unwrap(demoteLiveStage({ path: { portfolio_id: portfolioId }, body }));
+  }
+
+  /** A dry run through the broker's what-if. It never sends an order. */
+  preview(portfolioId: string) {
+    return unwrap(previewLiveOrders({ path: { portfolio_id: portfolioId } }));
   }
 }
