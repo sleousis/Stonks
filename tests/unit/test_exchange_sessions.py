@@ -81,3 +81,17 @@ def test_sessions_come_from_the_market_calendar():
 def test_outside_the_calendar_window_weekdays_count_as_sessions():
     assert is_session(date(1950, 1, 9))  # a Monday before the calendar's first session
     assert not is_session(date(1950, 1, 7))  # a Saturday
+
+
+def test_importing_the_feature_does_not_load_the_scheduler():
+    """BE-67 (DS-20): features stay free of the scheduler block at import
+    time; the market calendar loads on first use."""
+    import subprocess
+    import sys
+
+    code = (
+        "import sys, stonks.features.sessions; "
+        "print(any(m.startswith('stonks.scheduling') for m in sys.modules))"
+    )
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == "False"
