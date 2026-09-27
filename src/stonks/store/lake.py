@@ -1743,9 +1743,7 @@ class DuckDBLake:
         Ordered by ticker, ex-date, then splits before dividends on the same
         ex-date."""
         if not tickers:
-            return pd.DataFrame(
-                columns=["ticker", "ex_date", "kind", "value", "declaration_date"]
-            )
+            return pd.DataFrame(columns=["ticker", "ex_date", "kind", "value", "declaration_date"])
         df = self.con.execute(
             """
             SELECT ticker, ex_date, kind, value, declaration_date FROM (
