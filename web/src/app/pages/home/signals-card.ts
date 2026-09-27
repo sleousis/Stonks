@@ -12,7 +12,7 @@ import { RouterLink } from '@angular/router';
 import type { FeedItemView, TickRun } from '../../api/models';
 import { NotificationsService } from '../../api/notifications.service';
 import { TicksService } from '../../api/ticks.service';
-import { formatTime } from '../../core/format/format';
+import { formatTime, formatWeekday, isoDay } from '../../core/format/format';
 import { NotificationFeedService, appLink } from '../../core/notify/notification-feed.service';
 import { jobLabel, nextTradingRun } from '../../core/schedule/job-labels';
 import { TradingDayService } from '../../core/schedule/trading-day.service';
@@ -115,7 +115,12 @@ interface BlotterRow {
         <ol class="blotter">
           @if (next(); as n) {
             <li class="row next">
-              <span class="time num">{{ n.time }}</span>
+              <span class="time num">
+                @if (n.day) {
+                  <span class="weekday">{{ n.day }}</span>
+                }
+                {{ n.time }}</span
+              >
               <span class="node" aria-hidden="true"></span>
               <div class="text">
                 <span class="title">Next: {{ n.label }}</span>
@@ -190,6 +195,9 @@ interface BlotterRow {
     }
     .row:last-child::before {
       bottom: calc(100% - 1.1rem);
+    }
+    .weekday {
+      display: block;
     }
     .time {
       padding-top: 2px;
@@ -348,6 +356,11 @@ export class SignalsCard {
     return {
       label: jobLabel(job),
       time: formatTime(job.next_run_at),
+      // A run on another day carries its weekday, so 22:45 never reads as tonight.
+      day:
+        isoDay(new Date(job.next_run_at)) === isoDay(new Date(now))
+          ? null
+          : formatWeekday(job.next_run_at),
       in: countdown(Date.parse(job.next_run_at) - now),
     };
   });

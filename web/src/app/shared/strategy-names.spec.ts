@@ -25,6 +25,10 @@ describe('strategyKindName', () => {
     );
     expect(strategyKindName('BuyAndHold')).toBe('Buy and hold');
     expect(strategyKindName('x.RSIMeanReversion')).toBe('RSI mean reversion');
+    // The registry stores entry-point paths: module, a colon, then the class.
+    expect(strategyKindName('stonks.strategies.examples.buy_and_hold:BuyAndHold')).toBe(
+      'Buy and hold',
+    );
     expect(strategyKindName('x.TSMOM')).toBe('TSMOM');
   });
 });

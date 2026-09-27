@@ -81,7 +81,7 @@ def test_a_trader_reads_insights_on_their_own_book(browse, stack, viewport):
 
     alloc = page.locator(".slices")
     expect(alloc).to_contain_text("equity")
-    page.get_by_role("button", name="Holding", exact=True).click()
+    page.get_by_role("radio", name="Holding", exact=True).click()
     expect(alloc).to_contain_text("AAA.US")
 
     expect(page.get_by_role("heading", name="Returns")).to_be_visible()

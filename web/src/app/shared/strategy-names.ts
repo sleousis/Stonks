@@ -26,9 +26,9 @@ export function strategyDisplayName(id: string, hints: DisplayNameHints = {}): s
   return `${words.charAt(0).toUpperCase()}${words.slice(1)} ${match[2].slice(0, 4)}`;
 }
 
-/** `stonks.strategies.momentum.MomentumStrategy` -> `MomentumStrategy`. */
+/** `stonks.strategies.momentum.MomentumStrategy` or `pkg.mod:Class` -> the class name. */
 export function shortClassName(classPath: string): string {
-  return classPath.split('.').at(-1) || classPath;
+  return classPath.split(/[.:]/).at(-1) || classPath;
 }
 
 /**

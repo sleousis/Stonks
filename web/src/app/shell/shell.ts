@@ -145,8 +145,8 @@ export class Shell {
 
   protected async signOut(): Promise<void> {
     this.closeDrawer();
+    // logout() loads /login afresh, so no user's state outlives the session (UX-07).
     await this.session.logout();
-    await this.router.navigateByUrl('/login');
   }
 
   private focusPage(): void {

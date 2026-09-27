@@ -6,6 +6,7 @@ import type { FeedItemView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { nextRequest, tick } from '../../../testing/http';
 import type { TickRun } from '../../api/models';
+import { formatWeekday } from '../../core/format/format';
 import { NotificationFeedService } from '../../core/notify/notification-feed.service';
 import { TradingDayService } from '../../core/schedule/trading-day.service';
 import { SignalsCard, runDetail, todaysRuns, todaysSignals } from './signals-card';
@@ -147,6 +148,26 @@ describe('SignalsCard', () => {
     expect(next.querySelector('.title')?.textContent?.trim()).toBe('Next: Trading run');
     expect(next.textContent).toContain('1h 2');
     expect(next.textContent).not.toMatch(/sync|Health|Tick/);
+  });
+
+  it('names the weekday of a trading run on another day', async () => {
+    const at = new Date(Date.now() + 3 * 86_400_000).toISOString();
+    TestBed.inject(TradingDayService)['jobsSignal'].set([
+      { action: 'tick', name: 'tick', next_run_at: at, next_as_of: null, trigger: 'daily' },
+    ]);
+    const fixture = TestBed.createComponent(SignalsCard);
+    fixture.detectChanges();
+    (await nextRequest(controller, '/api/notifications')).flush({ items: [], unread_count: 0 });
+    (await nextRequest(controller, '/api/ticks')).flush({
+      items: [],
+      total: 0,
+      limit: 10,
+      offset: 0,
+    });
+    await tick();
+    fixture.detectChanges();
+    const time = (fixture.nativeElement as HTMLElement).querySelector('.row.next .time')!;
+    expect(time.querySelector('.weekday')?.textContent?.trim()).toBe(formatWeekday(at));
   });
 
   it('puts runs and signals in one time line, newest first', async () => {

@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
+import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter, map } from 'rxjs';
 
 import { RefreshStatus, UpdatedAgo } from '../../shared/auto-refresh';
@@ -20,16 +20,7 @@ import { OrdersTabs } from './orders-tabs';
 @Component({
   selector: 'app-orders-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [
-    RouterOutlet,
-    RouterLink,
-    PageHeader,
-    UpdatedAgo,
-    ExportButton,
-    OrdersTabs,
-    NoBook,
-    LoadingState,
-  ],
+  imports: [RouterOutlet, PageHeader, UpdatedAgo, ExportButton, OrdersTabs, NoBook, LoadingState],
   providers: [RefreshStatus],
   template: `
     <app-page-header
@@ -41,7 +32,6 @@ import { OrdersTabs } from './orders-tabs';
         <ng-container ngProjectAs="[actions]">
           <app-export-button kind="orders" label="Orders CSV" [ghost]="true" />
           <app-export-button kind="fills" label="Fills CSV" [ghost]="true" />
-          <a class="btn" routerLink="/orders/ticks">Go to trading runs</a>
         </ng-container>
       }
     </app-page-header>
@@ -72,6 +62,6 @@ export class OrdersPage {
     ),
     { initialValue: this.router.url },
   );
-  /** On the runs tab the runner is already on screen, so the header link goes. */
+  /** On the runs tab the CSV downloads give way to the runner. */
   protected readonly onRuns = computed(() => this.url().startsWith('/orders/ticks'));
 }

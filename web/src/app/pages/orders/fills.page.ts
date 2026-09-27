@@ -69,7 +69,7 @@ export const FILL_COLUMNS: TableColumn<FillView>[] = [
           <input
             id="ff-tick"
             class="input"
-            placeholder="Run id"
+            placeholder="Any run"
             [value]="tick() ?? ''"
             (change)="setFilter('tick', $any($event.target).value)"
           />
@@ -79,7 +79,7 @@ export const FILL_COLUMNS: TableColumn<FillView>[] = [
           <input
             id="ff-order"
             class="input"
-            placeholder="Order id"
+            placeholder="Any order"
             [value]="order() ?? ''"
             (change)="setFilter('order', $any($event.target).value)"
           />

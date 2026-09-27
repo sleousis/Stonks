@@ -102,36 +102,39 @@ const KEY_LABELS: Record<Grouping, string> = {
       }
     </section>
 
-    <section class="panel breakdown" aria-labelledby="breakdown-title">
-      <div class="panel-head">
-        <h2 id="breakdown-title">Breakdown</h2>
-        <app-segmented label="Group costs" [options]="groupings" [(value)]="grouping" />
-      </div>
+    <!-- With no trades yet the totals already say so: no second empty panel. -->
+    @if (!noTrades()) {
+      <section class="panel breakdown" aria-labelledby="breakdown-title">
+        <div class="panel-head">
+          <h2 id="breakdown-title">Breakdown</h2>
+          <app-segmented label="Group costs" [options]="groupings" [(value)]="grouping" />
+        </div>
 
-      @if (breakdown.error(); as err) {
-        <app-error-state
-          title="Could not load the breakdown"
-          [error]="err"
-          (retry)="breakdown.reload()"
-        />
-      } @else if (!breakdown.hasValue()) {
-        <app-loading-state label="Loading the breakdown" [rows]="4" />
-      } @else if (breakdown.value().groups.length === 0) {
-        <app-empty-state
-          title="No trades yet"
-          message="Costs appear after the first filled order."
-        />
-      } @else {
-        @let rows = breakdown.value().groups;
-        <app-data-table
-          [caption]="'Trade costs ' + groupingLabel().toLowerCase()"
-          [rows]="rows"
-          [columns]="columns()"
-          [rowKey]="rowKey"
-          [initialSort]="{ key: 'is_cost', dir: 'desc' }"
-        />
-      }
-    </section>
+        @if (breakdown.error(); as err) {
+          <app-error-state
+            title="Could not load the breakdown"
+            [error]="err"
+            (retry)="breakdown.reload()"
+          />
+        } @else if (!breakdown.hasValue()) {
+          <app-loading-state label="Loading the breakdown" [rows]="4" />
+        } @else if (breakdown.value().groups.length === 0) {
+          <app-empty-state
+            title="No trades yet"
+            message="Costs appear after the first filled order."
+          />
+        } @else {
+          @let rows = breakdown.value().groups;
+          <app-data-table
+            [caption]="'Trade costs ' + groupingLabel().toLowerCase()"
+            [rows]="rows"
+            [columns]="columns()"
+            [rowKey]="rowKey"
+            [initialSort]="{ key: 'is_cost', dir: 'desc' }"
+          />
+        }
+      </section>
+    }
   `,
   styles: `
     .breakdown {
@@ -162,6 +165,11 @@ export class TcaSummary {
     const g = this.totals.value().groups[0];
     return g && g.orders > 0 ? g : null;
   });
+
+  /** The totals loaded and hold no order: nothing to break down. */
+  protected readonly noTrades = computed(
+    () => this.totals.hasValue() && !this.totals.error() && this.headline() === null,
+  );
 
   protected readonly groupingLabel = computed(
     () => GROUPINGS.find((g) => g.value === this.grouping())?.label ?? '',

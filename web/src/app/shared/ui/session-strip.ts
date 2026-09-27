@@ -501,6 +501,10 @@ function runTime(iso: string, now: number): string {
       .phase {
         order: 1;
         flex: 1 1 0;
+        min-width: 0;
+      }
+      .phase-label {
+        white-space: nowrap;
       }
       .stop {
         order: 2;
@@ -514,9 +518,13 @@ function runTime(iso: string, now: number): string {
       .pick {
         order: 4;
       }
+      /* The countdown gets a line of its own, clock on the right. */
       .next {
         order: 5;
+        flex-basis: 100%;
+        justify-content: space-between;
         margin-left: 0;
+        border-top: 1px solid var(--color-border);
       }
       .at,
       .other {

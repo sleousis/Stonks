@@ -234,6 +234,7 @@ interface TapeItem {
       align-items: center;
       padding: 0 var(--space-3);
       border-left: 1px solid var(--color-border);
+      min-height: var(--touch-min);
       white-space: nowrap;
     }
     /* Reduced motion: the tape sits still and scrolls by hand. */
