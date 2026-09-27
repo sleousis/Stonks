@@ -7,7 +7,8 @@ dropped as one unit: all of its legs stay or none do, so a rule never
 leaves half a spread.
 
 - Orders with no option leg pass through untouched (these rules only look
-  at options), and so does every unit that only closes positions.
+  at options), and so does every unit that only closes positions. Closing
+  units are taken first, judged against the starting book.
 - ``ctx.options`` carries the day's :class:`~stonks.options.risk.
   OptionRiskView` (contracts, Greeks, marks, spots, groups). Without it an
   opening option unit is dropped: its risk cannot be measured.
@@ -125,8 +126,19 @@ class OptionRiskRule(RiskRule):
         book = dict(ctx.portfolio.positions)
         kept: list[Order] = []
         adjustments: list[RiskAdjustment] = []
+        # Exits first, judged against the starting book (as the order rules
+        # run sells first): a closing combo is never dropped because an
+        # opening one earlier in the list already moved the position.
+        start = dict(book)
+        exits = [u for u in units(orders) if closes_only(u, start)]
+        exit_ids = {id(u[0]) for u in exits}
+        for unit in exits:
+            kept.extend(unit)
+            apply_unit(book, unit)
         for unit in units(orders):
-            if not is_option_unit(unit, view) or closes_only(unit, book):
+            if id(unit[0]) in exit_ids:
+                continue
+            if not is_option_unit(unit, view):
                 kept.extend(unit)
                 apply_unit(book, unit)
                 continue
