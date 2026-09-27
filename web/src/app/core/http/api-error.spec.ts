@@ -12,6 +12,16 @@ describe('toApiError', () => {
     expect(err.message).toBe('strategy is already active');
   });
 
+  it('keeps the whole problem body for extra fields', () => {
+    const err = toApiError(
+      { title: 'Conflict', status: 409, code: 'order_refused', risk_adjustments: [{ rule: 'x' }] },
+      { status: 409 },
+    );
+    expect(err.code).toBe('order_refused');
+    expect(err.problem['risk_adjustments']).toEqual([{ rule: 'x' }]);
+    expect(toApiError('plain', { status: 500 }).problem).toEqual({});
+  });
+
   it('falls back to the title when there is no detail', () => {
     const err = toApiError({ title: 'Not Found', status: 404 });
     expect(err.status).toBe(404);

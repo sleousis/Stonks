@@ -25,10 +25,10 @@ import { OrdersTabs } from './orders-tabs';
   template: `
     <app-page-header
       title="Orders"
-      description="Orders placed by trading runs, the fills they received, and the runs themselves."
+      description="Orders placed by trading runs and by hand, the fills they received, and the runs themselves."
     >
       <app-updated-ago [at]="status.updatedAt()" />
-      @if (!onRuns() && book() !== 'none') {
+      @if (showExports() && book() !== 'none') {
         <ng-container ngProjectAs="[actions]">
           <app-export-button kind="orders" label="Orders CSV" [ghost]="true" />
           <app-export-button kind="fills" label="Fills CSV" [ghost]="true" />
@@ -64,4 +64,9 @@ export class OrdersPage {
   );
   /** On the runs tab the CSV downloads give way to the runner. */
   protected readonly onRuns = computed(() => this.url().startsWith('/orders/ticks'));
+  /** The CSV downloads belong to the orders and fills lists only. */
+  protected readonly showExports = computed(() => {
+    const path = this.url().split(/[?#]/)[0];
+    return path === '/orders' || path.startsWith('/orders/fills');
+  });
 }
