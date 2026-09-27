@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -27,6 +27,14 @@ class OrderView(BaseModel):
     broker_order_id: str | None
     created_at: str
     updated_at: str
+    #: Who decided the order: ``strategy`` (the tick) or ``manual`` (a person).
+    origin: Literal["strategy", "manual"] = "strategy"
+    #: Why a person placed a manual order.
+    manual_reason: str | None = None
+    #: Who placed a manual order (``user:<id>``).
+    placed_by: str | None = None
+    #: The order a changed manual order replaced.
+    replaces_client_id: str | None = None
 
 
 class FillView(BaseModel):
@@ -53,6 +61,7 @@ class OrdersService:
         strategy_id: str | None = None,
         ticker: str | None = None,
         status: str | None = None,
+        origin: str | None = None,
         limit: int,
         offset: int,
         portfolio_id: str,
@@ -60,7 +69,13 @@ class OrdersService:
         """One portfolio's orders. The caller names the portfolio (the
         route resolves one the caller owns), never a default (BE-46)."""
         clause, params = _where(
-            {"tick_id": tick_id, "strategy_id": strategy_id, "ticker": ticker, "status": status}
+            {
+                "tick_id": tick_id,
+                "strategy_id": strategy_id,
+                "ticker": ticker,
+                "status": status,
+                "origin": origin,
+            }
         )
         with self._ctx.state() as state:
             clause, params = _scoped(state, "orders", portfolio_id, None, clause, params)

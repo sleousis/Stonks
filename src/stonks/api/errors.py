@@ -44,6 +44,9 @@ class ProblemDetails(BaseModel):
     errors: list[dict[str, Any]] | None = None
     #: A refused promotion (409): the go-live checks that failed.
     failing_checks: list[FailingCheck] | None = None
+    #: A refused manual order (409 ``order_refused``): what each risk rule
+    #: would have done to it.
+    risk_adjustments: list[dict[str, Any]] | None = None
 
 
 _STATUS_BY_ERROR: tuple[tuple[type[AppError], int], ...] = (

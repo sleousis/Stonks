@@ -12,7 +12,14 @@ import pytest
 
 from stonks.core.corporate_actions import CorporateActions, Split
 from stonks.core.types import Order, Portfolio
-from stonks.production.ownership import drop_unowned_crossings, managed_view, owned_positions
+from stonks.production.ownership import (
+    drop_unowned_crossings,
+    managed_view,
+    manual_positions,
+    merge_holdings,
+    owned_positions,
+    strip_holdings,
+)
 from stonks.store.state import SqliteState
 
 
@@ -86,3 +93,47 @@ def test_orders_that_would_trade_the_users_own_holding_are_dropped():
     kept, dropped = drop_unowned_crossings(orders, managed, external)
     assert [o.client_id for o in kept] == ["1", "2", "5"]
     assert dropped == ["DN.US", "FLAT.US"]
+
+
+# ---- manual orders (roadmap 20.1) --------------------------------------------------
+
+
+def _manual(state, cid, ticker, side, qty, day, portfolio_id="pf_b"):
+    _fill(state, cid, ticker, side, qty, day, portfolio_id)
+    state.execute("UPDATE orders SET origin = 'manual' WHERE client_id = ?", [cid])
+
+
+def test_manual_fills_are_not_owned_by_the_book(state):
+    _fill(state, "a", "UP.US", "buy", 10, "2026-03-02")
+    _manual(state, "m", "UP.US", "buy", 4, "2026-03-03")
+    assert owned_positions(state, "pf_b") == {"UP.US": 10.0}
+
+
+def test_manual_positions_net_only_manual_fills(state):
+    _fill(state, "a", "UP.US", "buy", 10, "2026-03-02")
+    _manual(state, "m1", "UP.US", "buy", 4, "2026-03-03")
+    _manual(state, "m2", "FLAT.US", "buy", 5, "2026-03-03")
+    _manual(state, "m3", "FLAT.US", "sell", 5, "2026-03-04")
+    _manual(state, "m4", "DN.US", "buy", 2, "2026-03-03", portfolio_id="pf_other")
+    assert manual_positions(state, "pf_b") == {"UP.US": 4.0}
+
+
+def test_without_manual_holdings_the_view_keeps_everything():
+    account = Portfolio(cash=5.0, positions={"UP.US": 3.0})
+    managed, external = strip_holdings(account, {})
+    assert managed.positions == {"UP.US": 3.0} and external == {}
+
+
+def test_strip_holdings_takes_the_manual_part_out():
+    account = Portfolio(cash=100.0, positions={"UP.US": 10.0, "FLAT.US": 5.0, "DN.US": -2.0})
+    managed, external = strip_holdings(account, {"UP.US": 4.0, "FLAT.US": 9.0, "DN.US": 1.0})
+    assert managed.cash == 100.0
+    assert managed.positions == {"UP.US": 6.0, "DN.US": -2.0}
+    assert external == {"UP.US": 4.0, "FLAT.US": 5.0}
+
+
+def test_merge_holdings_puts_them_back():
+    managed = Portfolio(cash=10.0, positions={"UP.US": 6.0})
+    merged = merge_holdings(managed, {"UP.US": 4.0, "FLAT.US": 5.0})
+    assert merged.cash == 10.0
+    assert merged.positions == {"UP.US": 10.0, "FLAT.US": 5.0}

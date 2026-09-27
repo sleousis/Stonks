@@ -130,7 +130,14 @@ from stonks.production.hooks import (
 from stonks.production.hooks.attribution import load_attribution
 from stonks.production.ledger import ledger_columns, ledger_filter
 from stonks.production.monitor_settings import RiskMonitorSettings
-from stonks.production.ownership import drop_unowned_crossings, managed_view, owned_positions
+from stonks.production.ownership import (
+    drop_unowned_crossings,
+    managed_view,
+    manual_positions,
+    merge_holdings,
+    owned_positions,
+    strip_holdings,
+)
 from stonks.production.portfolio_runs import PortfolioRun, record_run, runs_recorded
 from stonks.production.prices import PriceBook, held_tickers, load_history, load_prices
 from stonks.production.quit_rule import QuitRuleSettings
@@ -908,6 +915,17 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         held = held_tickers(portfolio.positions)
         if external_holdings:
             log.info("tick.external_holdings", tickers=sorted(external_holdings))
+    manual_holdings: dict[str, float] = {}
+    if scope is not None and not external and not connection:
+        # Roadmap 20.1: what a person bought by hand in a simulated book is
+        # theirs. Strategies decide and size without it and never trade it;
+        # the snapshot puts it back.
+        manual = manual_positions(state, portfolio_id, actions)
+        if manual:
+            portfolio, manual_holdings = strip_holdings(account, manual)
+            external_holdings = dict(manual_holdings)
+            held = held_tickers(portfolio.positions)
+            log.info("tick.manual_holdings", tickers=sorted(manual_holdings))
 
     def result(status: TickStatus, winner: str | None, placed: int, fills: int, summary: dict):
         return BookResult(
@@ -1278,8 +1296,9 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             persist_corporate_actions()
             if financing is not None:
                 record_accrual(state, portfolio_id, as_of, financing, tick_id=tick_id)
-            _snapshot_portfolio(state, tick_id, portfolio, prices, as_of, portfolio_id=scope)
-            hook_summary = hooks(portfolio, prices)
+            whole = merge_holdings(portfolio, manual_holdings) if manual_holdings else portfolio
+            _snapshot_portfolio(state, tick_id, whole, prices, as_of, portfolio_id=scope)
+            hook_summary = hooks(whole, prices)
 
     rejected = [order.ticker for order, st, _ in outcomes if st == "rejected"]
     if rejected:
@@ -2196,7 +2215,7 @@ def _record_fill(
 
 def _snapshot_portfolio(
     state: SqliteState,
-    tick_id: str,
+    tick_id: str | None,
     portfolio: Portfolio,
     prices: dict[str, float],
     as_of: date,

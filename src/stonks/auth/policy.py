@@ -47,6 +47,8 @@ class Permission(StrEnum):
     TOKENS_REVOKE = "tokens.revoke"
     RECOVERY_CODES = "mfa.recovery_codes"
     PASSWORD_CHANGE = "password.change"
+    #: A manual order on a book that trades real money (roadmap 20.1).
+    ORDER_LIVE = "orders.live"
 
 
 @dataclass(frozen=True)
@@ -83,6 +85,8 @@ POLICY: dict[Permission, Rule] = {
     Permission.TOKENS_REVOKE: Rule(_ALL, frozenset(ApiScope)),
     Permission.RECOVERY_CODES: Rule(_ALL, frozenset({ApiScope.READ}), step_up=True),
     Permission.PASSWORD_CHANGE: Rule(_ALL, frozenset({ApiScope.READ}), step_up=True),
+    # Real money needs a fresh second factor, so never an API token.
+    Permission.ORDER_LIVE: Rule(_TRADERS, frozenset({ApiScope.TRADE}), step_up=True),
 }
 
 
