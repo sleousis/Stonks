@@ -39,6 +39,7 @@ from stonks.production.rules.settings import RuleSettings
 from stonks.scheduling.config import SchedulerConfig
 from stonks.store.audit import AuditTolerances
 from stonks.store.bars import BarBackend
+from stonks.streaming.settings import StreamingSettings
 from stonks.telegram.settings import TelegramConfig
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
@@ -553,6 +554,8 @@ class Settings(BaseSettings):
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     # ``[factors]``: the factor panel cache (roadmap 22.2).
     factors: FactorSettings = FactorSettings()
+    # ``[streaming]``: live price streams (roadmap 21.1). Off by default.
+    streaming: StreamingSettings = Field(default_factory=StreamingSettings)
 
 
 #: Secrets read straight from the environment by blocks that keep their own

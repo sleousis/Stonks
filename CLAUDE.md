@@ -8,7 +8,7 @@ An end-to-end multi-asset research and trading system: ingest data into a lake, 
 
 Asset classes (closed set in `core.types.AssetClass`): `equity`, `crypto`, `commodity`, `bond`. Equities are the default and have the richest metadata (statements, dividends, insiders, analysts, ...). Other classes use the same `bars` time series plus small profile tables.
 
-Read first: `docs/architecture.md` (the system), `docs/principles.md` (the research and risk rules every change must respect), `docs/operations.md`, `docs/deploy.md`, `docs/roadmap.md`, `docs/design/accounts-and-modes.md`, `docs/strategies/README.md`.
+Read first: `docs/architecture.md` (the system), `docs/principles.md` (the research and risk rules every change must respect), `docs/operations.md`, `docs/deploy.md`, `docs/roadmap.md`, `docs/design/accounts-and-modes.md`, `docs/design/intraday.md`, `docs/strategies/README.md`.
 
 ## Commands
 
@@ -110,6 +110,7 @@ uv run stonks users set-role|disable|enable|reset-2fa --email E   # reset-2fa: s
 uv run python -m stonks.notify vapid-keygen|test --user EMAIL|deliver
 uv run python -m stonks.connections providers|list|connect|sync [--due]|...
 uv run python -m stonks.security keygen
+uv run python -m stonks.streaming sources|run|record|replay   # live streams into 1m bars (Phase 21.1, off by default)
 ```
 
 ## Working rules (enforced)
@@ -123,13 +124,14 @@ uv run python -m stonks.security keygen
   - Vendor-only fields with no cross-vendor analogue (EODHD `HomeCategory`, `LogoURL`) are **not added**.
   - **Domain identifiers** (CUSIP, CIK, ISIN, OpenFigi, LEI) live on `TickerProfile`; the EODHD ticker (`AAPL.US`) is one access key among many.
   - **Column names use domain terms** (`change_pct` not `change_p`, `total_shares_pct` not `totalShares`).
-- **Third-party libraries.** Prefer well-maintained libraries over hand-rolled trading or finance logic, but wrap every non-trivial one behind a seam (`DataSource`, `Strategy`, `Tuner`, `Objective`, `SurvivalTest`, `Broker`, `BrokerConnection`, `PortfolioConstructor`, `RiskRule`, `BarStore`, a notification `Channel`, or a new ABC) so vendor types never leak into `core/` or other blocks. Examples: `yfinance` in `ingest/sources/yahoo.py`, `alpaca-py` in `execution/brokers/alpaca.py`, `exchange_calendars` in `scheduling/calendar.py`, `pywebpush` in `notify/webpush.py`, `cryptography` in `security/crypto.py`. numpy, pandas and scipy are exempt.
+- **Third-party libraries.** Prefer well-maintained libraries over hand-rolled trading or finance logic, but wrap every non-trivial one behind a seam (`DataSource`, `Strategy`, `Tuner`, `Objective`, `SurvivalTest`, `Broker`, `BrokerConnection`, `PortfolioConstructor`, `RiskRule`, `BarStore`, a notification `Channel`, or a new ABC) so vendor types never leak into `core/` or other blocks. Examples: `yfinance` in `ingest/sources/yahoo.py`, `alpaca-py` in `execution/brokers/alpaca.py`, `exchange_calendars` in `scheduling/calendar.py`, `pywebpush` in `notify/webpush.py`, `cryptography` in `security/crypto.py`, `websockets` in `streaming/sources/eodhd_ws.py`. numpy, pandas and scipy are exempt.
 - **Registries, not lists.** Survival tests, portfolio constructors, risk rules, tick hooks, strategies and factors are discovered from their packages. A new one is one new module; no central list is edited.
 
 ## Architecture in one screen
 
-- **`core/`**: dependency-free primitives. `types.py` (Bar, Order, Fill, Portfolio, AssetClass), `interval.py`, `params.py` (`ParameterSpec`, `Params`, `ParamSpace`), `protocols.py` (`Strategy`, `Tuner`, `Objective`, `SurvivalTest`, `Broker`), `corporate_actions.py`, `timeutil.py`.
+- **`core/`**: dependency-free primitives. `types.py` (Bar, Order, Fill, Portfolio, AssetClass), `interval.py`, `params.py` (`ParameterSpec`, `Params`, `ParamSpace`), `protocols.py` (`Strategy`, `Tuner`, `Objective`, `SurvivalTest`, `Broker`), `corporate_actions.py`, `timeutil.py`, `clock.py` (the `Clock` seam: system, fixed, fake), `stream.py` (vendor-neutral stream events: `TradeTick`, `QuoteTick`, `StreamBar`, `Heartbeat`).
 - **`ingest/`**: `DataSource` ABC and `IngestPipeline` (normalize, validate, idempotent upsert, one `ingest_runs` row per run). Sources in `ingest/sources/`: `eodhd`, `yahoo` (wraps `yfinance`), `defillama` (DeFi TVL), picked by `--source` through `sources/registry.py`, plus `ibkr_borrow` (IBKR's public short stock files, `stonks ingest borrow`, not a `--source`). `quality.py` checks every bar batch and moves bad rows to `quarantined_bars`; the pipeline can retry a failed ticker on a fallback source.
+- **`streaming/`** (Phase 21.1, off by default, `[streaming]`): the `StreamingSource` seam (`base.py`) and registry discovered from `sources/` (`eodhd_ws` wraps `websockets` for EODHD's feeds, `ibkr` polls the IBKR adapter's quotes under client id 14, `replay` plays a recording back and can drive a `FakeClock`), `bars.py` (`BarBuilder`: ticks to 1m bars with the `bars` columns, late ticks dropped), `writer.py` (`BarWriter`: idempotent upserts into the `BarStore`), `recorder.py` (Parquet recordings through DuckDB), `runner.py` (`StreamRunner`: reconnect with backoff, stale detection in market hours, gap backfill through the REST intraday ingest, subscribers), `health.py` (Prometheus families). Entry point `python -m stonks.streaming`. See `docs/design/intraday.md`.
 - **`store/`**: `DuckDBLake` (`lake.py`) and `SqliteState` (`state.py`), migrations in `store/migrations_duckdb/*.sql` and `store/migrations_sqlite/*.sql` applied in order by `stonks db init`. Bars sit behind the `BarStore` seam (`bars.py`): the DuckDB `bars` table (default) or hive-partitioned Parquet files that stay readable while `stonks serve` holds the lake; `lake_settings.bars_backend` records which. `filelock.py`, `corporate_actions.py` (splits and dividends reads). `SqliteState` is a thin foundation; domain helpers belong to the block that owns each table.
 - **`features/`**: optional helper toolkit, no pipeline stage. `library.py` (`ttm`, `rolling_zscore`, `trailing_return`), indicators (ATR), volatility, cross-section, momentum, trend, forecast (Carver EWMAC, TSMOM), fundamentals (value, forensic, quality scores), trailing stop, complexity, extremes, ML seams and bet sizing (`ml.py`), triple-barrier labels and uniqueness (`labels.py`), latent regimes (`regimes.py`, wraps `statsmodels`), the VIX term structure, the `VolForecaster` seam (`vol_forecast.py`: EWMA, GARCH wrapping `arch`, HAR-RV), VSA, market profile, visibility graph, spread, sessions, price adjustment.
 - **`factors/`**: the `Factor` seam (`base.py`) and a registry discovered from `library/` (one module per set: `alpha158`, `classic`, `fundamentals`), a Qlib-style expression language (`expression.py`) compiled to DuckDB window SQL (`sql.py`), point-in-time panels (`engine.py`: as-of adjustment, membership), the panel cache keyed by a data fingerprint (`cache.py`, `panels.py`, `[factors]` in `settings.py`), tear sheets (`tearsheet.py`: IC by horizon, sector, asset class and size, quantile returns, alpha and beta, monthly IC), model datasets with a next-open label (`dataset.py`), and style exposures and style factor returns (`style.py`: momentum, size, value, volatility, sector) for the factor risk model. Service in `app/factors.py`, `stonks factors`, `/api/factors`.
@@ -211,7 +213,7 @@ uv run python -m stonks.security keygen
 
 ## Conventions to match
 
-- Settings are pydantic models (`config.py`, `config/default.toml`, env overrides); never long kwarg lists. Some blocks own their settings models (`scheduling/config.py`, `ops/config.py`, `ingest/quality_config.py`, `ingest/ensure_settings.py`, `connections/settings.py`, `notify/settings.py`, `production/rules/settings.py`, `factors/settings.py`).
+- Settings are pydantic models (`config.py`, `config/default.toml`, env overrides); never long kwarg lists. Some blocks own their settings models (`scheduling/config.py`, `ops/config.py`, `ingest/quality_config.py`, `ingest/ensure_settings.py`, `connections/settings.py`, `notify/settings.py`, `production/rules/settings.py`, `factors/settings.py`, `streaming/settings.py`).
 - ABCs, Protocols and registries are the seams for new behavior (see the third-party rule above).
 - Logging via `stonks.logging.get_logger(name)` (structlog JSON). Cross-block actions carry a `run_id` / `tick_id` so logs correlate.
 - Free-tier EODHD only returns EOD prices; the fundamentals endpoint returns a text error. Live fundamentals tests skip on that signal, never fail.

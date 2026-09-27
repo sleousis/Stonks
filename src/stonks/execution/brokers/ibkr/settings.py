@@ -97,6 +97,8 @@ class IbkrClientIds(BaseModel):
     health: int = Field(default=13, ge=0)
     #: The reconciliation checks (roadmap 19.5).
     reconcile: int = Field(default=14, ge=0)
+    #: Live prices for the streaming source (roadmap 21.1). Read only.
+    stream: int = Field(default=15, ge=0)
 
 
 class IbkrHealthSettings(BaseModel):
