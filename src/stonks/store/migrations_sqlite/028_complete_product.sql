@@ -97,6 +97,10 @@ CREATE TABLE IF NOT EXISTS assistant_conversations (
     id         TEXT PRIMARY KEY,                    -- cnv_<hex>
     owner_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     title      TEXT NOT NULL DEFAULT '',
+    -- 1: no write tool is offered in this conversation.
+    research_only INTEGER NOT NULL DEFAULT 0 CHECK (research_only IN (0, 1)),
+    -- Tool categories the assistant turned on beyond the default set.
+    tool_categories_json TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );

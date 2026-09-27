@@ -13,7 +13,17 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from stonks.mcp.guards import CONFIRM_HINT
-from stonks.mcp.tools.common import Confirm, PortfolioId, Ticker, ToolContext, drop_none, seg
+from stonks.mcp.tools.common import (
+    READ,
+    WRITE,
+    Confirm,
+    PortfolioId,
+    Ticker,
+    ToolContext,
+    drop_none,
+    items,
+    seg,
+)
 
 #: Places or cancels an order: destructive, and a new client id each time.
 ORDER = ToolAnnotations(
@@ -30,6 +40,7 @@ ClientKey = Annotated[
         description="your idempotency key: the same key places the order once",
     ),
 ]
+DRAFT_HINTS = {409: "The draft was refused by a check (price band, caps or an unknown ticker)"}
 ORDER_HINTS = {
     409: "The order was refused by a check (the kill switch, a halt or a risk rule)",
 }
@@ -149,6 +160,48 @@ def register(t: ToolContext) -> None:
             }
         cancelled = await t.post(f"/api/orders/{cid}/cancel", body, hints=ORDER_HINTS)
         return {"preview": False, "applied": True, "result": cancelled}
+
+    @server.tool(annotations=WRITE)
+    async def draft_order(
+        ticker: Ticker,
+        side: Literal["buy", "sell"],
+        quantity: Annotated[float, Field(gt=0)],
+        reason: OrderReason,
+        retry_key: Annotated[
+            str,
+            Field(
+                pattern=r"^[A-Za-z0-9_.:\-]{1,120}$",
+                description="the same key returns the draft already made (a safe retry)",
+            ),
+        ],
+        portfolio_id: PortfolioId = None,
+        order_type: Literal["market", "limit"] = "market",
+        limit_price: Annotated[float | None, Field(gt=0)] = None,
+    ) -> dict[str, Any]:
+        """Propose an order without placing it. The server prices it at the
+        latest close and checks it. The person approves it in the web app
+        with a fresh second factor, and only then is it placed."""
+        body = drop_none(
+            {
+                "portfolio_id": portfolio_id,
+                "ticker": ticker,
+                "side": side,
+                "quantity": quantity,
+                "order_type": order_type,
+                "limit_price": limit_price,
+                "reason": reason,
+                "retry_key": retry_key,
+            }
+        )
+        return await t.post("/api/orders/drafts", body, hints=DRAFT_HINTS)
+
+    @server.tool(annotations=READ)
+    async def list_order_drafts(
+        status: Literal["pending", "placed", "rejected", "expired", "cancelled"] | None = None,
+    ) -> dict[str, Any]:
+        """Your order drafts, newest first: proposed orders waiting for your
+        approval in the web app, and what became of the others."""
+        return items(await t.get("/api/orders/drafts", drop_none({"status": status, "limit": 200})))
 
 
 async def _find(t: ToolContext, client_id: str, portfolio_id: str | None) -> Any:

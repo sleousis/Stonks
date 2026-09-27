@@ -10,12 +10,17 @@ do not stream.
 
 Checks (permission, configured, ownership, action state) run when a turn
 is opened, before anything streams, so they answer as normal problems.
+
+Each turn runs inside the person's safety gate
+(:mod:`stonks.assistant.guard`): research only while frozen, while a kill
+switch covers them, for a research-only conversation, or when order tools
+are off. Every write is counted, and a burst freezes the assistant.
 """
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -23,8 +28,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from stonks.app.context import AppContext
 from stonks.app.errors import ConfigurationError, ConflictError, NotFoundError
 from stonks.app.pagination import Page
+from stonks.assistant import guard
 from stonks.assistant.loop import ActionConflict, AgentLoop, AssistantEvent, EventKind
 from stonks.assistant.model import ChatModel, OpenAICompatibleModel
+from stonks.assistant.prompt import PROMPT_VERSION
 from stonks.assistant.settings import AssistantConfig
 from stonks.assistant.store import (
     ActionNotFound,
@@ -59,12 +66,39 @@ class AssistantStatusView(BaseModel):
     max_steps: int
     max_tokens: int
     timeout_seconds: float
+    prompt_version: str = PROMPT_VERSION
+    order_tools: bool = Field(
+        default=False, description="The assistant may draft orders for you to approve."
+    )
+    research_only: bool = Field(default=True, description="No write tool at all for you right now.")
+    frozen_until: datetime | None = Field(
+        default=None, description="A burst of writes froze your assistant until then."
+    )
+    reason: str | None = None
 
 
 class ConversationCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str = Field(default="", max_length=80)
+    research_only: bool = Field(
+        default=False, description="Offer no write tool at all in this conversation."
+    )
+
+
+class TurnView(BaseModel):
+    """One recorded turn: the model, the prompt version, every tool call and
+    result, and the drafts it made."""
+
+    id: str
+    model: str
+    prompt_version: str
+    status: str
+    steps: int
+    trace: list[dict[str, Any]]
+    draft_ids: list[str]
+    started_at: datetime
+    finished_at: datetime | None
 
 
 class MessageCreate(BaseModel):
@@ -82,6 +116,7 @@ class ActionDecision(BaseModel):
 class ConversationView(BaseModel):
     id: str
     title: str
+    research_only: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -141,6 +176,7 @@ def _conversation_view(c: Any) -> ConversationView:
     return ConversationView(
         id=c.id,
         title=c.title,
+        research_only=bool(getattr(c, "research_only", False)),
         created_at=datetime.fromisoformat(c.created_at),
         updated_at=datetime.fromisoformat(c.updated_at),
     )
@@ -192,8 +228,10 @@ class AssistantService:
         *,
         model_factory: ModelFactory | None = None,
         bridge_factory: BridgeFactory | None = None,
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._ctx = context
+        self._clock = clock or (lambda: datetime.now(UTC))
         self._store = ConversationStore(context.state)
         self.model_factory: ModelFactory = model_factory or default_model
         self.bridge_factory: BridgeFactory = bridge_factory or default_bridge
@@ -207,13 +245,48 @@ class AssistantService:
     def status(self, principal: Principal) -> AssistantStatusView:
         require(principal, Permission.READ)
         cfg = self.config
+        with self._ctx.state() as state:
+            gate = guard.gate_for(state, principal.user_id, cfg.envelope, now=self._clock())
         return AssistantStatusView(
             enabled=cfg.enabled,
             model=cfg.model if cfg.enabled else None,
             max_steps=cfg.max_steps,
             max_tokens=cfg.max_tokens,
             timeout_seconds=cfg.timeout_seconds,
+            order_tools=gate.order_tools,
+            research_only=gate.research_only or not gate.order_tools,
+            frozen_until=datetime.fromisoformat(gate.frozen_until) if gate.frozen_until else None,
+            reason=gate.reason,
         )
+
+    def turns(self, principal: Principal, conversation_id: str) -> list[TurnView]:
+        """The recorded turns of one of your conversations, oldest first."""
+        require(principal, Permission.READ)
+        self._owned(principal, conversation_id)
+        return [
+            TurnView(
+                id=t["id"],
+                model=t["model"],
+                prompt_version=t["prompt_version"],
+                status=t["status"],
+                steps=t["steps"],
+                trace=t["trace"],
+                draft_ids=t["draft_ids"],
+                started_at=datetime.fromisoformat(t["started_at"]),
+                finished_at=(
+                    datetime.fromisoformat(t["finished_at"]) if t["finished_at"] else None
+                ),
+            )
+            for t in self._store.turns(conversation_id)
+        ]
+
+    def clear_freeze(self, principal: Principal) -> bool:
+        """Unfreeze your assistant after a burst (a fresh second factor)."""
+        require(principal, Permission.KILLSWITCH_RESUME)
+        with self._ctx.state() as state:
+            cleared = guard.clear_freeze(state, principal.user_id)
+        _log.warning("assistant.freeze_cleared", user_id=principal.user_id, cleared=cleared)
+        return cleared
 
     def list(self, principal: Principal, *, limit: int, offset: int) -> Page[ConversationView]:
         require(principal, Permission.READ)
@@ -224,7 +297,9 @@ class AssistantService:
 
     def create(self, principal: Principal, body: ConversationCreate) -> ConversationView:
         require(principal, Permission.READ)
-        return _conversation_view(self._store.create(principal.user_id, body.title))
+        return _conversation_view(
+            self._store.create(principal.user_id, body.title, research_only=body.research_only)
+        )
 
     def get(self, principal: Principal, conversation_id: str) -> ConversationDetailView:
         require(principal, Permission.READ)
@@ -249,8 +324,13 @@ class AssistantService:
         """Check everything, then return the turn's events (not started)."""
         require(principal, Permission.READ)
         self._configured()
-        self._owned(principal, conversation_id)
-        return self._run(principal, app, lambda loop: loop.send(conversation_id, body.content))
+        conv = self._owned(principal, conversation_id)
+        return self._run(
+            principal,
+            app,
+            lambda loop: loop.send(conversation_id, body.content),
+            research_only=conv.research_only,
+        )
 
     def open_decision(
         self,
@@ -262,7 +342,7 @@ class AssistantService:
     ) -> AsyncIterator[AssistantEvent]:
         require(principal, Permission.READ)
         self._configured()
-        self._owned(principal, conversation_id)
+        conv = self._owned(principal, conversation_id)
         try:
             action = self._store.action(conversation_id, action_id)
         except ActionNotFound:
@@ -270,7 +350,10 @@ class AssistantService:
         if action.status != "pending":
             raise ConflictError(f"action {action_id} was already {action.status}")
         return self._run(
-            principal, app, lambda loop: loop.decide(conversation_id, action, body.approve)
+            principal,
+            app,
+            lambda loop: loop.decide(conversation_id, action, body.approve),
+            research_only=conv.research_only,
         )
 
     async def collect(self, events: AsyncIterator[AssistantEvent]) -> list[AssistantEvent]:
@@ -282,9 +365,44 @@ class AssistantService:
         principal: Principal,
         app: Any,
         start: Callable[[AgentLoop], AsyncIterator[AssistantEvent]],
+        *,
+        research_only: bool = False,
     ) -> AsyncIterator[AssistantEvent]:
+        envelope = self.config.envelope
+        with self._ctx.state() as state:
+            gate = guard.gate_for(
+                state, principal.user_id, envelope, research_only=research_only, now=self._clock()
+            )
+
+        def write_check() -> str | None:
+            """Refuse (and freeze) on a burst of writes. Fails closed."""
+            now = self._clock()
+            try:
+                with self._ctx.state() as state:
+                    burst = guard.over_rate(state, principal.user_id, envelope, now)
+                    if burst is None:
+                        return None
+                    until = guard.freeze(
+                        state, principal.user_id, envelope.freeze_minutes, burst, now
+                    )
+            except Exception as exc:
+                _log.error("assistant.write_check_failed", error=str(exc))
+                return "Not run: the safety check failed, so nothing was changed."
+            return (
+                f"Not run: {burst}. The assistant is frozen until {until}. The person can "
+                "unfreeze it in the web app."
+            )
+
         bridge = self.bridge_factory(app, principal)
-        loop = AgentLoop(self.model_factory(self.config), bridge, self._store, self.config)
+        loop = AgentLoop(
+            self.model_factory(self.config),
+            bridge,
+            self._store,
+            self.config,
+            gate=gate,
+            write_check=write_check,
+            owner_id=principal.user_id,
+        )
         try:
             async for event in start(loop):
                 yield event

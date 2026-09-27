@@ -43,6 +43,8 @@ class Conversation:
     title: str
     created_at: str
     updated_at: str
+    research_only: bool = False
+    tool_categories: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -101,16 +103,100 @@ class ConversationStore:
 
     # ---- conversations ----------------------------------------------------
 
-    def create(self, owner_id: str, title: str = "") -> Conversation:
+    def create(
+        self, owner_id: str, title: str = "", *, research_only: bool = False
+    ) -> Conversation:
         cid = f"cnv_{secrets.token_hex(8)}"
         now = _now()
         with self._open() as state:
             state.execute(
-                "INSERT INTO assistant_conversations (id, owner_id, title, created_at, updated_at)"
-                " VALUES (?, ?, ?, ?, ?)",
-                [cid, owner_id, title.strip()[:TITLE_MAX], now, now],
+                "INSERT INTO assistant_conversations (id, owner_id, title, research_only,"
+                " created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+                [cid, owner_id, title.strip()[:TITLE_MAX], int(research_only), now, now],
             )
-        return Conversation(cid, owner_id, title.strip()[:TITLE_MAX], now, now)
+        return Conversation(cid, owner_id, title.strip()[:TITLE_MAX], now, now, research_only)
+
+    def enable_category(self, conversation_id: str, category: str) -> tuple[str, ...]:
+        """Turn a tool category on for the rest of the conversation."""
+        with self._open() as state, state.transaction():
+            row = state.sql(
+                "SELECT tool_categories_json FROM assistant_conversations WHERE id = ?",
+                [conversation_id],
+            )
+            current = list(json.loads(row[0]["tool_categories_json"] or "[]")) if row else []
+            if category not in current:
+                current.append(category)
+            state.execute(
+                "UPDATE assistant_conversations SET tool_categories_json = ? WHERE id = ?",
+                [json.dumps(current), conversation_id],
+            )
+        return tuple(current)
+
+    def categories(self, conversation_id: str) -> tuple[str, ...]:
+        with self._open() as state:
+            row = state.sql(
+                "SELECT tool_categories_json FROM assistant_conversations WHERE id = ?",
+                [conversation_id],
+            )
+        return tuple(json.loads(row[0]["tool_categories_json"] or "[]")) if row else ()
+
+    # ---- turns (the trace) -------------------------------------------------------
+
+    def start_turn(
+        self, conversation_id: str, owner_id: str, model: str, prompt_version: str
+    ) -> str:
+        tid = f"trn_{secrets.token_hex(8)}"
+        with self._open() as state:
+            state.execute(
+                "INSERT INTO assistant_turns (id, conversation_id, owner_id, model,"
+                " prompt_version, status, started_at) VALUES (?, ?, ?, ?, ?, 'running', ?)",
+                [tid, conversation_id, owner_id, model, prompt_version, _now()],
+            )
+        return tid
+
+    def finish_turn(
+        self,
+        turn_id: str,
+        *,
+        status: str,
+        steps: int,
+        trace: list[dict[str, Any]],
+        draft_ids: list[str],
+    ) -> None:
+        with self._open() as state:
+            state.execute(
+                "UPDATE assistant_turns SET status = ?, steps = ?, trace_json = ?,"
+                " draft_ids_json = ?, finished_at = ? WHERE id = ?",
+                [
+                    status,
+                    steps,
+                    json.dumps(trace, default=str),
+                    json.dumps(draft_ids),
+                    _now(),
+                    turn_id,
+                ],
+            )
+
+    def turns(self, conversation_id: str) -> list[dict[str, Any]]:
+        with self._open() as state:
+            rows = state.sql(
+                "SELECT * FROM assistant_turns WHERE conversation_id = ? ORDER BY started_at, id",
+                [conversation_id],
+            )
+        return [
+            {
+                "id": r["id"],
+                "model": r["model"],
+                "prompt_version": r["prompt_version"],
+                "status": r["status"],
+                "steps": int(r["steps"]),
+                "trace": json.loads(r["trace_json"] or "[]"),
+                "draft_ids": json.loads(r["draft_ids_json"] or "[]"),
+                "started_at": r["started_at"],
+                "finished_at": r["finished_at"],
+            }
+            for r in rows
+        ]
 
     def list(self, owner_id: str, *, limit: int, offset: int) -> tuple[list[Conversation], int]:
         with self._open() as state:
@@ -147,6 +233,9 @@ class ConversationStore:
                 "DELETE FROM assistant_messages WHERE conversation_id = ?", [conversation_id]
             )
             state.execute(
+                "DELETE FROM assistant_turns WHERE conversation_id = ?", [conversation_id]
+            )
+            state.execute(
                 "DELETE FROM assistant_conversations WHERE id = ? AND owner_id = ?",
                 [conversation_id, owner_id],
             )
@@ -166,6 +255,8 @@ class ConversationStore:
             title=row["title"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+            research_only=bool(row["research_only"]),
+            tool_categories=tuple(json.loads(row["tool_categories_json"] or "[]")),
         )
 
     # ---- messages ------------------------------------------------------------

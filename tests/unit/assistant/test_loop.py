@@ -33,7 +33,7 @@ class FakeBridge(ToolBridge):
         return [
             ToolInfo("get_portfolio", "your book", obj, True, False, False),
             ToolInfo("engage_kill_switch", "stop orders", guarded, False, True, True),
-            ToolInfo("add_note", "a note", obj, False, False, False),
+            ToolInfo("delete_price_alert", "delete an alert", obj, False, False, False),
         ]
 
     async def call(self, name: str, arguments: dict[str, Any]) -> ToolOutcome:
@@ -51,6 +51,18 @@ def store(tmp_path) -> ConversationStore:
     with SqliteState(path) as state:
         state.migrate()
     return ConversationStore(lambda: SqliteState(path))
+
+
+def _open(store, conv_id: str) -> None:
+    """Turn on the categories the fake write tools live in."""
+    store.enable_category(conv_id, "risk")
+    store.enable_category(conv_id, "alerts")
+
+
+def _unwrap(content: str) -> dict:
+    """The JSON inside the untrusted tool_result wrapper the model sees."""
+    assert content.startswith("<tool_result") and 'trust="untrusted"' in content
+    return json.loads(content.split("\n", 1)[1].rsplit("\n", 1)[0])
 
 
 def _run(agen) -> list:
@@ -95,12 +107,13 @@ def test_read_tool_runs_and_feeds_back(store):
     assert events[1].data["ok"] and events[1].data["result"]["cash"] == 1000
     assert bridge.calls == [("get_portfolio", {})]
     tool_msg = model.requests[1][0][-1]
-    assert tool_msg.role == "tool" and json.loads(tool_msg.content)["result"]["cash"] == 1000
+    assert tool_msg.role == "tool" and _unwrap(tool_msg.content)["result"]["cash"] == 1000
     assert events[-1].kind == "done" and events[-1].data["steps"] == 2
 
 
 def test_write_tool_pauses_then_runs_with_confirm_on_approve(store):
     conv = store.create(OWNER)
+    _open(store, conv.id)
     kill = call("engage_kill_switch", {"reason": "panic", "confirm": True})
     loop, model, bridge = _loop(store, [Script(calls=(kill,)), Script(text="Stopped.")])
     events = _run(loop.send(conv.id, "stop everything"))
@@ -125,8 +138,9 @@ def test_write_tool_pauses_then_runs_with_confirm_on_approve(store):
 
 def test_reject_records_the_refusal(store):
     conv = store.create(OWNER)
+    _open(store, conv.id)
     loop, model, bridge = _loop(
-        store, [Script(calls=(call("add_note", {"ticker": "UP.US"}),)), Script(text="OK")]
+        store, [Script(calls=(call("delete_price_alert", {"ticker": "UP.US"}),)), Script(text="OK")]
     )
     events = _run(loop.send(conv.id, "note it"))
     action_id = events[1].data["action_id"]
@@ -141,7 +155,10 @@ def test_reject_records_the_refusal(store):
 
 def test_new_message_rejects_a_waiting_action(store):
     conv = store.create(OWNER)
-    loop, model, bridge = _loop(store, [Script(calls=(call("add_note"),)), Script(text="fine")])
+    _open(store, conv.id)
+    loop, model, bridge = _loop(
+        store, [Script(calls=(call("delete_price_alert"),)), Script(text="fine")]
+    )
     events = _run(loop.send(conv.id, "note"))
     action_id = events[1].data["action_id"]
     _run(loop.send(conv.id, "never mind"))
@@ -152,8 +169,9 @@ def test_new_message_rejects_a_waiting_action(store):
 
 def test_calls_after_a_pause_are_skipped(store):
     conv = store.create(OWNER)
+    _open(store, conv.id)
     loop, _, bridge = _loop(
-        store, [Script(calls=(call("add_note", id="a"), call("get_portfolio", id="b")))]
+        store, [Script(calls=(call("delete_price_alert", id="a"), call("get_portfolio", id="b")))]
     )
     _run(loop.send(conv.id, "x"))
     assert bridge.calls == []
@@ -172,7 +190,7 @@ def test_unknown_tool_and_bad_arguments(store):
     )
     events = _run(loop.send(conv.id, "x"))
     results = [e.data for e in events if e.kind == "tool_result"]
-    assert "no tool named" in results[0]["error"]
+    assert "not available" in results[0]["error"]
     assert "not valid JSON" in results[1]["error"]
 
 

@@ -22,6 +22,7 @@ from stonks.app.assistant import (
     ConversationDetailView,
     ConversationView,
     MessageCreate,
+    TurnView,
     event_view,
 )
 from stonks.app.pagination import Page
@@ -87,6 +88,33 @@ def delete_conversation(
     conversation_id: str, services: ServicesDep, principal: PrincipalDep
 ) -> Response:
     services.assistant.delete(principal, conversation_id)
+    return Response(status_code=204)
+
+
+@router.get(
+    "/conversations/{conversation_id}/turns",
+    response_model=list[TurnView],
+    operation_id="listAssistantTurns",
+)
+def list_turns(
+    conversation_id: str, services: ServicesDep, principal: PrincipalDep
+) -> list[TurnView]:
+    """The trace of one of your conversations: each turn's model, prompt
+    version, tool calls and results, and the order drafts it made."""
+    return services.assistant.turns(principal, conversation_id)
+
+
+@router.delete(
+    "/freeze",
+    status_code=204,
+    response_class=Response,
+    operation_id="clearAssistantFreeze",
+    dependencies=needs(Permission.KILLSWITCH_RESUME),
+)
+def clear_freeze(services: ServicesDep, principal: PrincipalDep) -> Response:
+    """Unfreeze your assistant after a burst of writes. Needs a fresh
+    second factor."""
+    services.assistant.clear_freeze(principal)
     return Response(status_code=204)
 
 

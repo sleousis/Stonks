@@ -99,6 +99,8 @@ def test_read_tool_runs_as_the_signed_in_person(client, people, model):
 def test_write_tool_waits_for_the_person_and_a_viewer_is_refused(client, people, model):
     vic = people["vic"]["headers"]
     model.turns = [
+        # the kill switch is in the risk category: the assistant turns it on first
+        Script(calls=(call("enable_tool_category", {"category": "risk"}),)),
         Script(
             calls=(
                 call("engage_kill_switch", {"scope": "user", "reason": "test", "confirm": True}),
@@ -136,6 +138,7 @@ def test_write_tool_waits_for_the_person_and_a_viewer_is_refused(client, people,
 def test_trader_approves_the_kill_switch(client, people, model):
     alice = people["alice"]["headers"]
     model.turns = [
+        Script(calls=(call("enable_tool_category", {"category": "risk"}),)),
         Script(calls=(call("engage_kill_switch", {"scope": "user", "reason": "assistant test"}),)),
         Script(text="Trading is stopped."),
     ]
