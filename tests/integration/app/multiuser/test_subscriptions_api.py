@@ -8,6 +8,7 @@ import pytest
 
 from stonks.accounts import DEFAULT_PORTFOLIO_ID, PortfolioRepository, Scope
 from stonks.store.state import SqliteState
+from tests.fixtures.paper import link_connection, seed_paper_days
 from tests.integration.app.stepup import allow_step_up
 from tests.integration.app.test_api import AUTH
 
@@ -157,6 +158,8 @@ def test_disable_enable_and_notify(client, settings, people):
 def test_auto_needs_a_step_up_then_the_paper_record(app, client, settings, people):
     alice = people["alice"]
     pf = _portfolio(settings, alice, "Live", kind="broker")
+    with SqliteState(settings.state.path) as state:
+        link_connection(state, pf)
     sub = client.post(
         "/api/subscriptions",
         json={"strategy_id": "bah_active", "portfolio_id": pf, "mode": "paper"},
@@ -174,9 +177,7 @@ def test_auto_needs_a_step_up_then_the_paper_record(app, client, settings, peopl
     assert body["blockers"] == ["0 of 20 paper trading days completed without a risk breach"]
 
     with SqliteState(settings.state.path) as state:
-        state.execute(
-            "UPDATE subscriptions SET paper_days_completed = 20 WHERE id = ?", [sub["id"]]
-        )
+        seed_paper_days(state, sub["id"], 20, portfolio_id=pf)
     ok = client.patch(url, json={"mode": "auto", "reason": "ready"}, headers=alice["headers"])
     assert ok.status_code == 200, ok.text
     assert ok.json()["mode"] == "auto" and ok.json()["auto_blockers"] == []

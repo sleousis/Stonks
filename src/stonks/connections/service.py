@@ -828,6 +828,28 @@ class ConnectionService:
         )
         return int(cur.rowcount or 0)
 
+    # ---- trading (auto mode, S6) -----------------------------------------------------------
+
+    def open_trader(self, scope: Scope, portfolio_id: str) -> Any:
+        """The ``Broker`` placing orders in the account ``portfolio_id``
+        mirrors, through its connection's trading adapter. Refused when the
+        portfolio isn't linked, the provider is disabled or can't trade.
+        Provider errors come back redacted."""
+        from stonks.connections.base import Capability
+
+        portfolio = owned_portfolio(self._state, scope, portfolio_id)
+        if not portfolio.broker_connection_id or not portfolio.external_account_id:
+            raise ConnectionsError(f"portfolio {portfolio_id!r} is not linked to a broker account")
+        record = owned_connection(self._state, scope, portfolio.broker_connection_id)
+        cls = enabled_provider(self.config, record.provider)
+        cls.require(Capability.TRADE)
+        credentials = self._open_credentials(self._secret_box(), record.id)
+        try:
+            conn = cls.open(credentials, self._context(cls, record.id))
+            return conn.trader(portfolio.external_account_id)
+        except ProviderError as exc:
+            raise _redacted(exc, credentials) from None
+
     # ---- key rotation ---------------------------------------------------------------------
 
     def rotate_credentials(self, scope: Scope) -> int:

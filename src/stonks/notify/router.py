@@ -245,6 +245,8 @@ class SignalNotice:
     kind: SignalKind
     as_of: str  # ISO date of the tick
     urgency: Urgency | None = None
+    #: A plain one-line reason (the signal phase's ``explain``), shown in the body.
+    reason: str | None = None
 
     def __post_init__(self) -> None:
         if self.kind not in SIGNAL_KINDS:
@@ -259,6 +261,8 @@ def _signal_event(router: NotificationRouter, notice: SignalNotice) -> Event:
     body = f"{notice.strategy_id} on {notice.as_of}"
     if incubating:
         body += " (incubating strategy)"
+    if notice.reason:
+        body += f". {notice.reason}"
     query = urlencode(
         {"strategy": notice.strategy_id, "ticker": notice.ticker, "as_of": notice.as_of}
     )

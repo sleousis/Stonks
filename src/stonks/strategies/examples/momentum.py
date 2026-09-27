@@ -41,6 +41,7 @@ class Momentum(BaseStrategy):
     premise = "trend"
     label_horizon_bars = 21
     required_history_bars = 148
+    parallel_scoring = True
 
     def param_metadata(self) -> dict[str, int]:
         p = self.params

@@ -26,13 +26,16 @@ class PortfolioRepository:
         return owned_portfolio(self._state, scope, portfolio_id)
 
     def list(self, scope: Scope) -> list[Portfolio]:
-        """The principal's own portfolios (a service scope: all of them)."""
+        """The principal's own portfolios, without the paper accounts of their
+        broker portfolios (:mod:`stonks.accounts.paper`). A service scope:
+        all of them."""
         if scope.is_service:
             rows = self._state.sql("SELECT * FROM portfolios ORDER BY created_at, id")
         else:
             rows = self._state.sql(
                 "SELECT p.* FROM portfolios p JOIN users u ON u.id = p.owner_id"
-                " WHERE p.owner_id = ? AND u.status = 'active' ORDER BY p.created_at, p.id",
+                " WHERE p.owner_id = ? AND u.status = 'active' AND p.paper_of IS NULL"
+                " ORDER BY p.created_at, p.id",
                 [scope.user_id],
             )
         return [Portfolio.from_row(r) for r in rows]

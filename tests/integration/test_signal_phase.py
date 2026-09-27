@@ -26,6 +26,8 @@ class RemembersItsScores(BuyAndHold):
     StocksOnTheMove, whose ``decide`` reads what ``estimate_return``
     computed. Module scope so the registry can import it."""
 
+    parallel_scoring = False  # decide reads what this instance scored
+
     def __init__(self, params):
         super().__init__(params)
         self.scored: set[tuple[str, str]] = set()

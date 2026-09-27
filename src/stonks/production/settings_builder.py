@@ -8,12 +8,20 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 
+from stonks.accounts.models import Portfolio as AccountPortfolio
 from stonks.config import Settings
 from stonks.core.protocols import Broker
 from stonks.core.types import Portfolio
 from stonks.execution.brokers import SimulatedCosts, make_broker
+from stonks.lab.parallel import default_max_workers
 from stonks.notify import Notifier, notifier_from_settings
-from stonks.production.tick import BrokerFactory, TickPlan, TickSettings, load_tick_plan
+from stonks.production.tick import (
+    BrokerFactory,
+    TickPlan,
+    TickSettings,
+    TraderFactory,
+    load_tick_plan,
+)
 from stonks.store.state import SqliteState
 
 
@@ -32,7 +40,24 @@ class TickRuntime:
         default single book over every active strategy)."""
         if not self.books_from_subscriptions:
             return None
-        return load_tick_plan(state, self.settings)
+        return load_tick_plan(state, self.settings, traders=connection_traders(state))
+
+
+def connection_traders(state: SqliteState) -> TraderFactory:
+    """Auto books trade through their portfolio's connection
+    (``ConnectionService.open_trader`` as ``service:scheduler``). The
+    connections config and the master key load on first use, inside the
+    tick, so a broken connection fails (and pauses) only its own book."""
+
+    def open_trader(account: AccountPortfolio) -> Broker:
+        from stonks.accounts.scope import Scope
+        from stonks.connections.service import ConnectionService
+        from stonks.connections.settings import ConnectionsConfig
+
+        service = ConnectionService(state, ConnectionsConfig.load())
+        return service.open_trader(Scope.service("scheduler"), account.id)
+
+    return open_trader
 
 
 def build_tick_settings(
@@ -67,6 +92,8 @@ def build_tick_settings(
         quit_rule=p.quit_rule,
         scoped=scoped,
         bars_due=dict(bars_due) if bars_due else None,
+        scoring_workers=p.scoring_workers or default_max_workers(),
+        parallel_min_estimates=p.parallel_min_estimates,
     )
 
 

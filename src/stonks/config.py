@@ -236,6 +236,11 @@ class ProductionConfig(BaseModel):
     # active strategy. Off by default. When on, a newly promoted strategy
     # trades only once a subscription (e.g. on pf_default) includes it.
     books_from_subscriptions: bool = False
+    # Worker processes that score strategies opting in with
+    # ``parallel_scoring`` (0 = every core, 1 = in the tick's process). A
+    # pool starts only for at least ``parallel_min_estimates`` estimates.
+    scoring_workers: int = Field(default=0, ge=0)
+    parallel_min_estimates: int = Field(default=2000, ge=1)
     # ``[production.quit_rule]`` (BL-29): alert (and with auto_demote, move
     # to shadow) an active strategy whose attributed drawdown passes
     # quit_multiple x its backtest drawdown.

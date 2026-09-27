@@ -32,6 +32,8 @@ from stonks.connections.base import (
     RateLimit,
 )
 from stonks.connections.registry import register_provider
+from stonks.core.types import Fill, Order, Portfolio
+from stonks.execution.brokers.base import BrokerOrderState, OrderRejectedError
 from stonks.execution.brokers.symbols import to_canonical_ticker
 
 
@@ -66,6 +68,12 @@ class FakeBook:
     fail: ProviderError | None = None
     calls: list[str] = field(default_factory=list)
     registered_users: set[str] = field(default_factory=set)
+    #: ``fake_trading``: the price each ticker fills at (no quote: rejected).
+    quotes: dict[str, float] = field(default_factory=dict)
+    #: ``fake_trading``: raised by ``place_order`` only, while set.
+    fail_orders: Exception | None = None
+    #: ``fake_trading``: every order the trader accepted, by client id.
+    orders: dict[str, BrokerOrderState] = field(default_factory=dict)
 
 
 def demo_book() -> FakeBook:
@@ -211,3 +219,97 @@ class FakePortalConnection(_FakeBase, PortalFlow):
         cls, context: ProviderContext, external_user_id: str, credentials: Credentials
     ) -> None:
         book_for(credentials["token"]).registered_users.discard(external_user_id)
+
+
+class FakeTrader:
+    """The ``Broker`` of a ``fake_trading`` account: market orders fill at
+    once at the book's quote (no quote: rejected), cash and positions change
+    in the book, and every accepted order can be looked up by client id
+    (``OrderStateSource``), like a real broker's order book."""
+
+    def __init__(self, connection: FakeTradingConnection, account_id: str) -> None:
+        self._conn = connection
+        self._book = connection.book
+        self._account_id = account_id
+
+    def fetch_portfolio(self) -> Portfolio:
+        self._conn.call("fetch_portfolio")
+        positions = {
+            p.ticker: p.quantity
+            for p in self._book.positions.get(self._account_id, [])
+            if p.ticker is not None and p.quantity
+        }
+        return Portfolio(cash=self._book.balances[self._account_id].cash, positions=positions)
+
+    def place_order(self, order: Order) -> Fill | None:
+        self._conn.call("place_order")
+        if self._book.fail_orders is not None:
+            raise self._book.fail_orders
+        if order.client_id in self._book.orders:
+            return None  # a duplicate submission is a no-op, as the Broker contract asks
+        price = self._book.quotes.get(order.ticker)
+        if price is None:
+            raise OrderRejectedError(f"no quote for {order.ticker}")
+        sign = 1.0 if order.side == "buy" else -1.0
+        balance = self._book.balances[self._account_id]
+        self._book.balances[self._account_id] = AccountBalances(
+            currency=balance.currency,
+            cash=balance.cash - sign * order.quantity * price,
+            buying_power=balance.buying_power,
+        )
+        held = {p.ticker: p for p in self._book.positions.get(self._account_id, [])}
+        before = held[order.ticker].quantity if order.ticker in held else 0.0
+        quantity = before + sign * order.quantity
+        held[order.ticker] = ExternalPosition(
+            raw_symbol=order.ticker.split(".")[0],
+            ticker=order.ticker,
+            quantity=quantity,
+            price=price,
+            market_value=quantity * price,
+            currency=balance.currency,
+        )
+        self._book.positions[self._account_id] = [p for p in held.values() if p.quantity]
+        client_id = order.client_id or f"fake-{len(self._book.orders) + 1}"
+        self._book.orders[client_id] = BrokerOrderState(
+            client_id=client_id,
+            broker_order_id=f"fake-order-{len(self._book.orders) + 1}",
+            ticker=order.ticker,
+            side=order.side,
+            status="filled",
+            quantity=order.quantity,
+            filled_quantity=order.quantity,
+            avg_fill_price=price,
+        )
+        return None
+
+    def get_order_state(self, client_id: str) -> BrokerOrderState | None:
+        self._conn.call("get_order_state")
+        return self._book.orders.get(client_id)
+
+    def reconcile(self) -> list[Fill]:
+        return []
+
+
+class FakeTradingConnection(_FakeBase):
+    """``fake`` plus trading: :meth:`trader` returns a :class:`FakeTrader`."""
+
+    auth_flow = "api_key"
+    credential_fields = ("token",)
+    display_name: ClassVar[str] = "Fake trading broker"
+    capabilities: ClassVar[frozenset[Capability]] = _FakeBase.capabilities | {Capability.TRADE}
+
+    @property
+    def book(self) -> FakeBook:
+        return self._book
+
+    def call(self, op: str) -> None:
+        self._call(op)
+
+    def trader(self, account_id: str) -> FakeTrader:
+        self.require(Capability.TRADE)
+        self._call("trader")
+        self._account(account_id)
+        return FakeTrader(self, account_id)
+
+
+register_provider("fake_trading")(FakeTradingConnection)

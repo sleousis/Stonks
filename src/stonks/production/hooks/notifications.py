@@ -1,8 +1,12 @@
 """Notification enqueue: the tick's notify-mode signals into the outbox.
 
 The tick records a :class:`~stonks.production.hooks.NotifySignal` per
-notify-mode subscription. This hook turns each subscribed strategy's top
-picks into ``entry`` signal events through the notification router
+notify-mode subscription. This hook sends each subscribed strategy's
+stored signal events of the day (``production.signals``: entry, exit,
+increase, decrease, strongest first, with their plain reason) through the
+notification router. A strategy with no stored signals (an old state
+file) falls back to its top picks as ``entry`` events. Either way it goes
+through the router
 (:func:`stonks.notify.router.notify_signals`), which fans them out to the
 strategy's notify subscribers and queues deliveries for the
 ``DeliveryWorker``; the tick never waits on a push service. Signals are
@@ -34,14 +38,34 @@ class EnqueueNotifications(PostTickHook):
         if ctx.dry_run or not ctx.notify_signals:
             return None
         from stonks.notify.router import SignalNotice, configured_router, notify_signals
+        from stonks.production.signals import (
+            events_for,
+            signals_recorded,
+            strategies_with_signals,
+        )
 
         picks: dict[str, tuple[tuple[str, float], ...]] = {}
         for signal in ctx.notify_signals:
             picks.setdefault(signal.strategy_id, signal.picks)
         as_of = ctx.as_of.isoformat()
-        notices = [
+        stored = (
+            strategies_with_signals(ctx.state, ctx.as_of) if signals_recorded(ctx.state) else set()
+        )
+        per_strategy: dict[str, int] = {}
+        notices = []
+        for event in events_for(ctx.state, ctx.as_of, sorted(set(picks) & stored)):
+            if event.kind == "risk" or per_strategy.get(event.strategy_id, 0) >= MAX_PICKS:
+                continue
+            per_strategy[event.strategy_id] = per_strategy.get(event.strategy_id, 0) + 1
+            notices.append(
+                SignalNotice(
+                    event.strategy_id, event.ticker, event.kind, as_of, reason=event.text or None
+                )
+            )
+        notices += [
             SignalNotice(strategy_id, ticker, "entry", as_of)
             for strategy_id, ranked in picks.items()
+            if strategy_id not in stored
             for ticker, _ in ranked[:MAX_PICKS]
         ]
         router = configured_router(ctx.state)

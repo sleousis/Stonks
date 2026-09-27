@@ -149,6 +149,10 @@ class BaseStrategy:
     #: A short opens only when the strategy and the book both allow it;
     #: off by default. Read with ``getattr`` so any Strategy works.
     supports_short: ClassVar[bool] = False
+    #: ``estimate_return`` keeps no per-day state that ``decide`` reads, so
+    #: the tick may score this strategy in worker processes (see
+    #: ``stonks.production.scoring``). Off unless a strategy opts in.
+    parallel_scoring: ClassVar[bool] = False
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         # Catch the ``applicable_asset_classes = ()`` footgun at class

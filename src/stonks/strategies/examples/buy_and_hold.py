@@ -26,6 +26,7 @@ class BuyAndHold(BaseStrategy):
     alpha_family = "benchmark"
     premise = "none"
     label_horizon_bars = 0
+    parallel_scoring = True
 
     @classmethod
     def parameter_spec(cls):
