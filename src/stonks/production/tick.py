@@ -1381,10 +1381,10 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         )
     else:
         if hard_to_borrow:
-            held = [o for o in sells if o.client_id in hard_to_borrow]
+            waiting = [o for o in sells if o.client_id in hard_to_borrow]
             sells = [o for o in sells if o.client_id not in hard_to_borrow]
             ticket_summary = _write_book_tickets(
-                run, book, broker, held, risk_adjustments, runaway, hard_to_borrow
+                run, book, broker, waiting, risk_adjustments, runaway, hard_to_borrow
             )
         # Sells first. The first risk pass counted their expected proceeds,
         # so buys are re-checked against the portfolio as it stands after
