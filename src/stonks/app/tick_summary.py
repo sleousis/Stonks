@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict
 
 from stonks.app.orders import OrderView
 from stonks.app.ticks import TickRunView
+from stonks.execution.brokers.base import BrokerMode
 
 
 class RiskAdjustmentView(BaseModel):
@@ -65,6 +66,10 @@ class TickSummary(BaseModel):
     risk_adjustments: list[RiskAdjustmentView] = []
     shadow: list[ShadowOutcomeView] = []
     shadow_error: str | None = None
+    #: A dry run places no orders and writes no ledger rows.
+    dry_run: bool | None = None
+    #: Whose money the default book traded (null for rows that predate it).
+    broker_mode: BrokerMode | None = None
 
 
 class TickRun(TickRunView):

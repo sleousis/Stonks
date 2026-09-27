@@ -1037,8 +1037,8 @@ def tick(
     console.print(
         f"[{color}]{result.tick_id}[/{color}]  status={result.status}  "
         f"winner={result.winner_strategy_id or '-'}  "
-        f"orders={result.orders_placed}  fills={result.fills}"
-        + ("  [dim](dry-run)[/dim]" if dry_run else "")
+        f"orders={result.orders_placed}  fills={result.fills}  "
+        f"broker={result.broker_mode}" + ("  [dim](dry-run)[/dim]" if result.dry_run else "")
     )
 
 

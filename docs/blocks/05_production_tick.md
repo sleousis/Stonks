@@ -98,6 +98,8 @@ Broker connections (`connections/`) sync other brokers' holdings read-only; they
 
 Clipped or dropped orders are listed under `risk_adjustments` in the tick summary.
 
+Every tick summary also records `dry_run` and `broker_mode`. The mode says whose money the default book traded: `simulated`, a broker's `paper` account, or a `live` account. The API tick result and `stonks tick` show both.
+
 ## CLI
 
 ```bash

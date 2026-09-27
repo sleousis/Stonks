@@ -16122,6 +16122,17 @@
       },
       "TickResultView": {
         "properties": {
+          "broker_mode": {
+            "default": "simulated",
+            "description": "Whose money the default book traded: simulated fills, a broker's paper account, or a live (real money) account.",
+            "enum": [
+              "simulated",
+              "paper",
+              "live"
+            ],
+            "title": "Broker Mode",
+            "type": "string"
+          },
           "dry_run": {
             "title": "Dry Run",
             "type": "boolean"
@@ -16310,6 +16321,22 @@
       "TickSummary": {
         "additionalProperties": true,
         "properties": {
+          "broker_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "simulated",
+                  "paper",
+                  "live"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broker Mode"
+          },
           "deferred_corporate_actions": {
             "default": [],
             "items": {
@@ -16318,6 +16345,17 @@
             },
             "title": "Deferred Corporate Actions",
             "type": "array"
+          },
+          "dry_run": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dry Run"
           },
           "error": {
             "anyOf": [

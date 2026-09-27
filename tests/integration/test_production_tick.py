@@ -203,3 +203,68 @@ def test_crash_during_rank_marks_tick_error(tick_env, monkeypatch):
 
     runs = state.sql("SELECT status FROM tick_runs")
     assert [r["status"] for r in runs] == ["error"]
+
+
+def _summary(state, tick_id: str) -> dict:
+    import json
+
+    rows = state.sql("SELECT summary_json FROM tick_runs WHERE id = ?", [tick_id])
+    return json.loads(rows[0]["summary_json"])
+
+
+def test_tick_summary_records_dry_run_and_broker_mode(tick_env):
+    lake, state, registry = tick_env
+    settings = TickSettings(universe=["UP.US"], threshold=0.0, initial_cash=10_000.0)
+
+    dry = run_tick(state, lake, registry, settings, as_of=date(2026, 3, 20), dry_run=True)
+    real = run_tick(state, lake, registry, settings, as_of=date(2026, 3, 20))
+
+    assert (dry.dry_run, dry.broker_mode) == (True, "simulated")
+    assert (real.dry_run, real.broker_mode) == (False, "simulated")
+    summary = _summary(state, dry.tick_id)
+    assert (summary["dry_run"], summary["broker_mode"]) == (True, "simulated")
+    summary = _summary(state, real.tick_id)
+    assert (summary["dry_run"], summary["broker_mode"]) == (False, "simulated")
+
+
+def test_tick_summary_names_the_configured_broker_mode(tick_env):
+    lake, state, registry = tick_env
+    settings = TickSettings(
+        universe=["UP.US"], threshold=0.0, broker_kind="alpaca", broker_mode="paper"
+    )
+    # no broker factory: the tick fails, and its row still names the mode
+    with pytest.raises(ValueError, match="broker_factory"):
+        run_tick(state, lake, registry, settings, as_of=date(2026, 3, 20), dry_run=True)
+    [row] = state.sql("SELECT id FROM tick_runs")
+    assert _summary(state, row["id"])["broker_mode"] == "paper"
+
+
+def test_a_failed_tick_still_records_dry_run_and_broker_mode(tick_env, monkeypatch):
+    from stonks.production.ranker import Ranker
+
+    lake, state, registry = tick_env
+    settings = TickSettings(universe=["UP.US"], threshold=0.0, initial_cash=10_000.0)
+
+    def boom(self, as_of):
+        raise RuntimeError("lake exploded")
+
+    monkeypatch.setattr(Ranker, "rank", boom)
+    with pytest.raises(RuntimeError):
+        run_tick(state, lake, registry, settings, as_of=date(2026, 3, 20), dry_run=True)
+
+    [row] = state.sql("SELECT id FROM tick_runs")
+    summary = _summary(state, row["id"])
+    assert (summary["dry_run"], summary["broker_mode"]) == (True, "simulated")
+
+
+def test_tick_settings_refuse_a_broker_mode_that_contradicts_the_broker():
+    with pytest.raises(ValueError, match="broker_mode"):
+        TickSettings(universe=["UP.US"], broker_mode="live")
+    with pytest.raises(ValueError, match="broker_mode"):
+        TickSettings(universe=["UP.US"], broker_kind="alpaca", broker_mode="simulated")
+
+
+def test_an_external_broker_without_a_mode_counts_as_live():
+    """Unknown means real money: the label never understates the risk."""
+    assert TickSettings(universe=["UP.US"], broker_kind="alpaca").broker_mode == "live"
+    assert TickSettings(universe=["UP.US"]).broker_mode == "simulated"

@@ -92,6 +92,9 @@ def test_typed_ingest_and_tick_result_routes(client):
     assert _done(client, tick["id"])["status"] == "succeeded"
     body = client.get(f"/api/ticks/jobs/{tick['id']}/result").json()
     assert body["dry_run"] is True
+    assert body["broker_mode"] == "simulated"
+    run = client.get(f"/api/ticks/{body['tick_id']}", headers=AUTH).json()
+    assert (run["summary"]["dry_run"], run["summary"]["broker_mode"]) == (True, "simulated")
 
 
 def test_tick_runs_have_a_typed_summary(client, seeded):

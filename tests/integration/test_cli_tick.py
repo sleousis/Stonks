@@ -98,12 +98,15 @@ def test_tick_dry_run_smoke(runner, seeded):
     result = runner.invoke(app, ["tick", "--dry-run", "--as-of", "2026-03-20"])
     assert result.exit_code == 0, result.output
     assert "dry-run" in result.output
+    assert "broker=simulated" in result.output
 
 
 def test_tick_full_run_smoke(runner, seeded):
     tmp_path, _ = seeded
     result = runner.invoke(app, ["tick", "--as-of", "2026-03-20"])
     assert result.exit_code == 0, result.output
+    assert "broker=simulated" in result.output
+    assert "dry-run" not in result.output
 
     # verify state tables populated
     state = SqliteState(tmp_path / "data" / "state.sqlite")

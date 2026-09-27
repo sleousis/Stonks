@@ -76,7 +76,12 @@ from stonks.backtest.simulated_broker import FinancingEvent, SimulatedBroker
 from stonks.core.interval import Interval
 from stonks.core.protocols import Broker
 from stonks.core.types import Fill, Order, OrderStatus, Portfolio
-from stonks.execution.brokers.base import BrokerKind, OrderRejectedError, OrderStateSource
+from stonks.execution.brokers.base import (
+    BrokerKind,
+    BrokerMode,
+    OrderRejectedError,
+    OrderStateSource,
+)
 from stonks.execution.brokers.simulated import SimulatedCosts
 from stonks.execution.orders import SideToken, make_client_id
 from stonks.execution.reconcile import (
@@ -218,6 +223,11 @@ class TickSettings:
     # "alpaca" trades through ``run_tick``'s ``broker_factory``; the broker
     # account is then the source of truth for the portfolio.
     broker_kind: BrokerKind = "simulated"
+    #: Whose money the default book trades (``simulated``, ``paper`` or
+    #: ``live``), recorded on every tick summary. ``None`` resolves from
+    #: ``broker_kind``: ``simulated``, else ``live``, so an unknown external
+    #: account never reads as paper money.
+    broker_mode: BrokerMode | None = None
     #: Fraction of each cash dividend withheld as tax (0 = credit in full).
     dividend_withholding_rate: float = 0.0
     #: ``[production.construction]``: the global constructor and no-trade
@@ -254,6 +264,13 @@ class TickSettings:
 
     def __post_init__(self) -> None:
         self.simulated_costs  # noqa: B018 - validates costs vs legacy (not both)
+        simulated = self.broker_kind == "simulated"
+        if self.broker_mode is None:
+            object.__setattr__(self, "broker_mode", "simulated" if simulated else "live")
+        elif (self.broker_mode == "simulated") != simulated:
+            raise ValueError(
+                f"broker_mode={self.broker_mode!r} contradicts broker_kind={self.broker_kind!r}"
+            )
         if not 0.0 <= self.dividend_withholding_rate <= 1.0:
             raise ValueError(
                 f"dividend_withholding_rate must be in [0, 1], got {self.dividend_withholding_rate}"
@@ -363,6 +380,8 @@ class TickResult:
     orders_placed: int
     fills: int
     portfolios: tuple[BookResult, ...] = ()
+    dry_run: bool = False
+    broker_mode: BrokerMode = "simulated"
 
 
 def run_tick(
@@ -425,7 +444,11 @@ def run_tick(
                 state,
                 tick_id,
                 status="error",
-                summary={"error": str(exc), "error_type": type(exc).__name__},
+                summary={
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                    **_run_facts(settings, dry_run),
+                },
             )
         except Exception as close_exc:  # pragma: no cover - best effort
             log.error("tick.close_failed", error=str(close_exc))
@@ -697,6 +720,7 @@ def _run_tick_body(
         winner = None
     summary.update(shadow_summary)
     summary.update(hook_summary)
+    summary.update(_run_facts(settings, dry_run))
     _close_tick(state, tick_id, status=status, summary=summary)
     if status == "noop":
         log.info("tick.noop", reason=summary.get("reason"))
@@ -707,7 +731,20 @@ def _run_tick_body(
         orders_placed=sum(r.orders_placed for r in results),
         fills=sum(r.fills for r in results),
         portfolios=tuple(results),
+        dry_run=dry_run,
+        broker_mode=_broker_mode(settings),
     )
+
+
+def _broker_mode(settings: TickSettings) -> BrokerMode:
+    assert settings.broker_mode is not None  # resolved in __post_init__
+    return settings.broker_mode
+
+
+def _run_facts(settings: TickSettings, dry_run: bool) -> dict[str, Any]:
+    """The summary keys that say how the tick ran: a dry run or not, and
+    whose money its default book traded."""
+    return {"dry_run": dry_run, "broker_mode": _broker_mode(settings)}
 
 
 def _tick_status(results: Sequence[BookResult]) -> TickStatus:
