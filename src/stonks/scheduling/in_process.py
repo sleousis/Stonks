@@ -213,6 +213,7 @@ def start_in_process_scheduler(
     another scheduler already holds the lock (e.g. a separate worker), so
     the API starts either way.
     """
+    from stonks.engine.deadman import engine_deadman_from_settings
     from stonks.notify import notifier_from_settings
     from stonks.scheduling.deadman import DeadlineWatchdog, HttpPinger
     from stonks.scheduling.runs import RunStore
@@ -248,7 +249,14 @@ def start_in_process_scheduler(
     )
     thread = threading.Thread(
         target=scheduler.run_forever,
-        kwargs={"watchdog": DeadlineWatchdog(specs, store, notifier)},
+        kwargs={
+            "watchdog": DeadlineWatchdog(
+                specs,
+                store,
+                notifier,
+                extra_checks=[engine_deadman_from_settings(settings, store, notifier)],
+            )
+        },
         name="stonks-scheduler",
         daemon=True,
     )

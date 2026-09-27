@@ -238,9 +238,7 @@ def _one_engine(status: EngineStatus, now: datetime, stale_after: timedelta) -> 
         )
     fams.append(counter("stonks_engine_events_total", "Events the driver received.", "events"))
     fams.append(counter("stonks_engine_bars_total", "Bars the driver built or took.", "bars"))
-    fams.append(
-        counter("stonks_engine_bar_closes_total", "Bar closes dispatched.", "bar_closes")
-    )
+    fams.append(counter("stonks_engine_bar_closes_total", "Bar closes dispatched.", "bar_closes"))
     fams.append(
         counter(
             "stonks_engine_late_bars_total",

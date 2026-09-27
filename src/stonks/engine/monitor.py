@@ -251,4 +251,3 @@ class EngineMonitor:
                 error=str(exc),
                 error_type=type(exc).__name__,
             )
-

@@ -148,3 +148,33 @@ def test_weekend_checks_fridays_run(store):
 def test_jobs_without_deadline_are_not_watched(store):
     spec = JobSpec("h", "health", SessionTrigger("XNYS"))
     assert missed_deadlines([spec], store, _utc(2026, 9, 26)) == []
+
+
+def test_extra_checks_run_with_each_check_and_a_failure_is_contained(store):
+    seen = []
+
+    class Boom:
+        def check(self, now):
+            raise RuntimeError("engine table locked")
+
+    class Seen:
+        def check(self, now):
+            seen.append(now)
+
+    dog = DeadlineWatchdog([], store, Recorder(), extra_checks=[Boom(), Seen()])
+    now = _utc(2026, 9, 25, 15)
+    assert dog.check(now) == []
+    assert seen == [now]
+
+
+def test_watchdog_includes_the_engine_deadman_from_settings(tmp_path):
+    from stonks.config import Settings
+    from stonks.engine.deadman import EngineDeadman, engine_deadman_from_settings
+
+    settings = Settings()
+    settings.state.path = tmp_path / "state.sqlite"
+    store = RunStore(settings.state.path)
+    store.migrate()
+    dead = engine_deadman_from_settings(settings, store, Recorder())
+    assert isinstance(dead, EngineDeadman)
+    assert dead.minutes == settings.streaming.monitor.deadman_minutes

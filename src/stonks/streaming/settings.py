@@ -14,6 +14,9 @@ Example::
     enabled = true
     dir = "data/streams"
 
+    [streaming.monitor]
+    deadman_minutes = 5
+
 No key lives here. The EODHD key comes from ``EODHD_API_KEY`` (the same
 one the REST ingest reads) and the IBKR login stays in the gateway.
 """
@@ -106,6 +109,21 @@ class StreamRecordSettings(BaseModel):
     chunk_seconds: float = Field(default=60.0, gt=0)
 
 
+class StreamMonitorSettings(BaseModel):
+    """Engine monitoring (roadmap 21.3.4): the status row, its staleness and
+    the engine dead-man."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Alert the operator when no bar close was dispatched for this long
+    #: while the engine's market is open.
+    deadman_minutes: int = Field(default=5, gt=0)
+    #: An engine that has not written its status for this long is not live.
+    stale_after_seconds: float = Field(default=120.0, gt=0)
+    #: The engine writes its status at most this often.
+    publish_seconds: float = Field(default=15.0, gt=0)
+
+
 class StreamingSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -142,6 +160,7 @@ class StreamingSettings(BaseModel):
     ibkr: IbkrStreamSettings = Field(default_factory=IbkrStreamSettings)
     replay: ReplayStreamSettings = Field(default_factory=ReplayStreamSettings)
     record: StreamRecordSettings = Field(default_factory=StreamRecordSettings)
+    monitor: StreamMonitorSettings = Field(default_factory=StreamMonitorSettings)
 
     @model_validator(mode="before")
     @classmethod
