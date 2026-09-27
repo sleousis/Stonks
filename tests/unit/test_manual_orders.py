@@ -485,7 +485,6 @@ def test_snapshot_date_is_the_order_day(state, lake, tick, portfolio_id, owner):
     assert snap["as_of"] == date(2026, 4, 2).isoformat() and snap["tick_id"] is None
 
 
-
 # ---- review 2026-09-27: live safeguards and the reconcile gate on broker books ----------
 
 

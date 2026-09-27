@@ -155,8 +155,8 @@ class ScreenData:
             return pd.DataFrame(columns=columns)
         filed = pd.to_datetime(df["available_date"]) <= pd.Timestamp(self.as_of)
         known = known_versions(df, day_start(self.as_of + timedelta(days=1)), filed)
-        out = known[columns]
-        return out.sort_values(["ticker", "period_end"], ascending=[True, False]).reset_index(
+        out = cast(pd.DataFrame, known[columns])
+        return out.sort_values(by=["ticker", "period_end"], ascending=[True, False]).reset_index(
             drop=True
         )
 
