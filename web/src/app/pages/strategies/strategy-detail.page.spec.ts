@@ -587,4 +587,28 @@ describe('StrategyDetailPage', () => {
       });
     });
   });
+  it('opens the Model versions tab and keeps it in the address', async () => {
+    await load();
+    const tab = Array.from(el.querySelectorAll<HTMLButtonElement>('app-segmented button')).find(
+      (b) => b.textContent?.trim() === 'Model versions',
+    )!;
+    tab.click();
+    await settle();
+    (await nextRequest(controller, '/api/strategies/momentum-v3/versions')).flush(page([]));
+    (await nextRequest(controller, '/api/strategies/momentum-v3/versions/history')).flush(page([]));
+    await settle();
+    expect(el.querySelector('app-model-versions-panel')).toBeTruthy();
+    expect(el.querySelector('#perf-title')).toBeNull();
+    expect(el.textContent).toContain('No model versions');
+  });
+
+  it('opens on the versions tab from ?tab=versions', async () => {
+    fixture.componentRef.setInput('tab', 'versions');
+    fixture.detectChanges();
+    await load();
+    (await nextRequest(controller, '/api/strategies/momentum-v3/versions')).flush(page([]));
+    (await nextRequest(controller, '/api/strategies/momentum-v3/versions/history')).flush(page([]));
+    await settle();
+    expect(el.querySelector('app-model-versions-panel')).toBeTruthy();
+  });
 });

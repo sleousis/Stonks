@@ -17,4 +17,9 @@ export default [
     title: 'Data quality',
     loadComponent: () => import('./data-quality.page').then((m) => m.DataQualityPage),
   },
+  {
+    path: 'models',
+    title: 'Model versions',
+    loadComponent: () => import('./models.page').then((m) => m.ModelsPage),
+  },
 ] satisfies Routes;
