@@ -34,9 +34,10 @@ from __future__ import annotations
 
 import copy
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
+from functools import partial
 from typing import Any, Literal
 
 from stonks.core.interval import Interval
@@ -128,13 +129,17 @@ class Ranker:
         min_parallel_estimates: int = 2000,
         allow_short: bool = False,
         universe_id: str | None = None,
+        loaders: Mapping[str, Callable[[], Strategy]] | None = None,
     ) -> None:
         """``universe_id``: the stored universe the tick trades; names that
         are not members on the tick date are not scored. ``workers`` > 1 scores the strategies that opt in with
         ``parallel_scoring`` in worker processes (``production.scoring``),
         once they need at least ``min_parallel_estimates`` estimates in all
         (below that a pool costs more than it saves). ``allow_short`` keeps
-        the short scores of strategies that support shorts (module doc)."""
+        the short scores of strategies that support shorts (module doc).
+        ``loaders`` scores these ``id -> loader`` instead of the registry's
+        strategies of ``status`` (the model version books, roadmap 22.6)."""
+        self._loaders = None if loaders is None else dict(loaders)
         self._allow_short = allow_short
         self._workers = workers
         self._min_parallel = min_parallel_estimates
@@ -156,7 +161,14 @@ class Ranker:
     def rank(self, as_of: date) -> list[RankedPick]:
         view = PitSession(self._lake).at(as_of, decision_interval=Interval.DAY_1)
         universe = self._members(view, as_of)
-        handles = self._registry.list_all(status=self._status)
+        sources: list[tuple[str, Callable[[], Strategy], str]]
+        if self._loaders is not None:
+            sources = [(sid, load, sid) for sid, load in self._loaders.items()]
+        else:
+            sources = [
+                (h.id, partial(self._registry.load, h.id), h.class_path)
+                for h in self._registry.list_all(status=self._status)
+            ]
         # Resolve asset classes once per tick. Tickers without an
         # ``instruments`` row are treated as "asset class unknown" and
         # skipped with a single warning per tick — defaulting to equity
@@ -176,20 +188,20 @@ class Ranker:
         scores: dict[str, dict[str, float]] = {}
         shorts: dict[str, dict[str, float]] = {}
         instances: dict[str, Strategy] = {}
-        for handle in handles:
+        for sid, load, class_path in sources:
             # One broken strategy (renamed class path, corrupt artifact, …)
             # must not take down the whole tick; skip it and keep ranking.
             try:
-                strategy = self._registry.load(handle.id)
+                strategy = load()
             except Exception as exc:
                 _log.warning(
                     "ranker.strategy_load.failed",
-                    strategy_id=handle.id,
-                    class_path=handle.class_path,
+                    strategy_id=sid,
+                    class_path=class_path,
                     error=str(exc),
                 )
                 continue
-            instances[handle.id] = strategy
+            instances[sid] = strategy
         parallel = self._score_parallel(instances, as_of, asset_classes, universe)
         for sid, strategy in instances.items():
             if sid in parallel:

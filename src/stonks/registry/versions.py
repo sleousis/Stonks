@@ -511,9 +511,7 @@ def _check_swap(
         if sid != strategy_id or int(ver) != int(version):
             passed = False
             if not override:
-                raise SwapRefused(
-                    f"swap check is for {sid} v{ver}, not {strategy_id} v{version}"
-                )
+                raise SwapRefused(f"swap check is for {sid} v{ver}, not {strategy_id} v{version}")
     if override:
         text = (reason or "").strip()
         if len(text) < MIN_OVERRIDE_REASON_CHARS:

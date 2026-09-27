@@ -28,6 +28,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date
+from typing import Any
 
 from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
 from stonks.backtest.costs import CostModel, CostModelSettings
@@ -269,29 +270,22 @@ def model_book_risk_context(
     strategy_id: str,
     portfolio: Portfolio,
     as_of: date,
+    *,
+    book: Any = None,
 ) -> RiskContext:
     """``base`` (history and sectors, from :func:`build_risk_context`) for a
-    strategy's model book: its virtual portfolio, its equity curve and the
-    entry dates of its filled shadow decisions."""
-    from stonks.production.pnl import load_pnl
+    model book: its virtual portfolio, its equity curve and the entry dates
+    of its filled decisions. ``book`` (a ``production.shadow.BookStore``)
+    names the book, by default the strategy's own model book."""
+    from stonks.production.pnl import daily_pnl
+    from stonks.production.shadow import shadow_book
 
+    store = book if book is not None else shadow_book(strategy_id)
     held = [t for t, q in portfolio.positions.items() if abs(q) > 1e-12]
     entry: dict[str, date] = {}
     if held:
-        marks = ",".join("?" for _ in held)
-        rows = state.sql(
-            "SELECT ticker, side, quantity, as_of FROM shadow_decisions"
-            f" WHERE strategy_id = ? AND status = 'filled' AND ticker IN ({marks})"
-            " AND as_of <= ? ORDER BY as_of, id",
-            [strategy_id, *held, as_of.isoformat()],
-        )
-        entry = entry_dates_from_fills(
-            (r["ticker"], r["side"], float(r["quantity"]), date.fromisoformat(r["as_of"]))
-            for r in rows
-        )
-    curve = [
-        (r.day, r.total_value) for r in load_pnl(state, strategy_id=strategy_id) if r.day <= as_of
-    ]
+        entry = entry_dates_from_fills(store.filled(state, held, as_of))
+    curve = [(r.day, r.total_value) for r in daily_pnl(store.curve(state)) if r.day <= as_of]
     return replace(
         base,
         portfolio=portfolio,
