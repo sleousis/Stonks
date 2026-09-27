@@ -18,6 +18,7 @@ from hypothesis import strategies as st
 from stonks.accounts.rules import AccountProfile, AccountRuleInputs
 from stonks.execution.brokers.base import LiveAccountState, Quote
 from stonks.production.live.context import LiveContext
+from stonks.production.live.trades import ClosedTrade
 from stonks.production.risk import apply_risk
 from stonks.production.rules import registered_rules
 from stonks.production.rules.settings import RuleSettings
@@ -28,7 +29,16 @@ LIVE_RULES = [
     r
     for r in registered_rules()
     if r.name
-    in {"capital_ramp", "live_notional_caps", "price_band", "max_orders_per_run", "account_rules"}
+    in {
+        "capital_ramp",
+        "live_notional_caps",
+        "price_band",
+        "max_orders_per_run",
+        "account_rules",
+        "stop_cooldown",
+        "stop_guard",
+        "losing_lock",
+    }
 ]
 
 
@@ -78,6 +88,16 @@ def live_cases(draw):
         account_rules=pick(None, rules_inputs),
         quotes=quotes,
         sent_today=pick(0.0, 900.0),
+        closed_trades=tuple(
+            ClosedTrade(
+                strategy_id=None,
+                ticker=draw(st.sampled_from(TICKERS)),
+                exit_day=ctx.as_of or NOW.date(),
+                pnl=pick(-5.0, 5.0),
+                stop=pick(False, True),
+            )
+            for _ in range(draw(st.integers(min_value=0, max_value=4)))
+        ),
     )
     rules = ctx.policy.rules.model_dump()
     rules.update(
@@ -88,6 +108,9 @@ def live_cases(draw):
         },
         price_band={"band_pct": 0.02, "max_gap_pct": pick(None, 0.05)},
         account_rules={"enabled": True},
+        stop_cooldown={"cooldown_days": pick(None, 5)},
+        stop_guard={"max_stops": pick(None, 1, 3)},
+        losing_lock={"max_consecutive_losses": pick(None, 1, 2)},
         max_orders_per_run={
             "max_opening_orders": pick(None, 0, 2),
             "max_closing_orders": pick(None, 0, 1),

@@ -28,6 +28,11 @@ from stonks.production.rules.max_orders import MaxOrdersPerRunSettings
 from stonks.production.rules.operational_halt import OperationalHaltSettings
 from stonks.production.rules.portfolio_vol import PortfolioVolSettings
 from stonks.production.rules.price_band import PriceBandSettings
+from stonks.production.rules.protections import (
+    LosingLockSettings,
+    StopCooldownSettings,
+    StopGuardSettings,
+)
 from stonks.production.rules.risk_per_position import RiskPerPositionSettings
 from stonks.production.rules.sector_cap import SectorCapSettings
 from stonks.production.rules.short_caps import ShortCapsSettings
@@ -42,6 +47,7 @@ __all__ = [
     "GrossExposureSettings",
     "LiquiditySettings",
     "LiveNotionalCapsSettings",
+    "LosingLockSettings",
     "MarginCallSettings",
     "MaxHoldingSettings",
     "MaxOrdersPerRunSettings",
@@ -54,6 +60,8 @@ __all__ = [
     "SectorCapSettings",
     "ShortCapsSettings",
     "SqueezeGuardSettings",
+    "StopCooldownSettings",
+    "StopGuardSettings",
     "merge_schedules",
     "tighter_rule_settings",
 ]
@@ -85,6 +93,10 @@ class RuleSettings(BaseModel):
     max_orders_per_run: MaxOrdersPerRunSettings = MaxOrdersPerRunSettings()
     # The account rules engine (roadmap 19.7), off by default.
     account_rules: AccountRulesSettings = AccountRulesSettings()
+    # Per-strategy protections for live books (roadmap 19.6), off by default.
+    stop_cooldown: StopCooldownSettings = StopCooldownSettings()
+    stop_guard: StopGuardSettings = StopGuardSettings()
+    losing_lock: LosingLockSettings = LosingLockSettings()
 
 
 def _min_optional(a: float | None, b: float | None) -> float | None:
@@ -197,6 +209,9 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
         "wash_sale_window_days": max,
         "short_disclosure_threshold": min,
     },
+    "stop_cooldown": {"cooldown_days": _max_optional, "count_losses": _either},
+    "stop_guard": {"max_stops": _min_optional, "window_days": max, "count_losses": _either},
+    "losing_lock": {"max_consecutive_losses": _min_optional, "lock_days": max},
 }
 
 

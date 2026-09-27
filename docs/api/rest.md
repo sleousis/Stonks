@@ -1525,6 +1525,13 @@ One recorded lab run: what was tested, why, and how it came out.
 | `next_step` | "enrol" \| "verify" | yes |  |
 | `user_id` | string | yes |  |
 
+### LosingLockSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `lock_days` | integer | no |  |
+| `max_consecutive_losses` | integer \| null | no |  |
+
 ### MarginCallSettings
 
 | Field | Type | Required | Description |
@@ -2471,6 +2478,7 @@ Type: "viewer" \| "trader" \| "admin"
 | `gross_exposure` | [GrossExposureSettings](#grossexposuresettings) | no |  |
 | `liquidity` | [LiquiditySettings](#liquiditysettings) | no |  |
 | `live_notional_caps` | [LiveNotionalCapsSettings](#livenotionalcapssettings) | no |  |
+| `losing_lock` | [LosingLockSettings](#losinglocksettings) | no |  |
 | `margin_call` | [MarginCallSettings](#margincallsettings) | no |  |
 | `max_holding` | [MaxHoldingSettings](#maxholdingsettings) | no |  |
 | `max_orders_per_run` | [MaxOrdersPerRunSettings](#maxordersperrunsettings) | no |  |
@@ -2482,6 +2490,8 @@ Type: "viewer" \| "trader" \| "admin"
 | `sector_cap` | [SectorCapSettings](#sectorcapsettings) | no |  |
 | `short_caps` | [ShortCapsSettings](#shortcapssettings) | no |  |
 | `squeeze_guard` | [SqueezeGuardSettings](#squeezeguardsettings) | no |  |
+| `stop_cooldown` | [StopCooldownSettings](#stopcooldownsettings) | no |  |
+| `stop_guard` | [StopGuardSettings](#stopguardsettings) | no |  |
 
 ### RuleTemplateView
 
@@ -2759,6 +2769,21 @@ One audited status change or intervention (BL-24).
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `state` | "done" \| "skipped" \| "todo" | yes |  |
+
+### StopCooldownSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cooldown_days` | integer \| null | no |  |
+| `count_losses` | boolean | no |  |
+
+### StopGuardSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `count_losses` | boolean | no |  |
+| `max_stops` | integer \| null | no |  |
+| `window_days` | integer | no |  |
 
 ### StrategyClassInfo
 

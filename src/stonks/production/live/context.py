@@ -16,6 +16,7 @@ from stonks.accounts.rules import AccountRuleInputs, InstrumentFacts
 from stonks.execution.brokers.base import AccountReader, LiveAccountState, Quote, QuoteSource
 from stonks.logging import get_logger
 from stonks.production.ledger import ledger_columns
+from stonks.production.live.trades import ClosedTrade, closed_trades
 from stonks.production.rules._account_settings import AccountRulesSettings
 from stonks.store.state import SqliteState
 
@@ -49,6 +50,8 @@ class LiveContext:
     #: The account rules engine's inputs (profile, settlement ledger,
     #: day trades, ...). ``None``: the ``account_rules`` rule refuses opens.
     account_rules: AccountRuleInputs | None = None
+    #: The book's recently closed trades, for the protections.
+    closed_trades: Sequence[ClosedTrade] = ()
 
     def room_left(self, cap: float | None, sent: float) -> float | None:
         """What is left of a daily ``cap`` after ``sent`` (``None``: no cap)."""
@@ -176,4 +179,5 @@ def build_live_context(
         sent_today_global=sent_notional_today(state, as_of),
         external_positions=dict(external_positions or {}),
         account_rules=inputs,
+        closed_trades=tuple(closed_trades(state, portfolio_id, as_of)),
     )

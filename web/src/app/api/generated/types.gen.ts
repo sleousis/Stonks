@@ -3215,6 +3215,20 @@ export type LoginView = {
 };
 
 /**
+ * LosingLockSettings
+ */
+export type LosingLockSettings = {
+    /**
+     * Lock Days
+     */
+    lock_days?: number;
+    /**
+     * Max Consecutive Losses
+     */
+    max_consecutive_losses?: number | null;
+};
+
+/**
  * MarginCallSettings
  */
 export type MarginCallSettings = {
@@ -5564,6 +5578,7 @@ export type RuleSettings = {
     gross_exposure?: GrossExposureSettings;
     liquidity?: LiquiditySettings;
     live_notional_caps?: LiveNotionalCapsSettings;
+    losing_lock?: LosingLockSettings;
     margin_call?: MarginCallSettings;
     max_holding?: MaxHoldingSettings;
     max_orders_per_run?: MaxOrdersPerRunSettings;
@@ -5575,6 +5590,8 @@ export type RuleSettings = {
     sector_cap?: SectorCapSettings;
     short_caps?: ShortCapsSettings;
     squeeze_guard?: SqueezeGuardSettings;
+    stop_cooldown?: StopCooldownSettings;
+    stop_guard?: StopGuardSettings;
 };
 
 /**
@@ -6326,6 +6343,38 @@ export type StepUpdate = {
      * State
      */
     state: 'done' | 'skipped' | 'todo';
+};
+
+/**
+ * StopCooldownSettings
+ */
+export type StopCooldownSettings = {
+    /**
+     * Cooldown Days
+     */
+    cooldown_days?: number | null;
+    /**
+     * Count Losses
+     */
+    count_losses?: boolean;
+};
+
+/**
+ * StopGuardSettings
+ */
+export type StopGuardSettings = {
+    /**
+     * Count Losses
+     */
+    count_losses?: boolean;
+    /**
+     * Max Stops
+     */
+    max_stops?: number | null;
+    /**
+     * Window Days
+     */
+    window_days?: number;
 };
 
 /**

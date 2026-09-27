@@ -113,3 +113,30 @@ def test_instrument_facts_from_the_lake(lake):
 def test_a_broker_without_capabilities_is_fine(state):
     live = build_live_context(state, "pf_default", DAY, broker=object())
     assert live.account is None and live.quotes == {}
+
+
+def test_closed_trades_come_from_the_books_own_fills(state):
+    import json
+
+    from stonks.production.live.trades import closed_trades
+
+    for cid, side, qty, price, day, ctx in [
+        ("b1", "buy", 10.0, 10.0, "2026-09-21", None),
+        ("s1", "sell", 10.0, 8.0, "2026-09-25", {"trigger": "stop"}),
+    ]:
+        state.execute(
+            "INSERT INTO orders (client_id, ticker, side, quantity, order_type, status,"
+            " created_at, updated_at, portfolio_id, decision_context_json)"
+            " VALUES (?, 'A.US', ?, ?, 'market', 'filled', 'x', 'x', 'pf_default', ?)",
+            [cid, side, qty, json.dumps(ctx) if ctx else None],
+        )
+        state.execute(
+            "INSERT INTO fills (order_client_id, ticker, quantity, price, fee, filled_at,"
+            " portfolio_id) VALUES (?, 'A.US', ?, ?, 0, ?, 'pf_default')",
+            [cid, qty, price, f"{day}T14:30:00"],
+        )
+    (trade,) = closed_trades(state, "pf_default", DAY)
+    assert trade.pnl == -20.0 and trade.stop and trade.ticker == "A.US"
+    assert closed_trades(state, "pf_default", DAY, lookback_days=1) == []
+    live = build_live_context(state, "pf_default", DAY)
+    assert len(live.closed_trades) == 1

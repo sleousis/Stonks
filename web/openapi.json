@@ -6248,6 +6248,31 @@
         "title": "LoginView",
         "type": "object"
       },
+      "LosingLockSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "lock_days": {
+            "default": 30,
+            "minimum": 1.0,
+            "title": "Lock Days",
+            "type": "integer"
+          },
+          "max_consecutive_losses": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Consecutive Losses"
+          }
+        },
+        "title": "LosingLockSettings",
+        "type": "object"
+      },
       "MarginCallSettings": {
         "additionalProperties": false,
         "properties": {
@@ -9842,6 +9867,9 @@
               "gross_exposure": {},
               "liquidity": {},
               "live_notional_caps": {},
+              "losing_lock": {
+                "lock_days": 30
+              },
               "margin_call": {
                 "buffer": 0.0,
                 "enabled": false,
@@ -9873,6 +9901,13 @@
               "short_caps": {},
               "squeeze_guard": {
                 "spike_bars": 5
+              },
+              "stop_cooldown": {
+                "count_losses": true
+              },
+              "stop_guard": {
+                "count_losses": true,
+                "window_days": 7
               }
             }
           }
@@ -10401,6 +10436,12 @@
             "$ref": "#/components/schemas/LiveNotionalCapsSettings",
             "default": {}
           },
+          "losing_lock": {
+            "$ref": "#/components/schemas/LosingLockSettings",
+            "default": {
+              "lock_days": 30
+            }
+          },
           "margin_call": {
             "$ref": "#/components/schemas/MarginCallSettings",
             "default": {
@@ -10464,6 +10505,19 @@
             "$ref": "#/components/schemas/SqueezeGuardSettings",
             "default": {
               "spike_bars": 5
+            }
+          },
+          "stop_cooldown": {
+            "$ref": "#/components/schemas/StopCooldownSettings",
+            "default": {
+              "count_losses": true
+            }
+          },
+          "stop_guard": {
+            "$ref": "#/components/schemas/StopGuardSettings",
+            "default": {
+              "count_losses": true,
+              "window_days": 7
             }
           }
         },
@@ -11839,6 +11893,60 @@
           "state"
         ],
         "title": "StepUpdate",
+        "type": "object"
+      },
+      "StopCooldownSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "cooldown_days": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cooldown Days"
+          },
+          "count_losses": {
+            "default": true,
+            "title": "Count Losses",
+            "type": "boolean"
+          }
+        },
+        "title": "StopCooldownSettings",
+        "type": "object"
+      },
+      "StopGuardSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "count_losses": {
+            "default": true,
+            "title": "Count Losses",
+            "type": "boolean"
+          },
+          "max_stops": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Stops"
+          },
+          "window_days": {
+            "default": 7,
+            "minimum": 1.0,
+            "title": "Window Days",
+            "type": "integer"
+          }
+        },
+        "title": "StopGuardSettings",
         "type": "object"
       },
       "StrategyClassInfo": {
