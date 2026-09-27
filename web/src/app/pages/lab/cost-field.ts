@@ -20,9 +20,7 @@ import { type CostForm, type FormErrors, costHint } from './lab-requests';
         [attr.aria-describedby]="idPrefix() + '-cost-hint'"
         (change)="patch.emit({ cost: $any($event.target).value })"
       >
-        <option value="configured" [selected]="value().cost === 'configured'">
-          Default costs
-        </option>
+        <option value="configured" [selected]="value().cost === 'configured'">Default costs</option>
         @for (m of costModels(); track m.name) {
           <option [value]="m.name" [selected]="value().cost === m.name">
             Preset: {{ m.name }}

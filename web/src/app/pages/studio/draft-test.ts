@@ -112,8 +112,8 @@ export class DraftTest {
   );
   /** The tests the lab run will do, with their labels. */
   protected readonly runTests = computed(() =>
-    suiteTests({ suite: this.suite(), tests: this.tests() }, this.suites()).map(
-      (id) => SURVIVAL_TESTS.find((t) => t.id === id)!,
+    suiteTests({ suite: this.suite(), tests: this.tests() }, this.suites()).map((id) =>
+      SURVIVAL_TESTS.find((t) => t.id === id)!,
     ),
   );
   protected readonly instruments = resource({
@@ -122,14 +122,16 @@ export class DraftTest {
 
   protected readonly tickers = computed(() => parseTickers(this.tickersText()));
   protected readonly tickersError = computed(() =>
-    this.tickers().length ? null : 'Enter at least one ticker from the lake.',
+    this.tickers().length ? null : 'Enter at least one ticker.',
   );
   protected readonly windowError = computed(() =>
     this.start() && this.end() && this.start() < this.end()
       ? null
       : 'The start date must be before the end date.',
   );
-  protected readonly costErrors = computed(() => (this.submitted() ? costErrors(this.costForm()) : {}));
+  protected readonly costErrors = computed(() =>
+    this.submitted() ? costErrors(this.costForm()) : {},
+  );
   protected readonly formValid = computed(
     () =>
       !this.tickersError() &&

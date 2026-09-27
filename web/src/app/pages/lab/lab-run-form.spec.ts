@@ -218,9 +218,9 @@ describe('LabRunFormView', () => {
       suite: 'promotion',
     });
     fixture.detectChanges();
-    expect(el.querySelector<HTMLInputElement>('input[name="lr-suite"][value="promotion"]')!.checked).toBe(
-      true,
-    );
+    expect(
+      el.querySelector<HTMLInputElement>('input[name="lr-suite"][value="promotion"]')!.checked,
+    ).toBe(true);
     submit();
     expect(emitted[0]).toMatchObject({ universe: ['NVDA.US'], preset: 'promotion' });
   });

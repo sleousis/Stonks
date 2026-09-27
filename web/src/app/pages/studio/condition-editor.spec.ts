@@ -111,7 +111,9 @@ describe('ConditionEditor', () => {
   it('removing the last child of a root group leaves a fresh comparison', () => {
     create({ type: 'any', conditions: [RSI_BELOW_30] });
     el.querySelector<HTMLButtonElement>('button[aria-label="Remove comparison"]')!.click();
-    expect(changes.at(-1)).toEqual(compare(indicatorOperand('rsi'), '>', indicatorOperand('close')));
+    expect(changes.at(-1)).toEqual(
+      compare(indicatorOperand('rsi'), '>', indicatorOperand('close')),
+    );
     expect(removed).toBe(0);
   });
 

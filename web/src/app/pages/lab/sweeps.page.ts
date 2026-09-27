@@ -56,8 +56,8 @@ import { SweepFormView } from './sweep-form';
         </div>
         <div class="panel-body">
           <p class="lead">
-            Each strategy is tuned and tested on the same data with the suite you pick. Nothing starts
-            paper trading, and every trial is counted.
+            Each strategy is tuned and tested on the same data with the suite you pick. Nothing
+            starts paper trading, and every trial is counted.
           </p>
           @if (classes.error(); as err) {
             <app-error-state

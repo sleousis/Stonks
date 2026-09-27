@@ -239,10 +239,7 @@
               <option value="cv_cagr" [selected]="form().objective === 'cv_cagr'">
                 CAGR on purged folds
               </option>
-              <option
-                value="cv_final_return"
-                [selected]="form().objective === 'cv_final_return'"
-              >
+              <option value="cv_final_return" [selected]="form().objective === 'cv_final_return'">
                 Total return on purged folds
               </option>
             </select>
@@ -490,7 +487,9 @@
               class="input"
               (change)="setChoice('mcptMetric', $any($event.target).value)"
             >
-              <option value="" [selected]="form().mcptMetric === ''">Default (profit factor)</option>
+              <option value="" [selected]="form().mcptMetric === ''">
+                Default (profit factor)
+              </option>
               <option value="profit_factor" [selected]="form().mcptMetric === 'profit_factor'">
                 Profit factor
               </option>

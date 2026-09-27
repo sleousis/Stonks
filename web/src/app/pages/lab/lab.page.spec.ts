@@ -66,10 +66,7 @@ describe('LabPage', () => {
 
   let created = false;
 
-  async function create(
-    me: MeView = TRADER,
-    query: Record<string, string> = {},
-  ): Promise<void> {
+  async function create(me: MeView = TRADER, query: Record<string, string> = {}): Promise<void> {
     created = true;
     const session = TestBed.inject(SessionService);
     const loading = session.load();
@@ -163,9 +160,7 @@ describe('LabPage', () => {
   async function settle(rounds = 8, hold: (path: string) => boolean = () => false): Promise<void> {
     if (!created) await create();
     for (let i = 0; i < rounds; i++) {
-      controller
-        .match((r) => !hold(r.url.split('?')[0]))
-        .forEach(respond);
+      controller.match((r) => !hold(r.url.split('?')[0])).forEach(respond);
       await tick(5);
       fixture.detectChanges();
     }
@@ -312,7 +307,9 @@ describe('LabPage', () => {
     submitLabRun();
     await settle(2);
     expect(posted).toEqual([]);
-    expect(el.textContent).toContain('Say why it should make money before it starts paper trading.');
+    expect(el.textContent).toContain(
+      'Say why it should make money before it starts paper trading.',
+    );
 
     const hypothesis = el.querySelector<HTMLTextAreaElement>('#lr-hypothesis')!;
     hypothesis.value = 'Slow money chases recent winners for months.';
@@ -367,8 +364,9 @@ describe('LabPage', () => {
       expect(el.querySelector<HTMLInputElement>('#lr-register')!.checked).toBe(true);
       expect(el.querySelector<HTMLInputElement>('#lr-tickers')!.value).toBe('SPY.US');
       expect(
-        el.querySelector<HTMLInputElement>('#lab-panel-lab_run input[name="lr-suite"][value="promotion"]')!
-          .checked,
+        el.querySelector<HTMLInputElement>(
+          '#lab-panel-lab_run input[name="lr-suite"][value="promotion"]',
+        )!.checked,
       ).toBe(true);
     });
 
@@ -399,8 +397,9 @@ describe('LabPage', () => {
     await settle();
     expect(el.querySelector('#lab-panel-lab_run')!.hasAttribute('hidden')).toBe(false);
     expect(
-      el.querySelector<HTMLInputElement>('#lab-panel-lab_run input[name="lr-suite"][value="promotion"]')!
-        .checked,
+      el.querySelector<HTMLInputElement>(
+        '#lab-panel-lab_run input[name="lr-suite"][value="promotion"]',
+      )!.checked,
     ).toBe(true);
   });
 

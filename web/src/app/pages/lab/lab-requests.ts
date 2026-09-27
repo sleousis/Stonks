@@ -321,7 +321,8 @@ export function costFields(
   f: CostForm,
 ): Pick<BacktestRequest, 'cost_model' | 'slippage_bps' | 'fee_per_trade'> {
   if (f.cost === 'zero' || f.cost === 'realistic') return { cost_model: f.cost };
-  if (f.cost === 'flat') return { slippage_bps: f.slippageBps ?? 0, fee_per_trade: f.feePerTrade ?? 0 };
+  if (f.cost === 'flat')
+    return { slippage_bps: f.slippageBps ?? 0, fee_per_trade: f.feePerTrade ?? 0 };
   return {};
 }
 
