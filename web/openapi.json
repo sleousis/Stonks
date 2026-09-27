@@ -2073,6 +2073,7 @@
                     "permutation",
                     "perturbation",
                     "plateau",
+                    "pool_correlation",
                     "runs_test",
                     "signal_ic",
                     "stress",
@@ -2116,6 +2117,7 @@
                     "permutation",
                     "perturbation",
                     "plateau",
+                    "pool_correlation",
                     "runs_test",
                     "signal_ic",
                     "stress",
@@ -4609,6 +4611,7 @@
                     "permutation",
                     "perturbation",
                     "plateau",
+                    "pool_correlation",
                     "runs_test",
                     "signal_ic",
                     "stress",
@@ -4652,6 +4655,7 @@
                     "permutation",
                     "perturbation",
                     "plateau",
+                    "pool_correlation",
                     "runs_test",
                     "signal_ic",
                     "stress",
@@ -5958,6 +5962,37 @@
           "offset"
         ],
         "title": "Page[PushDeviceView]",
+        "type": "object"
+      },
+      "Page_RiskSnapshotView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RiskSnapshotView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[RiskSnapshotView]",
         "type": "object"
       },
       "Page_ShadowDecisionView_": {
@@ -7916,6 +7951,309 @@
         "title": "RiskPolicy",
         "type": "object"
       },
+      "RiskSnapshotView": {
+        "description": "One book on one day. Figures are fractions of ``value``; a loss is\npositive. ``strategy_id`` is null for the whole portfolio.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "decay_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decay Days"
+          },
+          "decay_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decay Reason"
+          },
+          "decayed": {
+            "title": "Decayed",
+            "type": "boolean"
+          },
+          "es_95": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Es 95"
+          },
+          "es_99": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Es 99"
+          },
+          "expected_ir": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Ir"
+          },
+          "exposures": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Exposures",
+            "type": "object"
+          },
+          "ir_long": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ir Long"
+          },
+          "ir_short": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ir Short"
+          },
+          "kupiec_p_95": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kupiec P 95"
+          },
+          "kupiec_p_99": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kupiec P 99"
+          },
+          "observations": {
+            "title": "Observations",
+            "type": "integer"
+          },
+          "pnl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pnl"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "ratio_out_of_band": {
+            "title": "Ratio Out Of Band",
+            "type": "boolean"
+          },
+          "realized_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Realized Return"
+          },
+          "sigma": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sigma"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Id"
+          },
+          "tick_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tick Id"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          },
+          "var_95": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Var 95"
+          },
+          "var_99": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Var 99"
+          },
+          "violation_95": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Violation 95"
+          },
+          "violation_99": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Violation 99"
+          },
+          "violation_ratio_95": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Violation Ratio 95"
+          },
+          "violation_ratio_99": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Violation Ratio 99"
+          },
+          "violations_95": {
+            "title": "Violations 95",
+            "type": "integer"
+          },
+          "violations_99": {
+            "title": "Violations 99",
+            "type": "integer"
+          },
+          "window_days": {
+            "title": "Window Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "strategy_id",
+          "as_of",
+          "tick_id",
+          "value",
+          "exposures",
+          "sigma",
+          "var_95",
+          "var_99",
+          "es_95",
+          "es_99",
+          "observations",
+          "realized_return",
+          "pnl",
+          "violation_95",
+          "violation_99",
+          "window_days",
+          "violations_95",
+          "violations_99",
+          "violation_ratio_95",
+          "violation_ratio_99",
+          "kupiec_p_95",
+          "kupiec_p_99",
+          "ir_short",
+          "ir_long",
+          "expected_ir",
+          "decay_days",
+          "decayed",
+          "decay_reason",
+          "ratio_out_of_band"
+        ],
+        "title": "RiskSnapshotView",
+        "type": "object"
+      },
       "RiskStats": {
         "properties": {
           "current_drawdown": {
@@ -7965,6 +8303,51 @@
           "expected_shortfall_95"
         ],
         "title": "RiskStats",
+        "type": "object"
+      },
+      "RiskSummaryView": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "portfolio": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiskSnapshotView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "strategies": {
+            "items": {
+              "$ref": "#/components/schemas/RiskSnapshotView"
+            },
+            "title": "Strategies",
+            "type": "array"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "as_of",
+          "portfolio",
+          "strategies"
+        ],
+        "title": "RiskSummaryView",
         "type": "object"
       },
       "RiskView": {
@@ -10181,6 +10564,7 @@
                     "permutation",
                     "perturbation",
                     "plateau",
+                    "pool_correlation",
                     "runs_test",
                     "signal_ic",
                     "stress",
@@ -10224,6 +10608,7 @@
                     "permutation",
                     "perturbation",
                     "plateau",
+                    "pool_correlation",
                     "runs_test",
                     "signal_ic",
                     "stress",
@@ -21451,6 +21836,104 @@
         ]
       }
     },
+    "/api/risk/live": {
+      "get": {
+        "description": "One of your portfolios on its latest tick day: one-day 95% and 99%\nVaR and expected shortfall, the rolling violation ratio and Kupiec test,\nand per strategy sleeve the same plus the alpha-decay check (BL-47).",
+        "operationId": "getLiveRisk",
+        "parameters": [
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiskSummaryView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Live Risk",
+        "tags": [
+          "risk"
+        ]
+      }
+    },
     "/api/risk/policy": {
       "get": {
         "description": "The ``[production.risk]`` limits applied between a strategy's orders\nand the broker.",
@@ -21523,6 +22006,172 @@
           }
         ],
         "summary": "Get Risk Policy",
+        "tags": [
+          "risk"
+        ]
+      }
+    },
+    "/api/risk/snapshots": {
+      "get": {
+        "description": "Daily risk snapshots of one of your portfolios, newest first.",
+        "operationId": "listRiskSnapshots",
+        "parameters": [
+          {
+            "description": "one strategy's sleeve; default the whole portfolio",
+            "in": "query",
+            "name": "strategy_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "one strategy's sleeve; default the whole portfolio",
+              "title": "Strategy Id"
+            }
+          },
+          {
+            "description": "days on or after this one",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "days on or after this one",
+              "title": "Since"
+            }
+          },
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_RiskSnapshotView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Risk Snapshots",
         "tags": [
           "risk"
         ]
