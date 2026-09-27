@@ -134,8 +134,10 @@ class IbkrOrderSettings(BaseModel):
     #: orders for closes only.
     collar_bps: float = Field(default=100.0, ge=0.0, le=2000.0)
     #: The longest ``orderRef`` sent as the client id itself. Longer client
-    #: ids go out as a stable hash. The live contract test measures what the
-    #: gateway keeps.
+    #: ids go out as a stable hash. It must not exceed what the gateway
+    #: keeps whole, which ``test_live_order_ref_max_length_is_measured``
+    #: measures on a paper account (roadmap 19.16). 40 until that run
+    #: records its value in ``docs/design/live-trading.md`` section 16.
     order_ref_max_length: int = Field(default=40, ge=24, le=128)
 
 
