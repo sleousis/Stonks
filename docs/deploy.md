@@ -1,6 +1,21 @@
 # Deploy
 
-How to run Stonks on one small always-on cloud VM for several traders: create the server, set secrets, deploy, update, roll back, back up, restore and monitor. Covers Phases 12.7 to 12.9 and 14.1 to 14.10 of the [roadmap](roadmap.md). Sizes and costs: [capacity.md](capacity.md).
+How to run Stonks on one small always-on machine for several traders: create the server, set secrets, deploy, update, roll back, back up, restore and monitor. Covers Phases 12.7 to 12.9, 14.1 to 14.10, 19.4 and 20.6 of the [roadmap](roadmap.md). Sizes and costs: [capacity.md](capacity.md).
+
+## Pick where to run
+
+Two choices, one stack. Both use the same image and the same `deploy/compose.yaml`.
+
+| | Cloud VM | Home server |
+|---|---|---|
+| Machine | A rented VM (Hetzner, DigitalOcean and others) | A mini PC or your own PC |
+| Cost | About 6 to 15 EUR a month | The hardware once, plus power |
+| Uptime | The provider keeps it on | You keep it on (UPS, auto start) |
+| Access | Tailscale, or public HTTPS with a domain | Tailscale only |
+| AI model server | Needs a large, costly VM | Fits a PC with spare RAM or a GPU |
+| Guide | [Cloud VM guide](#cloud-vm-guide) | [Local home server guide](#local-home-server-guide) |
+
+Pick the cloud when you want no hardware to look after. Pick a home server when you have a spare machine, want the AI assistant on your own model, or want the data at home. Either way, backups go off the machine.
 
 ## The picture
 
@@ -30,13 +45,14 @@ flowchart LR
 ```
 
 - **One image** (`Dockerfile`) holds the API, the built console and the scheduler. It runs as a non-root user (uid 10001).
-- **Compose** (`deploy/compose.yaml`) runs three services: `api`, `scheduler` and `caddy`, plus an optional `lab-worker` (see [10. Lab offload](#10-lab-offload)). Everything the app writes lives on one volume, `/data`, which sits on an attached block volume on the host (`/srv/stonks/data`).
+- **Compose** (`deploy/compose.yaml`) runs three services: `api`, `scheduler` and `caddy`, plus optional services behind profiles (see [Profiles](#profiles)). Everything the app writes lives on one volume, `/data`, which sits on an attached block volume on the host (`/srv/stonks/data`).
 - **Private access** is the default: the server has no public port. Traders join the tailnet. Public HTTPS with Let's Encrypt is one setting away.
 
 | File | Purpose |
 |------|---------|
 | `Dockerfile`, `.dockerignore` | Multi-stage build: Node builds the console, uv installs the package, slim runtime with a healthcheck on `/api/health/live`. Compose waits for `/api/health/ready` before Caddy and the scheduler start. |
-| `deploy/compose.yaml` | `api`, `scheduler`, `caddy`, an optional `lab-worker` (profile `lab-worker`), plus a `restic` tool service (profile `backup`). |
+| `deploy/compose.yaml` | `api` and `caddy`, plus profiles for `scheduler`, `lab-worker`, `restic` (backup), the IB Gateways and the model server. |
+| `deploy/ibkr/` | The IB Gateway guide and the folder for its secret files (never committed). |
 | `deploy/compose.tailscale.yaml` | Lets Caddy get its `*.ts.net` certificate from Tailscale. |
 | `deploy/Caddyfile` | HTTPS, security headers, reverse proxy to the API. |
 | `deploy/.env.example` | Every setting and secret the server needs (placeholders). |
@@ -47,6 +63,40 @@ flowchart LR
 | `deploy/monitor/check-host.sh` | Disk, memory, load and container checks every 5 minutes. |
 | `deploy/crontab` | The schedule for the three jobs above. Installed by every deploy. |
 | `.github/workflows/release.yml`, `deploy.yml` | Build and publish on a tag; deploy over SSH. |
+
+## Profiles
+
+A plain `docker compose up -d` starts only the core. Profiles add the rest. Turn them on with `COMPOSE_PROFILES` in `deploy/.env` (comma separated) or with `--profile` on the command line.
+
+| Profile | Adds | Memory | Notes |
+|---------|------|--------|-------|
+| none (core) | `api`, `caddy` | about 0.5 GB | Always on |
+| `scheduler` | `scheduler` | about 0.2 GB | The daily loop and `broker_health`. On in the example `.env` |
+| `lab-worker` | `lab-worker` | 3 GB limit (`STONKS_LAB_WORKER_MEMORY`) | [10. Lab offload](#10-lab-offload) |
+| `backup` | `restic` | small, one-shot | `docker compose --profile backup run --rm restic ...` |
+| `ibkr-paper` | `ib-gateway-paper` | 1 GB | [IB Gateway](#ib-gateway) |
+| `ibkr-live` | `ib-gateway-live` | 1 GB | [IB Gateway](#ib-gateway) |
+| `ai` | `model-server` (Ollama) | 8 GB limit (`STONKS_AI_MEMORY`) | [AI model server](#ai-model-server) |
+
+`compose.tailscale.yaml` is not a profile. It is an overlay file that lets Caddy get its `*.ts.net` certificate from the host's Tailscale. Add it with `COMPOSE_FILE=compose.yaml:compose.tailscale.yaml`.
+
+Example for a home server with paper trading and the assistant:
+
+```dotenv
+COMPOSE_PROFILES=scheduler,ibkr-paper,ai
+```
+
+## Cloud VM guide
+
+The numbered sections below are the cloud path, start to finish:
+
+1. Create the VM with Terraform (`infra/terraform/hetzner/`) or by hand with `deploy/cloud-init.yaml` (section 1).
+2. Set the secrets in `deploy/.env` and in GitHub (section 2).
+3. Deploy with a tag. GitHub Actions ships every release (sections 3 to 5).
+4. Back up off the server, test restores and monitor (sections 6 to 8).
+5. Pick the access mode: Tailscale (the default, no open port) or [public mode](#public-mode-no-tailscale) with a domain and Let's Encrypt.
+
+A home server uses much of it too. Sections 2, 6, 7, 8 and 10 apply as written.
 
 ## 1. Create the server
 
@@ -314,6 +364,153 @@ docker compose up -d
 - Watch it: `docker compose exec lab-worker python -m stonks.lab.offload status`, the `lab_queue` health check and the `stonks_lab_*` metrics ([operations.md](operations.md#lab-worker)).
 
 The worker must share the data folder with the API on a local disk: the queue is the SQLite state DB, and SQLite on a network file system is not safe. A worker on another machine (the 32-core PC) needs a queue over the API. That is not built yet.
+
+## Local home server guide
+
+The same stack on a machine at home. Traders reach it over Tailscale. Your router opens no port.
+
+```mermaid
+flowchart LR
+  P[Phone or laptop<br/>Stonks PWA] --> TS[Tailscale tailnet<br/>WireGuard]
+  subgraph home["Home server (Docker)"]
+    C[Caddy :443] --> A[api]
+    S[scheduler] --> A
+    A --> G[ib-gateway<br/>ibkr network]
+    A --> M[model-server<br/>optional]
+    V[("/data")]
+    A --- V
+  end
+  TS --> C
+  G --> IB[(IBKR servers)]
+  V -. restic, encrypted .-> B[(Cloud bucket or<br/>another machine)]
+  UPS[UPS] -. NUT upsmon .-> home
+```
+
+### Hardware
+
+- **A low-cost mini PC** is plenty: an Intel N100 class box with 16 GB RAM and an SSD (256 GB or more). It idles at a few watts.
+- **Or your own PC**, if it stays on.
+- **Memory.** The core needs about 1 GB. Add 1 GB per IB Gateway and 3 GB for a lab worker. 16 GB leaves room for all of them.
+- **AI model server.** A 7 to 8B model at 4 bit needs about 6 GB more RAM and runs slowly on a mini PC's CPU. For a quick assistant use a PC with 32 GB RAM or an NVIDIA GPU with 8 GB of VRAM or more.
+- **An SSD**, not an SD card or a USB stick. SQLite and DuckDB write often.
+
+### Install Docker
+
+- **Linux (Ubuntu or Debian, recommended).** Install Docker Engine and the Compose plugin from [docs.docker.com](https://docs.docker.com/engine/install/). Add your user to the `docker` group.
+- **Windows.** Install Docker Desktop with the WSL 2 backend. Keep the repo and the data folder inside the WSL file system (for example `/home/you/stonks`), not on `C:`. SQLite over the Windows mount is slow and not safe.
+
+### Clone and configure
+
+```bash
+git clone https://github.com/OWNER/stonks.git /opt/stonks
+cd /opt/stonks/deploy
+cp .env.example .env && chmod 600 .env
+sudo mkdir -p /srv/stonks/data        # or set STONKS_DATA_PATH to your folder
+sudo chown 10001:10001 /srv/stonks/data
+```
+
+Fill in `.env` as in [2. Set the secrets](#2-set-the-secrets). On a home server:
+
+- `STONKS_IMAGE` and `STONKS_IMAGE_TAG`: the published image and a release tag.
+- `STONKS_DATA_PATH`: a folder on the SSD.
+- `COMPOSE_FILE=compose.yaml:compose.tailscale.yaml` and `STONKS_DOMAIN=<machine>.<tailnet>.ts.net`.
+
+Then start it and create the first user:
+
+```bash
+docker compose up -d
+docker compose run --rm api stonks users bootstrap --email you@example.com
+```
+
+To update, run `./scripts/deploy.sh <tag>`. It takes the same snapshot, runs the migrations and checks health, as on the cloud. Install `deploy/crontab` for the nightly backup, the restore test and the host check.
+
+### Phone access with Tailscale
+
+1. Install Tailscale on the server (`curl -fsSL https://tailscale.com/install.sh | sh`, then `sudo tailscale up`).
+2. In the Tailscale admin console turn on **MagicDNS** and **HTTPS certificates** ([deploy/tailscale/README.md](../deploy/tailscale/README.md)).
+3. Keep `compose.tailscale.yaml` in `COMPOSE_FILE`. Caddy then gets a real `*.ts.net` certificate from Tailscale.
+4. Optional: set `STONKS_BIND_IP` to the output of `tailscale ip -4`, so Caddy listens on the tailnet only and not on your home network.
+5. Install Tailscale on each phone, open `https://<machine>.<tailnet>.ts.net` and add the console to the home screen. The PWA and web push work over the tailnet.
+
+`tailscale serve` can also put Tailscale's own HTTPS in front of Caddy. The overlay above is simpler and matches the cloud setup.
+
+### Start on boot
+
+- Every service has `restart: unless-stopped`, so the containers come back when Docker starts.
+- **Linux:** `sudo systemctl enable docker containerd`.
+- **BIOS:** set "Restore on AC power loss" to **Power on**. The machine then boots by itself after a power cut.
+- **Windows:** in Docker Desktop turn on "Start Docker Desktop when you sign in", and let Windows sign in automatically. Docker Desktop runs only after a sign-in. A Linux box avoids this.
+
+### Sleep off
+
+Turn off sleep, hibernate and disk spin-down. A sleeping server misses the tick, and the gateway loses its session.
+
+- Linux: `sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target`
+- Windows: in Power options set sleep to "Never", then run `powercfg /hibernate off`.
+
+### UPS and power loss
+
+- A small UPS (600 VA or more) rides through short cuts and gives time for a clean shutdown on long ones.
+- Connect it by USB and run NUT (`sudo apt install nut`). Set `upsmon` to shut the machine down at low battery. The shutdown stops Docker, which stops each container within its grace period.
+- SQLite (WAL mode) and DuckDB survive a clean stop. A hard power cut is usually fine too, but a torn write is possible. That is what the backups are for.
+
+When the power comes back:
+
+- The machine boots (the BIOS setting), Docker starts and the containers restart.
+- The **scheduler** catches up the latest missed run of each job (tick, ingest, health) within 72 hours and skips older ones.
+- The **IB Gateway** logs in again by itself. It needs your IBKR Mobile approval only if the weekly session expired in the meantime.
+- **Auto orders are never sent late.** Tickets expire at the submit deadline, and the next tick decides again from fresh data.
+
+### Backups off the machine
+
+A backup on the same disk is not a backup. A dead SSD, a theft or a fire takes both copies.
+
+- Use the `backup` profile (restic, encrypted) with a cloud bucket, as in [6. Backups](#6-backups). B2 or R2 cost cents a month at this size.
+- Or back up to another machine, for example `RESTIC_REPOSITORY=sftp:user@nas:/backups/stonks` or a restic REST server.
+- Test a restore now and then: `./backup/restore-test.sh`. The crontab runs it monthly.
+- Keep `RESTIC_PASSWORD` in your password manager, not only on the server.
+
+### Home network
+
+- Open **no ports** on your router. No port forwarding, no UPnP.
+- Tailscale connects out only, so it works behind any home router.
+- The gateway also connects out to IBKR only.
+
+## IB Gateway
+
+Live and broker paper trading at Interactive Brokers go through IB Gateway containers. The full guide is [deploy/ibkr/README.md](../deploy/ibkr/README.md). It covers the secret files, the dedicated username, the weekly 2FA on IBKR Mobile, the daily restart and a one-off VNC login.
+
+```bash
+# after creating deploy/ibkr/secrets/paper_username.txt and paper_password.txt
+docker compose --profile ibkr-paper up -d
+# later, after creating live_username.txt and live_password.txt
+docker compose --profile ibkr-live up -d
+```
+
+- The gateways sit on the internal `ibkr` network. Only `api` and `scheduler` can reach them. Nothing is published on the host.
+- The credentials come from Docker secret files that only the gateway reads.
+- **Never run the paper and live gateways with the same username.** Each login kicks the other off.
+- Each gateway needs about 1 GB of memory.
+
+## AI model server
+
+The optional `ai` profile runs an [Ollama](https://ollama.com) model server for the AI assistant (roadmap 20.4). It serves an OpenAI-compatible API on the default network only, with no port on the host.
+
+```bash
+# in deploy/.env
+COMPOSE_PROFILES=scheduler,ai
+STONKS_AI_BASE_URL=http://model-server:11434/v1
+```
+
+```bash
+docker compose up -d
+docker compose exec model-server ollama pull <model>
+```
+
+- Models live in the `models` volume, several GB each.
+- `STONKS_AI_MEMORY` sets the memory limit (default 8 GB).
+- With an NVIDIA GPU and the NVIDIA container toolkit, add `gpus: all` to the service.
+- Any other OpenAI-compatible endpoint (vLLM, a llama.cpp server) works too. Point `STONKS_AI_BASE_URL` at it.
 
 ## Public mode (no Tailscale)
 
