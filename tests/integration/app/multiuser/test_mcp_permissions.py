@@ -406,6 +406,21 @@ CASES: dict[str, Case] = {
         "/api/lab/signal-ic",
         lambda i: {"universe": ["UP.US"], "strategy_id": "bah_active"} | _WINDOW,
     ),
+    "run_factor_tearsheet": _c(
+        "POST",
+        "/api/factors/tearsheets",
+        lambda i: {"factor": "KMID", "universe": ["UP.US"]} | _WINDOW,
+    ),
+    "list_factors": _c("GET", "/api/factors"),
+    "get_factor": _c("GET", "/api/factors/{factor_id}", lambda i: {"factor_id": "KMID"}),
+    "check_factor_expression": _c(
+        "POST", "/api/factors/check", lambda i: {"expression": "$close/$open"}
+    ),
+    "get_factor_values": _c(
+        "POST",
+        "/api/factors/values",
+        lambda i: {"factor": "KMID", "universe": ["UP.US"], "as_of": "2026-04-01"},
+    ),
     "run_ingest": _c(
         "POST",
         "/api/ingest/runs",

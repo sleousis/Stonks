@@ -162,6 +162,10 @@ READ_TOOLS = {
     "list_cash_flows",
     "list_research_sessions",
     "get_research_session",
+    "list_factors",
+    "get_factor",
+    "check_factor_expression",
+    "get_factor_values",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
@@ -169,6 +173,7 @@ JOB_TOOLS = {
     "run_lab",
     "run_ingest",
     "run_signal_ic",
+    "run_factor_tearsheet",
     "create_draft",
     "validate_draft",
     "backtest_draft",

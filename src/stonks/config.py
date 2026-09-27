@@ -22,6 +22,7 @@ from stonks.backtest.costs import CostModelSettings
 from stonks.backtest.fills import ExecutionSettings
 from stonks.core.types import AssetClass
 from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig
+from stonks.factors.settings import FactorSettings
 from stonks.ingest.ensure_settings import EnsureSettings
 from stonks.ingest.quality_config import DataQualityConfig, FallbackConfig
 from stonks.lab.offload.settings import LabOffloadSettings
@@ -533,6 +534,8 @@ class Settings(BaseSettings):
     assistant: AssistantConfig = Field(default_factory=AssistantConfig)
     # ``[telegram]``: the Telegram bot (roadmap 20.3). The token is env only.
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
+    # ``[factors]``: the factor panel cache (roadmap 22.2).
+    factors: FactorSettings = FactorSettings()
 
 
 #: Secrets read straight from the environment by blocks that keep their own

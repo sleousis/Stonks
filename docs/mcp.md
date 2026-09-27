@@ -8,7 +8,7 @@ it to:
   schedule, the notification feed and operational health
 - inspect strategies, their go-live gate and market data
 - launch backtests, lab runs (on typed tickers or a stored universe),
-  sweeps, signal IC analyses and ingests, and cancel them
+  sweeps, signal IC analyses, factor tear sheets and ingests, and cancel them
 - build and test Strategy Studio drafts, and write trade journal notes
 - with explicit confirmation, change strategy status, queue a production
   tick, or place, change and cancel your own manual orders
@@ -150,6 +150,9 @@ Every tool carries MCP annotations (`readOnlyHint`, `destructiveHint`,
 | `list_sources` | `GET /api/sources` |
 | `get_catalog` (strategy classes + parameter specs, intervals, asset classes) | `GET /api/catalog/...` |
 | `list_cost_models` | `GET /api/lab/cost-models` |
+| `list_factors`, `get_factor` (the factor library, see [factors](factors.md)) | `GET /api/factors[/{id}]` |
+| `check_factor_expression` (parses a formula, saves nothing) | `POST /api/factors/check` |
+| `get_factor_values` (values at a date, best first) | `POST /api/factors/values` |
 | `list_jobs`, `get_job` | `GET /api/jobs[/{id}]` |
 | `wait_for_job` (polls, then fetches the typed result) | `GET /api/jobs/{id}` + result route |
 | `list_studio_templates`, `get_rule_schema`, `get_studio_capabilities` | `GET /api/studio/templates`, `/schema`, `/capabilities` |
@@ -166,7 +169,7 @@ List-shaped responses come back as `{"items": [...]}`.
 `wait_for_job` returns `{"timed_out", "job", "result"}`. Once the job
 succeeded, `result` is the typed result from `/api/lab/backtests/{id}/result`,
 `/api/lab/runs/{id}/result`, `/api/lab/sweeps/{id}/result`,
-`/api/lab/signal-ic/{id}/result`, `/api/lab/ensure/{id}/result`,
+`/api/lab/signal-ic/{id}/result`, `/api/factors/tearsheets/{id}/result`, `/api/lab/ensure/{id}/result`,
 `/api/ingest/jobs/{id}/result` or `/api/ticks/jobs/{id}/result` (by job kind). Studio jobs have no typed route,
 so their `result` is the job's own. Otherwise `result` is `null`.
 
@@ -179,6 +182,7 @@ never orders):
 | `run_lab` (typed `universe` or a stored `universe_id`, `ensure_data` to fetch missing bars first, `preflight` and `strict_preflight`, `walk_forward` and `mcpt` option blocks) | `POST /api/lab/runs` |
 | `run_sweep` (a lab run of every strategy, or the ones named, ranked, and never registers) | `POST /api/lab/sweeps` |
 | `run_signal_ic` (IC, ICIR, decay, quantile spread, turnover of `estimate_return`; 10+ tickers) | `POST /api/lab/signal-ic` |
+| `run_factor_tearsheet` (IC by horizon, sector, asset class and size, quantile returns, alpha and beta, monthly IC; 10+ tickers) | `POST /api/factors/tearsheets` |
 | `run_ingest` (also `openWorld`: calls market-data vendors) | `POST /api/ingest/runs` |
 | `create_draft` | `POST /api/studio/drafts` |
 | `validate_draft` (smoke run; a code draft's Python runs in the API) | `POST /api/studio/drafts/{id}/validate` |

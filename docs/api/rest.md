@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
+Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
 
 ## alerts endpoints
 
@@ -121,6 +121,17 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/exports/orders` | Orders as CSV | sign-in |  | `text/csv` |
 | GET | `/api/exports/pnl` | Daily P&L as CSV | sign-in |  | `text/csv` |
 | GET | `/api/exports/snapshots` | Portfolio snapshots as CSV | sign-in |  | `text/csv` |
+
+## factors endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/factors` | List Factors | sign-in |  | [FactorCatalogView](#factorcatalogview) |
+| POST | `/api/factors/check` | Check Expression | `data.read` | [ExpressionCheckRequest](#expressioncheckrequest) | [ExpressionCheckView](#expressioncheckview) |
+| POST | `/api/factors/tearsheets` | Start Tearsheet | `lab.run` | [FactorTearSheetRequest](#factortearsheetrequest) | [Job](#job) |
+| GET | `/api/factors/tearsheets/{job_id}/result` | Get Tearsheet Result | sign-in |  | [FactorTearSheetView](#factortearsheetview) |
+| POST | `/api/factors/values` | Factor Values | `data.read` | [FactorValuesRequest](#factorvaluesrequest) | [FactorValuesView](#factorvaluesview) |
+| GET | `/api/factors/{factor_id}` | Get Factor | sign-in |  | [FactorView](#factorview) |
 
 ## fx endpoints
 
@@ -524,6 +535,17 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | `connected` | boolean | yes |  |
 | `error` | string \| null | no |  |
 | `paper` | boolean | yes |  |
+
+### AlphaBetaView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `alpha_annual` | number \| null | no |  |
+| `alpha_t` | number \| null | no |  |
+| `benchmark` | string | no |  |
+| `beta` | number \| null | no |  |
+| `n_periods` | integer | no |  |
+| `r_squared` | number \| null | no |  |
 
 ### ApiScope
 
@@ -1087,6 +1109,121 @@ What an ensure did. ``run_id`` is the ``ingest_runs`` row (``None`` when nothing
 | `net` | number \| null | yes | (long + short) / total value; null without value. |
 | `short_value` | number | yes | Market value of short holdings (zero or negative). |
 
+### ExpressionCheckRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `expression` | string | yes |  |
+
+### ExpressionCheckView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `canonical` | string \| null | no |  |
+| `error` | string \| null | no |  |
+| `lookback_bars` | integer \| null | no |  |
+| `ok` | boolean | yes |  |
+
+### FactorCatalogView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `factors` | list[[FactorView](#factorview)] | yes |  |
+| `families` | list[string] | yes |  |
+| `sets` | list[[FactorSetView](#factorsetview)] | yes |  |
+
+### FactorSetView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `count` | integer | yes |  |
+| `name` | string | yes |  |
+
+### FactorTearSheetRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `end` | date | yes |  |
+| `every_bars` | integer | no |  |
+| `factor` | string | yes |  |
+| `horizons` | list[integer] | no |  |
+| `interval` | string | no |  |
+| `min_names` | integer | no |  |
+| `n_quantiles` | integer | no |  |
+| `start` | date | yes |  |
+| `universe` | list[string] \| null | no |  |
+| `universe_id` | string \| null | no |  |
+
+### FactorTearSheetView
+
+:class:`stonks.factors.tearsheet.FactorTearSheet`; NaN is null.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `alpha_beta` | [AlphaBetaView](#alphabetaview) | no |  |
+| `coverage` | number \| null | no |  |
+| `every_bars` | integer | yes |  |
+| `factor` | [FactorView](#factorview) | yes |  |
+| `horizons` | list[[HorizonSummaryView](#horizonsummaryview)] | no |  |
+| `ic_by_group` | dict[str, list[[GroupICView](#groupicview)]] | no |  |
+| `ic_horizon` | integer \| null | no |  |
+| `ic_series` | list[list[any]] | no |  |
+| `interval` | string | yes |  |
+| `monthly_ic` | list[[MonthlyICView](#monthlyicview)] | no |  |
+| `n_dates` | integer | yes |  |
+| `n_quantiles` | integer | yes |  |
+| `n_tickers` | integer | yes |  |
+| `note` | string | no |  |
+| `quantile_curves` | [QuantileCurvesView](#quantilecurvesview) | no |  |
+| `score_turnover` | number \| null | no |  |
+| `size_basis` | string | no |  |
+| `status` | string | yes |  |
+| `top_quantile_turnover` | number \| null | no |  |
+| `universe_id` | string \| null | no |  |
+| `window` | list[any] | yes |  |
+
+### FactorValue
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `rank` | integer | yes |  |
+| `ticker` | string | yes |  |
+| `value` | number | yes |  |
+
+### FactorValuesRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `factor` | string | yes |  |
+| `universe` | list[string] \| null | no |  |
+| `universe_id` | string \| null | no |  |
+
+### FactorValuesView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | string | yes |  |
+| `direction` | integer | yes |  |
+| `factor_id` | string | yes |  |
+| `missing` | list[string] | yes |  |
+| `values` | list[[FactorValue](#factorvalue)] | yes |  |
+
+### FactorView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `asset_classes` | list[string] | yes |  |
+| `description` | string | yes |  |
+| `direction` | integer | yes |  |
+| `expression` | string \| null | no |  |
+| `family` | string | yes |  |
+| `hypothesis` | string | yes |  |
+| `id` | string | yes |  |
+| `kind` | string | yes |  |
+| `lookback_bars` | integer | yes |  |
+| `set` | string \| null | no |  |
+
 ### FailingCheck
 
 One go-live check that failed (``GoLiveCheck`` without ``passed``).
@@ -1190,6 +1327,16 @@ Limits a paper-trading period must meet before ``stonks golive check`` passes (`
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `max_gross` | number \| null | no |  |
+
+### GroupICView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `group` | string | yes |  |
+| `mean_ic` | number \| null | yes |  |
+| `mean_names` | number \| null | yes |  |
+| `n_dates` | integer | yes |  |
+| `t_stat_hac` | number \| null | yes |  |
 
 ### HaltView
 
@@ -1305,6 +1452,22 @@ Scores over ``y_values`` (rows) by ``x_values`` (columns), ``None`` for a cell t
 | `quantile_means` | list[number \| null] | yes |  |
 | `se_hac` | number \| null | yes |  |
 | `se_iid` | number \| null | yes |  |
+| `spread_mean` | number \| null | yes |  |
+| `spread_t_hac` | number \| null | yes |  |
+| `t_stat_hac` | number \| null | yes |  |
+
+### HorizonSummaryView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `hac_lags` | integer | yes |  |
+| `hit_rate` | number \| null | yes |  |
+| `horizon` | integer | yes |  |
+| `ic_std` | number \| null | yes |  |
+| `icir` | number \| null | yes |  |
+| `mean_ic` | number \| null | yes |  |
+| `n_dates` | integer | yes |  |
+| `quantile_means` | list[number \| null] | yes |  |
 | `spread_mean` | number \| null | yes |  |
 | `spread_t_hac` | number \| null | yes |  |
 | `t_stat_hac` | number \| null | yes |  |
@@ -1931,6 +2094,13 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `method` | "totp" \| "recovery_code" | yes |  |
 | `recovery_codes` | list[string] \| null | no |  |
 | `recovery_codes_left` | integer | yes |  |
+
+### MonthlyICView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `months` | list[number \| null] | yes |  |
+| `year` | integer | yes |  |
 
 ### MonthlyReturn
 
@@ -2875,6 +3045,14 @@ The browser's ``PushSubscription.toJSON()`` plus its user agent.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `endpoint` | string | yes |  |
+
+### QuantileCurvesView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `dates` | list[string] | no |  |
+| `series` | list[list[number \| null]] | no |  |
+| `spread` | list[number \| null] | no |  |
 
 ### QuietHoursUpdate
 

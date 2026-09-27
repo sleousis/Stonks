@@ -18,6 +18,7 @@ from stonks.app.catalog import CatalogService, LabCatalogSource, StrategySource
 from stonks.app.connections import ConnectionsAppService
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError
+from stonks.app.factors import FactorService
 from stonks.app.ingest import IngestService
 from stonks.app.insights import InsightsService
 from stonks.app.jobs import Job, JobRunner, JobStore
@@ -203,6 +204,7 @@ class Services:
     assistant: AssistantService
     research: ResearchService
     telegram: TelegramService
+    factors: FactorService
     _user_finder: UserStrategyFinder | None = field(default=None, repr=False)
 
     @classmethod
@@ -284,6 +286,7 @@ class Services:
                 model_factory=lambda: assistant.model_factory,
             ),
             telegram=TelegramService(context),
+            factors=FactorService(context, runner),
         )
         services.schedule.bind(services)
         return services

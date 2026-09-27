@@ -431,6 +431,66 @@
         "title": "AlpacaStatus",
         "type": "object"
       },
+      "AlphaBetaView": {
+        "properties": {
+          "alpha_annual": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alpha Annual"
+          },
+          "alpha_t": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alpha T"
+          },
+          "benchmark": {
+            "default": "equal_weight",
+            "title": "Benchmark",
+            "type": "string"
+          },
+          "beta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Beta"
+          },
+          "n_periods": {
+            "default": 0,
+            "title": "N Periods",
+            "type": "integer"
+          },
+          "r_squared": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "R Squared"
+          }
+        },
+        "title": "AlphaBetaView",
+        "type": "object"
+      },
       "ApiScope": {
         "description": "What a credential may do. A token never exceeds its user's role.",
         "enum": [
@@ -3380,6 +3440,575 @@
         "title": "Exposure",
         "type": "object"
       },
+      "ExpressionCheckRequest": {
+        "properties": {
+          "expression": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Expression",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expression"
+        ],
+        "title": "ExpressionCheckRequest",
+        "type": "object"
+      },
+      "ExpressionCheckView": {
+        "properties": {
+          "canonical": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "lookback_bars": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lookback Bars"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "ExpressionCheckView",
+        "type": "object"
+      },
+      "FactorCatalogView": {
+        "properties": {
+          "factors": {
+            "items": {
+              "$ref": "#/components/schemas/FactorView"
+            },
+            "title": "Factors",
+            "type": "array"
+          },
+          "families": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Families",
+            "type": "array"
+          },
+          "sets": {
+            "items": {
+              "$ref": "#/components/schemas/FactorSetView"
+            },
+            "title": "Sets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "factors",
+          "sets",
+          "families"
+        ],
+        "title": "FactorCatalogView",
+        "type": "object"
+      },
+      "FactorSetView": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "count"
+        ],
+        "title": "FactorSetView",
+        "type": "object"
+      },
+      "FactorTearSheetRequest": {
+        "properties": {
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "every_bars": {
+            "default": 5,
+            "maximum": 504.0,
+            "minimum": 1.0,
+            "title": "Every Bars",
+            "type": "integer"
+          },
+          "factor": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Factor",
+            "type": "string"
+          },
+          "horizons": {
+            "default": [
+              1,
+              5,
+              21
+            ],
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Horizons",
+            "type": "array"
+          },
+          "interval": {
+            "default": "1d",
+            "title": "Interval",
+            "type": "string"
+          },
+          "min_names": {
+            "default": 5,
+            "maximum": 1000.0,
+            "minimum": 2.0,
+            "title": "Min Names",
+            "type": "integer"
+          },
+          "n_quantiles": {
+            "default": 5,
+            "maximum": 20.0,
+            "minimum": 2.0,
+            "title": "N Quantiles",
+            "type": "integer"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "universe": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 5000,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Universe"
+          },
+          "universe_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Universe Id"
+          }
+        },
+        "required": [
+          "factor",
+          "start",
+          "end"
+        ],
+        "title": "FactorTearSheetRequest",
+        "type": "object"
+      },
+      "FactorTearSheetView": {
+        "description": ":class:`stonks.factors.tearsheet.FactorTearSheet`; NaN is null.",
+        "properties": {
+          "alpha_beta": {
+            "$ref": "#/components/schemas/AlphaBetaView"
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage"
+          },
+          "every_bars": {
+            "title": "Every Bars",
+            "type": "integer"
+          },
+          "factor": {
+            "$ref": "#/components/schemas/FactorView"
+          },
+          "horizons": {
+            "items": {
+              "$ref": "#/components/schemas/HorizonSummaryView"
+            },
+            "title": "Horizons",
+            "type": "array"
+          },
+          "ic_by_group": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/GroupICView"
+              },
+              "type": "array"
+            },
+            "title": "Ic By Group",
+            "type": "object"
+          },
+          "ic_horizon": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ic Horizon"
+          },
+          "ic_series": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Ic Series",
+            "type": "array"
+          },
+          "interval": {
+            "title": "Interval",
+            "type": "string"
+          },
+          "monthly_ic": {
+            "items": {
+              "$ref": "#/components/schemas/MonthlyICView"
+            },
+            "title": "Monthly Ic",
+            "type": "array"
+          },
+          "n_dates": {
+            "title": "N Dates",
+            "type": "integer"
+          },
+          "n_quantiles": {
+            "title": "N Quantiles",
+            "type": "integer"
+          },
+          "n_tickers": {
+            "title": "N Tickers",
+            "type": "integer"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          },
+          "quantile_curves": {
+            "$ref": "#/components/schemas/QuantileCurvesView"
+          },
+          "score_turnover": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Turnover"
+          },
+          "size_basis": {
+            "default": "none",
+            "title": "Size Basis",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "top_quantile_turnover": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Quantile Turnover"
+          },
+          "universe_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Universe Id"
+          },
+          "window": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Window",
+            "type": "array"
+          }
+        },
+        "required": [
+          "factor",
+          "window",
+          "interval",
+          "n_tickers",
+          "n_dates",
+          "every_bars",
+          "n_quantiles",
+          "status"
+        ],
+        "title": "FactorTearSheetView",
+        "type": "object"
+      },
+      "FactorValue": {
+        "properties": {
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "ticker",
+          "value",
+          "rank"
+        ],
+        "title": "FactorValue",
+        "type": "object"
+      },
+      "FactorValuesRequest": {
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "factor": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Factor",
+            "type": "string"
+          },
+          "universe": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 5000,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Universe"
+          },
+          "universe_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Universe Id"
+          }
+        },
+        "required": [
+          "factor",
+          "as_of"
+        ],
+        "title": "FactorValuesRequest",
+        "type": "object"
+      },
+      "FactorValuesView": {
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "direction": {
+            "title": "Direction",
+            "type": "integer"
+          },
+          "factor_id": {
+            "title": "Factor Id",
+            "type": "string"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          },
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/FactorValue"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "factor_id",
+          "as_of",
+          "direction",
+          "values",
+          "missing"
+        ],
+        "title": "FactorValuesView",
+        "type": "object"
+      },
+      "FactorView": {
+        "properties": {
+          "asset_classes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Asset Classes",
+            "type": "array"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "direction": {
+            "title": "Direction",
+            "type": "integer"
+          },
+          "expression": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expression"
+          },
+          "family": {
+            "title": "Family",
+            "type": "string"
+          },
+          "hypothesis": {
+            "title": "Hypothesis",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "lookback_bars": {
+            "title": "Lookback Bars",
+            "type": "integer"
+          },
+          "set": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "family",
+          "description",
+          "direction",
+          "hypothesis",
+          "lookback_bars",
+          "asset_classes"
+        ],
+        "title": "FactorView",
+        "type": "object"
+      },
       "FailingCheck": {
         "description": "One go-live check that failed (``GoLiveCheck`` without ``passed``).",
         "properties": {
@@ -3842,6 +4471,60 @@
           }
         },
         "title": "GrossExposureSettings",
+        "type": "object"
+      },
+      "GroupICView": {
+        "properties": {
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "mean_ic": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Ic"
+          },
+          "mean_names": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Names"
+          },
+          "n_dates": {
+            "title": "N Dates",
+            "type": "integer"
+          },
+          "t_stat_hac": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T Stat Hac"
+          }
+        },
+        "required": [
+          "group",
+          "n_dates",
+          "mean_names",
+          "mean_ic",
+          "t_stat_hac"
+        ],
+        "title": "GroupICView",
         "type": "object"
       },
       "HaltView": {
@@ -4438,6 +5121,128 @@
           "spread_t_hac"
         ],
         "title": "HorizonICView",
+        "type": "object"
+      },
+      "HorizonSummaryView": {
+        "properties": {
+          "hac_lags": {
+            "title": "Hac Lags",
+            "type": "integer"
+          },
+          "hit_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hit Rate"
+          },
+          "horizon": {
+            "title": "Horizon",
+            "type": "integer"
+          },
+          "ic_std": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ic Std"
+          },
+          "icir": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icir"
+          },
+          "mean_ic": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Ic"
+          },
+          "n_dates": {
+            "title": "N Dates",
+            "type": "integer"
+          },
+          "quantile_means": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Quantile Means",
+            "type": "array"
+          },
+          "spread_mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spread Mean"
+          },
+          "spread_t_hac": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spread T Hac"
+          },
+          "t_stat_hac": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T Stat Hac"
+          }
+        },
+        "required": [
+          "horizon",
+          "n_dates",
+          "mean_ic",
+          "ic_std",
+          "icir",
+          "hit_rate",
+          "t_stat_hac",
+          "hac_lags",
+          "quantile_means",
+          "spread_mean",
+          "spread_t_hac"
+        ],
+        "title": "HorizonSummaryView",
         "type": "object"
       },
       "IStarSettings": {
@@ -7805,6 +8610,34 @@
           "recovery_codes_left"
         ],
         "title": "MfaView",
+        "type": "object"
+      },
+      "MonthlyICView": {
+        "properties": {
+          "months": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Months",
+            "type": "array"
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year",
+          "months"
+        ],
+        "title": "MonthlyICView",
         "type": "object"
       },
       "MonthlyReturn": {
@@ -12019,6 +12852,50 @@
           "endpoint"
         ],
         "title": "PushUnsubscribeRequest",
+        "type": "object"
+      },
+      "QuantileCurvesView": {
+        "properties": {
+          "dates": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Dates",
+            "type": "array"
+          },
+          "series": {
+            "items": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "Series",
+            "type": "array"
+          },
+          "spread": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Spread",
+            "type": "array"
+          }
+        },
+        "title": "QuantileCurvesView",
         "type": "object"
       },
       "QuietHoursUpdate": {
@@ -24521,6 +25398,581 @@
         "summary": "Portfolio snapshots as CSV",
         "tags": [
           "exports"
+        ]
+      }
+    },
+    "/api/factors": {
+      "get": {
+        "description": "The factor library (Alpha158, classic price factors, fundamentals\nscores), optionally one family, set or kind, with the sets and families.",
+        "operationId": "listFactors",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Family"
+            }
+          },
+          {
+            "in": "query",
+            "name": "set",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Set"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "expression",
+                    "fundamental"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactorCatalogView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Factors",
+        "tags": [
+          "factors"
+        ]
+      }
+    },
+    "/api/factors/check": {
+      "post": {
+        "description": "Whether a formula parses and is point in time, its canonical form and\nits warm-up in bars. A bad formula is ``ok: false`` with the reason.",
+        "operationId": "checkFactorExpression",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExpressionCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpressionCheckView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check Expression",
+        "tags": [
+          "factors"
+        ],
+        "x-permission": "data.read"
+      }
+    },
+    "/api/factors/tearsheets": {
+      "post": {
+        "description": "Queue a factor tear sheet: IC per horizon and by sector, asset class\nand size, returns per quantile, factor alpha and beta, a monthly IC\nheatmap and turnover. Fetch it from ``GET\n/api/factors/tearsheets/{job_id}/result``. Universes under 10 tickers\ncome back ``n/a``.",
+        "operationId": "startFactorTearsheet",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FactorTearSheetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Tearsheet",
+        "tags": [
+          "factors"
+        ],
+        "x-permission": "lab.run"
+      }
+    },
+    "/api/factors/tearsheets/{job_id}/result": {
+      "get": {
+        "description": "The result of a succeeded factor tear sheet job (409 until it has\nsucceeded).",
+        "operationId": "getFactorTearsheetResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactorTearSheetView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Tearsheet Result",
+        "tags": [
+          "factors"
+        ]
+      }
+    },
+    "/api/factors/values": {
+      "post": {
+        "description": "Each universe name's factor value known at the close of ``as_of``,\nbest first in the factor's direction.",
+        "operationId": "getFactorValues",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FactorValuesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactorValuesView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Factor Values",
+        "tags": [
+          "factors"
+        ],
+        "x-permission": "data.read"
+      }
+    },
+    "/api/factors/{factor_id}": {
+      "get": {
+        "description": "One library factor: formula, family, direction, hypothesis, warm-up.",
+        "operationId": "getFactor",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "factor_id",
+            "required": true,
+            "schema": {
+              "title": "Factor Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactorView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Factor",
+        "tags": [
+          "factors"
         ]
       }
     },

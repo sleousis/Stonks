@@ -12,6 +12,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`cancel_job`](#cancel_job) | job | no |
 | [`cancel_order`](#cancel_order) | guarded | yes |
 | [`change_order`](#change_order) | guarded | yes |
+| [`check_factor_expression`](#check_factor_expression) | read | no |
 | [`create_draft`](#create_draft) | job | no |
 | [`create_price_alert`](#create_price_alert) | job | no |
 | [`create_universe`](#create_universe) | guarded | yes |
@@ -33,6 +34,8 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_connection_accounts`](#get_connection_accounts) | read | no |
 | [`get_coverage`](#get_coverage) | read | no |
 | [`get_draft`](#get_draft) | read | no |
+| [`get_factor`](#get_factor) | read | no |
+| [`get_factor_values`](#get_factor_values) | read | no |
 | [`get_fx_rate`](#get_fx_rate) | read | no |
 | [`get_golive_report`](#get_golive_report) | read | no |
 | [`get_health_report`](#get_health_report) | read | no |
@@ -71,6 +74,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_connections`](#list_connections) | read | no |
 | [`list_cost_models`](#list_cost_models) | read | no |
 | [`list_drafts`](#list_drafts) | read | no |
+| [`list_factors`](#list_factors) | read | no |
 | [`list_fills`](#list_fills) | read | no |
 | [`list_halts`](#list_halts) | read | no |
 | [`list_ingest_runs`](#list_ingest_runs) | read | no |
@@ -112,6 +116,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`run_backtest`](#run_backtest) | job | no |
 | [`run_draft_backtest`](#run_draft_backtest) | job | no |
 | [`run_draft_lab`](#run_draft_lab) | guarded | yes |
+| [`run_factor_tearsheet`](#run_factor_tearsheet) | job | no |
 | [`run_ingest`](#run_ingest) | job | no |
 | [`run_lab`](#run_lab) | guarded | yes |
 | [`run_signal_ic`](#run_signal_ic) | job | no |
@@ -136,6 +141,18 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 ## Read tools
 
 Only issue GETs. Safe to call any time.
+
+### `check_factor_expression`
+
+Check a formula in the factor expression language: whether it
+parses and is point in time (no future reads, no raw price levels
+that later splits would change), its canonical form and warm-up.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `expression` | string | yes |  |  |
 
 ### `get_api_health`
 
@@ -228,6 +245,31 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `draft_id` | string | yes |  |  |
+
+### `get_factor`
+
+One library factor: formula, family, direction, hypothesis and
+warm-up in bars.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `factor_id` | string | yes |  |  |
+
+### `get_factor_values`
+
+Each universe name's factor value known at the close of as_of,
+ranked best first in the factor's direction.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `factor` | string | yes |  | a library factor id (e.g. mom_12_1, ROC20, piotroski_f) or a formula such as '$close / Ref($close, 20) - 1' |
+| `as_of` | date | yes |  | YYYY-MM-DD |
+| `universe` | list[string] \| null | no | `null` | instrument ids; or name a stored universe_id |
+| `universe_id` | string \| null | no | `null` | a stored universe id (or give universe) |
 
 ### `get_fx_rate`
 
@@ -630,6 +672,19 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
+
+### `list_factors`
+
+The factor library: every factor with its family, direction,
+formula and hypothesis, plus the sets and families to filter by.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `family` | string \| null | no | `null` | e.g. momentum, value, kbar |
+| `set` | string \| null | no | `null` | alpha158, classic or fundamentals |
+| `kind` | "expression" \| "fundamental" \| null | no | `null` |  |
 
 ### `list_fills`
 
@@ -1282,6 +1337,28 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 | `fee_per_trade` | number | no | `0.0` |  |
 | `cost_model` | "zero" \| "realistic" \| null | no | `null` | transaction-cost preset (see list_cost_models); default [backtest.costs] |
 | `benchmark` | string \| null | no | `null` | benchmark to compare against: auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark |
+
+### `run_factor_tearsheet`
+
+Queue a factor tear sheet: IC per horizon and by sector, asset
+class and size, returns per quantile, factor alpha and beta, a
+monthly IC heatmap and turnover. Needs at least 10 tickers (else
+n/a). Returns the job; use wait_for_job for the result. Research
+only: writes nothing.
+
+Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `factor` | string | yes |  | a library factor id (e.g. mom_12_1, ROC20, piotroski_f) or a formula such as '$close / Ref($close, 20) - 1' |
+| `start` | date | yes |  | YYYY-MM-DD |
+| `end` | date | yes |  | YYYY-MM-DD |
+| `universe` | list[string] \| null | no | `null` | instrument ids; or name a stored universe_id |
+| `universe_id` | string \| null | no | `null` | a stored universe id (or give universe) |
+| `interval` | string | no | `"1d"` |  |
+| `horizons` | list[integer] \| null | no | `null` | forward-return horizons in bars; default [1, 5, 21] |
+| `every_bars` | integer | no | `5` | sample every N bars |
+| `n_quantiles` | integer | no | `5` |  |
 
 ### `run_ingest`
 

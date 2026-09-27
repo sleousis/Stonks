@@ -6,6 +6,7 @@ from __future__ import annotations
 from stonks.mcp.tools import (
     cash_flows,
     connections,
+    factors,
     guarded,
     halts,
     insights,
@@ -38,6 +39,7 @@ MODULES = (
     tca,
     tax,
     cash_flows,
+    factors,
     subscriptions,
     insights,
     risk,
