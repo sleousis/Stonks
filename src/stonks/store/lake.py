@@ -1007,8 +1007,10 @@ class DuckDBLake:
         first, plus an ``available_date`` column: the first date the row may
         be used without look-ahead.
 
-        ``available_date`` is the ``filing_date``; when the vendor didn't
-        supply one it is ``period_end + missing_filing_lag_days`` (a
+        ``available_date`` is the day after the ``filing_date``: a filing
+        may land after the close, so the first session that may act on it
+        is the next one (P12, BE-22). When the vendor didn't supply a
+        filing date it is ``period_end + missing_filing_lag_days`` (a
         conservative stand-in for the filing delay). It is never earlier
         than ``period_end``: a filing date before the period closed is bad
         data and is clamped.
@@ -1022,7 +1024,8 @@ class DuckDBLake:
         df = self.con.execute(
             f"""
             SELECT *,
-                   CAST(GREATEST(COALESCE(filing_date, period_end + to_days(CAST(? AS INTEGER))),
+                   CAST(GREATEST(COALESCE(filing_date + INTERVAL 1 DAY,
+                                          period_end + to_days(CAST(? AS INTEGER))),
                                  period_end) AS DATE) AS available_date
               FROM {table}
              WHERE ticker = ?

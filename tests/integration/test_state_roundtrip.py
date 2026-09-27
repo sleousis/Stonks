@@ -174,3 +174,7 @@ def test_close_is_idempotent(tmp_path):
     s = SqliteState(tmp_path / "y.sqlite")
     s.close()
     s.close()  # must not raise
+    assert s._con is None
+    reopened = SqliteState(tmp_path / "y.sqlite")  # the file is still usable
+    assert reopened.sql("SELECT 1 AS one")[0]["one"] == 1
+    reopened.close()

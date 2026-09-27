@@ -8,7 +8,9 @@ from datetime import date
 
 import pandas as pd
 import pytest
+from fastapi.testclient import TestClient
 
+from stonks.api import create_app
 from stonks.app.context import AppContext
 from stonks.app.services import Services
 from stonks.config import ApiConfig, LakeConfig, RegistryConfig, Settings, StateConfig
@@ -24,6 +26,10 @@ from stonks.strategies.examples.buy_and_hold import BuyAndHold
 from tests.fixtures.governance import seed_status
 
 API_TOKEN = "test-token-123"
+#: Client addresses for ``TestClient``: loopback, and a remote peer.
+LOOPBACK = ("127.0.0.1", 50000)
+REMOTE = ("203.0.113.7", 50000)
+AUTH = {"Authorization": f"Bearer {API_TOKEN}"}
 
 
 class FakeDataSource(DataSource):
@@ -154,3 +160,24 @@ def services(settings, seeded, fake_source):
     svc.start()
     yield svc
     svc.shutdown()
+
+
+@pytest.fixture
+def app(settings, seeded, fake_source):
+    """The REST app over the seeded workspace (TT-09, BE-25). A module that
+    needs auth or other services overrides it; ``client`` and ``remote``
+    then use the override."""
+    settings.api.allowed_hosts = ["testserver"]
+    return create_app(settings, source_factory=lambda: fake_source, sse_poll_seconds=0.02)
+
+
+@pytest.fixture
+def client(app):
+    with TestClient(app, client=LOOPBACK) as c:
+        yield c
+
+
+@pytest.fixture
+def remote(app):
+    with TestClient(app, client=REMOTE) as c:
+        yield c

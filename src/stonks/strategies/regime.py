@@ -40,7 +40,13 @@ from typing import Any
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
 from stonks.features.regime_conditions import ConditionContext, RegimeCondition, build_condition
-from stonks.strategies._common import LakeBarCaches, as_datetime, iso, sell_all_longs
+from stonks.strategies._common import (
+    LakeBarCaches,
+    as_datetime,
+    close_all_positions,
+    closing_orders,
+    iso,
+)
 from stonks.strategies._wrapping import InnerStrategyWrapper, inner_param_specs
 
 DEFAULT_CONDITIONS: list[dict[str, Any]] = [{"kind": "price_trend", "ticker": "SPY.US"}]
@@ -224,12 +230,16 @@ class RegimeFilter(InnerStrategyWrapper):
             return self._inner.decide(my_picks, portfolio, prices, as_of)
         mode = self.params["mode"]
         if mode == "exit_all":
-            return sell_all_longs(self.id, portfolio, as_of)
+            return close_all_positions(self.id, portfolio, as_of)
         orders = self._inner.decide(my_picks, portfolio, prices, as_of)
         if mode == "block_new_buys":
+            if self.supports_short:  # covers go through, new shorts do not
+                return closing_orders(orders, portfolio)
             return [o for o in orders if o.side != "buy"]
         hits, n = self.triggered_count(as_of, lake)
         share = (n - hits) / n
+        if self.supports_short:
+            return _scale_opening(orders, portfolio, share)
         out: list[Order] = []
         for order in orders:
             if order.side != "buy":
@@ -237,3 +247,16 @@ class RegimeFilter(InnerStrategyWrapper):
             elif share > 0:
                 out.append(dataclasses.replace(order, quantity=order.quantity * share))
         return out
+
+
+def _scale_opening(orders: Sequence[Order], portfolio: Portfolio, share: float) -> list[Order]:
+    """Closes as they are, opening legs (either side) scaled by ``share``."""
+    from stonks.execution.orders import classify_all
+
+    out: list[Order] = []
+    for leg in classify_all(orders, portfolio.positions):
+        if leg.position_effect == "close":
+            out.append(leg)
+        elif share > 0:
+            out.append(dataclasses.replace(leg, quantity=leg.quantity * share))
+    return out

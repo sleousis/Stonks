@@ -12,7 +12,7 @@ cd web && npm ci                  # Node 22+
 ## Before you open a pull request
 
 - **Tests first.** Write a failing test, then the code. `uv run pytest -n auto` and `cd web && npm test` must pass.
-- **Lint and format.** `uv run ruff check . && uv run ruff format .`, `cd web && npm run lint && npm run format`.
+- **Lint and format.** `uv run ruff check . && uv run ruff format .`, `cd web && npm run lint && npm run format`. To run ruff on every commit, `uvx pre-commit install` once (`.pre-commit-config.yaml`).
 - **Generated files.** After changing API routes or MCP tools, regenerate them (see [CLAUDE.md](CLAUDE.md), Commands) and commit the result.
 - **No secrets.** Keys and tokens live in `.env`, never in code, config or tests. Push protection blocks known secret formats.
 - **Principles.** Changes respect [docs/principles.md](docs/principles.md).

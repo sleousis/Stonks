@@ -29,6 +29,13 @@ default the test passes with a note, because P35 asks for a crisis only
 "where data allows"; set it to make missing crisis data a failure.
 The strategy is judged on the whole dataset window (crises are history,
 not a tuning target), with bars before each window visible for look-backs.
+
+A window with strategy bars but no benchmark bars fails ("benchmark
+missing"): a crisis the data holds cannot be waved through for want of a
+yardstick. A window that overlaps the tuner's training data is still
+judged but reported as in sample (P7): ``in_sample_<name>`` is 1, and
+``n_covered_oos`` and ``crisis_coverage_oos`` count only the held-out
+windows (BE-33).
 """
 
 from __future__ import annotations
@@ -115,14 +122,24 @@ class CrisisTest:
         spec = self._spec(context)
         metrics: dict[str, float] = {"n_windows": float(len(windows))}
         covered: list[str] = []
+        in_sample: list[str] = []
         failures: list[str] = []
+        trained = _train_windows(context)
         for window in windows:
             lo, hi = max(window.start, start), min(window.end, end)
             if lo > hi:
                 continue
             report = run_backtest(strategy, context, (lo, hi), benchmark=spec)
+            if len(report.equity_curve) < o.min_bars:
+                continue
+            seen = any(lo <= t_end and t_start <= hi for t_start, t_end in trained)
+            metrics[f"in_sample_{window.name}"] = 1.0 if seen else 0.0
+            if seen:
+                in_sample.append(window.name)
             bench = getattr(report, "benchmark", None)
-            if len(report.equity_curve) < o.min_bars or bench is None:
+            if bench is None:
+                covered.append(window.name)
+                failures.append(f"{window.name}: benchmark missing ({spec} has no bars there)")
                 continue
             dd = abs(float(report.max_drawdown))
             bench_dd = abs(float(bench.stats.benchmark_max_dd))
@@ -135,8 +152,11 @@ class CrisisTest:
                     f"{window.name}: drawdown {dd:.1%} > {limit:.1%} "
                     f"({o.max_dd_ratio:g}x benchmark {bench_dd:.1%})"
                 )
+        held_out = [w for w in covered if w not in in_sample]
         metrics["n_covered"] = float(len(covered))
         metrics["crisis_coverage"] = len(covered) / len(windows) if windows else 0.0
+        metrics["n_covered_oos"] = float(len(held_out))
+        metrics["crisis_coverage_oos"] = len(held_out) / len(windows) if windows else 0.0
         if not covered:
             return SurvivalReport(
                 test_id=self.id,
@@ -145,9 +165,17 @@ class CrisisTest:
                 notes="no crisis window has data in the dataset window"
                 + ("" if o.require_coverage else " (skipped; P35: where data allows)"),
             )
-        return SurvivalReport(
-            test_id=self.id,
-            passed=not failures,
-            metrics=metrics,
-            notes="; ".join(failures) or f"within limits in {', '.join(covered)}",
-        )
+        notes = "; ".join(failures) or f"within limits in {', '.join(covered)}"
+        if in_sample:
+            notes += f" ({', '.join(in_sample)} in sample: the tuner saw it)"
+        return SurvivalReport(test_id=self.id, passed=not failures, metrics=metrics, notes=notes)
+
+
+def _train_windows(context: Any) -> tuple[tuple[date, date], ...]:
+    """The windows the tuner fitted on (none for a context without them)."""
+    windows: Any = getattr(context, "train_windows", None)
+    if windows is None:
+        return ()
+    if callable(windows):
+        windows = windows()
+    return tuple(windows)

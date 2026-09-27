@@ -76,7 +76,7 @@ Cancelling a job needs `operations.run` for operator jobs (ticks, ingests, backu
 
 ## Your data only
 
-Portfolio, orders, fills, P&L and insights reads take an optional `portfolio_id`. It must be one of your portfolios, or the answer is `404`. Without it you get your own book. Admins get the same `404` for other people's portfolios. They see `GET /api/portfolio/totals` and `GET /api/insights/totals` instead: cash, value, asset classes and exposure summed over every book, with no tickers. Connections, notifications, alerts, subscriptions, halts and tokens follow the same rule.
+Portfolio, orders, fills, P&L and insights reads take an optional `portfolio_id`. It must be one of your portfolios, or the answer is `404`. Without it you get your own book. Admins get the same `404` for other people's portfolios. They see `GET /api/portfolio/totals` and `GET /api/insights/totals` instead: cash, value, asset classes and exposure summed over every book, with no tickers. A paper account counts with its broker book. While fewer than three people besides the admin own books, the sums could reveal one person's numbers, so the money figures read 0 and `suppressed` is true. Connections, notifications, alerts, subscriptions, halts and tokens follow the same rule.
 
 - `GET /api/alerts` shows your alerts. Admins also see the admin audience (alerts with no single recipient).
 - Jobs and Studio drafts record who made them (`owner_id`). Only the owner sees, cancels or changes one. Admins see all of them. Anyone else gets `404`.

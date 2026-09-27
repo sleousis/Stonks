@@ -348,13 +348,16 @@ class BarQualityChecker:
 class RunQuality:
     """Quality counters for one ingest run, stored as JSON on
     ``ingest_runs.quality_json``. ``supplied_by`` maps each ticker served
-    by a fallback source to that source's id."""
+    by a fallback source to that source's id. ``readjusted`` maps each
+    ticker whose older stored bars were brought onto the vendor's new
+    adjustment basis to the factor applied (BE-09)."""
 
     bars_checked: int = 0
     bars_quarantined: int = 0
     reasons: Counter = field(default_factory=Counter)
     warnings: list[SeriesWarning] = field(default_factory=list)
     supplied_by: dict[str, str] = field(default_factory=dict)
+    readjusted: dict[str, float] = field(default_factory=dict)
 
     def add(self, checked: int, batch: BatchQuality) -> None:
         self.bars_checked += checked
@@ -380,6 +383,7 @@ class RunQuality:
                 for w in self.warnings
             ],
             "supplied_by": dict(sorted(self.supplied_by.items())),
+            "readjusted": dict(sorted(self.readjusted.items())),
         }
 
     def breaches(self, config: DataQualityConfig) -> list[str]:

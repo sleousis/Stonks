@@ -65,6 +65,7 @@ markers = [
     "live: tests that hit real external APIs (gated by STONKS_RUN_LIVE_TESTS=1)",
     "e2e: browser journeys over a seeded stack (opt in with -m e2e; see docs/testing.md)",
     "soak: the long paper soak over simulated weeks (opt in with -m soak; see docs/testing.md)",
+    "slow: runs by default but takes seconds; skip with -m 'not slow' for a quick loop",
 ]
 # TT-14: a leaked SQLite connection fails the run. The warning surfaces when
 # the connection is garbage collected, as an unraisable exception.

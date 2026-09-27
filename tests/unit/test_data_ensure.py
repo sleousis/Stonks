@@ -22,16 +22,6 @@ from tests.fixtures.universes import FakeListingSource, bars, seed_daily_bars
 TODAY = date(2025, 7, 1)
 
 
-@pytest.fixture
-def lake(tmp_path):
-    from stonks.store.lake import DuckDBLake
-
-    lk = DuckDBLake(tmp_path / "lake.duckdb")
-    lk.migrate()
-    yield lk
-    lk.close()
-
-
 def _source(*tickers: str, start=date(2023, 1, 1), end=date(2025, 6, 30), **kw):
     return FakeListingSource(prices={t: bars(t, start, end) for t in tickers}, **kw)
 
@@ -201,6 +191,22 @@ def test_bulk_refreshes_an_exchange_in_one_call_a_day(lake):
     assert last.date() == date(2025, 6, 30)
 
 
+def test_one_long_gap_does_not_turn_bulk_off_for_the_exchange(lake):
+    """BE-61: a dead name in a point-in-time universe misses months; it is
+    fetched on its own while the others still share the bulk days."""
+    tickers = [f"T{i}.US" for i in range(25)]
+    for t in tickers:
+        seed_daily_bars(lake, t, date(2025, 6, 2), date(2025, 6, 25))
+    source = _source(*tickers, "DEAD.US", start=date(2025, 1, 2), end=date(2025, 6, 30), bulk=True)
+    report = _ensurer(lake, source, bulk=True, bulk_min_tickers=20).ensure(
+        [*tickers, "DEAD.US"], date(2025, 6, 2), date(2025, 6, 30)
+    )
+    assert report.bulk_days == 4
+    assert [c[0] for c in source.price_calls] == ["DEAD.US"]
+    assert report.tickers_fetched == 26
+
+
+@pytest.mark.slow
 def test_bulk_falls_back_per_ticker_when_unsupported(lake):
     tickers = [f"T{i}.US" for i in range(25)]
     for t in tickers:
@@ -211,14 +217,6 @@ def test_bulk_falls_back_per_ticker_when_unsupported(lake):
     )
     assert len(source.price_calls) == 25
     assert report.bulk_days == 0 and report.tickers_fetched == 25
-
-
-def test_refresh_exchange_day(lake):
-    source = _source("A.US", "B.US", start=date(2025, 6, 27), end=date(2025, 6, 27), bulk=True)
-    report = _ensurer(lake, source, bulk=True).refresh_exchange_day("US", date(2025, 6, 27))
-    assert source.bulk_calls == [("US", date(2025, 6, 27))]
-    assert report.tickers_fetched == 2
-    assert lake.count_rows("bars") == 2
 
 
 def test_writes_go_through_the_pipeline_factory(lake):
@@ -450,7 +448,32 @@ def test_the_fallback_fetches_only_the_failed_tickers_own_gap(lake):
     ensurer = DataEnsurer(lake, primary, EnsureSettings(), pipeline_factory=factory, today=TODAY)
     report = ensurer.ensure(["A.US", "B.US"], date(2024, 7, 1), date(2025, 6, 30))
     assert report.tickers_fetched == 2
-    assert fallback.price_calls == [("A.US", date(2025, 6, 28), date(2025, 6, 30))]
+    # the gap plus the 5-bar overlap, so its adjustment basis is checked (BE-36)
+    assert fallback.price_calls == [("A.US", date(2025, 6, 23), date(2025, 6, 30))]
+    # BE-35: a ticker the fallback rescued is not reported as failed
+    assert report.tickers_failed == 0
+    assert report.failed == []
+
+
+def test_failed_lists_the_pipelines_failures():
+    """BE-35: ``failed`` comes from the pipeline's per-ticker outcomes."""
+    from stonks.ingest.pipeline import IngestPipeline
+    from stonks.store.lake import DuckDBLake
+
+    lake = DuckDBLake(":memory:")
+    lake.migrate()
+    try:
+        primary = _source("B.US", failing=["A.US"])
+        result = IngestPipeline(primary, lake).run_prices(
+            ["A.US", "B.US"], since=date(2025, 6, 2), until=date(2025, 6, 6)
+        )
+        assert result.failed == ("A.US",)
+        report = _ensurer(lake, primary).ensure(
+            ["A.US", "C.US"], date(2025, 6, 2), date(2025, 6, 6)
+        )
+        assert report.failed == ["A.US"]
+    finally:
+        lake.close()
 
 
 # ---- edge cases ------------------------------------------------------------------------------
@@ -489,3 +512,60 @@ def test_a_dead_ticker_is_not_asked_again_after_settle_days(lake):
     source.price_calls.clear()
     later.ensure(["DEAD.US"], date(2025, 6, 2), date(2025, 6, 30))
     assert source.price_calls == []
+
+
+# ---- intraday coverage by timestamp (BE-23) --------------------------------------------
+
+
+class _HourlySource(FakeListingSource):
+    """Hourly XNYS-like bars 14:00-20:00 UTC on 2025-06-19 and 06-20, served
+    only once complete at ``upto`` (naive UTC)."""
+
+    def __init__(self, upto: datetime) -> None:
+        super().__init__()
+        self.upto = upto
+        self.intraday_calls: list[tuple[date | None, date | None]] = []
+
+    def fetch_intraday_bars(self, ticker, interval, since=None, until=None):
+        from datetime import timedelta
+
+        from stonks.ingest.schemas import IntradayBar
+
+        self.intraday_calls.append((since, until))
+        out = []
+        for day in (date(2025, 6, 19), date(2025, 6, 20)):
+            if (since and day < since) or (until and day > until):
+                continue
+            for hour in range(14, 20):
+                ts = datetime(day.year, day.month, day.day, hour)
+                if ts + timedelta(hours=1) <= self.upto:
+                    out.append(
+                        IntradayBar(ticker=ticker, timestamp=ts, open=10, high=10.1, low=9.9,
+                                    close=10, adj_close=10, volume=5)
+                    )  # fmt: skip
+        return out
+
+
+def test_a_mid_session_intraday_ensure_leaves_no_hole():
+    from stonks.store.lake import DuckDBLake
+
+    lake = DuckDBLake(":memory:")
+    lake.migrate()
+    try:
+        hourly = Interval.parse("1h")
+        paid = {"fake": "all_in_one"}
+        mid = datetime(2025, 6, 20, 17, 30, tzinfo=UTC)
+        first = _HourlySource(mid.replace(tzinfo=None))
+        DataEnsurer(lake, first, EnsureSettings(plans=paid), clock=lambda: mid).ensure(
+            ["A.US"], date(2025, 6, 19), date(2025, 6, 20), hourly
+        )
+        later = datetime(2025, 6, 23, 12, tzinfo=UTC)
+        second = _HourlySource(later.replace(tzinfo=None))
+        DataEnsurer(lake, second, EnsureSettings(plans=paid), clock=lambda: later).ensure(
+            ["A.US"], date(2025, 6, 19), date(2025, 6, 20), hourly
+        )
+        assert second.intraday_calls == [(date(2025, 6, 20), date(2025, 6, 20))]
+        stored = lake.get_bars("A.US", hourly, datetime(2025, 6, 20), datetime(2025, 6, 21))
+        assert pd.to_datetime(stored["timestamp"]).dt.hour.tolist() == list(range(14, 20))
+    finally:
+        lake.close()

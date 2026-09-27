@@ -241,14 +241,14 @@ class PrescreenTuner:
         self.last_screen = prescreen(
             strategy_cls, candidates, closes, start=train_start, cost_bps=self._cost_bps
         )
-        direction = 1.0 if objective.direction == "maximize" else -1.0
+        # The screen score is a Sharpe, higher is better, whatever the
+        # objective's direction (BE-58): the objective only picks among the
+        # full backtests below.
         order = sorted(
             range(len(candidates)),
             key=lambda i: (
                 math.isnan(self.last_screen[i].score),
-                -direction * self.last_screen[i].score
-                if not math.isnan(self.last_screen[i].score)
-                else 0.0,
+                -self.last_screen[i].score if not math.isnan(self.last_screen[i].score) else 0.0,
                 i,
             ),
         )

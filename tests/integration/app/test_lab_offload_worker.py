@@ -145,7 +145,9 @@ def test_the_snapshot_context_refuses_without_a_snapshot(offload_settings, tmp_p
     ctx.close()  # never closes the real lake
 
 
-def test_a_stopping_worker_cancels_its_running_job(api, worker):
+def test_a_stopping_worker_requeues_its_running_job(api, worker):
+    """BE-42: a worker shut down mid-job hands the job back to the queue
+    (a restart is not a user cancel)."""
     job = api.lab.submit_lab_run(_request(budget=1000))
     stop = threading.Event()
     thread = threading.Thread(target=worker.run_forever, args=(stop,), daemon=True)
@@ -156,7 +158,10 @@ def test_a_stopping_worker_cancels_its_running_job(api, worker):
     stop.set()
     worker.request_stop()
     thread.join(timeout=60)
-    assert api.jobs.get(job.id).status == "cancelled"
+    requeued = api.jobs.get(job.id)
+    assert requeued.status == "queued"
+    assert requeued.error is None
+    assert worker.queue.claim_next("w2", ["lab_run"]) == job.id
 
 
 def test_metrics_include_the_lab_queue(api):

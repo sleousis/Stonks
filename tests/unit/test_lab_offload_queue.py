@@ -161,3 +161,25 @@ def test_worker_beat_records_the_current_job(path, queue, clock):
         row = s.sql("SELECT * FROM lab_workers WHERE id='w1'")[0]
     assert row["current_job_id"] == "job_x"
     assert row["heartbeat_at"] == clock.now.isoformat(timespec="microseconds")
+
+
+def test_registering_the_same_worker_id_twice_works(path, queue, clock):
+    """BE-42: a restart with the same ``--id`` must not crash-loop."""
+    queue.register_worker("w1", host="h", pid=1, cpus=2)
+    queue.stop_worker("w1")
+    clock.advance(5)
+    queue.register_worker("w1", host="h", pid=2, cpus=4)
+    with SqliteState(path) as s:
+        rows = s.sql("SELECT pid, cpus, stopped_at FROM lab_workers WHERE id = 'w1'")
+    assert [(r["pid"], r["cpus"], r["stopped_at"]) for r in rows] == [(2, 4, None)]
+
+
+def test_requeue_hands_a_running_job_back(path, queue):
+    store = JobStore(path)
+    job = store.create("lab_run", {}, executor="worker")
+    assert queue.claim_next("w1", ["lab_run"]) == job.id
+    store.finish(job.id, "cancelled")
+    assert queue.requeue(job.id, "w1")
+    back = store.get(job.id)
+    assert back.status == "queued" and back.started_at is None
+    assert not queue.requeue(job.id, "w1")  # only a job that worker finished

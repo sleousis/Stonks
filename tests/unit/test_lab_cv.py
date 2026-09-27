@@ -252,3 +252,25 @@ def test_cv_objective_scores_purged_folds_of_the_train_window(lake):
 def test_cv_objective_rejects_bad_arguments():
     with pytest.raises(ValueError):
         CVObjective(SharpeObjective(), folds=1)
+
+
+# ---- the purge horizon is in bars, the folds in days (BE-60) ---------------------------
+
+
+class _Horizon:
+    def __init__(self, bars: int) -> None:
+        self.label_horizon_bars = bars
+
+
+def test_an_intraday_purge_horizon_is_turned_into_trading_days():
+    from stonks.lab.cv import purge_days
+
+    daily = LabDataset(lake=None, universe=["A"], start=date(2024, 1, 1), end=date(2024, 6, 1))
+    hourly = LabDataset(
+        lake=None, universe=["A"], start=date(2024, 1, 1), end=date(2024, 6, 1),
+        interval=Interval.HOUR_1,
+    )  # fmt: skip
+    assert purge_days(daily, _Horizon(24)) == 24
+    # 24 hourly bars fill four 6.5-hour sessions, not 24 days
+    assert purge_days(hourly, _Horizon(24)) == 4
+    assert purge_days(hourly, _Horizon(0)) == 0

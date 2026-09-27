@@ -19,15 +19,16 @@ from __future__ import annotations
 from datetime import date, timedelta
 from functools import lru_cache
 
-from stonks.scheduling.calendar import US_CALENDAR, get_calendar
-
 __all__ = ["is_session", "last_session_of_month", "week_index", "weekly_session"]
 
 
 @lru_cache(maxsize=256)
 def _sessions(year: int) -> frozenset[date] | None:
     """The US session dates of ``year``; ``None`` when the calendar doesn't
-    cover the whole year."""
+    cover the whole year. The calendar seam is imported here, on first use,
+    so the features block never loads the scheduler at import (BE-67)."""
+    from stonks.scheduling.calendar import US_CALENDAR, get_calendar
+
     cal = get_calendar(US_CALENDAR)
     first, last = date(year, 1, 1), date(year, 12, 31)
     lo, hi = getattr(cal, "first_session", None), getattr(cal, "last_session", None)

@@ -118,6 +118,20 @@ class LabQueue:
             )
         return bool(rows)
 
+    def requeue(self, job_id: str, worker_id: str) -> bool:
+        """Hand a job ``worker_id`` stopped because it was shutting down
+        back to the queue, as if never claimed (BE-42). False when the job
+        is not one that worker ended as cancelled."""
+        with self._state() as s:
+            cur = s.execute(
+                "UPDATE jobs SET status='queued', started_at=NULL, finished_at=NULL, "
+                "worker_id=NULL, heartbeat_at=NULL, cancel_requested_at=NULL, error=NULL, "
+                "result_json=NULL, progress=0, progress_message=NULL "
+                "WHERE id=? AND worker_id=? AND executor=? AND status='cancelled'",
+                [job_id, worker_id, WORKER_EXECUTOR],
+            )
+            return cur.rowcount == 1
+
     def reap_stale(self, lease_seconds: float) -> list[str]:
         """Fail running worker jobs with no heartbeat for ``lease_seconds``."""
         now = self._clock()
@@ -138,11 +152,16 @@ class LabQueue:
     # ---- workers ---------------------------------------------------------------
 
     def register_worker(self, worker_id: str, *, host: str, pid: int, cpus: int) -> None:
+        """Add ``worker_id``, or restart it under the same id (BE-42): the
+        row keeps its job counters and gets a new process and start."""
         now = self._now()
         with self._state() as s:
             s.execute(
                 "INSERT INTO lab_workers (id, host, pid, cpus, started_at, heartbeat_at) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
+                "VALUES (?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(id) DO UPDATE SET host = excluded.host, pid = excluded.pid, "
+                "cpus = excluded.cpus, started_at = excluded.started_at, "
+                "heartbeat_at = excluded.heartbeat_at, stopped_at = NULL, current_job_id = NULL",
                 [worker_id, host, pid, cpus, now, now],
             )
 

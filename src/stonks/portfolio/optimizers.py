@@ -34,6 +34,7 @@ from pydantic import Field
 
 from stonks.logging import get_logger
 from stonks.portfolio._risk_based import (
+    CovarianceView,
     RiskBasedSettings,
     covariance_for,
     top_candidates,
@@ -175,10 +176,37 @@ class MeanVarianceSettings(RiskBasedSettings):
     solver: str = "cvxpy"
 
 
+#: Annual volatility given to a held name with neither history nor a vol
+#: when no other name has one either.
+FALLBACK_VOL_ANNUAL = 0.30
+
+
+def _with_fallback_variance(cov: CovarianceView, held: list[Ticker]) -> CovarianceView:
+    """``cov`` plus every held name it left out (no history and no vol),
+    with the median variance of the others (else :data:`FALLBACK_VOL_ANNUAL`
+    squared) and no correlation, so a holding the optimiser cannot size is
+    still traded down under the costs and the cap, never dumped (BE-34)."""
+    missing = sorted(set(held) - set(cov.tickers))
+    if not missing:
+        return cov
+    known = np.diag(cov.matrix)
+    fallback = float(np.median(known)) if known.size else FALLBACK_VOL_ANNUAL**2
+    tickers = sorted([*cov.tickers, *missing])
+    position = {t: i for i, t in enumerate(tickers)}
+    matrix = np.zeros((len(tickers), len(tickers)))
+    idx = [position[t] for t in cov.tickers]
+    matrix[np.ix_(idx, idx)] = cov.matrix
+    for t in missing:
+        matrix[position[t], position[t]] = fallback
+    return CovarianceView(
+        tickers=tickers, matrix=matrix, source=cov.source, observations=cov.observations
+    )
+
+
 @register_constructor("mean_variance_costs")
 class MeanVarianceCosts(PortfolioConstructor):
     """Mean-variance over the ``top_n`` best positive scores plus every
-    tradable held name (a held name without a signal has ``mu = 0``, so the
+    tradable held name, long or short (a held name without a signal has ``mu = 0``, so the
     optimiser decides how fast to sell it given costs and the turnover cap).
 
     - ``mu_i = ic * sigma_i * score_i``; covariance as in ``hrp``/``erc``.
@@ -201,8 +229,10 @@ class MeanVarianceCosts(PortfolioConstructor):
     def target_weights(self, inp: ConstructionInput) -> TargetBook:
         s: MeanVarianceSettings = self.settings  # type: ignore[assignment]
         chosen, combined, attribution = top_candidates(inp, s.top_n)
-        held = [t for t, q in inp.portfolio.positions.items() if q > 0 and inp.tradable(t)]
-        cov = covariance_for(inp, list(chosen) + held, s)
+        # every holding, long or short, so the costs and the turnover cap
+        # decide how fast it goes (BE-34)
+        held = [t for t, q in inp.portfolio.positions.items() if q != 0 and inp.tradable(t)]
+        cov = _with_fallback_variance(covariance_for(inp, list(chosen) + held, s), held)
         meta: dict = {
             "covariance": cov.source,
             "observations": cov.observations,

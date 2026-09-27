@@ -10,7 +10,6 @@ import pytest
 
 from stonks.execution.brokers.base import OrderCanceller
 from stonks.execution.cancel import CANCEL_REASON, cancel_working_orders
-from stonks.store.state import SqliteState
 from tests.integration.test_reconcile import (
     FakeStateBroker,
     fills_for,
@@ -36,14 +35,6 @@ class CancellingBroker(FakeStateBroker):
         self.cancelled.append(client_id)
         self.book[client_id] = replace(order, status="cancelled")
         return True
-
-
-@pytest.fixture
-def state(tmp_path):
-    s = SqliteState(tmp_path / "state.sqlite")
-    s.migrate()
-    yield s
-    s.close()
 
 
 def _pf_default(state) -> None:

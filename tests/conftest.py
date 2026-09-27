@@ -27,6 +27,7 @@ import dotenv
 import pytest
 
 from stonks.store.lake import DuckDBLake
+from stonks.store.state import SqliteState
 
 _LIVE_FLAG = "STONKS_RUN_LIVE_TESTS"
 
@@ -56,6 +57,16 @@ def lake(tmp_path: Path) -> Iterator[DuckDBLake]:
     """An empty, migrated lake in the test's temp folder (TT-09). A test
     module that needs seeded data or another bar backend overrides it."""
     db = DuckDBLake(tmp_path / "lake.duckdb")
+    db.migrate()
+    yield db
+    db.close()
+
+
+@pytest.fixture
+def state(tmp_path: Path) -> Iterator[SqliteState]:
+    """An empty, migrated state DB in the test's temp folder (TT-09,
+    BE-25). A module that needs seeded rows overrides it."""
+    db = SqliteState(tmp_path / "state.sqlite")
     db.migrate()
     yield db
     db.close()

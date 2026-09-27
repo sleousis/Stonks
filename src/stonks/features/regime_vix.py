@@ -10,7 +10,8 @@ Both series live in ``macro_indicators`` (country ``USA``), filled by
 ``stonks ingest macro --source yahoo --countries USA --indicators
 vix_spot,vix_3m``. Each leg is its latest close dated on or before
 ``as_of`` (plus ``publication_lag_days``, 0 by default: a daily close is
-known when the day ends, like the bar a strategy decides on). A leg older
+known when the day ends, like the bar a strategy decides on). An intraday
+decision reads the day before, since its own day has not closed. A leg older
 than ``max_staleness_days`` means unknown.
 
 Registered with the condition registry just by living in a

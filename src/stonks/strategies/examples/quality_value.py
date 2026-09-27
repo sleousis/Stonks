@@ -13,7 +13,7 @@ weights are tunable). ``estimate_return`` maps the score to an expected
 return (``return_scale * score``); ``decide`` holds the top-K picks equally
 weighted and exits everything else.
 
-Point in time: a statement row is visible only from its ``filing_date``,
+Point in time: a statement row is visible only from the day after its ``filing_date``,
 or ``period_end + missing_filing_lag_days`` when the filing date is unknown
 (see :meth:`DuckDBLake.get_statement_history`). Flows are trailing twelve
 months from the last four visible quarterlies, falling back to the latest
@@ -292,16 +292,18 @@ class QualityValue(BaseStrategy):
     def _metrics(self, ticker: str, as_of: Any, lake: Any) -> dict[str, float | None]:
         day = as_datetime(as_of).date()
         oldest = day - timedelta(days=int(self.params["max_statement_age_days"]))
-        # Filing dates carry no time of day (a report may land after the
-        # close), so mid-session only filings from earlier days are known.
+        # Day-stamped rows are known once their day ends, so mid-session
+        # only earlier days are known. Filing dates carry no time of day
+        # (a report may land after the close), so a filing is used from the
+        # day after it: ``available_date`` already holds that day (BE-22).
         known = day - timedelta(days=1) if _is_intraday(as_of) else day
 
         def fresh(snap: _Snapshot | None) -> Mapping[str, float | None]:
             return snap.values if snap is not None and snap.period_end >= oldest else {}
 
-        income = fresh(self._flows(lake, "income_statement", ticker, known, _INCOME_FLOWS))
-        cash = fresh(self._flows(lake, "cash_flow_statement", ticker, known, _CASH_FLOWS))
-        balance = fresh(self._balance(lake, ticker, known))
+        income = fresh(self._flows(lake, "income_statement", ticker, day, _INCOME_FLOWS))
+        cash = fresh(self._flows(lake, "cash_flow_statement", ticker, day, _CASH_FLOWS))
+        balance = fresh(self._balance(lake, ticker, day))
         if not (income or cash or balance):
             return {}
 

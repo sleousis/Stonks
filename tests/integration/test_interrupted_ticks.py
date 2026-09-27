@@ -8,22 +8,12 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 
-import pytest
-
 from stonks.config import HealthConfig
 from stonks.production.halts import list_halts, run_health
 from stonks.production.tick import INTERRUPTED_ERROR, recover_interrupted_ticks
 from stonks.store.state import SqliteState
 
 NOW = datetime(2026, 4, 3, 21, 0, tzinfo=UTC)
-
-
-@pytest.fixture
-def state(tmp_path):
-    s = SqliteState(tmp_path / "state.sqlite")
-    s.migrate()
-    yield s
-    s.close()
 
 
 def _running(state, tick_id: str, started: datetime) -> None:

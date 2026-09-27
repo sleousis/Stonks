@@ -114,3 +114,38 @@ def test_custom_windows_and_ratio(crisis_lake):
     report = build_survival_test("crisis", options).run(HoldAll({}), _ds(crisis_lake, "WILD.US"))
     assert report.passed, report.notes
     assert report.metrics["n_windows"] == 1 and "dd_spring" in report.metrics
+
+
+# ---- a missing benchmark and in-sample windows (BE-33) ---------------------------------
+
+
+def test_a_covered_crisis_with_no_benchmark_bars_does_not_pass(crisis_lake):
+    ds = LabDataset(
+        lake=crisis_lake,
+        universe=["MILD.US"],
+        start=DATES[0].date(),
+        end=DATES[-1].date(),
+        benchmark="NOPE.US",
+    )
+    report = build_survival_test("crisis").run(HoldAll({}), ds)
+    assert not report.passed
+    assert "benchmark missing" in report.notes
+
+
+def test_windows_the_tuner_saw_are_reported_as_in_sample(crisis_lake):
+    tuned_on_it = _ds(crisis_lake, "MILD.US")  # default split: COVID is in training
+    report = build_survival_test("crisis").run(HoldAll({}), tuned_on_it)
+    assert report.metrics["in_sample_covid"] == 1.0
+    assert report.metrics["n_covered_oos"] == 0.0
+    assert "in sample" in report.notes
+    held_out = LabDataset(
+        lake=crisis_lake,
+        universe=["MILD.US"],
+        start=DATES[0].date(),
+        end=DATES[-1].date(),
+        train_end=date(2020, 1, 31),
+        benchmark="SPY.US",
+    )
+    report = build_survival_test("crisis").run(HoldAll({}), held_out)
+    assert report.metrics["in_sample_covid"] == 0.0
+    assert report.metrics["n_covered_oos"] == 1.0

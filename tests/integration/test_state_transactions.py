@@ -9,14 +9,6 @@ from stonks.store import state as state_mod
 from stonks.store.state import SqliteState
 
 
-@pytest.fixture
-def state(tmp_path):
-    s = SqliteState(tmp_path / "state.sqlite")
-    s.migrate()
-    yield s
-    s.close()
-
-
 def test_failed_migration_leaves_no_partial_schema(tmp_path, monkeypatch):
     migs = tmp_path / "migs"
     migs.mkdir()

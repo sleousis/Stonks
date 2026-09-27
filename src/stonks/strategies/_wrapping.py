@@ -90,6 +90,9 @@ class InnerStrategyWrapper(BaseStrategy):
         self.applicable_asset_classes = tuple(
             getattr(inner, "applicable_asset_classes", ("equity",))
         )
+        # A short-capable inner strategy stays short-capable (BE-14): the
+        # engine, pipeline and ranker read the flag from the wrapper.
+        self.supports_short = bool(getattr(inner, "supports_short", False))
         # RS-02: the embargo, walk-forward and the preflight read these from
         # the wrapper, so they must cover what the inner strategy needs.
         cls = type(self)

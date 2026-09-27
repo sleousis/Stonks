@@ -53,3 +53,34 @@ def test_other_pairs_and_empty_frames_give_no_rows():
     assert list(source.fetch_macro_indicator("USA", "real_gdp_total")) == []
     assert fake.calls == []
     assert list(source.fetch_macro_indicator("USA", "vix_spot")) == []
+
+
+def test_todays_vix_is_left_out_until_the_session_closes():
+    """BE-38: during the session Yahoo's last row is the live value, not
+    the close. It is stored only after the close (16:15 ET for the VIX)."""
+    from datetime import UTC
+
+    from stonks.ingest.sources.yahoo import YahooDataSource
+
+    idx = pd.DatetimeIndex(
+        [datetime(2026, 4, 6), datetime(2026, 4, 7), datetime(2026, 4, 8)], name="Date"
+    ).tz_localize("America/Chicago")
+    frame = pd.DataFrame(
+        {"Open": 18.0, "High": 25.0, "Low": 17.0, "Close": [18.5, 20.5, 24.0], "Volume": 0},
+        index=idx,
+    )
+
+    def rows_at(now):
+        source = YahooDataSource(
+            ticker_factory=FakeYF(frames=[frame]),
+            now=lambda: now,
+            sleep=lambda s: None,
+            min_request_interval_seconds=0.0,
+            retry_backoff_seconds=0.0,
+        )
+        return [r.observation_date for r in source.fetch_macro_indicator("USA", "vix_spot")]
+
+    mid_session = datetime(2026, 4, 8, 18, 0, tzinfo=UTC)  # 14:00 in New York
+    assert rows_at(mid_session) == [date(2026, 4, 6), date(2026, 4, 7)]
+    after_close = datetime(2026, 4, 8, 21, 0, tzinfo=UTC)  # 17:00 in New York
+    assert rows_at(after_close)[-1] == date(2026, 4, 8)
