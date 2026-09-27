@@ -15,6 +15,8 @@ from stonks.app.errors import NotFoundError
 from stonks.app.pagination import Page
 from stonks.app.serialize import finite
 from stonks.config import HealthConfig, RiskPolicy
+from stonks.insights.flows import external_flows
+from stonks.insights.returns import mwr, net_flows, twr
 from stonks.production.halts import HEALTH_ACTOR, read_health, run_health
 from stonks.production.pnl import PnlRow, load_pnl
 from stonks.production.universe import EmptyUniverseError, production_tickers
@@ -46,6 +48,14 @@ class PnlSeries(BaseModel):
     #: held currency has no FX rate on some day (see ``fx_missing``).
     base_rows: list[PnlRowView] | None = None
     fx_missing: list[str] = []
+    #: Deposits less withdrawals inside the range of the rows (real portfolios).
+    net_flows: float = 0.0
+    #: Time-weighted return over the rows: deposits and withdrawals taken
+    #: out, so a deposit is never profit (``cumulative_return`` is the plain
+    #: change in value).
+    twr: float | None = None
+    #: Money-weighted return over the rows, annualized (XIRR).
+    mwr: float | None = None
 
 
 class ShadowPnlSummary(BaseModel):
@@ -142,13 +152,18 @@ class OperationsService:
         with self._ctx.state() as state:
             rows = load_pnl(state, since=since, portfolio_id=portfolio_id)
             snapshots, base = _snapshot_points(state, portfolio_id)
+            flows = external_flows(state, portfolio_id)
         base_rows, missing = self._base_rows(snapshots, base, since)
+        points = [(r.day, r.total_value) for r in rows]
         return PnlSeries(
             strategy_id=None,
             rows=[_pnl_view(r) for r in rows],
             base_currency=base,
             base_rows=base_rows,
             fx_missing=missing,
+            net_flows=net_flows(points, flows),
+            twr=twr(points, flows),
+            mwr=mwr(points, flows),
         )
 
     def _base_rows(

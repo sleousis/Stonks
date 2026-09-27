@@ -49,6 +49,8 @@ from stonks.insights import (
     strategy_agreement,
     weighted_returns,
 )
+from stonks.insights.flows import external_flows
+from stonks.insights.returns import mwr, net_flows
 from stonks.logging import get_logger
 from stonks.production.ledger import ledger_filter
 from stonks.production.pnl import load_pnl
@@ -104,6 +106,12 @@ class InsightsView(BaseModel):
     fx_missing: list[str] = Field(
         default_factory=list, description="Held currencies with no FX rate to the base currency."
     )
+    mwr: float | None = Field(
+        default=None,
+        description="Money-weighted return since inception, annualized (XIRR of the start "
+        "value, deposits, withdrawals and the latest value).",
+    )
+    net_flows: float = Field(default=0.0, description="Deposits less withdrawals since inception.")
 
 
 class AgreementView(BaseModel):
@@ -155,6 +163,7 @@ class InsightsService:
         betas = self._betas(book, returns, bench, notes)
         with self._ctx.state() as state:
             points = [(r.day, r.total_value) for r in load_pnl(state, portfolio_id=portfolio_id)]
+            flows = external_flows(state, portfolio_id)
         total_base, fx_missing = self._total_in_base(book)
         if fx_missing:
             notes.append(
@@ -179,7 +188,7 @@ class InsightsService:
                 ticker=allocation(book, "ticker"),
             ),
             exposure=exposure(book, betas=betas, benchmark=bench),
-            pnl=period_pnl(points),
+            pnl=period_pnl(points, flows),
             risk=RiskView(
                 history=realized_risk([v for _, v in points]),
                 holdings=self._holdings_risk(book, returns),
@@ -191,6 +200,8 @@ class InsightsService:
             notes=notes,
             total_value_base=total_base,
             fx_missing=fx_missing,
+            mwr=mwr(points, flows),
+            net_flows=net_flows(points, flows),
         )
 
     def _total_in_base(self, book: Book) -> tuple[float | None, list[str]]:

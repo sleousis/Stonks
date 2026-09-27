@@ -58,6 +58,8 @@ No wash sale adjustment. UK share matching rules (same day, 30 day, section 104 
 
 `GET /api/tax/exports/dividends?year=2025` or `stonks tax dividends --year 2025`. From the corporate action ledger: gross is the amount per share times the shares held, net is the cash credited, and withholding is the difference.
 
+Deposits and withdrawals are not income. They are recorded as cash flows and taken out of the returns (see "Returns and cash flows" in `operations.md`).
+
 ## CSV columns
 
 Gains: `ticker, lot_kind, quantity, acquired, disposed, holding_period, currency, proceeds, cost_basis, wash_sale_disallowed, gain, base_currency, proceeds_base, cost_basis_base, wash_sale_disallowed_base, gain_base, open_fill_id, close_fill_id`.

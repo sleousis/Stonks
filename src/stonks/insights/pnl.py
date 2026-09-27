@@ -7,12 +7,19 @@ from collections.abc import Sequence
 from datetime import date, timedelta
 
 from stonks.insights.models import Period, PeriodPnl
+from stonks.insights.returns import Flow, twr
 
 #: Calendar days back from the last value for each fixed period.
 _DAYS: dict[Period, int] = {"1w": 7, "1m": 30, "3m": 91, "1y": 365}
 
 
-def _row(period: Period, start: tuple[date, float] | None, end: tuple[date, float]) -> PeriodPnl:
+def _row(
+    period: Period,
+    start: tuple[date, float] | None,
+    end: tuple[date, float],
+    points: Sequence[tuple[date, float]] = (),
+    flows: Sequence[Flow] = (),
+) -> PeriodPnl:
     if start is None:
         return PeriodPnl(
             period=period,
@@ -24,6 +31,8 @@ def _row(period: Period, start: tuple[date, float] | None, end: tuple[date, floa
             change_pct=None,
         )
     change = end[1] - start[1]
+    window = [p for p in points if start[0] <= p[0] <= end[0]] or [start, end]
+    inside = sum(f.amount for f in flows if start[0] < f.day <= end[0])
     return PeriodPnl(
         period=period,
         start_day=start[0],
@@ -32,13 +41,17 @@ def _row(period: Period, start: tuple[date, float] | None, end: tuple[date, floa
         end_value=end[1],
         change=change,
         change_pct=change / start[1] if start[1] else None,
+        net_flows=inside,
+        twr=twr(window, flows),
     )
 
 
-def period_pnl(points: Sequence[tuple[date, float]]) -> list[PeriodPnl]:
+def period_pnl(points: Sequence[tuple[date, float]], flows: Sequence[Flow] = ()) -> list[PeriodPnl]:
     """For each period, the change from the last value on or before the
-    period's start to the latest value. ``points`` are ``(day, value)``,
-    oldest first. A period longer than the history has no start."""
+    period's start to the latest value, and the time-weighted return with
+    ``flows`` (deposits and withdrawals) taken out. ``points`` are
+    ``(day, value)``, oldest first. A period longer than the history has no
+    start."""
     if not points:
         return []
     days = [d for d, _ in points]
@@ -48,10 +61,13 @@ def period_pnl(points: Sequence[tuple[date, float]]) -> list[PeriodPnl]:
         i = bisect_right(days, day)
         return points[i - 1] if i else None
 
-    rows = [_row("1d", points[-2] if len(points) > 1 else None, end)]
+    def row(period: Period, start: tuple[date, float] | None) -> PeriodPnl:
+        return _row(period, start, end, points, flows)
+
+    rows = [row("1d", points[-2] if len(points) > 1 else None)]
     for period in ("1w", "1m", "3m"):
-        rows.append(_row(period, on_or_before(end[0] - timedelta(days=_DAYS[period])), end))
-    rows.append(_row("ytd", on_or_before(date(end[0].year - 1, 12, 31)), end))
-    rows.append(_row("1y", on_or_before(end[0] - timedelta(days=_DAYS["1y"])), end))
-    rows.append(_row("inception", points[0], end))
+        rows.append(row(period, on_or_before(end[0] - timedelta(days=_DAYS[period]))))
+    rows.append(row("ytd", on_or_before(date(end[0].year - 1, 12, 31))))
+    rows.append(row("1y", on_or_before(end[0] - timedelta(days=_DAYS["1y"]))))
+    rows.append(row("inception", points[0]))
     return rows
