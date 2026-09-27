@@ -1,5 +1,6 @@
 import type {
   BacktestRequest,
+  CostModelPreset,
   LabRunRequest,
   McptOptions,
   StrategyClassInfo,
@@ -43,11 +44,15 @@ export interface BenchmarkForm {
   benchmarkTicker: string;
 }
 
-export interface BacktestForm extends WindowForm, BenchmarkForm {
-  params: ParamValues;
+/** The cost field the Lab backtest and the Studio share (`cost-field.ts`). */
+export interface CostForm {
   cost: CostChoice;
   slippageBps: number | null;
   feePerTrade: number | null;
+}
+
+export interface BacktestForm extends WindowForm, BenchmarkForm, CostForm {
+  params: ParamValues;
   initialCash: number | null;
   rebalanceEveryBars: number | null;
 }
@@ -126,9 +131,9 @@ export const SUITES: readonly SuiteInfo[] = [
   },
   {
     id: 'promotion',
-    label: 'Promotion',
+    label: 'Go-live',
     description:
-      'Everything a strategy must survive before it may trade, including overfitting, Monte Carlo, other tickers, the benchmark and a 200-shuffle permutation test. Slow.',
+      'Everything the go-live check asks a strategy to pass, including overfitting, Monte Carlo, other tickers, the benchmark and a 200-shuffle permutation test. Slow.',
     tests: [
       'oos',
       'walk_forward',
@@ -294,11 +299,37 @@ export function backtestErrors(f: BacktestForm, cls: StrategyClassInfo | null): 
   if (!isNum(f.initialCash) || f.initialCash <= 0) e['initialCash'] = 'Enter a positive amount.';
   if (!isInt(f.rebalanceEveryBars) || f.rebalanceEveryBars < 1)
     e['rebalanceEveryBars'] = 'Enter a whole number of at least 1.';
+  return { ...e, ...costErrors(f) };
+}
+
+/** `slippageBps` / `feePerTrade` messages when flat costs are picked. */
+export function costErrors(f: CostForm): FormErrors {
+  const e: FormErrors = {};
   if (f.cost === 'flat') {
     if (!isNum(f.slippageBps) || f.slippageBps < 0) e['slippageBps'] = 'Enter 0 or more.';
     if (!isNum(f.feePerTrade) || f.feePerTrade < 0) e['feePerTrade'] = 'Enter 0 or more.';
   }
   return e;
+}
+
+/**
+ * The cost part of a backtest body. A preset and flat costs are mutually
+ * exclusive, and "configured" sends neither: the server then charges the
+ * costs the admin set up for backtests (P18: costs are on by default).
+ */
+export function costFields(
+  f: CostForm,
+): Pick<BacktestRequest, 'cost_model' | 'slippage_bps' | 'fee_per_trade'> {
+  if (f.cost === 'zero' || f.cost === 'realistic') return { cost_model: f.cost };
+  if (f.cost === 'flat') return { slippage_bps: f.slippageBps ?? 0, fee_per_trade: f.feePerTrade ?? 0 };
+  return {};
+}
+
+/** One line under the cost field saying what the choice charges. */
+export function costHint(cost: CostChoice, presets: readonly CostModelPreset[]): string {
+  if (cost === 'configured') return 'The fees and slippage your admin set up for backtests.';
+  if (cost === 'flat') return 'A flat slippage on every fill and a fixed fee per trade.';
+  return presets.find((m) => m.name === cost)?.description ?? '';
 }
 
 /**
@@ -367,12 +398,7 @@ export function buildBacktestRequest(
     initial_cash: f.initialCash ?? 10_000,
     rebalance_every_bars: f.rebalanceEveryBars ?? 1,
   };
-  // A preset and flat costs are mutually exclusive; "configured" sends neither.
-  if (f.cost === 'zero' || f.cost === 'realistic') body.cost_model = f.cost;
-  if (f.cost === 'flat') {
-    body.slippage_bps = f.slippageBps ?? 0;
-    body.fee_per_trade = f.feePerTrade ?? 0;
-  }
+  Object.assign(body, costFields(f));
   const benchmark = benchmarkValue(f);
   if (benchmark) body.benchmark = benchmark;
   return body;

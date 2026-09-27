@@ -52,6 +52,7 @@ describe('DraftPage', () => {
     allowed.set(true);
     // The test and ship tabs load reference data in the background.
     controller.match('/api/lab/cost-models').forEach((r) => r.flush([]));
+    controller.match('/api/lab/survival-presets').forEach((r) => r.flush([]));
     controller
       .match((r) => r.url.startsWith('/api/market/instruments'))
       .forEach((r) => r.flush({ items: [], total: 0, limit: 500, offset: 0 }));

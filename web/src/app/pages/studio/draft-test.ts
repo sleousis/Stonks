@@ -15,7 +15,6 @@ import { LabService } from '../../api/lab.service';
 import { MarketService } from '../../api/market.service';
 import type {
   BacktestResult,
-  CostModelPreset,
   Draft,
   DraftBacktestRequest,
   DraftLabRunRequest,
@@ -23,60 +22,29 @@ import type {
 } from '../../api/models';
 import { StudioService } from '../../api/studio.service';
 import { SessionService } from '../../core/auth/session.service';
-import { formatMoney, formatNumber, formatPercent } from '../../core/format/format';
+import { formatPercent } from '../../core/format/format';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { BacktestResultView } from '../../shared/lab-results/backtest-result';
 import { LabRunResultView } from '../../shared/lab-results/lab-run-result';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { CostField } from '../lab/cost-field';
+import {
+  type CostForm,
+  PICKABLE_TESTS,
+  SUITES,
+  SURVIVAL_TESTS,
+  type SuiteChoice,
+  type SurvivalTestName,
+  costErrors,
+  costFields,
+  defaultWindow,
+  parseTickers,
+  suiteTests,
+  suitesFromPresets,
+} from '../lab/lab-requests';
 import { INTERVALS } from './rule-spec';
-
-export type CostChoice = 'zero' | 'realistic' | 'custom';
-type SurvivalTest = NonNullable<DraftLabRunRequest['survival_tests']>[number];
-
-export const SURVIVAL_TESTS: readonly { id: SurvivalTest; label: string; hint: string }[] = [
-  { id: 'oos', label: 'Out of sample', hint: 'Holds up on data it was not tuned on' },
-  { id: 'period_stability', label: 'Period stability', hint: 'Works across sub-periods' },
-  { id: 'perturbation', label: 'Perturbation', hint: 'Survives small parameter changes' },
-  { id: 'drift', label: 'Drift', hint: 'Recent behaviour matches the past' },
-  { id: 'runs_test', label: 'Runs test', hint: 'Wins and losses are not clustered' },
-  { id: 'permutation', label: 'Permutation', hint: 'Beats shuffled prices' },
-  { id: 'walk_forward', label: 'Walk forward', hint: 'Re-tuned windows keep working' },
-];
-
-/** Slippage (bps) and flat fee a cost preset amounts to for one asset class. */
-export function costsFor(
-  preset: CostModelPreset | undefined,
-  assetClass: string,
-): { slippage_bps: number; fee_per_trade: number } {
-  if (!preset) return { slippage_bps: 0, fee_per_trade: 0 };
-  const s = preset.settings;
-  const c = s.asset_classes?.[assetClass] ?? s.default ?? {};
-  return {
-    slippage_bps: round2((c.half_spread_bps ?? 0) + (c.fee_bps ?? 0) + (s.impact_bps ?? 0)),
-    fee_per_trade: round2(c.fee_flat ?? 0),
-  };
-}
-
-export function parseTickers(raw: string): string[] {
-  return [
-    ...new Set(
-      raw
-        .split(/[\s,;]+/)
-        .map((t) => t.trim().toUpperCase())
-        .filter(Boolean),
-    ),
-  ];
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
-function isoDay(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
 
 /**
  * Test a draft: a backtest (equity, drawdown, metrics) and a lab run
@@ -86,7 +54,7 @@ function isoDay(d: Date): string {
 @Component({
   selector: 'app-draft-test',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BacktestResultView, LabRunResultView, StatusPill, PermissionNote],
+  imports: [BacktestResultView, LabRunResultView, StatusPill, PermissionNote, CostField],
   templateUrl: './draft-test.html',
   styleUrl: './draft-test.scss',
 })
@@ -112,23 +80,42 @@ export class DraftTest {
   readonly ensureSaved = input<() => Promise<boolean>>(() => Promise.resolve(true));
 
   protected readonly intervals = INTERVALS;
-  protected readonly survivalTests = SURVIVAL_TESTS;
+  protected readonly pickable = PICKABLE_TESTS;
 
   // ---- setup form ------------------------------------------------------------
   protected readonly tickersText = linkedSignal(() => (this.specTickers() ?? []).join(', '));
-  protected readonly start = signal(isoDay(new Date(Date.now() - 365 * 86_400_000)));
-  protected readonly end = signal(isoDay(new Date()));
+  protected readonly start = signal(defaultWindow().start);
+  protected readonly end = signal(defaultWindow().end);
   protected readonly interval = linkedSignal(() => this.specInterval());
   protected readonly initialCash = signal(10_000);
   protected readonly rebalanceEvery = signal(1);
-  protected readonly cost = signal<CostChoice>('zero');
-  protected readonly customSlippage = signal(5);
-  protected readonly customFee = signal(0);
-  protected readonly tests = signal<SurvivalTest[]>(['oos', 'period_stability']);
+  /** Realistic by default: the costs the admin configured (P18), as in the Lab. */
+  protected readonly costForm = signal<CostForm>({
+    cost: 'configured',
+    slippageBps: 5,
+    feePerTrade: 0,
+  });
+  protected readonly suite = signal<SuiteChoice>('quick');
+  /** The tests ticked for a custom suite. */
+  protected readonly tests = signal<SurvivalTestName[]>(['oos', 'period_stability']);
   protected readonly objective = signal<'sharpe' | 'cagr' | 'final_return'>('sharpe');
   protected readonly submitted = signal(false);
 
   protected readonly costModels = resource({ loader: () => this.lab.costModels() });
+  protected readonly presets = computed(() =>
+    this.costModels.hasValue() ? this.costModels.value() : [],
+  );
+  /** The server's named suites; the console's own lists stand in while they load. */
+  private readonly suitePresets = resource({ loader: () => this.lab.survivalPresets() });
+  protected readonly suites = computed(() =>
+    this.suitePresets.hasValue() ? suitesFromPresets(this.suitePresets.value()) : SUITES,
+  );
+  /** The tests the lab run will do, with their labels. */
+  protected readonly runTests = computed(() =>
+    suiteTests({ suite: this.suite(), tests: this.tests() }, this.suites()).map(
+      (id) => SURVIVAL_TESTS.find((t) => t.id === id)!,
+    ),
+  );
   protected readonly instruments = resource({
     loader: () => this.market.instruments({ limit: 500 }),
   });
@@ -142,30 +129,28 @@ export class DraftTest {
       ? null
       : 'The start date must be before the end date.',
   );
-  protected readonly formValid = computed(() => !this.tickersError() && !this.windowError());
+  protected readonly costErrors = computed(() => (this.submitted() ? costErrors(this.costForm()) : {}));
+  protected readonly formValid = computed(
+    () =>
+      !this.tickersError() &&
+      !this.windowError() &&
+      !Object.keys(costErrors(this.costForm())).length,
+  );
+  protected readonly costNote = computed(() =>
+    this.costForm().cost === 'flat' ? 'Lab runs use the default costs.' : '',
+  );
 
-  protected readonly costs = computed(() => {
-    const choice = this.cost();
-    if (choice === 'custom') {
-      return { slippage_bps: this.customSlippage(), fee_per_trade: this.customFee() };
+  protected patchCost(p: Partial<CostForm>): void {
+    this.costForm.update((f) => ({ ...f, ...p }));
+  }
+
+  protected setSuite(suite: SuiteChoice): void {
+    // Starting a custom suite from the suite in view saves re-ticking its tests.
+    if (suite === 'custom' && this.suite() !== 'custom') {
+      this.tests.set(this.runTests().map((t) => t.id));
     }
-    const presets = this.costModels.hasValue() ? this.costModels.value() : [];
-    return costsFor(
-      presets.find((p) => p.name === choice),
-      this.assetClass(),
-    );
-  });
-  protected readonly costSummary = computed(() => {
-    const c = this.costs();
-    return `${formatNumber(c.slippage_bps)} bps slippage, ${formatMoney(c.fee_per_trade)} per trade`;
-  });
-  protected readonly costHint = computed(() => {
-    const summary = this.costSummary();
-    if (this.cost() !== 'realistic') return `${summary}.`;
-    // Draft backtests take flat slippage and fees, so the preset's spread and
-    // percentage fee are folded into slippage; size-dependent impact is not.
-    return `≈ ${summary}, from the realistic preset's spread and fees for ${this.assetClass()}.`;
-  });
+    this.suite.set(suite);
+  }
 
   protected jobText(h: JobHandle): string {
     const msg = h.message();
@@ -199,7 +184,7 @@ export class DraftTest {
     return !!h && !h.done();
   }
 
-  protected toggleTest(id: SurvivalTest, on: boolean): void {
+  protected toggleTest(id: SurvivalTestName, on: boolean): void {
     this.tests.update((t) => (on ? [...t.filter((x) => x !== id), id] : t.filter((x) => x !== id)));
   }
 
@@ -227,7 +212,7 @@ export class DraftTest {
         ...this.window(),
         initial_cash: this.initialCash(),
         rebalance_every_bars: this.rebalanceEvery(),
-        ...this.costs(),
+        ...costFields(this.costForm()),
       };
       this.btResult.set(null);
       this.btRun()?.stop();
@@ -249,14 +234,19 @@ export class DraftTest {
 
   async runLab(): Promise<void> {
     this.submitted.set(true);
-    if (!this.formValid() || this.labBusy() || !this.tests().length || !this.canLab()) return;
+    if (!this.formValid() || this.labBusy() || !this.runTests().length || !this.canLab()) return;
     this.labBusy.set(true);
     try {
       if (!(await this.ensureSaved()())) return;
+      const suite = this.suite();
+      const cost = this.costForm().cost;
       const body: DraftLabRunRequest = {
         ...this.window(),
         objective: this.objective(),
-        survival_tests: this.tests(),
+        ...(suite === 'custom'
+          ? { survival_tests: this.runTests().map((t) => t.id) }
+          : { preset: suite }),
+        ...(cost === 'zero' || cost === 'realistic' ? { cost_model: cost } : {}),
       };
       this.labResult.set(null);
       this.labRun()?.stop();

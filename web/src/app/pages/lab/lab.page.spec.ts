@@ -294,7 +294,7 @@ describe('LabPage', () => {
     fixture.detectChanges();
     // Registering switches the quick suite to promotion, as the API does.
     expect(el.querySelector('#lab-panel-lab_run .suite.chosen .suite-name')?.textContent).toContain(
-      'Promotion',
+      'Go-live',
     );
 
     submitLabRun();
