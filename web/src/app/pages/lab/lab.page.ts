@@ -25,6 +25,7 @@ import type {
 import { SignalsService } from '../../api/signals.service';
 import { StrategiesService } from '../../api/strategies.service';
 import { SystemService } from '../../api/system.service';
+import { UniversesService } from '../../api/universes.service';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { type JobHandle, JobsService, isTerminal } from '../../core/jobs/jobs.service';
@@ -37,7 +38,6 @@ import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { BacktestFormView } from './backtest-form';
 import { BacktestResultView } from '../../shared/lab-results/backtest-result';
-import { suiteTests } from './lab-requests';
 import { LabRunFormView } from './lab-run-form';
 import { LabRunResultView } from '../../shared/lab-results/lab-run-result';
 import { SignalIcResult } from '../../shared/lab-results/signal-ic-result';
@@ -127,6 +127,7 @@ export class LabPage {
   /** Starting and cancelling lab jobs needs `lab.run`. */
   protected readonly canRun = computed(() => this.session.can('lab.run'));
   private readonly system = inject(SystemService);
+  private readonly universesApi = inject(UniversesService);
   private readonly strategiesApi = inject(StrategiesService);
   private readonly jobsApi = inject(JobsApiService);
   private readonly jobs = inject(JobsService);
@@ -160,6 +161,11 @@ export class LabPage {
   protected readonly classes = resource({ loader: () => this.system.strategyClasses() });
   protected readonly intervals = resource({ loader: () => this.system.intervals() });
   protected readonly costModels = resource({ loader: () => this.lab.costModels() });
+  /** Stored universes the lab run can use instead of typed tickers. */
+  private readonly universes = resource({ loader: () => this.universesApi.list() });
+  protected readonly universeList = computed(() =>
+    this.universes.hasValue() ? this.universes.value() : [],
+  );
   protected readonly intervalList = computed(() =>
     this.intervals.hasValue() ? this.intervals.value() : [],
   );
@@ -232,7 +238,7 @@ export class LabPage {
     const name = shortName(request.strategy.class_path);
     const ok = await this.confirm.confirm({
       title: `Run a backtest of ${name}?`,
-      message: `${request.universe.length} ticker${request.universe.length === 1 ? '' : 's'}, ${request.start} to ${request.end}, ${request.interval ?? '1d'} bars. It runs in the background.`,
+      message: `${basket(request)}, ${request.start} to ${request.end}, ${request.interval ?? '1d'} bars. It runs in the background.`,
       confirmLabel: 'Run backtest',
     });
     if (!ok) return;
@@ -244,12 +250,13 @@ export class LabPage {
     const always = !!request.register_strategy;
     const register = always || !!request.register_if_passes;
     const suite = request.preset
-      ? `the ${request.preset} suite (${suiteTests({ suite: request.preset, tests: [] }).length} tests)`
+      ? `the ${request.preset} suite`
       : `${request.survival_tests?.length ?? 0} survival tests`;
+    const fetchFirst = request.ensure_data ? 'Fetches missing data first, then a ' : 'A ';
     const ok = await this.confirm.confirm({
       title: `Start a lab run of ${name}?`,
       message:
-        `${request.tuner ?? 'random'} search, ${request.budget ?? 20} trials, then ${suite}.` +
+        `${basket(request)}. ${fetchFirst}${request.tuner ?? 'random'} search, ${request.budget ?? 20} trials, then ${suite}.` +
         (always
           ? ' The fitted strategy is registered in shadow when the run finishes, whatever the verdict.'
           : register
@@ -371,4 +378,11 @@ export class LabPage {
 
 function shortName(classPath: string | null | undefined): string {
   return classPath?.split(':').at(-1) ?? 'the strategy';
+}
+
+/** "3 tickers" or "the sp500 universe", for confirmations. */
+export function basket(request: { universe?: string[]; universe_id?: string | null }): string {
+  if (request.universe_id) return `the ${request.universe_id} universe`;
+  const n = request.universe?.length ?? 0;
+  return `${n} ticker${n === 1 ? '' : 's'}`;
 }

@@ -11,6 +11,7 @@ import {
   listNotifications,
   listPushSubscriptions,
   markNotificationsRead,
+  sendTestNotification,
   setNotificationWebhook,
   setQuietHours,
   updateNotificationPreferences,
@@ -72,6 +73,11 @@ export class NotificationsService {
   /** `silent` skips error toasts (the bell's background refresh). */
   feed(query?: ListNotificationsData['query'], silent = false) {
     return unwrap(listNotifications({ query, headers: silent ? SILENT_HEADERS : undefined }));
+  }
+
+  /** Send the caller a test notification on every channel they turned on. */
+  sendTest() {
+    return unwrap(sendTestNotification());
   }
 
   /** Mark these ids read, or every notification when `ids` is omitted. */

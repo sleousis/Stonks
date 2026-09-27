@@ -9,6 +9,7 @@ from stonks.mcp.tools import (
     halts,
     insights,
     jobs,
+    notifications,
     reads,
     risk,
     studio,
@@ -30,6 +31,7 @@ MODULES = (
     subscriptions,
     insights,
     risk,
+    notifications,
 )
 
 

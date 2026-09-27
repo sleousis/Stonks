@@ -49,12 +49,14 @@ services:
     # A running tick or ingest is never cut off mid-way. Give it time to
     # finish on shutdown instead of Docker's default 10 s.
     stop_grace_period: 5m
+    # Readiness (state migrated, lake present), so Caddy and the scheduler
+    # start only once the API can serve. The image's own check is liveness.
     healthcheck:
       test:
         - CMD
         - python
         - -c
-        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4)
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=4)
       interval: 30s
       timeout: 5s
       start_period: 30s

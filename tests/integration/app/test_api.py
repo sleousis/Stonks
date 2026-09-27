@@ -201,6 +201,7 @@ def test_orders_ticks_routes(client, seeded):
         "/api/orders/fills", params={"tick_id": seeded["tick_id"]}, headers=AUTH
     ).json()
     assert fills["total"] == 1
+    assert fills["items"][0]["side"] == orders["items"][0]["side"]
     ticks = client.get("/api/ticks", headers=AUTH).json()
     assert ticks["total"] == 1
     tick = client.get(f"/api/ticks/{seeded['tick_id']}", headers=AUTH).json()

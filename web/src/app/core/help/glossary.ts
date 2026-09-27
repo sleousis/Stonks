@@ -84,6 +84,10 @@ export const METRIC_KEYS = [
   'label_horizon',
   // Signal research
   'information_coefficient',
+  // Live risk and portfolio insights
+  'violation_ratio',
+  'alpha_decay',
+  'concentration',
 ] as const;
 
 export type MetricKey = (typeof METRIC_KEYS)[number];
@@ -423,6 +427,24 @@ export const GLOSSARY: Record<MetricKey, GlossaryEntry> = {
     short:
       'How well a signal ranked the moves that followed, from -1 to 1. 0 means no skill, and a steady 0.05 is already useful.',
     aliases: ['IC', 'Mean IC', 'mean_ic', 'IC estimate'],
+  },
+  violation_ratio: {
+    term: 'VaR violation ratio',
+    short:
+      'Days the loss beat VaR, divided by the days the model expected. Near 1 is right, and outside 0.5 to 1.5 the risk model is off.',
+    aliases: ['Violation ratio', 'VaR misses', 'VaR misses against the model', 'Kupiec'],
+  },
+  alpha_decay: {
+    term: 'Alpha decay',
+    short:
+      "A strategy's live information ratio has fallen well below its backtest, so its edge may be fading.",
+    aliases: ['Decay', 'Decayed'],
+  },
+  concentration: {
+    term: 'Concentration',
+    short:
+      'How much of the book sits in a few names. Effective holdings is how many equal positions it acts like.',
+    aliases: ['Effective holdings', 'Largest holding', 'Top 5 weight'],
   },
 };
 

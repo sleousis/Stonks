@@ -19,6 +19,9 @@ pytestmark = pytest.mark.e2e
 ADMIN_PAGES = (
     "/",
     "/profile",
+    "/insights",
+    "/insights/risk",
+    "/lab/ledger",
     "/admin/users",
     "/dashboard",
     "/strategies",
@@ -38,7 +41,7 @@ ADMIN_PAGES = (
     "/ops/data-quality",
     "/universes",
 )
-TRADER_PAGES = ("/", "/profile", "/settings", "/strategies")
+TRADER_PAGES = ("/", "/insights", "/insights/risk", "/profile", "/settings", "/strategies")
 
 
 def _audit(visit, pages, who: str) -> dict[str, list[str]]:

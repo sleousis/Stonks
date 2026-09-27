@@ -13,7 +13,12 @@ from fastapi import APIRouter, Path
 from stonks.api.deps import PageDep, PrincipalDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.app.pagination import Page, page_of
-from stonks.app.portfolio import PortfolioSummaryView, TradingModeView
+from stonks.app.portfolio import (
+    PortfolioCreate,
+    PortfolioRename,
+    PortfolioSummaryView,
+    TradingModeView,
+)
 from stonks.app.subscriptions import SubscribeRequest, SubscriptionUpdate, SubscriptionView
 from stonks.auth import Permission
 
@@ -23,6 +28,7 @@ subscriptions_router = APIRouter(
 )
 
 SubscriptionId = Annotated[str, Path(max_length=64)]
+PortfolioId = Annotated[str, Path(max_length=64)]
 
 
 @router.get(
@@ -37,6 +43,38 @@ def list_portfolios(
     """Your portfolios, oldest first, each marked paper or live. Empty
     for someone who only follows strategies for signals."""
     return page_of(services.portfolio.list_mine(principal), page)
+
+
+@router.post(
+    "",
+    status_code=201,
+    response_model=PortfolioSummaryView,
+    operation_id="createPortfolio",
+    dependencies=needs(Permission.PORTFOLIO_MANAGE),
+)
+def create_portfolio(
+    body: PortfolioCreate, services: ServicesDep, principal: PrincipalDep
+) -> PortfolioSummaryView:
+    """Open a new paper portfolio of yours: simulated fills on the Stonks
+    ledger, starting from ``initial_cash``. Subscribe strategies to it in
+    ``paper`` mode to trade it."""
+    return services.portfolio.create(principal, body)
+
+
+@router.patch(
+    "/{portfolio_id}",
+    response_model=PortfolioSummaryView,
+    operation_id="renamePortfolio",
+    dependencies=needs(Permission.PORTFOLIO_MANAGE),
+)
+def rename_portfolio(
+    portfolio_id: PortfolioId,
+    body: PortfolioRename,
+    services: ServicesDep,
+    principal: PrincipalDep,
+) -> PortfolioSummaryView:
+    """Rename one of your portfolios (404 when it isn't yours)."""
+    return services.portfolio.rename(principal, portfolio_id, body)
 
 
 @router.get(

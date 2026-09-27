@@ -68,6 +68,8 @@ describe('TimeSeriesChart', () => {
     expect(colors).not.toContain('gain');
     expect(colors).not.toContain('loss');
     expect(colors).not.toContain('brass');
+    // amber reads as brass next to a live line, so peers never use it
+    expect(colors).not.toContain('warn');
     const keys = CATEGORICAL_LINES.map((l) => `${l.color}:${l.dashed}`);
     expect(new Set(keys).size).toBe(keys.length);
   });

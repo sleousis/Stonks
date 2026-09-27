@@ -8,12 +8,13 @@ scopes:
 - ``user``: every portfolio of the caller;
 - ``portfolio``: one portfolio the caller owns.
 
-It stops every new order (``halt = all``), or only buys when ``flatten``
-is set so sells and exits still go through. The tick's ``risk_halts`` gate
-enforces it. Engaging stop-all over an open flatten escalates it (never
-the other way round). Engaging also cancels the orders a portfolio still
-has working at an external broker (all of them, or only buys with
-``flatten``) through the broker interface (``execution.cancel``); a
+It stops every new order (``halt = all``), or only buys when ``buys_only``
+is set so sells and exits still go through (``flatten`` is the deprecated
+name of that option: it never closed a position). The tick's ``risk_halts``
+gate enforces it. Engaging stop-all over an open buys-only switch escalates
+it (never the other way round). Engaging also cancels the orders a
+portfolio still has working at an external broker (all of them, or only
+buys with ``buys_only``) through the broker interface (``execution.cancel``); a
 failed cancel is logged and never undoes the halt. Engaging, resuming and clearing each write an ``audit_log``
 row; resuming and clearing also write the ``risk_reset`` row in
 ``status_changes``. Resuming the kill switch needs the typed confirmation
@@ -29,9 +30,9 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, date, datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from stonks.accounts import NotFound, Role, Scope, owned_portfolio
 from stonks.accounts.audit import AuditLog
@@ -70,9 +71,23 @@ class KillSwitchRequest(BaseModel):
     scope: KillScope
     #: Required with ``scope = "portfolio"``; a portfolio you own.
     portfolio_id: str | None = Field(default=None, max_length=64)
-    #: Stop buys only and let sells and exits through.
-    flatten: bool = False
+    buys_only: bool = Field(
+        default=False,
+        description="stop buys only: sells and exits still go through, no position is closed",
+    )
+    flatten: bool | None = Field(
+        default=None,
+        deprecated=True,
+        description="deprecated name of buys_only (it never closed a position)",
+    )
     reason: str = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _flatten_alias(cls, data: Any) -> Any:
+        if isinstance(data, dict) and data.get("flatten"):
+            return {**data, "buys_only": True}
+        return data
 
 
 class ResumeRequest(BaseModel):
@@ -235,7 +250,7 @@ class HaltService:
                 if not request.portfolio_id:
                     raise ValidationError("a portfolio kill switch needs portfolio_id")
                 portfolio_id = self._owned(state, scope, request.portfolio_id)
-            mode = "buys" if request.flatten else "all"
+            mode = "buys" if request.buys_only else "all"
             with state.transaction():
                 halt, created = trip_halt(
                     state,
@@ -256,7 +271,7 @@ class HaltService:
                     details = {
                         "scope": request.scope,
                         "user_id": user_id,
-                        "flatten": request.flatten,
+                        "buys_only": request.buys_only,
                         "reason": request.reason,
                     }
                     if escalated_from is not None:

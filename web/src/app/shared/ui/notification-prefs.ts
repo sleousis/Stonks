@@ -59,6 +59,18 @@ const ALWAYS_ON = 'inapp';
       } @else {
         <div class="panel-body body">
           <p class="lead">Everything shows in the app. Choose what else reaches you.</p>
+          <div class="test-row">
+            <button
+              type="button"
+              class="btn"
+              [disabled]="testing()"
+              [attr.aria-busy]="testing()"
+              (click)="sendTest()"
+            >
+              {{ testing() ? 'Sending…' : 'Send a test notification' }}
+            </button>
+            <span class="hint">Check that alerts reach your phone and your other channels.</span>
+          </div>
           <app-permission-note permission="notifications.manage" />
           @if (channels().length === 0) {
             <p class="note">This server has no push, email or webhook delivery set up yet.</p>
@@ -210,6 +222,12 @@ const ALWAYS_ON = 'inapp';
     .body {
       display: grid;
       gap: var(--space-4);
+    }
+    .test-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2) var(--space-3);
     }
     .lead {
       color: var(--color-ink-2);
@@ -383,6 +401,31 @@ export class NotificationPrefs {
     this.webhookError.set(null);
     if (await this.save(() => this.api.setWebhook(null))) {
       this.toasts.success('Removed the webhook.');
+    }
+  }
+
+  protected readonly testing = signal(false);
+
+  protected async sendTest(): Promise<void> {
+    this.testing.set(true);
+    try {
+      const sent = await this.api.sendTest();
+      const names = sent.channels
+        .filter((c) => c !== ALWAYS_ON)
+        .map((c) => this.channelLabel(c).toLowerCase());
+      if (sent.deliveries > 0) {
+        const where = names.length ? ` by ${names.join(', ')}` : '';
+        const count = sent.deliveries === 1 ? '1 delivery' : `${sent.deliveries} deliveries`;
+        this.toasts.success(`Sent a test notification: ${count}${where}. It arrives in seconds.`);
+      } else {
+        this.toasts.info(
+          'Sent a test notification to the app only. Turn on push on this device, or another channel, to get it elsewhere.',
+        );
+      }
+    } catch {
+      // The error interceptor already showed the API's message.
+    } finally {
+      this.testing.set(false);
     }
   }
 

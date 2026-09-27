@@ -5,7 +5,8 @@ parameterless read routes."""
 # No ``from __future__ import annotations``: tool signatures use closure
 # values inside ``Annotated`` metadata, which must be evaluated at def time.
 
-from collections.abc import Awaitable, Iterable, Mapping
+import inspect
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date
 from typing import Annotated, Any, Literal
@@ -30,6 +31,10 @@ JOB = ToolAnnotations(
 #: Ingest reaches out to external market-data vendors via the API.
 JOB_OPEN_WORLD = ToolAnnotations(
     read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=True
+)
+#: A small write that destroys nothing (a journal note, marking read).
+WRITE = ToolAnnotations(
+    read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=False
 )
 #: Overwrites a draft's fields (repeating the same edit is a no-op).
 EDIT = ToolAnnotations(
@@ -71,8 +76,13 @@ JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 AssetClass = Literal["equity", "crypto", "commodity", "bond"]
 TunerName = Literal["grid", "random"]
 ObjectiveName = Literal["sharpe", "cagr", "final_return", "cv_sharpe", "cv_cagr", "cv_final_return"]
-SurvivalTestName = Literal[
-    "oos", "period_stability", "perturbation", "drift", "runs_test", "permutation", "walk_forward"
+#: A survival test id. Not a fixed list, so the schema cannot drift from the
+#: API's registry: ``list_survival_tests`` names them and the API checks them.
+SurvivalTestName = Annotated[
+    str,
+    Field(
+        pattern=r"^[a-z][a-z0-9_]{0,63}$", description="a survival test id (list_survival_tests)"
+    ),
 ]
 
 
@@ -234,6 +244,9 @@ class ToolContext:
     async def patch(self, path: str, body: dict[str, Any], *, hints: Hints | None = None) -> Any:
         return await self.call(self.api.patch(path, body), hints)
 
+    async def put(self, path: str, body: dict[str, Any], *, hints: Hints | None = None) -> Any:
+        return await self.call(self.api.put(path, body), hints)
+
     async def delete(self, path: str, *, hints: Hints | None = None) -> Any:
         return await self.call(self.api.delete(path), hints)
 
@@ -252,6 +265,35 @@ async def queue_lab_run(
     return {"preview": False, "applied": True, "job": job}
 
 
+# --- old tool names ------------------------------------------------------------------
+
+#: Old tool name -> its current name. The old names stay registered as
+#: deprecated aliases so agents that learned them keep working. Reads are
+#: ``get_*`` / ``list_*`` and queued work is ``run_*``.
+ALIASES: dict[str, str] = {
+    "health": "get_api_health",
+    "live_risk": "get_live_risk",
+    "risk_snapshots": "list_risk_snapshots",
+    "tca_summary": "get_tca_summary",
+    "trade_journal": "list_trade_journal",
+    "order_tca": "get_order_tca",
+    "backtest_draft": "run_draft_backtest",
+    "lab_run_draft": "run_draft_lab",
+}
+_OLD_NAMES = {new: old for old, new in ALIASES.items()}
+
+
+def add_alias(t: ToolContext, tool: Callable[..., Any], annotations: ToolAnnotations) -> None:
+    """Register ``tool`` again under its old name (see :data:`ALIASES`)."""
+    name = tool.__name__
+    t.server.add_tool(
+        tool,
+        name=_OLD_NAMES[name],
+        description=f"Deprecated alias of {name}. {inspect.getdoc(tool) or ''}".strip(),
+        annotations=annotations,
+    )
+
+
 # --- declarative parameterless reads ------------------------------------------------
 
 
@@ -267,12 +309,17 @@ class RouteRead:
 
 def register_route_reads(t: ToolContext, routes: Iterable[RouteRead]) -> None:
     for route in routes:
-        t.server.add_tool(
-            _route_tool(t, route.path),
-            name=route.name,
-            description=route.description,
-            annotations=READ,
-        )
+        names = [route.name]
+        if route.name in _OLD_NAMES:
+            names.append(_OLD_NAMES[route.name])
+        for name in names:
+            prefix = "" if name == route.name else f"Deprecated alias of {route.name}. "
+            t.server.add_tool(
+                _route_tool(t, route.path),
+                name=name,
+                description=prefix + route.description,
+                annotations=READ,
+            )
 
 
 def _route_tool(t: ToolContext, path: str):

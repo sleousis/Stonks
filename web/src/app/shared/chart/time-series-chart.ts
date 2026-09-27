@@ -132,6 +132,9 @@ import {
     .swatch[data-color='warn'] {
       background: var(--color-warn);
     }
+    .swatch[data-color='violet'] {
+      background: var(--chart-violet);
+    }
     .swatch[data-color='ink'] {
       background: var(--color-ink-2);
     }
@@ -151,6 +154,9 @@ import {
     }
     .swatch.dashed[data-color='warn'] {
       --swatch: var(--color-warn);
+    }
+    .swatch.dashed[data-color='violet'] {
+      --swatch: var(--chart-violet);
     }
     .swatch.dashed[data-color='ink'] {
       --swatch: var(--color-ink-2);
@@ -267,6 +273,7 @@ export class TimeSeriesChart {
         muted: v('--color-ink-3', '#5f6b78'),
         info: v('--color-info', '#2a5db0'),
         warn: v('--color-warn', '#8f5d00'),
+        violet: v('--chart-violet', '#6a3fa0'),
         ink: v('--color-ink-2', '#45515e'),
       },
     };

@@ -1,0 +1,195 @@
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  linkedSignal,
+  resource,
+  signal,
+} from '@angular/core';
+import { RouterLink } from '@angular/router';
+
+import { InsightsService } from '../../api/insights.service';
+import type {
+  AllocationSlice,
+  HoldingAgreement,
+  Opinion,
+  PeriodPnl,
+  SnapshotView,
+} from '../../api/models';
+import { PortfolioService } from '../../api/portfolio.service';
+import { SessionService } from '../../core/auth/session.service';
+import { formatDateTime, formatMoney, formatNumber, formatPercent } from '../../core/format/format';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
+import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
+import { DataTable, type TableColumn } from '../../shared/ui/data-table/data-table';
+import { keepLatest } from '../../shared/ui/data-table/keep-latest';
+import { HelpTip } from '../../shared/ui/help-tip';
+import { PageHeader } from '../../shared/ui/page-header';
+import { StatTile } from '../../shared/ui/stat-tile';
+import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
+import { InsightsNav } from './insights-nav';
+
+const HISTORY_PAGE = 20;
+
+export type AllocationDimension = 'asset_class' | 'sector' | 'currency' | 'ticker';
+export const DIMENSIONS: readonly { key: AllocationDimension; label: string }[] = [
+  { key: 'asset_class', label: 'Asset class' },
+  { key: 'sector', label: 'Sector' },
+  { key: 'currency', label: 'Currency' },
+  { key: 'ticker', label: 'Holding' },
+];
+
+export const PERIOD_LABELS: Record<PeriodPnl['period'], string> = {
+  '1d': 'Day',
+  '1w': 'Week',
+  '1m': 'Month',
+  '3m': 'Three months',
+  ytd: 'Year to date',
+  '1y': 'Year',
+  inception: 'Since the start',
+};
+
+/** A strategy's stance on a holding, as words and a shape (never colour alone). */
+export const STANCE: Record<Opinion['stance'], { text: string; mark: string }> = {
+  agree: { text: 'agrees', mark: '✓' },
+  disagree: { text: 'disagrees', mark: '✗' },
+  no_view: { text: 'has no view', mark: '–' },
+  not_applicable: { text: 'does not trade this', mark: '–' },
+  error: { text: 'could not score it', mark: '!' },
+};
+
+/** "1 agrees, 2 disagree". */
+export function agreementLine(h: HoldingAgreement): string {
+  const agree = `${h.agree} ${h.agree === 1 ? 'agrees' : 'agree'}`;
+  const disagree = `${h.disagree} ${h.disagree === 1 ? 'disagrees' : 'disagree'}`;
+  return `${agree}, ${disagree}`;
+}
+
+/**
+ * Insights on the picked portfolio (a synced broker account too): where the
+ * money sits, exposure and beta, returns over periods, risk, which active
+ * strategies agree with each holding, and the snapshot history. Admins also
+ * get totals across every book, never holdings.
+ */
+@Component({
+  selector: 'app-insights-page',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [
+    RouterLink,
+    PageHeader,
+    InsightsNav,
+    StatTile,
+    DataTable,
+    HelpTip,
+    UpdatedAgo,
+    LoadingState,
+    EmptyState,
+    ErrorState,
+  ],
+  templateUrl: './insights.page.html',
+  styleUrl: './insights.page.scss',
+})
+export class InsightsPage {
+  private readonly insightsApi = inject(InsightsService);
+  private readonly portfolioApi = inject(PortfolioService);
+  private readonly portfolioCtx = inject(PortfolioContextService);
+  protected readonly session = inject(SessionService);
+
+  /** Real money: the headline figure turns brass. */
+  protected readonly live = this.portfolioCtx.live;
+  protected readonly canSeeTotals = computed(() => this.session.can('portfolio.totals'));
+
+  protected readonly insights = resource({
+    params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
+    loader: () => this.insightsApi.get(),
+  });
+  protected readonly agreement = resource({
+    params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
+    loader: () => this.insightsApi.agreement(),
+  });
+  protected readonly totals = resource({
+    params: () => (this.canSeeTotals() ? {} : undefined),
+    loader: () => this.insightsApi.totals(),
+  });
+
+  protected readonly historyOffset = linkedSignal({
+    source: () => this.portfolioCtx.selectedId(),
+    computation: () => 0,
+  });
+  protected readonly history = resource({
+    params: () => ({
+      portfolio: this.portfolioCtx.selectedId(),
+      limit: HISTORY_PAGE,
+      offset: this.historyOffset(),
+    }),
+    loader: ({ params }) =>
+      this.portfolioApi.snapshots({ limit: params.limit, offset: params.offset }),
+  });
+  protected readonly historyPage = keepLatest(this.history);
+  protected readonly historyPageSize = HISTORY_PAGE;
+
+  protected readonly auto = autoRefresh(() => [this.insights, this.agreement, this.history]);
+
+  protected readonly dimensions = DIMENSIONS;
+  protected readonly dimension = signal<AllocationDimension>('asset_class');
+  protected readonly slices = computed<AllocationSlice[]>(() =>
+    this.insights.hasValue() ? this.insights.value().allocation[this.dimension()] : [],
+  );
+
+  protected readonly currency = computed(() =>
+    this.insights.hasValue() ? this.insights.value().currency : null,
+  );
+  protected money(value: number | null | undefined): string {
+    return formatMoney(value, { currency: this.currency() });
+  }
+  protected readonly moneyFormat = (value: number) => this.money(value);
+  protected readonly pct = (value: number | null | undefined, signed = false) =>
+    formatPercent(value, { digits: 1, signed });
+  protected readonly num = (value: number | null | undefined) => formatNumber(value, { digits: 2 });
+
+  protected readonly description = computed(() => {
+    if (!this.insights.hasValue()) return 'Where your money sits and which strategies agree.';
+    const i = this.insights.value();
+    const from = i.source === 'sync' ? 'the last broker sync' : 'the last trading run';
+    return i.taken_at
+      ? `From ${from} on ${formatDateTime(i.taken_at)}, valued at the latest prices.`
+      : 'No snapshot yet. The first trading run or broker sync fills this page.';
+  });
+
+  protected readonly dayChange = computed(() => {
+    if (!this.insights.hasValue()) return null;
+    const day = this.insights.value().pnl.find((p) => p.period === '1d');
+    if (!day || day.change == null) return null;
+    return `${this.money(day.change)} today (${this.pct(day.change_pct, true)})`;
+  });
+
+  protected readonly betaDetail = computed(() => {
+    if (!this.insights.hasValue()) return null;
+    const e = this.insights.value().exposure;
+    if (e.beta == null) return 'No beta for these holdings yet';
+    return `Against ${e.benchmark ?? 'the benchmark'}, ${this.pct(e.beta_coverage, false)} covered`;
+  });
+
+  protected readonly periodLabel = (p: PeriodPnl) => PERIOD_LABELS[p.period];
+  protected readonly stance = STANCE;
+  protected readonly agreementLine = agreementLine;
+
+  protected readonly historyColumns: TableColumn<SnapshotView>[] = [
+    { key: 'taken_at', label: 'Taken', format: 'datetime', mobile: 'title' },
+    { key: 'total_value', label: 'Value', format: 'money', currency: () => this.currency() },
+    { key: 'cash', label: 'Cash', format: 'money', currency: () => this.currency() },
+    {
+      key: 'positions',
+      label: 'Positions',
+      format: 'number',
+      value: (s) => Object.keys(s.positions).length,
+    },
+    { key: 'tick_id', label: 'Trading run', mobile: 'hide', sortable: false },
+  ];
+  protected readonly snapshotKey = (s: SnapshotView) => String(s.id);
+  protected readonly sliceKey = (s: AllocationSlice) => s.key;
+  protected readonly sliceLabel = (s: AllocationSlice) => (s.key === 'cash' ? 'Cash' : s.key);
+  protected readonly barWidth = (s: AllocationSlice) =>
+    `${Math.max(0, Math.min(1, Math.abs(s.weight ?? 0))) * 100}%`;
+}

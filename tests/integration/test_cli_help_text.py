@@ -65,10 +65,11 @@ def test_tick_help_does_not_promise_a_single_winner():
     assert "\u00d7" not in result.output  # the multiplication sign breaks Windows consoles
 
 
-def test_halts_flatten_says_it_only_stops_buys():
+def test_halts_kill_names_the_buys_only_option():
     result = CliRunner().invoke(app, ["halts", "kill", "--help"], env={"COLUMNS": "400"})
     shown = " ".join(result.output.split())
-    assert "--buys-only" in shown or "only stops buys" in shown
+    assert "--buys-only" in shown and "only stops buys" in shown
+    assert "--flatten" not in shown  # the deprecated alias is hidden
 
 
 def test_help_does_not_leak_roadmap_numbers():

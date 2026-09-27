@@ -143,3 +143,23 @@ def test_lab_run_with_ensure_data_chains_an_ensure_job_on_the_lake_lane(settings
     finally:
         svc.shutdown()
     assert {c[0] for c in source.price_calls} == {"NEW.US"}
+
+
+def test_a_backtest_can_run_on_a_stored_universe(settings, services):
+    from stonks.app.errors import NotFoundError
+    from stonks.app.lab import BacktestRequest
+
+    _store_universe(settings, "pair", ["UP.US", "DOWN.US"])
+    body = {
+        "strategy": {"class_path": "stonks.strategies.examples.momentum:Momentum"},
+        "universe_id": "pair",
+        "start": "2025-10-01",
+        "end": "2026-04-01",
+    }
+    queued = services.lab.submit_backtest(BacktestRequest(**body))
+    final = services.runner.wait(queued.id, timeout=60)
+    assert final.status == "succeeded", final.error
+    with pytest.raises(NotFoundError):
+        services.lab.submit_backtest(BacktestRequest(**{**body, "universe_id": "nope"}))
+    with pytest.raises(ValueError, match="universe"):
+        BacktestRequest(**{k: v for k, v in body.items() if k != "universe_id"})

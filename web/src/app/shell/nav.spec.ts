@@ -32,6 +32,7 @@ describe('Nav', () => {
   it('puts Home and Profile first, and Users for admins only', () => {
     expect(mine(render(TRADER))).toEqual([
       'Today',
+      'Insights',
       'Notifications',
       'Broker connections',
       'Profile',
@@ -42,6 +43,7 @@ describe('Nav', () => {
     });
     expect(mine(render(ADMIN))).toEqual([
       'Today',
+      'Insights',
       'Notifications',
       'Broker connections',
       'Profile',

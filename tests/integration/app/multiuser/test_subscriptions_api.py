@@ -72,6 +72,37 @@ def test_the_default_book_follows_the_alpaca_endpoint(client, settings, paper, a
     assert (mode["trading"], mode["broker"]) == (trading, "alpaca")
 
 
+def test_create_and_rename_your_own_portfolio(client, settings, people):
+    alice = people["alice"]["headers"]
+    made = client.post(
+        "/api/portfolios", json={"name": "  Swing book ", "initial_cash": 25_000}, headers=alice
+    )
+    assert made.status_code == 201, made.text
+    body = made.json()
+    assert (body["name"], body["kind"], body["trading"]) == ("Swing book", "simulated", "paper")
+    assert body["initial_cash"] == 25_000
+    listed = client.get("/api/portfolios", headers=alice).json()["items"]
+    assert [p["id"] for p in listed] == [body["id"]]
+
+    renamed = client.patch(f"/api/portfolios/{body['id']}", json={"name": "Swing"}, headers=alice)
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["name"] == "Swing"
+    with SqliteState(settings.state.path) as state:
+        actions = [r["action"] for r in state.sql("SELECT action FROM audit_log ORDER BY id")]
+    assert actions[-2:] == ["portfolio.create", "portfolio.rename"]
+
+
+def test_portfolio_writes_are_scoped_and_checked(client, settings, people):
+    pf = _portfolio(settings, people["alice"], "Alice book")
+    bob, vic = people["bob"]["headers"], people["vic"]["headers"]
+    assert client.patch(f"/api/portfolios/{pf}", json={"name": "x"}, headers=bob).status_code == 404
+    assert client.post("/api/portfolios", json={"name": "v"}, headers=vic).status_code == 403
+    alice = people["alice"]["headers"]
+    assert client.post("/api/portfolios", json={"name": "  "}, headers=alice).status_code == 422
+    negative = {"name": "x", "initial_cash": -1}
+    assert client.post("/api/portfolios", json=negative, headers=alice).status_code == 422
+
+
 # ---- subscriptions ---------------------------------------------------------------
 
 

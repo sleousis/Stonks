@@ -13,10 +13,15 @@ import { HealthService } from '../../api/health.service';
 import { IngestService } from '../../api/ingest.service';
 import type { IngestRunView, TickRun } from '../../api/models';
 import { TicksService } from '../../api/ticks.service';
+import { SessionService } from '../../core/auth/session.service';
+import { ConfirmService } from '../../core/confirm/confirm.service';
 import { formatAgo, formatDateTime } from '../../core/format/format';
+import { HaltStateService } from '../../core/halts/halt-state.service';
+import { ToastService } from '../../core/notify/toast.service';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { AlertsPanel } from '../../shared/ui/alerts-panel';
 import { PageHeader } from '../../shared/ui/page-header';
+import { PermissionNote } from '../../shared/ui/permission-note';
 import { StatTile, type StatTone } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { humanize } from '../../shared/ui/param-form/param-spec';
@@ -60,6 +65,7 @@ function sourceName(id: string | null | undefined): string {
     EmptyState,
     ErrorState,
     AlertsPanel,
+    PermissionNote,
   ],
   templateUrl: './health.page.html',
   styleUrl: './health.page.scss',
@@ -68,6 +74,14 @@ export class HealthPage {
   private readonly healthApi = inject(HealthService);
   private readonly ingestApi = inject(IngestService);
   private readonly ticksApi = inject(TicksService);
+  private readonly confirm = inject(ConfirmService);
+  private readonly toasts = inject(ToastService);
+  private readonly halts = inject(HaltStateService);
+  protected readonly session = inject(SessionService);
+
+  /** Running the checks can open or clear the operational halt: admins only. */
+  protected readonly canRunChecks = computed(() => this.session.can('operations.run'));
+  protected readonly runningChecks = signal(false);
 
   /** Tickers for the freshness checks; empty means the production universe. */
   protected readonly tickers = signal<string[]>([]);
@@ -132,6 +146,30 @@ export class HealthPage {
         return 'Act now: data is missing or far out of date, a run is stuck, or a check could not run.';
     }
   });
+
+  async runChecksNow(): Promise<void> {
+    if (this.runningChecks() || !this.canRunChecks()) return;
+    const ok = await this.confirm.confirm({
+      title: 'Run the health checks now?',
+      message:
+        'Runs every check now, like the scheduled health job. Stale data or a stuck run stops trading for everyone until the checks pass again, and passing checks lift that stop.',
+      confirmLabel: 'Run checks now',
+    });
+    if (!ok) return;
+    this.runningChecks.set(true);
+    try {
+      const result = await this.healthApi.runChecks(this.tickers());
+      this.toasts.success(
+        result.healthy ? 'Ran the health checks: all pass.' : 'Ran the health checks: some fail.',
+      );
+      this.report.reload();
+      void this.halts.refresh();
+    } catch {
+      // The error interceptor already showed the API's message.
+    } finally {
+      this.runningChecks.set(false);
+    }
+  }
 
   protected readonly checkedAt = computed(() => {
     if (!this.report.hasValue()) return 'Freshness, stuck runs and recent failures.';

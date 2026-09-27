@@ -65,6 +65,15 @@ function paramText(v: unknown): string {
       </p>
     }
 
+    @if (r.ensure_job_id) {
+      <p class="data-job">
+        Missing prices were fetched first, in a separate data job, before the tuning started.
+      </p>
+    }
+    <p class="ledger-link">
+      Every trial is kept in the <a routerLink="/lab/ledger">trial ledger</a>.
+    </p>
+
     @if (r.preflight) {
       <app-preflight-issues [preflight]="r.preflight" />
     }

@@ -42,4 +42,25 @@ describe('LabService', () => {
     ]);
     expect((await list)[0].id).toBe('oos');
   });
+
+  it('reads the survival presets', async () => {
+    const presets = lab.survivalPresets();
+    (await nextRequest(controller, '/api/lab/survival-presets')).flush([
+      { name: 'quick', tests: ['oos'], options: {} },
+    ]);
+    expect((await presets)[0].tests).toEqual(['oos']);
+  });
+
+  it('reads the trial ledger, one page and one run', async () => {
+    const page = lab.ledgerRuns({ strategy_class: 'x:Y', limit: 25, offset: 50 });
+    const req = await nextRequest(controller, '/api/lab/ledger');
+    expect(req.request.urlWithParams).toContain('strategy_class=x%3AY');
+    expect(req.request.urlWithParams).toContain('offset=50');
+    req.flush({ items: [], total: 0, limit: 25, offset: 50 });
+    expect((await page).total).toBe(0);
+
+    const run = lab.ledgerRun('lab_1');
+    (await nextRequest(controller, '/api/lab/ledger/lab_1')).flush({ id: 'lab_1', trials: [] });
+    expect((await run).id).toBe('lab_1');
+  });
 });

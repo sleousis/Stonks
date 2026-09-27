@@ -1,5 +1,5 @@
 {
-  "instructions": "Stonks research + trading system. Tools talk to the local REST API started\nwith `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs,\nsignal IC analyses and ingests; follow up with wait_for_job. Status changes,\ndraft register/enable/disable, broker syncs and production ticks need\nconfirm=true; call them first without it to get a preview and show it to the\nuser before confirming.\nrun_tick is a dry run unless dry_run=false, and a real tick is refused unless\nthe API reports a paper/simulated broker. No tool can change broker settings\nor enable live trading.\nEvery tool acts as the user who owns this server's API token (whoami shows the\nuser, role and scopes) and sees only that user's portfolios. Actions that need\na fresh second factor (switching to auto, connecting a broker, resuming the\nkill switch) are refused here; the user does them in the web app.",
+  "instructions": "Stonks research + trading system. Tools talk to the local REST API started\nwith `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs,\nsweeps, signal IC analyses and ingests. Follow up with wait_for_job, and stop\none with cancel_job. Check get_golive_report before promote_strategy. Status changes,\ndraft register/enable/disable, broker syncs and production ticks need\nconfirm=true; call them first without it to get a preview and show it to the\nuser before confirming.\nrun_tick is a dry run unless dry_run=false, and a real tick is refused unless\nthe API reports a paper/simulated broker. No tool can change broker settings\nor enable live trading.\nEvery tool acts as the user who owns this server's API token (whoami shows the\nuser, role and scopes) and sees only that user's portfolios. Actions that need\na fresh second factor (switching to auto, connecting a broker, resuming the\nkill switch, restoring a backup) are refused here. The user does them in the\nweb app.",
   "resource_templates": [],
   "resources": [
     {
@@ -18,7 +18,39 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Queue a backtest of a draft. Returns the job; wait_for_job gives the\nBacktestResult. Simulated only: never places real orders.",
+      "description": "Add a note to one of your orders in the trade journal (why you\nagree or disagree with it, what you learned). Needs a trading\ntoken. The note is yours and shows in the console.",
+      "input_schema": {
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "note": {
+            "description": "the note text",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "note"
+        ],
+        "title": "add_journal_noteArguments",
+        "type": "object"
+      },
+      "name": "add_journal_note",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Deprecated alias of run_draft_backtest. Queue a backtest of a draft. Returns the job; wait_for_job gives the\nBacktestResult. Simulated only: never places real orders.",
       "input_schema": {
         "properties": {
           "benchmark": {
@@ -118,10 +150,34 @@
           "start",
           "end"
         ],
-        "title": "backtest_draftArguments",
+        "title": "run_draft_backtestArguments",
         "type": "object"
       },
       "name": "backtest_draft",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Stop one of your background jobs: a queued job never starts, and a\nrunning lab run stops at its next trial (it ends cancelled). Other\nrunning jobs cannot be interrupted (409). Ticks and ingests need an\nadmin.",
+      "input_schema": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "cancel_jobArguments",
+        "type": "object"
+      },
+      "name": "cancel_job",
       "needs_confirm": false
     },
     {
@@ -283,6 +339,36 @@
     {
       "annotations": {
         "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Delete one of your Studio drafts. A strategy already registered\nfrom it stays registered. Without confirm=true returns a preview\n(the draft's name, kind and status) and deletes nothing.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "draft_id": {
+            "title": "Draft Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "draft_id"
+        ],
+        "title": "delete_draftArguments",
+        "type": "object"
+      },
+      "name": "delete_draft",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
         "idempotent": false,
         "open_world": false,
         "read_only": false
@@ -362,6 +448,39 @@
         "open_world": false,
         "read_only": false
       },
+      "description": "Replace the text of one of your journal notes.",
+      "input_schema": {
+        "properties": {
+          "note": {
+            "description": "the note text",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          },
+          "note_id": {
+            "minimum": 1,
+            "title": "Note Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "note_id",
+          "note"
+        ],
+        "title": "edit_journal_noteArguments",
+        "type": "object"
+      },
+      "name": "edit_journal_note",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
       "description": "Promote a registered draft's strategy to active so production ticks rank\nand trade it. Same go-live gate as promote_strategy (override=true needs a\nreason of at least 20 characters). Without confirm=true returns a preview\n(survival results, warnings) and changes nothing.",
       "input_schema": {
         "properties": {
@@ -415,6 +534,12 @@
       "description": "Stop new orders at once and cancel the orders still working at the\nbroker. Without confirm=true returns a preview and changes nothing.\nResuming is done in the console or the CLI with a typed confirmation\nand a fresh 2FA code.",
       "input_schema": {
         "properties": {
+          "buys_only": {
+            "default": false,
+            "description": "stop buys and cancel working buy orders only: sells and exits still go through, and no position is closed",
+            "title": "Buys Only",
+            "type": "boolean"
+          },
           "confirm": {
             "default": false,
             "description": "must be true to apply; false (default) returns a preview only",
@@ -423,7 +548,7 @@
           },
           "flatten": {
             "default": false,
-            "description": "stop buys and cancel working buy orders only: sells and exits still go through, and no position is closed",
+            "description": "deprecated name of buys_only (it never closed a position)",
             "title": "Flatten",
             "type": "boolean"
           },
@@ -533,6 +658,22 @@
       },
       "name": "ensure_universe_data",
       "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Check that the Stonks API is up and report its version.",
+      "input_schema": {
+        "properties": {},
+        "title": "toolArguments",
+        "type": "object"
+      },
+      "name": "get_api_health",
+      "needs_confirm": false
     },
     {
       "annotations": {
@@ -750,6 +891,45 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "The go-live gate for one strategy: every check of its paper period\n(days, trades, drawdown, Sharpe against the backtest, MinTRL, ...)\nwith its value, limit and pass or fail, and the verdict. Read it\nbefore promote_strategy: an override skips exactly these checks.",
+      "input_schema": {
+        "properties": {
+          "since": {
+            "anyOf": [
+              {
+                "description": "YYYY-MM-DD",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "first day of the paper period, default all",
+            "title": "Since"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_id"
+        ],
+        "title": "get_golive_reportArguments",
+        "type": "object"
+      },
+      "name": "get_golive_report",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Operational health (every `stonks health` check): bar freshness, stuck\nticks and ingest runs, recent ingest failures; see `healthy`.",
       "input_schema": {
         "properties": {
@@ -860,6 +1040,83 @@
         "type": "object"
       },
       "name": "get_job",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "One recorded lab run with every trial (parameters, score, status)\nand the trial count of its strategy class across all runs.",
+      "input_schema": {
+        "properties": {
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id"
+        ],
+        "title": "get_ledger_runArguments",
+        "type": "object"
+      },
+      "name": "get_ledger_run",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "One of your portfolios on its latest tick day: one-day 95% and\n99% VaR and expected shortfall (fractions of value, loss positive),\nthe rolling VaR violation ratio (1.0 is right, outside 0.5 to 1.5\nmeans the risk model is off) with its Kupiec p-value, and per\nstrategy sleeve the same plus the alpha-decay check against the\nbacktest's IR.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          }
+        },
+        "title": "get_live_riskArguments",
+        "type": "object"
+      },
+      "name": "get_live_risk",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "One of your orders in full: decision price and context, arrival\nand fill prices, the shortfall split and the notes.",
+      "input_schema": {
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id"
+        ],
+        "title": "get_order_tcaArguments",
+        "type": "object"
+      },
+      "name": "get_order_tca",
       "needs_confirm": false
     },
     {
@@ -993,6 +1250,31 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "The scheduler: each job with its next run and last outcome, the\nmost recent runs (did last night's trading run go?), and the market\nsession today and next (open, close, and whether it is open now).",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 20,
+            "description": "recent runs to show",
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "title": "get_scheduleArguments",
+        "type": "object"
+      },
+      "name": "get_schedule",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Daily P&L of one shadow strategy's virtual portfolio.",
       "input_schema": {
         "properties": {
@@ -1110,6 +1392,116 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "What the Studio allows on this server: whether code drafts are allowed (an operator setting MCP cannot change) and the draft kinds you can create.",
+      "input_schema": {
+        "properties": {},
+        "title": "toolArguments",
+        "type": "object"
+      },
+      "name": "get_studio_capabilities",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Implementation shortfall of your orders in bps of notional:\ndelay (decision to arrival), impact (arrival to fill), fees and the\nopportunity cost of what did not fill, next to the cost model's\nestimate (model_gap_bps = realised minus modelled).",
+      "input_schema": {
+        "properties": {
+          "by": {
+            "default": "all",
+            "description": "how to group the orders",
+            "enum": [
+              "all",
+              "strategy",
+              "ticker",
+              "portfolio",
+              "day",
+              "week",
+              "month"
+            ],
+            "title": "By",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Since"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Strategy Id"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ticker"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Until"
+          }
+        },
+        "title": "get_tca_summaryArguments",
+        "type": "object"
+      },
+      "name": "get_tca_summary",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "One production tick run with the orders it placed in your\nportfolios (or in ``portfolio_id`` only).",
       "input_schema": {
         "properties": {
@@ -1212,7 +1604,7 @@
         "open_world": false,
         "read_only": true
       },
-      "description": "Check that the Stonks API is up and report its version.",
+      "description": "Deprecated alias of get_api_health. Check that the Stonks API is up and report its version.",
       "input_schema": {
         "properties": {},
         "title": "toolArguments",
@@ -1274,7 +1666,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Queue tune -> fit -> survival suite for a draft (a rule draft's spec\nis fixed; a code draft is tuned). Returns the job; wait_for_job gives\nthe verdict and survival reports. Registering (register_strategy, or\nregister_if_passes for a passing run only) needs confirm=true\n(preview otherwise), like register_draft.",
+      "description": "Deprecated alias of run_draft_lab. Queue tune -> fit -> survival suite for a draft (a rule draft's spec\nis fixed; a code draft is tuned). Returns the job; wait_for_job gives\nthe verdict and survival reports. Registering (register_strategy, or\nregister_if_passes for a passing run only) needs confirm=true\n(preview otherwise), like register_draft.",
       "input_schema": {
         "properties": {
           "benchmark": {
@@ -1438,15 +1830,8 @@
             "anyOf": [
               {
                 "items": {
-                  "enum": [
-                    "oos",
-                    "period_stability",
-                    "perturbation",
-                    "drift",
-                    "runs_test",
-                    "permutation",
-                    "walk_forward"
-                  ],
+                  "description": "a survival test id (list_survival_tests)",
+                  "pattern": "^[a-z][a-z0-9_]{0,63}$",
                   "type": "string"
                 },
                 "type": "array"
@@ -1508,11 +1893,60 @@
           "start",
           "end"
         ],
-        "title": "lab_run_draftArguments",
+        "title": "run_draft_labArguments",
         "type": "object"
       },
       "name": "lab_run_draft",
       "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "System alerts for you, newest first (admins also see operational\nalerts with no single recipient): failed runs, halts, stale data.",
+      "input_schema": {
+        "properties": {
+          "level": {
+            "anyOf": [
+              {
+                "enum": [
+                  "info",
+                  "warning",
+                  "error"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Level"
+          },
+          "limit": {
+            "default": 50,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          }
+        },
+        "title": "list_alertsArguments",
+        "type": "object"
+      },
+      "name": "list_alerts",
+      "needs_confirm": false
     },
     {
       "annotations": {
@@ -1809,6 +2243,95 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "The trial ledger: every recorded lab run, newest first, with its\nhypothesis, tuner, budget, trials run and failed, best score and\nverdict. Trials of a class add up across runs, which is what the\ndeflated Sharpe and other multiple-testing checks count.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "strategy_class": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "only runs of this module:Class",
+            "title": "Strategy Class"
+          }
+        },
+        "title": "list_ledger_runsArguments",
+        "type": "object"
+      },
+      "name": "list_ledger_runs",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Your notification feed, newest first, with the unread count: what\nStonks told you (signals, fills, halts, failed runs), each with a\ncategory, level, message and a link into the console.",
+      "input_schema": {
+        "properties": {
+          "before_id": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "page: only items with a lower id",
+            "title": "Before Id"
+          },
+          "limit": {
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "unread_only": {
+            "default": false,
+            "title": "Unread Only",
+            "type": "boolean"
+          }
+        },
+        "title": "list_notificationsArguments",
+        "type": "object"
+      },
+      "name": "list_notifications",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Orders placed by production ticks, newest first, with optional filters.",
       "input_schema": {
         "properties": {
@@ -1956,6 +2479,74 @@
         "type": "object"
       },
       "name": "list_portfolios",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Daily risk snapshots of one of your portfolios, newest first:\nVaR, ES, the day's hypothetical return, violations and decay.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Since"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one strategy's sleeve; default the whole portfolio",
+            "title": "Strategy Id"
+          }
+        },
+        "title": "list_risk_snapshotsArguments",
+        "type": "object"
+      },
+      "name": "list_risk_snapshots",
       "needs_confirm": false
     },
     {
@@ -2253,6 +2844,38 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "The named survival suites (quick, standard, promotion) and the tests in each.",
+      "input_schema": {
+        "properties": {},
+        "title": "toolArguments",
+        "type": "object"
+      },
+      "name": "list_survival_presets",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Every survival test a lab run can name (the ids survival_tests takes), with what it checks and its options schema (the keys test_options takes).",
+      "input_schema": {
+        "properties": {},
+        "title": "toolArguments",
+        "type": "object"
+      },
+      "name": "list_survival_tests",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Production tick runs, newest first. Summaries show the global\noutcome and the parts about your own portfolios only.",
       "input_schema": {
         "properties": {
@@ -2297,6 +2920,85 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Your orders, newest first: why each was placed (trigger, signal\nscore and rank), the outcome (shortfall, next-day move) and notes.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Since"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Strategy Id"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ticker"
+          }
+        },
+        "title": "list_trade_journalArguments",
+        "type": "object"
+      },
+      "name": "list_trade_journal",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "For each of your portfolios: paper or live money, and the broker\n(simulated ledger, the configured Alpaca account, or a linked\nconnection).",
       "input_schema": {
         "properties": {},
@@ -2329,7 +3031,7 @@
         "open_world": false,
         "read_only": true
       },
-      "description": "One of your portfolios on its latest tick day: one-day 95% and\n99% VaR and expected shortfall (fractions of value, loss positive),\nthe rolling VaR violation ratio (1.0 is right, outside 0.5 to 1.5\nmeans the risk model is off) with its Kupiec p-value, and per\nstrategy sleeve the same plus the alpha-decay check against the\nbacktest's IR.",
+      "description": "Deprecated alias of get_live_risk. One of your portfolios on its latest tick day: one-day 95% and\n99% VaR and expected shortfall (fractions of value, loss positive),\nthe rolling VaR violation ratio (1.0 is right, outside 0.5 to 1.5\nmeans the risk model is off) with its Kupiec p-value, and per\nstrategy sleeve the same plus the alpha-decay check against the\nbacktest's IR.",
       "input_schema": {
         "properties": {
           "portfolio_id": {
@@ -2345,7 +3047,7 @@
             "title": "Portfolio Id"
           }
         },
-        "title": "live_riskArguments",
+        "title": "get_live_riskArguments",
         "type": "object"
       },
       "name": "live_risk",
@@ -2356,9 +3058,43 @@
         "destructive": false,
         "idempotent": true,
         "open_world": false,
+        "read_only": false
+      },
+      "description": "Mark notifications read (all of yours when ids is omitted). Only\ntouches your own feed, and returns how many changed and the new unread\ncount.",
+      "input_schema": {
+        "properties": {
+          "ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "notification ids, or omit to mark all of yours",
+            "title": "Ids"
+          }
+        },
+        "title": "mark_notifications_readArguments",
+        "type": "object"
+      },
+      "name": "mark_notifications_read",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
         "read_only": true
       },
-      "description": "One of your orders in full: decision price and context, arrival\nand fill prices, the shortfall split and the notes.",
+      "description": "Deprecated alias of get_order_tca. One of your orders in full: decision price and context, arrival\nand fill prices, the shortfall split and the notes.",
       "input_schema": {
         "properties": {
           "client_id": {
@@ -2369,7 +3105,7 @@
         "required": [
           "client_id"
         ],
-        "title": "order_tcaArguments",
+        "title": "get_order_tcaArguments",
         "type": "object"
       },
       "name": "order_tca",
@@ -2537,7 +3273,7 @@
         "open_world": false,
         "read_only": true
       },
-      "description": "Daily risk snapshots of one of your portfolios, newest first:\nVaR, ES, the day's hypothetical return, violations and decay.",
+      "description": "Deprecated alias of list_risk_snapshots. Daily risk snapshots of one of your portfolios, newest first:\nVaR, ES, the day's hypothetical return, violations and decay.",
       "input_schema": {
         "properties": {
           "limit": {
@@ -2592,7 +3328,7 @@
             "title": "Strategy Id"
           }
         },
-        "title": "risk_snapshotsArguments",
+        "title": "list_risk_snapshotsArguments",
         "type": "object"
       },
       "name": "risk_snapshots",
@@ -2605,7 +3341,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Queue a backtest of one strategy over a universe and date window.\nReturns the job; use wait_for_job to get the metrics and equity curve.\nSimulated only: never places real orders.",
+      "description": "Queue a backtest of one strategy over typed tickers (universe) or a\nstored universe (universe_id) and a date window. Returns the job. Use\nwait_for_job to get the metrics and equity curve. Simulated only:\nnever places real orders.",
       "input_schema": {
         "properties": {
           "benchmark": {
@@ -2726,6 +3462,138 @@
             "type": "number"
           },
           "universe": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "instrument ids, or give universe_id",
+            "title": "Universe"
+          },
+          "universe_id": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "a stored universe (see list_universes): its point-in-time members, delisted names included, instead of typed tickers",
+            "title": "Universe Id"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "run_backtestArguments",
+        "type": "object"
+      },
+      "name": "run_backtest",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Queue a backtest of a draft. Returns the job; wait_for_job gives the\nBacktestResult. Simulated only: never places real orders.",
+      "input_schema": {
+        "properties": {
+          "benchmark": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "benchmark to compare against: auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark",
+            "title": "Benchmark"
+          },
+          "cost_model": {
+            "anyOf": [
+              {
+                "enum": [
+                  "zero",
+                  "realistic"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "transaction-cost preset (see list_cost_models); default [backtest.costs]",
+            "title": "Cost Model"
+          },
+          "draft_id": {
+            "title": "Draft Id",
+            "type": "string"
+          },
+          "end": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "fee_per_trade": {
+            "default": 0.0,
+            "minimum": 0,
+            "title": "Fee Per Trade",
+            "type": "number"
+          },
+          "initial_cash": {
+            "default": 10000.0,
+            "exclusiveMinimum": 0,
+            "title": "Initial Cash",
+            "type": "number"
+          },
+          "interval": {
+            "default": "1d",
+            "title": "Interval",
+            "type": "string"
+          },
+          "rebalance_every_bars": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Rebalance Every Bars",
+            "type": "integer"
+          },
+          "slippage_bps": {
+            "default": 0.0,
+            "minimum": 0,
+            "title": "Slippage Bps",
+            "type": "number"
+          },
+          "start": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "threshold": {
+            "default": 0.0,
+            "title": "Threshold",
+            "type": "number"
+          },
+          "universe": {
             "description": "instrument ids",
             "items": {
               "type": "string"
@@ -2736,15 +3604,256 @@
           }
         },
         "required": [
+          "draft_id",
           "universe",
           "start",
           "end"
         ],
-        "title": "run_backtestArguments",
+        "title": "run_draft_backtestArguments",
         "type": "object"
       },
-      "name": "run_backtest",
+      "name": "run_draft_backtest",
       "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Queue tune -> fit -> survival suite for a draft (a rule draft's spec\nis fixed; a code draft is tuned). Returns the job; wait_for_job gives\nthe verdict and survival reports. Registering (register_strategy, or\nregister_if_passes for a passing run only) needs confirm=true\n(preview otherwise), like register_draft.",
+      "input_schema": {
+        "properties": {
+          "benchmark": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "benchmark to compare against: auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark",
+            "title": "Benchmark"
+          },
+          "budget": {
+            "default": 20,
+            "description": "tuner trials",
+            "maximum": 1000,
+            "minimum": 1,
+            "title": "Budget",
+            "type": "integer"
+          },
+          "confirm": {
+            "default": false,
+            "description": "must be true with register_strategy / register_if_passes; otherwise a preview",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "cost_model": {
+            "anyOf": [
+              {
+                "enum": [
+                  "zero",
+                  "realistic"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "transaction-cost preset (see list_cost_models); default [backtest.costs]",
+            "title": "Cost Model"
+          },
+          "draft_id": {
+            "title": "Draft Id",
+            "type": "string"
+          },
+          "embargo_bars": {
+            "anyOf": [
+              {
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "trading bars skipped between the train and validation windows (a strategy's label horizon raises it); default [lab] embargo_bars",
+            "title": "Embargo Bars"
+          },
+          "end": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "hypothesis": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "the edge and who pays for it; recorded before tuning (trial ledger)",
+            "title": "Hypothesis"
+          },
+          "interval": {
+            "default": "1d",
+            "title": "Interval",
+            "type": "string"
+          },
+          "objective": {
+            "default": "sharpe",
+            "enum": [
+              "sharpe",
+              "cagr",
+              "final_return",
+              "cv_sharpe",
+              "cv_cagr",
+              "cv_final_return"
+            ],
+            "title": "Objective",
+            "type": "string"
+          },
+          "premortem": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "how the strategy is expected to fail; recorded",
+            "title": "Premortem"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "enum": [
+                  "quick",
+                  "standard",
+                  "promotion"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "named survival suite when survival_tests is omitted (default: promotion when registering, else quick)",
+            "title": "Preset"
+          },
+          "register_if_passes": {
+            "default": false,
+            "description": "register the result in shadow only if every survival test passes (needs confirm=true)",
+            "title": "Register If Passes",
+            "type": "boolean"
+          },
+          "register_strategy": {
+            "default": false,
+            "description": "register the result in shadow status whatever the verdict (needs confirm=true)",
+            "title": "Register Strategy",
+            "type": "boolean"
+          },
+          "seed": {
+            "default": 0,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "start": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "survival_tests": {
+            "anyOf": [
+              {
+                "items": {
+                  "description": "a survival test id (list_survival_tests)",
+                  "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "survival suite; server default when omitted",
+            "title": "Survival Tests"
+          },
+          "test_options": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "options per survival test id, validated by each test (422 on an unknown test or option), e.g. {\"oos\": {\"mode\": \"sharpe\", \"min_trades\": 0}, \"deflated_sharpe\": {\"min_dsr\": 0.9}, \"pbo\": {\"max_pbo\": 0.3}, \"mc_trades\": {\"n_paths\": 2000}, \"cost_stress\": {\"stress_multiplier\": 3}}; each test must be in the suite",
+            "title": "Test Options"
+          },
+          "train_ratio": {
+            "default": 0.7,
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Train Ratio",
+            "type": "number"
+          },
+          "tuner": {
+            "default": "random",
+            "enum": [
+              "grid",
+              "random"
+            ],
+            "title": "Tuner",
+            "type": "string"
+          },
+          "universe": {
+            "description": "instrument ids",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Universe",
+            "type": "array"
+          }
+        },
+        "required": [
+          "draft_id",
+          "universe",
+          "start",
+          "end"
+        ],
+        "title": "run_draft_labArguments",
+        "type": "object"
+      },
+      "name": "run_draft_lab",
+      "needs_confirm": true
     },
     {
       "annotations": {
@@ -2853,7 +3962,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Queue a lab run: tune a strategy class, fit, run the survival suite and\ngive a pass/fail verdict. Returns the job; use wait_for_job for the result.\nEvery run and trial is recorded in the trial ledger (with the hypothesis).\nRegistering (register_strategy, or register_if_passes to register only a\npassing run) needs confirm=true (preview otherwise).",
+      "description": "Queue a lab run: tune a strategy class, fit, run the survival suite and\ngive a pass/fail verdict. Returns the job; use wait_for_job for the result.\nEvery run and trial is recorded in the trial ledger (with the hypothesis).\nGive typed tickers (universe) or a stored universe (universe_id), and\nensure_data=true to fetch missing bars first.\nRegistering (register_strategy, or register_if_passes to register only a\npassing run) needs confirm=true (preview otherwise).",
       "input_schema": {
         "$defs": {
           "McptOptions": {
@@ -3140,6 +4249,12 @@
             "title": "End",
             "type": "string"
           },
+          "ensure_data": {
+            "default": false,
+            "description": "fetch the bars the run needs that the lake lacks first (a lab_ensure job the run waits for, and its id is ensure_job_id in the result)",
+            "title": "Ensure Data",
+            "type": "boolean"
+          },
           "hypothesis": {
             "anyOf": [
               {
@@ -3183,6 +4298,19 @@
             ],
             "title": "Objective",
             "type": "string"
+          },
+          "preflight": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "check the data before tuning (missing bars, gaps). Default [lab] preflight",
+            "title": "Preflight"
           },
           "premortem": {
             "anyOf": [
@@ -3239,19 +4367,25 @@
             "title": "Start",
             "type": "string"
           },
+          "strict_preflight": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "treat preflight warnings as errors. Default [lab] strict_preflight",
+            "title": "Strict Preflight"
+          },
           "survival_tests": {
             "anyOf": [
               {
                 "items": {
-                  "enum": [
-                    "oos",
-                    "period_stability",
-                    "perturbation",
-                    "drift",
-                    "runs_test",
-                    "permutation",
-                    "walk_forward"
-                  ],
+                  "description": "a survival test id (list_survival_tests)",
+                  "pattern": "^[a-z][a-z0-9_]{0,63}$",
                   "type": "string"
                 },
                 "type": "array"
@@ -3298,13 +4432,34 @@
             "type": "string"
           },
           "universe": {
-            "description": "instrument ids",
-            "items": {
-              "type": "string"
-            },
-            "minItems": 1,
-            "title": "Universe",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "instrument ids, or give universe_id",
+            "title": "Universe"
+          },
+          "universe_id": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "a stored universe (see list_universes): its point-in-time members, delisted names included, instead of typed tickers",
+            "title": "Universe Id"
           },
           "walk_forward": {
             "anyOf": [
@@ -3321,7 +4476,6 @@
         },
         "required": [
           "class_path",
-          "universe",
           "start",
           "end"
         ],
@@ -3447,6 +4601,286 @@
         "type": "object"
       },
       "name": "run_signal_ic",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Queue a sweep: a lab run of every strategy (or the ones named) on\nthe same tickers or stored universe and window, ranked best first.\nA strategy with a ticker parameter runs once per ticker. Returns the\njob, and wait_for_job gives the ranked rows. Every trial is counted in\nthe trial ledger. A sweep never registers a strategy: register the\none you like with run_lab.",
+      "input_schema": {
+        "properties": {
+          "benchmark": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "benchmark to compare against: auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark",
+            "title": "Benchmark"
+          },
+          "budget": {
+            "default": 20,
+            "description": "tuner trials each",
+            "maximum": 1000,
+            "minimum": 1,
+            "title": "Budget",
+            "type": "integer"
+          },
+          "cost_model": {
+            "anyOf": [
+              {
+                "enum": [
+                  "zero",
+                  "realistic"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "transaction-cost preset (see list_cost_models); default [backtest.costs]",
+            "title": "Cost Model"
+          },
+          "embargo_bars": {
+            "anyOf": [
+              {
+                "maximum": 10000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "trading bars skipped between the train and validation windows (a strategy's label horizon raises it); default [lab] embargo_bars",
+            "title": "Embargo Bars"
+          },
+          "end": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "exclude": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "strategies to leave out",
+            "title": "Exclude"
+          },
+          "hypothesis": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "the edge and who pays for it; recorded before tuning (trial ledger)",
+            "title": "Hypothesis"
+          },
+          "interval": {
+            "default": "1d",
+            "title": "Interval",
+            "type": "string"
+          },
+          "objective": {
+            "default": "sharpe",
+            "enum": [
+              "sharpe",
+              "cagr",
+              "final_return",
+              "cv_sharpe",
+              "cv_cagr",
+              "cv_final_return"
+            ],
+            "title": "Objective",
+            "type": "string"
+          },
+          "preflight": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "check the data before tuning (missing bars, gaps). Default [lab] preflight",
+            "title": "Preflight"
+          },
+          "premortem": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "how the strategy is expected to fail; recorded",
+            "title": "Premortem"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "enum": [
+                  "quick",
+                  "standard",
+                  "promotion"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "named survival suite when survival_tests is omitted (default: promotion when registering, else quick)",
+            "title": "Preset"
+          },
+          "seed": {
+            "default": 0,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "start": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "strategies": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "strategy ids (e.g. momentum), class names or module:Class. default every catalogued strategy",
+            "title": "Strategies"
+          },
+          "strict_preflight": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "treat preflight warnings as errors. Default [lab] strict_preflight",
+            "title": "Strict Preflight"
+          },
+          "survival_tests": {
+            "anyOf": [
+              {
+                "items": {
+                  "description": "a survival test id (list_survival_tests)",
+                  "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "survival suite for every strategy, the server default when omitted",
+            "title": "Survival Tests"
+          },
+          "train_ratio": {
+            "default": 0.7,
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Train Ratio",
+            "type": "number"
+          },
+          "tuner": {
+            "default": "random",
+            "enum": [
+              "grid",
+              "random"
+            ],
+            "title": "Tuner",
+            "type": "string"
+          },
+          "universe": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "instrument ids, or give universe_id",
+            "title": "Universe"
+          },
+          "universe_id": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "a stored universe (see list_universes): its point-in-time members, delisted names included, instead of typed tickers",
+            "title": "Universe Id"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "run_sweepArguments",
+        "type": "object"
+      },
+      "name": "run_sweep",
       "needs_confirm": false
     },
     {
@@ -3723,7 +5157,7 @@
         "open_world": false,
         "read_only": true
       },
-      "description": "Implementation shortfall of your orders in bps of notional:\ndelay (decision to arrival), impact (arrival to fill), fees and the\nopportunity cost of what did not fill, next to the cost model's\nestimate (model_gap_bps = realised minus modelled).",
+      "description": "Deprecated alias of get_tca_summary. Implementation shortfall of your orders in bps of notional:\ndelay (decision to arrival), impact (arrival to fill), fees and the\nopportunity cost of what did not fill, next to the cost model's\nestimate (model_gap_bps = realised minus modelled).",
       "input_schema": {
         "properties": {
           "by": {
@@ -3804,7 +5238,7 @@
             "title": "Until"
           }
         },
-        "title": "tca_summaryArguments",
+        "title": "get_tca_summaryArguments",
         "type": "object"
       },
       "name": "tca_summary",
@@ -3817,7 +5251,7 @@
         "open_world": false,
         "read_only": true
       },
-      "description": "Your orders, newest first: why each was placed (trigger, signal\nscore and rank), the outcome (shortfall, next-day move) and notes.",
+      "description": "Deprecated alias of list_trade_journal. Your orders, newest first: why each was placed (trigger, signal\nscore and rank), the outcome (shortfall, next-day move) and notes.",
       "input_schema": {
         "properties": {
           "limit": {
@@ -3883,7 +5317,7 @@
             "title": "Ticker"
           }
         },
-        "title": "trade_journalArguments",
+        "title": "list_trade_journalArguments",
         "type": "object"
       },
       "name": "trade_journal",

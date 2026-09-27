@@ -20,8 +20,10 @@ from stonks.accounts import AccountsError, NotFound, Scope
 from stonks.app.context import AppContext
 from stonks.app.errors import NotFoundError, ValidationError
 from stonks.notify import service as notify
-from stonks.notify.events import Category
+from stonks.notify.channels import build_channels
+from stonks.notify.events import Audience, Category, Event
 from stonks.notify.prefs import Preference
+from stonks.notify.router import NotificationRouter
 from stonks.notify.service import ENDPOINT_MAX, FEED_LIMIT_MAX, USER_AGENT_MAX, WEBHOOK_MAX
 from stonks.notify.settings import NotifySettings
 from stonks.notify.webpush import vapid_public_key
@@ -145,6 +147,16 @@ class FeedView(BaseModel):
 class MarkReadView(BaseModel):
     updated: int
     unread_count: int
+
+
+class TestNotificationView(BaseModel):
+    """What a test notification queued: its feed id and one delivery per
+    enabled channel target (a push device, the webhook, email)."""
+
+    notification_id: int | None
+    deliveries: int
+    #: The channels this server can send on.
+    channels: list[str]
 
 
 # ---- service --------------------------------------------------------------------------
@@ -297,6 +309,34 @@ class NotificationsAppService:
                 for i in items
             ],
             unread_count=unread,
+        )
+
+    def send_test(self, scope: Scope) -> TestNotificationView:
+        """Queue a test notification for the caller on every channel they
+        have turned on. The delivery worker sends it within seconds, high
+        urgency, so quiet hours don't hold it."""
+        if scope.is_service or scope.user_id is None:
+            raise ValidationError("a service has no devices to notify")
+        channels = build_channels(self.settings)
+        with self._state() as state:
+            router = NotificationRouter(
+                state, channels, self.settings.outbox, secrets=self.settings.secrets
+            )
+            result = router.publish(
+                Event(
+                    category="system",
+                    title="Test notification",
+                    body="If you can read this, notifications reach you.",
+                    audience=Audience.users(scope.user_id),
+                    urgency="high",
+                    deep_link="/notifications",
+                )
+            )
+        ids = result.notification_ids
+        return TestNotificationView(
+            notification_id=ids[0] if ids else None,
+            deliveries=result.deliveries,
+            channels=sorted(channels),
         )
 
     def mark_read(self, scope: Scope, request: MarkReadRequest) -> MarkReadView:

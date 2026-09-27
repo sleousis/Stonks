@@ -155,4 +155,28 @@ describe('AdminUsersPage', () => {
     await reload([{ ...ANN, mfa_enrolled: false }, ME]);
     expect(rowOf(el, 'Ann').textContent).toContain('App not set up');
   });
+
+  it('resets a password after the email is typed', async () => {
+    const el = await render();
+    button(rowOf(el, 'Ann'), 'Reset password').click();
+    fixture.detectChanges();
+    const sheet = el.querySelector('#reset-password-form')!;
+    expect(sheet.textContent).toContain('signed out');
+    expect(sheet.textContent).toContain('API tokens stop working');
+    const submit = button(sheet, 'Reset password');
+    type(el, '#reset-password', 'short');
+    fixture.detectChanges();
+    expect(submit.disabled).toBe(true);
+    type(el, '#reset-password', 'a brand new passphrase');
+    type(el, '#reset-typed', 'ann@example.com');
+    fixture.detectChanges();
+    expect(submit.disabled).toBe(false);
+    submit.click();
+    const req = await nextRequest(controller, '/api/auth/users/usr_1/password', 'POST');
+    expect(req.request.body).toEqual({ new_password: 'a brand new passphrase' });
+    req.flush(null, { status: 204, statusText: 'No Content' });
+    await tick();
+    fixture.detectChanges();
+    expect(el.querySelector('#reset-password-form')).toBeNull();
+  });
 });

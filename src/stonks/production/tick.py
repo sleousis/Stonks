@@ -1259,7 +1259,9 @@ def load_tick_plan(
       (:func:`~stonks.accounts.paper.ensure_paper_account`), so paper money
       never reaches the real account.
 
-    Every book is tightened by its owner's risk limits."""
+    The simulated default portfolio keeps a book while it holds positions,
+    even with no strategy subscribed, so corporate actions on its holdings
+    still apply. Every book is tightened by its owner's risk limits."""
     live_default = settings.broker_kind != "simulated"
     rows = state.sql(
         "SELECT p.*, u.risk_policy_json AS owner_risk_json FROM portfolios p"
@@ -1281,6 +1283,8 @@ def load_tick_plan(
         own: list[Subscription],
         owner_risk: Mapping[str, Any],
         mode: Literal["paper", "auto"],
+        *,
+        keep_holdings: bool = False,
     ) -> None:
         spec = BookSpec.for_portfolio(
             portfolio,
@@ -1290,7 +1294,7 @@ def load_tick_plan(
             default_initial_cash=settings.initial_cash,
             owner_risk=owner_risk or None,
         )
-        if not spec.strategy_weights:
+        if not spec.strategy_weights and not (keep_holdings and holds_positions(portfolio.id)):
             return
         account: AccountPortfolio | None = portfolio
         parent: str | None = None
@@ -1316,13 +1320,20 @@ def load_tick_plan(
     def trades_at_broker(portfolio: AccountPortfolio) -> bool:
         return portfolio.kind == "broker" or (live_default and portfolio.id == DEFAULT_PORTFOLIO_ID)
 
+    def holds_positions(portfolio_id: str) -> bool:
+        return bool(_load_or_seed_portfolio(state, 0.0, portfolio_id=portfolio_id).positions)
+
     for row in rows:
         portfolio = AccountPortfolio.from_row(row)
         owner_risk = json.loads(row["owner_risk_json"] or "{}")
         own = [s for s in subs if s.portfolio_id == portfolio.id]
         if trades_at_broker(portfolio):
             add(portfolio, [s for s in own if s.mode is Mode.AUTO], owner_risk, "auto")
-        add(portfolio, [s for s in own if s.mode is Mode.PAPER], owner_risk, "paper")
+        # The simulated default portfolio keeps its book while it holds
+        # positions, so corporate actions apply with no strategy subscribed.
+        keep = portfolio.id == DEFAULT_PORTFOLIO_ID and not trades_at_broker(portfolio)
+        paper = [s for s in own if s.mode is Mode.PAPER]
+        add(portfolio, paper, owner_risk, "paper", keep_holdings=keep)
     notify = tuple(s for s in subs if s.mode is Mode.NOTIFY)
     return TickPlan(books=tuple(books), notify=notify, traders=traders)
 

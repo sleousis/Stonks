@@ -20,6 +20,7 @@ from stonks.app.notifications import (
     PushSubscriptionRequest,
     PushUnsubscribeRequest,
     QuietHoursUpdate,
+    TestNotificationView,
     VapidKeyView,
     WebhookUpdate,
 )
@@ -170,3 +171,17 @@ def mark_read(body: MarkReadRequest, services: ServicesDep, scope: ScopeDep) -> 
     """Mark notifications read (all of yours when ``ids`` is omitted). Only
     touches your own rows, so viewers may do it too."""
     return services.notifications.mark_read(scope, body)
+
+
+@router.post(
+    "/test",
+    status_code=201,
+    response_model=TestNotificationView,
+    operation_id="sendTestNotification",
+    dependencies=needs(Permission.READ),
+)
+def send_test(services: ServicesDep, scope: ScopeDep) -> TestNotificationView:
+    """Send yourself a test notification on every channel you turned on
+    (push devices, email, your webhook), to check that alerts reach you.
+    It skips quiet hours. Only ever reaches you, so viewers may do it too."""
+    return services.notifications.send_test(scope)

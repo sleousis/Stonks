@@ -4,10 +4,12 @@
 server over stdio. Claude Code, Claude Desktop or any other MCP client can use
 it to:
 
-- read the portfolio, P&L, risk policy, shadow results and operational health
-- inspect strategies and market data
-- launch backtests, lab runs and ingests
-- build and test Strategy Studio drafts
+- read the portfolio, P&L, insights, live risk, shadow results, the
+  schedule, the notification feed and operational health
+- inspect strategies, their go-live gate and market data
+- launch backtests, lab runs (on typed tickers or a stored universe),
+  sweeps, signal IC analyses and ingests, and cancel them
+- build and test Strategy Studio drafts, and write trade journal notes
 - with explicit confirmation, change strategy status or queue a production tick
 
 ## How it works
@@ -115,7 +117,7 @@ Every tool carries MCP annotations (`readOnlyHint`, `destructiveHint`,
 
 | Tool | Route |
 |------|-------|
-| `health` | `GET /api/health` |
+| `get_api_health` | `GET /api/health` |
 | `get_health_report` (freshness, stuck ticks/ingests, ingest failures) | `GET /api/health/report` |
 | `whoami` (the token's user, role and scopes) | `GET /api/auth/me` |
 | `get_portfolio`, `list_portfolio_snapshots` | `GET /api/portfolio[/snapshots]` |
@@ -124,6 +126,17 @@ Every tool carries MCP annotations (`readOnlyHint`, `destructiveHint`,
 | `get_portfolio_totals`, `get_insights_totals` (admins, no holdings) | `GET /api/portfolio/totals`, `GET /api/insights/totals` |
 | `get_pnl` | `GET /api/pnl` |
 | `get_risk_policy` | `GET /api/risk/policy` |
+| `get_live_risk`, `list_risk_snapshots` (VaR, ES, violations and decay) | `GET /api/risk/live`, `GET /api/risk/snapshots` |
+| `get_golive_report` (every go-live check with value, limit and verdict) | `GET /api/strategies/{id}/golive` |
+| `list_ledger_runs`, `get_ledger_run` (the trial ledger: hypothesis, trials, verdict) | `GET /api/lab/ledger[/{run_id}]` |
+| `get_schedule` (jobs, next and last runs, market session) | `GET /api/schedule` |
+| `list_notifications` (your feed and unread count) | `GET /api/notifications` |
+| `list_alerts` (system alerts) | `GET /api/alerts` |
+| `get_tca_summary`, `list_trade_journal`, `get_order_tca` | `GET /api/tca/...` |
+| `list_halts` | `GET /api/halts` |
+| `list_portfolios`, `list_trading_modes`, `list_subscriptions` | `GET /api/portfolios[/trading-modes]`, `GET /api/subscriptions` |
+| `list_universes`, `get_universe`, `get_universe_members` | `GET /api/universes/...` |
+| `list_survival_tests`, `list_survival_presets` | `GET /api/lab/survival-tests`, `GET /api/lab/survival-presets` |
 | `get_broker` (kind, paper, allow_live, credentials configured; never keys) | `GET /api/brokers` |
 | `list_strategies`, `get_strategy` (with survival reports) | `GET /api/strategies[/{id}]` |
 | `list_shadow_decisions`, `list_shadow_pnl` | `GET /api/shadow/decisions`, `GET /api/shadow/pnl` |
@@ -137,7 +150,7 @@ Every tool carries MCP annotations (`readOnlyHint`, `destructiveHint`,
 | `list_cost_models` | `GET /api/lab/cost-models` |
 | `list_jobs`, `get_job` | `GET /api/jobs[/{id}]` |
 | `wait_for_job` (polls, then fetches the typed result) | `GET /api/jobs/{id}` + result route |
-| `list_studio_templates`, `get_rule_schema` | `GET /api/studio/templates`, `GET /api/studio/schema` |
+| `list_studio_templates`, `get_rule_schema`, `get_studio_capabilities` | `GET /api/studio/templates`, `/schema`, `/capabilities` |
 | `list_drafts`, `get_draft` | `GET /api/studio/drafts[/{id}]` |
 | `validate_rule_spec` (saves nothing) | `POST /api/studio/spec/validate` |
 | `list_connections` (your broker connections; never credentials) | `GET /api/connections` |
@@ -147,7 +160,8 @@ List-shaped responses come back as `{"items": [...]}`.
 
 `wait_for_job` returns `{"timed_out", "job", "result"}`. Once the job
 succeeded, `result` is the typed result from `/api/lab/backtests/{id}/result`,
-`/api/lab/runs/{id}/result`, `/api/lab/signal-ic/{id}/result`,
+`/api/lab/runs/{id}/result`, `/api/lab/sweeps/{id}/result`,
+`/api/lab/signal-ic/{id}/result`, `/api/lab/ensure/{id}/result`,
 `/api/ingest/jobs/{id}/result` or `/api/ticks/jobs/{id}/result` (by job kind). Studio jobs have no typed route,
 so their `result` is the job's own. Otherwise `result` is `null`.
 
@@ -157,20 +171,29 @@ never orders):
 | Tool | Route |
 |------|-------|
 | `run_backtest` (`cost_model`: `zero` / `realistic` preset, or flat `slippage_bps` / `fee_per_trade`) | `POST /api/lab/backtests` |
-| `run_lab` (`walk_forward` and `mcpt` option blocks, with `walk_forward` / `permutation` in `survival_tests`) | `POST /api/lab/runs` |
+| `run_lab` (typed `universe` or a stored `universe_id`, `ensure_data` to fetch missing bars first, `preflight` and `strict_preflight`, `walk_forward` and `mcpt` option blocks) | `POST /api/lab/runs` |
+| `run_sweep` (a lab run of every strategy, or the ones named, ranked, and never registers) | `POST /api/lab/sweeps` |
 | `run_signal_ic` (IC, ICIR, decay, quantile spread, turnover of `estimate_return`; 10+ tickers) | `POST /api/lab/signal-ic` |
 | `run_ingest` (also `openWorld`: calls market-data vendors) | `POST /api/ingest/runs` |
 | `create_draft` | `POST /api/studio/drafts` |
 | `validate_draft` (smoke run; a code draft's Python runs in the API) | `POST /api/studio/drafts/{id}/validate` |
-| `backtest_draft`, `lab_run_draft` | `POST /api/studio/drafts/{id}/backtests`, `/lab-runs` |
+| `run_draft_backtest`, `run_draft_lab` | `POST /api/studio/drafts/{id}/backtests`, `/lab-runs` |
+| `add_journal_note` (a note on one of your orders) | `POST /api/tca/orders/{id}/notes` |
+| `mark_notifications_read` (idempotent, your own feed only) | `POST /api/notifications/read` |
 
-`run_lab` and `lab_run_draft` with `register_strategy: true` register the
+With `ensure_data: true`, `run_lab` first runs a `lab_ensure` job that
+fetches the missing bars. The lab result names it in `ensure_job_id`, and
+`wait_for_job` on that id returns its report.
+
+`run_lab` and `run_draft_lab` with `register_strategy: true` register the
 result in shadow (whatever the verdict), so like `register_draft` they need
 `confirm: true`; without it they return a preview and queue nothing.
 
-**Draft edit** (destructive, idempotent; no confirm, since a draft is never
-traded): `update_draft` (`PATCH /api/studio/drafts/{id}`, only the fields
-given).
+**Edits** (destructive, idempotent, and no confirm since none of them trades):
+`update_draft` (`PATCH /api/studio/drafts/{id}`, only the fields given),
+`edit_journal_note` (`PUT /api/tca/notes/{id}`) and `cancel_job`
+(`POST /api/jobs/{id}/cancel`: a queued job never starts, a running lab run
+stops at its next trial).
 
 **Guarded writes** (destructive, need `confirm: true`):
 
@@ -181,6 +204,10 @@ given).
 | `enable_draft`, `disable_draft` (active / back to shadow) | `POST /api/studio/drafts/{id}/{enable,disable}` |
 | `run_tick` (not idempotent) | `POST /api/ticks` |
 | `sync_connection` (idempotent, `openWorld`: reads from the broker, read-only there) | `POST /api/connections/{id}/sync` |
+| `delete_draft` (the registered strategy stays) | `DELETE /api/studio/drafts/{id}` |
+| `engage_kill_switch` (`buys_only` stops buys only, and `flatten` is its deprecated name) | `POST /api/halts/kill` |
+| `subscribe`, `update_subscription` (never to auto) | `POST /api/subscriptions`, `PATCH /api/subscriptions/{id}` |
+| `create_universe`, `refresh_universe`, `ensure_universe_data`, `import_index_history`, `delete_universe` | `/api/universes/...` |
 
 Connecting, linking and removing a broker are console-only: they carry
 credentials and need a fresh second factor.
@@ -191,6 +218,33 @@ refusal on, saying that an operator has to change the setting and that MCP
 cannot.
 
 Resource: `stonks://portfolio/summary` (cash, total value, positions).
+
+### Tool names
+
+Reads are `get_*` (one thing) or `list_*` (many), and queued work is
+`run_*`. Actions use their verb (`promote_strategy`, `subscribe`). `whoami`
+keeps its usual name. Older names still work as deprecated aliases with
+the same inputs (`ALIASES` in `tools/common.py`):
+
+| Old name | Name now |
+|---|---|
+| `health` | `get_api_health` |
+| `live_risk`, `risk_snapshots` | `get_live_risk`, `list_risk_snapshots` |
+| `tca_summary`, `trade_journal`, `order_tca` | `get_tca_summary`, `list_trade_journal`, `get_order_tca` |
+| `backtest_draft`, `lab_run_draft` | `run_draft_backtest`, `run_draft_lab` |
+
+### What MCP leaves to the console
+
+These stay out of MCP on purpose. The parity test
+(`tests/unit/test_surface_parity.py`) holds the full list.
+
+- Anything that needs a fresh second factor: resuming the kill switch,
+  auto mode, connecting or removing a broker, restoring a backup, user
+  admin, recovery codes.
+- Anything that mints credentials or redirects alerts: API tokens,
+  notification preferences, quiet hours, the webhook.
+- Turning a safety stop back off: clearing a halt, running health checks,
+  run now on a scheduled job.
 
 ## Safety model
 
@@ -221,10 +275,12 @@ helpers are in `common.py`.
 - A parameterless `GET` is one `RouteRead(name, path, description)` row in the
   module's `ROUTE_READS` table.
 - Anything else is one small async function in the module's `register(t)`.
-  Pick the annotation constant (`READ`, `JOB`, `JOB_OPEN_WORLD`, `EDIT`,
-  `STATUS_CHANGE`, `GUARDED_CREATE`, `TICK`), write a docstring (it becomes the
+  Pick the annotation constant (`READ`, `JOB`, `JOB_OPEN_WORLD`, `WRITE`,
+  `EDIT`, `STATUS_CHANGE`, `GUARDED_CREATE`, `TICK`), write a docstring (it becomes the
   tool description) and typed parameters (they become the input schema), and
-  return `await t.get(...)`, `t.post(...)` or `t.patch(...)`.
+  return `await t.get(...)`, `t.post(...)`, `t.put(...)` or `t.patch(...)`.
+- Name it `get_*`, `list_*` or `run_*` where that fits. To rename a tool,
+  add the old name to `ALIASES` and call `add_alias`.
 - Wrap every id that goes into a path in `seg(...)`.
 - A write that changes what production trades needs a `confirm` parameter and
   a preview built in `guards.py`.
@@ -233,4 +289,5 @@ helpers are in `common.py`.
 Add a test in `tests/integration/app/test_mcp_server.py` (or
 `test_mcp_studio.py`) and put the tool in the catalogue sets there. Add a
 row to `CASES` in `tests/integration/app/multiuser/test_mcp_permissions.py`
-with the route the tool reaches and arguments that reach it.
+with the route the tool reaches and arguments that reach it. Name the tool
+in `tests/parity/capabilities.toml` too.

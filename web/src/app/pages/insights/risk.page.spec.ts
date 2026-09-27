@@ -1,0 +1,134 @@
+import {
+  HttpTestingController,
+  type TestRequest,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
+import { signal } from '@angular/core';
+import { type ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+
+import { provideApi } from '../../api/provide-api';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
+import { FakeChartEngine, provideFakeChart } from '../../../testing/fake-chart';
+import { tick } from '../../../testing/http';
+import { INSIGHTS, LIVE, POLICY, RISK_HISTORY } from './insights.fixtures';
+import { RiskPage, violationText } from './risk.page';
+
+describe('RiskPage', () => {
+  let fixture: ComponentFixture<RiskPage>;
+  let http: HttpTestingController;
+  let chart: FakeChartEngine;
+  let el: HTMLElement;
+  let live: typeof LIVE;
+  const selected = signal<string | null>('pf_2');
+  const seen: string[] = [];
+
+  beforeEach(() => {
+    live = LIVE;
+    seen.length = 0;
+    chart = new FakeChartEngine();
+    TestBed.configureTestingModule({
+      imports: [RiskPage],
+      providers: [
+        ...provideApi(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        provideFakeChart(chart),
+        {
+          provide: PortfolioContextService,
+          useValue: {
+            selectedId: selected,
+            live: signal(false),
+            query: () => (selected() ? { portfolio_id: selected() } : {}),
+          },
+        },
+      ],
+    });
+    http = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(RiskPage);
+    el = fixture.nativeElement;
+    fixture.detectChanges();
+  });
+
+  afterEach(() => http.verify());
+
+  function respond(req: TestRequest): void {
+    const url = new URL(req.request.urlWithParams, 'http://localhost');
+    seen.push(url.pathname + url.search);
+    switch (url.pathname) {
+      case '/api/risk/live':
+        return req.flush(live);
+      case '/api/insights':
+        return req.flush(INSIGHTS);
+      case '/api/risk/policy':
+        return req.flush(POLICY);
+      case '/api/risk/snapshots':
+        return req.flush(RISK_HISTORY);
+      default:
+        throw new Error(`unexpected request ${url.pathname}`);
+    }
+  }
+
+  async function flushAll(): Promise<void> {
+    for (let i = 0; i < 6; i++) {
+      http.match(() => true).forEach(respond);
+      await tick(5);
+      fixture.detectChanges();
+    }
+  }
+
+  it('shows each measure against its limit, with the status in words', async () => {
+    await flushAll();
+    const limits = el.querySelector('.limits')!;
+    const text = limits.textContent ?? '';
+    expect(text).toContain('Largest holding');
+    expect(text).toContain('of 50.0%');
+    expect(text).toContain('Near the limit');
+    expect(text).toContain('Over the limit');
+    expect(text).toContain('Weight in crypto');
+    expect(limits.querySelectorAll('.limit-over').length).toBeGreaterThan(0);
+  });
+
+  it("shows today's VaR and ES and how often the model missed", async () => {
+    await flushAll();
+    const text = el.textContent ?? '';
+    expect(text).toContain('2.00%');
+    expect(text).toContain('3.30%');
+    expect(text).toContain('3 misses, 1.2 times the expected rate (p 0.61)');
+    expect(text).not.toContain('Treat these numbers with care');
+  });
+
+  it('warns when the model is out of band, and shows a fading sleeve', async () => {
+    live = {
+      ...LIVE,
+      portfolio: { ...LIVE.portfolio!, ratio_out_of_band: true, violation_ratio_95: 2.4 },
+    };
+    await flushAll();
+    expect(el.textContent).toContain('Treat these numbers with care');
+    expect(el.textContent).toContain('Fading. live IR 0.1 is under half the backtest IR 0.9');
+  });
+
+  it('draws the history and pages the readings for the picked portfolio', async () => {
+    await flushAll();
+    const series = chart.last!;
+    expect(series.map((s) => s.id)).toEqual(['var95', 'es95', 'loss']);
+    expect(series[0].points[0].time).toBe('2026-09-24');
+    expect(el.textContent).toContain('2 days');
+    const snapshotCalls = seen.filter((u) => u.startsWith('/api/risk/snapshots'));
+    expect(snapshotCalls.some((u) => u.includes('limit=200'))).toBe(true);
+    expect(snapshotCalls.some((u) => u.includes('limit=20&') || u.endsWith('limit=20'))).toBe(true);
+    expect(snapshotCalls.every((u) => u.includes('portfolio_id=pf_2'))).toBe(true);
+  });
+
+  it('asks for a first trading run when there are no readings', async () => {
+    live = { ...LIVE, portfolio: null, strategies: [], as_of: null };
+    await flushAll();
+    expect(el.textContent).toContain('No risk readings yet');
+    expect(el.textContent).toContain('No strategy sleeves');
+  });
+
+  it('words misses without a ratio', async () => {
+    await flushAll();
+    expect(violationText(1, null, null)).toBe('1 miss');
+  });
+});
