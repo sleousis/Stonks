@@ -369,19 +369,19 @@ The last phase. The whole project is reviewed file by file, fixed, tested throug
 | 18.7 Feature completeness | A capability matrix of API, console, CLI and MCP. Fill every gap and add the parity test. |
 | 18.8 Release | Changelog, docs and wiki final pass, version 1.0 tag and a deploy dry run. |
 
-**Gate status (integration step 6, measured 2026-09-27)**
+**Gate status (integration step 7, measured 2026-09-27)**
 
 CI enforces each gate at today's value where it is still below the target, so it passes now and the floor only moves up. Raise a floor in the same change that lifts coverage.
 
 | Gate | Target | Today | Enforced by |
 |---|---|---|---|
-| Coverage overall (coverage.py's combined line and branch number) | 90 | 94.2 (lines 95.7, branches 87.6) | `fail_under = 90` in `pyproject.toml` |
-| Coverage `core/` | 95 | 98.4 | floor 95 (the target) in `tools/coverage_gate.py` |
-| Coverage `production/` | 95 | 95.5 | floor 95 |
-| Coverage `execution/` | 95 | 95.9 | floor 95 |
+| Coverage overall (coverage.py's combined line and branch number) | 90 | 94.3 (lines 95.8, branches 88.0) | `fail_under = 90` in `pyproject.toml` |
+| Coverage `core/` | 95 | 98.5 | floor 95 (the target) in `tools/coverage_gate.py` |
+| Coverage `production/` | 95 | 95.9 | floor 95 |
+| Coverage `execution/` | 95 | 96.8 | floor 95 |
 | Coverage `auth/` | 95 | 98.5 | floor 95 |
-| Coverage `portfolio/` | 95 | 96.3 | floor 95 |
-| Pyright basic over `src/stonks` | 0 errors | 479 errors, all in the baseline (10 fixed and locked in this step) | `tools/pyright_gate.py` fails on any error not in `tools/pyright-baseline.json` |
+| Coverage `portfolio/` | 95 | 96.5 | floor 95 |
+| Pyright basic over `src/stonks` | 0 errors | 493 errors, all in the baseline (14 added in step 7: pandas typing noise in untouched files after the statsmodels and arch dependencies came in; errors in new code were fixed) | `tools/pyright_gate.py` fails on any error not in `tools/pyright-baseline.json` |
 | Surviving mutants on the money paths | under 10% | 19.8% over six targets (the risk rules still to run in full) | `tools/mutation.py`, weekly and manual (`.github/workflows/mutation.yml`) |
 | Ruff | no ignore without a comment | met | `[tool.ruff.lint]`, every ignore says why |
 | End to end, desktop and 375px phone | every journey passes | 26 passed (13 per viewport), 0 xfail, no known app issue | `uv run pytest -m e2e tests/e2e`, `.github/workflows/e2e.yml` |
