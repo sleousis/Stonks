@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import date
 from typing import Any
 
 import pandas as pd
@@ -43,7 +44,14 @@ def actions_from_frame(df: pd.DataFrame | None) -> CorporateActions:
         if row.kind == "split" and value > 0 and value != 1.0:
             events.append(Split(row.ticker, ex_date, value))
         elif row.kind == "dividend" and value > 0:
-            declared = getattr(row, "declaration_date", None)
-            declared_on = None if pd.isna(declared) else pd.Timestamp(declared).date()
+            declared_on = _optional_date(getattr(row, "declaration_date", None))
             events.append(Dividend(row.ticker, ex_date, value, declared_on=declared_on))
     return CorporateActions.from_events(events)
+
+
+def _optional_date(value: Any) -> date | None:
+    """A frame cell as a date, ``None`` for NULL, NaN or NaT."""
+    if value is None:
+        return None
+    stamp = pd.Timestamp(value)
+    return stamp.date() if isinstance(stamp, pd.Timestamp) else None
