@@ -120,6 +120,7 @@ class CashFlowService:
                 if account.initial_cash is not None
                 else float(self._ctx.settings.production.initial_cash)
             )
+            marker = _snapshot_marker(state, portfolio_id)
             book = _load_or_seed_portfolio(state, initial, portfolio_id)
             signed = body.amount if body.kind == "deposit" else -body.amount
             if book.cash + signed < -1e-9:
@@ -131,6 +132,12 @@ class CashFlowService:
                 prices = load_prices(lake, [], held, day, max_staleness_days=_ANY_AGE_DAYS).prices
             book.cash += signed
             with state.transaction():
+                # The book was read outside this write lock: a tick or a
+                # manual order may have written it since.
+                if _snapshot_marker(state, portfolio_id) != marker or state.sql(
+                    "SELECT 1 FROM tick_runs WHERE status = 'running' LIMIT 1"
+                ):
+                    raise ConflictError("the book changed while the flow was checked; try again")
                 cur = state.execute(
                     "INSERT INTO portfolio_cash_flows (portfolio_id, flow_date, kind, amount,"
                     " note, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -170,3 +177,12 @@ class CashFlowService:
             return owned_portfolio(state, _scope(who), portfolio_id)
         except NotFound as exc:
             raise NotFoundError(str(exc)) from None
+
+
+def _snapshot_marker(state: SqliteState, portfolio_id: str) -> int:
+    """The newest snapshot id of the book (0 for none)."""
+    row = state.sql(
+        "SELECT COALESCE(MAX(id), 0) AS m FROM portfolio_snapshots WHERE portfolio_id = ?",
+        [portfolio_id],
+    )[0]
+    return int(row["m"])
