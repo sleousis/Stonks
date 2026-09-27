@@ -2022,6 +2022,85 @@ export type EconomicEvent = {
 };
 
 /**
+ * EngineView
+ */
+export type EngineView = {
+    /**
+     * Bar Closes
+     */
+    bar_closes: number;
+    /**
+     * Bars
+     */
+    bars: number;
+    /**
+     * Calendar
+     */
+    calendar: string;
+    /**
+     * Deadman
+     */
+    deadman: 'ok' | 'silent' | 'closed' | 'stopped';
+    dispatch_lag: LatencyView;
+    /**
+     * Engine Id
+     */
+    engine_id: string;
+    event_to_order: LatencyView;
+    /**
+     * Handler Errors
+     */
+    handler_errors: {
+        [key: string]: number;
+    };
+    /**
+     * Last Dispatch Age Seconds
+     */
+    last_dispatch_age_seconds: number | null;
+    /**
+     * Last Dispatch At
+     */
+    last_dispatch_at: string | null;
+    /**
+     * Late Bars
+     */
+    late_bars: number;
+    /**
+     * Live
+     */
+    live: boolean;
+    /**
+     * Market Open
+     */
+    market_open: boolean;
+    /**
+     * Pending Closes
+     */
+    pending_closes: number;
+    /**
+     * Silent Seconds
+     */
+    silent_seconds: number | null;
+    /**
+     * Started At
+     */
+    started_at: string;
+    /**
+     * State
+     */
+    state: string;
+    /**
+     * Stopped At
+     */
+    stopped_at: string | null;
+    stream: StreamHealthView | null;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+};
+
+/**
  * EnrolStartView
  */
 export type EnrolStartView = {
@@ -3858,6 +3937,20 @@ export type IntervalInfo = {
 };
 
 /**
+ * IntradayPnlView
+ */
+export type IntradayPnlView = {
+    /**
+     * Available
+     */
+    available: boolean;
+    /**
+     * Note
+     */
+    note: string;
+};
+
+/**
  * Job
  */
 export type Job = {
@@ -4258,6 +4351,32 @@ export type LabRunView = {
      * Verdict
      */
     verdict: 'pass' | 'fail';
+};
+
+/**
+ * LatencyView
+ */
+export type LatencyView = {
+    /**
+     * Count
+     */
+    count: number;
+    /**
+     * Max Seconds
+     */
+    max_seconds: number | null;
+    /**
+     * Mean Seconds
+     */
+    mean_seconds: number | null;
+    /**
+     * P50 Seconds
+     */
+    p50_seconds: number | null;
+    /**
+     * P95 Seconds
+     */
+    p95_seconds: number | null;
 };
 
 /**
@@ -10521,6 +10640,103 @@ export type StrategySummary = {
      * Updated At
      */
     updated_at: string;
+};
+
+/**
+ * StreamHealthView
+ */
+export type StreamHealthView = {
+    /**
+     * Backfills Failed
+     */
+    backfills_failed: number;
+    /**
+     * Backfills Ok
+     */
+    backfills_ok: number;
+    /**
+     * Bars Written
+     */
+    bars_written: number;
+    /**
+     * Connected
+     */
+    connected: boolean;
+    /**
+     * Connected At
+     */
+    connected_at: string | null;
+    /**
+     * Connects
+     */
+    connects: number;
+    /**
+     * Disconnects
+     */
+    disconnects: number;
+    /**
+     * Gaps
+     */
+    gaps: number;
+    /**
+     * Last Error
+     */
+    last_error: string | null;
+    /**
+     * Last Event Age Seconds
+     */
+    last_event_age_seconds: number | null;
+    /**
+     * Last Event At
+     */
+    last_event_at: string | null;
+    /**
+     * Late Ticks
+     */
+    late_ticks: number;
+    /**
+     * Source
+     */
+    source: string;
+    /**
+     * State
+     */
+    state: string;
+    /**
+     * Write Errors
+     */
+    write_errors: number;
+};
+
+/**
+ * StreamStatusView
+ */
+export type StreamStatusView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Deadman Minutes
+     */
+    deadman_minutes: number;
+    /**
+     * Engines
+     */
+    engines: Array<EngineView>;
+    intraday_pnl: IntradayPnlView;
+    /**
+     * Source
+     */
+    source: string;
+    /**
+     * Stale After Seconds
+     */
+    stale_after_seconds: number;
+    /**
+     * Streaming Enabled
+     */
+    streaming_enabled: boolean;
 };
 
 /**
@@ -22431,6 +22647,47 @@ export type SwapModelVersionResponses = {
 };
 
 export type SwapModelVersionResponse = SwapModelVersionResponses[keyof SwapModelVersionResponses];
+
+export type GetStreamStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/stream/status';
+};
+
+export type GetStreamStatusErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetStreamStatusError = GetStreamStatusErrors[keyof GetStreamStatusErrors];
+
+export type GetStreamStatusResponses = {
+    /**
+     * Successful Response
+     */
+    200: StreamStatusView;
+};
+
+export type GetStreamStatusResponse = GetStreamStatusResponses[keyof GetStreamStatusResponses];
 
 export type GetStudioCapabilitiesData = {
     body?: never;

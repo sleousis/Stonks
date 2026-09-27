@@ -1,0 +1,150 @@
+@use 'breakpoints' as bp;
+
+.banner {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-loss);
+  border-radius: var(--radius-sm);
+  background: var(--color-loss-soft);
+  color: var(--color-ink);
+}
+
+.engines {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+
+// Tone shows as a rule, the pill and the words carry the meaning.
+.engine {
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-gain);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-1);
+
+  &[data-tone='negative'] {
+    border-left-color: var(--color-loss);
+  }
+
+  &[data-tone='warn'] {
+    border-left-color: var(--color-warn);
+  }
+
+  &[data-tone='neutral'] {
+    border-left-color: var(--color-border-strong);
+  }
+
+  > section {
+    display: grid;
+    gap: var(--space-3);
+  }
+}
+
+.engine-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+
+  h2 {
+    font-size: var(--text-xl);
+    overflow-wrap: anywhere;
+  }
+}
+
+.advice {
+  max-width: 70ch;
+  color: var(--color-ink-2);
+}
+
+.panels {
+  display: grid;
+  gap: var(--space-3);
+
+  @include bp.from-desktop {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.sub {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+
+  h3 {
+    font-size: var(--text-md);
+  }
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+dt {
+  font-size: var(--text-xs);
+  color: var(--color-ink-3);
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.alarm {
+  color: var(--color-loss);
+  font-weight: var(--weight-semibold);
+}
+
+.problem {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-xs);
+  background: var(--color-loss-soft);
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+.errors {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--space-1) var(--space-3);
+  }
+
+  .step {
+    font-family: var(--font-mono);
+    overflow-wrap: anywhere;
+  }
+}
+
+.pnl {
+  margin-bottom: var(--space-3);
+
+  .note {
+    padding: var(--space-3) var(--space-4);
+    color: var(--color-ink-2);
+  }
+}
+
+.footnote {
+  max-width: 70ch;
+  font-size: var(--text-sm);
+}

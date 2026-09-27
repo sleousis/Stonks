@@ -106,6 +106,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
     keywords: ['alerts', 'status'],
   },
   {
+    path: '/live',
+    label: 'Live engine',
+    group: 'System',
+    adminOnly: true,
+    keywords: ['intraday', 'stream', 'latency', 'engine'],
+  },
+  {
     path: '/ops/schedule',
     label: 'Schedule',
     key: 'j',

@@ -49,6 +49,8 @@ export const routes: Routes = [
   { path: 'shadow', redirectTo: 'paper' },
   { path: 'go-live', loadChildren: () => import('./pages/go-live/go-live.routes') },
   { path: 'health', loadChildren: () => import('./pages/health/health.routes') },
+  // 21.3.4: the live intraday engine, its stream and speed
+  { path: 'live', loadChildren: () => import('./pages/live/live.routes') },
   { path: 'settings', loadChildren: () => import('./pages/settings/settings.routes') },
   // ops: halts, schedule and backups, data quality, universes
   { path: 'ops', loadChildren: () => import('./pages/ops/ops.routes') },
