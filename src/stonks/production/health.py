@@ -65,6 +65,7 @@ def check_health(
     checks.extend(_guard("ingest_failures", lambda: [_ingest_failures(lake, config, now)]))
     checks.extend(_guard("var_violations", lambda: [_var_violations(state, now)]))
     checks.extend(_guard("lab_queue", lambda: [_lab_queue(state, config, now)]))
+    checks.extend(_guard("broker", lambda: _broker_gateways(state)))
     report = HealthReport(checks=checks, checked_at=now)
     _log.info(
         "health.checked",
@@ -89,6 +90,15 @@ def notify_unhealthy(report: HealthReport, notifier: Notifier) -> None:
 
 
 # ---- individual checks -----------------------------------------------------
+
+
+def _broker_gateways(state: SqliteState) -> list[HealthCheck]:
+    """``broker:<gateway>`` per IB Gateway the ``broker_health`` job has
+    seen (roadmap 19.4). Never opens the operational halt: an outage only
+    skips or pauses the gateway's own portfolios."""
+    from stonks.production.broker_health import gateway_health_checks
+
+    return gateway_health_checks(state)
 
 
 def _guard(name: str, fn: Callable[[], list[HealthCheck]]) -> list[HealthCheck]:

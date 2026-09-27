@@ -44,6 +44,8 @@ def test_default_jobs_build():
         "connections_sync",
         "universes_refresh",
         "ingest_metadata",
+        "broker_health",
+        "ibkr_reauth_reminder",
     }
     tick = by_name["tick"]
     assert tick.trigger == SessionTrigger("XNYS", "close", timedelta(minutes=45))

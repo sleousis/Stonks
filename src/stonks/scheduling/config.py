@@ -94,7 +94,9 @@ def default_jobs() -> list[JobConfig]:
     fill their recent bars, ingest metadata (splits, dividends) and prices,
     tick, report after the close; health
     every four hours; a backup every night; due broker syncs every hour.
-    ``universes_refresh`` skips while no universe is stored."""
+    ``universes_refresh`` skips while no universe is stored. The IB Gateway
+    jobs (``broker_health`` every 5 minutes, ``ibkr_reauth_reminder`` on
+    Sunday at 18:00 New York time) skip while no gateway is configured."""
     return [
         JobConfig(
             name="universes_refresh",
@@ -142,6 +144,18 @@ def default_jobs() -> list[JobConfig]:
             name="connections_sync",
             action="connections_sync",
             trigger=IntervalTriggerConfig(every_minutes=60),
+        ),
+        JobConfig(
+            name="broker_health",
+            action="broker_health",
+            trigger=IntervalTriggerConfig(every_minutes=5),
+            catch_up="none",
+        ),
+        JobConfig(
+            name="ibkr_reauth_reminder",
+            action="ibkr_reauth_reminder",
+            trigger=DailyTriggerConfig(at=time(18, 0), timezone="America/New_York", weekdays=[6]),
+            catch_up="none",
         ),
     ]
 

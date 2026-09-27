@@ -306,6 +306,21 @@ def api_connections_sync(ctx: RunContext) -> JobOutcome:
     return connections_sync_action(ctx)
 
 
+@API_ACTIONS.register("broker_health")
+def api_broker_health(ctx: RunContext) -> JobOutcome:
+    """State DB and the gateway socket only: runs in this process."""
+    from stonks.scheduling.local import broker_health_action
+
+    return broker_health_action(ctx)
+
+
+@API_ACTIONS.register("ibkr_reauth_reminder")
+def api_ibkr_reauth_reminder(ctx: RunContext) -> JobOutcome:
+    from stonks.scheduling.local import ibkr_reauth_reminder_action
+
+    return ibkr_reauth_reminder_action(ctx)
+
+
 def ensure_body(ctx: RunContext) -> dict[str, Any]:
     """The ensure request of the ``universes_refresh`` job."""
     start, end = ensure_window(ctx)
