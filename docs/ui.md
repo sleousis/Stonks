@@ -611,6 +611,28 @@ Tickers open `/data?instrument=<id>`.
   hovered or focused. Errors stay until dismissed. The toast layer is a
   manual popover in the top layer, so toasts over a modal stay usable.
 
+## Model versions (22.6)
+
+| Page | Route | What it does |
+|---|---|---|
+| Model versions tab | `/strategies/:id?tab=versions` | Every fit of the strategy's model, the candidate's model book against the live model, the swap check, Swap in and Reject, a retrain of this strategy, and the version log |
+| Model versions | `/ops/models` | Admins: every candidate across strategies, each linking to its tab, and Retrain all |
+
+- **The tab** is a segmented switch on the strategy page (Overview or
+  Model versions). The choice goes into the address, so a link opens it.
+- **The candidate** shows its training window, the two model books over
+  the same days as bars (return, the difference, the candidate's
+  drawdown), and each swap check with its value and limit.
+- **Swap in** opens a Model swap ticket that asks for a reason, then a
+  fresh code (`StepUpService.ensure()`). A failing check turns the button
+  into Override and swap in, which needs a reason of at least 20
+  characters. Reject asks for a reason only. Both need `strategy.promote`.
+  A trader sees the check with the buttons off and a note.
+- **Retrain** (`<app-retrain-job>`, `lab.run`) starts the job, follows it
+  with `<app-job-progress>` and lists what each strategy got: a new
+  candidate, skipped, or a failed fit. "Refit even when fitted in the last
+  few days" sends `force`.
+
 ## Insights and risk
 
 | Page | Route | What it does |
@@ -973,7 +995,8 @@ about the same thing.
 | Update data, Data updates | `/api/ingest/*`, `ingest_runs` | `stonks ingest` | `run_ingest` |
 | Go-live suite | preset `promotion` | `--preset promotion` | `run_lab` (`preset`) |
 | Signals only, Paper trading, Approve each trade, Auto (modes) | `notify`, `paper`, `approve`, `auto` | none | `subscribe` (`mode`) |
-| Approvals, order tickets | `/api/tickets` | none | `list_tickets`, `get_ticket` |
+| Approvals, order tickets | `/api/tickets` | `stonks tickets` | `list_tickets`, `get_ticket` |
+| Model versions, candidate, Swap in, Retrain | `/api/strategies/{id}/versions`, `/api/model-versions` | `registry versions`, `swap`, `reject`, `retrain` | `list_model_versions`, `swap_model_version`, `retrain_models` |
 | Signal IC | `/api/lab/signal-ic` | `stonks lab ic` | `run_signal_ic` |
 | Trial ledger | `/api/lab/ledger` | none | `list_ledger_runs`, `get_ledger_run` |
 | Notifications (feed) | `/api/notifications` | `python -m stonks.notify` | `list_notifications` |

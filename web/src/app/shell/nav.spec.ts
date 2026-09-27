@@ -98,6 +98,7 @@ describe('Nav', () => {
       'Data',
       'Data quality',
       'Universes',
+      'Model versions',
       'Halts',
       'Users',
     ]);

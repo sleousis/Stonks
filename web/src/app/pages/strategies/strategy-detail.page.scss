@@ -23,6 +23,12 @@
   }
 }
 
+.tabs {
+  display: flex;
+  margin: var(--space-4) 0;
+  max-width: 100%;
+}
+
 // Label / value lists ------------------------------------------------------
 dl {
   margin: 0;

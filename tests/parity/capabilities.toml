@@ -410,7 +410,7 @@ id = "strategies.versions"
 domain = "strategies"
 title = "Model versions of a strategy, their log, and every candidate"
 routes = ["GET /api/strategies/{strategy_id}/versions", "GET /api/strategies/{strategy_id}/versions/history", "GET /api/model-versions/candidates"]
-console = { limited = "no versions page yet, the CLI and MCP read them" }
+console = ["listModelVersions", "getModelVersionHistory", "listModelCandidates"]
 cli = ["stonks registry versions", "stonks registry version-history", "stonks registry candidates"]
 mcp = ["list_model_versions", "get_model_version_history", "list_model_candidates"]
 
@@ -419,7 +419,7 @@ id = "strategies.versions.check"
 domain = "strategies"
 title = "Swap check: a candidate model book against the live one"
 routes = ["GET /api/strategies/{strategy_id}/versions/{version}/check"]
-console = { limited = "no versions page yet, the CLI and MCP read it" }
+console = "checkModelSwap"
 cli = "stonks registry swap-check"
 mcp = "check_model_swap"
 
@@ -428,7 +428,7 @@ id = "strategies.versions.swap"
 domain = "strategies"
 title = "Swap a candidate model in through the check or an override, or reject it"
 routes = ["POST /api/strategies/{strategy_id}/versions/{version}/swap", "POST /api/strategies/{strategy_id}/versions/{version}/reject"]
-console = { limited = "no versions page yet, the CLI and MCP do the governed swap" }
+console = ["swapModelVersion", "rejectModelVersion"]
 cli = ["stonks registry swap", "stonks registry reject"]
 mcp = ["swap_model_version", "reject_model_version"]
 
@@ -437,7 +437,7 @@ id = "strategies.versions.retrain"
 domain = "strategies"
 title = "Retrain strategies that learn from data into candidate versions"
 routes = ["POST /api/model-versions/retrain", "GET /api/model-versions/jobs/{job_id}/result"]
-console = { limited = "the scheduler runs it weekly, the CLI and MCP start it by hand" }
+console = ["startModelRetrain", "getModelRetrainResult"]
 cli = "stonks registry retrain"
 mcp = "retrain_models"
 
@@ -1499,7 +1499,7 @@ routes = [
   "POST /api/tickets/{ticket_id}/reject",
 ]
 console = ["listTickets", "getTicketSummary", "approveTickets", "rejectTicket"]
-cli = { limited = "approving needs a fresh second factor in the web app, the shell sees orders with stonks orders list" }
+cli = ["stonks tickets list", "stonks tickets show", "stonks tickets approve", "stonks tickets reject"]
 mcp = ["list_tickets", "get_ticket"]
 
 [[capability]]

@@ -124,6 +124,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { path: '/ops/data-quality', label: 'Data quality', key: 'q', group: 'System', adminOnly: true },
   { path: '/universes', label: 'Universes', key: 'v', group: 'System', adminOnly: true },
   {
+    path: '/ops/models',
+    label: 'Model versions',
+    group: 'System',
+    adminOnly: true,
+    keywords: ['retrain', 'candidates', 'swap'],
+  },
+  {
     path: '/ops/halts',
     label: 'Halts',
     key: 'k',
