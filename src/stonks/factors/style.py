@@ -18,7 +18,10 @@ standardises them, :func:`stonks.portfolio.factor_model.standardize_exposures`).
   ``as_of`` uses only data known at it (P12).
 - :func:`style_factor_returns`: a window, for P&L attribution. The return
   of bar ``t`` is regressed on the exposures of bar ``t - 1``, so a factor
-  return never uses an exposure that was not known before the move.
+  return never uses an exposure that was not known before the move. The
+  sector of each name is the label known on ``t - 1``
+  (:func:`sector_labels`), and with a stored universe's membership a name
+  counts only on bars it was a member on both days (22.10).
 
 A style whose factor fails (no statements for value, too little history)
 is left out, logged, and the rest go on.
@@ -35,7 +38,7 @@ import pandas as pd
 
 from stonks.core.interval import Interval
 from stonks.factors.base import ExpressionFactor
-from stonks.factors.engine import PanelRequest
+from stonks.factors.engine import PanelRequest, membership_spans
 from stonks.factors.registry import get_factor
 from stonks.logging import get_logger
 from stonks.portfolio.factor_model import (
@@ -49,6 +52,7 @@ from stonks.strategies._common import as_datetime
 __all__ = [
     "STYLE_FACTOR_IDS",
     "safe_style_exposures",
+    "sector_labels",
     "sectors_of",
     "style_exposures",
     "style_factor_returns",
@@ -81,6 +85,41 @@ def sectors_of(lake: Any, tickers: Sequence[str]) -> dict[str, str]:
         for i, s in zip(rows["id"], rows["sector"], strict=True)
         if isinstance(s, str) and s
     }
+
+
+def sector_labels(lake: Any, tickers: Sequence[str], days: pd.DatetimeIndex) -> pd.DataFrame:
+    """Days by tickers: the ``sector`` known on each day (P12).
+
+    A day takes the latest version in ``instrument_sector_versions`` seen
+    on or before it. The first version of a name counts on earlier days
+    too, since it is the oldest label there is. A name with no versions
+    (or a lake without the table) keeps its static ``instruments.sector``.
+    Empty cells where no label is known."""
+    names = list(dict.fromkeys(tickers))
+    index = pd.DatetimeIndex(pd.to_datetime(days).normalize())
+    out = pd.DataFrame(index=index, columns=pd.Index(names, dtype=object), dtype=object)
+    versions = pd.DataFrame()
+    reader = getattr(lake, "instrument_sector_versions", None)
+    if callable(reader) and names:
+        try:
+            versions = reader(names)
+        except Exception as exc:  # a lake from before migration 022
+            _log.warning("factor.style.sector_versions_failed", error=str(exc))
+    seen: set[str] = set()
+    if not versions.empty:
+        for ticker, rows in versions.groupby("id", sort=False):
+            known = pd.DatetimeIndex(pd.to_datetime(rows["known_at"])).normalize()
+            labels = pd.Series(rows["sector"].to_numpy(dtype=object), index=known)
+            labels = labels[~labels.index.duplicated(keep="last")].sort_index()
+            at = labels.index.searchsorted(index, side="right") - 1
+            values = labels.to_numpy(dtype=object)[np.maximum(at, 0)]
+            out[str(ticker)] = [v if isinstance(v, str) and v else None for v in values]
+            seen.add(str(ticker))
+    rest = [t for t in names if t not in seen]
+    if rest:
+        for ticker, label in sectors_of(lake, rest).items():
+            out[ticker] = label
+    return out
 
 
 def style_exposures(
@@ -144,6 +183,21 @@ def _month_ends(index: pd.DatetimeIndex) -> pd.DatetimeIndex:
     return pd.DatetimeIndex(np.asarray(last, dtype="datetime64[ns]"))
 
 
+def _members(
+    membership: pd.DataFrame | None, names: Sequence[str], dates: pd.DatetimeIndex
+) -> pd.DataFrame | None:
+    """Dates by names, true where the name was a member (``end_date``
+    exclusive); ``None`` without membership."""
+    if membership is None:
+        return None
+    days = pd.DatetimeIndex(pd.to_datetime(dates).normalize())
+    mask = pd.DataFrame(False, index=days, columns=pd.Index(list(names), dtype=object))
+    for ticker, lo, hi in membership_spans(membership):
+        if ticker in mask.columns:
+            mask.loc[(days >= lo.normalize()) & (days < hi), ticker] = True
+    return mask
+
+
 def style_factor_returns(
     lake: Any,
     universe: Sequence[str],
@@ -153,11 +207,24 @@ def style_factor_returns(
     interval: Interval = Interval.DAY_1,
     styles: Sequence[str] = STYLE_FACTORS,
     sectors: bool = True,
+    membership: pd.DataFrame | None = None,
+    universe_id: str | None = None,
 ) -> pd.DataFrame:
     """Dates by factor returns over ``start..end``: the ``market``, each
     style and each ``sector:<name>`` (see the module doc). Per-date
-    factors (value) are sampled on month ends and carried forward."""
-    request = PanelRequest(universe=tuple(universe), start=start, end=end, interval=interval)
+    factors (value) are sampled on month ends and carried forward.
+
+    ``membership`` (``ticker, start_date, end_date`` spans of a stored
+    universe, ``universe_id``) limits each bar's cross-section to the
+    names that were members then."""
+    request = PanelRequest(
+        universe=tuple(universe),
+        start=start,
+        end=end,
+        interval=interval,
+        universe_id=universe_id,
+        membership=membership,
+    )
     returns = _DAILY_RETURN.panel(lake, request)
     if returns.empty or len(returns) < 2:
         return pd.DataFrame()
@@ -174,17 +241,29 @@ def style_factor_returns(
             _log.warning("factor.style.panel_failed", style=style, error=str(exc))
             continue
         panels[style] = panel.reindex(index=dates, columns=list(request.universe))
-    labels = sectors_of(lake, request.universe) if sectors else {}
+    names = list(request.universe)
+    labels = sector_labels(lake, names, dates) if sectors else None
+    members = _members(membership, names, dates)
     rows: dict[Any, dict[str, float]] = {}
     for i in range(1, len(dates)):
         before = dates[i - 1]
+        counted = names
+        if members is not None:
+            both = members.iloc[i - 1] & members.iloc[i]
+            counted = [t for t in names if both[t]]
+            if not counted:
+                continue
         raw = pd.DataFrame(
-            {style: panel.loc[before] for style, panel in panels.items()},
-            index=list(request.universe),
+            {style: panel.loc[before, counted] for style, panel in panels.items()},
+            index=counted,
         )
-        if labels:
-            raw[SECTOR] = pd.Series(labels, dtype=object).reindex(raw.index)
-        got = cross_section_returns(returns.loc[dates[i]], standardize_exposures(raw))
+        if labels is not None:
+            known = labels.iloc[i - 1].reindex(counted)
+            if known.notna().any():
+                raw[SECTOR] = known.astype(object)
+        got = cross_section_returns(
+            returns.loc[dates[i]].reindex(counted), standardize_exposures(raw)
+        )
         if got:
             rows[dates[i]] = got
     out = pd.DataFrame.from_dict(rows, orient="index").sort_index()

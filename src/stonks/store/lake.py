@@ -1837,18 +1837,52 @@ class DuckDBLake:
             pk=("ticker", "date"),
         )
 
-    def upsert_instrument_profile(self, df: pd.DataFrame) -> int:
+    def upsert_instrument_profile(
+        self, df: pd.DataFrame, *, known_at: datetime | None = None
+    ) -> int:
         """Profiles arrive from several sources of differing richness (EODHD
         carries ISIN/CIK/IPO date, Yahoo doesn't), so a NULL or absent field
         from a later source keeps the earlier source's value instead of
-        clearing it. Real values still overwrite."""
+        clearing it. Real values still overwrite.
+
+        A sector that changes is also kept in ``instrument_sector_versions``
+        (migration 022), stamped ``known_at`` (now, in naive UTC, by
+        default)."""
         if df.empty:
             return 0
-        return self._upsert_preserve_nulls(
+        count = self._upsert_preserve_nulls(
             df.reindex(columns=list(self._INSTRUMENT_PROFILE_COLS)),
             table="instruments",
             cols=self._INSTRUMENT_PROFILE_COLS,
             pk=("id",),
+        )
+        stamp = known_at if known_at is not None else datetime.now(UTC).replace(tzinfo=None)
+        self._record_sector_versions([str(t) for t in df["id"].dropna().unique()], stamp)
+        return count
+
+    def _record_sector_versions(self, tickers: list[str], known_at: datetime) -> None:
+        """Append the current sector of each of ``tickers`` whose label
+        differs from its latest version (or has none yet)."""
+        if not tickers:
+            return
+        self.con.execute(
+            """
+            INSERT OR REPLACE INTO instrument_sector_versions (ticker, sector, gic_sector, known_at)
+            SELECT i.id, i.sector, i.gic_sector, ?
+              FROM instruments i
+              LEFT JOIN (
+                    SELECT ticker, sector, gic_sector,
+                           ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY known_at DESC) AS rn
+                      FROM instrument_sector_versions
+                     WHERE ticker = ANY(?)
+                   ) v ON v.ticker = i.id AND v.rn = 1
+             WHERE i.id = ANY(?)
+               AND (i.sector IS NOT NULL OR i.gic_sector IS NOT NULL)
+               AND (v.ticker IS NULL
+                    OR v.sector IS DISTINCT FROM i.sector
+                    OR v.gic_sector IS DISTINCT FROM i.gic_sector)
+            """,
+            [known_at, tickers, tickers],
         )
 
     def upsert_crypto_profile(self, df: pd.DataFrame) -> int:
@@ -2340,6 +2374,16 @@ class DuckDBLake:
         ``tickers`` (static profile data, no time stamp)."""
         return self.sql(
             "SELECT id, sector, gic_sector FROM instruments WHERE id = ANY(?)", [list(tickers)]
+        )
+
+    def instrument_sector_versions(self, tickers: list[str]) -> pd.DataFrame:
+        """``id, sector, gic_sector, known_at``: every sector label of
+        ``tickers`` with the time Stonks first saw it, oldest first
+        (migration 022)."""
+        return self.sql(
+            "SELECT ticker AS id, sector, gic_sector, known_at FROM instrument_sector_versions "
+            "WHERE ticker = ANY(?) ORDER BY ticker, known_at",
+            [list(tickers)],
         )
 
     # ---- escape hatch -------------------------------------------------------
