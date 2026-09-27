@@ -18,6 +18,7 @@ from typing import Annotated, Any, Literal, Self
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, WithJsonSchema, model_validator
 
+from stonks.app.catalog import class_path_of
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
 from stonks.app.heatmap import HeatmapView, check_heatmap_axes
@@ -493,8 +494,9 @@ class LabRunOptions(BaseModel):
 
 
 class LabRunRequest(_WindowRequest, LabRunOptions):
-    """Tunes the class the ``strategy`` ref points at (its ``params`` are
-    ignored: the tuner searches the class's parameter space).
+    """Tunes the class the ``strategy`` ref points at over its parameter
+    space. The ref's ``params`` stay fixed for the whole search, such as
+    the ``factor`` of the ``factor`` strategy.
 
     Give ``universe`` (tickers), ``universe_id`` (a stored universe: every
     member on any day of the window, delisted names included), or both
@@ -694,6 +696,22 @@ def build_tuner(options: LabRunOptions, parallel: ParallelSettings | None = None
             seed=options.seed, parallel=parallel, sampler=options.sampler, prune=options.prune
         )
     return RandomTuner(seed=options.seed, parallel=parallel)
+
+
+def pinned_params(cls: type[Strategy], ref: StrategyRef) -> dict[str, Any] | None:
+    """The params a class ref pins for the whole search (``--params`` on the
+    CLI), or ``None``. A name the class does not declare is a
+    ``ValidationError``. A registered strategy ref pins nothing."""
+    if ref.class_path is None or not ref.params:
+        return None
+    known = {spec.name for spec in cls.parameter_spec()}
+    unknown = sorted(set(ref.params) - known)
+    if unknown:
+        raise ValidationError(
+            f"{class_path_of(cls)} has no parameter {', '.join(unknown)} "
+            f"(it has {', '.join(sorted(known)) or 'none'})"
+        )
+    return dict(ref.params)
 
 
 def lab_costs(settings: Any, option: CostModelOption | None) -> CostModelSettings:
@@ -1031,7 +1049,9 @@ class LabService:
 
     def submit_lab_run(self, request: LabRunRequest, *, owner_id: str | None = None) -> Job:
         _parse_interval(request.interval)
-        check_heatmap_axes(self._strategies.strategy_class(request.strategy), request.heatmap)
+        cls = self._strategies.strategy_class(request.strategy)
+        pinned = pinned_params(cls, request.strategy)
+        check_heatmap_axes(cls, request.heatmap, set(pinned or {}))
         if request.universe_id is not None:
             self._require_universe(request.universe_id)
         if request.ensure_data:
@@ -1040,7 +1060,9 @@ class LabService:
 
     def run_lab(self, request: LabRunRequest, progress: JobContext | None = None) -> LabRunView:
         cls = self._strategies.strategy_class(request.strategy)
-        return self.run_lab_class(cls, request, progress=progress)
+        return self.run_lab_class(
+            cls, request, progress=progress, fixed_params=pinned_params(cls, request.strategy)
+        )
 
     def ensure_lab_data(self, request: LabRunRequest) -> EnsureReport:
         """Fetch the bars a lab run will read that the lake lacks: the
@@ -1095,10 +1117,11 @@ class LabService:
         progress: JobContext | None = None,
         register: RegisterFn | None = None,
         family: str | None = None,
+        fixed_params: Mapping[str, Any] | None = None,
     ) -> LabRunView:
         """Run :func:`execute_lab_run` for ``cls`` (``request.strategy`` is
-        not resolved here) on this context's lake and state. ``family``:
-        see :func:`execute_lab_run`."""
+        not resolved here) on this context's lake and state. ``family`` and
+        ``fixed_params``: see :func:`execute_lab_run`."""
         with self._ctx.lake() as lake, self._ctx.state() as state:
             execution = execute_lab_run(
                 self._ctx.settings,
@@ -1108,6 +1131,7 @@ class LabService:
                 state=state,
                 progress=progress,
                 register=register,
+                fixed_params=fixed_params,
                 family=family,
             )
         return execution.view()

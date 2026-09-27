@@ -6308,7 +6308,7 @@
         "type": "object"
       },
       "LabRunRequest": {
-        "description": "Tunes the class the ``strategy`` ref points at (its ``params`` are\nignored: the tuner searches the class's parameter space).\n\nGive ``universe`` (tickers), ``universe_id`` (a stored universe: every\nmember on any day of the window, delisted names included), or both\n(the preflight then reports members missing from the list).",
+        "description": "Tunes the class the ``strategy`` ref points at over its parameter\nspace. The ref's ``params`` stay fixed for the whole search, such as\nthe ``factor`` of the ``factor`` strategy.\n\nGive ``universe`` (tickers), ``universe_id`` (a stored universe: every\nmember on any day of the window, delisted names included), or both\n(the preflight then reports members missing from the list).",
         "properties": {
           "benchmark": {
             "anyOf": [
