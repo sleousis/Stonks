@@ -263,6 +263,13 @@ def in_process_backup(ctx: RunContext) -> JobOutcome:
     return backup_job_outcome(*ex.run_job(job, BACKUP_JOB, BackupResultView))
 
 
+@IN_PROCESS_ACTIONS.register("price_alerts")
+def in_process_price_alerts(ctx: RunContext) -> JobOutcome:
+    """Every person's price alert rules against the latest closes."""
+    out = _executor(ctx).services.price_alerts.evaluate(as_of=ctx.fire.as_of)
+    return JobOutcome("succeeded", out.as_dict())
+
+
 @IN_PROCESS_ACTIONS.register("connections_sync")
 def in_process_connections_sync(ctx: RunContext) -> JobOutcome:
     from stonks.scheduling.local import connections_sync_action

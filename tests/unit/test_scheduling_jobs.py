@@ -29,6 +29,7 @@ BUILTIN = {
     "health",
     "report",
     "universes_refresh",
+    "price_alerts",
 }
 
 
@@ -44,6 +45,7 @@ def test_default_jobs_build():
         "connections_sync",
         "universes_refresh",
         "ingest_metadata",
+        "price_alerts",
     }
     tick = by_name["tick"]
     assert tick.trigger == SessionTrigger("XNYS", "close", timedelta(minutes=45))
@@ -57,6 +59,8 @@ def test_default_jobs_build():
     assert by_name["universes_refresh"].trigger.offset < tick.trigger.offset
     # splits and dividends reach the lake before the tick applies them (TO-05)
     assert by_name["ingest_metadata"].trigger.offset < tick.trigger.offset
+    # price alerts check the closes the ingest just stored (roadmap 20.2)
+    assert ingest_at < by_name["price_alerts"].trigger.offset
 
 
 @pytest.mark.parametrize("registry", [LOCAL_ACTIONS, API_ACTIONS, IN_PROCESS_ACTIONS])
