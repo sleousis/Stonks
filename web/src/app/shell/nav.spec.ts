@@ -59,6 +59,7 @@ describe('Nav', () => {
     expect(group(el, 'Research')).toEqual([
       'Paper trading',
       'Leaderboard',
+      'Screener',
       'Studio',
       'Lab',
       'Go live',
@@ -78,7 +79,13 @@ describe('Nav', () => {
     expect(all).not.toContain('Lab');
     // Viewers may still read strategies, paper trading and the leaderboard.
     expect(all).toContain('Strategies');
-    expect(group(el, 'Research')).toEqual(['Paper trading', 'Leaderboard', 'Go live', 'Assistant']);
+    expect(group(el, 'Research')).toEqual([
+      'Paper trading',
+      'Leaderboard',
+      'Screener',
+      'Go live',
+      'Assistant',
+    ]);
   });
 
   it('gives admins the System group, with Overview, Halts and Users', () => {

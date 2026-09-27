@@ -51,6 +51,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { path: '/paper', label: 'Paper trading', key: 'w', group: 'Research', keywords: ['shadow'] },
   { path: '/leaderboard', label: 'Leaderboard', key: 'b', group: 'Research', keywords: ['rank'] },
   {
+    path: '/screener',
+    label: 'Screener',
+    key: 'f',
+    group: 'Research',
+    keywords: ['screen', 'filter', 'fundamentals', 'universe'],
+  },
+  {
     path: '/studio',
     label: 'Studio',
     key: 'u',
