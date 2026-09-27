@@ -40,6 +40,7 @@ from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.auth.service import AuthService
 from stonks.config import configured_secrets
+from stonks.lab.offload.executor import make_lab_executor
 from stonks.logging import get_logger
 from stonks.production.tick import recover_interrupted_ticks
 
@@ -203,6 +204,13 @@ class Services:
             JobStore(settings.state.path),
             max_workers=settings.api.max_concurrent_jobs,
             secrets=lambda: _configured_secrets(context),
+            # Roadmap 14.9: heavy lab jobs may run in a lab worker process.
+            lab_executor=make_lab_executor(
+                settings.lab.offload,
+                state_path=settings.state.path,
+                lake_path=settings.lake.path,
+                open_lake=context.lake,
+            ),
         )
         catalog = CatalogService(
             sources=list(strategy_sources)

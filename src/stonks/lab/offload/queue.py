@@ -171,48 +171,52 @@ class LabQueue:
     # ---- reads -----------------------------------------------------------------
 
     def stats(self, lease_seconds: float) -> QueueStats:
-        now = self._clock()
-        cutoff = _iso(now - timedelta(seconds=lease_seconds))
         with self._state() as s:
-            counts = {
-                r["status"]: int(r["n"])
-                for r in s.sql(
-                    "SELECT status, COUNT(*) AS n FROM jobs "
-                    "WHERE executor=? AND status IN ('queued', 'running') GROUP BY status",
-                    [WORKER_EXECUTOR],
-                )
-            }
-            oldest = s.sql(
-                "SELECT MIN(created_at) AS m FROM jobs WHERE executor=? AND status='queued'",
-                [WORKER_EXECUTOR],
-            )[0]["m"]
-            stale = int(
-                s.sql(
-                    "SELECT COUNT(*) AS n FROM jobs "
-                    "WHERE executor=? AND status='running' AND heartbeat_at < ?",
-                    [WORKER_EXECUTOR, cutoff],
-                )[0]["n"]
-            )
-            alive = int(
-                s.sql(
-                    "SELECT COUNT(*) AS n FROM lab_workers "
-                    "WHERE stopped_at IS NULL AND heartbeat_at >= ?",
-                    [cutoff],
-                )[0]["n"]
-            )
-            totals = s.sql(
-                "SELECT COALESCE(SUM(jobs_succeeded), 0) AS succeeded,"
-                " COALESCE(SUM(jobs_failed), 0) AS failed,"
-                " COALESCE(SUM(jobs_cancelled), 0) AS cancelled FROM lab_workers"
-            )[0]
-        oldest_age = None
-        if oldest is not None:
-            oldest_age = max(0.0, (now - datetime.fromisoformat(oldest)).total_seconds())
-        return QueueStats(
-            queued=counts.get("queued", 0),
-            running=counts.get("running", 0),
-            oldest_queued_seconds=oldest_age,
-            workers_alive=alive,
-            outcomes={k: int(totals[k]) for k in ("succeeded", "failed", "cancelled")},
-            stale_running=stale,
+            return queue_stats(s, lease_seconds=lease_seconds, now=self._clock())
+
+
+def queue_stats(state: SqliteState, *, lease_seconds: float, now: datetime) -> QueueStats:
+    """:class:`QueueStats` read on an open state connection."""
+    cutoff = _iso(now - timedelta(seconds=lease_seconds))
+    s = state
+    counts = {
+        r["status"]: int(r["n"])
+        for r in s.sql(
+            "SELECT status, COUNT(*) AS n FROM jobs "
+            "WHERE executor=? AND status IN ('queued', 'running') GROUP BY status",
+            [WORKER_EXECUTOR],
         )
+    }
+    oldest = s.sql(
+        "SELECT MIN(created_at) AS m FROM jobs WHERE executor=? AND status='queued'",
+        [WORKER_EXECUTOR],
+    )[0]["m"]
+    stale = int(
+        s.sql(
+            "SELECT COUNT(*) AS n FROM jobs "
+            "WHERE executor=? AND status='running' AND heartbeat_at < ?",
+            [WORKER_EXECUTOR, cutoff],
+        )[0]["n"]
+    )
+    alive = int(
+        s.sql(
+            "SELECT COUNT(*) AS n FROM lab_workers WHERE stopped_at IS NULL AND heartbeat_at >= ?",
+            [cutoff],
+        )[0]["n"]
+    )
+    totals = s.sql(
+        "SELECT COALESCE(SUM(jobs_succeeded), 0) AS succeeded,"
+        " COALESCE(SUM(jobs_failed), 0) AS failed,"
+        " COALESCE(SUM(jobs_cancelled), 0) AS cancelled FROM lab_workers"
+    )[0]
+    oldest_age = None
+    if oldest is not None:
+        oldest_age = max(0.0, (now - datetime.fromisoformat(oldest)).total_seconds())
+    return QueueStats(
+        queued=counts.get("queued", 0),
+        running=counts.get("running", 0),
+        oldest_queued_seconds=oldest_age,
+        workers_alive=alive,
+        outcomes={k: int(totals[k]) for k in ("succeeded", "failed", "cancelled")},
+        stale_running=stale,
+    )
