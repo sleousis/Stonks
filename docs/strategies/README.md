@@ -43,6 +43,7 @@ uv run stonks lab run quant_momentum --start 2020-01-01 --end 2025-01-01 --prese
 | `ewmac_trend` | Carver's EWMAC forecasts at several speeds, per instrument. Equity, crypto, commodity. |
 | `tsmom` | Time-series momentum: each instrument against its own past return. Equity, crypto, commodity. |
 | `ath_trend` | Buys weekly closes at all-time highs, exits on a wide ATR trailing stop. Equity and crypto. |
+| `forecast_blend` | EWMAC and TSMOM rules combined with weights fitted after costs, and rules too costly for an instrument dropped ([details](forecast-weights.md)). Equity, crypto, commodity. |
 
 ## Long/short
 

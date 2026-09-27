@@ -86,7 +86,7 @@ Enforced: BL-13. `[backtest.costs]` in `config/default.toml` holds realistic cos
 
 **P19. A strategy must survive twice the modelled costs, and costs may eat at most a third of the pre-cost Sharpe.**
 Why: cost estimates are uncertain, and Carver's "speed limit" caps turnover (Chan; Carver; Wilmott).
-Enforced: BL-18 (cost-stress and cost-budget test).
+Enforced: BL-18 (cost-stress and cost-budget test). Per rule, `forecast_blend` drops a trend rule whose yearly cost is above 0.13 Sharpe on an instrument, and weights the rest after costs (roadmap 22.7, `features/forecast_weights`).
 
 **P20. Impact grows with order size relative to volume and with volatility, and no fill takes more than a set share of a bar's volume.**
 Why: today a backtest can buy 300% of a small cap's daily volume at one open (Kissell; Harris; Zipline's volume limit).
