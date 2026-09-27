@@ -22,6 +22,8 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_coverage`](#get_coverage) | read | no |
 | [`get_draft`](#get_draft) | read | no |
 | [`get_health_report`](#get_health_report) | read | no |
+| [`get_insights`](#get_insights) | read | no |
+| [`get_insights_totals`](#get_insights_totals) | read | no |
 | [`get_job`](#get_job) | read | no |
 | [`get_pnl`](#get_pnl) | read | no |
 | [`get_portfolio`](#get_portfolio) | read | no |
@@ -30,6 +32,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_rule_schema`](#get_rule_schema) | read | no |
 | [`get_shadow_pnl`](#get_shadow_pnl) | read | no |
 | [`get_strategy`](#get_strategy) | read | no |
+| [`get_strategy_agreement`](#get_strategy_agreement) | read | no |
 | [`get_strategy_history`](#get_strategy_history) | read | no |
 | [`get_tick`](#get_tick) | read | no |
 | [`get_universe`](#get_universe) | read | no |
@@ -78,6 +81,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`validate_draft`](#validate_draft) | job | no |
 | [`validate_rule_spec`](#validate_rule_spec) | read | no |
 | [`wait_for_job`](#wait_for_job) | read | no |
+| [`whoami`](#whoami) | read | no |
 
 ## Read tools
 
@@ -159,6 +163,28 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `tickers` | list[string] \| null | no | `null` | bar-freshness tickers; default [production].universe |
 
+### `get_insights`
+
+Insights for one of your portfolios (a synced broker account too):
+allocation by asset class, sector, currency and ticker; exposure
+(gross, net, beta); P&L over 1d, 1w, 1m, 3m, ytd, 1y and since
+inception; risk (volatility, drawdown, VaR, concentration).
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
+| `benchmark` | string \| null | no | `null` | ticker beta is measured against; default SPY.US |
+
+### `get_insights_totals`
+
+Admins only: asset-class allocation and exposure summed over every active portfolio (no tickers, no per-person numbers).
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
 ### `get_job`
 
 One background job: status, progress, and its result once finished.
@@ -236,6 +262,17 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `strategy_id` | string | yes |  |  |
+
+### `get_strategy_agreement`
+
+For each holding of one of your portfolios: whether each active
+strategy's latest signal agrees or disagrees with it, and why.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
 
 ### `get_strategy_history`
 
@@ -603,6 +640,14 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `job_id` | string | yes |  |  |
 | `timeout_seconds` | number | no | `120.0` | give up after this long (max 600) |
 | `poll_seconds` | number | no | `1.0` |  |
+
+### `whoami`
+
+Who this MCP server acts as: the token's user, role and scopes. Every tool does only what that user may do.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
 
 ## Job tools
 

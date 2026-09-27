@@ -35,6 +35,7 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'GET /api/backups': 'operations.run',
   'GET /api/backups/jobs/{job_id}/result': 'operations.run',
   'GET /api/backups/restores/{job_id}/result': 'operations.run',
+  'GET /api/insights/totals': 'portfolio.totals',
   'GET /api/portfolio/totals': 'portfolio.totals',
   'GET /api/portfolios': 'data.read',
   'GET /api/portfolios/trading-modes': 'data.read',

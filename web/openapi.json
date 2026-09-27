@@ -1,6 +1,59 @@
 {
   "components": {
     "schemas": {
+      "AgreementView": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The price day the strategies scored.",
+            "title": "As Of"
+          },
+          "holdings": {
+            "items": {
+              "$ref": "#/components/schemas/HoldingAgreement"
+            },
+            "title": "Holdings",
+            "type": "array"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "skipped": {
+            "description": "Active strategies that could not be loaded.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Skipped",
+            "type": "array"
+          },
+          "strategies": {
+            "description": "Active strategies asked, in registry order.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Strategies",
+            "type": "array"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "as_of",
+          "strategies",
+          "skipped",
+          "holdings"
+        ],
+        "title": "AgreementView",
+        "type": "object"
+      },
       "AlertView": {
         "properties": {
           "context": {
@@ -44,6 +97,85 @@
           "created_at"
         ],
         "title": "AlertView",
+        "type": "object"
+      },
+      "AllocationSlice": {
+        "properties": {
+          "holdings": {
+            "description": "Holdings in the group (0 for cash).",
+            "title": "Holdings",
+            "type": "integer"
+          },
+          "key": {
+            "description": "The group: an asset class, sector, currency or ticker.",
+            "title": "Key",
+            "type": "string"
+          },
+          "value": {
+            "description": "Market value of the group (shorts count negative).",
+            "title": "Value",
+            "type": "number"
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "value / the book's total value; null when the total is zero or less.",
+            "title": "Weight"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "weight",
+          "holdings"
+        ],
+        "title": "AllocationSlice",
+        "type": "object"
+      },
+      "AllocationView": {
+        "properties": {
+          "asset_class": {
+            "items": {
+              "$ref": "#/components/schemas/AllocationSlice"
+            },
+            "title": "Asset Class",
+            "type": "array"
+          },
+          "currency": {
+            "items": {
+              "$ref": "#/components/schemas/AllocationSlice"
+            },
+            "title": "Currency",
+            "type": "array"
+          },
+          "sector": {
+            "items": {
+              "$ref": "#/components/schemas/AllocationSlice"
+            },
+            "title": "Sector",
+            "type": "array"
+          },
+          "ticker": {
+            "items": {
+              "$ref": "#/components/schemas/AllocationSlice"
+            },
+            "title": "Ticker",
+            "type": "array"
+          }
+        },
+        "required": [
+          "asset_class",
+          "sector",
+          "currency",
+          "ticker"
+        ],
+        "title": "AllocationView",
         "type": "object"
       },
       "AlpacaStatus": {
@@ -977,6 +1109,83 @@
           "reason"
         ],
         "title": "ClearHaltRequest",
+        "type": "object"
+      },
+      "Concentration": {
+        "properties": {
+          "effective_holdings": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "1 / hhi.",
+            "title": "Effective Holdings"
+          },
+          "hhi": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Herfindahl index of the holding weights (0 to 1).",
+            "title": "Hhi"
+          },
+          "holdings": {
+            "description": "Priced holdings.",
+            "title": "Holdings",
+            "type": "integer"
+          },
+          "largest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Largest"
+          },
+          "top5_weight": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top5 Weight"
+          },
+          "top_weight": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Largest holding's share of gross holdings.",
+            "title": "Top Weight"
+          }
+        },
+        "required": [
+          "holdings",
+          "largest",
+          "top_weight",
+          "top5_weight",
+          "hhi",
+          "effective_holdings"
+        ],
+        "title": "Concentration",
         "type": "object"
       },
       "ConnectWithKeysRequest": {
@@ -2254,6 +2463,82 @@
         "title": "EquityPoint",
         "type": "object"
       },
+      "Exposure": {
+        "properties": {
+          "benchmark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark"
+          },
+          "beta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sum of each holding's weight times its beta to the benchmark, over the holdings with a beta. Null when none has one.",
+            "title": "Beta"
+          },
+          "beta_coverage": {
+            "description": "Share of the gross holdings (by value) that have a beta.",
+            "title": "Beta Coverage",
+            "type": "number"
+          },
+          "gross": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "(long - short) / total value; null without value.",
+            "title": "Gross"
+          },
+          "long_value": {
+            "title": "Long Value",
+            "type": "number"
+          },
+          "net": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "(long + short) / total value; null without value.",
+            "title": "Net"
+          },
+          "short_value": {
+            "description": "Market value of short holdings (zero or negative).",
+            "title": "Short Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "long_value",
+          "short_value",
+          "gross",
+          "net",
+          "beta",
+          "beta_coverage",
+          "benchmark"
+        ],
+        "title": "Exposure",
+        "type": "object"
+      },
       "FailingCheck": {
         "description": "One go-live check that failed (``GoLiveCheck`` without ``passed``).",
         "properties": {
@@ -2913,6 +3198,58 @@
         "title": "HealthRunRequest",
         "type": "object"
       },
+      "HoldingAgreement": {
+        "properties": {
+          "agree": {
+            "title": "Agree",
+            "type": "integer"
+          },
+          "disagree": {
+            "title": "Disagree",
+            "type": "integer"
+          },
+          "opinions": {
+            "items": {
+              "$ref": "#/components/schemas/Opinion"
+            },
+            "title": "Opinions",
+            "type": "array"
+          },
+          "side": {
+            "enum": [
+              "long",
+              "short"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker"
+          }
+        },
+        "required": [
+          "symbol",
+          "ticker",
+          "side",
+          "agree",
+          "disagree",
+          "opinions"
+        ],
+        "title": "HoldingAgreement",
+        "type": "object"
+      },
       "HorizonICView": {
         "properties": {
           "hac_lags": {
@@ -3381,6 +3718,153 @@
           "error"
         ],
         "title": "IngestRunView",
+        "type": "object"
+      },
+      "InsightsTotalsView": {
+        "description": "Sums over every active portfolio's latest snapshot, for admins. No\ntickers, sectors or per-person numbers (decision 2026-09-26).",
+        "properties": {
+          "asset_class": {
+            "items": {
+              "$ref": "#/components/schemas/AllocationSlice"
+            },
+            "title": "Asset Class",
+            "type": "array"
+          },
+          "cash": {
+            "title": "Cash",
+            "type": "number"
+          },
+          "exposure": {
+            "$ref": "#/components/schemas/Exposure"
+          },
+          "owners": {
+            "title": "Owners",
+            "type": "integer"
+          },
+          "portfolios": {
+            "title": "Portfolios",
+            "type": "integer"
+          },
+          "total_value": {
+            "title": "Total Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "portfolios",
+          "owners",
+          "cash",
+          "total_value",
+          "asset_class",
+          "exposure"
+        ],
+        "title": "InsightsTotalsView",
+        "type": "object"
+      },
+      "InsightsView": {
+        "properties": {
+          "allocation": {
+            "$ref": "#/components/schemas/AllocationView"
+          },
+          "cash": {
+            "title": "Cash",
+            "type": "number"
+          },
+          "currency": {
+            "description": "Reporting currency. Amounts are not FX-converted.",
+            "title": "Currency",
+            "type": "string"
+          },
+          "exposure": {
+            "$ref": "#/components/schemas/Exposure"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "pnl": {
+            "items": {
+              "$ref": "#/components/schemas/PeriodPnl"
+            },
+            "title": "Pnl",
+            "type": "array"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "risk": {
+            "$ref": "#/components/schemas/RiskView"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "tick",
+                  "sync"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "tick (the Stonks ledger) or sync (a broker).",
+            "title": "Source"
+          },
+          "taken_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the snapshot read was taken.",
+            "title": "Taken At"
+          },
+          "total_value": {
+            "title": "Total Value",
+            "type": "number"
+          },
+          "uncovered": {
+            "description": "Broker symbols no ticker maps to.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Uncovered",
+            "type": "array"
+          },
+          "unpriced": {
+            "description": "Holdings without a price, left out of the numbers.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Unpriced",
+            "type": "array"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "taken_at",
+          "source",
+          "currency",
+          "cash",
+          "total_value",
+          "allocation",
+          "exposure",
+          "pnl",
+          "risk",
+          "uncovered",
+          "unpriced",
+          "notes"
+        ],
+        "title": "InsightsView",
         "type": "object"
       },
       "InstrumentView": {
@@ -4850,6 +5334,48 @@
         "title": "OperationalHaltSettings",
         "type": "object"
       },
+      "Opinion": {
+        "properties": {
+          "expected_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Return"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "stance": {
+            "enum": [
+              "agree",
+              "disagree",
+              "no_view",
+              "not_applicable",
+              "error"
+            ],
+            "title": "Stance",
+            "type": "string"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_id",
+          "stance",
+          "expected_return",
+          "reason"
+        ],
+        "title": "Opinion",
+        "type": "object"
+      },
       "OrderView": {
         "properties": {
           "broker_order_id": {
@@ -5872,6 +6398,91 @@
           "new_password"
         ],
         "title": "PasswordResetRequest",
+        "type": "object"
+      },
+      "PeriodPnl": {
+        "properties": {
+          "change": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Value change, deposits and withdrawals included.",
+            "title": "Change"
+          },
+          "change_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "change / start_value (0.05 = +5%).",
+            "title": "Change Pct"
+          },
+          "end_day": {
+            "format": "date",
+            "title": "End Day",
+            "type": "string"
+          },
+          "end_value": {
+            "title": "End Value",
+            "type": "number"
+          },
+          "period": {
+            "enum": [
+              "1d",
+              "1w",
+              "1m",
+              "3m",
+              "ytd",
+              "1y",
+              "inception"
+            ],
+            "title": "Period",
+            "type": "string"
+          },
+          "start_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Day of the start value; null without history.",
+            "title": "Start Day"
+          },
+          "start_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Value"
+          }
+        },
+        "required": [
+          "period",
+          "start_day",
+          "end_day",
+          "start_value",
+          "end_value",
+          "change",
+          "change_pct"
+        ],
+        "title": "PeriodPnl",
         "type": "object"
       },
       "PnlRowView": {
@@ -7291,6 +7902,107 @@
           }
         },
         "title": "RiskPolicy",
+        "type": "object"
+      },
+      "RiskStats": {
+        "properties": {
+          "current_drawdown": {
+            "description": "Latest value against its peak, <= 0.",
+            "title": "Current Drawdown",
+            "type": "number"
+          },
+          "expected_shortfall_95": {
+            "description": "Mean return at or below var_95.",
+            "title": "Expected Shortfall 95",
+            "type": "number"
+          },
+          "max_drawdown": {
+            "description": "Worst fall from a peak, <= 0.",
+            "title": "Max Drawdown",
+            "type": "number"
+          },
+          "observations": {
+            "description": "Daily returns the numbers use.",
+            "title": "Observations",
+            "type": "integer"
+          },
+          "var_95": {
+            "description": "One-day historical value at risk, a return (loss < 0).",
+            "title": "Var 95",
+            "type": "number"
+          },
+          "volatility": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Annualized (252 days) standard deviation.",
+            "title": "Volatility"
+          }
+        },
+        "required": [
+          "observations",
+          "volatility",
+          "max_drawdown",
+          "current_drawdown",
+          "var_95",
+          "expected_shortfall_95"
+        ],
+        "title": "RiskStats",
+        "type": "object"
+      },
+      "RiskView": {
+        "properties": {
+          "concentration": {
+            "$ref": "#/components/schemas/Concentration"
+          },
+          "history": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiskStats"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "From the portfolio's own daily values; null with under three days."
+          },
+          "holdings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiskStats"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Today's weights applied to the last year of price returns; null without enough prices."
+          },
+          "returns_as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Last price day behind holdings risk and beta.",
+            "title": "Returns As Of"
+          }
+        },
+        "required": [
+          "history",
+          "holdings",
+          "concentration",
+          "returns_as_of"
+        ],
+        "title": "RiskView",
         "type": "object"
       },
       "Role": {
@@ -16433,6 +17145,300 @@
           "ingest"
         ],
         "x-permission": "operations.run"
+      }
+    },
+    "/api/insights": {
+      "get": {
+        "description": "Allocation (asset class, sector, currency, ticker), exposure (gross,\nnet, beta), P&L over periods and risk (volatility, drawdown, VaR,\nconcentration) of one of your portfolios.",
+        "operationId": "getInsights",
+        "parameters": [
+          {
+            "description": "Ticker beta is measured against. Default SPY.US.",
+            "in": "query",
+            "name": "benchmark",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "pattern": "^[A-Za-z0-9_.\\-]+$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Ticker beta is measured against. Default SPY.US.",
+              "title": "Benchmark"
+            }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Insights",
+        "tags": [
+          "insights"
+        ]
+      }
+    },
+    "/api/insights/agreement": {
+      "get": {
+        "description": "For each holding, whether every active strategy's latest signal\nagrees or disagrees with it, and why.",
+        "operationId": "getStrategyAgreement",
+        "parameters": [
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgreementView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Agreement",
+        "tags": [
+          "insights"
+        ]
+      }
+    },
+    "/api/insights/totals": {
+      "get": {
+        "description": "Admins: asset-class allocation and exposure summed over every active\nportfolio. No tickers and no per-person numbers.",
+        "operationId": "getInsightsTotals",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightsTotalsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Totals",
+        "tags": [
+          "insights"
+        ],
+        "x-permission": "portfolio.totals"
       }
     },
     "/api/jobs": {

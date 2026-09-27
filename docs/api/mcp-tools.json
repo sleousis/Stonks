@@ -1,5 +1,5 @@
 {
-  "instructions": "Stonks research + trading system. Tools talk to the local REST API started\nwith `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs,\nsignal IC analyses and ingests; follow up with wait_for_job. Status changes,\ndraft register/enable/disable, broker syncs and production ticks need\nconfirm=true; call them first without it to get a preview and show it to the\nuser before confirming.\nrun_tick is a dry run unless dry_run=false, and a real tick is refused unless\nthe API reports a paper/simulated broker. No tool can change broker settings\nor enable live trading.",
+  "instructions": "Stonks research + trading system. Tools talk to the local REST API started\nwith `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs,\nsignal IC analyses and ingests; follow up with wait_for_job. Status changes,\ndraft register/enable/disable, broker syncs and production ticks need\nconfirm=true; call them first without it to get a preview and show it to the\nuser before confirming.\nrun_tick is a dry run unless dry_run=false, and a real tick is refused unless\nthe API reports a paper/simulated broker. No tool can change broker settings\nor enable live trading.\nEvery tool acts as the user who owns this server's API token (whoami shows the\nuser, role and scopes) and sees only that user's portfolios. Actions that need\na fresh second factor (switching to auto, connecting a broker, resuming the\nkill switch) are refused here; the user does them in the web app.",
   "resource_templates": [],
   "resources": [
     {
@@ -783,6 +783,68 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Insights for one of your portfolios (a synced broker account too):\nallocation by asset class, sector, currency and ticker; exposure\n(gross, net, beta); P&L over 1d, 1w, 1m, 3m, ytd, 1y and since\ninception; risk (volatility, drawdown, VaR, concentration).",
+      "input_schema": {
+        "properties": {
+          "benchmark": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "pattern": "^[A-Za-z0-9_.\\-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "ticker beta is measured against; default SPY.US",
+            "title": "Benchmark"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          }
+        },
+        "title": "get_insightsArguments",
+        "type": "object"
+      },
+      "name": "get_insights",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Admins only: asset-class allocation and exposure summed over every active portfolio (no tickers, no per-person numbers).",
+      "input_schema": {
+        "properties": {},
+        "title": "toolArguments",
+        "type": "object"
+      },
+      "name": "get_insights_totals",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "One background job: status, progress, and its result once finished.",
       "input_schema": {
         "properties": {
@@ -984,6 +1046,37 @@
         "type": "object"
       },
       "name": "get_strategy",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "For each holding of one of your portfolios: whether each active\nstrategy's latest signal agrees or disagrees with it, and why.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          }
+        },
+        "title": "get_strategy_agreementArguments",
+        "type": "object"
+      },
+      "name": "get_strategy_agreement",
       "needs_confirm": false
     },
     {
@@ -3964,6 +4057,22 @@
         "type": "object"
       },
       "name": "wait_for_job",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Who this MCP server acts as: the token's user, role and scopes. Every tool does only what that user may do.",
+      "input_schema": {
+        "properties": {},
+        "title": "toolArguments",
+        "type": "object"
+      },
+      "name": "whoami",
       "needs_confirm": false
     }
   ]

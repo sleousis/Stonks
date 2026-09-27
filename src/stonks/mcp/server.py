@@ -37,7 +37,11 @@ confirm=true; call them first without it to get a preview and show it to the
 user before confirming.
 run_tick is a dry run unless dry_run=false, and a real tick is refused unless
 the API reports a paper/simulated broker. No tool can change broker settings
-or enable live trading."""
+or enable live trading.
+Every tool acts as the user who owns this server's API token (whoami shows the
+user, role and scopes) and sees only that user's portfolios. Actions that need
+a fresh second factor (switching to auto, connecting a broker, resuming the
+kill switch) are refused here; the user does them in the web app."""
 
 
 def build_server(api: ApiClient, *, max_wait_seconds: float = 600.0) -> MCPServer:

@@ -5,6 +5,38 @@ export type ClientOptions = {
 };
 
 /**
+ * AgreementView
+ */
+export type AgreementView = {
+    /**
+     * As Of
+     *
+     * The price day the strategies scored.
+     */
+    as_of: string | null;
+    /**
+     * Holdings
+     */
+    holdings: Array<HoldingAgreement>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Skipped
+     *
+     * Active strategies that could not be loaded.
+     */
+    skipped: Array<string>;
+    /**
+     * Strategies
+     *
+     * Active strategies asked, in registry order.
+     */
+    strategies: Array<string>;
+};
+
+/**
  * AlertView
  */
 export type AlertView = {
@@ -34,6 +66,58 @@ export type AlertView = {
      * Title
      */
     title: string;
+};
+
+/**
+ * AllocationSlice
+ */
+export type AllocationSlice = {
+    /**
+     * Holdings
+     *
+     * Holdings in the group (0 for cash).
+     */
+    holdings: number;
+    /**
+     * Key
+     *
+     * The group: an asset class, sector, currency or ticker.
+     */
+    key: string;
+    /**
+     * Value
+     *
+     * Market value of the group (shorts count negative).
+     */
+    value: number;
+    /**
+     * Weight
+     *
+     * value / the book's total value; null when the total is zero or less.
+     */
+    weight: number | null;
+};
+
+/**
+ * AllocationView
+ */
+export type AllocationView = {
+    /**
+     * Asset Class
+     */
+    asset_class: Array<AllocationSlice>;
+    /**
+     * Currency
+     */
+    currency: Array<AllocationSlice>;
+    /**
+     * Sector
+     */
+    sector: Array<AllocationSlice>;
+    /**
+     * Ticker
+     */
+    ticker: Array<AllocationSlice>;
 };
 
 /**
@@ -491,6 +575,44 @@ export type ClearHaltRequest = {
      * Reason
      */
     reason: string;
+};
+
+/**
+ * Concentration
+ */
+export type Concentration = {
+    /**
+     * Effective Holdings
+     *
+     * 1 / hhi.
+     */
+    effective_holdings: number | null;
+    /**
+     * Hhi
+     *
+     * Herfindahl index of the holding weights (0 to 1).
+     */
+    hhi: number | null;
+    /**
+     * Holdings
+     *
+     * Priced holdings.
+     */
+    holdings: number;
+    /**
+     * Largest
+     */
+    largest: string | null;
+    /**
+     * Top5 Weight
+     */
+    top5_weight: number | null;
+    /**
+     * Top Weight
+     *
+     * Largest holding's share of gross holdings.
+     */
+    top_weight: number | null;
 };
 
 /**
@@ -1138,6 +1260,50 @@ export type EquityPoint = {
 };
 
 /**
+ * Exposure
+ */
+export type Exposure = {
+    /**
+     * Benchmark
+     */
+    benchmark: string | null;
+    /**
+     * Beta
+     *
+     * Sum of each holding's weight times its beta to the benchmark, over the holdings with a beta. Null when none has one.
+     */
+    beta: number | null;
+    /**
+     * Beta Coverage
+     *
+     * Share of the gross holdings (by value) that have a beta.
+     */
+    beta_coverage: number;
+    /**
+     * Gross
+     *
+     * (long - short) / total value; null without value.
+     */
+    gross: number | null;
+    /**
+     * Long Value
+     */
+    long_value: number;
+    /**
+     * Net
+     *
+     * (long + short) / total value; null without value.
+     */
+    net: number | null;
+    /**
+     * Short Value
+     *
+     * Market value of short holdings (zero or negative).
+     */
+    short_value: number;
+};
+
+/**
  * FailingCheck
  *
  * One go-live check that failed (``GoLiveCheck`` without ``passed``).
@@ -1521,6 +1687,36 @@ export type HealthRunRequest = {
 };
 
 /**
+ * HoldingAgreement
+ */
+export type HoldingAgreement = {
+    /**
+     * Agree
+     */
+    agree: number;
+    /**
+     * Disagree
+     */
+    disagree: number;
+    /**
+     * Opinions
+     */
+    opinions: Array<Opinion>;
+    /**
+     * Side
+     */
+    side: 'long' | 'short';
+    /**
+     * Symbol
+     */
+    symbol: string;
+    /**
+     * Ticker
+     */
+    ticker: string | null;
+};
+
+/**
  * HorizonICView
  */
 export type HorizonIcView = {
@@ -1761,6 +1957,95 @@ export type IngestRunView = {
      * Tickers Ok
      */
     tickers_ok: number | null;
+};
+
+/**
+ * InsightsTotalsView
+ *
+ * Sums over every active portfolio's latest snapshot, for admins. No
+ * tickers, sectors or per-person numbers (decision 2026-09-26).
+ */
+export type InsightsTotalsView = {
+    /**
+     * Asset Class
+     */
+    asset_class: Array<AllocationSlice>;
+    /**
+     * Cash
+     */
+    cash: number;
+    exposure: Exposure;
+    /**
+     * Owners
+     */
+    owners: number;
+    /**
+     * Portfolios
+     */
+    portfolios: number;
+    /**
+     * Total Value
+     */
+    total_value: number;
+};
+
+/**
+ * InsightsView
+ */
+export type InsightsView = {
+    allocation: AllocationView;
+    /**
+     * Cash
+     */
+    cash: number;
+    /**
+     * Currency
+     *
+     * Reporting currency. Amounts are not FX-converted.
+     */
+    currency: string;
+    exposure: Exposure;
+    /**
+     * Notes
+     */
+    notes: Array<string>;
+    /**
+     * Pnl
+     */
+    pnl: Array<PeriodPnl>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    risk: RiskView;
+    /**
+     * Source
+     *
+     * tick (the Stonks ledger) or sync (a broker).
+     */
+    source: 'tick' | 'sync' | null;
+    /**
+     * Taken At
+     *
+     * When the snapshot read was taken.
+     */
+    taken_at: string | null;
+    /**
+     * Total Value
+     */
+    total_value: number;
+    /**
+     * Uncovered
+     *
+     * Broker symbols no ticker maps to.
+     */
+    uncovered: Array<string>;
+    /**
+     * Unpriced
+     *
+     * Holdings without a price, left out of the numbers.
+     */
+    unpriced: Array<string>;
 };
 
 /**
@@ -2479,6 +2764,28 @@ export type OperationalHaltSettings = {
 };
 
 /**
+ * Opinion
+ */
+export type Opinion = {
+    /**
+     * Expected Return
+     */
+    expected_return: number | null;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Stance
+     */
+    stance: 'agree' | 'disagree' | 'no_view' | 'not_applicable' | 'error';
+    /**
+     * Strategy Id
+     */
+    strategy_id: string;
+};
+
+/**
  * OrderView
  */
 export type OrderView = {
@@ -3182,6 +3489,46 @@ export type PasswordResetRequest = {
      * New Password
      */
     new_password: string;
+};
+
+/**
+ * PeriodPnl
+ */
+export type PeriodPnl = {
+    /**
+     * Change
+     *
+     * Value change, deposits and withdrawals included.
+     */
+    change: number | null;
+    /**
+     * Change Pct
+     *
+     * change / start_value (0.05 = +5%).
+     */
+    change_pct: number | null;
+    /**
+     * End Day
+     */
+    end_day: string;
+    /**
+     * End Value
+     */
+    end_value: number;
+    /**
+     * Period
+     */
+    period: '1d' | '1w' | '1m' | '3m' | 'ytd' | '1y' | 'inception';
+    /**
+     * Start Day
+     *
+     * Day of the start value; null without history.
+     */
+    start_day: string | null;
+    /**
+     * Start Value
+     */
+    start_value: number | null;
 };
 
 /**
@@ -3980,6 +4327,69 @@ export type RiskPolicy = {
      */
     min_order_notional?: number;
     rules?: RuleSettings;
+};
+
+/**
+ * RiskStats
+ */
+export type RiskStats = {
+    /**
+     * Current Drawdown
+     *
+     * Latest value against its peak, <= 0.
+     */
+    current_drawdown: number;
+    /**
+     * Expected Shortfall 95
+     *
+     * Mean return at or below var_95.
+     */
+    expected_shortfall_95: number;
+    /**
+     * Max Drawdown
+     *
+     * Worst fall from a peak, <= 0.
+     */
+    max_drawdown: number;
+    /**
+     * Observations
+     *
+     * Daily returns the numbers use.
+     */
+    observations: number;
+    /**
+     * Var 95
+     *
+     * One-day historical value at risk, a return (loss < 0).
+     */
+    var_95: number;
+    /**
+     * Volatility
+     *
+     * Annualized (252 days) standard deviation.
+     */
+    volatility: number | null;
+};
+
+/**
+ * RiskView
+ */
+export type RiskView = {
+    concentration: Concentration;
+    /**
+     * From the portfolio's own daily values; null with under three days.
+     */
+    history: RiskStats | null;
+    /**
+     * Today's weights applied to the last year of price returns; null without enough prices.
+     */
+    holdings: RiskStats | null;
+    /**
+     * Returns As Of
+     *
+     * Last price day behind holdings risk and beta.
+     */
+    returns_as_of: string | null;
 };
 
 /**
@@ -8702,6 +9112,149 @@ export type StartIngestResponses = {
 };
 
 export type StartIngestResponse = StartIngestResponses[keyof StartIngestResponses];
+
+export type GetInsightsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Benchmark
+         *
+         * Ticker beta is measured against. Default SPY.US.
+         */
+        benchmark?: string | null;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/insights';
+};
+
+export type GetInsightsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetInsightsError = GetInsightsErrors[keyof GetInsightsErrors];
+
+export type GetInsightsResponses = {
+    /**
+     * Successful Response
+     */
+    200: InsightsView;
+};
+
+export type GetInsightsResponse = GetInsightsResponses[keyof GetInsightsResponses];
+
+export type GetStrategyAgreementData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/insights/agreement';
+};
+
+export type GetStrategyAgreementErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetStrategyAgreementError = GetStrategyAgreementErrors[keyof GetStrategyAgreementErrors];
+
+export type GetStrategyAgreementResponses = {
+    /**
+     * Successful Response
+     */
+    200: AgreementView;
+};
+
+export type GetStrategyAgreementResponse = GetStrategyAgreementResponses[keyof GetStrategyAgreementResponses];
+
+export type GetInsightsTotalsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/insights/totals';
+};
+
+export type GetInsightsTotalsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetInsightsTotalsError = GetInsightsTotalsErrors[keyof GetInsightsTotalsErrors];
+
+export type GetInsightsTotalsResponses = {
+    /**
+     * Successful Response
+     */
+    200: InsightsTotalsView;
+};
+
+export type GetInsightsTotalsResponse = GetInsightsTotalsResponses[keyof GetInsightsTotalsResponses];
 
 export type ListJobsData = {
     body?: never;
