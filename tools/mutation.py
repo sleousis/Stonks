@@ -43,7 +43,7 @@ class Target:
     timeout: float = 120.0
 
 
-#: Money paths: orders, fills, risk rules, the ledger sync and P&L.
+#: Money paths: orders, fills, risk rules, the ledger sync, drift and P&L.
 TARGETS: tuple[Target, ...] = (
     Target("pnl", "src/stonks/production/pnl.py", ("tests/unit/test_pnl.py",)),
     Target(
@@ -68,6 +68,11 @@ TARGETS: tuple[Target, ...] = (
     ),
     Target(
         "ledger_sync", "src/stonks/execution/reconcile.py", ("tests/integration/test_reconcile.py",)
+    ),
+    Target(
+        "drift",
+        "src/stonks/execution/drift.py",
+        ("tests/unit/test_drift.py", "tests/unit/test_drift_cash.py"),
     ),
     Target(
         "ibkr_orders",

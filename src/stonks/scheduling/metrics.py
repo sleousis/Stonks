@@ -17,6 +17,7 @@ state DB opens and is fully migrated, the lake file exists) and
 
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -93,6 +94,19 @@ def render_prometheus(families: Iterable[MetricFamily]) -> str:
 
 
 @dataclass(frozen=True)
+class ReconcileSample:
+    """A portfolio's latest reconciliation check (roadmap 19.15)."""
+
+    portfolio_id: str
+    status: str
+    #: Unexplained items that count toward the ``broker_drift`` halt.
+    material: int
+    #: Unexplained items that only alert.
+    warnings: int
+    taken_at: datetime | None
+
+
+@dataclass(frozen=True)
 class MetricsSnapshot:
     now: datetime
     tick_counts: Mapping[str, int] = field(default_factory=dict)
@@ -110,6 +124,8 @@ class MetricsSnapshot:
     #: IB Gateway health (roadmap 19.4): ``(gateway, mode, connected,
     #: last ok)`` per gateway the ``broker_health`` job has seen.
     brokers: Sequence[tuple[str, str, bool, datetime | None]] = ()
+    #: The latest reconciliation check of each live portfolio (19.15).
+    reconcile: Sequence[ReconcileSample] = ()
 
 
 def age_bucket(latest: date | None, today: date) -> str:
@@ -252,6 +268,34 @@ def build_metrics(snap: MetricsSnapshot) -> list[MetricFamily]:
                 if last is not None
             ],
         )
+    if snap.reconcile:
+        # labelled by portfolio id, never by account number
+        add(
+            "stonks_reconcile_drift_items",
+            "Unexplained items in each live portfolio's latest reconciliation check.",
+            "gauge",
+            [
+                Sample(n, {"portfolio": r.portfolio_id, "severity": severity})
+                for r in snap.reconcile
+                for severity, n in (("material", r.material), ("warning", r.warnings))
+            ],
+        )
+        add(
+            "stonks_reconcile_last_status",
+            "1 for the status of each live portfolio's latest reconciliation check.",
+            "gauge",
+            [Sample(1, {"portfolio": r.portfolio_id, "status": r.status}) for r in snap.reconcile],
+        )
+        add(
+            "stonks_reconcile_last_check_timestamp_seconds",
+            "Unix time of each live portfolio's latest reconciliation check.",
+            "gauge",
+            [
+                Sample(_ts(r.taken_at), {"portfolio": r.portfolio_id})
+                for r in snap.reconcile
+                if r.taken_at is not None
+            ],
+        )
     return fams
 
 
@@ -295,6 +339,7 @@ def collect_snapshot(
             if "broker_gateway_status" in tables
             else []
         )
+        reconcile = _reconcile_samples(state) if "reconcile_reports" in tables else []
         tick_counts = _counts(state, "tick_runs")
         order_counts = _counts(state, "orders")
         job_counts = _counts(state, "jobs")
@@ -335,7 +380,32 @@ def collect_snapshot(
         next_runs=next_runs,
         scheduler_heartbeat=heartbeat,
         brokers=brokers,
+        reconcile=reconcile,
     )
+
+
+def _reconcile_samples(state: SqliteState) -> list[ReconcileSample]:
+    """The latest ``reconcile_reports`` row of each portfolio."""
+    rows = state.sql(
+        "SELECT r.portfolio_id, r.status, r.items_json, r.taken_at FROM reconcile_reports r"
+        " WHERE r.rowid = (SELECT x.rowid FROM reconcile_reports x"
+        " WHERE x.portfolio_id = r.portfolio_id ORDER BY x.taken_at DESC, x.rowid DESC LIMIT 1)"
+        " ORDER BY r.portfolio_id"
+    )
+    out: list[ReconcileSample] = []
+    for r in rows:
+        items = [i for i in json.loads(r["items_json"] or "[]") if not i.get("explained")]
+        material = sum(1 for i in items if i.get("material"))
+        out.append(
+            ReconcileSample(
+                portfolio_id=r["portfolio_id"],
+                status=r["status"],
+                material=material,
+                warnings=len(items) - material,
+                taken_at=_parse(r["taken_at"]),
+            )
+        )
+    return out
 
 
 def latest_daily_bars(lake: Any, universe: Sequence[str]) -> dict[str, date | None]:

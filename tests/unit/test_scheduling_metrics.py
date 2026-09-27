@@ -154,6 +154,44 @@ def test_broker_gateway_metrics(tmp_path):
     )
 
 
+def _report(s, rid, portfolio, taken_at, status, items):
+    import json
+
+    s.execute(
+        "INSERT INTO reconcile_reports (id, portfolio_id, kind, as_of, taken_at, status,"
+        " items_json, explained_json, external_json, summary_json, paused_json)"
+        " VALUES (?, ?, 'eod', ?, ?, ?, ?, '[]', '{}', '{}', '[]')",
+        [rid, portfolio, taken_at[:10], taken_at, status, json.dumps(items)],
+    )
+
+
+def test_reconcile_drift_metrics(tmp_path):
+    """Roadmap 19.15: the latest check per portfolio, never an account."""
+    path = tmp_path / "state.sqlite"
+    material = {"kind": "position_qty", "key": "AAPL.US", "material": True}
+    minor = {"kind": "cash", "key": "USD", "material": False}
+    with SqliteState(path) as s:
+        s.migrate()
+        _report(s, "r1", "pf_a", "2026-09-24T20:15:00+00:00", "drift", [material])
+        _report(s, "r2", "pf_a", "2026-09-25T20:15:00+00:00", "warn", [minor, minor])
+        _report(s, "r3", "pf_b", "2026-09-25T20:15:00+00:00", "drift", [material, minor])
+    snap = collect_snapshot(path, now=NOW)
+    assert [(r.portfolio_id, r.status, r.material, r.warnings) for r in snap.reconcile] == [
+        ("pf_a", "warn", 0, 2),
+        ("pf_b", "drift", 1, 1),
+    ]
+    text = metrics_text(path, now=NOW)
+    assert 'stonks_reconcile_drift_items{portfolio="pf_a",severity="material"} 0' in text
+    assert 'stonks_reconcile_drift_items{portfolio="pf_a",severity="warning"} 2' in text
+    assert 'stonks_reconcile_drift_items{portfolio="pf_b",severity="material"} 1' in text
+    assert 'stonks_reconcile_last_status{portfolio="pf_b",status="drift"} 1' in text
+    ts = datetime(2026, 9, 25, 20, 15, tzinfo=UTC).timestamp()
+    assert f'stonks_reconcile_last_check_timestamp_seconds{{portfolio="pf_a"}} {int(ts)}' in text
+    assert "stonks_reconcile_drift_items" not in render_prometheus(
+        build_metrics(MetricsSnapshot(now=NOW))
+    )
+
+
 def test_collect_tolerates_unmigrated_db(tmp_path):
     snap = collect_snapshot(tmp_path / "empty.sqlite", now=NOW)
     assert snap.tick_counts == {} and snap.scheduled == {}
