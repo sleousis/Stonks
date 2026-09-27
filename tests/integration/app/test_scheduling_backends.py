@@ -159,7 +159,7 @@ def test_a_scheduled_tick_after_a_failed_ingest_places_no_buys(settings, service
             strategy_id="bah_flat",
         )
         seed_status(registry, "bah_active", "retired")
-        seed_status(registry, sid, "active")
+        seed_status(registry, sid, "active", default_book=True)
     ex = InProcessExecutor(services)
     ctx, _ = _ctx(settings, ex, "tick", as_of, tickers=["FLAT.US"])
     out = ex.execute(ctx)
