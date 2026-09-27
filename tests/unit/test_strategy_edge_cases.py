@@ -15,6 +15,9 @@ from stonks.lab.catalog import strategy_catalog
 from stonks.store.lake import DuckDBLake
 from stonks.strategies.examples.quant_momentum import QuantMomentum
 from stonks.strategies.examples.stocks_on_the_move import StocksOnTheMove
+from stonks.strategies.examples.volatility_hawkes import VolatilityHawkesStrategy
+from stonks.strategies.examples.vsa import VSAStrategy
+from tests.nt888_bars import as_of, bars, seed_lake
 
 N_DAYS = 420
 DATES = pd.bdate_range("2023-01-02", periods=N_DAYS)
@@ -98,6 +101,43 @@ def test_nan_closes_inside_the_window_never_crash_or_leak_nan(name, nan_lake):
     for ticker in ("A.US", "B.US"):
         r = strategy.estimate_return(ticker, LAST, nan_lake)
         assert r is None or math.isfinite(r)
+
+
+def _untriggered_bars(n: int = 700):
+    """Hourly bars where neither trigger fires: the range tracks volume
+    exactly (no VSA anomaly) and widens geometrically, so the Hawkes vol never
+    dips below its rolling 5% quantile."""
+    rng = np.random.default_rng(5)
+    closes = 100 + rng.normal(0, 0.05, n).cumsum()
+    spread = np.geomspace(0.5, 50.0, n)
+    return bars(closes, spread=spread, volume=spread * 1000)
+
+
+@pytest.mark.parametrize(
+    ("cls", "untriggered"),
+    [
+        (VSAStrategy, {"trigger_dev": 0.0, "bars_since_trigger": 24.0}),
+        (VolatilityHawkesStrategy, {}),
+    ],
+    ids=["vsa", "volatility_hawkes"],
+)
+def test_features_are_finite_when_nothing_has_triggered(tmp_path, cls, untriggered):
+    """Intraday bars where no trigger fired still give finite features with
+    their documented no-trigger values."""
+    frame = _untriggered_bars()
+    lake = seed_lake(tmp_path / "lake.duckdb", {"X.CC": frame})
+    try:
+        strategy = cls({"ticker": "X.CC"})
+        values = strategy.extract_features("X.CC", as_of(frame, -1), lake).values
+        assert values, "enough history for a full evaluation"
+        assert values["signal"] == 0.0
+        assert _finite(values), {k: v for k, v in values.items() if not _finite({k: v})}
+        for key, expected in untriggered.items():
+            assert values[key] == expected
+        if cls is VolatilityHawkesStrategy:
+            assert values["close_at_last_below"] == values["close"]
+    finally:
+        lake.close()
 
 
 # ---- cross-sectional strategies --------------------------------------------------

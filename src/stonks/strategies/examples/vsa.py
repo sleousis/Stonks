@@ -31,6 +31,8 @@ Deliberate deviations from the original indicator:
   window start).
 - ``estimate_return`` while long is ``|dev|`` of the triggering bar, the
   strength of the anomaly, not a forecast return.
+- With no trigger in the last ``hold_bars`` bars, ``trigger_dev`` is 0 and
+  ``bars_since_trigger`` is ``hold_bars``, so every feature stays finite.
 """
 
 from __future__ import annotations
@@ -120,11 +122,13 @@ class VSAStrategy(SingleTickerLongFlat):
                 triggers = recent > threshold
         hits = np.flatnonzero(triggers)
         long = len(hits) > 0
-        trigger_dev = float(recent[hits[-1]]) if long else float("nan")
+        # No trigger in the hold window: no anomaly (0) and the count set to
+        # hold_bars, one past the oldest bar the window can hold.
+        trigger_dev = float(recent[hits[-1]]) if long else 0.0
         return {
             "dev": float(dev[-1]),
             "trigger_dev": trigger_dev,
-            "bars_since_trigger": float(len(recent) - 1 - hits[-1]) if long else float("nan"),
+            "bars_since_trigger": float(len(recent) - 1 - hits[-1]) if long else float(hold),
             "close": float(df["close"].iloc[-1]),
             "signal": 1.0 if long else 0.0,
             "score": abs(trigger_dev) if long else 0.0,

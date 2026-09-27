@@ -51,6 +51,8 @@ The helpers use numpy and pandas only: `features/visibility_graph.py`,
     `2*norm_lookback + 4*quantile_lookback` bars, so the ATR and Hawkes
     warm-up starts at the beginning of that window.
   - A calm bar at index 0 counts (`>= 0` instead of `> 0`).
+  - With no calm bar in the window, `close_at_last_below` is the current
+    close, so the feature stays finite.
 
 ## VisibilityGraphPathStrategy (`visibility_graph_path`)
 
@@ -91,6 +93,8 @@ The helpers use numpy and pandas only: `features/visibility_graph.py`,
   - The rolling regression uses vectorised rolling sums.
   - A window where volume doesn't vary gives 0 instead of NaN.
   - Recomputed over the trailing `2n + hold_bars` bars.
+  - With no trigger in the last `hold_bars` bars, `trigger_dev` is 0 and
+    `bars_since_trigger` is `hold_bars`, never NaN.
 
 ## MarketProfileSRStrategy (`market_profile_sr`)
 
