@@ -147,7 +147,7 @@ uv run python -m stonks.security keygen
 - `universe_membership (universe_id, ticker, start_date, end_date)` (015): point-in-time universes, delisted names included.
 - `universe_definitions`, `index_constituent_snapshots`, `index_constituent_changes`, `bar_fetch_ranges` (016): stored universe definitions (list, exchange, rule, index), index history, and the bar ranges already requested so on-demand fetches skip them. See `docs/universes.md`.
 
-**State (SQLite, migrations 001-023):**
+**State (SQLite, migrations 001-026):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.
 - 002: `shadow_decisions`, `shadow_portfolio_snapshots` (model books).
 - 003: `jobs` (API background jobs). 004: `portfolio_snapshots.as_of`. 005: `strategy_drafts` (Studio). 006: `orders.status_reason`. 007: `alerts`.
@@ -163,6 +163,7 @@ uv run python -m stonks.security keygen
 - 019: `risk_snapshots` (daily VaR, ES, violations and decay per book and strategy sleeve).
 - 020: `signals`, `signal_events`, `portfolio_runs`, `portfolios.paper_of` (a broker portfolio's paper account), `subscriptions.paper_since`, `users.risk_policy_json`.
 - 021: `orders.position_effect` (`open` or `close`). 022: a `pf_default` subscription for every active strategy. 023: `financing_accruals`, `financing_charges`.
+- 025: lab offload queue (`jobs.executor`, `lab_workers`). 026: `onboarding_steps`, `onboarding_status` (first-run guide) and `watchlists` (per-user ticker lists).
 
 ## Conventions to match
 

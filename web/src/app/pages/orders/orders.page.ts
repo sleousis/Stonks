@@ -4,6 +4,7 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { filter, map } from 'rxjs';
 
 import { RefreshStatus, UpdatedAgo } from '../../shared/auto-refresh';
+import { ExportButton } from '../../shared/ui/export-button';
 import { PageHeader } from '../../shared/ui/page-header';
 
 /**
@@ -14,7 +15,7 @@ import { PageHeader } from '../../shared/ui/page-header';
 @Component({
   selector: 'app-orders-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, PageHeader, UpdatedAgo],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, PageHeader, UpdatedAgo, ExportButton],
   providers: [RefreshStatus],
   template: `
     <app-page-header
@@ -23,7 +24,11 @@ import { PageHeader } from '../../shared/ui/page-header';
     >
       <app-updated-ago [at]="status.updatedAt()" />
       @if (!onRuns()) {
-        <a actions class="btn" routerLink="/orders/ticks">Go to trading runs</a>
+        <ng-container ngProjectAs="[actions]">
+          <app-export-button kind="orders" label="Orders CSV" [ghost]="true" />
+          <app-export-button kind="fills" label="Fills CSV" [ghost]="true" />
+          <a class="btn" routerLink="/orders/ticks">Go to trading runs</a>
+        </ng-container>
       }
     </app-page-header>
 

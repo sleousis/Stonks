@@ -11,6 +11,7 @@ import {
   formatWeekday,
 } from '../../core/format/format';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
+import { WatchlistContextService } from '../../core/watchlists/watchlist-context.service';
 import { BrandMark } from '../../shared/ui/brand-mark';
 import { SideTag } from '../../shared/ui/side-tag';
 
@@ -261,6 +262,7 @@ interface TapeItem {
 export class FillsTape {
   private readonly api = inject(OrdersService);
   private readonly ctx = inject(PortfolioContextService);
+  private readonly watch = inject(WatchlistContextService);
 
   /** Nothing to show (and nothing asked) for someone without a portfolio. */
   protected readonly show = computed(
@@ -294,14 +296,16 @@ export class FillsTape {
     if (!this.fills.hasValue()) return [];
     const sides = this.fills.value().sides;
     const { fills, today } = this.latest();
-    return fills.map((f) => ({
-      id: f.id,
-      side: sides.get(f.order_client_id) ?? null,
-      ticker: f.ticker,
-      quantity: formatNumber(Math.abs(f.quantity)),
-      price: formatMoney(f.price),
-      time: today ? formatTime(f.filled_at) : null,
-    }));
+    return fills
+      .filter((f) => this.watch.keeps(f.ticker))
+      .map((f) => ({
+        id: f.id,
+        side: sides.get(f.order_client_id) ?? null,
+        ticker: f.ticker,
+        quantity: formatNumber(Math.abs(f.quantity)),
+        price: formatMoney(f.price),
+        time: today ? formatTime(f.filled_at) : null,
+      }));
   });
   protected readonly moving = computed(() => this.items().length >= TAPE_MOVES_FROM);
 }

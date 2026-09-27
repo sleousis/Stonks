@@ -12,6 +12,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`cancel_job`](#cancel_job) | job | no |
 | [`create_draft`](#create_draft) | job | no |
 | [`create_universe`](#create_universe) | guarded | yes |
+| [`create_watchlist`](#create_watchlist) | job | no |
 | [`delete_draft`](#delete_draft) | guarded | yes |
 | [`delete_universe`](#delete_universe) | guarded | yes |
 | [`disable_draft`](#disable_draft) | guarded | yes |
@@ -23,6 +24,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_bars`](#get_bars) | read | no |
 | [`get_broker`](#get_broker) | read | no |
 | [`get_catalog`](#get_catalog) | read | no |
+| [`get_chart`](#get_chart) | read | no |
 | [`get_connection_accounts`](#get_connection_accounts) | read | no |
 | [`get_coverage`](#get_coverage) | read | no |
 | [`get_draft`](#get_draft) | read | no |
@@ -31,8 +33,10 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_insights`](#get_insights) | read | no |
 | [`get_insights_totals`](#get_insights_totals) | read | no |
 | [`get_job`](#get_job) | read | no |
+| [`get_leaderboard`](#get_leaderboard) | read | no |
 | [`get_ledger_run`](#get_ledger_run) | read | no |
 | [`get_live_risk`](#get_live_risk) | read | no |
+| [`get_my_risk_limits`](#get_my_risk_limits) | read | no |
 | [`get_order_tca`](#get_order_tca) | read | no |
 | [`get_pnl`](#get_pnl) | read | no |
 | [`get_portfolio`](#get_portfolio) | read | no |
@@ -46,9 +50,11 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_strategy_history`](#get_strategy_history) | read | no |
 | [`get_studio_capabilities`](#get_studio_capabilities) | read | no |
 | [`get_tca_summary`](#get_tca_summary) | read | no |
+| [`get_tear_sheet`](#get_tear_sheet) | read | no |
 | [`get_tick`](#get_tick) | read | no |
 | [`get_universe`](#get_universe) | read | no |
 | [`get_universe_members`](#get_universe_members) | read | no |
+| [`get_watchlist`](#get_watchlist) | read | no |
 | [`health`](#health) | read | no |
 | [`import_index_history`](#import_index_history) | guarded | yes |
 | [`lab_run_draft`](#lab_run_draft) | guarded | yes |
@@ -79,6 +85,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_trade_journal`](#list_trade_journal) | read | no |
 | [`list_trading_modes`](#list_trading_modes) | read | no |
 | [`list_universes`](#list_universes) | read | no |
+| [`list_watchlists`](#list_watchlists) | read | no |
 | [`live_risk`](#live_risk) | read | no |
 | [`mark_notifications_read`](#mark_notifications_read) | job | no |
 | [`order_tca`](#order_tca) | read | no |
@@ -103,6 +110,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`trade_journal`](#trade_journal) | read | no |
 | [`update_draft`](#update_draft) | job | no |
 | [`update_subscription`](#update_subscription) | guarded | yes |
+| [`update_watchlist`](#update_watchlist) | job | no |
 | [`validate_draft`](#validate_draft) | job | no |
 | [`validate_rule_spec`](#validate_rule_spec) | read | no |
 | [`wait_for_job`](#wait_for_job) | read | no |
@@ -150,6 +158,25 @@ specs, plus the valid bar intervals and asset classes.
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
+
+### `get_chart`
+
+A price chart's data for one ticker: OHLCV bars (the latest
+``limit`` in the window), your fills of it (side, quantity, price)
+in one of your portfolios, and every strategy's signal events for it
+(entry, exit, increase, decrease) with the plain reason.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `ticker` | string | yes |  | instrument id, e.g. AAPL.US or BTC-USD.CC |
+| `interval` | string | no | `"1d"` |  |
+| `start` | string \| null | no | `null` | YYYY-MM-DD |
+| `end` | string \| null | no | `null` | YYYY-MM-DD |
+| `limit` | integer | no | `750` |  |
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
+| `strategy_id` | string \| null | no | `null` | only this strategy's signals |
 
 ### `get_connection_accounts`
 
@@ -242,6 +269,20 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `job_id` | string | yes |  |  |
 
+### `get_leaderboard`
+
+Every strategy ranked by its risk-adjusted paper result (the
+model book the tick keeps for it): total return, CAGR, Sharpe,
+Sortino, worst drawdown, trades in the model book and in real books,
+survival tests passed and the go-live verdict.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `sort` | "sharpe" \| "return" \| "drawdown" \| "trades" | no | `"sharpe"` | rank by paper Sharpe, total return, drawdown or trades |
+| `include_retired` | boolean | no | `false` |  |
+
 ### `get_ledger_run`
 
 One recorded lab run with every trial (parameters, score, status)
@@ -267,6 +308,16 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `portfolio_id` | string \| null | no | `null` |  |
+
+### `get_my_risk_limits`
+
+Your own risk limits next to the system policy, what your
+portfolios follow (the system tightened by yours) and any of yours
+that are looser than the system and so change nothing.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
 
 ### `get_order_tca`
 
@@ -407,6 +458,18 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `ticker` | string \| null | no | `null` |  |
 | `portfolio_id` | string \| null | no | `null` |  |
 
+### `get_tear_sheet`
+
+One strategy on one page: paper figures and value curve, monthly
+returns, recent model-book trades, survival verdicts, the go-live
+report and the status history.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `strategy_id` | string | yes |  |  |
+
 ### `get_tick`
 
 One production tick run with the orders it placed in your
@@ -440,6 +503,16 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `universe_id` | string | yes |  | universe id, e.g. sp500 or us_common |
 | `as_of` | date \| null | no | `null` | YYYY-MM-DD |
+
+### `get_watchlist`
+
+One of your watchlists with its tickers.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `watchlist_id` | string | yes |  |  |
 
 ### `health`
 
@@ -769,6 +842,14 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
 
+### `list_watchlists`
+
+Your watchlists (named ticker lists), oldest first.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
 ### `live_risk`
 
 Deprecated alias of get_live_risk. One of your portfolios on its latest tick day: one-day 95% and
@@ -957,6 +1038,18 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 | `kind` | "rule" \| "code" | no | `"rule"` |  |
 | `source_code` | string \| null | no | `null` | Python source of a code draft (API must allow code strategies) |
 
+### `create_watchlist`
+
+Start a watchlist of yours. Names are unique per person. Needs a
+trading token.
+
+Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `name` | string | yes |  | the list's name |
+| `tickers` | list[string] \| null | no | `null` | instrument ids, kept once and in order |
+
 ### `edit_journal_note`
 
 Replace the text of one of your journal notes.
@@ -1116,6 +1209,18 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: no.
 | `name` | string \| null | no | `null` |  |
 | `spec` | object \| null | no | `null` | replaces the spec |
 | `source_code` | string \| null | no | `null` | Python source of a code draft (API must allow code strategies) |
+
+### `update_watchlist`
+
+Rename one of your watchlists, replace its tickers, or both.
+
+Safety: writes, destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `watchlist_id` | string | yes |  |  |
+| `name` | string \| null | no | `null` |  |
+| `tickers` | list[string] \| null | no | `null` | instrument ids, kept once and in order |
 
 ### `validate_draft`
 

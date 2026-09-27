@@ -11,7 +11,9 @@ from stonks.api.routers import (
     backups,
     brokers,
     catalog,
+    charts,
     connections,
+    exports,
     golive,
     halts,
     health,
@@ -22,6 +24,7 @@ from stonks.api.routers import (
     ledger,
     market,
     notifications,
+    onboarding,
     orders,
     pnl,
     portfolio,
@@ -37,6 +40,7 @@ from stonks.api.routers import (
     tca,
     ticks,
     universes,
+    watchlists,
 )
 
 #: Routers mounted behind the auth dependency.
@@ -73,6 +77,10 @@ API_ROUTERS: list[APIRouter] = [
     backups.router,
     tca.router,
     insights.router,
+    onboarding.router,
+    watchlists.router,
+    charts.router,
+    exports.router,
 ]
 
 #: Routers that always need a principal, even for reads on loopback.

@@ -4,15 +4,22 @@ import { SILENT_HEADERS } from '../core/http/interceptors';
 import { allItems, unwrap } from './api-call';
 import {
   getGoLiveReport,
+  getLeaderboard,
   getStrategy,
   getStrategyHistory,
   getStrategySummary,
+  getTearSheet,
   listStrategies,
   promoteStrategy,
   retireStrategy,
   shadowStrategy,
 } from './generated/sdk.gen';
-import type { ListStrategiesData, StatusChangeRequest, StrategyStatus } from './models';
+import type {
+  GetLeaderboardData,
+  ListStrategiesData,
+  StatusChangeRequest,
+  StrategyStatus,
+} from './models';
 
 /** Registered strategies, their survival reports, and status changes. */
 @Injectable({ providedIn: 'root' })
@@ -41,6 +48,16 @@ export class StrategiesService {
     return unwrap(
       getGoLiveReport({ path: { strategy_id: strategyId }, query: since ? { since } : undefined }),
     );
+  }
+
+  /** Every strategy ranked by its risk-adjusted paper result. */
+  leaderboard(query?: GetLeaderboardData['query']) {
+    return unwrap(getLeaderboard({ query }));
+  }
+
+  /** One strategy on one page, from stored results. */
+  tearSheet(strategyId: string) {
+    return unwrap(getTearSheet({ path: { strategy_id: strategyId } }));
   }
 
   /** Audited status changes and interventions, oldest first. */

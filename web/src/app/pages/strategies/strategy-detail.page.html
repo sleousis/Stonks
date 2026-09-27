@@ -24,6 +24,7 @@
   <a routerLink="/strategies" class="related-link"
     ><span aria-hidden="true">←</span> All strategies</a
   >
+  <a [routerLink]="['/strategies', id(), 'tearsheet']" class="related-link">Tear sheet</a>
   <a routerLink="/lab" [queryParams]="{ strategy: id() }" class="related-link">Re-run in Lab</a>
   <a routerLink="/go-live" [queryParams]="{ strategy: id() }" class="related-link">Go-live check</a>
 </nav>

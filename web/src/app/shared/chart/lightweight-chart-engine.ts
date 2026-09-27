@@ -2,20 +2,28 @@
 // Charts, Apache-2.0). Everything else talks to the ChartEngine interface.
 import {
   BaselineSeries,
+  CandlestickSeries,
+  type CandlestickData,
+  HistogramSeries,
+  type HistogramData,
   type IChartApi,
   type ISeriesApi,
+  type ISeriesMarkersPluginApi,
   LineSeries,
   type LineData,
   LineStyle,
   type MouseEventParams,
+  type SeriesMarker,
   type SeriesType,
   type Time,
   type UTCTimestamp,
   createChart,
+  createSeriesMarkers,
 } from 'lightweight-charts';
 
 import { formatMoney, formatNumber, formatPercent } from '../../core/format/format';
 import type {
+  Candle,
   ChartEngine,
   ChartHandle,
   ChartPoint,
@@ -23,6 +31,10 @@ import type {
   ChartTheme,
   ChartValueFormat,
   CrosshairReadout,
+  PriceChartData,
+  PriceChartHandle,
+  PriceMarker,
+  PriceReadout,
 } from './chart-engine';
 
 const LOWER_PANE_STRETCH = 0.35;
@@ -221,6 +233,233 @@ function withAlpha(color: string, alpha: number): string {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
+function sortedByTime<T extends { time: Time }>(rows: T[]): T[] {
+  const byTime = new Map<string | number, T>();
+  for (const r of rows) byTime.set(r.time as string | number, r);
+  return [...byTime.values()].sort((a, b) =>
+    (a.time as string | number) < (b.time as string | number) ? -1 : 1,
+  );
+}
+
+const MARKER_STYLE: Record<
+  PriceMarker['kind'],
+  { position: 'aboveBar' | 'belowBar' | 'inBar'; shape: SeriesMarker<Time>['shape'] }
+> = {
+  buy: { position: 'belowBar', shape: 'arrowUp' },
+  sell: { position: 'aboveBar', shape: 'arrowDown' },
+  entry: { position: 'belowBar', shape: 'circle' },
+  exit: { position: 'aboveBar', shape: 'circle' },
+  change: { position: 'inBar', shape: 'square' },
+};
+
+/**
+ * Candles with volume along the bottom, moving-average lines on top and
+ * markers for fills (B below, S above) and strategy signals (dots). Up
+ * candles use the gain colour, down candles the loss colour; volume is a
+ * quiet grey so the price reads first.
+ */
+class LightweightPriceChart implements PriceChartHandle {
+  private readonly chart: IChartApi;
+  private readonly candles: ISeriesApi<'Candlestick'>;
+  private readonly volume: ISeriesApi<'Histogram'>;
+  private readonly markers: ISeriesMarkersPluginApi<Time>;
+  private readonly overlays = new Map<string, ISeriesApi<'Line'>>();
+  private data: PriceChartData = { candles: [], overlays: [], markers: [], showVolume: true };
+  private byTime = new Map<string, Candle>();
+  private theme: ChartTheme;
+  private listener: ((r: PriceReadout) => void) | null = null;
+  private readonly resizeObserver: ResizeObserver | null = null;
+  private frame = 0;
+
+  constructor(container: HTMLElement, theme: ChartTheme) {
+    this.theme = theme;
+    this.chart = createChart(container, {
+      width: container.clientWidth,
+      height: container.clientHeight,
+      handleScroll: {
+        vertTouchDrag: false,
+        horzTouchDrag: true,
+        mouseWheel: false,
+        pressedMouseMove: true,
+      },
+      // The wheel scrolls the page; zoom with the range buttons, a pinch or the axis.
+      handleScale: { mouseWheel: false, pinch: true, axisPressedMouseMove: true },
+      rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.22 } },
+      timeScale: { borderVisible: false, fixLeftEdge: true, fixRightEdge: true },
+      crosshair: { mode: 0 },
+      layout: { attributionLogo: false },
+    });
+    this.candles = this.chart.addSeries(CandlestickSeries, { priceLineVisible: false });
+    this.volume = this.chart.addSeries(HistogramSeries, {
+      priceScaleId: 'volume',
+      priceFormat: { type: 'volume' },
+      lastValueVisible: false,
+      priceLineVisible: false,
+    });
+    this.chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+    this.markers = createSeriesMarkers(this.candles, []);
+    this.applyTheme();
+    this.chart.subscribeCrosshairMove((p) => this.emitCrosshair(p));
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => {
+        cancelAnimationFrame(this.frame);
+        this.frame = requestAnimationFrame(() =>
+          this.chart.resize(container.clientWidth, container.clientHeight),
+        );
+      });
+      this.resizeObserver.observe(container);
+    }
+  }
+
+  setData(data: PriceChartData): void {
+    const firstLoad = this.data.candles.length === 0 || this.data.candles[0] !== data.candles[0];
+    this.data = data;
+    this.byTime = new Map(data.candles.map((c) => [c.time, c]));
+    this.candles.setData(
+      sortedByTime(
+        data.candles
+          .filter((c) => [c.open, c.high, c.low, c.close].every(Number.isFinite))
+          .map<CandlestickData<Time>>((c) => ({
+            time: toTime(c.time),
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close,
+          })),
+      ),
+    );
+    this.volume.applyOptions({ visible: data.showVolume });
+    this.paintVolume();
+    const wanted = new Set(data.overlays.map((o) => o.id));
+    for (const [id, api] of this.overlays) {
+      if (!wanted.has(id)) {
+        this.chart.removeSeries(api);
+        this.overlays.delete(id);
+      }
+    }
+    for (const spec of data.overlays) {
+      let api = this.overlays.get(spec.id);
+      if (!api) {
+        api = this.chart.addSeries(LineSeries, {
+          lineWidth: 1,
+          lastValueVisible: false,
+          priceLineVisible: false,
+          crosshairMarkerVisible: false,
+        });
+        this.overlays.set(spec.id, api);
+      }
+      api.applyOptions(this.overlayStyle(spec));
+      api.setData(toData(spec.points));
+    }
+    this.paintMarkers();
+    if (firstLoad) this.chart.timeScale().fitContent();
+  }
+
+  setTheme(theme: ChartTheme): void {
+    this.theme = theme;
+    this.applyTheme();
+    this.paintVolume();
+    this.paintMarkers();
+    for (const spec of this.data.overlays) {
+      this.overlays.get(spec.id)?.applyOptions(this.overlayStyle(spec));
+    }
+  }
+
+  onCrosshair(listener: (r: PriceReadout) => void): void {
+    this.listener = listener;
+  }
+
+  destroy(): void {
+    this.listener = null;
+    this.resizeObserver?.disconnect();
+    cancelAnimationFrame(this.frame);
+    this.chart.remove();
+  }
+
+  private applyTheme(): void {
+    const t = this.theme;
+    this.chart.applyOptions({
+      layout: {
+        background: { color: t.background },
+        textColor: t.text,
+        fontFamily: t.font,
+        fontSize: 11,
+      },
+      grid: { vertLines: { visible: false }, horzLines: { color: t.grid } },
+    });
+    const up = t.colors.gain;
+    const down = t.colors.loss;
+    this.candles.applyOptions({
+      upColor: up,
+      downColor: down,
+      borderUpColor: up,
+      borderDownColor: down,
+      wickUpColor: up,
+      wickDownColor: down,
+    });
+  }
+
+  private paintVolume(): void {
+    const up = withAlpha(this.theme.colors.muted, 0.35);
+    const down = withAlpha(this.theme.colors.muted, 0.2);
+    this.volume.setData(
+      sortedByTime(
+        this.data.candles
+          .filter((c) => c.volume !== null && Number.isFinite(c.volume))
+          .map<HistogramData<Time>>((c) => ({
+            time: toTime(c.time),
+            value: c.volume as number,
+            color: c.close >= c.open ? up : down,
+          })),
+      ),
+    );
+  }
+
+  private paintMarkers(): void {
+    const colors = this.theme.colors;
+    const color: Record<PriceMarker['kind'], string> = {
+      buy: colors.primary,
+      sell: colors.ink,
+      entry: colors.violet,
+      exit: colors.violet,
+      change: colors.muted,
+    };
+    const marks = this.data.markers.map<SeriesMarker<Time>>((m) => ({
+      time: toTime(m.time),
+      position: MARKER_STYLE[m.kind].position,
+      shape: MARKER_STYLE[m.kind].shape,
+      color: color[m.kind],
+      text: m.text,
+      size: m.kind === 'buy' || m.kind === 'sell' ? 1 : 0.6,
+    }));
+    marks.sort((a, b) => ((a.time as string | number) < (b.time as string | number) ? -1 : 1));
+    this.markers.setMarkers(marks);
+  }
+
+  private overlayStyle(spec: ChartSeries) {
+    return {
+      color: this.theme.colors[spec.color],
+      lineStyle: spec.dashed ? LineStyle.Dashed : LineStyle.Solid,
+    };
+  }
+
+  private emitCrosshair(p: MouseEventParams<Time>): void {
+    if (!this.listener) return;
+    const time = fromTime(p.time);
+    if (!time || !p.point) {
+      this.listener({ time: null, candle: null, overlays: null });
+      return;
+    }
+    const overlays = new Map<string, number>();
+    for (const [id, api] of this.overlays) {
+      const d = p.seriesData.get(api) as { value?: number } | undefined;
+      if (d && typeof d.value === 'number') overlays.set(id, d.value);
+    }
+    this.listener({ time, candle: this.byTime.get(time) ?? null, overlays });
+  }
+}
+
 export const lightweightChartEngine: ChartEngine = {
   create: (container, theme) => new LightweightChart(container, theme),
+  createPrice: (container, theme) => new LightweightPriceChart(container, theme),
 };

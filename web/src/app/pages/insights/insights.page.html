@@ -1,5 +1,7 @@
 <app-page-header title="Insights" [description]="description()">
   <app-updated-ago [at]="auto.updatedAt()" />
+  <app-export-button actions kind="pnl" label="P&amp;L CSV" [ghost]="true" />
+  <app-export-button actions kind="snapshots" label="Snapshots CSV" [ghost]="true" />
 </app-page-header>
 
 <app-insights-nav />

@@ -1,0 +1,325 @@
+<app-page-header
+  title="Get set up"
+  description="A few plain steps to your first signals. Skip any of them and come back later."
+>
+  @if (guide.hasValue()) {
+    <p class="progress num" aria-live="polite">{{ progress() }}</p>
+  }
+</app-page-header>
+
+@if (session.isAdmin()) {
+  <section class="panel system" aria-labelledby="system-title">
+    <div class="panel-head">
+      <h2 id="system-title">Your install</h2>
+      @if (system.hasValue()) {
+        <span class="muted">{{ system.value().complete ? 'Ready' : 'Needs attention' }}</span>
+      }
+    </div>
+    @if (system.error(); as err) {
+      <app-error-state
+        title="Could not check the install"
+        [error]="err"
+        (retry)="system.reload()"
+      />
+    } @else if (!system.hasValue()) {
+      <app-loading-state label="Checking the install" [rows]="2" />
+    } @else {
+      <ul class="checks">
+        @for (c of system.value().checks; track c.id) {
+          <li class="check" [attr.data-done]="c.done">
+            <span class="mark" aria-hidden="true">{{ c.done ? '✓' : '!' }}</span>
+            <div class="check-text">
+              <span class="check-title">
+                {{ systemCopy[c.id].title }}
+                <span class="visually-hidden">{{ c.done ? ': ready' : ': not ready' }}</span>
+              </span>
+              <span class="check-detail">{{ c.detail }}</span>
+              @if (!c.done) {
+                <a class="check-fix" [routerLink]="systemCopy[c.id].link">{{
+                  systemCopy[c.id].fix
+                }}</a>
+              }
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+}
+
+@if (guide.error(); as err) {
+  <app-error-state title="Could not load your steps" [error]="err" (retry)="guide.reload()" />
+} @else if (!guide.hasValue()) {
+  <app-loading-state label="Loading your steps" [rows]="5" />
+} @else {
+  @let view = guide.value();
+  @if (view.dismissed) {
+    <p class="note">
+      You closed this guide. It stays here if you want it.
+      <button
+        type="button"
+        class="btn btn-ghost"
+        [disabled]="busy() === 'reopen'"
+        (click)="reopen()"
+      >
+        Show it on Today again
+      </button>
+    </p>
+  }
+  @if (view.complete) {
+    <app-empty-state
+      title="You are set up"
+      message="Signals from the strategies you follow show on Today after each daily run."
+    >
+      <a routerLink="/" class="btn btn-primary">Go to Today</a>
+    </app-empty-state>
+  }
+
+  <ol class="steps">
+    @for (s of view.steps; track s.id; let i = $index) {
+      <li class="step" [attr.data-state]="s.state" [class.open]="open() === s.id">
+        <span class="node num" aria-hidden="true">{{ s.state === 'done' ? '✓' : i + 1 }}</span>
+        <div class="step-body">
+          <button
+            type="button"
+            class="step-head"
+            [attr.aria-expanded]="open() === s.id"
+            [attr.aria-controls]="'step-' + s.id"
+            (click)="toggle(s.id)"
+          >
+            <span class="step-title">{{ copy[s.id].title }}</span>
+            <span class="tag" [attr.data-state]="s.state">
+              {{ s.state === 'done' ? 'Done' : s.state === 'skipped' ? 'Skipped' : 'To do' }}
+            </span>
+          </button>
+          @if (open() === s.id) {
+            <div class="step-panel" [id]="'step-' + s.id">
+              <p class="lead">{{ s.state === 'done' ? copy[s.id].done : copy[s.id].lead }}</p>
+
+              @switch (s.id) {
+                @case ('account') {
+                  @if (s.state !== 'done') {
+                    <a routerLink="/profile" class="btn btn-primary">Open your profile</a>
+                  }
+                }
+                @case ('portfolio') {
+                  @if (portfolios.options().length) {
+                    <ul class="books">
+                      @for (p of portfolios.options(); track p.id) {
+                        <li>
+                          <label class="book">
+                            <input
+                              type="radio"
+                              name="welcome-book"
+                              class="check"
+                              [checked]="portfolios.current()?.id === p.id"
+                              (change)="portfolios.select(p.id)"
+                            />
+                            <span class="book-name">{{ p.name }}</span>
+                            <app-mode-stamp [live]="p.trading === 'live'" />
+                          </label>
+                        </li>
+                      }
+                    </ul>
+                  }
+                  @if (session.can('portfolio.manage')) {
+                    <form
+                      class="form-grid form-grid-2 inline-form"
+                      (submit)="createPortfolio($event)"
+                    >
+                      <div class="field">
+                        <label for="wp-name">New paper portfolio</label>
+                        <input
+                          id="wp-name"
+                          class="input"
+                          maxlength="80"
+                          [value]="portfolioName()"
+                          (input)="portfolioName.set($any($event.target).value)"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="wp-cash">Starting cash</label>
+                        <input
+                          id="wp-cash"
+                          class="input num"
+                          inputmode="decimal"
+                          [value]="portfolioCash()"
+                          (input)="portfolioCash.set($any($event.target).value)"
+                        />
+                      </div>
+                      <div class="actions">
+                        <button type="submit" class="btn btn-primary" [disabled]="!!busy()">
+                          Open paper portfolio
+                        </button>
+                      </div>
+                    </form>
+                  }
+                }
+                @case ('data') {
+                  @if (session.can('portfolio.manage')) {
+                    <form class="form-grid inline-form" (submit)="createWatchlist($event)">
+                      <div class="field">
+                        <label for="wd-name">Watchlist name</label>
+                        <input
+                          id="wd-name"
+                          class="input"
+                          maxlength="80"
+                          [value]="listName()"
+                          (input)="listName.set($any($event.target).value)"
+                        />
+                      </div>
+                      <div class="field">
+                        <label for="wd-tickers">Tickers</label>
+                        <textarea
+                          id="wd-tickers"
+                          class="input tickers"
+                          rows="2"
+                          autocapitalize="characters"
+                          spellcheck="false"
+                          placeholder="AAPL.US, MSFT.US"
+                          aria-describedby="wd-hint"
+                          [value]="listTickers()"
+                          (input)="listTickers.set($any($event.target).value)"
+                        ></textarea>
+                        <span class="hint" id="wd-hint">Separate with commas or spaces.</span>
+                      </div>
+                      <div class="actions">
+                        <button type="submit" class="btn btn-primary" [disabled]="!!busy()">
+                          Save watchlist
+                        </button>
+                        <a routerLink="/universes" class="btn btn-ghost">Use a universe instead</a>
+                      </div>
+                    </form>
+                  } @else {
+                    <a routerLink="/universes" class="btn">See the universes</a>
+                  }
+                }
+                @case ('follow') {
+                  @if (strategies.hasValue() && strategies.value().length === 0) {
+                    <p class="muted">No strategy is ready to follow yet. Ask your admin.</p>
+                  } @else if (session.can('portfolio.trade')) {
+                    <form class="form-grid inline-form" (submit)="follow($event)">
+                      <div class="field">
+                        <label for="wf-strategy">Strategy</label>
+                        <select
+                          id="wf-strategy"
+                          class="input"
+                          (change)="followStrategy.set($any($event.target).value)"
+                        >
+                          <option value="" [selected]="!followStrategy()">Pick one</option>
+                          @for (st of strategies.value() ?? []; track st.id) {
+                            <option [value]="st.id" [selected]="followStrategy() === st.id">
+                              {{ st.id }} ({{ st.status === 'active' ? 'live' : 'paper' }})
+                            </option>
+                          }
+                        </select>
+                      </div>
+                      <fieldset class="modes">
+                        <legend>How</legend>
+                        <label class="mode">
+                          <input
+                            type="radio"
+                            name="welcome-mode"
+                            class="check"
+                            [checked]="followMode() === 'notify'"
+                            (change)="followMode.set('notify')"
+                          />
+                          Signals only
+                        </label>
+                        <label class="mode">
+                          <input
+                            type="radio"
+                            name="welcome-mode"
+                            class="check"
+                            [checked]="followMode() === 'paper'"
+                            (change)="followMode.set('paper')"
+                          />
+                          Paper trading
+                        </label>
+                      </fieldset>
+                      @if (followMode() === 'paper' && portfolios.options().length > 1) {
+                        <div class="field">
+                          <label for="wf-book">Portfolio</label>
+                          <select
+                            id="wf-book"
+                            class="input"
+                            (change)="followPortfolio.set($any($event.target).value)"
+                          >
+                            @for (p of portfolios.options(); track p.id) {
+                              <option [value]="p.id" [selected]="portfolios.current()?.id === p.id">
+                                {{ p.name }}
+                              </option>
+                            }
+                          </select>
+                        </div>
+                      }
+                      <div class="actions">
+                        <button type="submit" class="btn btn-primary" [disabled]="!!busy()">
+                          Follow
+                        </button>
+                        <a routerLink="/leaderboard" class="btn btn-ghost">Compare strategies</a>
+                      </div>
+                    </form>
+                  }
+                }
+                @case ('alerts') {
+                  <app-notification-settings />
+                  <button type="button" class="btn btn-ghost" (click)="guide.reload()">
+                    I turned them on
+                  </button>
+                }
+              }
+
+              @if (formError(); as e) {
+                <p class="error" role="alert">{{ e }}</p>
+              }
+
+              @if (!s.derived) {
+                <div class="step-foot">
+                  @if (s.state === 'todo') {
+                    @if (s.id === 'account' || s.id === 'data') {
+                      <button
+                        type="button"
+                        class="btn btn-ghost"
+                        [disabled]="!!busy()"
+                        (click)="mark(s.id, 'done')"
+                      >
+                        Mark as done
+                      </button>
+                    }
+                    <button
+                      type="button"
+                      class="btn btn-ghost"
+                      [disabled]="!!busy()"
+                      (click)="mark(s.id, 'skipped')"
+                    >
+                      Skip this step
+                    </button>
+                  } @else {
+                    <button
+                      type="button"
+                      class="btn btn-ghost"
+                      [disabled]="!!busy()"
+                      (click)="mark(s.id, 'todo')"
+                    >
+                      Undo
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </li>
+    }
+  </ol>
+
+  @if (!view.dismissed) {
+    <div class="foot">
+      <button type="button" class="btn" [disabled]="busy() === 'close'" (click)="close()">
+        Close the guide
+      </button>
+      <span class="muted">You can open it again from your profile.</span>
+    </div>
+  }
+}
