@@ -82,6 +82,30 @@ def test_gate_main_exits_1_on_new_errors_and_0_on_update(tmp_path, capsys):
     assert pyright_gate.main(["--report", str(report_path), "--baseline", str(baseline)]) == 0
 
 
+def test_strict_paths_come_from_the_pyright_config():
+    strict = pyright_gate.strict_paths()
+    assert "src/stonks/core" in strict
+
+
+def test_an_error_under_a_strict_path_fails_even_when_baselined(tmp_path, capsys):
+    report_path = tmp_path / "report.json"
+    report_path.write_text(json.dumps(_report(_diag("src/stonks/core/x.py", "reportCallIssue"))))
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps({"src/stonks/core/x.py::reportCallIssue": 1}))
+    args = ["--report", str(report_path), "--baseline", str(baseline)]
+    assert pyright_gate.main([*args, "--strict", "src/stonks/core"]) == 1
+    assert "strict" in capsys.readouterr().out
+    # --update never writes a strict path into the baseline
+    assert pyright_gate.main([*args, "--strict", "src/stonks/core", "--update"]) == 1
+    assert json.loads(baseline.read_text()) == {"src/stonks/core/x.py::reportCallIssue": 1}
+
+
+def test_the_checked_in_baseline_has_no_strict_path():
+    data = json.loads((ROOT / "tools" / "pyright-baseline.json").read_text())
+    strict = pyright_gate.strict_paths()
+    assert not [k for k in data if any(k.startswith(p + "/") for p in strict)]
+
+
 def test_the_checked_in_baseline_is_sorted_json():
     path = ROOT / "tools" / "pyright-baseline.json"
     data = json.loads(path.read_text())

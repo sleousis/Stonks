@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import duckdb
 import pandas as pd
@@ -2080,6 +2080,30 @@ class DuckDBLake:
             tickers,
         ).fetchall()
         return {row[0]: row[1] for row in rows}
+
+    def bar_first_stamps(self, interval: Interval) -> dict[str, datetime]:
+        """``{ticker: first bar timestamp}`` for every ticker with bars at
+        ``interval`` (the point-in-time lake lists a name only once its
+        first bar exists, BL-49)."""
+        rows = self.sql(
+            "SELECT ticker, MIN(timestamp) AS first FROM bars WHERE interval = ? GROUP BY ticker",
+            [interval.code],
+        )
+        out: dict[str, datetime] = {}
+        for t, ts in zip(rows["ticker"], rows["first"], strict=True):
+            out[str(t)] = cast(datetime, pd.Timestamp(ts).to_pydatetime())
+        return out
+
+    def bar_tickers(self, interval: Interval) -> list[str]:
+        """Tickers with bars at ``interval``, sorted."""
+        return sorted(self.bar_first_stamps(interval))
+
+    def instrument_sectors(self, tickers: list[str]) -> pd.DataFrame:
+        """``id, sector, gic_sector`` of the ``instruments`` rows for
+        ``tickers`` (static profile data, no time stamp)."""
+        return self.sql(
+            "SELECT id, sector, gic_sector FROM instruments WHERE id = ANY(?)", [list(tickers)]
+        )
 
     # ---- escape hatch -------------------------------------------------------
 

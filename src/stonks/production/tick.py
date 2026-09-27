@@ -221,6 +221,10 @@ class TickSettings:
     scoring_workers: int = 1
     #: Fewest estimates (opted-in strategies x tickers) worth a pool.
     parallel_min_estimates: int = 2000
+    #: The stored universe the full tick trades (``[production].universe``
+    #: as an id): the ranker skips names that are not members on the tick
+    #: date (BL-49). ``None`` for a ticker list or a scoped tick.
+    universe_id: str | None = None
 
     def __post_init__(self) -> None:
         self.simulated_costs  # noqa: B018 - validates costs vs legacy (not both)
@@ -471,6 +475,7 @@ class _TickRun:
                     status="shadow",
                     workers=self.settings.scoring_workers,
                     min_parallel_estimates=self.settings.parallel_min_estimates,
+                    universe_id=self.settings.universe_id,
                 ).score(as_of=self.as_of)
             except Exception as exc:
                 self._shadow_error = exc
@@ -529,6 +534,7 @@ def _run_tick_body(
         workers=settings.scoring_workers,
         min_parallel_estimates=settings.parallel_min_estimates,
         allow_short=any(b.spec.allow_short for b in plan.books),
+        universe_id=settings.universe_id,
     )
     signals = ranker.score(as_of=as_of)
     pool = StrategyPool(registry, lake)

@@ -12,7 +12,7 @@ Enforced: BL-26 adds a `hypothesis` card to every strategy. BL-04 stores it with
 
 **P2. Every trial is counted, and a Sharpe ratio is never reported without its trial count.**
 Why: search a big enough parameter space and a high Sharpe always turns up. Overfitting is what normally happens, not a rare accident (López de Prado, *AFML*; Bailey et al.; Kahneman's "what you see is all there is").
-Enforced: BL-04's trial ledger (`lab/trials.py`, tables `lab_runs` and `lab_trials`) records every lab run with a running trial count for each strategy class. BL-14's deflated Sharpe reads that count.
+Enforced: BL-04's trial ledger (`lab/trials.py`, tables `lab_runs` and `lab_trials`) records every lab run with a running trial count for each strategy class. BL-14's deflated Sharpe reads that count. The opt-in vectorised pre-screen (`lab/vectorized.py`, BL-49) records every set it screened out as a trial too.
 
 **P3. The best of many noisy estimates is biased upward, so it is shrunk before anyone acts on it.**
 Why: the winner's curse applies to tuner winners and to the top-ranked pick each tick alike (Kahneman; Bailey and López de Prado, deflated Sharpe).
@@ -54,7 +54,7 @@ Enforced: `backtest/trades.py` keeps the trade ledger (BL-02). A backtest trades
 
 **P12. No look-ahead, ever.**
 Why: one leaked bar or one early statement invalidates the whole result (McKinney; Graham and Dodd, via Gray and Carlisle's point-in-time rules; Hamilton, who warns that smoothed regime probabilities use future data).
-Enforced: today fills happen at the next bar's open (`backtest/engine.py:11-24`), statements are read by `filing_date`, and macro data carries publication lags. BL-49 adds a point-in-time lake proxy, plus a test that plants a future bar for every catalogued strategy. A strategy sees a bar only after it closes (`strategies._common.visible_cutoff`), and the catalogue-wide planted-future-bar test (`tests/unit/test_strategy_lookahead.py`) covers intraday decisions against daily reads (RS-03).
+Enforced: fills happen at the next bar's open (`backtest/engine.py`), statements are read by `filing_date`, and macro data carries publication lags. A strategy sees a bar only after it closes (`core.interval.visible_cutoff`, RS-03). Strategies never get the lake itself (BL-49): the backtest engine, the tick's ranker and its scoring workers hand them a `PointInTimeLake` (`store/pit.py`) of the decision bar. It clamps every read (bars, statements by filing date, macro prints, dated metadata, universe membership) to the decision, even when the strategy asks for more, and raw `sql()` raises. `tests/unit/test_pit_catalog.py` plants future bars, statements, macro prints, share counts, splits, dividends, yields, TVL and a new ticker, and checks every catalogued strategy answers the same, also when asked about a later day by mistake. `tests/unit/test_strategy_lookahead.py` covers intraday decisions against daily reads.
 
 **P13. Signals and returns use split- and dividend-adjusted prices.**
 Why: a 4:1 split looks like a 75% crash and ignored dividends understate total return, so both corrupt signals and equity curves (Chan; Clenow; Wilcox and Crittenden).
@@ -62,7 +62,7 @@ Enforced: today the engine and the bar cache read raw `close` (`backtest/engine.
 
 **P14. Universes are point in time, delisted names included.**
 Why: a universe of names that are alive today inflates every cross-sectional backtest (Malkiel; Clenow; Covel).
-Enforced: BL-37 (membership table and survivorship warning). A backtest with a `universe_id` (`BacktestConfig.universe_id`, set from the lab dataset) trades a name only on days it is a member and sells a holding that leaves (RS-05). The preflight warns about tickers that are never members in the window.
+Enforced: BL-37 (membership table and survivorship warning). A backtest with a `universe_id` (`BacktestConfig.universe_id`, set from the lab dataset) trades a name only on days it is a member and sells a holding that leaves (RS-05). A tick over a stored universe scores only names that are members on the tick date (`Ranker(universe_id=...)`, BL-49), and membership read through the point-in-time lake hides joins and exits after the decision. The preflight warns about tickers that are never members in the window.
 
 ## 3. Benchmarking
 
@@ -124,7 +124,7 @@ Enforced: BL-27 (drawdown scaling, 5/10/15% → 1.0/0.5/0.25).
 
 **P28. Automated risk rules only reduce exposure.**
 Why: a safety layer that can add risk isn't one (Narang's risk model; Part 7 of the Axon series).
-Enforced: today the `production/risk.py` docstring and its tests. BL-11 turns this into a property test that runs over every registered rule.
+Enforced: the `production/risk.py` docstring and its tests. `tests/unit/test_rules_w31_properties.py` and the Hypothesis tests in `tests/property/test_risk_rule_properties.py` run every registered rule and `apply_risk` over generated books, long-only and short: no buy grows, gross exposure never rises, and an order that closes a position is never dropped or cut (BL-49).
 
 **P29. The future worst drawdown will exceed the historical one.**
 Why: the largest historical loss is a lower bound (Vince; Davey's Monte Carlo).
@@ -212,4 +212,4 @@ Enforced: today CLAUDE.md's working rules. `statsmodels`, `arch` and `cvxpy` get
 
 **P48. Tests come first and are hermetic, and every invariant gets a property test.**
 Why: invariants such as cost monotonicity, cash never going negative and rules never adding exposure should be checked for all inputs, not for three examples (Slatkin).
-Enforced: today TDD with `FakeDataSource`. BL-49 adds Hypothesis and pyright.
+Enforced: TDD with `FakeDataSource`. Hypothesis property tests (`tests/property/`, BL-49) cover `orders_from_targets` (cash-safe, idempotent, split at zero), the ledger (cash plus marked positions equals equity, a fill moves equity by its cost), fills (inside the order and the bar, participation cap), costs (never negative, always adverse, impact grows with size), the risk rules and the price adjustment. They run derandomized in CI. Pyright runs over `src/` in CI, and `core/` and `execution/` are checked in strict mode with no baseline allowed (`tools/pyright_gate.py`).

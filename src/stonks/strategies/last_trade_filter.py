@@ -42,7 +42,7 @@ import pandas as pd
 from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
-from stonks.strategies._common import LakeBarCaches
+from stonks.strategies._common import LakeBarCaches, memo_scope
 from stonks.strategies._wrapping import INTERVALS, InnerStrategyWrapper, inner_param_specs
 
 
@@ -141,10 +141,11 @@ class LastTradeFilter(InnerStrategyWrapper):
 
     def _lake_signals(self, lake: Any) -> dict | None:
         try:
-            memo = self._signals.get(lake)
+            scope = memo_scope(lake)
+            memo = self._signals.get(scope)
             if memo is None:
                 memo = {}
-                self._signals[lake] = memo
+                self._signals[scope] = memo
         except TypeError:
             return None
         return memo

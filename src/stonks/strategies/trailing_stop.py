@@ -42,7 +42,7 @@ from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
 from stonks.features.indicators import atr
 from stonks.features.trailing_stop import Trade, open_trade, replay_trades
-from stonks.strategies._common import LakeBarCaches, iso
+from stonks.strategies._common import LakeBarCaches, iso, memo_scope
 from stonks.strategies._wrapping import INTERVALS, InnerStrategyWrapper, inner_param_specs
 
 
@@ -118,7 +118,7 @@ class TrailingStopWrapper(InnerStrategyWrapper):
 
     def _memo(self, lake: Any) -> dict | None:
         try:
-            return self._signals.setdefault(lake, {})
+            return self._signals.setdefault(memo_scope(lake), {})
         except TypeError:
             return None
 

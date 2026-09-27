@@ -12,6 +12,7 @@ from stonks.lab.survival.perturbation import PerturbationTest
 from stonks.strategies.base import BaseStrategy
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
 from stonks.strategies.examples.momentum import Momentum
+from tests.fixtures.pit import underlying
 
 FIRST_DAY = date(2025, 10, 1)
 
@@ -33,6 +34,7 @@ class _Spy(BaseStrategy):
     seen: list[tuple[object, tuple[float, ...], tuple[float, ...]]] = []
 
     def estimate_return(self, ticker, as_of, lake):
+        lake = underlying(lake)  # the perturbed lake behind the engine's view
         bars = lake.get_bars(ticker, Interval.DAY_1, start=FIRST_DAY, end=as_of)
         prices = lake.get_prices(ticker, FIRST_DAY, FIRST_DAY + timedelta(days=7))
         _Spy.seen.append(
@@ -107,6 +109,7 @@ class _StatementSpy(BaseStrategy):
     seen: dict[object, tuple[int, int, int]] = {}
 
     def estimate_return(self, ticker, as_of, lake):
+        lake = underlying(lake)
         _StatementSpy.seen[lake] = (
             len(lake.get_income_statement(ticker)),
             len(lake.get_dividends(ticker)),
@@ -143,6 +146,7 @@ class _Coin(BaseStrategy):
     id = "coin_fake"
 
     def estimate_return(self, ticker, as_of, lake):
+        lake = underlying(lake)  # the perturbed lake behind the engine's view
         bars = lake.get_bars(ticker, Interval.DAY_1, start=FIRST_DAY, end=as_of)
         if bars.empty:
             return None

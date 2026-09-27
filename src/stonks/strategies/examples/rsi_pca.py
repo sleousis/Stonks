@@ -55,7 +55,7 @@ from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
 from stonks.features.library import rsi
-from stonks.strategies._common import LakeBarCaches, long_only_decide
+from stonks.strategies._common import LakeBarCaches, long_only_decide, memo_scope
 from stonks.strategies.base import BaseStrategy
 from stonks.strategies.examples._nt888_common import train_bars
 
@@ -327,7 +327,7 @@ class RSIPCAStrategy(BaseStrategy):
         lake: a backtest asks for the last ``hold_bars`` bars on every bar,
         so each bar's prediction is computed once."""
         try:
-            memo = self._preds.setdefault(lake, {})
+            memo = self._preds.setdefault(memo_scope(lake), {})
         except TypeError:  # lake not weakly referenceable: no memo
             return self._predict_current(ticker, bar_ts, lake)
         key = (ticker, bar_ts)

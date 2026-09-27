@@ -20,7 +20,8 @@ jobs:
       - name: Format
         run: uv run ruff format --check .
       # TT-02: pyright basic over src/stonks; fails only on errors that are
-      # not in tools/pyright-baseline.json.
+      # not in tools/pyright-baseline.json. The strict packages in
+      # [tool.pyright] (core, execution) may have no errors at all (BL-49).
       - name: Type check (new pyright errors only)
         run: uv run python -m tools.pyright_gate
       # TT-01: coverage.py's combined line-and-branch number. fail_under

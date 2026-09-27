@@ -22,6 +22,9 @@ from collections.abc import Mapping, Sequence
 from datetime import date
 from typing import Any
 
+import numpy as np
+import pandas as pd
+
 from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
@@ -158,6 +161,38 @@ class Momentum(BaseStrategy):
                     )
 
         return orders
+
+    # ---- vectorised pre-screen (BL-49, lab/vectorized.py) --------------------
+
+    @classmethod
+    def target_positions(cls, closes: pd.DataFrame, params: Mapping[str, Any]) -> pd.DataFrame:
+        """Weights ``decide`` would hold after each close, for a whole table
+        of daily closes at once: flat until a pick, then ``allocation`` in
+        the top pick, kept while it stays a pick. A switch takes two bars
+        (the sell frees the cash, the buy follows at the next decision),
+        exactly as in the event engine."""
+        p = cls(dict(params)).params
+        lookback, skip = int(p["lookback_days"]), int(p["skip_days"])
+        values = closes.to_numpy(dtype=float)
+        n_bars, n_tickers = values.shape
+        score = np.full((n_bars, n_tickers), np.nan)
+        start = lookback + skip
+        if n_bars > start:
+            past, now = values[: n_bars - start], values[lookback : n_bars - skip]
+            with np.errstate(divide="ignore", invalid="ignore"):
+                score[start:] = np.where(past > 0, now / past - 1.0, np.nan)
+        picks = np.nan_to_num(score, nan=-np.inf) > float(p["threshold"])
+        weights = np.zeros((n_bars, n_tickers))
+        held = -1
+        for t in range(n_bars):
+            if held >= 0:
+                if not picks[t, held]:
+                    held = -1  # sold at the next open; no cash to buy with yet
+            elif picks[t].any():
+                held = int(np.argmax(np.where(picks[t], score[t], -np.inf)))
+            if held >= 0:
+                weights[t, held] = float(p["allocation"])
+        return pd.DataFrame(weights, index=closes.index, columns=closes.columns)
 
     # ---- internals ---------------------------------------------------------
 

@@ -28,6 +28,7 @@ from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy
 from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
+from stonks.store.pit import PitSession
 
 _log = get_logger("stonks.production.scoring")
 
@@ -91,10 +92,12 @@ def _score_chunk(
     sid, portable, names, threshold, as_of = task
     strategy = portable.strategy
     out: dict[str, float] = {}
+    # the same point-in-time view the serial path scores through (BL-49)
+    view = PitSession(lake).at(as_of, decision_interval=Interval.DAY_1)
     with decision_interval(Interval.DAY_1):
         for ticker in names:
             try:
-                r = strategy.estimate_return(ticker, as_of, lake)
+                r = strategy.estimate_return(ticker, as_of, view)
             except Exception as exc:
                 _log.warning("ranker.estimate_return.failed", strategy_id=sid, ticker=ticker,
                              error=str(exc))  # fmt: skip
