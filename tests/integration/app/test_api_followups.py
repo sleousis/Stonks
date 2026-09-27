@@ -139,8 +139,7 @@ def test_orders_say_which_are_protective_stops(client, settings, seeded):
         )
     items = client.get("/api/orders", headers=AUTH).json()["items"]
     assert all(
-        (o["protective"], o["stop_price"], o["time_in_force"]) == (True, 90.5, "gtc")
-        for o in items
+        (o["protective"], o["stop_price"], o["time_in_force"]) == (True, 90.5, "gtc") for o in items
     )
 
 

@@ -49,7 +49,9 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, time, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
+
+import pandas as pd
 
 from stonks.core.clock import SYSTEM_CLOCK, Clock
 from stonks.core.timeutil import day_start
@@ -69,6 +71,7 @@ from stonks.production.rules._stop_settings import ProtectiveStopSettings
 
 if TYPE_CHECKING:
     from stonks.backtest.simulated_broker import SimulatedBroker
+    from stonks.core.protocols import Broker
     from stonks.store.lake import DuckDBLake
     from stonks.store.state import SqliteState
 
@@ -498,8 +501,11 @@ def load_atr(
     closes: dict[str, float] = {}
     for ticker, group in df.groupby("ticker", sort=True):
         name = str(ticker)
-        closes[name] = float(group["close"].iloc[-1])
-        series = wilder_atr(group["high"], group["low"], group["close"], window)
+        high = pd.Series(group["high"], dtype=float)
+        low = pd.Series(group["low"], dtype=float)
+        close = pd.Series(group["close"], dtype=float)
+        closes[name] = float(close.iloc[-1])
+        series = wilder_atr(high, low, close, window)
         last = series.iloc[-1] if len(series) else float("nan")
         if last == last and last > 0:  # not NaN
             atrs[name] = float(last)
@@ -691,11 +697,13 @@ def sync_live_books(
         if not book.enabled and not working:
             continue
         try:
-            broker = open_broker(pid)
+            broker: Any = open_broker(pid)
             if not isinstance(broker, OrderStateSource):
                 out[pid] = {"error": "the broker cannot look orders up by client id"}
                 continue
-            startup = startup_reconcile(broker, state, portfolio_id=pid, clock=clock)
+            startup = startup_reconcile(
+                cast("Broker", broker), state, portfolio_id=pid, clock=clock
+            )
             if startup.unresolved:
                 out[pid] = {"skipped": "orders_unreconciled"}
                 continue
@@ -858,15 +866,22 @@ def sweep_paper_stops(
     broker = make_broker(portfolio) if make_broker is not None else SimulatedBroker(portfolio)
     by_id = {o.client_id: o for o, _ in stops}
     fills: list[Fill] = []
-    for day, group in bars.groupby("date", sort=True):
-        bar_day = day.date() if hasattr(day, "date") else day
+    by_day: dict[date, list[dict[str, Any]]] = {}
+    for record in bars.to_dict("records"):
+        raw_day = record["date"]
+        bar_day: date = raw_day.date() if isinstance(raw_day, datetime) else raw_day
+        by_day.setdefault(bar_day, []).append(record)
+    for bar_day in sorted(by_day):
+        rows_of_day = by_day[bar_day]
         for order, placed in stops:
             if placed < bar_day:
                 broker.place_order(order)  # rests; a no-op once resting or filled
-        opens = {str(r.ticker): float(r.open) for r in group.itertuples() if r.open == r.open}
-        highs = {str(r.ticker): float(r.high) for r in group.itertuples() if r.high == r.high}
-        lows = {str(r.ticker): float(r.low) for r in group.itertuples() if r.low == r.low}
-        broker.set_prices(opens, bar_day, highs=highs, lows=lows)
+        broker.set_prices(
+            _column(rows_of_day, "open"),
+            bar_day,
+            highs=_column(rows_of_day, "high"),
+            lows=_column(rows_of_day, "low"),
+        )
         fills.extend(broker.trigger_resting())
     out: list[tuple[Order, Fill]] = []
     for f in fills:
@@ -881,6 +896,16 @@ def sweep_paper_stops(
         )
     # a stop the bars could not fill but whose position is gone is cancelled
     # by the run's plan, not here
+    return out
+
+
+def _column(rows: Sequence[Mapping[str, Any]], name: str) -> dict[str, float]:
+    """``ticker -> value`` of one bar column, missing values left out."""
+    out: dict[str, float] = {}
+    for row in rows:
+        value = row.get(name)
+        if value is not None and value == value:  # not NaN
+            out[str(row["ticker"])] = float(value)
     return out
 
 
