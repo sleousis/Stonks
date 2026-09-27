@@ -7,7 +7,7 @@ import {
   linkedSignal,
   resource,
 } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { OrdersService } from '../../api/orders.service';
 import { autoRefresh } from '../../shared/auto-refresh';
@@ -27,7 +27,7 @@ const PAGE_SIZE = 50;
 @Component({
   selector: 'app-orders-list-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [OrdersTable, LoadingState, EmptyState, ErrorState],
+  imports: [RouterLink, OrdersTable, LoadingState, EmptyState, ErrorState],
   template: `
     <section class="panel" aria-labelledby="orders-title">
       <div class="panel-head">
@@ -105,12 +105,16 @@ const PAGE_SIZE = 50;
           <app-empty-state
             title="No orders match these filters"
             message="Clear a filter or widen the search. Filters match ids exactly."
-          />
+          >
+            <button type="button" class="btn" (click)="clearFilters()">Clear filters</button>
+          </app-empty-state>
         } @else {
           <app-empty-state
             title="No orders yet"
             message="Orders appear here after a trading run. Start one from the Trading runs tab, with a dry run first."
-          />
+          >
+            <a class="btn" routerLink="/orders/ticks">Go to trading runs</a>
+          </app-empty-state>
         }
       } @else {
         <!-- Re-created per filter set so paging restarts on page one. -->

@@ -102,7 +102,13 @@ export const FILL_COLUMNS: TableColumn<FillView>[] = [
               ? 'Clear a filter. Ids must match exactly.'
               : 'Fills are recorded when a real trading run (not a dry run) sends orders the broker fills.'
           "
-        />
+        >
+          @if (hasFilters()) {
+            <button type="button" class="btn" (click)="clearFilters()">Clear filters</button>
+          } @else {
+            <a class="btn" routerLink="/orders/ticks">Go to trading runs</a>
+          }
+        </app-empty-state>
       } @else {
         @for (k of [filterKey()]; track k) {
           <app-data-table

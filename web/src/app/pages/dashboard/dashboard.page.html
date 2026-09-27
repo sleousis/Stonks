@@ -79,7 +79,9 @@
         <app-empty-state
           title="No P&L yet"
           message="The series starts after the first trading run saves a portfolio snapshot."
-        />
+        >
+          <a class="btn" routerLink="/orders/ticks">Go to trading runs</a>
+        </app-empty-state>
       } @else {
         <app-time-series-chart
           ariaLabel="Portfolio value, with drawdown below"
@@ -144,7 +146,9 @@
       <app-empty-state
         title="No open positions"
         message="The portfolio is all cash. Positions appear after a trading run fills orders."
-      />
+      >
+        <a class="btn" routerLink="/orders">See orders</a>
+      </app-empty-state>
     } @else {
       <app-data-table
         caption="Open positions valued at the latest prices"

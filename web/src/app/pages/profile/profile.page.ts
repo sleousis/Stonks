@@ -7,7 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
 import { AuthService } from '../../api/auth.service';
 import type { ApiScope, TokenView } from '../../api/models';
@@ -57,6 +57,7 @@ const ROLE_LABELS: Record<string, string> = {
   selector: 'app-profile-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    RouterLink,
     ReactiveFormsModule,
     PageHeader,
     OneTimeSecret,

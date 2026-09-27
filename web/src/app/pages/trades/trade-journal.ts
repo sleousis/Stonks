@@ -45,10 +45,9 @@ export const JOURNAL_PAGE_SIZE = 25;
       } @else if (!journal.hasValue()) {
         <app-loading-state label="Loading the journal" [rows]="6" />
       } @else if (journal.value().items.length === 0) {
-        <app-empty-state
-          title="No trades yet"
-          message="Costs appear after the first filled order."
-        />
+        <app-empty-state title="No trades yet" message="Costs appear after the first filled order.">
+          <a class="btn" routerLink="/orders">See orders</a>
+        </app-empty-state>
       } @else {
         @let page = journal.value();
         <app-data-table

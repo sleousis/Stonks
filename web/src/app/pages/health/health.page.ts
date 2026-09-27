@@ -7,6 +7,8 @@ import {
   signal,
 } from '@angular/core';
 
+import { RouterLink } from '@angular/router';
+
 import { HealthService } from '../../api/health.service';
 import { IngestService } from '../../api/ingest.service';
 import type { IngestRunView, TickRun } from '../../api/models';
@@ -48,6 +50,7 @@ function sourceName(id: string | null | undefined): string {
   selector: 'app-health-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    RouterLink,
     PageHeader,
     StatTile,
     StatusPill,

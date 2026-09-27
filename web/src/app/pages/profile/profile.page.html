@@ -41,7 +41,9 @@
           </div>
         </dl>
       } @else {
-        <app-empty-state title="Not signed in" message="Sign in to see and change your account." />
+        <app-empty-state title="Not signed in" message="Sign in to see and change your account.">
+          <a class="btn btn-primary" routerLink="/login">Sign in</a>
+        </app-empty-state>
       }
     </section>
 
