@@ -172,3 +172,27 @@ def test_a_breach_queues_deliveries_on_the_configured_channels(env):
     apply_quit_rule(state, _loader([100.0, 80.0]), START + timedelta(days=1), QuitRuleSettings())
     channels = [r["channel"] for r in state.sql("SELECT channel FROM notification_deliveries")]
     assert channels == ["webhook"]
+
+
+# ---- BE-24: a failed demotion ------------------------------------------------------------
+
+
+class _RefusingRegistry:
+    def set_status(self, *args, **kwargs):
+        raise RuntimeError("state is locked")
+
+
+@pytest.mark.parametrize("registry", [None, _RefusingRegistry()])
+def test_be24_a_failed_demotion_reports_not_demoted_and_changes_nothing(env, registry):
+    state, _ = env
+    [check] = apply_quit_rule(
+        state,
+        _loader([100.0, 80.0]),
+        START + timedelta(days=1),
+        QuitRuleSettings(auto_demote=True),
+        registry=registry,
+    )
+    assert check.breached and not check.demoted
+    assert state.sql("SELECT status FROM strategies WHERE id = 'bh'")[0][0] == "active"
+    # the alert still went out
+    assert state.sql("SELECT COUNT(*) FROM notification_outbox")[0][0] == 1

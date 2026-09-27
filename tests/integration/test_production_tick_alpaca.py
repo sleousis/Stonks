@@ -550,3 +550,30 @@ def test_be10_a_live_default_with_holdings_and_no_auto_strategy_alerts(env):
     run_tick(state, lake, registry, SETTINGS, as_of=AS_OF, broker_factory=factory, plan=plan,
              notifier=capture)  # fmt: skip
     assert any(n.title == "default book unmanaged" for n in capture.sent)
+
+
+def test_be24_a_sync_failure_after_submit_leaves_the_row_pending_for_the_next_tick(
+    env, monkeypatch
+):
+    _, state, _, sid, client, _, _ = env
+
+    def broken_sync(*args, **kwargs):
+        raise BrokerError("order lookup failed")
+
+    monkeypatch.setattr(tick_mod, "reconcile_order", broken_sync)
+    result = _tick(env)
+    assert result.status == "ok" and result.orders_placed == 1
+    [row] = _orders(state)
+    assert (row["client_id"], row["status"]) == (_cid(sid), "pending")
+
+    # the broker filled it; the next tick's reconcile books it, never resubmits
+    monkeypatch.undo()
+    client.orders[_cid(sid)].update(
+        status="filled", filled_qty=client.orders[_cid(sid)]["qty"], filled_avg_price="190"
+    )
+    _tick(env, as_of=date(2026, 3, 23))
+    assert [o.client_order_id for o in client.submitted].count(_cid(sid)) == 1
+    row = next(r for r in _orders(state) if r["client_id"] == _cid(sid))
+    assert row["status"] == "filled"
+    fills = state.sql("SELECT 1 FROM fills WHERE order_client_id = ?", [_cid(sid)])
+    assert len(fills) == 1
