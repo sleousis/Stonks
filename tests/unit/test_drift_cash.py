@@ -198,3 +198,35 @@ def test_statement_items_are_sorted_material_first():
         ("statement_missing_execution", "e2"),
         ("statement_commission", "e1"),
     ]
+
+
+# ---- edges the mutation run found ------------------------------------------------------------
+
+
+def test_a_cash_item_says_cash_not_settled_cash():
+    [cash] = cash_drift("cash", "USD", 0.0, 100.0, CashFlows(), tolerance=1.0)
+    assert cash.detail.startswith("the broker's cash moved +100.00 USD")
+
+
+def test_a_tiny_float_residual_is_noise_even_with_no_tolerance():
+    assert cash_drift("cash", "USD", 0.0, 5e-10, CashFlows(), tolerance=0.0) == []
+
+
+def test_every_missing_execution_is_listed():
+    items = statement_drift([ex("e1"), ex("e2")], [], commission_tolerance=0.01)
+    assert kinds(items) == [
+        ("statement_missing_execution", "e1"),
+        ("statement_missing_execution", "e2"),
+    ]
+
+
+def test_a_double_quantity_is_a_difference():
+    [item] = statement_drift([ex(qty=20.0)], [fill(qty=10.0)], commission_tolerance=0.01)
+    assert item.kind == "statement_quantity"
+
+
+def test_currencies_are_not_compared_whichever_way_round():
+    items = statement_drift(
+        [ex(commission=2.0, ccy="USD")], [fill(fee=1.0, ccy="EUR")], commission_tolerance=0.01
+    )
+    assert items == []
