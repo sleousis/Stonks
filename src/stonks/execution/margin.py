@@ -108,16 +108,6 @@ class MarginModel(ABC):
         asset_classes: Mapping[str, str] | None = None,
     ) -> float: ...
 
-    def buying_power(
-        self,
-        portfolio: Portfolio,
-        prices: Mapping[str, float],
-        asset_classes: Mapping[str, str] | None = None,
-    ) -> float:
-        """Notional of a new equity long the excess equity could carry."""
-        rate = self.initial_requirement("", 1.0, 1.0)
-        return max(self.excess_equity(portfolio, prices, asset_classes), 0.0) / rate
-
     def deficit(
         self,
         portfolio: Portfolio,

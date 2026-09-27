@@ -63,7 +63,6 @@ def test_cash_margin_is_todays_account() -> None:
     assert isinstance(m, CashMargin) and not m.allows_short
     p = Portfolio(cash=1_000.0, positions={"X": 10.0})
     assert m.excess_equity(p, {"X": 50.0}) == 1_000.0
-    assert m.buying_power(p, {"X": 50.0}) == 1_000.0
     assert m.maintenance_requirement(p, {"X": 50.0}) == 0.0
     assert m.deficit(p, {"X": 1.0}) == 0.0
     assert m.initial_requirement("X", 10, 50.0) == 500.0
@@ -78,7 +77,6 @@ def test_reg_t_short_by_hand() -> None:
     at50 = {"X": 50.0}
     assert m.initial_requirement("X", -100, 50.0) == 2_500.0
     assert m.excess_equity(p, at50) == 7_500.0
-    assert m.buying_power(p, at50) == 15_000.0
     assert m.maintenance_requirement(p, at50) == pytest.approx(1_500.0)
     assert m.deficit(p, at50) == 0.0
     # At 120: equity 3,000, maintenance 0.3 x 12,000 = 3,600, deficit 600.
