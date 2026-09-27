@@ -132,7 +132,7 @@ def _members(request: PanelRequest, dates: pd.DatetimeIndex) -> dict | None:
         lo = pd.Timestamp(span.start_date)
         hi = pd.Timestamp(span.end_date) if pd.notna(span.end_date) else pd.Timestamp.max
         for i, day in enumerate(days):
-            if lo <= day <= hi:
+            if lo <= day < hi:  # end_date is exclusive
                 out[(i, str(span.ticker))] = True
     return out
 

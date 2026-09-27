@@ -199,6 +199,17 @@ def test_csrank_ranks_members_only_and_output_skips_non_members():
     assert mean.loc[DATES[3], "C"] == 3
 
 
+def test_membership_end_date_is_exclusive():
+    """A member from start_date up to the day before end_date (docs/universes.md)."""
+    raw = _bars({"A": [1] * 6, "B": [2] * 6})
+    spans = membership_frame(
+        {"A": [(DATES[0].date(), DATES[2].date())], "B": [(DATES[0].date(), None)]}
+    )
+    panel = _panel("$close", raw, membership=spans)
+    assert panel.loc[DATES[1], "A"] == 1
+    assert math.isnan(panel.loc[DATES[2], "A"])
+
+
 # ---- no look-ahead (planted future) -------------------------------------------------------
 
 EXPRESSIONS = [

@@ -45,6 +45,7 @@ from stonks.features.price_adjustment import SeriesAdjustment
 from stonks.logging import get_logger
 from stonks.store.corporate_actions import LakeCorporateActions
 from stonks.store.pit import PointInTimeLake
+from stonks.strategies._common import as_datetime, visible_cutoff
 
 __all__ = [
     "PanelRequest",
@@ -70,7 +71,7 @@ class PanelRequest:
 
     ``membership`` (``ticker, start_date, end_date`` spans, ``end_date``
     empty for open) limits each ticker to the dates it was a member; without
-    it every ticker counts on every date. ``universe_id`` names the stored
+    it every ticker counts on every date. ``end_date`` is exclusive. ``universe_id`` names the stored
     universe the spans came from (for cache keys and reports)."""
 
     universe: tuple[str, ...]
@@ -135,7 +136,8 @@ def read_bars(
 def _membership_mask(
     bars: pd.DataFrame, membership: pd.DataFrame | None, tickers: Sequence[str]
 ) -> np.ndarray:
-    """True where the row's ticker was a member on the row's date."""
+    """True where the row's ticker was a member on the row's date: from
+    ``start_date`` up to the day before ``end_date`` (docs/universes.md)."""
     if membership is None:
         return np.ones(len(bars), dtype=bool)
     days = pd.to_datetime(bars["timestamp"]).dt.normalize()
@@ -147,7 +149,7 @@ def _membership_mask(
         lo = pd.Timestamp(span.start_date)
         hi = pd.Timestamp(span.end_date) if pd.notna(span.end_date) else pd.Timestamp.max
         rows = (bars["ticker"] == span.ticker).to_numpy() & (days >= lo).to_numpy()
-        rows &= (days <= hi).to_numpy()
+        rows &= (days < hi).to_numpy()
         mask |= rows
     return mask
 
@@ -254,15 +256,17 @@ def latest_values(
     interval: Interval = Interval.DAY_1,
     max_age_days: int = 10,
 ) -> dict[str, float]:
-    """``{ticker: value}`` at each ticker's last bar on or before ``as_of``
-    (read through ``lake``, a point-in-time view in a backtest). A ticker
-    whose last bar is older than ``max_age_days`` (delisted, halted) or
-    whose value is empty is left out."""
+    """``{ticker: value}`` at each ticker's last bar complete at a decision
+    on ``as_of`` (read through ``lake``, a point-in-time view in a
+    backtest). A daily decision sees its own day's bar, an intraday one only
+    the days before (RS-03, :func:`~stonks.strategies._common.visible_cutoff`).
+    A ticker whose last bar is older than ``max_age_days`` (delisted,
+    halted) or whose value is empty is left out."""
     if not tickers:
         return {}
-    at = as_of if isinstance(as_of, datetime) else day_start(as_of)
+    at = as_datetime(as_of)
     warm = warmup_days(lookback(node), interval) + max_age_days
-    hi = at if interval.is_intraday else day_end(at.date())
+    hi = visible_cutoff(at, interval)
     raw = read_bars(lake, tickers, interval, day_start(at.date() - timedelta(days=warm)), hi)
     if raw.empty:
         return {}
