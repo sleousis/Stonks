@@ -69,11 +69,19 @@ def test_be44_a_tick_whose_process_is_alive_survives_recovery(state):
     import socket
 
     here = socket.gethostname()
+    from stonks.production import tick as tick_mod
+
     _owned(state, "tick_live", NOW - timedelta(minutes=5), here, os.getpid())
+    _owned(state, "tick_mine_dead", NOW - timedelta(minutes=5), here, os.getpid())
+    tick_mod._RUNNING.add("tick_live")  # a tick this process runs right now
     _owned(state, "tick_dead", NOW - timedelta(minutes=5), here, 2**30)
     _owned(state, "tick_elsewhere", NOW - timedelta(hours=1), "other-host", 1)
     _owned(state, "tick_abandoned", NOW - timedelta(days=1), "other-host", 1)
-    assert sorted(recover_interrupted_ticks(state, now=NOW)) == ["tick_abandoned", "tick_dead"]
+    try:
+        closed = sorted(recover_interrupted_ticks(state, now=NOW))
+    finally:
+        tick_mod._RUNNING.discard("tick_live")
+    assert closed == ["tick_abandoned", "tick_dead", "tick_mine_dead"]
     assert _row(state, "tick_live")["status"] == "running"
     assert _row(state, "tick_elsewhere")["status"] == "running"
 

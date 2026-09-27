@@ -385,6 +385,7 @@ def run_tick(
         "INSERT INTO tick_runs (id, started_at, status, summary_json) VALUES (?, ?, 'running', ?)",
         [tick_id, started, json.dumps({OWNER_KEY: tick_owner()})],
     )
+    _RUNNING.add(tick_id)
 
     # Any failure past this point closes the tick as 'error' so the ledger
     # never keeps a row stuck at 'running'; the exception still propagates.
@@ -428,6 +429,8 @@ def run_tick(
             log,
         )
         raise
+    finally:
+        _RUNNING.discard(tick_id)
     if result.status == "partial":
         _safe_notify(notifier, _partial_notification(result, as_of), log)
     if not dry_run:
@@ -1344,6 +1347,8 @@ INTERRUPTED_ERROR = "interrupted: the process running the tick stopped before it
 OWNER_KEY = "owner"
 #: A running tick owned by another host is taken for dead after this long.
 FOREIGN_TICK_MAX_AGE = timedelta(hours=12)
+#: Ticks running in this process right now.
+_RUNNING: set[str] = set()
 
 
 def tick_owner() -> dict[str, Any]:
@@ -1378,7 +1383,7 @@ def _process_alive(pid: int) -> bool:
     return True
 
 
-def _owner_gone(summary: str | None, started_at: str, now: datetime) -> bool:
+def _owner_gone(tick_id: str, summary: str | None, started_at: str, now: datetime) -> bool:
     """A running row may be closed: it names no owner (written before
     owners were recorded), its owner process on this host is gone, or its
     owner is another host and the row is older than
@@ -1390,7 +1395,10 @@ def _owner_gone(summary: str | None, started_at: str, now: datetime) -> bool:
     if not isinstance(owner, dict):
         return True
     if owner.get("host") == socket.gethostname():
-        return not _process_alive(int(owner.get("pid") or 0))
+        pid = int(owner.get("pid") or 0)
+        if pid == os.getpid():  # this process: gone unless it runs it now
+            return tick_id not in _RUNNING
+        return not _process_alive(pid)
     try:
         started = datetime.fromisoformat(started_at)
     except ValueError:
@@ -1418,7 +1426,7 @@ def recover_interrupted_ticks(state: SqliteState, *, now: datetime | None = None
         "SELECT id, started_at, summary_json FROM tick_runs WHERE status = 'running'"
         " ORDER BY started_at"
     )
-    ids = [r["id"] for r in rows if _owner_gone(r["summary_json"], r["started_at"], clock)]
+    ids = [r["id"] for r in rows if _owner_gone(r["id"], r["summary_json"], r["started_at"], clock)]
     if not ids:
         return []
     summary = json.dumps({"error": INTERRUPTED_ERROR, "error_type": "Interrupted"})
