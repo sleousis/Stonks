@@ -1,16 +1,13 @@
-"""Price and liquidity metrics from daily bars up to the screen date."""
+"""Price and liquidity metrics from daily bars up to the screen date. Each
+reads a column of :attr:`ScreenData.price_stats`, so a screen over thousands
+of tickers is one query, not a loop per ticker."""
 
 from __future__ import annotations
 
 from typing import ClassVar
 
-import numpy as np
-
-from stonks.screener.data import ScreenData
+from stonks.screener.data import HALF, MONTH, QUARTER, YEAR, ScreenData
 from stonks.screener.metrics.base import ScreenMetric
-
-#: Sessions in a month, a quarter, half a year and a year.
-MONTH, QUARTER, HALF, YEAR = 21, 63, 126, 252
 
 
 class Price(ScreenMetric):
@@ -32,23 +29,14 @@ class DollarVolume20d(ScreenMetric):
     description = "Average close times volume over the last 20 sessions."
 
     def compute(self, data: ScreenData) -> dict[str, float]:
-        df = data.bars.dropna(subset=["close", "volume"])
-        if df.empty:
-            return {}
-        traded = (df["close"] * df["volume"]).groupby(df["ticker"])
-        return traded.apply(lambda s: s.tail(20).mean()).to_dict()
+        return data.dollar_volume
 
 
 class _TrailingReturn(ScreenMetric):
     sessions: ClassVar[int]
 
     def compute(self, data: ScreenData) -> dict[str, float]:
-        n = self.sessions
-        return {
-            t: float(p[-1] / p[-1 - n] - 1.0)
-            for t, p in data.adjusted.items()
-            if len(p) > n and p[-1 - n] > 0
-        }
+        return data.trailing_return(self.sessions)
 
 
 class Return1m(_TrailingReturn):
@@ -95,13 +83,7 @@ class Volatility3m(ScreenMetric):
     description = "Annualised standard deviation of daily log returns over 63 sessions."
 
     def compute(self, data: ScreenData) -> dict[str, float]:
-        out: dict[str, float] = {}
-        for t, p in data.adjusted.items():
-            window = p[-(QUARTER + 1) :]
-            if len(window) < 21 or (window <= 0).any():
-                continue
-            out[t] = float(np.diff(np.log(window)).std(ddof=1) * np.sqrt(YEAR))
-        return out
+        return data.volatility
 
 
 class FromHigh52w(ScreenMetric):
@@ -112,8 +94,4 @@ class FromHigh52w(ScreenMetric):
     description = "Last adjusted close against the highest of the last 252 sessions (0 at a high)."
 
     def compute(self, data: ScreenData) -> dict[str, float]:
-        return {
-            t: float(p[-1] / p[-YEAR:].max() - 1.0)
-            for t, p in data.adjusted.items()
-            if len(p) and p[-YEAR:].max() > 0
-        }
+        return data.from_high
