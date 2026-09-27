@@ -17,6 +17,11 @@ const VIEW: PreferencesView = {
   quiet_end: null,
   timezone: 'Europe/London',
   webhook: null,
+  event_alerts: [
+    { topic: 'earnings', label: 'Earnings coming up', enabled: true },
+    { topic: 'dividends', label: 'Ex-dividend dates coming up', enabled: false },
+    { topic: 'economic', label: 'Economic releases coming up', enabled: true },
+  ],
 };
 
 describe('NotificationPrefs', () => {
@@ -90,6 +95,51 @@ describe('NotificationPrefs', () => {
     await tick();
     fixture.detectChanges();
     expect(box(el, 'Signals by Push').checked).toBe(false);
+  });
+
+  it('gives price alerts and upcoming events their own rows, apart from signals', async () => {
+    const el = await render();
+    const rows = [...el.querySelectorAll('tbody th')].map((th) => th.textContent?.trim());
+    expect(rows).toEqual([
+      'Signals',
+      'Price alerts',
+      'Upcoming events',
+      'Orders and fills',
+      'Risk alerts',
+      'System',
+    ]);
+    box(el, 'Price alerts by Push').click();
+    const req = await nextRequest(controller, '/api/notifications/preferences', 'PUT');
+    expect(req.request.body).toEqual({
+      preferences: [{ category: 'price_alert', channel: 'webpush', enabled: false }],
+    });
+    req.flush(VIEW);
+    await tick();
+  });
+
+  function kind(el: HTMLElement, label: string) {
+    return [...el.querySelectorAll('label.kind')]
+      .find((l) => l.textContent?.includes(label))!
+      .querySelector('input')!;
+  }
+
+  it('shows one switch per kind of upcoming event and saves it', async () => {
+    const el = await render();
+    expect(kind(el, 'Earnings coming up').checked).toBe(true);
+    expect(kind(el, 'Ex-dividend dates coming up').checked).toBe(false);
+    expect(kind(el, 'Economic releases coming up').checked).toBe(true);
+    kind(el, 'Earnings coming up').click();
+    const req = await nextRequest(controller, '/api/notifications/preferences', 'PUT');
+    expect(req.request.body).toEqual({ event_alerts: [{ topic: 'earnings', enabled: false }] });
+    req.flush({
+      ...VIEW,
+      event_alerts: VIEW.event_alerts!.map((e) =>
+        e.topic === 'earnings' ? { ...e, enabled: false } : e,
+      ),
+    });
+    await tick();
+    fixture.detectChanges();
+    expect(kind(el, 'Earnings coming up').checked).toBe(false);
   });
 
   it('sets and clears quiet hours', async () => {
@@ -174,6 +224,7 @@ describe('NotificationPrefs', () => {
     const el = await render();
     expect(el.textContent).toContain('Traders and admins only.');
     expect(box(el, 'Signals by Push').disabled).toBe(true);
+    expect(kind(el, 'Earnings coming up').disabled).toBe(true);
     expect(button(el, 'Save quiet hours')!.disabled).toBe(true);
     expect(button(el, 'Save webhook')!.disabled).toBe(true);
     expect(el.querySelector<HTMLInputElement>('#webhook-url')!.disabled).toBe(true);

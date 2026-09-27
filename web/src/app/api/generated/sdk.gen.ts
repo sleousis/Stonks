@@ -537,8 +537,8 @@ export const getCalendar = <ThrowOnError extends boolean = false>(options?: Opti
 /**
  * List Event Alert Kinds
  *
- * The upcoming-event alert kinds (earnings, ex-dividend) and how many
- * days ahead each looks by default.
+ * The upcoming-event alert kinds (earnings, ex-dividend), how many
+ * days ahead each looks by default, and the notification switch it follows.
  */
 export const listEventAlertKinds = <ThrowOnError extends boolean = false>(options?: Options<ListEventAlertKindsData, ThrowOnError>): RequestResult<ListEventAlertKindsResponses, ListEventAlertKindsErrors, ThrowOnError> => (options?.client ?? client).get<ListEventAlertKindsResponses, ListEventAlertKindsErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],

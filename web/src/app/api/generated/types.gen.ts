@@ -2099,6 +2099,10 @@ export type EventAlertKindView = {
      * Label
      */
     label: string;
+    /**
+     * Topic
+     */
+    topic: string;
 };
 
 /**
@@ -2117,6 +2121,38 @@ export type EventAlertSummary = {
      * Sent
      */
     sent: number;
+};
+
+/**
+ * EventAlertSwitchItem
+ */
+export type EventAlertSwitchItem = {
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Topic
+     */
+    topic: string;
+};
+
+/**
+ * EventAlertSwitchView
+ */
+export type EventAlertSwitchView = {
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Topic
+     */
+    topic: string;
 };
 
 /**
@@ -7221,7 +7257,7 @@ export type PreferenceItem = {
     /**
      * Category
      */
-    category: 'signal' | 'order' | 'risk' | 'system';
+    category: 'signal' | 'order' | 'risk' | 'system' | 'price_alert' | 'event_alert';
     /**
      * Channel
      */
@@ -7238,12 +7274,18 @@ export type PreferenceItem = {
 
 /**
  * PreferencesUpdate
+ *
+ * Only what is given changes.
  */
 export type PreferencesUpdate = {
     /**
+     * Event Alerts
+     */
+    event_alerts?: Array<EventAlertSwitchItem>;
+    /**
      * Preferences
      */
-    preferences: Array<PreferenceItem>;
+    preferences?: Array<PreferenceItem>;
 };
 
 /**
@@ -7258,6 +7300,10 @@ export type PreferencesView = {
      * Channels
      */
     channels: Array<string>;
+    /**
+     * Event Alerts
+     */
+    event_alerts?: Array<EventAlertSwitchView>;
     /**
      * Preferences
      */
