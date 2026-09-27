@@ -55,6 +55,7 @@ def test_default_jobs_build():
         "model_retrain",
         "live_submit",
         "live_stops",
+        "live_gate_days",
     }
     tick = by_name["tick"]
     # 19.8: approved tickets go out before the open, never caught up late
@@ -66,6 +67,8 @@ def test_default_jobs_build():
     assert stops.trigger == SessionTrigger("XNYS", "open", timedelta(minutes=30))
     assert stops.catch_up == "none"
     assert tick.trigger == SessionTrigger("XNYS", "close", timedelta(minutes=45))
+    # 19.9: gate metrics read the snapshots the tick wrote
+    assert by_name["live_gate_days"].trigger.offset > tick.trigger.offset
     assert tick.deadline == timedelta(minutes=60)
     assert tick.catch_up == "latest"
     assert isinstance(by_name["health"].trigger, IntervalTrigger)

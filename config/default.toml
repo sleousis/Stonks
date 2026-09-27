@@ -158,6 +158,18 @@ calendar = "XNYS"
 window_minutes = 20                # the live_submit job fires at open minus this
 deadline_minutes = 2               # unsent tickets expire at open minus this
 
+[production.live.stages]
+# Stage gates (roadmap 19.9). A promotion needs every check to pass, a
+# fresh second factor and a typed confirmation. A dirty week only alerts.
+min_paper_days = 20                # gate 1: paper days of every live subscription
+min_broker_paper_sessions = 20     # gate 2: sessions in broker_paper
+broker_paper_clean_sessions = 20   # gate 2: the last 4 weeks clean
+min_live_small_sessions = 40       # gate 3: 8 weeks in live_small
+live_small_clean_sessions = 30     # gate 3: the last 6 weeks clean
+min_live_fills = 30                # gate 3: filled live orders
+max_reject_rate = 0.02             # a clean session rejects under 2%
+week_sessions = 5
+
 [production.health]
 # `stonks health` thresholds.
 max_bar_age_days = 4

@@ -223,6 +223,44 @@
         "title": "ActionDecision",
         "type": "object"
       },
+      "AdjustmentView": {
+        "properties": {
+          "adjusted_quantity": {
+            "title": "Adjusted Quantity",
+            "type": "number"
+          },
+          "original_quantity": {
+            "title": "Original Quantity",
+            "type": "number"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "side": {
+            "title": "Side",
+            "type": "string"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker",
+          "side",
+          "rule",
+          "original_quantity",
+          "adjusted_quantity",
+          "reason"
+        ],
+        "title": "AdjustmentView",
+        "type": "object"
+      },
       "AgreementView": {
         "properties": {
           "as_of": {
@@ -5079,6 +5117,232 @@
         "title": "FxRateView",
         "type": "object"
       },
+      "GateCheckView": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "passed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passed"
+          },
+          "required": {
+            "title": "Required"
+          },
+          "value": {
+            "title": "Value"
+          }
+        },
+        "required": [
+          "name",
+          "passed",
+          "detail"
+        ],
+        "title": "GateCheckView",
+        "type": "object"
+      },
+      "GateDayView": {
+        "properties": {
+          "clean": {
+            "title": "Clean",
+            "type": "boolean"
+          },
+          "drift_items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drift Items"
+          },
+          "fills": {
+            "title": "Fills",
+            "type": "integer"
+          },
+          "fills_missing_commission": {
+            "title": "Fills Missing Commission",
+            "type": "integer"
+          },
+          "live_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Return"
+          },
+          "model_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Return"
+          },
+          "orders_filled": {
+            "title": "Orders Filled",
+            "type": "integer"
+          },
+          "orders_refused": {
+            "title": "Orders Refused",
+            "type": "integer"
+          },
+          "orders_rejected": {
+            "title": "Orders Rejected",
+            "type": "integer"
+          },
+          "orders_sent": {
+            "title": "Orders Sent",
+            "type": "integer"
+          },
+          "reject_rate": {
+            "title": "Reject Rate",
+            "type": "number"
+          },
+          "session_date": {
+            "format": "date",
+            "title": "Session Date",
+            "type": "string"
+          },
+          "stage": {
+            "enum": [
+              "sim_paper",
+              "broker_paper",
+              "live_small",
+              "live_scale"
+            ],
+            "title": "Stage",
+            "type": "string"
+          },
+          "stuck_orders": {
+            "title": "Stuck Orders",
+            "type": "integer"
+          },
+          "tca_gap_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tca Gap Bps"
+          },
+          "tca_orders": {
+            "title": "Tca Orders",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "session_date",
+          "stage",
+          "orders_sent",
+          "orders_filled",
+          "orders_rejected",
+          "orders_refused",
+          "stuck_orders",
+          "fills",
+          "fills_missing_commission",
+          "tca_orders",
+          "tca_gap_bps",
+          "live_return",
+          "model_return",
+          "drift_items",
+          "reject_rate",
+          "clean"
+        ],
+        "title": "GateDayView",
+        "type": "object"
+      },
+      "GateReportView": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/GateCheckView"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "computed_at": {
+            "format": "date-time",
+            "title": "Computed At",
+            "type": "string"
+          },
+          "from_stage": {
+            "enum": [
+              "sim_paper",
+              "broker_paper",
+              "live_small",
+              "live_scale"
+            ],
+            "title": "From Stage",
+            "type": "string"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "title": "Metrics",
+            "type": "object"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sim_paper",
+                  "broker_paper",
+                  "live_small",
+                  "live_scale"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "from_stage",
+          "target",
+          "passed",
+          "checks",
+          "metrics",
+          "computed_at"
+        ],
+        "title": "GateReportView",
+        "type": "object"
+      },
       "GatewayHealthView": {
         "properties": {
           "configured": {
@@ -8623,6 +8887,110 @@
         "title": "LiveNotionalCapsSettings",
         "type": "object"
       },
+      "LivePreviewView": {
+        "properties": {
+          "account": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreviewAccountView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "adjustments": {
+            "items": {
+              "$ref": "#/components/schemas/AdjustmentView"
+            },
+            "title": "Adjustments",
+            "type": "array"
+          },
+          "allocation": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allocation"
+          },
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "orders": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewOrderView"
+            },
+            "title": "Orders",
+            "type": "array"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "stage": {
+            "enum": [
+              "sim_paper",
+              "broker_paper",
+              "live_small",
+              "live_scale"
+            ],
+            "title": "Stage",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "transmitted": {
+            "title": "Transmitted",
+            "type": "boolean"
+          },
+          "what_if_available": {
+            "title": "What If Available",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "as_of",
+          "stage",
+          "status",
+          "reason",
+          "orders",
+          "adjustments",
+          "account",
+          "allocation",
+          "what_if_available",
+          "transmitted",
+          "notes"
+        ],
+        "title": "LivePreviewView",
+        "type": "object"
+      },
       "LiveRuleView": {
         "properties": {
           "name": {
@@ -8684,6 +9052,69 @@
           "account_rules"
         ],
         "title": "LiveRulesView",
+        "type": "object"
+      },
+      "LiveStageView": {
+        "properties": {
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/GateDayView"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/StageChangeView"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "next_stage": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sim_paper",
+                  "broker_paper",
+                  "live_small",
+                  "live_scale"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Stage"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "real_money": {
+            "title": "Real Money",
+            "type": "boolean"
+          },
+          "stage": {
+            "enum": [
+              "sim_paper",
+              "broker_paper",
+              "live_small",
+              "live_scale"
+            ],
+            "title": "Stage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "stage",
+          "next_stage",
+          "real_money",
+          "history",
+          "days"
+        ],
+        "title": "LiveStageView",
         "type": "object"
       },
       "LoginRequest": {
@@ -11550,6 +11981,37 @@
         "title": "Page[PushDeviceView]",
         "type": "object"
       },
+      "Page_ReconcileReportView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReconcileReportView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[ReconcileReportView]",
+        "type": "object"
+      },
       "Page_ResearchSessionView_": {
         "properties": {
           "items": {
@@ -13580,6 +14042,173 @@
           "issues"
         ],
         "title": "PreflightView",
+        "type": "object"
+      },
+      "PreviewAccountView": {
+        "properties": {
+          "account_type": {
+            "title": "Account Type",
+            "type": "string"
+          },
+          "available_funds": {
+            "title": "Available Funds",
+            "type": "number"
+          },
+          "buying_power": {
+            "title": "Buying Power",
+            "type": "number"
+          },
+          "cash": {
+            "title": "Cash",
+            "type": "number"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "equity": {
+            "title": "Equity",
+            "type": "number"
+          },
+          "settled_cash": {
+            "title": "Settled Cash",
+            "type": "number"
+          }
+        },
+        "required": [
+          "equity",
+          "cash",
+          "settled_cash",
+          "available_funds",
+          "buying_power",
+          "currency",
+          "account_type"
+        ],
+        "title": "PreviewAccountView",
+        "type": "object"
+      },
+      "PreviewOrderView": {
+        "properties": {
+          "adjustments": {
+            "items": {
+              "$ref": "#/components/schemas/AdjustmentView"
+            },
+            "title": "Adjustments",
+            "type": "array"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "limit_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Price"
+          },
+          "notional": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notional"
+          },
+          "order_type": {
+            "title": "Order Type",
+            "type": "string"
+          },
+          "position_effect": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position Effect"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          },
+          "side": {
+            "title": "Side",
+            "type": "string"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Id"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          },
+          "time_in_force": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time In Force"
+          },
+          "what_if": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WhatIfView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "what_if_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "What If Error"
+          }
+        },
+        "required": [
+          "client_id",
+          "ticker",
+          "side",
+          "quantity",
+          "order_type",
+          "limit_price",
+          "time_in_force",
+          "position_effect",
+          "strategy_id",
+          "notional",
+          "what_if",
+          "what_if_error",
+          "adjustments"
+        ],
+        "title": "PreviewOrderView",
         "type": "object"
       },
       "PriceAlertCreate": {
@@ -18186,6 +18815,140 @@
         "title": "SqueezeGuardSettings",
         "type": "object"
       },
+      "StageChangeView": {
+        "properties": {
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "promote",
+              "demote"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "from_stage": {
+            "enum": [
+              "sim_paper",
+              "broker_paper",
+              "live_small",
+              "live_scale"
+            ],
+            "title": "From Stage",
+            "type": "string"
+          },
+          "gate_report": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gate Report"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "to_stage": {
+            "enum": [
+              "sim_paper",
+              "broker_paper",
+              "live_small",
+              "live_scale"
+            ],
+            "title": "To Stage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "from_stage",
+          "to_stage",
+          "direction",
+          "actor",
+          "reason",
+          "gate_report",
+          "created_at"
+        ],
+        "title": "StageChangeView",
+        "type": "object"
+      },
+      "StageDemoteBody": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "to_stage": {
+            "enum": [
+              "sim_paper",
+              "broker_paper",
+              "live_small",
+              "live_scale"
+            ],
+            "title": "To Stage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to_stage",
+          "reason"
+        ],
+        "title": "StageDemoteBody",
+        "type": "object"
+      },
+      "StagePromoteBody": {
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Confirm",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "to_stage": {
+            "enum": [
+              "sim_paper",
+              "broker_paper",
+              "live_small",
+              "live_scale"
+            ],
+            "title": "To Stage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to_stage",
+          "reason",
+          "confirm"
+        ],
+        "title": "StagePromoteBody",
+        "type": "object"
+      },
       "StartPortalRequest": {
         "additionalProperties": false,
         "properties": {
@@ -22688,6 +23451,65 @@
           }
         },
         "title": "WebhookUpdate",
+        "type": "object"
+      },
+      "WhatIfView": {
+        "properties": {
+          "commission": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commission"
+          },
+          "commission_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commission Currency"
+          },
+          "equity_with_loan_after": {
+            "title": "Equity With Loan After",
+            "type": "number"
+          },
+          "initial_margin_change": {
+            "title": "Initial Margin Change",
+            "type": "number"
+          },
+          "maintenance_margin_change": {
+            "title": "Maintenance Margin Change",
+            "type": "number"
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning"
+          }
+        },
+        "required": [
+          "initial_margin_change",
+          "maintenance_margin_change",
+          "equity_with_loan_after",
+          "commission",
+          "commission_currency",
+          "warning"
+        ],
+        "title": "WhatIfView",
         "type": "object"
       },
       "stonks__app__brokers__BrokerAccountView": {
@@ -37562,6 +38384,186 @@
         "x-permission": "live.manage"
       }
     },
+    "/api/portfolios/{portfolio_id}/live/gate-report": {
+      "get": {
+        "description": "What a promotion to the next stage needs, checked now. A check with\n``passed: null`` has no data yet and does not block.",
+        "operationId": "getLiveGateReport",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GateReportView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Live Gate Report",
+        "tags": [
+          "live"
+        ],
+        "x-permission": "data.read"
+      }
+    },
+    "/api/portfolios/{portfolio_id}/live/preview": {
+      "post": {
+        "description": "The orders the live book would send now: a dry run through every\nrule and the broker's what-if. It never transmits an order.",
+        "operationId": "previewLiveOrders",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LivePreviewView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Live Orders",
+        "tags": [
+          "live"
+        ],
+        "x-permission": "portfolio.trade"
+      }
+    },
     "/api/portfolios/{portfolio_id}/live/rules": {
       "get": {
         "description": "Which live safeguards and account rules act on this portfolio, as its\nbook follows them. Read only: the limits are set by the admin and your\nown risk limits.",
@@ -37650,6 +38652,308 @@
           "live"
         ],
         "x-permission": "data.read"
+      }
+    },
+    "/api/portfolios/{portfolio_id}/live/stage": {
+      "get": {
+        "description": "The portfolio's live stage, its changes and the last sessions' gate\nmetrics (orders, rejections, stuck orders, fill quality, tracking and\ndrift).",
+        "operationId": "getLiveStage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 260,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveStageView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Live Stage",
+        "tags": [
+          "live"
+        ],
+        "x-permission": "data.read"
+      }
+    },
+    "/api/portfolios/{portfolio_id}/live/stage/demote": {
+      "post": {
+        "description": "Down to any lower stage, with a reason. It only reduces risk, so it\nneeds no second factor.",
+        "operationId": "demoteLiveStage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StageDemoteBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveStageView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Demote Live Stage",
+        "tags": [
+          "live"
+        ],
+        "x-permission": "portfolio.trade"
+      }
+    },
+    "/api/portfolios/{portfolio_id}/live/stage/promote": {
+      "post": {
+        "description": "One stage up. The gate report is computed now and must pass. Type\nthe target stage in ``confirm``. Needs a fresh second factor.",
+        "operationId": "promoteLiveStage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StagePromoteBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveStageView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Promote Live Stage",
+        "tags": [
+          "live"
+        ],
+        "x-permission": "live.manage"
       }
     },
     "/api/price-alerts": {
@@ -38793,14 +40097,32 @@
             }
           },
           {
+            "description": "page size",
             "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
-              "default": 50,
-              "maximum": 500,
-              "minimum": 1,
-              "title": "Limit",
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
               "type": "integer"
             }
           }
@@ -38810,11 +40132,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ReconcileReportView"
-                  },
-                  "title": "Response Listreconcilereports",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_ReconcileReportView_"
                 }
               }
             },

@@ -199,3 +199,103 @@ def test_gateway_health_is_empty_without_gateways(client, people):
     got = client.get("/api/brokers/gateways", headers=people["vic"]["headers"])
     assert got.status_code == 200
     assert got.json() == {"configured": False, "gateways": []}
+
+
+# ---- stages, gates and the preview (19.9) --------------------------------------------
+
+
+def _move(settings, pid: str, *stages: str) -> None:
+    from stonks.production.live.stages import change_stage
+
+    with SqliteState(settings.state.path) as state:
+        for stage in stages:
+            change_stage(
+                state, pid, stage, actor="t", reason="setup",
+                gate_report={"target": stage, "passed": True},
+            )  # fmt: skip
+
+
+def _ready_for_broker_paper(settings, pid: str) -> None:
+    with SqliteState(settings.state.path) as state:
+        state.execute(
+            "INSERT INTO subscriptions (id, user_id, strategy_id, portfolio_id, mode,"
+            " paper_days_completed, created_at, updated_at)"
+            " SELECT 'sub_live', owner_id, 'bah_active', id, 'paper', 20, 'x', 'x'"
+            " FROM portfolios WHERE id = ?",
+            [pid],
+        )
+
+
+def test_stage_starts_in_sim_paper_and_promotion_needs_a_step_up(app, client, settings, people):
+    alice = people["alice"]["headers"]
+    pid = _portfolio(settings, people["alice"], "Live")
+    got = client.get(f"/api/portfolios/{pid}/live/stage", headers=alice)
+    assert got.status_code == 200, got.text
+    view = got.json()
+    assert (view["stage"], view["next_stage"], view["real_money"]) == (
+        "sim_paper",
+        "broker_paper",
+        False,
+    )
+    assert view["history"] == [] and view["days"] == []
+    url = f"/api/portfolios/{pid}/live/stage/promote"
+    body = {"to_stage": "broker_paper", "reason": "soak", "confirm": "broker_paper"}
+    refused = client.post(url, json=body, headers=alice)
+    assert refused.status_code == 403 and refused.json()["code"] == "step_up_required"
+
+    allow_step_up(app)
+    report = client.get(f"/api/portfolios/{pid}/live/gate-report", headers=alice).json()
+    assert report["target"] == "broker_paper" and report["passed"] is False
+    failed = client.post(url, json=body, headers=alice)
+    assert failed.status_code == 409 and "paper_days" in failed.json()["detail"]
+    wrong = client.post(url, json={**body, "confirm": "yes"}, headers=alice)
+    assert wrong.status_code == 422
+
+    _ready_for_broker_paper(settings, pid)
+    ok = client.post(url, json=body, headers=alice)
+    assert ok.status_code == 200, ok.text
+    view = ok.json()
+    assert view["stage"] == "broker_paper"
+    [change] = view["history"]
+    assert change["direction"] == "promote" and change["gate_report"]["passed"] is True
+    skip = {"to_stage": "live_scale", "reason": "x", "confirm": "live_scale"}
+    assert client.post(url, json=skip, headers=alice).status_code == 409
+
+
+def test_demotion_needs_no_step_up_and_only_goes_down(client, settings, people):
+    alice = people["alice"]["headers"]
+    pid = _portfolio(settings, people["alice"], "Live")
+    url = f"/api/portfolios/{pid}/live/stage/demote"
+    same = client.post(url, json={"to_stage": "sim_paper", "reason": "x"}, headers=alice)
+    assert same.status_code == 409
+    _move(settings, pid, "broker_paper", "live_small")
+    ok = client.post(url, json={"to_stage": "sim_paper", "reason": "bad week"}, headers=alice)
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["stage"] == "sim_paper"
+    assert ok.json()["history"][0]["direction"] == "demote"
+    viewer = client.post(
+        url, json={"to_stage": "sim_paper", "reason": "x"}, headers=people["vic"]["headers"]
+    )
+    assert viewer.status_code == 403
+    other = client.get(f"/api/portfolios/{pid}/live/stage", headers=people["bob"]["headers"])
+    assert other.status_code == 404
+
+
+def test_the_account_profile_is_locked_while_trading_real_money(app, client, settings, people):
+    alice = people["alice"]["headers"]
+    pid = _portfolio(settings, people["alice"], "Live")
+    allow_step_up(app)
+    url = f"/api/portfolios/{pid}/live/account-profile"
+    assert client.put(url, json={"jurisdiction": "us"}, headers=alice).status_code == 200
+    _move(settings, pid, "broker_paper", "live_small")
+    locked = client.put(url, json={"jurisdiction": "uk"}, headers=alice)
+    assert locked.status_code == 409 and "locked" in locked.json()["detail"]
+
+
+def test_a_portfolio_without_a_live_book_has_nothing_to_preview(client, settings, people):
+    alice = people["alice"]["headers"]
+    pid = _portfolio(settings, people["alice"], "Live")
+    got = client.post(f"/api/portfolios/{pid}/live/preview", headers=alice)
+    assert got.status_code == 422 and "no live book" in got.json()["detail"]
+    viewer = client.post(f"/api/portfolios/{pid}/live/preview", headers=people["vic"]["headers"])
+    assert viewer.status_code == 403

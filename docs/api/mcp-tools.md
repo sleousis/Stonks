@@ -32,6 +32,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_api_health`](#get_api_health) | read | no |
 | [`get_bars`](#get_bars) | read | no |
 | [`get_broker`](#get_broker) | read | no |
+| [`get_broker_gateways`](#get_broker_gateways) | read | no |
 | [`get_calendar`](#get_calendar) | read | no |
 | [`get_catalog`](#get_catalog) | read | no |
 | [`get_chart`](#get_chart) | read | no |
@@ -49,7 +50,11 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_job`](#get_job) | read | no |
 | [`get_leaderboard`](#get_leaderboard) | read | no |
 | [`get_ledger_run`](#get_ledger_run) | read | no |
+| [`get_live_allocation`](#get_live_allocation) | read | no |
+| [`get_live_gate_report`](#get_live_gate_report) | read | no |
 | [`get_live_risk`](#get_live_risk) | read | no |
+| [`get_live_rules`](#get_live_rules) | read | no |
+| [`get_live_stage`](#get_live_stage) | read | no |
 | [`get_model_version_history`](#get_model_version_history) | read | no |
 | [`get_my_risk_limits`](#get_my_risk_limits) | read | no |
 | [`get_news`](#get_news) | read | no |
@@ -218,6 +223,15 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 ### `get_broker`
 
 The broker production ticks trade through: kind (simulated/alpaca), paper, allow_live and whether credentials are configured (keys are never shown). Read-only.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
+### `get_broker_gateways`
+
+IB Gateway health: connected or not, the last good check, and the
+auto books of yours a gateway outage paused.
 
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
@@ -436,6 +450,29 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `run_id` | string | yes |  |  |
 
+### `get_live_allocation`
+
+How much Stonks may trade in a live portfolio, set by hand by its
+owner (amount null: not set, so nothing opens).
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string | yes |  | a portfolio id of yours (pf_...) |
+
+### `get_live_gate_report`
+
+What a promotion to the next stage needs, checked now. A check
+with passed = null has no data yet and does not block. Promoting is
+done in the web app with a fresh second factor, never here.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string | yes |  | a portfolio id of yours (pf_...) |
+
 ### `get_live_risk`
 
 One of your portfolios on its latest tick day: one-day 95% and
@@ -450,6 +487,31 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `portfolio_id` | string \| null | no | `null` |  |
+
+### `get_live_rules`
+
+Which live safeguards and account rules act on a live portfolio,
+with their settings as its book follows them.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string | yes |  | a portfolio id of yours (pf_...) |
+
+### `get_live_stage`
+
+A portfolio's live stage (sim_paper, broker_paper, live_small,
+live_scale), its stage changes, and the last sessions' gate metrics:
+orders sent, rejected and stuck, fills with no commission, the TCA
+gap, the book's and the model book's returns, and drift.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string | yes |  | a portfolio id of yours (pf_...) |
+| `days` | integer | no | `30` |  |
 
 ### `get_model_version_history`
 

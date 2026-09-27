@@ -7,8 +7,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query
 
-from stonks.api.deps import PrincipalDep, ServicesDep, needs
+from stonks.api.deps import PageDep, PrincipalDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
+from stonks.app.pagination import Page, page_of
 from stonks.app.reconcile import ReconcileReportView, ReconcileService
 from stonks.auth import Permission
 
@@ -21,22 +22,25 @@ def _service(services: ServicesDep) -> ReconcileService:
 
 @router.get(
     "/reports",
-    response_model=list[ReconcileReportView],
+    response_model=Page[ReconcileReportView],
     operation_id="listReconcileReports",
     dependencies=needs(Permission.READ),
 )
 def list_reconcile_reports(
     services: ServicesDep,
     principal: PrincipalDep,
+    page: PageDep,
     portfolio_id: Annotated[
         str | None, Query(max_length=64, description="one of your portfolios")
     ] = None,
-    limit: Annotated[int, Query(ge=1, le=500)] = 50,
-) -> list[ReconcileReportView]:
+) -> Page[ReconcileReportView]:
     """The latest checks of your live portfolios against their brokers,
     newest first. ``drift`` opened a ``broker_drift`` halt and paused auto.
     ``outage`` skipped the day. ``fault`` paused auto."""
-    return _service(services).reports(principal, portfolio_id=portfolio_id, limit=limit)
+    reports = _service(services).reports(
+        principal, portfolio_id=portfolio_id, limit=page.offset + page.limit
+    )
+    return page_of(reports, page)
 
 
 @router.get(

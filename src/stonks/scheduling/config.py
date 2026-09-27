@@ -105,7 +105,10 @@ def default_jobs() -> list[JobConfig]:
     ``live_submit`` (open minus 20 minutes) sends approved order tickets and
     skips while none is open. ``live_stops`` (open plus 30 minutes) places
     the protective stops of the entries that just filled, and skips while no
-    live book turns stops on."""
+    live book turns stops on.
+    ``live_gate_days`` (close plus 75 minutes)
+    records the live stages' gate metrics and skips while no portfolio is
+    past ``sim_paper``."""
     return [
         JobConfig(
             name="universes_refresh",
@@ -219,6 +222,13 @@ def default_jobs() -> list[JobConfig]:
             action="live_stops",
             trigger=SessionTriggerConfig(anchor="open", offset_minutes=30),
             catch_up="none",
+        ),
+        # The live stages' gate metrics for the session, after the tick
+        # wrote its snapshots (roadmap 19.9). A dirty week only alerts.
+        JobConfig(
+            name="live_gate_days",
+            action="live_gate_days",
+            trigger=SessionTriggerConfig(offset_minutes=75),
         ),
     ]
 

@@ -412,6 +412,25 @@ class BookResult:
 
 
 @dataclass(frozen=True)
+class BookDecision:
+    """What a dry run decided for one book, before anything is sent: the
+    live preview (roadmap 19.9) reads it through ``run_tick(order_sink=...)``."""
+
+    portfolio_id: str
+    #: Sells first, then buys, after every risk rule, safeguard and account rule.
+    orders: tuple[Order, ...]
+    adjustments: tuple[RiskAdjustment, ...]
+    #: The book's broker while it is open (``None``: simulated).
+    broker: Broker | None
+    #: The live context the safeguards saw (``None``: not a live book).
+    live: LiveContext | None
+    portfolio: Portfolio
+
+
+OrderSink = Callable[[BookDecision], None]
+
+
+@dataclass(frozen=True)
 class TickResult:
     tick_id: str
     status: TickStatus
@@ -433,9 +452,12 @@ def run_tick(
     notifier: Notifier | None = None,
     broker_factory: BrokerFactory | None = None,
     plan: TickPlan | None = None,
+    order_sink: OrderSink | None = None,
 ) -> TickResult:
     """``plan``: the books to trade (default :meth:`TickPlan.default`; build
-    one from portfolios and subscriptions with :func:`load_tick_plan`)."""
+    one from portfolios and subscriptions with :func:`load_tick_plan`).
+    ``order_sink``: a dry run hands each book's decided orders to it
+    (ignored by a real run)."""
     as_of = as_of or utc_today()
     tick_id = _new_tick_id(as_of)
     started = _iso_now()
@@ -475,6 +497,7 @@ def run_tick(
                 notifier=notifier,
                 broker_factory=broker_factory,
                 plan=plan,
+                order_sink=order_sink if dry_run else None,
             )
     except Exception as exc:
         log.error("tick.error", error=str(exc), error_type=type(exc).__name__)
@@ -566,6 +589,8 @@ class _TickRun:
     notifier: Notifier | None
     broker_factory: BrokerFactory | None
     plan: TickPlan
+    #: A dry run's reader of each book's decided orders.
+    order_sink: OrderSink | None
     #: The ledger tables carry ``portfolio_id`` (accounts schema).
     scoped: bool
     signals: SignalSet
@@ -647,6 +672,7 @@ def _run_tick_body(
     notifier: Notifier | None,
     broker_factory: BrokerFactory | None,
     plan: TickPlan,
+    order_sink: OrderSink | None = None,
 ) -> TickResult:
     scoped = _ledger_scoped(state)
     if not scoped and any(not b.legacy for b in plan.books):
@@ -678,6 +704,7 @@ def _run_tick_body(
         notifier=notifier,
         broker_factory=broker_factory,
         plan=plan,
+        order_sink=order_sink,
         scoped=scoped,
         signals=signals,
         pool=pool,
@@ -1443,6 +1470,18 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             outcomes.append((order, "filled" if fill else "rejected", fill))
             if fill is not None:
                 fills_count += 1
+
+    if dry_run and run.order_sink is not None:
+        run.order_sink(
+            BookDecision(
+                portfolio_id=portfolio_id,
+                orders=(*sells, *buys),
+                adjustments=tuple(risk_adjustments),
+                broker=broker if external else None,
+                live=risk_context.live if risk_context is not None else None,
+                portfolio=portfolio,
+            )
+        )
 
     # 19.8: a live book decides now and submits later (order tickets) when
     # it has an approve subscription, when submit_in_window is on, or when

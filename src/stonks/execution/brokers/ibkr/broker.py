@@ -16,7 +16,11 @@ Safety, in the order every call meets it (:meth:`IbkrBroker.ensure_ready`):
    accounts must hold the expected account (or exactly one account when
    none is set), a paper gateway a ``DU`` account and a live gateway a
    ``U`` account. Anything else raises ``LiveTradingRefusedError``;
-4. calls that change orders also need ``allow_live`` on a live gateway.
+4. calls that change orders also need ``allow_live`` on a live gateway;
+5. an order that may open a position at a live gateway also needs the
+   portfolio's live stage (``stage_lookup``) at ``live_small`` or higher
+   (roadmap 19.9). Closes and cancels still go out at a lower stage, so a
+   demoted book can wind down (P28).
 
 Idempotency: IBKR does not dedupe on ``orderRef``, so :meth:`place_order`
 first looks the client id up (open orders, completed orders, executions)
@@ -67,6 +71,7 @@ from stonks.execution.brokers.ibkr.settings import GatewayMode, IbkrOrderSetting
 from stonks.execution.brokers.ibkr.status import ibkr_state
 from stonks.execution.order_state import TERMINAL, ledger_status
 from stonks.logging import get_logger
+from stonks.production.live.stages import REAL_MONEY
 
 _log = get_logger("stonks.execution.brokers.ibkr")
 
@@ -108,6 +113,7 @@ class IbkrBroker:
         allow_short: bool = False,
         borrow: BorrowSource | None = None,
         ref_lookup: Callable[[str], str | None] | None = None,
+        stage_lookup: Callable[[], str | None] | None = None,
         clock: Clock = SYSTEM_CLOCK,
     ) -> None:
         self.client = client
@@ -127,6 +133,9 @@ class IbkrBroker:
         #: ``ref_lookup`` (``orders.broker_ref``).
         self._refs: dict[str, str] = {}
         self._ref_lookup = ref_lookup
+        #: The live stage of the portfolio this broker trades, read at each
+        #: opening order (``None``: unknown, so a live gateway opens nothing).
+        self._stage_lookup = stage_lookup
         self._account: str | None = None
         self._checked_connects = -1
         self._seen_execs: set[str] = set()
@@ -210,6 +219,24 @@ class IbkrBroker:
             )
         return account
 
+    def _ensure_stage_allows(self, order: Order) -> None:
+        """At a live gateway an order that may open needs the portfolio at
+        ``live_small`` or higher. A close (a sell that does not open a
+        short) goes out at any stage."""
+        if self.mode != "live" or (order.side == "sell" and order.position_effect != "open"):
+            return
+        try:
+            stage = self._stage_lookup() if self._stage_lookup is not None else None
+        except Exception as exc:
+            raise LiveTradingRefusedError(
+                f"the portfolio's live stage could not be read ({exc}): refusing to open"
+            ) from exc
+        if stage not in REAL_MONEY:
+            raise LiveTradingRefusedError(
+                f"real-money orders that open need the portfolio at stage live_small or higher"
+                f" (it is {stage or 'unknown'})"
+            )
+
     def login_check(self) -> LoginCheck:
         """Connect, check the account and read the server time. The health
         probe's view; it never raises."""
@@ -251,6 +278,7 @@ class IbkrBroker:
 
     def place_order(self, order: Order) -> None:
         account = self._ensure_may_trade()
+        self._ensure_stage_allows(order)
         ref = self.broker_ref(order.client_id)
         self._refs[ref] = order.client_id
         existing = self.get_order_state(order.client_id)

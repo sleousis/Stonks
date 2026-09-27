@@ -110,3 +110,29 @@ def test_a_cash_gateway_trades_long_only_and_a_margin_gateway_checks_borrow():
     with pytest.raises(ValueError, match="account_type"):
         IbkrBrokerConfig(gateways={"m": {"host": "h", "port": 1, "mode": "paper",
                                          "account_type": "cfd"}})  # fmt: skip
+
+
+def test_connect_ibkr_reads_the_portfolio_stage(state):
+    from stonks.core.types import Order
+    from stonks.execution.brokers.base import LiveTradingRefusedError
+    from stonks.production.live.stages import change_stage
+
+    fake = FakeIbGateway(["U1"])
+    live = CONFIG.gateways["live"].model_copy(update={"portfolios": ["pf_default"]})
+    config = CONFIG.model_copy(update={"gateways": {**CONFIG.gateways, "live": live}})
+    broker = connect_ibkr(
+        config, portfolio_id="pf_default", state=state, client_factory=lambda e: fake
+    )
+    order = Order(client_id="c1", ticker="AAPL.US", side="buy", quantity=1.0, decision_price=10.0)
+    with pytest.raises(LiveTradingRefusedError, match="sim_paper"):
+        broker.place_order(order)
+    for stage in ("broker_paper", "live_small"):
+        change_stage(
+            state, "pf_default", stage, actor="u", reason="r",
+            gate_report={"target": stage, "passed": True},
+        )  # fmt: skip
+    broker.place_order(order)
+    assert fake.sent_count("c1") == 1
+    # a gateway picked by name that serves one portfolio reads that one
+    named = connect_ibkr(config, gateway="live", state=state, client_factory=lambda e: fake)
+    assert named._stage_lookup is not None and named._stage_lookup() == "live_small"

@@ -35,9 +35,9 @@ def test_reports_list_and_read(client, settings, people):
 
     listed = client.get("/api/reconcile/reports", headers=alice)
     assert listed.status_code == 200, listed.text
-    assert [r["id"] for r in listed.json()] == [second, first]
+    assert [r["id"] for r in listed.json()["items"]] == [second, first]
     one = client.get(f"/api/reconcile/reports?portfolio_id={pid}&limit=1", headers=alice)
-    assert [r["id"] for r in one.json()] == [second]
+    assert [r["id"] for r in one.json()["items"]] == [second]
 
     got = client.get(f"/api/reconcile/reports/{first}", headers=alice)
     assert got.status_code == 200
@@ -55,6 +55,6 @@ def test_another_persons_reports_read_as_missing(client, settings, people):
         assert client.get(f"/api/reconcile/reports/{report}", headers=headers).status_code == 404
         mine = client.get(f"/api/reconcile/reports?portfolio_id={pid}", headers=headers)
         assert mine.status_code == 404
-        assert client.get("/api/reconcile/reports", headers=headers).json() == []
+        assert client.get("/api/reconcile/reports", headers=headers).json()["items"] == []
     missing = client.get("/api/reconcile/reports/rec_nope", headers=people["alice"]["headers"])
     assert missing.status_code == 404

@@ -1,0 +1,87 @@
+<section class="panel preview-panel" aria-labelledby="preview-title">
+  <div class="panel-head">
+    <h2 id="preview-title">Order preview</h2>
+  </div>
+  <div class="panel-body stack">
+    <p class="muted">
+      The orders this portfolio would send now: a dry run through every risk rule, safeguard and
+      account rule, then the broker's own fee and margin check.
+      <strong>Nothing is sent.</strong>
+    </p>
+    <div class="actions">
+      <button
+        type="button"
+        class="btn btn-primary"
+        [disabled]="!canTrade() || running()"
+        [attr.aria-busy]="running()"
+        (click)="run()"
+      >
+        {{ running() ? 'Previewing…' : result() ? 'Preview again' : 'Preview the next orders' }}
+      </button>
+      <app-permission-note permission="portfolio.trade" />
+    </div>
+
+    <div aria-live="polite" class="stack">
+      @if (running()) {
+        <app-loading-state label="Running the dry run" [rows]="3" />
+      } @else if (failed(); as err) {
+        <app-error-state title="Could not preview the orders" [error]="err" (retry)="run()" />
+      } @else if (result(); as p) {
+        <p class="outcome" data-testid="preview-outcome">
+          <span class="num">{{ date(p.as_of) }}</span
+          >, {{ words(p.stage).label }}.
+          {{ outcome(p) }}
+        </p>
+        @if (p.account; as a) {
+          <dl class="figures" aria-label="The account as the broker reports it">
+            <div>
+              <dt>Equity</dt>
+              <dd class="num">{{ money(a.equity, { currency: a.currency }) }}</dd>
+            </div>
+            <div>
+              <dt>Settled cash</dt>
+              <dd class="num">{{ money(a.settled_cash, { currency: a.currency }) }}</dd>
+            </div>
+            <div>
+              <dt>Buying power</dt>
+              <dd class="num">{{ money(a.buying_power, { currency: a.currency }) }}</dd>
+            </div>
+            @if (p.allocation !== null) {
+              <div>
+                <dt>Your allocation</dt>
+                <dd class="num">{{ money(p.allocation, { currency: a.currency }) }}</dd>
+              </div>
+            }
+          </dl>
+        }
+        @if (p.orders.length) {
+          <app-data-table
+            caption="Orders the preview would send, not sent"
+            [rows]="p.orders"
+            [columns]="columns"
+            [rowKey]="orderKey"
+            [pageSize]="0"
+          >
+            <ng-template appCell="side" [appCellOf]="p.orders" let-row>
+              <app-side-tag [side]="row.side" />
+            </ng-template>
+          </app-data-table>
+        }
+        @if (dropped().length) {
+          <h3>Dropped by a rule</h3>
+          <ul class="dropped">
+            @for (a of dropped(); track $index) {
+              <li>
+                <strong>{{ a.ticker }}</strong> ({{ a.side }}): {{ a.reason }}
+              </li>
+            }
+          </ul>
+        }
+        @for (n of p.notes; track n) {
+          <p class="note" role="note">{{ n }}</p>
+        }
+        <p class="sent" data-testid="preview-not-sent">Nothing was sent to the broker.</p>
+      }
+    </div>
+  </div>
+</section>

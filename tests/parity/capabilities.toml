@@ -578,7 +578,7 @@ title = "IB Gateway health and the auto books it paused"
 routes = ["GET /api/brokers/gateways"]
 console = "getBrokerGateways"
 cli = { limited = "the scheduler's broker health job logs each check" }
-mcp = { limited = "read tools land with the live stages (roadmap 19.9)" }
+mcp = "get_broker_gateways"
 
 # ---- portfolio and P&L ------------------------------------------------------------
 
@@ -1552,7 +1552,7 @@ title = "Read a live portfolio's allocation, account profile and live rules"
 routes = ["GET /api/portfolios/{portfolio_id}/live/allocation", "GET /api/portfolios/{portfolio_id}/live/account-profile", "GET /api/portfolios/{portfolio_id}/live/rules"]
 console = ["getLiveAllocation", "getAccountProfile", "getLiveRules"]
 cli = { limited = "owner settings live in the console, the API has them now" }
-mcp = { limited = "read tools land with the live stages (roadmap 19.9)" }
+mcp = ["get_live_allocation", "get_live_rules"]
 
 [[capability]]
 id = "live.settings.write"
@@ -1562,6 +1562,44 @@ routes = ["PUT /api/portfolios/{portfolio_id}/live/allocation", "PUT /api/portfo
 console = ["setLiveAllocation", "setAccountProfile"]
 cli = { limited = "needs a fresh second factor, done in the web app" }
 mcp = { limited = "needs a fresh second factor, done in the web app" }
+
+# ---- live stages, gates and the preview (roadmap 19.9) ----------------------------
+
+[[capability]]
+id = "live.stage.read"
+domain = "trading"
+title = "A live portfolio's stage, stage changes, gate metrics and gate report"
+routes = ["GET /api/portfolios/{portfolio_id}/live/stage", "GET /api/portfolios/{portfolio_id}/live/gate-report"]
+console = ["getLiveStage", "getLiveGateReport"]
+cli = ["stonks live stage show", "stonks live stage report"]
+mcp = ["get_live_stage", "get_live_gate_report"]
+
+[[capability]]
+id = "live.stage.promote"
+domain = "trading"
+title = "Promote a live portfolio one stage up (gate report, step-up, typed confirmation)"
+routes = ["POST /api/portfolios/{portfolio_id}/live/stage/promote"]
+console = "promoteLiveStage"
+cli = "stonks live stage promote"
+mcp = { limited = "needs a fresh second factor, done in the web app" }
+
+[[capability]]
+id = "live.stage.demote"
+domain = "trading"
+title = "Demote a live portfolio to a lower stage"
+routes = ["POST /api/portfolios/{portfolio_id}/live/stage/demote"]
+console = "demoteLiveStage"
+cli = "stonks live stage demote"
+mcp = { limited = "a stage change stays with a person in the console or the shell" }
+
+[[capability]]
+id = "live.preview"
+domain = "trading"
+title = "Preview the live book's orders through the broker's what-if (never sent)"
+routes = ["POST /api/portfolios/{portfolio_id}/live/preview"]
+console = "previewLiveOrders"
+cli = "stonks live preview"
+mcp = { limited = "runs a dry-run tick through the broker, in the console and the CLI" }
 
 # ---- calendars and news (roadmap 20.7) ----------------------------------------------
 

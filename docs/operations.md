@@ -61,6 +61,7 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `model_retrain`: refit strategies that learn from data into candidate versions (see [Model lifecycle](model-lifecycle.md)) | Saturday 06:00 UTC | none |
 | `live_submit`: send approved order tickets (see Live trading) | open - 20 min | none |
 | `live_stops`: protective stops for the entries the opening auction filled (see Protective stops) | open + 30 min | none |
+| `live_gate_days`: the live stages' gate metrics for the session (see Live trading) | close + 75 min | none |
 
 Session jobs run on NYSE trading days. The IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty (the two reconcile checks also while no gateway lists a portfolio). `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
 
@@ -450,6 +451,32 @@ PUT /api/portfolios/{id}/live/account-profile   {"jurisdiction": "us", "account_
 - The allocation is the most Stonks may hold in the book. There are no automatic steps. A bad week alerts but never changes it.
 - The profile picks the account rules: `us`, `eu` or `uk`, `cash` (default) or `margin`, `retail` (default) or `professional`. Shorts need a margin account.
 - The account is shared with your own trading. Stonks only trades the positions it opened (`[production.live] allow_manual_trades = true`).
+- The profile is locked while the portfolio trades real money (`live_small` or up). Move it down to `broker_paper` to change it.
+
+### Stages, gates and the preview
+
+Every portfolio has a live stage (roadmap 19.9):
+
+```mermaid
+flowchart LR
+  A[sim_paper] --> B[broker_paper] --> C[live_small] --> D[live_scale]
+```
+
+- Moving up goes one stage at a time. It needs a gate report that passes, computed at that moment, a reason, the target stage typed again, and a fresh second factor (`live.manage`). Moving down goes to any lower stage with a reason and needs no code. Both write a `live_stage_changes` row and an audit row.
+- The IBKR adapter only sends an opening order to a live gateway when the portfolio is at `live_small` or up. Closes and cancels still go out, so a book moved down can wind down.
+- `live_gate_days` records, for every portfolio past `sim_paper`: orders sent, filled, rejected, refused by our own rules and stuck, fills with no commission, the TCA gap, the book's and its model book's return, and drift. A session is clean with no drift, no stuck order, every commission booked and under 2% rejected. A week that is not clean sends the owner an alert. It never changes the stage or the allocation.
+- Thresholds sit under `[production.live.stages]`: 20 paper days for gate 1, 20 clean sessions in `broker_paper` for gate 2, 40 sessions with the last 30 clean and 30 filled orders for gate 3, whose TCA gap interval must include zero or sit below it.
+- Checks with no data yet (drift before reconciliation lands, the kill switch drill before 19.11, tracking error without model books) show as "no data yet" and do not block. Tracking error needs `[production] model_books = "all"`.
+- The preview runs the live book's decision as a dry run through every rule and the broker's what-if. It never sends an order and needs trade rights only.
+
+```
+uv run stonks live stage show|report PORTFOLIO
+uv run stonks live stage promote PORTFOLIO --to broker_paper --reason "..."   # asks you to type the stage
+uv run stonks live stage demote PORTFOLIO --to sim_paper --reason "..."
+uv run stonks live preview PORTFOLIO
+```
+
+In the console: Live settings of the portfolio, the Stage card and Order preview. Over the API: `GET /api/portfolios/{id}/live/stage`, `GET .../live/gate-report`, `POST .../live/stage/promote`, `POST .../live/stage/demote`, `POST .../live/preview`. MCP reads the stage and the gate report only.
 
 ### Live safeguards
 

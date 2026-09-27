@@ -3,9 +3,9 @@
 :func:`connect_ibkr` picks the gateway (by name, by the portfolio it
 serves, or the only one), gives the process role its fixed API client id
 (``[brokers.ibkr] client_ids``: tick 11, sync 12, health 13,
-reconcile 14, stream 15), and wires the
-contract cache and the ``orderRef`` lookup to the state DB when one is
-given. Nothing connects until the broker is first used, so a gateway that
+reconcile 14, stream 15), and wires the contract cache, the
+``orderRef`` lookup and the portfolio's live stage (roadmap 19.9) to the
+state DB when one is given. Nothing connects until the broker is first used, so a gateway that
 is down fails that call, nothing else.
 """
 
@@ -89,6 +89,20 @@ def order_ref_lookup(state: SqliteState) -> Callable[[str], str | None]:
     return lookup
 
 
+def stage_lookup(state: SqliteState, portfolio_id: str) -> Callable[[], str | None]:
+    """The portfolio's live stage, read at each call (``None`` before
+    migration 037 or for an unknown portfolio)."""
+    from stonks.production.live.stages import get_stage, stages_enabled
+
+    def lookup() -> str | None:
+        if not stages_enabled(state):
+            return None
+        rows = state.sql("SELECT 1 FROM portfolios WHERE id = ?", [portfolio_id])
+        return get_stage(state, portfolio_id) if rows else None
+
+    return lookup
+
+
 def connect_ibkr(
     config: IbkrBrokerConfig,
     *,
@@ -108,6 +122,7 @@ def connect_ibkr(
     ``borrow_rates``, say) when given."""
     _, gw = pick_gateway(config, gateway=gateway, portfolio_id=portfolio_id)
     kind: AccountType = account_type or gw.account_type
+    served = portfolio_id or (gw.portfolios[0] if len(gw.portfolios) == 1 else None)
     client = client_factory(endpoint_for(config, gw, role))
     cache = SqliteContractCache(state) if state is not None else MemoryContractCache()
     resolver = ContractResolver(
@@ -127,6 +142,9 @@ def connect_ibkr(
         account_type=kind,
         allow_short=kind == "margin",
         ref_lookup=order_ref_lookup(state) if state is not None else None,
+        stage_lookup=(
+            stage_lookup(state, served) if state is not None and served is not None else None
+        ),
         clock=clock,
     )
     if kind == "margin":

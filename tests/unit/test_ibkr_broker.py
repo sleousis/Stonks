@@ -94,13 +94,62 @@ def test_no_managed_account_means_the_login_did_not_finish():
 
 def test_live_orders_need_allow_live():
     gw = FakeIbGateway(["U7654321"])
-    broker, _ = make(gw, mode="live")
+    broker, _ = make(gw, mode="live", stage_lookup=lambda: "live_small")
     assert broker.account_id == "U7654321"  # reads are fine
     with pytest.raises(LiveTradingRefusedError, match="allow_live"):
         broker.place_order(buy())
     assert gw.sent == []
-    allowed, _ = make(gw, mode="live", allow_live=True)
+    allowed, _ = make(gw, mode="live", allow_live=True, stage_lookup=lambda: "live_small")
     allowed.place_order(buy())
+    assert gw.sent_count("t1-s1-AAPL.US-buy") == 1
+
+
+@pytest.mark.parametrize("stage", [None, "sim_paper", "broker_paper"])
+def test_live_orders_need_stage_live_small_or_higher(stage):
+    gw = FakeIbGateway(["U7654321"])
+    broker, _ = make(gw, mode="live", allow_live=True, stage_lookup=lambda: stage)
+    with pytest.raises(LiveTradingRefusedError, match="live_small"):
+        broker.place_order(buy())
+    assert gw.sent == []
+
+
+def test_live_orders_without_a_stage_lookup_are_refused():
+    gw = FakeIbGateway(["U7654321"])
+    broker, _ = make(gw, mode="live", allow_live=True)
+    with pytest.raises(LiveTradingRefusedError, match="live_small"):
+        broker.place_order(buy())
+
+
+def test_a_failing_stage_lookup_refuses():
+    def boom():
+        raise RuntimeError("state db locked")
+
+    gw = FakeIbGateway(["U7654321"])
+    broker, _ = make(gw, mode="live", allow_live=True, stage_lookup=boom)
+    with pytest.raises(LiveTradingRefusedError, match="stage"):
+        broker.place_order(buy())
+    assert gw.sent == []
+
+
+def test_a_demoted_live_book_may_still_close_and_cancel():
+    gw = FakeIbGateway(["U7654321"])
+    broker, _ = make(gw, mode="live", allow_live=True, stage_lookup=lambda: "broker_paper")
+    broker.place_order(buy("t1-s1-AAPL.US-sell", side="sell", position_effect="close"))
+    assert gw.sent_count("t1-s1-AAPL.US-sell") == 1
+    assert broker.cancel_order("t1-s1-AAPL.US-sell") is True
+
+
+@pytest.mark.parametrize("stage", ["live_small", "live_scale"])
+def test_live_stages_may_open(stage):
+    gw = FakeIbGateway(["U7654321"])
+    broker, _ = make(gw, mode="live", allow_live=True, stage_lookup=lambda: stage)
+    broker.place_order(buy())
+    assert gw.sent_count("t1-s1-AAPL.US-buy") == 1
+
+
+def test_paper_gateways_ignore_the_stage():
+    broker, gw = make(stage_lookup=lambda: "sim_paper")
+    broker.place_order(buy())
     assert gw.sent_count("t1-s1-AAPL.US-buy") == 1
 
 

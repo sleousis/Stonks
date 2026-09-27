@@ -2,7 +2,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
-import type { LiveRulesView } from '../../api/models';
+import type { GateReportView, LiveRulesView, LiveStageView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
@@ -33,6 +33,25 @@ const RULES: LiveRulesView = {
     { name: 'restricted', applies: false },
     { name: 'settled_cash', applies: false },
   ],
+};
+
+const STAGE: LiveStageView = {
+  portfolio_id: 'pf_live',
+  stage: 'sim_paper',
+  next_stage: 'broker_paper',
+  real_money: false,
+  history: [],
+  days: [],
+};
+
+const REPORT: GateReportView = {
+  portfolio_id: 'pf_live',
+  from_stage: 'sim_paper',
+  target: 'broker_paper',
+  passed: false,
+  checks: [{ name: 'paper_days', passed: false, detail: 'short of paper days', value: 3 }],
+  metrics: { sessions: 0, clean_streak: 0, reject_rate: 0 },
+  computed_at: '2026-09-27T20:00:00Z',
 };
 
 describe('live settings helpers', () => {
@@ -125,6 +144,8 @@ describe('LiveSettingsPage', () => {
       if (profile) prof.flush(profile);
       else prof.flush({ detail: 'none' }, { status: 404, statusText: 'Not Found' });
       (await nextRequest(http, '/api/portfolios/pf_live/live/rules')).flush(RULES);
+      (await nextRequest(http, '/api/portfolios/pf_live/live/stage')).flush(STAGE);
+      (await nextRequest(http, '/api/portfolios/pf_live/live/gate-report')).flush(REPORT);
       await tick();
       fixture.detectChanges();
     }
@@ -135,6 +156,10 @@ describe('LiveSettingsPage', () => {
     const input = el.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)!;
     input.value = value;
     input.dispatchEvent(new Event('input'));
+  }
+
+  function allocationForm(el: HTMLElement): HTMLFormElement {
+    return el.querySelector<HTMLFormElement>('form[aria-labelledby="allocation-form-title"]')!;
   }
 
   function button(el: HTMLElement, text: string) {
@@ -154,7 +179,7 @@ describe('LiveSettingsPage', () => {
     const el = await render();
     type(el, '#allocation-amount', '2500');
     type(el, '#allocation-reason', 'first slice');
-    el.querySelector<HTMLFormElement>('form')!.dispatchEvent(new Event('submit'));
+    allocationForm(el).dispatchEvent(new Event('submit'));
     const put = await nextRequest(http, '/api/portfolios/pf_live/live/allocation', 'PUT');
     expect(confirm).toHaveBeenCalledTimes(1);
     const ticket = confirm.mock.calls[0][0] as { ticket: { live: boolean; kind: string } };
@@ -178,7 +203,7 @@ describe('LiveSettingsPage', () => {
   it('needs a reason before anything is sent', async () => {
     const el = await render();
     type(el, '#allocation-amount', '100');
-    el.querySelector<HTMLFormElement>('form')!.dispatchEvent(new Event('submit'));
+    allocationForm(el).dispatchEvent(new Event('submit'));
     await tick();
     fixture.detectChanges();
     expect(el.textContent).toContain('Say why.');
@@ -190,7 +215,7 @@ describe('LiveSettingsPage', () => {
     const el = await render();
     type(el, '#allocation-amount', '100');
     type(el, '#allocation-reason', 'try');
-    el.querySelector<HTMLFormElement>('form')!.dispatchEvent(new Event('submit'));
+    allocationForm(el).dispatchEvent(new Event('submit'));
     await tick();
     http.expectNone({ method: 'PUT' });
   });
@@ -240,6 +265,12 @@ describe('LiveSettingsPage', () => {
     const el = await render();
     expect(button(el, 'Set allocation').disabled).toBe(true);
     expect(button(el, 'Save profile').disabled).toBe(true);
+  });
+
+  it('shows the stage card and the preview panel on a live portfolio', async () => {
+    const el = await render();
+    expect(el.querySelector('app-live-stage-card')?.textContent).toContain('Simulated paper');
+    expect(el.querySelector('app-live-preview-panel')?.textContent).toContain('Nothing is sent');
   });
 
   it('explains a paper portfolio has no live settings', async () => {

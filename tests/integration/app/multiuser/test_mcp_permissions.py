@@ -660,6 +660,28 @@ CASES: dict[str, Case] = {
     # order tickets (roadmap 19.8): read-only over MCP
     "list_tickets": _c("GET", "/api/tickets"),
     "get_ticket": _c("GET", "/api/tickets/{ticket_id}", lambda i: {"ticket_id": "tkt_none"}),
+    # live stages and settings (roadmap 19.9): read-only over MCP
+    "get_live_stage": _c(
+        "GET",
+        "/api/portfolios/{portfolio_id}/live/stage",
+        lambda i: {"portfolio_id": i["portfolio"]},
+    ),
+    "get_live_gate_report": _c(
+        "GET",
+        "/api/portfolios/{portfolio_id}/live/gate-report",
+        lambda i: {"portfolio_id": i["portfolio"]},
+    ),
+    "get_live_allocation": _c(
+        "GET",
+        "/api/portfolios/{portfolio_id}/live/allocation",
+        lambda i: {"portfolio_id": i["portfolio"]},
+    ),
+    "get_live_rules": _c(
+        "GET",
+        "/api/portfolios/{portfolio_id}/live/rules",
+        lambda i: {"portfolio_id": i["portfolio"]},
+    ),
+    "get_broker_gateways": _c("GET", "/api/brokers/gateways"),
     "draft_order": _c(
         "POST",
         "/api/orders/drafts",
