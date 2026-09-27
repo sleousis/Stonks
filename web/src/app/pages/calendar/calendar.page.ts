@@ -455,7 +455,8 @@ export class CalendarPage implements OnInit {
 
   constructor() {
     // Watchlists are personal: nothing to read for someone not signed in.
-    if (inject(SessionService).signedIn()) void this.watchlists.load();
+    // Read them fresh, so a list made since the app opened is offered.
+    if (inject(SessionService).signedIn()) void this.watchlists.load(true);
   }
 
   ngOnInit(): void {
