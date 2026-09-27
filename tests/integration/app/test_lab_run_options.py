@@ -8,6 +8,7 @@ from datetime import date
 import pytest
 
 import stonks.app.lab as lab_module
+from stonks.app.errors import ValidationError
 from stonks.app.lab import LabRunRequest
 from stonks.app.strategies import StrategyRef
 from stonks.backtest.costs import CostModelSettings
@@ -144,3 +145,40 @@ def test_lab_without_cost_model_uses_configured_costs(services, verdict, monkeyp
     seen = _capture_dataset_costs(monkeypatch)
     services.lab.run_lab(_request())
     assert seen == [services.lab._ctx.settings.backtest.costs]
+
+
+def _capture_fixed_params(monkeypatch) -> list:
+    seen: list = []
+    real = lab_module.execute_lab_run
+
+    def spy(*args, **kwargs):
+        seen.append(kwargs.get("fixed_params"))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(lab_module, "execute_lab_run", spy)
+    return seen
+
+
+def test_lab_run_pins_the_ref_params(services, verdict, monkeypatch):
+    """A class ref's params stay fixed while the tuner searches the rest
+    (``--params`` on the CLI), so a factor run keeps its factor."""
+    seen = _capture_fixed_params(monkeypatch)
+    ref = StrategyRef(
+        class_path="stonks.strategies.examples.momentum:Momentum",
+        params={"lookback_days": 40},
+    )
+    view = services.lab.run_lab(_request(strategy=ref))
+    assert seen == [{"lookback_days": 40}]
+    assert view.best_params["lookback_days"] == 40
+
+
+def test_lab_run_without_params_pins_nothing(services, verdict, monkeypatch):
+    seen = _capture_fixed_params(monkeypatch)
+    services.lab.run_lab(_request())
+    assert seen == [None]
+
+
+def test_submit_refuses_a_param_the_class_does_not_have(services):
+    ref = StrategyRef(class_path="stonks.strategies.examples.momentum:Momentum", params={"nope": 1})
+    with pytest.raises(ValidationError, match="nope"):
+        services.lab.submit_lab_run(_request(strategy=ref))

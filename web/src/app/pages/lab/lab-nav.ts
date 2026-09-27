@@ -7,6 +7,8 @@ export const LAB_SECTIONS = [
   { path: '/lab/sweeps', label: 'Sweep', exact: false },
   { path: '/lab/signal-ic', label: 'Signal IC', exact: false },
   { path: '/lab/ledger', label: 'Trial ledger', exact: false },
+  { path: '/lab/factors', label: 'Factors', exact: false },
+  { path: '/lab/research', label: 'Research sessions', exact: false },
 ] as const;
 
 @Component({

@@ -3810,8 +3810,9 @@ export type KillSwitchRequest = {
 /**
  * LabRunRequest
  *
- * Tunes the class the ``strategy`` ref points at (its ``params`` are
- * ignored: the tuner searches the class's parameter space).
+ * Tunes the class the ``strategy`` ref points at over its parameter
+ * space. The ref's ``params`` stay fixed for the whole search, such as
+ * the ``factor`` of the ``factor`` strategy.
  *
  * Give ``universe`` (tickers), ``universe_id`` (a stored universe: every
  * member on any day of the window, delisted names included), or both
@@ -8623,6 +8624,7 @@ export type RuleSettings = {
     squeeze_guard?: SqueezeGuardSettings;
     stop_cooldown?: StopCooldownSettings;
     stop_guard?: StopGuardSettings;
+    style_exposure?: StyleExposureSettings;
 };
 
 /**
@@ -9911,6 +9913,20 @@ export type StudioCapabilities = {
      * Code Strategies
      */
     code_strategies: boolean;
+};
+
+/**
+ * StyleExposureSettings
+ */
+export type StyleExposureSettings = {
+    /**
+     * Max Abs Exposure
+     */
+    max_abs_exposure?: number | null;
+    /**
+     * Styles
+     */
+    styles?: Array<'momentum' | 'size' | 'value' | 'volatility'>;
 };
 
 /**

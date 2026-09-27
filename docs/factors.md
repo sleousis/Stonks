@@ -102,7 +102,7 @@ uv run stonks lab run factor --start 2020-01-01 --end 2025-01-01 --universe-id s
   --params '{"factor": "mom_12_1", "top_pct": 0.2}'
 ```
 
-A formula has no hypothesis of its own. Write one in the lab trial before you trust it (P1).
+A formula has no hypothesis of its own. Write one in the lab trial before you trust it (P1). Through the API, `strategy.params` of a lab run stay fixed while the tuner searches the rest, so `{"factor": "mom_12_1"}` keeps the factor.
 
 ## Datasets for models
 
@@ -185,3 +185,5 @@ Every backtest tear sheet (`stonks report --backtest`) ends with a factor attrib
 | `POST /api/factors/tearsheets`, `GET /api/factors/tearsheets/{job_id}/result` | `run_factor_tearsheet` |
 
 Reads need `data.read`. Tear sheets are jobs and need `lab.run`.
+
+In the console, **Lab, Factors** has the library, a page per factor and a formula editor. Each shows values on a date, runs a tear sheet and starts a lab run of the `factor` strategy. See `docs/ui.md`.

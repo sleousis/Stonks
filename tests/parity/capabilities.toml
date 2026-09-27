@@ -235,7 +235,7 @@ id = "factors.catalog"
 domain = "lab"
 title = "The factor library: Alpha158, classic price factors and fundamentals scores"
 routes = ["GET /api/factors", "GET /api/factors/{factor_id}"]
-console = { limited = "no factor views in the console yet (roadmap 22.2), the CLI and MCP cover it" }
+console = ["listFactors", "getFactor"]
 cli = ["stonks factors list", "stonks factors show"]
 mcp = ["list_factors", "get_factor"]
 
@@ -244,7 +244,7 @@ id = "factors.check"
 domain = "lab"
 title = "Check a factor formula: parses, point in time, warm-up"
 routes = ["POST /api/factors/check"]
-console = { limited = "no factor views in the console yet (roadmap 22.2), the CLI and MCP cover it" }
+console = "checkFactorExpression"
 cli = "stonks factors check"
 mcp = "check_factor_expression"
 
@@ -253,7 +253,7 @@ id = "factors.values"
 domain = "lab"
 title = "Factor values across a universe at a date, ranked"
 routes = ["POST /api/factors/values"]
-console = { limited = "no factor views in the console yet (roadmap 22.2), the CLI and MCP cover it" }
+console = "getFactorValues"
 cli = "stonks factors values"
 mcp = "get_factor_values"
 
@@ -262,7 +262,7 @@ id = "factors.tearsheet"
 domain = "lab"
 title = "Factor tear sheet: IC by horizon, sector, asset class and size, quantile returns, alpha, monthly IC"
 routes = ["POST /api/factors/tearsheets", "GET /api/factors/tearsheets/{job_id}/result"]
-console = { limited = "no factor views in the console yet (roadmap 22.3), the CLI and MCP cover it" }
+console = ["startFactorTearsheet", "getFactorTearsheetResult"]
 cli = "stonks factors tearsheet"
 mcp = "run_factor_tearsheet"
 
@@ -1484,7 +1484,7 @@ routes = [
   "GET /api/assistant/research",
   "GET /api/assistant/research/{session_id}",
 ]
-console = { limited = "research sessions start from the assistant chat, which calls the MCP tool" }
+console = ["startAssistantResearch", "listAssistantResearch", "getAssistantResearch"]
 cli = { limited = "a research session runs as an API job, and the eval set checks the loop from the shell" }
 mcp = ["start_research", "list_research_sessions", "get_research_session"]
 

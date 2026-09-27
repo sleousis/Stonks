@@ -1868,7 +1868,7 @@ One order: why it was placed, the signal context, the outcome and the notes peop
 
 ### LabRunRequest
 
-Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the tuner searches the class's parameter space).
+Tunes the class the ``strategy`` ref points at over its parameter space. The ref's ``params`` stay fixed for the whole search, such as the ``factor`` of the ``factor`` strategy.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -3681,6 +3681,7 @@ Type: "viewer" \| "trader" \| "admin"
 | `squeeze_guard` | [SqueezeGuardSettings](#squeezeguardsettings) | no |  |
 | `stop_cooldown` | [StopCooldownSettings](#stopcooldownsettings) | no |  |
 | `stop_guard` | [StopGuardSettings](#stopguardsettings) | no |  |
+| `style_exposure` | [StyleExposureSettings](#styleexposuresettings) | no |  |
 
 ### RuleTemplateView
 
@@ -4180,6 +4181,13 @@ What this server lets the Studio do.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `code_strategies` | boolean | yes |  |
+
+### StyleExposureSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_abs_exposure` | number \| null | no |  |
+| `styles` | list["momentum" \| "size" \| "value" \| "volatility"] | no |  |
 
 ### SubscribeRequest
 

@@ -321,7 +321,7 @@ A draft is never an order. The person approves it in the web app with a fresh se
 
 ### Research sessions
 
-The assistant can also run a research session (roadmap 22.9). You give a goal and a universe. The model proposes lab trials, each with a hypothesis and a premortem, and the lab runs them. Start one from the chat (it calls `start_research`), from MCP, or with `POST /api/assistant/research`. Read it with `GET /api/assistant/research/{id}`: every proposal, whether it ran or why not, and its lab run in the trial ledger.
+The assistant can also run a research session (roadmap 22.9). You give a goal and a universe. The model proposes lab trials, each with a hypothesis and a premortem, and the lab runs them. Start one from the chat (it calls `start_research`), from MCP, from **Lab, Research sessions** in the console, or with `POST /api/assistant/research`. Read it with `GET /api/assistant/research/{id}`: every proposal, whether it ran or why not, and its lab run in the trial ledger.
 
 Rules the code enforces, whatever the model says:
 

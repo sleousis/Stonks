@@ -394,6 +394,99 @@ describe('lab requests', () => {
     });
   });
 
+  describe('Optuna and the heatmap', () => {
+    it('sends sampler and prune only with Optuna', () => {
+      expect(buildLabRunRequest(labForm({ prune: true }))).not.toHaveProperty('sampler');
+      expect(buildLabRunRequest(labForm({ prune: true }))).not.toHaveProperty('prune');
+      const body = buildLabRunRequest(
+        labForm({ tuner: 'optuna', sampler: 'nsga2', prune: true, objective: 'multi' }),
+      );
+      expect(body).toMatchObject({
+        tuner: 'optuna',
+        sampler: 'nsga2',
+        prune: true,
+        objective: 'multi',
+      });
+      expect(buildLabRunRequest(labForm({ tuner: 'optuna' }))).not.toHaveProperty('prune');
+    });
+
+    it('sends a heatmap only when asked, auto axes as null', () => {
+      expect(buildLabRunRequest(labForm())).not.toHaveProperty('heatmap');
+      expect(buildLabRunRequest(labForm({ heatmap: true })).heatmap).toEqual({
+        x: null,
+        y: null,
+        grid_size: 7,
+        fast: true,
+      });
+      const body = buildLabRunRequest(
+        labForm({
+          heatmap: true,
+          heatmapX: 'lookback_days',
+          heatmapY: 'threshold',
+          heatmapGrid: 9,
+          heatmapFull: true,
+        }),
+      );
+      expect(body.heatmap).toEqual({
+        x: 'lookback_days',
+        y: 'threshold',
+        grid_size: 9,
+        fast: false,
+      });
+    });
+
+    it('checks the grid size and two different axes', () => {
+      expect(labRunErrors(labForm({ heatmapGrid: 40 }))).not.toHaveProperty('heatmapGrid');
+      expect(labRunErrors(labForm({ heatmap: true, heatmapGrid: 1 }))['heatmapGrid']).toContain(
+        'Between 2 and 15',
+      );
+      expect(labRunErrors(labForm({ heatmap: true, heatmapGrid: 15 }))).not.toHaveProperty(
+        'heatmapGrid',
+      );
+      expect(
+        labRunErrors(labForm({ heatmap: true, heatmapX: 'threshold', heatmapY: 'threshold' }))[
+          'heatmapY'
+        ],
+      ).toBe('Pick a different parameter.');
+    });
+
+    it('keeps walk-forward on its own metric for objectives it cannot score', () => {
+      const body = buildLabRunRequest(
+        labForm({ suite: 'custom', tests: ['walk_forward'], wfSplits: 3, objective: 'calmar' }),
+      );
+      expect(body.walk_forward).toEqual({ n_splits: 3 });
+      const cv = buildLabRunRequest(
+        labForm({ suite: 'custom', tests: ['walk_forward'], wfSplits: 3, objective: 'cv_cagr' }),
+      );
+      expect(cv.walk_forward).toEqual({ n_splits: 3, metric: 'cagr' });
+    });
+
+    it('reads Optuna, the heatmap and the new objectives back for a re-run', () => {
+      const request = buildLabRunRequest(
+        labForm({
+          tuner: 'optuna',
+          sampler: 'random',
+          prune: true,
+          objective: 'sharpe_dd',
+          heatmap: true,
+          heatmapX: 'lookback_days',
+          heatmapGrid: 5,
+          heatmapFull: true,
+        }),
+      );
+      expect(formFromRequest(request)).toMatchObject({
+        tuner: 'optuna',
+        sampler: 'random',
+        prune: true,
+        objective: 'sharpe_dd',
+        heatmap: true,
+        heatmapX: 'lookback_days',
+        heatmapGrid: 5,
+        heatmapFull: true,
+      });
+    });
+  });
+
   it('groups and filters the catalog', () => {
     expect(groupStrategies(CATALOG).map((g) => [g.label, g.classes.map((c) => c.name)])).toEqual([
       ['Examples', ['buy_and_hold', 'momentum']],

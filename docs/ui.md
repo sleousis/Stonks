@@ -355,9 +355,21 @@ options schema gives labels, defaults, bounds and choices
 change. Field errors show next to the field, and the advanced panel opens
 when one of its fields is wrong.
 
-The Lab has four screens, linked at the top of each: Backtest and lab run
-(`/lab`), Sweep (`/lab/sweeps`), Signal IC (`/lab/signal-ic`) and Trial
-ledger (`/lab/ledger`). A sweep
+The search settings in the Advanced fold include the Optuna tuner. Pick it
+and the form shows its sampler (TPE, NSGA-II or random) and "Stop weak
+trials early" (`prune`). Objectives include Sortino, Calmar, Sharpe less
+twice the drawdown, and a combined score. "Draw a parameter heatmap" sends
+`heatmap: {x, y, grid_size, fast}`: pick two parameters or leave them on
+Auto. The result then shows `<app-param-heatmap>`
+(`shared/lab-results/param-heatmap.ts`): a real table of scores, green for
+high and red for low. The tuned cell is outlined and the plateau
+neighbourhood is bordered, with the plateau verdict above. On phones the
+table scrolls inside its own labelled box.
+
+The Lab has six screens, linked at the top of each: Backtest and lab run
+(`/lab`), Sweep (`/lab/sweeps`), Signal IC (`/lab/signal-ic`), Trial
+ledger (`/lab/ledger`), Factors (`/lab/factors`) and Research sessions
+(`/lab/research`). A sweep
 runs every strategy, or the ones picked, on typed tickers or a saved
 universe, and `<app-sweep-result>` ranks the rows best first. Signal IC
 shows how well a strategy's scores ranked the moves that followed, per
@@ -372,6 +384,42 @@ and failed, best score and verdict. `/lab/ledger/:runId` shows one run from
 every trial, and the strategy's trial count across all runs, with one line
 on why it matters (more trials make a good result more likely to be luck).
 A lab run's result links to it.
+
+Factors (`pages/lab/factors/`, `api/factors.service.ts`):
+
+- `/lab/factors` lists the library from `GET /api/factors`. Set, family
+  and kind go to the server as `?set=`, `?family=` and `?kind=`. The search
+  box filters the loaded list on the page.
+- `/lab/factors/:id` shows one factor: what it measures, why it should
+  work, direction, warm-up and its formula, with "Edit as a formula".
+- `/lab/factors/formula?expression=` is the formula workbench.
+  `<app-formula-editor>` checks the formula with `POST /api/factors/check`
+  as you type (a short pause first, and only the last edit counts). It
+  shows the canonical form and the warm-up, or why the formula is refused.
+- Below either one sit three tools. Each picks its names with
+  `<app-basket-picker>`: a stored universe, a watchlist or typed tickers.
+  - Values on a date: `POST /api/factors/values`, best first.
+  - Tear sheet: a job followed over SSE, then
+    `<app-factor-tearsheet-result>`. It shows tiles, IC per horizon, a bar
+    per bucket, cumulative returns per bucket and top minus bottom, IC by
+    group, a monthly IC heatmap, and alpha and beta.
+  - Test as a strategy: a lab run of the `factor` strategy with
+    `strategy.params.factor` set. The API keeps a class ref's params fixed
+    for the whole search, so the tuner only moves the slice held. A
+    library factor starts from its own hypothesis. A formula starts blank,
+    and a hypothesis is required (P1).
+
+Research sessions (`pages/lab/research/`, `api/research.service.ts`):
+
+- `/lab/research` lists your sessions from `GET /api/assistant/research`.
+  A start form sends a goal, a universe or tickers, and budgets only when
+  you lower them. The page follows the job and links the new session.
+  When research is off (no model endpoint or no model cutoff), it says so.
+- `/lab/research/:id` shows the goal, model and cutoff, meters for trials,
+  proposals and compute, and one card per proposal. A card shows its
+  status, hypothesis and premortem, validation start, trials, best score,
+  verdict, why it was rejected, and a link to its run in the trial ledger.
+  It reloads every minute while the session runs.
 
 ### Formatting and copy
 
