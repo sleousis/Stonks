@@ -46,6 +46,10 @@
   />
 
   <div class="page-grid">
+    @if (s.status !== 'retired') {
+      <app-follow-panel class="span-12" [strategyId]="s.id" />
+    }
+
     <!-- Performance ------------------------------------------------------->
     <section class="panel span-7" aria-labelledby="perf-title">
       <div class="panel-head">

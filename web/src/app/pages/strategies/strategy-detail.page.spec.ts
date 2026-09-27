@@ -1,5 +1,5 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { signal } from '@angular/core';
+import { Component, input, signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
@@ -18,7 +18,14 @@ import {
 } from '../../../testing/status-dialog';
 import { STRATEGY_METADATA } from '../../../testing/strategy-fixtures';
 import { LIFECYCLE } from '../../shared/governance-labels';
+import { FollowPanel } from './follow-panel';
 import { StrategyDetailPage, historyEntries, paperPerformance } from './strategy-detail.page';
+
+/** The follow panel has its own spec; here only where it shows matters. */
+@Component({ selector: 'app-follow-panel', template: 'Follow panel' })
+class FollowPanelStub {
+  readonly strategyId = input.required<string>();
+}
 
 const DETAIL: StrategyDetail = {
   id: 'momentum-v3',
@@ -130,6 +137,10 @@ describe('StrategyDetailPage', () => {
         provideRouter([]),
         provideFakeChart(chart),
       ],
+    });
+    TestBed.overrideComponent(StrategyDetailPage, {
+      remove: { imports: [FollowPanel] },
+      add: { imports: [FollowPanelStub] },
     });
     const session = TestBed.inject(SessionService);
     vi.spyOn(session, 'can').mockImplementation(() => allowed());
@@ -250,8 +261,14 @@ describe('StrategyDetailPage', () => {
     );
     (await nextRequest(controller, '/api/orders')).flush(page([]));
     await settle();
+    expect(el.querySelector('app-follow-panel')).toBeNull();
     expect(el.textContent).toContain('Could not load the status history');
     expect(el.querySelectorAll('.report').length).toBe(2);
+  });
+
+  it('offers to follow a paper or live strategy, not a stopped one', async () => {
+    await load();
+    expect(el.querySelector('app-follow-panel')).not.toBeNull();
   });
 
   it('offers only the actions that change the status', async () => {

@@ -29,6 +29,14 @@ describe('SubscriptionsService', () => {
     expect(await result).toEqual([]);
   });
 
+  it('follows a strategy', async () => {
+    const result = svc.subscribe({ strategy_id: 'mom', mode: 'paper', portfolio_id: 'pf_1' });
+    const req = await nextRequest(controller, '/api/subscriptions', 'POST');
+    expect(req.request.body).toEqual({ strategy_id: 'mom', mode: 'paper', portfolio_id: 'pf_1' });
+    req.flush({ id: 'sub_2' });
+    expect(await result).toEqual({ id: 'sub_2' });
+  });
+
   it('patches the mode or the switch', async () => {
     const result = svc.update('sub 1', { mode: 'paper' });
     const req = await nextRequest(controller, '/api/subscriptions/sub%201', 'PATCH');
