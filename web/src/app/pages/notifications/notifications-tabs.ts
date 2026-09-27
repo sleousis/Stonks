@@ -1,33 +1,28 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 
-/** The views under Orders. Trade costs lives at its own address but sits here too. */
-export const ORDERS_TABS = [
-  { path: '/orders', label: 'Orders', exact: true },
-  { path: '/orders/new', label: 'New order', exact: true },
-  { path: '/orders/drafts', label: 'Drafts', exact: true },
-  { path: '/orders/fills', label: 'Fills', exact: false },
-  { path: '/orders/ticks', label: 'Trading runs', exact: false },
-  { path: '/trades', label: 'Trade costs', exact: true },
+/** The views under Notifications: the feed and the price alerts that feed it. */
+export const NOTIFICATIONS_TABS = [
+  { path: '/notifications', label: 'Feed' },
+  { path: '/notifications/price-alerts', label: 'Price alerts' },
 ] as const;
 
 /**
- * The tab bar shared by the Orders views and Trade costs, so each is one tap
- * from the other. Plain links (each view has its own address), the current
- * one marked with aria-current. 44px tall on phones and touch screens.
+ * The tab bar of Notifications and Price alerts, one tap apart. Plain links,
+ * the current one marked with aria-current. 44px tall on phones.
  */
 @Component({
-  selector: 'app-orders-tabs',
+  selector: 'app-notifications-tabs',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, RouterLinkActive],
   template: `
-    <nav class="tabs" aria-label="Orders views">
+    <nav class="tabs" aria-label="Notifications views">
       @for (t of tabs; track t.path) {
         <a
           [routerLink]="t.path"
           routerLinkActive="active"
           ariaCurrentWhenActive="page"
-          [routerLinkActiveOptions]="{ exact: t.exact }"
+          [routerLinkActiveOptions]="{ exact: true }"
           >{{ t.label }}</a
         >
       }
@@ -60,7 +55,6 @@ export const ORDERS_TABS = [
       font-weight: var(--weight-medium);
       text-decoration: none;
       white-space: nowrap;
-      transition: color var(--dur-fast) var(--ease);
     }
     .tabs a:hover {
       color: var(--color-ink);
@@ -70,14 +64,10 @@ export const ORDERS_TABS = [
       border-bottom-color: var(--color-accent);
     }
     @include bp.phone {
-      .tabs {
-        gap: 0;
-      }
       .tabs a {
         flex: 1 1 auto;
         justify-content: center;
         min-height: var(--touch-min);
-        padding: 0 var(--space-2);
       }
     }
     @include bp.coarse {
@@ -87,6 +77,6 @@ export const ORDERS_TABS = [
     }
   `,
 })
-export class OrdersTabs {
-  protected readonly tabs = ORDERS_TABS;
+export class NotificationsTabs {
+  protected readonly tabs = NOTIFICATIONS_TABS;
 }

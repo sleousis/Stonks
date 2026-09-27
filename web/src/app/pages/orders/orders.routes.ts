@@ -11,6 +11,16 @@ export default [
         loadComponent: () => import('./orders-list.page').then((m) => m.OrdersListPage),
       },
       {
+        path: 'new',
+        title: 'New order',
+        loadComponent: () => import('./manual-ticket.page').then((m) => m.ManualTicketPage),
+      },
+      {
+        path: 'drafts',
+        title: 'Order drafts',
+        loadComponent: () => import('./order-drafts.page').then((m) => m.OrderDraftsPage),
+      },
+      {
         path: 'fills',
         title: 'Fills',
         loadComponent: () => import('./fills.page').then((m) => m.FillsPage),

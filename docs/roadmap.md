@@ -17,7 +17,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 16 | 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. |
 | 17 | Planned. |
 | 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7, with console screens. The IBKR adapter (19.2) done. Design: `docs/design/live-trading.md`. |
-| 20 | Backend of 20.1 to 20.5 done (API, CLI, MCP). The console screens are next. 20.6 done. |
+| 20 | 20.1 to 20.6 done, backend and console. 20.7 and 20.8 in progress. |
 | 22 | 22.1, 22.2, 22.3, 22.5, 22.7, 22.8 and 22.9 done. 22.4 and 22.6 are next. Factors: `docs/factors.md`. |
 
 Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor-agnostic schemas, third-party libraries wrapped behind a seam). Live-network tests go under `tests/integration/live/` behind `@pytest.mark.live`.
@@ -457,6 +457,8 @@ Waves: 19.1, 19.4, 19.6 and 19.7 first (done), then 19.2 and 19.8, then 19.3, 19
 Decided with the owner on 2026-09-27. Stonks stays private: the owner plus invited traders, no billing or public sign-up. Research data comes from EODHD All-in-one, live prices from Interactive Brokers.
 
 **Status:** the backend of 20.1 to 20.5 is done: services, API, CLI and MCP, with minimal console services. The console screens come next, after the usability pass. 20.6 is planned.
+
+**Console:** the screens for 20.1 to 20.3 and the draft approvals of 20.4 are done: the New order and Drafts tabs under Orders, Price alerts under Notifications, and Telegram in Settings (see `docs/ui.md`).
 
 **Console, 20.4 and 20.5:** done. The assistant chat (`/assistant`: streamed answers, tool steps, the yes or no step for writes, research only, the trace, unfreeze, conversations, and a clear page when it is off), cash flows (`/insights/cash-flows`), tax settings with lot picks and the yearly CSVs (`/insights/tax`), and time-weighted and money-weighted returns with base-currency values on Insights and Today. See `docs/ui.md`.
 

@@ -78,6 +78,11 @@ describe('SettingsPage', () => {
       timezone: 'UTC',
       webhook: null,
     });
+    (await nextRequest(http, '/api/telegram/link')).flush({
+      bot_configured: false,
+      bot_enabled: false,
+      linked: false,
+    });
     (await nextRequest(http, '/api/risk/limits')).flush(limitsView({}));
     await tick();
     fixture.detectChanges();
@@ -128,6 +133,7 @@ describe('SettingsPage', () => {
     expect(h).toContain('Your account');
     expect(h).toContain('API token');
     expect(h).toContain('Theme');
+    expect(h).toContain('Telegram');
     expect(h).not.toContain('System');
     expect(h).not.toContain('Broker');
     expect(h).not.toContain('Risk policy');

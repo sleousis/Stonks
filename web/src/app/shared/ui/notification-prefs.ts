@@ -30,6 +30,7 @@ const CHANNEL_LABELS: Record<string, string> = {
   webpush: 'Push',
   email: 'Email',
   webhook: 'Webhook',
+  telegram: 'Telegram',
 };
 
 /** The in-app feed always gets everything; it is not a switch. */
@@ -76,41 +77,43 @@ const ALWAYS_ON = 'inapp';
           @if (channels().length === 0) {
             <p class="note">This server has no push, email or webhook delivery set up yet.</p>
           } @else {
-            <table class="grid">
-              <caption class="visually-hidden">
-                Alert types by channel
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">Alert</th>
-                  @for (c of channels(); track c) {
-                    <th scope="col">{{ channelLabel(c) }}</th>
-                  }
-                </tr>
-              </thead>
-              <tbody>
-                @for (cat of categories; track cat.value) {
+            <div class="grid-scroll">
+              <table class="grid">
+                <caption class="visually-hidden">
+                  Alert types by channel
+                </caption>
+                <thead>
                   <tr>
-                    <th scope="row">{{ cat.label }}</th>
+                    <th scope="col">Alert</th>
                     @for (c of channels(); track c) {
-                      <td>
-                        <label class="cell">
-                          <input
-                            type="checkbox"
-                            [checked]="isOn(cat.value, c)"
-                            [disabled]="locked()"
-                            (change)="setPref(cat.value, c, $event)"
-                          />
-                          <span class="visually-hidden"
-                            >{{ cat.label }} by {{ channelLabel(c) }}</span
-                          >
-                        </label>
-                      </td>
+                      <th scope="col">{{ channelLabel(c) }}</th>
                     }
                   </tr>
-                }
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  @for (cat of categories; track cat.value) {
+                    <tr>
+                      <th scope="row">{{ cat.label }}</th>
+                      @for (c of channels(); track c) {
+                        <td>
+                          <label class="cell">
+                            <input
+                              type="checkbox"
+                              [checked]="isOn(cat.value, c)"
+                              [disabled]="locked()"
+                              (change)="setPref(cat.value, c, $event)"
+                            />
+                            <span class="visually-hidden"
+                              >{{ cat.label }} by {{ channelLabel(c) }}</span
+                            >
+                          </label>
+                        </td>
+                      }
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
           }
 
           <fieldset class="quiet">
@@ -219,9 +222,11 @@ const ALWAYS_ON = 'inapp';
   styles: `
     :host {
       display: block;
+      min-width: 0;
     }
     .body {
       display: grid;
+      grid-template-columns: minmax(0, 1fr);
       gap: var(--space-4);
     }
     .test-row {
@@ -239,6 +244,12 @@ const ALWAYS_ON = 'inapp';
       border-radius: var(--radius-sm);
       background: var(--color-info-soft);
       font-size: var(--text-sm);
+    }
+    /* Four or more channels are wider than a phone: the table scrolls in its own box. */
+    .grid-scroll {
+      position: relative; /* keeps the hidden cell labels inside the scroll box */
+      max-width: 100%;
+      overflow-x: auto;
     }
     .grid {
       width: 100%;

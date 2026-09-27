@@ -38,6 +38,8 @@ export class ApiError extends Error {
     readonly code: string | null = null,
     /** On a 401 `mfa_required`: which second-factor screen comes next. */
     readonly nextStep: 'enrol' | 'verify' | null = null,
+    /** The whole problem body, for routes that send extra fields (`risk_adjustments`). */
+    readonly problem: Readonly<Record<string, unknown>> = {},
   ) {
     super(message);
     this.name = 'ApiError';
@@ -74,7 +76,7 @@ export function toApiError(body: unknown, response?: unknown): ApiError {
     );
   }
 
-  const problem = isProblem(body) ? body : null;
+  const problem = isProblem(body) ? (body as ProblemDetails & Record<string, unknown>) : null;
   const title = problem?.title ?? statusTitle(status);
   const fieldErrors = (problem?.errors ?? []).map(toFieldError);
   let message = problem?.detail || (typeof body === 'string' && body.trim()) || title;
@@ -88,6 +90,7 @@ export function toApiError(body: unknown, response?: unknown): ApiError {
       fieldErrors,
       code,
       nextStepOf(body),
+      problem ?? {},
     );
   }
 
@@ -97,7 +100,7 @@ export function toApiError(body: unknown, response?: unknown): ApiError {
   if (status === 401) {
     message = `${message}. Sign in again.`;
   }
-  return new ApiError(status, title, message, fieldErrors, code);
+  return new ApiError(status, title, message, fieldErrors, code, null, problem ?? {});
 }
 
 /**

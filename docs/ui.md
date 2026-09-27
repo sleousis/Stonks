@@ -737,6 +737,35 @@ flowchart LR
   P&L and snapshots (Insights) and lab trials (trial ledger, and one run).
   A failure toasts the API's reason.
 
+## Trader screens added in Phase 20
+
+| Page | Route | What it does |
+|---|---|---|
+| New order | `/orders/new` | The order ticket: check an order, place it, and change or cancel your working orders by hand |
+| Drafts | `/orders/drafts` | Orders the assistant proposed, each a ticket to approve (fresh code) or reject |
+| Price alerts | `/notifications/price-alerts` | Make, switch off, change and delete price alerts, and see when they fired |
+| Telegram | Settings, Your account | Link status, a one-time link code, and Unlink |
+
+```mermaid
+flowchart LR
+  F[Fill the ticket] --> C[Check order: preview]
+  C -->|409 order_refused| R[Each rule's cut, accept a smaller order]
+  R --> C
+  C --> L{Real money?}
+  L -->|yes| S[Fresh code] --> T
+  L -->|no| T[Ticket: side, PAPER or LIVE]
+  T --> P[Place order] --> W[Your orders by hand: Change, Cancel]
+```
+
+- **Order ticket.** `pages/orders/manual-ticket.page.ts`. Ticker, side, quantity, market or limit, and a reason (kept with the order). **Check order** calls `POST /api/orders/manual/preview`: every halt and risk rule runs and nothing is placed. The ticket then shows the last close, the value and any cut. **Place order** checks again, asks with the order ticket (`ConfirmService`, `ticket`), then places it. A real-money book asks for a fresh code first (`StepUpService.ensure()`) and the ticker typed on the ticket. `?ticker=&side=` prefill it.
+- **Refusals.** A 409 `order_refused` carries `risk_adjustments`. `refusalOf()` (`pages/orders/order-refusal.ts`) reads them from `ApiError.problem`, the whole problem body. `<app-order-refusal>` lists each rule with what it did ("Cuts 100 to 40", "Drops the order") and, when the rules allow a smaller order, offers **Accept a smaller order**, which sends `allow_reduce` and checks again. Preview, place and change are silent: the ticket shows the failure, so no toast repeats it.
+- **Idempotency.** The ticket sends its own `client_id`. A new key is made when the order changes and after it is placed, so a retry of the same order never places it twice.
+- **Change and cancel.** "Your orders by hand" lists `GET /api/orders?origin=manual`. A working order (pending, submitted, partly filled) has **Change** (`<app-order-change-sheet>`: new quantity or limit and a reason, the same refusal panel) and **Cancel** (a reason, `<app-status-change-dialog>`).
+- **Drafts.** `pages/orders/order-drafts.page.ts` reads `GET /api/orders/drafts?status=` (Waiting, Placed, Rejected, Expired, All). **Approve and place** asks for a fresh code, shows the order ticket (the ticker typed for real money), then calls `.../approve`. A refused approval shows its reason on the draft, and the draft turns rejected. **Reject** takes an optional note.
+- **Price alerts.** `<app-notifications-tabs>` links the feed and Price alerts. The editor watches one ticker or a watchlist and fires when the price rises above or falls below a level, or moves by a percent either way over some days (`pct` is in percent, 8 means 8%). Changing an alert keeps its target and condition and starts it fresh. Firings are a server-paged table filtered by alert, with the ticker linking to its chart.
+- **Telegram.** `<app-telegram-link>` (`pages/settings/telegram-link.ts`) reads `GET /api/telegram/link`. **Get a link code** shows `/link CODE` once in `<app-one-time-secret>`, with the bot's `t.me` link and the time it runs out. **Check the link** reads the status again. **Unlink** asks first. Without a bot on the server the panel says so and offers nothing.
+- The alert settings table scrolls inside its own box on phones, now that Telegram adds a channel.
+
 ## Shared pieces from the usability pass (18.6)
 
 | Piece | Where | Use it for |
@@ -850,6 +879,10 @@ about the same thing.
 | Live settings (allocation, account profile, live safeguards, account rules) | `/api/portfolios/{id}/live/*` | none | none |
 | Broker gateways (Health) | `/api/brokers/gateways` | none | none |
 | Download CSV | `/api/exports/*` | none | none |
+| New order, orders by hand | `/api/orders/manual`, `origin=manual` | `stonks orders` | `place_order`, `change_order`, `cancel_order` |
+| Drafts (to approve) | `/api/orders/drafts` | none | `draft_order`, `list_order_drafts` |
+| Price alerts | `/api/price-alerts` | `stonks price-alerts` | `list_price_alerts`, `create_price_alert`, `update_price_alert`, `delete_price_alert`, `list_price_alert_events` |
+| Telegram link | `/api/telegram/link` | `stonks telegram` | none |
 
 "Buys only" was called `flatten` before 1.0. It never closed a position,
 so the old name was misleading. The API, the CLI (`--flatten`) and MCP

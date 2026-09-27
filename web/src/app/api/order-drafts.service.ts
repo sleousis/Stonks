@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 
+import { SILENT_HEADERS } from '../core/http/interceptors';
 import { allItems, unwrap } from './api-call';
 import {
   approveOrderDraft,
@@ -24,8 +25,9 @@ export class OrderDraftsService {
     return unwrap(createOrderDraft({ body }));
   }
 
+  /** Silent: the drafts page shows a refusal on the draft's own ticket. */
   approve(id: string) {
-    return unwrap(approveOrderDraft({ path: { draft_id: id } }));
+    return unwrap(approveOrderDraft({ path: { draft_id: id }, headers: SILENT_HEADERS }));
   }
 
   reject(id: string, note?: string) {
