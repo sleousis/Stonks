@@ -1,5 +1,5 @@
 """Vendor-neutral rows for the event calendars (roadmap 20.7, lake
-migration 021).
+migration 017).
 
 Every :class:`~stonks.ingest.sources.base.DataSource` that serves calendars
 maps its vendor JSON into these rows at parse time, so the lake tables never

@@ -1,4 +1,4 @@
--- Roadmap 20.7 and 20.8: event calendars and saved screens.
+-- Roadmap 20.7: event calendars.
 --
 -- The calendars are vendor neutral: every DataSource that serves them fills
 -- the same columns with the same normalized values.
@@ -55,15 +55,4 @@ CREATE TABLE economic_events (
     source      VARCHAR   NOT NULL,
     updated_at  TIMESTAMP NOT NULL,
     PRIMARY KEY (country, event_time, event_type, comparison)
-);
-
--- screens: a person's saved screener filters (spec_json is a ScreenSpec).
--- Names are unique per owner; the service checks it.
-CREATE TABLE screens (
-    id          VARCHAR   PRIMARY KEY,
-    owner_id    VARCHAR   NOT NULL,
-    name        VARCHAR   NOT NULL,
-    spec_json   VARCHAR   NOT NULL,
-    created_at  TIMESTAMP NOT NULL,
-    updated_at  TIMESTAMP NOT NULL
 );

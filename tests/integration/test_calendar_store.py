@@ -1,5 +1,5 @@
 """CalendarStore: idempotent upserts and range reads of the event
-calendars (lake migration 021), plus news reads."""
+calendars (lake migration 017), plus news reads."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ def _earn(ticker: str, period: date, report: date, **kw) -> EarningsEventRow:
 
 def test_migration_creates_calendar_tables(lake):
     tables = set(lake.tables())
-    assert {"earnings_calendar", "dividend_calendar", "economic_events", "screens"} <= tables
+    assert {"earnings_calendar", "dividend_calendar", "economic_events"} <= tables
 
 
 def test_earnings_upsert_is_idempotent_and_moves_report_date(lake):

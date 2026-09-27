@@ -1,4 +1,4 @@
-"""Lake persistence for the event calendars (migration 021) and the news
+"""Lake persistence for the event calendars (migration 017) and the news
 reads the console shows (migration 002 tables ``news``, ``news_sentiment``).
 
 Writes are idempotent upserts keyed as in the migration. Reads take a date
