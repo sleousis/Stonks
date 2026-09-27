@@ -70,6 +70,7 @@ from pydantic import ValidationError
 from stonks.core.interval import Interval
 from stonks.core.types import AssetClass
 from stonks.ingest.metadata_bundle import MetadataBundle
+from stonks.ingest.option_schemas import OptionQuoteRow
 from stonks.ingest.redact import format_exception, redact_exception, redact_secrets
 from stonks.ingest.schemas import (
     AnalystForecastRow,
@@ -110,6 +111,7 @@ from stonks.ingest.schemas import (
     TickerSnapshotRow,
 )
 from stonks.ingest.sources.base import DataSource, DataSourceError
+from stonks.ingest.sources.eodhd_options import fetch_option_quotes
 from stonks.logging import get_logger
 
 # Substrings (case-insensitive) that EODHD returns in plain-text bodies when
@@ -1940,6 +1942,13 @@ class EodhdDataSource(DataSource):
             params["to"] = until.isoformat()
         data = self._get(url, params=params)
         return list(parse_prices_response(ticker, data))
+
+    def fetch_option_quotes(
+        self, underlying: str, since: date | None = None, until: date | None = None
+    ) -> Iterable[OptionQuoteRow]:
+        """US option EOD quotes from the EODHD Marketplace options API
+        (a separate subscription; see ``eodhd_options``)."""
+        return list(fetch_option_quotes(self._get, self._base_url, underlying, since, until))
 
     def fetch_fundamentals(self, ticker: str) -> FinancialStatementsBundle:
         # Income/balance/cashflow statements are equity-only. Crypto/bond/

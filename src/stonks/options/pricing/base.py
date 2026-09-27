@@ -211,9 +211,7 @@ def solve_implied_vol(
         return MIN_VOL
     if f_lo > 0 or f_hi < 0:
         return None
-    root: Any = brentq(
-        lambda v: price_fn(inputs.with_vol(v)) - price, MIN_VOL, MAX_VOL, xtol=1e-10
-    )
+    root: Any = brentq(lambda v: price_fn(inputs.with_vol(v)) - price, MIN_VOL, MAX_VOL, xtol=1e-10)
     return float(root)
 
 
