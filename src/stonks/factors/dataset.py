@@ -80,5 +80,5 @@ def factor_dataset(
     out = pd.DataFrame(long)
     out.index = out.index.set_names(["timestamp", "ticker"])
     features = [f.id for f in factors]
-    keep = out[features].notna().any(axis=1).to_numpy()
+    keep = out[features].notna().to_numpy().any(axis=1)
     return pd.DataFrame(out.loc[keep]).astype(float)
