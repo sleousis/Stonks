@@ -17,6 +17,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 16 | 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. |
 | 17 | Planned. |
 | 19 | Planned. Design: `docs/design/live-trading.md`. |
+| 22 | 22.2, 22.3 and 22.8 done: the factor layer, tear sheets and library (`docs/factors.md`). The rest is planned. |
 
 Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor-agnostic schemas, third-party libraries wrapped behind a seam). Live-network tests go under `tests/integration/live/` behind `@pytest.mark.live`.
 
@@ -475,13 +476,13 @@ From the competitor study of 44 open-source projects (Qlib, alphalens, vectorbt,
 | WP | Scope |
 |----|-------|
 | 22.1 Optuna tuner and objectives | An Optuna tuner behind the Tuner seam, seeded and parallel, with every trial in the ledger, plus Sortino, Calmar, drawdown-penalised and multi-metric objectives. |
-| 22.2 Factor layer | A Factor ABC and registry, a small expression language compiled to DuckDB SQL, cached date-by-ticker panels, and a FactorStrategy. Modelled on Qlib's expression engine. |
-| 22.3 Factor tear sheets | alphalens-style IC by sector, asset class and size, returns per quantile, factor alpha and beta, and a monthly IC heatmap, for any factor. |
+| 22.2 Factor layer | Done. A Factor ABC and registry, a small expression language compiled to DuckDB SQL, cached date-by-ticker panels, and a FactorStrategy. Modelled on Qlib's expression engine. `stonks factors`, `/api/factors`, MCP tools. The console views are still to do. |
+| 22.3 Factor tear sheets | Done. alphalens-style IC by sector, asset class and size, returns per quantile, factor alpha and beta, and a monthly IC heatmap, for any factor. `stonks factors tearsheet --html`, a tear sheet job in the API and MCP. |
 | 22.4 Factor risk model | A PCA then style-factor risk model as a CovarianceEstimator, a style-exposure RiskRule, and factor attribution in reports. |
 | 22.5 Sweeps and heatmaps | Vectorised sweeps for more strategies, with parameter heatmaps in reports and the console, linked to the plateau test. |
 | 22.6 Model lifecycle | Scheduled retraining for ML strategies, model versions under one strategy id, new fits run as model books, swaps only through governance. |
 | 22.7 Forecast weights | Carver-style forecast weights estimated net of costs, and rules dropped when too costly for an instrument. |
-| 22.8 Factor library | An Alpha158-style factor set with a next-open label, plus the fundamentals scores as factors. |
+| 22.8 Factor library | Done. An Alpha158-style factor set with a next-open label, plus the fundamentals scores as factors. `stonks factors dataset` exports features and the label for a model. |
 | 22.9 AI research loop | The assistant proposes hypotheses and runs lab trials under a budget, each counted in the trial ledger. |
 
 ## Execution order

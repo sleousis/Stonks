@@ -28,6 +28,12 @@ uv run stonks lab run quant_momentum --start 2020-01-01 --end 2025-01-01 --prese
 |----|--------------|
 | `quality_value` | Point-in-time value (earnings and FCF yield) plus quality (ROE, margin, leverage); holds the top K. |
 
+## Factors ([details](../factors.md))
+
+| Id | What it does |
+|----|--------------|
+| `factor` | Holds the top slice of a universe by any library factor or formula, equal weight, month-end rebalance. |
+
 ## Book strategies ([details](book-strategies.md))
 
 | Id | What it does |

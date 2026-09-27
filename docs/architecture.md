@@ -74,7 +74,8 @@ The CLI opens the stores itself and reuses the services for lab and registry wor
 | `universes` | Stored universe definitions (list, exchange, rule, index) refreshed into point-in-time membership. See [universes](universes.md). |
 | `store` | `DuckDBLake` (market data) and `SqliteState` (everything that changes), migrations, the `BarStore` seam. |
 | `features` | Optional indicator and scoring helpers that strategies call. |
-| `strategies` | `BaseStrategy`, 25 example strategies, wrappers, the rule-based Studio strategy. |
+| `factors` | Factor registry and library, an expression language compiled to DuckDB SQL, cached panels, tear sheets and model datasets. See [factors](factors.md). |
+| `strategies` | `BaseStrategy`, 26 example strategies, wrappers, the rule-based Studio strategy. |
 | `portfolio` | Constructors that turn signals into a target book, and the shared construction pipeline. |
 | `lab`, `stats` | Tuning, survival tests, trial ledger, parallel pool, signal research, statistics. |
 | `backtest` | Engine, simulated broker, fills, costs, trade ledger, metrics, benchmark, corporate actions. |
@@ -98,7 +99,8 @@ New behaviour plugs in behind a seam. Most are registries, so a new one is one n
 | `BarStore` | `store/bars.py` | DuckDB table, Parquet files |
 | `UniverseProvider` | `universes/providers/` (registry) | list, exchange, rule, index |
 | `IndexSource` | `universes/index_sources/` (registry) | wikipedia_sp500 |
-| `Strategy` | `core/protocols.py`, `strategies/base.py` | 28 catalogued strategies |
+| `Strategy` | `core/protocols.py`, `strategies/base.py` | 34 catalogued strategies |
+| `Factor` | `factors/base.py`, `factors/library/` (registry) | alpha158, classic, fundamentals |
 | `Tuner`, `Objective` | `lab/tuning/`, `lab/objectives.py` | grid, random; Sharpe, CAGR, final return |
 | `SurvivalTest` | `lab/survival/` (registry) | 18 tests, presets `quick`, `standard`, `promotion` |
 | `PortfolioConstructor` | `portfolio/base.py` (registry) | single_winner, equal_weight_top_n, inverse_vol, vol_target, atr_parity |
