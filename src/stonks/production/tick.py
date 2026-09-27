@@ -1,4 +1,4 @@
-"""Production tick — one-shot entrypoint invoked by an external scheduler.
+"""Production tick â€” one-shot entrypoint invoked by an external scheduler.
 
 Each invocation is a fresh process. State lives in SqliteState + DuckDBLake;
 the tick is stateless across runs. A tick has three phases (BL-12, design
@@ -127,6 +127,7 @@ from stonks.production.hooks import (
 from stonks.production.hooks.attribution import load_attribution
 from stonks.production.ledger import ledger_columns, ledger_filter
 from stonks.production.monitor_settings import RiskMonitorSettings
+from stonks.production.ownership import drop_unowned_crossings, managed_view, owned_positions
 from stonks.production.portfolio_runs import PortfolioRun, record_run, runs_recorded
 from stonks.production.prices import PriceBook, held_tickers, load_history, load_prices
 from stonks.production.quit_rule import QuitRuleSettings
@@ -859,6 +860,17 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         max_staleness_days=settings.max_price_staleness_days,
     )
     prices = book_prices.prices
+    # BE-02: a connected account may hold the user's own positions. The auto
+    # book decides and sizes on what it owns (its fill ledger) and never
+    # trades the rest; the snapshot still marks the whole account.
+    account = portfolio
+    external_holdings: dict[str, float] = {}
+    if connection:
+        owned = owned_positions(state, portfolio_id, actions)
+        portfolio, external_holdings = managed_view(account, owned)
+        held = held_tickers(portfolio.positions)
+        if external_holdings:
+            log.info("tick.external_holdings", tickers=sorted(external_holdings))
 
     def result(status: TickStatus, winner: str | None, placed: int, fills: int, summary: dict):
         return BookResult(
@@ -897,9 +909,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             halt_summary = halted(gate())
             with state.transaction():
                 if persist_corporate_actions() or applied:
-                    _snapshot_portfolio(
-                        state, tick_id, portfolio, prices, as_of, portfolio_id=scope
-                    )
+                    _snapshot_portfolio(state, tick_id, account, prices, as_of, portfolio_id=scope)
         log.info("tick.portfolio_noop", reason=reason)
         return result("noop", None, 0, 0, {"reason": reason, **halt_summary, **corporate_summary})
 
@@ -992,6 +1002,13 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         if outside:
             log.info("tick.outside_universe_skipped", tickers=outside)
         proposed = [o for o in proposed if o.ticker in allowed]
+    external_skipped: list[str] = []
+    if external_holdings:
+        proposed, external_skipped = drop_unowned_crossings(
+            proposed, portfolio.positions, external_holdings
+        )
+        if external_skipped:
+            log.warning("tick.external_holdings_skipped", tickers=external_skipped)
 
     halt = gate()
     if halt is not None:
@@ -1227,6 +1244,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             ),
             "stale_buys_dropped": pipeline.stale_buys,
             **({"outside_universe_skipped": outside} if outside else {}),
+            **({"external_holdings_skipped": external_skipped} if external_skipped else {}),
             **({"open_order_conflicts": open_conflicts} if open_conflicts else {}),
             **halted(halt),
             **({"constructor": construction.method} if not book.legacy else {}),

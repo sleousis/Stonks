@@ -309,3 +309,48 @@ def test_be01_a_dry_run_pauses_nothing_for_an_inactive_strategy(world):
     world.tick(DAY1, dry_run=True)
     assert world.book.orders == {}
     assert world.subs.get(world.bob, world.bob_auto).paused_reason is None
+
+
+# ---- BE-02: an auto book trades only what it owns ----------------------------------------
+
+
+def _momentum_auto(world):
+    from stonks.strategies.examples.momentum import Momentum
+
+    reports = [SurvivalReport(test_id="oos", passed=True, metrics={})]
+    params = {"lookback_days": 5, "skip_days": 0, "threshold": 0.0, "allocation": 0.5}
+    world.registry.register(Momentum(params), reports=reports, strategy_id="mom")
+    seed_status(world.registry, "mom", "active")
+    world.state.execute("UPDATE subscriptions SET strategy_id = 'mom' WHERE id = ?",
+                        [world.bob_auto])  # fmt: skip
+
+
+def test_be02_an_auto_book_never_sells_the_users_own_holdings(world):
+    from stonks.connections.base import ExternalPosition
+
+    _momentum_auto(world)
+    [account] = world.book.accounts
+    world.book.positions = {
+        account.id: [
+            ExternalPosition(raw_symbol="FLAT", ticker="FLAT.US", quantity=10, price=50.0),
+            ExternalPosition(raw_symbol="UP", ticker="UP.US", quantity=5, price=150.0),
+        ]
+    }
+    world.tick(DAY1)
+    placed = [(o.ticker, o.side) for o in world.book.orders.values()]
+    assert ("FLAT.US", "sell") not in placed
+    # momentum picks UP: the book buys its own UP even though Bob holds some
+    assert placed == [("UP.US", "buy")]
+    [bought] = world.book.orders.values()
+
+    world.tick(DAY2)  # the book holds its UP now: nothing new, still no FLAT sell
+    assert [(o.ticker, o.side) for o in world.book.orders.values()] == placed
+    held = {p.ticker: p.quantity for p in world.book.positions[account.id]}
+    assert held == {"FLAT.US": 10, "UP.US": 5 + bought.quantity}
+    # the snapshot still marks the whole account
+    [snap] = world.state.sql(
+        "SELECT positions_json FROM portfolio_snapshots WHERE portfolio_id = ?"
+        " ORDER BY as_of DESC LIMIT 1",
+        [world.live],
+    )
+    assert "FLAT.US" in snap["positions_json"]

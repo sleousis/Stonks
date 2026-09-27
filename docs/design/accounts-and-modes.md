@@ -156,6 +156,10 @@ stateDiagram-v2
 
 `auto_paused` is `mode = auto` with `paused_reason` set; nothing is placed until cleared. Causes: broker auth error, reconcile mismatch, kill switch, strategy retired, user disabled.
 
+A strategy that leaves `active` pauses its auto subscriptions at once, in the same transaction as the status change (`strategy_not_active: shadow` or `: retired`). The tick checks again and pauses any auto subscription it finds on an inactive strategy.
+
+**What an auto book may trade.** A connected account can hold the user's own positions. The book owns only its net filled quantity per ticker in that portfolio (its fill ledger, carried through splits). It decides and sizes on that managed view (the account's cash plus its own positions). The rest is marked, never traded, and an order that would push the book's position past zero into the user's holding is dropped.
+
 **Auto checklist** (all must pass, shown in the UI):
 1. The strategy is `active` (so it passed global go-live, BL-25).
 2. The portfolio is `kind = broker`, its connection is healthy, has the `trade` capability, and the provider is enabled by an admin.
