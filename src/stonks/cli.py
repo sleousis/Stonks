@@ -1105,6 +1105,8 @@ def pnl(
     """Daily P&L from portfolio snapshots, one row per tick as_of: value,
     change since the previous row (blank when more than 4 days apart, see
     ``days``), cumulative return and drawdown from the running peak."""
+    from stonks.insights.flows import external_flows
+    from stonks.insights.returns import mwr, net_flows, twr
     from stonks.production.pnl import load_pnl
 
     settings = _settings()
@@ -1112,6 +1114,7 @@ def pnl(
     state = SqliteState(settings.state.path)
     try:
         rows = load_pnl(state, since=since_d, strategy_id=strategy, portfolio_id=portfolio)
+        flows = [] if strategy else external_flows(state, portfolio)
     finally:
         state.close()
 
@@ -1137,6 +1140,11 @@ def pnl(
             pct(r.drawdown),
         )
     console.print(table)
+    points = [(r.day, r.total_value) for r in rows]
+    console.print(
+        f"time-weighted {pct(twr(points, flows))}, money-weighted (annual)"
+        f" {pct(mwr(points, flows))}, net deposits {net_flows(points, flows):+,.2f}"
+    )
 
 
 # Re-export bound logger so tests / users can discover it easily
@@ -2374,6 +2382,18 @@ app.add_typer(telegram_app, name="telegram")
 from stonks.cli_tax import app as tax_app  # noqa: E402
 
 app.add_typer(tax_app, name="tax")
+
+# ---- cash flows ---------------------------------------------------------------
+
+from stonks.cli_cash_flows import app as cash_flows_app  # noqa: E402
+
+app.add_typer(cash_flows_app, name="cash-flows")
+
+# ---- the assistant ------------------------------------------------------------
+
+from stonks.cli_assistant import app as assistant_app  # noqa: E402
+
+app.add_typer(assistant_app, name="assistant")
 
 if __name__ == "__main__":
     app()

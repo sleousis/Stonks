@@ -11,6 +11,7 @@ export type RoutePermission =
   | 'mfa.recovery_codes'
   | 'notifications.manage'
   | 'operations.run'
+  | 'orders.approve'
   | 'password.change'
   | 'portfolio.manage'
   | 'portfolio.totals'
@@ -25,6 +26,7 @@ export type RoutePermission =
 /** `"METHOD /api/path/{param}"` to the permission the route needs. */
 export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'DELETE /api/assistant/conversations/{conversation_id}': 'data.read',
+  'DELETE /api/assistant/freeze': 'killswitch.resume',
   'DELETE /api/auth/tokens/{token_id}': 'tokens.revoke',
   'DELETE /api/auth/users/{user_id}/mfa': 'users.manage',
   'DELETE /api/connections/{connection_id}': 'connection.manage',
@@ -84,9 +86,13 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'POST /api/notifications/test': 'data.read',
   'POST /api/orders/{client_id}/cancel': 'portfolio.trade',
   'POST /api/orders/{client_id}/change': 'portfolio.trade',
+  'POST /api/orders/drafts': 'portfolio.trade',
+  'POST /api/orders/drafts/{draft_id}/approve': 'orders.approve',
+  'POST /api/orders/drafts/{draft_id}/reject': 'portfolio.trade',
   'POST /api/orders/manual': 'portfolio.trade',
   'POST /api/orders/manual/preview': 'portfolio.trade',
   'POST /api/portfolios': 'portfolio.manage',
+  'POST /api/portfolios/{portfolio_id}/cash-flows': 'portfolio.manage',
   'POST /api/price-alerts': 'notifications.manage',
   'POST /api/price-alerts/evaluate': 'operations.run',
   'POST /api/push/subscriptions': 'notifications.manage',

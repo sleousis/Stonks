@@ -313,6 +313,19 @@
             "title": "Enabled",
             "type": "boolean"
           },
+          "frozen_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A burst of writes froze your assistant until then.",
+            "title": "Frozen Until"
+          },
           "max_steps": {
             "title": "Max Steps",
             "type": "integer"
@@ -332,6 +345,34 @@
             ],
             "description": "The model name, when enabled.",
             "title": "Model"
+          },
+          "order_tools": {
+            "default": false,
+            "description": "The assistant may draft orders for you to approve.",
+            "title": "Order Tools",
+            "type": "boolean"
+          },
+          "prompt_version": {
+            "default": "2026-09-27.2",
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "research_only": {
+            "default": true,
+            "description": "No write tool at all for you right now.",
+            "title": "Research Only",
+            "type": "boolean"
           },
           "timeout_seconds": {
             "title": "Timeout Seconds",
@@ -1185,6 +1226,122 @@
         "title": "BrokerInfo",
         "type": "object"
       },
+      "CashFlowCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1000000000000.0,
+            "title": "Amount",
+            "type": "number"
+          },
+          "flow_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default: today (UTC).",
+            "title": "Flow Date"
+          },
+          "kind": {
+            "enum": [
+              "deposit",
+              "withdrawal"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "required": [
+          "kind",
+          "amount"
+        ],
+        "title": "CashFlowCreate",
+        "type": "object"
+      },
+      "CashFlowView": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "flow_date": {
+            "format": "date",
+            "title": "Flow Date",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The recorded row; null for a flow from a broker sync.",
+            "title": "Id"
+          },
+          "kind": {
+            "enum": [
+              "deposit",
+              "withdrawal"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "manual",
+              "broker"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "portfolio_id",
+          "flow_date",
+          "kind",
+          "amount",
+          "source"
+        ],
+        "title": "CashFlowView",
+        "type": "object"
+      },
       "ChannelDefaultView": {
         "properties": {
           "channel": {
@@ -1683,6 +1840,12 @@
       "ConversationCreate": {
         "additionalProperties": false,
         "properties": {
+          "research_only": {
+            "default": false,
+            "description": "Offer no write tool at all in this conversation.",
+            "title": "Research Only",
+            "type": "boolean"
+          },
           "title": {
             "default": "",
             "maxLength": 80,
@@ -1719,6 +1882,11 @@
             "title": "Pending Actions",
             "type": "array"
           },
+          "research_only": {
+            "default": false,
+            "title": "Research Only",
+            "type": "boolean"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -1750,6 +1918,11 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "research_only": {
+            "default": false,
+            "title": "Research Only",
+            "type": "boolean"
           },
           "title": {
             "title": "Title",
@@ -4298,6 +4471,24 @@
             },
             "title": "Fx Missing",
             "type": "array"
+          },
+          "mwr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Money-weighted return since inception, annualized (XIRR of the start value, deposits, withdrawals and the latest value).",
+            "title": "Mwr"
+          },
+          "net_flows": {
+            "default": 0.0,
+            "description": "Deposits less withdrawals since inception.",
+            "title": "Net Flows",
+            "type": "number"
           },
           "notes": {
             "items": {
@@ -7256,6 +7447,291 @@
         "title": "OrderCancelResult",
         "type": "object"
       },
+      "OrderDraftApproval": {
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/OrderDraftView"
+          },
+          "order": {
+            "$ref": "#/components/schemas/ManualOrderResult"
+          }
+        },
+        "required": [
+          "draft",
+          "order"
+        ],
+        "title": "OrderDraftApproval",
+        "type": "object"
+      },
+      "OrderDraftCreate": {
+        "additionalProperties": false,
+        "description": "An order to propose. The server prices it and checks it; a person\napproves it in the web app before anything is placed.",
+        "properties": {
+          "limit_price": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Price"
+          },
+          "order_type": {
+            "default": "market",
+            "enum": [
+              "market",
+              "limit"
+            ],
+            "title": "Order Type",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio Id"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1000000000.0,
+            "title": "Quantity",
+            "type": "number"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          },
+          "retry_key": {
+            "description": "The same key returns the draft already made (a safe retry).",
+            "pattern": "^[A-Za-z0-9_.:\\-]{1,120}$",
+            "title": "Retry Key",
+            "type": "string"
+          },
+          "side": {
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "ticker": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._\\-^=]{0,31}$",
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker",
+          "side",
+          "quantity",
+          "reason",
+          "retry_key"
+        ],
+        "title": "OrderDraftCreate",
+        "type": "object"
+      },
+      "OrderDraftDecision": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "title": "OrderDraftDecision",
+        "type": "object"
+      },
+      "OrderDraftView": {
+        "properties": {
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The manual order it became, once placed.",
+            "title": "Client Id"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "limit_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Price"
+          },
+          "notional": {
+            "description": "quantity x reference_price, computed by the server.",
+            "title": "Notional",
+            "type": "number"
+          },
+          "order_type": {
+            "enum": [
+              "market",
+              "limit"
+            ],
+            "title": "Order Type",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "reference_price": {
+            "description": "The latest close, computed by the server.",
+            "title": "Reference Price",
+            "type": "number"
+          },
+          "side": {
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "assistant",
+              "console",
+              "mcp"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "placed",
+              "rejected",
+              "expired",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "portfolio_id",
+          "source",
+          "conversation_id",
+          "ticker",
+          "side",
+          "quantity",
+          "order_type",
+          "limit_price",
+          "reason",
+          "reference_price",
+          "notional",
+          "status",
+          "client_id",
+          "created_at",
+          "expires_at",
+          "decided_at",
+          "decided_by",
+          "decision_note"
+        ],
+        "title": "OrderDraftView",
+        "type": "object"
+      },
       "OrderView": {
         "properties": {
           "broker_order_id": {
@@ -7496,6 +7972,37 @@
           "offset"
         ],
         "title": "Page[BrokerAccountView]",
+        "type": "object"
+      },
+      "Page_CashFlowView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CashFlowView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[CashFlowView]",
         "type": "object"
       },
       "Page_ConnectionView_": {
@@ -7837,6 +8344,37 @@
           "offset"
         ],
         "title": "Page[LedgerRunView]",
+        "type": "object"
+      },
+      "Page_OrderDraftView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OrderDraftView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[OrderDraftView]",
         "type": "object"
       },
       "Page_OrderView_": {
@@ -8719,6 +9257,12 @@
             "title": "End Value",
             "type": "number"
           },
+          "net_flows": {
+            "default": 0.0,
+            "description": "Deposits less withdrawals inside the period (roadmap 20.5).",
+            "title": "Net Flows",
+            "type": "number"
+          },
           "period": {
             "enum": [
               "1d",
@@ -8755,6 +9299,18 @@
               }
             ],
             "title": "Start Value"
+          },
+          "twr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Time-weighted return over the period: deposits and withdrawals taken out, so a deposit is never profit. Null without a start value.",
+            "title": "Twr"
           }
         },
         "required": [
@@ -8876,6 +9432,22 @@
             "title": "Fx Missing",
             "type": "array"
           },
+          "mwr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mwr"
+          },
+          "net_flows": {
+            "default": 0.0,
+            "title": "Net Flows",
+            "type": "number"
+          },
           "rows": {
             "items": {
               "$ref": "#/components/schemas/PnlRowView"
@@ -8893,6 +9465,17 @@
               }
             ],
             "title": "Strategy Id"
+          },
+          "twr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Twr"
           }
         },
         "required": [
@@ -15391,6 +15974,76 @@
         "title": "TradingModeView",
         "type": "object"
       },
+      "TurnView": {
+        "description": "One recorded turn: the model, the prompt version, every tool call and\nresult, and the drafts it made.",
+        "properties": {
+          "draft_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Draft Ids",
+            "type": "array"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "steps": {
+            "title": "Steps",
+            "type": "integer"
+          },
+          "trace": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Trace",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "model",
+          "prompt_version",
+          "status",
+          "steps",
+          "trace",
+          "draft_ids",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "TurnView",
+        "type": "object"
+      },
       "UniverseCreate": {
         "properties": {
           "csv": {
@@ -16995,6 +17648,169 @@
           "assistant"
         ],
         "x-permission": "data.read"
+      }
+    },
+    "/api/assistant/conversations/{conversation_id}/turns": {
+      "get": {
+        "description": "The trace of one of your conversations: each turn's model, prompt\nversion, tool calls and results, and the order drafts it made.",
+        "operationId": "listAssistantTurns",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TurnView"
+                  },
+                  "title": "Response Listassistantturns",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Turns",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
+    "/api/assistant/freeze": {
+      "delete": {
+        "description": "Unfreeze your assistant after a burst of writes. Needs a fresh\nsecond factor.",
+        "operationId": "clearAssistantFreeze",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Clear Freeze",
+        "tags": [
+          "assistant"
+        ],
+        "x-permission": "killswitch.resume"
       }
     },
     "/api/assistant/status": {
@@ -26477,6 +27293,413 @@
         ]
       }
     },
+    "/api/orders/drafts": {
+      "get": {
+        "description": "Your order drafts, newest first.",
+        "operationId": "listOrderDrafts",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "pending",
+                    "placed",
+                    "rejected",
+                    "expired",
+                    "cancelled"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_OrderDraftView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Order Drafts",
+        "tags": [
+          "orders"
+        ]
+      },
+      "post": {
+        "description": "Propose an order. The server prices it at the latest close, checks\nthe price band and caps, and keeps it until you approve, reject or it\nexpires. The same retry_key returns the draft already made.",
+        "operationId": "createOrderDraft",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderDraftCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDraftView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Order Draft",
+        "tags": [
+          "orders"
+        ],
+        "x-permission": "portfolio.trade"
+      }
+    },
+    "/api/orders/drafts/{draft_id}/approve": {
+      "post": {
+        "description": "Place a pending draft as a manual order, through the kill switch,\nevery halt and every risk rule. Needs a fresh second factor.",
+        "operationId": "approveOrderDraft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDraftApproval"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Approve Order Draft",
+        "tags": [
+          "orders"
+        ],
+        "x-permission": "orders.approve"
+      }
+    },
+    "/api/orders/drafts/{draft_id}/reject": {
+      "post": {
+        "operationId": "rejectOrderDraft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderDraftDecision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDraftView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reject Order Draft",
+        "tags": [
+          "orders"
+        ],
+        "x-permission": "portfolio.trade"
+      }
+    },
     "/api/orders/fills": {
       "get": {
         "operationId": "listFills",
@@ -27850,6 +29073,223 @@
           }
         ],
         "summary": "Rename Portfolio",
+        "tags": [
+          "portfolio"
+        ],
+        "x-permission": "portfolio.manage"
+      }
+    },
+    "/api/portfolios/{portfolio_id}/cash-flows": {
+      "get": {
+        "description": "Every deposit and withdrawal of one of your portfolios, oldest first:\nrecorded ones and those a broker sync brought in.",
+        "operationId": "listCashFlows",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_CashFlowView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Cash Flows",
+        "tags": [
+          "portfolio"
+        ]
+      },
+      "post": {
+        "description": "Record a deposit or a withdrawal on one of your simulated portfolios.\nIt moves the book's cash. Broker books get theirs from the sync.",
+        "operationId": "recordCashFlow",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashFlowCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CashFlowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Record Cash Flow",
         "tags": [
           "portfolio"
         ],

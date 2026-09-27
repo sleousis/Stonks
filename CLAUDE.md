@@ -71,6 +71,8 @@ uv run stonks price-alerts list|create|delete|events --user E | run   # price al
 uv run stonks telegram link-code|status|unlink --user E | poll [--once]
 uv run stonks tax gains|dividends --year Y [--portfolio ID] | settings   # yearly tax CSVs, see docs/tax.md
 uv run stonks ingest fx --pairs EURUSD,GBPUSD [--since ...]   # FX rates into the lake
+uv run stonks cash-flows record|list --user E --portfolio ID   # deposits and withdrawals (TWR, MWR)
+uv run stonks assistant eval [--base-url URL --model M]   # the assistant's eval set
 
 # Servers
 uv run stonks serve              # REST API + built console on 127.0.0.1:8000
@@ -132,7 +134,7 @@ uv run python -m stonks.security keygen
 - **`universes/`**: stored universe definitions (list, exchange, rule, index) behind `UniverseProvider` and `IndexSource` registries, refreshed into point-in-time membership. See `docs/universes.md`.
 - **`api/`**: FastAPI app (`stonks serve`), session or API-token auth with per-route permissions (`STONKS_API_TOKEN` is a legacy credential), background jobs with SSE, OpenAPI contract, serves `web/dist`.
 - **`mcp/`**: `stonks mcp`, an MCP server that talks to the running REST API. Write tools need an explicit confirm.
-- **Phase 20 blocks**: `production/manual.py` (manual orders through the gates, every risk rule and the broker, idempotent by client id, `origin = manual`; the tick never trades manual holdings), `price_alerts/` (rules on tickers or watchlists, the `price_alerts` scheduler job, delivery through the notification router), `telegram/` (the `telegram` channel and a long-polling bot acting as the linked user, env token only), `assistant/` (the `ChatModel` seam, an OpenAI-compatible client for Ollama, vLLM or llama.cpp, and an agent loop over the in-process MCP tools as the signed-in user, write tools need the person's confirmation), `fx/` (conversion over the lake's `fx_rates`) and `tax/` (FIFO or specific lots, US wash sales, dividends, yearly CSVs).
+- **Phase 20 blocks**: `production/manual.py` (manual orders through the gates, every risk rule and the broker, idempotent by client id, `origin = manual`; the tick never trades manual holdings), `price_alerts/` (rules on tickers or watchlists, the `price_alerts` scheduler job, delivery through the notification router), `telegram/` (the `telegram` channel and a long-polling bot acting as the linked user, env token only), `assistant/` (the `ChatModel` seam, an OpenAI-compatible client for Ollama, vLLM or llama.cpp, an agent loop over the in-process MCP tools as the signed-in user, a tool catalog with a small default set, the safety gate and freeze in `guard.py`, and an eval set in `evals.py`), `production/order_drafts.py` (the assistant only drafts orders, approved in the web app with a fresh second factor), `fx/` (conversion over the lake's `fx_rates`) and `tax/` (FIFO or specific lots, US wash sales, dividends, yearly CSVs).
 - **`web/`**: Angular console (dashboard, strategies, lab, studio, data, orders, shadow, go-live, health, settings), typed client generated from the OpenAPI spec, installable PWA. See `docs/ui.md`.
 - **Deploy**: `Dockerfile`, `deploy/` (Compose with api, scheduler and Caddy, Tailscale, restic backups, host checks), `infra/` (Terraform), `.github/workflows/` (ci, codeql, docs, release, deploy, mutation).
 
@@ -171,7 +173,7 @@ uv run python -m stonks.security keygen
 - 020: `signals`, `signal_events`, `portfolio_runs`, `portfolios.paper_of` (a broker portfolio's paper account), `subscriptions.paper_since`, `users.risk_policy_json`.
 - 021: `orders.position_effect` (`open` or `close`). 022: a `pf_default` subscription for every active strategy. 023: `financing_accruals`, `financing_charges`.
 - 025: lab offload queue (`jobs.executor`, `lab_workers`). 026: `onboarding_steps`, `onboarding_status` (first-run guide) and `watchlists` (per-user ticker lists).
-- 027: reserved for Phase 19. 028: `orders.origin` (`strategy` or `manual`), `manual_reason`, `placed_by`, `replaces_client_id`; `price_alert_rules`, `price_alert_state`, `price_alert_events`; `telegram_links`, `telegram_link_codes`, `telegram_bot_state`; `assistant_conversations`, `assistant_messages`, `assistant_pending_actions`; `portfolio_tax_settings`, `tax_lot_picks`.
+- 027: reserved for Phase 19. 028: `orders.origin` (`strategy` or `manual`), `manual_reason`, `placed_by`, `replaces_client_id`; `price_alert_rules`, `price_alert_state`, `price_alert_events`; `telegram_links`, `telegram_link_codes`, `telegram_bot_state`; `assistant_conversations`, `assistant_messages`, `assistant_pending_actions`; `portfolio_tax_settings`, `tax_lot_picks`; `order_drafts`, `assistant_turns`, `assistant_freezes`, `portfolio_cash_flows`.
 
 ## Conventions to match
 

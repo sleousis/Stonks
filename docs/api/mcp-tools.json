@@ -1,5 +1,5 @@
 {
-  "instructions": "Stonks research + trading system. Tools talk to the local REST API started\nwith `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs,\nsweeps, signal IC analyses and ingests. Follow up with wait_for_job, and stop\none with cancel_job. Check get_golive_report before promote_strategy. Status changes,\ndraft register/enable/disable, broker syncs and production ticks need\nconfirm=true; call them first without it to get a preview and show it to the\nuser before confirming.\nrun_tick is a dry run unless dry_run=false, and a real tick is refused unless\nthe API reports a paper/simulated broker. No tool can change broker settings\nor enable live trading.\nEvery tool acts as the user who owns this server's API token (whoami shows the\nuser, role and scopes) and sees only that user's portfolios. Actions that need\na fresh second factor (switching to auto, connecting a broker, resuming the\nkill switch, restoring a backup) are refused here. The user does them in the\nweb app.",
+  "instructions": "Stonks research + trading system. Tools talk to the local REST API started\nwith `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs,\nsweeps, signal IC analyses and ingests. Follow up with wait_for_job, and stop\none with cancel_job. Check get_golive_report before promote_strategy. Status changes,\ndraft register/enable/disable, broker syncs, manual orders (place_order,\nchange_order, cancel_order) and production ticks need confirm=true; call them\nfirst without it to get a preview and show it to the user before confirming.\nrun_tick is a dry run unless dry_run=false, and a real tick is refused unless\nthe API reports a paper/simulated broker. No tool can change broker settings\nor enable live trading.\nEvery tool acts as the user who owns this server's API token (whoami shows the\nuser, role and scopes) and sees only that user's portfolios. Actions that need\na fresh second factor (switching to auto, connecting a broker, resuming the\nkill switch, restoring a backup, a manual order on a real-money book) are\nrefused here. The user does them in the web app.",
   "resource_templates": [],
   "resources": [
     {
@@ -762,6 +762,97 @@
       },
       "name": "disable_draft",
       "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Propose an order without placing it. The server prices it at the\nlatest close and checks it. The person approves it in the web app\nwith a fresh second factor, and only then is it placed.",
+      "input_schema": {
+        "properties": {
+          "limit_price": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Limit Price"
+          },
+          "order_type": {
+            "default": "market",
+            "enum": [
+              "market",
+              "limit"
+            ],
+            "title": "Order Type",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0,
+            "title": "Quantity",
+            "type": "number"
+          },
+          "reason": {
+            "description": "why you trade (recorded and audited)",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          },
+          "retry_key": {
+            "description": "the same key returns the draft already made (a safe retry)",
+            "pattern": "^[A-Za-z0-9_.:\\-]{1,120}$",
+            "title": "Retry Key",
+            "type": "string"
+          },
+          "side": {
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "ticker": {
+            "description": "instrument id, e.g. AAPL.US or BTC-USD.CC",
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker",
+          "side",
+          "quantity",
+          "reason",
+          "retry_key"
+        ],
+        "title": "draft_orderArguments",
+        "type": "object"
+      },
+      "name": "draft_order",
+      "needs_confirm": false
     },
     {
       "annotations": {
@@ -2543,6 +2634,45 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Every deposit and withdrawal of one of your portfolios, oldest\nfirst: recorded ones and those a broker sync brought in. Returns take\nthem out, so a deposit is never profit.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 200,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "portfolio_id"
+        ],
+        "title": "list_cash_flowsArguments",
+        "type": "object"
+      },
+      "name": "list_cash_flows",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Your broker connections: provider, status, last sync and error.\nNever includes credentials.",
       "input_schema": {
         "properties": {},
@@ -2911,6 +3041,42 @@
         "type": "object"
       },
       "name": "list_notifications",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Your order drafts, newest first: proposed orders waiting for your\napproval in the web app, and what became of the others.",
+      "input_schema": {
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pending",
+                  "placed",
+                  "rejected",
+                  "expired",
+                  "cancelled"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          }
+        },
+        "title": "list_order_draftsArguments",
+        "type": "object"
+      },
+      "name": "list_order_drafts",
       "needs_confirm": false
     },
     {

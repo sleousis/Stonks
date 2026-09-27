@@ -549,6 +549,25 @@ CASES: dict[str, Case] = {
         "GET", "/api/tax/lots/picks", lambda i: {"portfolio_id": i["portfolio"]}
     ),
     "get_fx_rate": _c("GET", "/api/fx/rate", lambda i: {"base": "EUR", "quote": "USD"}),
+    "list_cash_flows": _c(
+        "GET",
+        "/api/portfolios/{portfolio_id}/cash-flows",
+        lambda i: {"portfolio_id": i["portfolio"]},
+    ),
+    # order drafts (roadmap 20.4): a stale price answers 409 once permitted
+    "list_order_drafts": _c("GET", "/api/orders/drafts"),
+    "draft_order": _c(
+        "POST",
+        "/api/orders/drafts",
+        lambda i: {
+            "portfolio_id": i["portfolio"],
+            "ticker": "UP.US",
+            "side": "buy",
+            "quantity": 1,
+            "reason": "by hand",
+            "retry_key": "perm-1",
+        },
+    ),
     # manual orders (roadmap 20.1): a stale price answers 409 once permitted
     "place_order": _c(
         "POST",

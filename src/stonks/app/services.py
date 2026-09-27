@@ -25,6 +25,7 @@ from stonks.app.manual_orders import ManualOrdersService
 from stonks.app.market import MarketDataService
 from stonks.app.notifications import NotificationsAppService
 from stonks.app.operations import OperationsService
+from stonks.app.order_drafts import OrderDraftService
 from stonks.app.orders import OrdersService
 from stonks.app.ownership import check_owner, owner_filter, owner_of
 from stonks.app.pagination import Page
@@ -179,6 +180,7 @@ class Services:
     market: MarketDataService
     orders: OrdersService
     manual_orders: ManualOrdersService
+    order_drafts: OrderDraftService
     price_alerts: PriceAlertService
     ingest: IngestService
     ticks: TickService
@@ -229,6 +231,7 @@ class Services:
         )
         strategies = StrategyService(context, catalog)
         orders = OrdersService(context)
+        manual_orders = ManualOrdersService(context)
         lab = LabService(context, strategies, runner)
         portfolio = PortfolioService(context)
         services = cls(
@@ -242,7 +245,8 @@ class Services:
             strategies=strategies,
             market=MarketDataService(context),
             orders=orders,
-            manual_orders=ManualOrdersService(context),
+            manual_orders=manual_orders,
+            order_drafts=OrderDraftService(context, manual_orders),
             price_alerts=PriceAlertService(context),
             ingest=IngestService(context, runner),
             ticks=TickService(context, orders, runner),

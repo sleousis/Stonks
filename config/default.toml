@@ -417,3 +417,17 @@ timeout_seconds = 120.0           # one turn, tool calls included
 max_conversation_messages = 40    # recent messages sent to the model
 max_tool_result_chars = 8000      # characters of each tool result fed back
 temperature = 0.2
+
+[assistant.envelope]
+# Research only by default: no order tool at all. With order_tools = true the
+# assistant may only draft orders, which you approve in the web app with a
+# fresh second factor.
+order_tools = false
+# allowed_tickers = ["AAPL.US", "MSFT.US"]
+max_order_notional = 5000.0
+max_day_notional = 20000.0
+price_band = 0.05                 # a limit within 5% of the latest close
+draft_ttl_minutes = 1440.0
+max_writes_per_minute = 5         # a burst freezes the assistant
+max_writes_per_hour = 40
+freeze_minutes = 60.0

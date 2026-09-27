@@ -49,6 +49,7 @@ Every route that changes something names one permission. A test walks the route 
 | `data.read` | all | read | stream tokens, mark your feed read, reads of your own data (portfolios, subscriptions) |
 | `portfolio.manage` | trader, admin | trade | link and sync a broker account |
 | `portfolio.trade` | trader, admin | trade | subscribe to a strategy, turn a subscription on or off, notify or paper, place, change or cancel your own orders |
+| `orders.approve` | trader, admin | trade, step-up | approve an order draft, so it is placed as a manual order |
 | `orders.live` | trader, admin | trade, step-up | a manual order on a book that trades real money (checked by the service on top of `portfolio.trade`) |
 | `subscription.auto_enable` | trader, admin | trade, step-up | switch a subscription to auto |
 | `connection.manage` | trader, admin | trade, step-up | connect or delete a broker |
@@ -178,7 +179,13 @@ A trader's own webhook URL points at a host they chose. So it must be `https`, i
 
 - The assistant acts as the signed-in person. Its tools are the MCP tools, run inside the API process against the same routes, so every call checks the same permission and ownership as the web app. A viewer's assistant can only read.
 - It never has a fresh second factor. Step-up actions are refused with a pointer to the web app.
-- A tool that changes something never runs on the model's word. The person approves or rejects it in the chat first. The model cannot set `confirm` itself.
+- The model proposes, deterministic code decides. The assistant never places an order. With `[assistant.envelope] order_tools` on it may only draft one (`draft_order`). The server resolves the instrument, sets the reference price and the notional, checks the price band, the ticker allowlist and the per-order and per-day caps, and keeps the draft for a limited time. Approving a draft needs `orders.approve`: a signed-in browser with a fresh second factor. Nothing is approved through the assistant, Telegram, MCP or a token. Off (the default) is research only: no order tool at all.
+- A draft may only name an instrument that `search_instruments` returned in the same conversation, never a ticker from the model's own text. Each draft gets a retry key from the loop, so a retried call never makes two.
+- Tool results reach the model inside `<tool_result trust="untrusted">` tags, and the system prompt says never to follow instructions in them. The eval set (`stonks assistant eval`) plants an instruction in an instrument description and checks nothing is drafted.
+- Only the tools in `assistant/catalog.py` are offered: a default set of about twenty and the categories the conversation turns on. Direct orders, ticks, strategy status changes and broker actions are in none.
+- A tool that changes something else (the kill switch, deleting an alert) never runs on the model's word. The person approves or rejects it in the chat first. The model cannot set `confirm` itself. Research writes (strategy drafts, lab jobs, price alerts) run at once and stay research only: registering a strategy still needs the person.
+- Every write is counted. More than `max_writes_per_minute` or `max_writes_per_hour` freezes the person's assistant for `freeze_minutes`: it runs research only until then, or until they unfreeze it in the web app with a fresh second factor. While a kill switch covers them it is research only too, and the kill switch cancels their pending drafts. A failed check means research only: it fails closed.
+- Every turn is recorded (`assistant_turns`): the model, the prompt version, each tool call and result, and the drafts it made.
 - Only code in the API process can make a request act for the assistant. No header, cookie or token turns it on.
 - The model endpoint sees the system prompt, the conversation and the tool results, which can include your holdings and orders. Run it on your own server or a host you trust, over a private network or https.
 - The key, if any, is read from `STONKS_ASSISTANT_API_KEY` only, never from TOML, and is scrubbed from errors and logs.

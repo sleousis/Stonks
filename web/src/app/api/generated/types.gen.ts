@@ -215,6 +215,12 @@ export type AssistantStatusView = {
      */
     enabled: boolean;
     /**
+     * Frozen Until
+     *
+     * A burst of writes froze your assistant until then.
+     */
+    frozen_until?: string | null;
+    /**
      * Max Steps
      */
     max_steps: number;
@@ -228,6 +234,26 @@ export type AssistantStatusView = {
      * The model name, when enabled.
      */
     model: string | null;
+    /**
+     * Order Tools
+     *
+     * The assistant may draft orders for you to approve.
+     */
+    order_tools?: boolean;
+    /**
+     * Prompt Version
+     */
+    prompt_version?: string;
+    /**
+     * Reason
+     */
+    reason?: string | null;
+    /**
+     * Research Only
+     *
+     * No write tool at all for you right now.
+     */
+    research_only?: boolean;
     /**
      * Timeout Seconds
      */
@@ -640,6 +666,66 @@ export type BrokerInfo = {
 };
 
 /**
+ * CashFlowCreate
+ */
+export type CashFlowCreate = {
+    /**
+     * Amount
+     */
+    amount: number;
+    /**
+     * Flow Date
+     *
+     * Default: today (UTC).
+     */
+    flow_date?: string | null;
+    /**
+     * Kind
+     */
+    kind: 'deposit' | 'withdrawal';
+    /**
+     * Note
+     */
+    note?: string | null;
+};
+
+/**
+ * CashFlowView
+ */
+export type CashFlowView = {
+    /**
+     * Amount
+     */
+    amount: number;
+    /**
+     * Flow Date
+     */
+    flow_date: string;
+    /**
+     * Id
+     *
+     * The recorded row; null for a flow from a broker sync.
+     */
+    id: number | null;
+    /**
+     * Kind
+     */
+    kind: 'deposit' | 'withdrawal';
+    /**
+     * Note
+     */
+    note?: string | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Source
+     */
+    source: 'manual' | 'broker';
+};
+
+/**
  * ChannelDefaultView
  */
 export type ChannelDefaultView = {
@@ -898,6 +984,12 @@ export type ConnectionView = {
  */
 export type ConversationCreate = {
     /**
+     * Research Only
+     *
+     * Offer no write tool at all in this conversation.
+     */
+    research_only?: boolean;
+    /**
      * Title
      */
     title?: string;
@@ -926,6 +1018,10 @@ export type ConversationDetailView = {
      */
     pending_actions: Array<PendingActionView>;
     /**
+     * Research Only
+     */
+    research_only?: boolean;
+    /**
      * Title
      */
     title: string;
@@ -947,6 +1043,10 @@ export type ConversationView = {
      * Id
      */
     id: string;
+    /**
+     * Research Only
+     */
+    research_only?: boolean;
     /**
      * Title
      */
@@ -2325,6 +2425,18 @@ export type InsightsView = {
      * Held currencies with no FX rate to the base currency.
      */
     fx_missing?: Array<string>;
+    /**
+     * Mwr
+     *
+     * Money-weighted return since inception, annualized (XIRR of the start value, deposits, withdrawals and the latest value).
+     */
+    mwr?: number | null;
+    /**
+     * Net Flows
+     *
+     * Deposits less withdrawals since inception.
+     */
+    net_flows?: number;
     /**
      * Notes
      */
@@ -3841,6 +3953,155 @@ export type OrderCancelResult = {
 };
 
 /**
+ * OrderDraftApproval
+ */
+export type OrderDraftApproval = {
+    draft: OrderDraftView;
+    order: ManualOrderResult;
+};
+
+/**
+ * OrderDraftCreate
+ *
+ * An order to propose. The server prices it and checks it; a person
+ * approves it in the web app before anything is placed.
+ */
+export type OrderDraftCreate = {
+    /**
+     * Limit Price
+     */
+    limit_price?: number | null;
+    /**
+     * Order Type
+     */
+    order_type?: 'market' | 'limit';
+    /**
+     * Portfolio Id
+     */
+    portfolio_id?: string | null;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Retry Key
+     *
+     * The same key returns the draft already made (a safe retry).
+     */
+    retry_key: string;
+    /**
+     * Side
+     */
+    side: 'buy' | 'sell';
+    /**
+     * Ticker
+     */
+    ticker: string;
+};
+
+/**
+ * OrderDraftDecision
+ */
+export type OrderDraftDecision = {
+    /**
+     * Note
+     */
+    note?: string | null;
+};
+
+/**
+ * OrderDraftView
+ */
+export type OrderDraftView = {
+    /**
+     * Client Id
+     *
+     * The manual order it became, once placed.
+     */
+    client_id: string | null;
+    /**
+     * Conversation Id
+     */
+    conversation_id: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Decided At
+     */
+    decided_at: string | null;
+    /**
+     * Decided By
+     */
+    decided_by: string | null;
+    /**
+     * Decision Note
+     */
+    decision_note: string | null;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Limit Price
+     */
+    limit_price: number | null;
+    /**
+     * Notional
+     *
+     * quantity x reference_price, computed by the server.
+     */
+    notional: number;
+    /**
+     * Order Type
+     */
+    order_type: 'market' | 'limit';
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Reference Price
+     *
+     * The latest close, computed by the server.
+     */
+    reference_price: number;
+    /**
+     * Side
+     */
+    side: 'buy' | 'sell';
+    /**
+     * Source
+     */
+    source: 'assistant' | 'console' | 'mcp';
+    /**
+     * Status
+     */
+    status: 'pending' | 'placed' | 'rejected' | 'expired' | 'cancelled';
+    /**
+     * Ticker
+     */
+    ticker: string;
+};
+
+/**
  * OrderView
  */
 export type OrderView = {
@@ -3966,6 +4227,28 @@ export type PageBrokerAccountView = {
      * Items
      */
     items: Array<StonksAppConnectionsBrokerAccountView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[CashFlowView]
+ */
+export type PageCashFlowView = {
+    /**
+     * Items
+     */
+    items: Array<CashFlowView>;
     /**
      * Limit
      */
@@ -4208,6 +4491,28 @@ export type PageLedgerRunView = {
      * Items
      */
     items: Array<LedgerRunView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[OrderDraftView]
+ */
+export type PageOrderDraftView = {
+    /**
+     * Items
+     */
+    items: Array<OrderDraftView>;
     /**
      * Limit
      */
@@ -4803,6 +5108,12 @@ export type PeriodPnl = {
      */
     end_value: number;
     /**
+     * Net Flows
+     *
+     * Deposits less withdrawals inside the period (roadmap 20.5).
+     */
+    net_flows?: number;
+    /**
      * Period
      */
     period: '1d' | '1w' | '1m' | '3m' | 'ytd' | '1y' | 'inception';
@@ -4816,6 +5127,12 @@ export type PeriodPnl = {
      * Start Value
      */
     start_value: number | null;
+    /**
+     * Twr
+     *
+     * Time-weighted return over the period: deposits and withdrawals taken out, so a deposit is never profit. Null without a start value.
+     */
+    twr?: number | null;
 };
 
 /**
@@ -4872,6 +5189,14 @@ export type PnlSeries = {
      */
     fx_missing?: Array<string>;
     /**
+     * Mwr
+     */
+    mwr?: number | null;
+    /**
+     * Net Flows
+     */
+    net_flows?: number;
+    /**
      * Rows
      */
     rows: Array<PnlRowView>;
@@ -4879,6 +5204,10 @@ export type PnlSeries = {
      * Strategy Id
      */
     strategy_id: string | null;
+    /**
+     * Twr
+     */
+    twr?: number | null;
 };
 
 /**
@@ -8321,6 +8650,53 @@ export type TradingModeView = {
 };
 
 /**
+ * TurnView
+ *
+ * One recorded turn: the model, the prompt version, every tool call and
+ * result, and the drafts it made.
+ */
+export type TurnView = {
+    /**
+     * Draft Ids
+     */
+    draft_ids: Array<string>;
+    /**
+     * Finished At
+     */
+    finished_at: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Model
+     */
+    model: string;
+    /**
+     * Prompt Version
+     */
+    prompt_version: string;
+    /**
+     * Started At
+     */
+    started_at: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Steps
+     */
+    steps: number;
+    /**
+     * Trace
+     */
+    trace: Array<{
+        [key: string]: unknown;
+    }>;
+};
+
+/**
  * UniverseCreate
  */
 export type UniverseCreate = {
@@ -9158,6 +9534,95 @@ export type SendAssistantMessageResponses = {
      */
     200: unknown;
 };
+
+export type ListAssistantTurnsData = {
+    body?: never;
+    path: {
+        /**
+         * Conversation Id
+         */
+        conversation_id: string;
+    };
+    query?: never;
+    url: '/api/assistant/conversations/{conversation_id}/turns';
+};
+
+export type ListAssistantTurnsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListAssistantTurnsError = ListAssistantTurnsErrors[keyof ListAssistantTurnsErrors];
+
+export type ListAssistantTurnsResponses = {
+    /**
+     * Response Listassistantturns
+     *
+     * Successful Response
+     */
+    200: Array<TurnView>;
+};
+
+export type ListAssistantTurnsResponse = ListAssistantTurnsResponses[keyof ListAssistantTurnsResponses];
+
+export type ClearAssistantFreezeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/assistant/freeze';
+};
+
+export type ClearAssistantFreezeErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ClearAssistantFreezeError = ClearAssistantFreezeErrors[keyof ClearAssistantFreezeErrors];
+
+export type ClearAssistantFreezeResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type ClearAssistantFreezeResponse = ClearAssistantFreezeResponses[keyof ClearAssistantFreezeResponses];
 
 export type GetAssistantStatusData = {
     body?: never;
@@ -13757,6 +14222,195 @@ export type ListOrdersResponses = {
 
 export type ListOrdersResponse = ListOrdersResponses[keyof ListOrdersResponses];
 
+export type ListOrderDraftsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Status
+         */
+        status?: 'pending' | 'placed' | 'rejected' | 'expired' | 'cancelled' | null;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/orders/drafts';
+};
+
+export type ListOrderDraftsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListOrderDraftsError = ListOrderDraftsErrors[keyof ListOrderDraftsErrors];
+
+export type ListOrderDraftsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageOrderDraftView;
+};
+
+export type ListOrderDraftsResponse = ListOrderDraftsResponses[keyof ListOrderDraftsResponses];
+
+export type CreateOrderDraftData = {
+    body: OrderDraftCreate;
+    path?: never;
+    query?: never;
+    url: '/api/orders/drafts';
+};
+
+export type CreateOrderDraftErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CreateOrderDraftError = CreateOrderDraftErrors[keyof CreateOrderDraftErrors];
+
+export type CreateOrderDraftResponses = {
+    /**
+     * Successful Response
+     */
+    201: OrderDraftView;
+};
+
+export type CreateOrderDraftResponse = CreateOrderDraftResponses[keyof CreateOrderDraftResponses];
+
+export type ApproveOrderDraftData = {
+    body?: never;
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+    };
+    query?: never;
+    url: '/api/orders/drafts/{draft_id}/approve';
+};
+
+export type ApproveOrderDraftErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ApproveOrderDraftError = ApproveOrderDraftErrors[keyof ApproveOrderDraftErrors];
+
+export type ApproveOrderDraftResponses = {
+    /**
+     * Successful Response
+     */
+    200: OrderDraftApproval;
+};
+
+export type ApproveOrderDraftResponse = ApproveOrderDraftResponses[keyof ApproveOrderDraftResponses];
+
+export type RejectOrderDraftData = {
+    body: OrderDraftDecision;
+    path: {
+        /**
+         * Draft Id
+         */
+        draft_id: string;
+    };
+    query?: never;
+    url: '/api/orders/drafts/{draft_id}/reject';
+};
+
+export type RejectOrderDraftErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RejectOrderDraftError = RejectOrderDraftErrors[keyof RejectOrderDraftErrors];
+
+export type RejectOrderDraftResponses = {
+    /**
+     * Successful Response
+     */
+    200: OrderDraftView;
+};
+
+export type RejectOrderDraftResponse = RejectOrderDraftResponses[keyof RejectOrderDraftResponses];
+
 export type ListFillsData = {
     body?: never;
     path?: never;
@@ -14394,6 +15048,109 @@ export type RenamePortfolioResponses = {
 };
 
 export type RenamePortfolioResponse = RenamePortfolioResponses[keyof RenamePortfolioResponses];
+
+export type ListCashFlowsData = {
+    body?: never;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/portfolios/{portfolio_id}/cash-flows';
+};
+
+export type ListCashFlowsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListCashFlowsError = ListCashFlowsErrors[keyof ListCashFlowsErrors];
+
+export type ListCashFlowsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageCashFlowView;
+};
+
+export type ListCashFlowsResponse = ListCashFlowsResponses[keyof ListCashFlowsResponses];
+
+export type RecordCashFlowData = {
+    body: CashFlowCreate;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/cash-flows';
+};
+
+export type RecordCashFlowErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RecordCashFlowError = RecordCashFlowErrors[keyof RecordCashFlowErrors];
+
+export type RecordCashFlowResponses = {
+    /**
+     * Successful Response
+     */
+    201: CashFlowView;
+};
+
+export type RecordCashFlowResponse = RecordCashFlowResponses[keyof RecordCashFlowResponses];
 
 export type ListPriceAlertsData = {
     body?: never;

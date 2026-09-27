@@ -35,6 +35,8 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | DELETE | `/api/assistant/conversations/{conversation_id}` | Delete Conversation | `data.read` |  |  |
 | POST | `/api/assistant/conversations/{conversation_id}/actions/{action_id}` | Decide Action | `data.read` | [ActionDecision](#actiondecision) | SSE of [AssistantEventView](#assistanteventview) |
 | POST | `/api/assistant/conversations/{conversation_id}/messages` | Send Message | `data.read` | [MessageCreate](#messagecreate) | SSE of [AssistantEventView](#assistanteventview) |
+| GET | `/api/assistant/conversations/{conversation_id}/turns` | List Turns | sign-in |  | list[[TurnView](#turnview)] |
+| DELETE | `/api/assistant/freeze` | Clear Freeze | `killswitch.resume` |  |  |
 | GET | `/api/assistant/status` | Assistant Status | sign-in |  | [AssistantStatusView](#assistantstatusview) |
 
 ## auth endpoints
@@ -222,6 +224,10 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
 | GET | `/api/orders` | List Orders | sign-in |  | [Page_OrderView_](#page_orderview_) |
+| GET | `/api/orders/drafts` | List Order Drafts | sign-in |  | [Page_OrderDraftView_](#page_orderdraftview_) |
+| POST | `/api/orders/drafts` | Create Order Draft | `portfolio.trade` | [OrderDraftCreate](#orderdraftcreate) | [OrderDraftView](#orderdraftview) |
+| POST | `/api/orders/drafts/{draft_id}/approve` | Approve Order Draft | `orders.approve` |  | [OrderDraftApproval](#orderdraftapproval) |
+| POST | `/api/orders/drafts/{draft_id}/reject` | Reject Order Draft | `portfolio.trade` | [OrderDraftDecision](#orderdraftdecision) | [OrderDraftView](#orderdraftview) |
 | GET | `/api/orders/fills` | List Fills | sign-in |  | [Page_FillView_](#page_fillview_) |
 | POST | `/api/orders/manual` | Place Manual Order | `portfolio.trade` | [ManualOrderRequest](#manualorderrequest) | [ManualOrderResult](#manualorderresult) |
 | POST | `/api/orders/manual/preview` | Preview Manual Order | `portfolio.trade` | [ManualOrderRequest](#manualorderrequest) | [ManualOrderResult](#manualorderresult) |
@@ -245,6 +251,8 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | POST | `/api/portfolios` | Create Portfolio | `portfolio.manage` | [PortfolioCreate](#portfoliocreate) | [PortfolioSummaryView](#portfoliosummaryview) |
 | GET | `/api/portfolios/trading-modes` | List Trading Modes | `data.read` |  | [Page_TradingModeView_](#page_tradingmodeview_) |
 | PATCH | `/api/portfolios/{portfolio_id}` | Rename Portfolio | `portfolio.manage` | [PortfolioRename](#portfoliorename) | [PortfolioSummaryView](#portfoliosummaryview) |
+| GET | `/api/portfolios/{portfolio_id}/cash-flows` | List Cash Flows | sign-in |  | [Page_CashFlowView_](#page_cashflowview_) |
+| POST | `/api/portfolios/{portfolio_id}/cash-flows` | Record Cash Flow | `portfolio.manage` | [CashFlowCreate](#cashflowcreate) | [CashFlowView](#cashflowview) |
 
 ## price-alerts endpoints
 
@@ -498,9 +506,14 @@ One server-sent event of a turn. ``kind`` is also the SSE event name.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `enabled` | boolean | yes | True when a model endpoint is configured. |
+| `frozen_until` | date-time \| null | no | A burst of writes froze your assistant until then. |
 | `max_steps` | integer | yes |  |
 | `max_tokens` | integer | yes |  |
 | `model` | string \| null | yes | The model name, when enabled. |
+| `order_tools` | boolean | no | The assistant may draft orders for you to approve. |
+| `prompt_version` | string | no |  |
+| `reason` | string \| null | no |  |
+| `research_only` | boolean | no | No write tool at all for you right now. |
 | `timeout_seconds` | number | yes |  |
 
 ### AuthCheck
@@ -649,6 +662,27 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `kind` | "simulated" \| "alpaca" | yes |  |
 | `paper` | boolean | yes |  |
 
+### CashFlowCreate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `amount` | number | yes |  |
+| `flow_date` | date \| null | no | Default: today (UTC). |
+| `kind` | "deposit" \| "withdrawal" | yes |  |
+| `note` | string \| null | no |  |
+
+### CashFlowView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `amount` | number | yes |  |
+| `flow_date` | date | yes |  |
+| `id` | integer \| null | yes | The recorded row; null for a flow from a broker sync. |
+| `kind` | "deposit" \| "withdrawal" | yes |  |
+| `note` | string \| null | no |  |
+| `portfolio_id` | string | yes |  |
+| `source` | "manual" \| "broker" | yes |  |
+
 ### ChannelDefaultView
 
 | Field | Type | Required | Description |
@@ -748,6 +782,7 @@ API-key connect. ``fields`` are the provider's ``credential_fields`` (plus ``pap
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `research_only` | boolean | no | Offer no write tool at all in this conversation. |
 | `title` | string | no |  |
 
 ### ConversationDetailView
@@ -758,6 +793,7 @@ API-key connect. ``fields`` are the provider's ``credential_fields`` (plus ``pap
 | `id` | string | yes |  |
 | `messages` | list[[MessageView](#messageview)] | yes |  |
 | `pending_actions` | list[[PendingActionView](#pendingactionview)] | yes | Write actions waiting for you to approve or reject. |
+| `research_only` | boolean | no |  |
 | `title` | string | yes |  |
 | `updated_at` | date-time | yes |  |
 
@@ -767,6 +803,7 @@ API-key connect. ``fields`` are the provider's ``credential_fields`` (plus ``pap
 |-------|------|----------|-------------|
 | `created_at` | date-time | yes |  |
 | `id` | string | yes |  |
+| `research_only` | boolean | no |  |
 | `title` | string | yes |  |
 | `updated_at` | date-time | yes |  |
 
@@ -1278,6 +1315,8 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers, sect
 | `currency` | string | yes | Reporting currency. Amounts are not FX-converted. |
 | `exposure` | [Exposure](#exposure) | yes |  |
 | `fx_missing` | list[string] | no | Held currencies with no FX rate to the base currency. |
+| `mwr` | number \| null | no | Money-weighted return since inception, annualized (XIRR of the start value, deposits, withdrawals and the latest value). |
+| `net_flows` | number | no | Deposits less withdrawals since inception. |
 | `notes` | list[string] | yes |  |
 | `pnl` | list[[PeriodPnl](#periodpnl)] | yes |  |
 | `portfolio_id` | string | yes |  |
@@ -1833,6 +1872,58 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `client_id` | string | yes |  |
 | `status` | string | yes |  |
 
+### OrderDraftApproval
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `draft` | [OrderDraftView](#orderdraftview) | yes |  |
+| `order` | [ManualOrderResult](#manualorderresult) | yes |  |
+
+### OrderDraftCreate
+
+An order to propose. The server prices it and checks it; a person approves it in the web app before anything is placed.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `limit_price` | number \| null | no |  |
+| `order_type` | "market" \| "limit" | no |  |
+| `portfolio_id` | string \| null | no |  |
+| `quantity` | number | yes |  |
+| `reason` | string | yes |  |
+| `retry_key` | string | yes | The same key returns the draft already made (a safe retry). |
+| `side` | "buy" \| "sell" | yes |  |
+| `ticker` | string | yes |  |
+
+### OrderDraftDecision
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `note` | string \| null | no |  |
+
+### OrderDraftView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `client_id` | string \| null | yes | The manual order it became, once placed. |
+| `conversation_id` | string \| null | yes |  |
+| `created_at` | date-time | yes |  |
+| `decided_at` | date-time \| null | yes |  |
+| `decided_by` | string \| null | yes |  |
+| `decision_note` | string \| null | yes |  |
+| `expires_at` | date-time | yes |  |
+| `id` | string | yes |  |
+| `limit_price` | number \| null | yes |  |
+| `notional` | number | yes | quantity x reference_price, computed by the server. |
+| `order_type` | "market" \| "limit" | yes |  |
+| `portfolio_id` | string | yes |  |
+| `quantity` | number | yes |  |
+| `reason` | string | yes |  |
+| `reference_price` | number | yes | The latest close, computed by the server. |
+| `side` | "buy" \| "sell" | yes |  |
+| `source` | "assistant" \| "console" \| "mcp" | yes |  |
+| `status` | "pending" \| "placed" \| "rejected" \| "expired" \| "cancelled" | yes |  |
+| `ticker` | string | yes |  |
+
 ### OrderView
 
 | Field | Type | Required | Description |
@@ -1878,6 +1969,15 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[stonks__app__connections__BrokerAccountView](#stonks__app__connections__brokeraccountview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_CashFlowView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[CashFlowView](#cashflowview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
@@ -1977,6 +2077,15 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[LedgerRunView](#ledgerrunview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_OrderDraftView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[OrderDraftView](#orderdraftview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
@@ -2213,9 +2322,11 @@ The model book's result. Every figure is null without two days.
 | `change_pct` | number \| null | yes | change / start_value (0.05 = +5%). |
 | `end_day` | date | yes |  |
 | `end_value` | number | yes |  |
+| `net_flows` | number | no | Deposits less withdrawals inside the period (roadmap 20.5). |
 | `period` | "1d" \| "1w" \| "1m" \| "3m" \| "ytd" \| "1y" \| "inception" | yes |  |
 | `start_day` | date \| null | yes | Day of the start value; null without history. |
 | `start_value` | number \| null | yes |  |
+| `twr` | number \| null | no | Time-weighted return over the period: deposits and withdrawals taken out, so a deposit is never profit. Null without a start value. |
 
 ### PnlRowView
 
@@ -2238,8 +2349,11 @@ One row per day. ``strategy_id`` is ``None`` for the real portfolio and a shadow
 | `base_currency` | string \| null | no |  |
 | `base_rows` | list[[PnlRowView](#pnlrowview)] \| null | no |  |
 | `fx_missing` | list[string] | no |  |
+| `mwr` | number \| null | no |  |
+| `net_flows` | number | no |  |
 | `rows` | list[[PnlRowView](#pnlrowview)] | yes |  |
 | `strategy_id` | string \| null | yes |  |
+| `twr` | number \| null | no |  |
 
 ### PortalLinkView
 
@@ -3501,6 +3615,22 @@ Whether a portfolio trades paper or live money, and through what.
 | `name` | string | yes |  |
 | `portfolio_id` | string | yes |  |
 | `trading` | "paper" \| "live" | yes | paper: simulated fills or a paper broker account. live: real money. |
+
+### TurnView
+
+One recorded turn: the model, the prompt version, every tool call and result, and the drafts it made.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `draft_ids` | list[string] | yes |  |
+| `finished_at` | date-time \| null | yes |  |
+| `id` | string | yes |  |
+| `model` | string | yes |  |
+| `prompt_version` | string | yes |  |
+| `started_at` | date-time | yes |  |
+| `status` | string | yes |  |
+| `steps` | integer | yes |  |
+| `trace` | list[object] | yes |  |
 
 ### UniverseCreate
 

@@ -295,7 +295,25 @@ The console has a chat that talks to your own model server and acts through the 
 
 Limits per turn, all under `[assistant]`: `max_steps` model calls (default 8), `max_tokens` per call (1024), `timeout_seconds` for the whole turn with its tool calls (120), `max_conversation_messages` sent to the model (40) and `max_tool_result_chars` of each tool result (8000).
 
-Read tools run at once. A tool that changes something waits: the chat shows what it will do, and runs it only when the person approves. Actions that need a fresh second factor stay in the web app. Conversations are stored per person in the state database.
+Read tools run at once, and so do research writes (strategy drafts, lab jobs, price alerts). Any other tool that changes something waits: the chat shows what it will do, and runs it only when the person approves. Actions that need a fresh second factor stay in the web app. Conversations and every turn (model, prompt version, tool calls, drafts) are stored per person in the state database.
+
+The assistant starts with about twenty tools and turns on more categories when it needs them (portfolio, market, strategies, risk, alerts, studio, lab). This keeps small local models reliable.
+
+Order drafts and limits live under `[assistant.envelope]`:
+
+| Setting | Default | Effect |
+|---------|---------|--------|
+| `order_tools` | false | Off: research only, no order tool at all. On: the assistant may draft orders. |
+| `allowed_tickers` | unset | Only these instruments may be drafted. |
+| `max_order_notional`, `max_day_notional` | 5000, 20000 | Caps per draft and per day, in the book's currency. |
+| `price_band` | 0.05 | A limit price must sit within 5% of the latest close. |
+| `draft_ttl_minutes` | 1440 | A draft not approved by then expires. |
+| `max_writes_per_minute`, `max_writes_per_hour` | 5, 40 | A burst freezes the assistant. |
+| `freeze_minutes` | 60 | How long a freeze lasts. |
+
+A draft is never an order. The person approves it in the web app with a fresh second factor, and only then it is placed as a manual order through every check. The kill switch cancels pending drafts. A conversation can be started research only.
+
+Before switching models, run the eval set: `uv run stonks assistant eval` checks the safety code with the scripted model, and `uv run stonks assistant eval --base-url http://127.0.0.1:11434/v1 --model qwen2.5` checks a real model on the same tasks (a planted prompt injection included). It exits 1 when a case fails.
 
 ## Broker connections
 
@@ -493,6 +511,23 @@ uv run stonks pnl --strategy <id>      # a model book
 ```
 
 Columns: `date`, `value` (cash plus marked positions), `change`, `daily`, `cumulative` (since the first snapshot) and `drawdown` (below the running peak). `--since` only trims rows; `cumulative` and `drawdown` still count from inception.
+
+## Returns and cash flows
+
+`cumulative` is the plain change in value, so a deposit would look like profit. The P&L views, Insights and `stonks pnl` also show returns with the money a person moved taken out:
+
+- **Time-weighted return (TWR):** each day's return with that day's deposit or withdrawal taken out, chained. A flow counts at the start of its day: `value today / (value yesterday + flow) - 1`. It shows how the investments did, whatever the timing of the flows.
+- **Money-weighted return (MWR):** the yearly rate (XIRR) that turns the start value and the flows into the latest value. It shows what your money earned, timing included.
+- **Net deposits:** deposits less withdrawals inside the range.
+
+Only deposits and withdrawals are flows. Dividends, interest and fees stay inside the return. A broker book's flows come from its sync. On a simulated book, record them yourself. Recording one also moves the book's cash:
+
+```bash
+uv run stonks cash-flows record --kind deposit --amount 5000 [--date YYYY-MM-DD] [--note ...] --user you@example.com
+uv run stonks cash-flows list --user you@example.com
+```
+
+The API does the same (`/api/portfolios/{id}/cash-flows`). A withdrawal larger than the cash, a date before the book's latest snapshot or in the future, and a running tick are refused.
 
 ## FX rates
 

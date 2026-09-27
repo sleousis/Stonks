@@ -1291,3 +1291,54 @@ routes = ["GET /api/fx/rate"]
 console = "getFxRate"
 cli = "stonks ingest fx"
 mcp = "get_fx_rate"
+
+[[capability]]
+id = "portfolio.cash_flows.list"
+domain = "portfolio"
+title = "Deposits and withdrawals of a portfolio (behind the time- and money-weighted returns)"
+routes = ["GET /api/portfolios/{portfolio_id}/cash-flows"]
+console = "listCashFlows"
+cli = "stonks cash-flows list"
+mcp = "list_cash_flows"
+
+[[capability]]
+id = "portfolio.cash_flows.record"
+domain = "portfolio"
+title = "Record a deposit or a withdrawal on a simulated portfolio"
+routes = ["POST /api/portfolios/{portfolio_id}/cash-flows"]
+console = "recordCashFlow"
+cli = "stonks cash-flows record"
+mcp = { limited = "moving money in a book stays in the console and the CLI" }
+
+[[capability]]
+id = "orders.drafts"
+domain = "trading"
+title = "Order drafts: propose an order, list, reject, and approve it with a fresh second factor"
+routes = [
+  "GET /api/orders/drafts",
+  "POST /api/orders/drafts",
+  "POST /api/orders/drafts/{draft_id}/approve",
+  "POST /api/orders/drafts/{draft_id}/reject",
+]
+console = ["listOrderDrafts", "createOrderDraft", "approveOrderDraft", "rejectOrderDraft"]
+cli = { limited = "drafts come from the assistant and MCP, the shell places orders directly" }
+mcp = ["draft_order", "list_order_drafts"]
+
+[[capability]]
+id = "assistant.safety"
+domain = "assistant"
+title = "The assistant's trace and freeze: recorded turns, and unfreezing after a burst"
+routes = ["GET /api/assistant/conversations/{conversation_id}/turns", "DELETE /api/assistant/freeze"]
+console = ["listAssistantTurns", "clearAssistantFreeze"]
+cli = { limited = "the trace and the freeze belong to the in-app chat" }
+mcp = { limited = "the assistant runs the MCP tools itself, an MCP client is already an assistant" }
+
+[[capability]]
+id = "assistant.eval"
+domain = "assistant"
+title = "Run the assistant's fixed eval set against the fake model or a real endpoint"
+routes = []
+console = { limited = "an operator check before switching models" }
+cli = "stonks assistant eval"
+mcp = { limited = "an operator check before switching models" }
+

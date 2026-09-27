@@ -20,6 +20,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`delete_price_alert`](#delete_price_alert) | guarded | yes |
 | [`delete_universe`](#delete_universe) | guarded | yes |
 | [`disable_draft`](#disable_draft) | guarded | yes |
+| [`draft_order`](#draft_order) | job | no |
 | [`edit_journal_note`](#edit_journal_note) | job | no |
 | [`enable_draft`](#enable_draft) | guarded | yes |
 | [`engage_kill_switch`](#engage_kill_switch) | guarded | yes |
@@ -65,6 +66,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`import_index_history`](#import_index_history) | guarded | yes |
 | [`lab_run_draft`](#lab_run_draft) | guarded | yes |
 | [`list_alerts`](#list_alerts) | read | no |
+| [`list_cash_flows`](#list_cash_flows) | read | no |
 | [`list_connections`](#list_connections) | read | no |
 | [`list_cost_models`](#list_cost_models) | read | no |
 | [`list_drafts`](#list_drafts) | read | no |
@@ -74,6 +76,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_jobs`](#list_jobs) | read | no |
 | [`list_ledger_runs`](#list_ledger_runs) | read | no |
 | [`list_notifications`](#list_notifications) | read | no |
+| [`list_order_drafts`](#list_order_drafts) | read | no |
 | [`list_orders`](#list_orders) | read | no |
 | [`list_portfolio_snapshots`](#list_portfolio_snapshots) | read | no |
 | [`list_portfolios`](#list_portfolios) | read | no |
@@ -572,6 +575,20 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
 
+### `list_cash_flows`
+
+Every deposit and withdrawal of one of your portfolios, oldest
+first: recorded ones and those a broker sync brought in. Returns take
+them out, so a deposit is never profit.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string | yes |  |  |
+| `limit` | integer | no | `200` | page size |
+| `offset` | integer | no | `0` | rows to skip |
+
 ### `list_connections`
 
 Your broker connections: provider, status, last sync and error.
@@ -681,6 +698,17 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `unread_only` | boolean | no | `false` |  |
 | `limit` | integer | no | `50` |  |
 | `before_id` | integer \| null | no | `null` | page: only items with a lower id |
+
+### `list_order_drafts`
+
+Your order drafts, newest first: proposed orders waiting for your
+approval in the web app, and what became of the others.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `status` | "pending" \| "placed" \| "rejected" \| "expired" \| "cancelled" \| null | no | `null` |  |
 
 ### `list_orders`
 
@@ -1138,6 +1166,25 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 |-------|------|----------|---------|-------------|
 | `name` | string | yes |  | the list's name |
 | `tickers` | list[string] \| null | no | `null` | instrument ids, kept once and in order |
+
+### `draft_order`
+
+Propose an order without placing it. The server prices it at the
+latest close and checks it. The person approves it in the web app
+with a fresh second factor, and only then is it placed.
+
+Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `ticker` | string | yes |  | instrument id, e.g. AAPL.US or BTC-USD.CC |
+| `side` | "buy" \| "sell" | yes |  |  |
+| `quantity` | number | yes |  |  |
+| `reason` | string | yes |  | why you trade (recorded and audited) |
+| `retry_key` | string | yes |  | the same key returns the draft already made (a safe retry) |
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
+| `order_type` | "market" \| "limit" | no | `"market"` |  |
+| `limit_price` | number \| null | no | `null` |  |
 
 ### `edit_journal_note`
 

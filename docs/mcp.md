@@ -219,6 +219,8 @@ stops at its next trial).
 | `change_order` (cancel and replace a working manual order), `cancel_order` (any working order of your portfolio) | `POST /api/orders/{id}/change`, `POST /api/orders/{id}/cancel` |
 | `delete_price_alert` | `DELETE /api/price-alerts/{id}` |
 
+`draft_order` (`POST /api/orders/drafts`) proposes an order without placing it: the server prices and checks it, and you approve it in the web app with a fresh second factor. `list_order_drafts` reads them.
+
 Connecting, linking and removing a broker are console-only: they carry
 credentials and need a fresh second factor.
 

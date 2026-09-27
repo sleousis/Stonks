@@ -2,12 +2,14 @@ import { Injectable } from '@angular/core';
 
 import { allItems, unwrap } from './api-call';
 import {
+  clearAssistantFreeze,
   createAssistantConversation,
   decideAssistantAction,
   deleteAssistantConversation,
   getAssistantConversation,
   getAssistantStatus,
   listAssistantConversations,
+  listAssistantTurns,
   sendAssistantMessage,
 } from './generated/sdk.gen';
 
@@ -32,8 +34,18 @@ export class AssistantService {
     return unwrap(getAssistantConversation({ path: { conversation_id: id } }));
   }
 
-  create(title?: string) {
-    return unwrap(createAssistantConversation({ body: { title } }));
+  create(title?: string, researchOnly = false) {
+    return unwrap(createAssistantConversation({ body: { title, research_only: researchOnly } }));
+  }
+
+  /** The recorded turns of a conversation: model, prompt, tool calls, drafts. */
+  turns(id: string) {
+    return unwrap(listAssistantTurns({ path: { conversation_id: id } }));
+  }
+
+  /** Unfreeze after a burst of writes (asks for a fresh second factor). */
+  clearFreeze() {
+    return unwrap(clearAssistantFreeze());
   }
 
   delete(id: string) {
