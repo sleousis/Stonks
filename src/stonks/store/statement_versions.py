@@ -1,4 +1,4 @@
-"""Which version of a statement row a decision may read (P12, DuckDB 020).
+"""Which version of a statement row a decision may read (P12, DuckDB 018).
 
 Each statement table keeps a ``<table>_versions`` twin: every version of a
 row with ``known_at``, the time Stonks first saw it. :func:`known_versions`

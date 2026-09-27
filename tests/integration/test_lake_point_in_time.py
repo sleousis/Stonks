@@ -100,7 +100,7 @@ def test_a_statement_is_known_from_the_day_after_its_filing(lake):
 
 
 def test_a_restated_statement_is_read_from_when_stonks_saw_it(lake):
-    """P12, DuckDB 020: the restatement below is first seen now, long after
+    """P12, DuckDB 018: the restatement below is first seen now, long after
     its filing date, so earlier days keep reading the numbers as filed."""
     lake.upsert_income_statement(
         pd.DataFrame(

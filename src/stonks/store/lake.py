@@ -921,7 +921,7 @@ class DuckDBLake:
         check raises a clearer error before that.
 
         Every row the upsert changes is also kept as a new version in
-        ``<table>_versions`` (migration 020), stamped ``known_at`` (now, in
+        ``<table>_versions`` (migration 018), stamped ``known_at`` (now, in
         naive UTC, unless given): the full merged row, so a point-in-time
         read can pick the version known at a decision (P12). Re-sending the
         same numbers adds no version.
@@ -1105,7 +1105,7 @@ class DuckDBLake:
         python_dates: bool = True,
     ) -> pd.DataFrame:
         """Every version of one statement table's rows for ``ticker``
-        (migration 020), oldest period first and, per period, oldest
+        (migration 018), oldest period first and, per period, oldest
         version first: the table's columns, ``known_at`` (when Stonks first
         saw the version) and ``available_date`` as in
         :meth:`get_statement_history`. A row written straight to the table

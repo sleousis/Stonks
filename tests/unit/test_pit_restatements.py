@@ -1,5 +1,5 @@
 """The fundamentals strategies are blind to a restatement Stonks saw after
-the decision (P12, DuckDB 020).
+the decision (P12, DuckDB 018).
 
 Two lakes share the same past. The planted one also holds a restatement of
 every past quarter that keeps the original filing dates, first seen two

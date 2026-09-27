@@ -134,7 +134,7 @@ uv run python -m stonks.security keygen
 
 ## Canonical schemas (current)
 
-**Lake (DuckDB, migrations 001-017):**
+**Lake (DuckDB, migrations 001-018):**
 - `instruments (id, asset_class, exchange, currency, ipo_date, sector, industry, is_delisted, name, identifiers, GICS, address, ...)`: renamed from `tickers` in 007. `asset_class` in {equity, crypto, commodity, bond}.
 - `bars (ticker, timestamp, interval, open, high, low, close, adj_close, volume; PK (ticker, timestamp, interval))`: OHLCV at any `Interval` code (1m, 5m, 1h, 4h, 1d, 1w, 1mo, ...). `prices` is a read-only view of `interval='1d'`. Write with `upsert_bars` or the daily `upsert_prices` shim. With the Parquet backend the rows live under `<lake dir>/bars` instead of the table.
 - Statements (008, equity only), keyed `(ticker, period_end, frequency)`: `income_statement`, `balance_sheet`, `cash_flow_statement`, each with `filing_date` and `currency`. `upsert_<statement>` reindexes sparse frames and uses `COALESCE(EXCLUDED.col, table.col)`, so a NULL never overwrites a stored value but a real restated value does.
@@ -149,6 +149,7 @@ uv run python -m stonks.security keygen
 - `universe_membership (universe_id, ticker, start_date, end_date)` (015): point-in-time universes, delisted names included.
 - `universe_definitions`, `index_constituent_snapshots`, `index_constituent_changes`, `bar_fetch_ranges` (016): stored universe definitions (list, exchange, rule, index), index history, and the bar ranges already requested so on-demand fetches skip them. See `docs/universes.md`.
 - `option_contracts (contract_id, underlying, expiry, strike, right, style, multiplier, settlement, ...)` and `option_quotes (contract_id, as_of, source, bid, ask, last, volume, open_interest, underlying_price, vendor_iv, vendor_delta..vendor_rho)` (017): option chains, vendor-agnostic. The contract id is `<underlying>:<expiry>:<C|P>:<strike>[:<multiplier>]`.
+- `income_statement_versions`, `balance_sheet_versions`, `cash_flow_statement_versions` (018): every version of a statement row with `known_at`, the time Stonks first saw it. Point-in-time reads pick the version known at the decision, so a restatement cannot leak backward (P12).
 
 **State (SQLite, migrations 001-026):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.

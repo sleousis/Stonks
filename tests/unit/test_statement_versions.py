@@ -1,4 +1,4 @@
-"""Versioned fundamentals (DuckDB 020, principle P12).
+"""Versioned fundamentals (DuckDB 018, principle P12).
 
 Every statement upsert keeps a version stamped with the time Stonks first
 saw it (``known_at``). The current tables stay the latest view. A decision

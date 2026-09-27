@@ -82,7 +82,7 @@ The copy is checked per ticker and interval (row count and checksum) before the 
 | 013 | `quarantined_bars`; `ingest_runs.quality_json` |
 | 014 | `statement_flags` (statement audit, BL-36) |
 | 015 | `universe_membership` (point-in-time universes, BL-37) |
-| 020 | `income_statement_versions`, `balance_sheet_versions`, `cash_flow_statement_versions` (P12) |
+| 018 | `income_statement_versions`, `balance_sheet_versions`, `cash_flow_statement_versions` (P12) |
 
 ### Statement versions
 
@@ -94,7 +94,7 @@ Each statement table has a `_versions` twin with the same columns plus `known_at
 - `upsert_income_statement(df, known_at=...)` sets the stamp. The default is now.
 - A decision reads, per period, the latest version whose `known_at` and filing date are both at or before it (`store/statement_versions.py`). `PointInTimeLake` and `get_statements_as_of` do this.
 - The first version of a period is taken as filed. It counts from its filing date whenever Stonks saw it, so history loaded late stays usable. A vendor that only sends restated numbers still leaks on the first load.
-- Migration `020` copied the existing rows in as first versions, stamped with their filing date.
+- Migration `018` copied the existing rows in as first versions, stamped with their filing date.
 - A row written straight to a statement table, with no version, reads as its first version.
 - A later migration that adds a statement column must add it to the `_versions` table too.
 

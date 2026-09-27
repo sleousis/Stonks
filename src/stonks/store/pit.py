@@ -19,7 +19,7 @@ a daily decision). Then:
   ``available_date`` (the day after the filing date, since a filing may
   land after the close: usable from the decision bar's start day, daily
   or intraday) and, per period, the version Stonks had seen by the
-  decision (a restatement seen later stays hidden, DuckDB 020), macro prints by their period end plus the publication
+  decision (a restatement seen later stays hidden, DuckDB 018), macro prints by their period end plus the publication
   lag the caller passes (0 by default: a daily close such as the VIX is
   known when its day ends, but a monthly print needs the caller's lag),
   share counts :data:`SHARE_COUNT_LAG_DAYS` after the period date they
@@ -256,7 +256,7 @@ class PointInTimeLake:
     # ---- statements --------------------------------------------------------------
 
     def _versioned(self) -> bool:
-        """The lake keeps statement versions (DuckDB 020)."""
+        """The lake keeps statement versions (DuckDB 018)."""
         return callable(getattr(self._lake, "get_statement_versions", None))
 
     def _versions(self, statement: str, ticker: str, lag: int, python_dates: bool) -> pd.DataFrame:
