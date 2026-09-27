@@ -11,8 +11,9 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from stonks.accounts.audit import AuditLog, iso_now
+from stonks.accounts.audit import AuditLog
 from stonks.accounts.rules import AccountProfile
+from stonks.core.clock import SYSTEM_CLOCK, Clock, iso_now
 from stonks.store.state import SqliteState
 
 TABLE = "account_profiles"
@@ -56,10 +57,16 @@ def validate_profile(profile: AccountProfile) -> None:
         raise ProfileError("base_currency must be a three-letter code")
 
 
-def set_profile(state: SqliteState, profile: AccountProfile, *, actor: str) -> AccountProfile:
+def set_profile(
+    state: SqliteState,
+    profile: AccountProfile,
+    *,
+    actor: str,
+    clock: Clock = SYSTEM_CLOCK,
+) -> AccountProfile:
     """Insert or replace the portfolio's profile and audit the change."""
     validate_profile(profile)
-    now = iso_now()
+    now = iso_now(clock)
     with state.transaction():
         old = get_profile(state, profile.portfolio_id)
         state.execute(

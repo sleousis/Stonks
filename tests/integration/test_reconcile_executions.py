@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+from stonks.core.clock import FixedClock
 from stonks.core.types import Portfolio
 from stonks.execution.brokers.base import BrokerOrderState, Execution
 from stonks.execution.reconcile import book_executions, reconcile_orders
@@ -49,9 +50,13 @@ def status(state, client_id="c1"):
 
 def test_each_execution_is_booked_once(state):
     insert_order(state, "c1")
-    first = book_executions(state, [execution("e1"), execution("e2", qty=6.0)], now=T0)
+    first = book_executions(
+        state, [execution("e1"), execution("e2", qty=6.0)], clock=FixedClock(T0)
+    )
     assert first.fills_inserted == 2
-    again = book_executions(state, [execution("e1"), execution("e2", qty=6.0)], now=T0)
+    again = book_executions(
+        state, [execution("e1"), execution("e2", qty=6.0)], clock=FixedClock(T0)
+    )
     assert again.fills_inserted == 0
     rows = fills(state)
     assert [(r["broker_exec_id"], r["quantity"]) for r in rows] == [("e1", 4.0), ("e2", 6.0)]
@@ -61,15 +66,17 @@ def test_each_execution_is_booked_once(state):
 
 def test_a_partial_execution_marks_the_order_partially_filled(state):
     insert_order(state, "c1", qty=10.0)
-    book_executions(state, [execution("e1", qty=4.0)], now=T0)
+    book_executions(state, [execution("e1", qty=4.0)], clock=FixedClock(T0))
     assert status(state) == "partially_filled"
 
 
 def test_a_late_commission_updates_the_fee(state):
     insert_order(state, "c1")
-    book_executions(state, [execution("e1")], now=T0)
+    book_executions(state, [execution("e1")], clock=FixedClock(T0))
     assert fills(state)[0]["fee"] == 0.0
-    later = book_executions(state, [execution("e1", commission=1.05, ccy="USD")], now=T0)
+    later = book_executions(
+        state, [execution("e1", commission=1.05, ccy="USD")], clock=FixedClock(T0)
+    )
     assert later.fees_updated == 1 and later.fills_inserted == 0
     row = fills(state)[0]
     assert row["fee"] == 1.05 and row["fee_currency"] == "USD"

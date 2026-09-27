@@ -11,6 +11,10 @@
 --                           portfolio, so booking an execution twice is a
 --                           no-op and a late commission updates the fee.
 --   fills.fee_currency, fee_fx_rate   a commission in another currency.
+--   orders.state            the fine order state (execution.order_state):
+--                           submitted, accepted, pending_cancel, expired and
+--                           unknown besides the five statuses. NULL on older
+--                           rows, which read it from status. status follows it.
 
 ALTER TABLE orders ADD COLUMN broker_ref TEXT;
 ALTER TABLE orders ADD COLUMN stop_price REAL CHECK (stop_price IS NULL OR stop_price > 0);
@@ -18,6 +22,12 @@ ALTER TABLE orders ADD COLUMN time_in_force TEXT
     CHECK (time_in_force IS NULL OR time_in_force IN ('day', 'gtc', 'opg', 'ioc'));
 ALTER TABLE orders ADD COLUMN outside_rth INTEGER NOT NULL DEFAULT 0
     CHECK (outside_rth IN (0, 1));
+ALTER TABLE orders ADD COLUMN state TEXT
+    CHECK (state IS NULL OR state IN ('pending', 'submitted', 'accepted', 'partially_filled',
+                                      'filled', 'pending_cancel', 'cancelled', 'expired',
+                                      'rejected', 'unknown'));
+
+CREATE INDEX IF NOT EXISTS idx_orders_state ON orders(state) WHERE state IS NOT NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_orders_broker_ref
     ON orders(COALESCE(portfolio_id, ''), broker_ref) WHERE broker_ref IS NOT NULL;

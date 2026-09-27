@@ -18,6 +18,32 @@ from stonks.core.types import Fill, Order, OrderSide, OrderStatus
 BrokerKind = Literal["simulated", "alpaca", "ibkr"]
 #: The kind of a real-money account (roadmap 19.7).
 AccountType = Literal["cash", "margin"]
+#: The fine state of an order at a live broker (roadmap 19.1). The ledger's
+#: ``OrderStatus`` follows it; the machine is ``execution.order_state``.
+OrderState = Literal[
+    "pending",
+    "submitted",
+    "accepted",
+    "partially_filled",
+    "filled",
+    "pending_cancel",
+    "cancelled",
+    "expired",
+    "rejected",
+    "unknown",
+]
+ORDER_STATES: tuple[OrderState, ...] = (
+    "pending",
+    "submitted",
+    "accepted",
+    "partially_filled",
+    "filled",
+    "pending_cancel",
+    "cancelled",
+    "expired",
+    "rejected",
+    "unknown",
+)
 
 
 class BrokerError(RuntimeError):
@@ -88,6 +114,9 @@ class BrokerOrderState:
     filled_quantity: float
     avg_fill_price: float | None
     updated_at: datetime | None = None
+    #: The fine state when the broker reports one (``status`` is the
+    #: coarse one every broker gives).
+    state: OrderState | None = None
 
 
 QTY_EPSILON = 1e-9

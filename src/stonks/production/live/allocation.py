@@ -16,7 +16,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from stonks.accounts.audit import AuditLog, iso_now
+from stonks.accounts.audit import AuditLog
+from stonks.core.clock import SYSTEM_CLOCK, Clock, iso_now
 from stonks.store.state import SqliteState
 
 TABLE = "live_allocations"
@@ -67,6 +68,7 @@ def set_allocation(
     currency: str,
     actor: str,
     reason: str,
+    clock: Clock = SYSTEM_CLOCK,
 ) -> Allocation:
     """Set the allocation and write an ``audit_log`` row with the old and
     new amounts, in one transaction."""
@@ -79,7 +81,7 @@ def set_allocation(
     code = (currency or "").strip().upper()
     if len(code) != 3:
         raise AllocationError(f"a three-letter currency is required, got {currency!r}")
-    now = iso_now()
+    now = iso_now(clock)
     with state.transaction():
         old = get_allocation(state, portfolio_id)
         state.execute(

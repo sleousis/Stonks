@@ -297,6 +297,7 @@ def connections_sync_action(ctx: RunContext) -> JobOutcome:
 @register_action("broker_health")
 def broker_health_action(ctx: RunContext) -> JobOutcome:
     """Probe every configured IB Gateway (skipped when none is configured)."""
+    from stonks.core.clock import FixedClock
     from stonks.production.broker_health import SocketProbe, check_gateways, gateway_targets
     from stonks.store.state import SqliteState
 
@@ -311,7 +312,7 @@ def broker_health_action(ctx: RunContext) -> JobOutcome:
             targets,
             SocketProbe(config.health.probe_timeout_seconds),
             config.health,
-            now=ctx.now,
+            clock=FixedClock(ctx.now),
         )
     finally:
         state.close()
@@ -328,6 +329,7 @@ def broker_health_action(ctx: RunContext) -> JobOutcome:
 @register_action("ibkr_reauth_reminder")
 def ibkr_reauth_reminder_action(ctx: RunContext) -> JobOutcome:
     """Remind the owners to approve the weekly IBKR login."""
+    from stonks.core.clock import FixedClock
     from stonks.production.broker_health import gateway_targets, send_reauth_reminder
     from stonks.store.state import SqliteState
 
@@ -336,7 +338,7 @@ def ibkr_reauth_reminder_action(ctx: RunContext) -> JobOutcome:
         return JobOutcome("skipped", {"reason": "no_gateways"})
     state = SqliteState(ctx.settings.state.path)
     try:
-        sent = send_reauth_reminder(state, targets, now=ctx.now)
+        sent = send_reauth_reminder(state, targets, clock=FixedClock(ctx.now))
     finally:
         state.close()
     return JobOutcome("succeeded", {"sent": sent})

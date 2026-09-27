@@ -37,6 +37,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any, Protocol
 
+from stonks.core.clock import SYSTEM_CLOCK, Clock
 from stonks.execution.brokers.ibkr.settings import (
     GatewayMode,
     IbkrBrokerConfig,
@@ -197,12 +198,12 @@ def check_gateways(
     probe: BrokerProbe,
     settings: IbkrHealthSettings,
     *,
-    now: datetime | None = None,
+    clock: Clock = SYSTEM_CLOCK,
     publish: Publish | None = None,
 ) -> list[GatewayCheck]:
     """Probe every gateway, store its status, and alert or pause as the
     module doc says. A probe that raises counts as down."""
-    now = now or datetime.now(UTC)
+    now = clock.now()
     return [_check_one(state, t, probe, settings, now, publish) for t in targets]
 
 
@@ -417,7 +418,7 @@ def send_reauth_reminder(
     state: SqliteState,
     targets: Sequence[GatewayTarget],
     *,
-    now: datetime | None = None,
+    clock: Clock = SYSTEM_CLOCK,
     publish: Publish | None = None,
 ) -> int:
     """The Sunday push to the owners of every gateway's portfolios (and the
@@ -425,8 +426,7 @@ def send_reauth_reminder(
     tonight. One per audience per ISO week. Returns the events sent."""
     from stonks.notify.events import Audience, Event
 
-    now = now or datetime.now(UTC)
-    year, week, _ = now.isocalendar()
+    year, week, _ = clock.now().isocalendar()
     send = publish or _router(state)
     audiences: dict[str, Audience] = {}
     for target in targets:

@@ -31,6 +31,14 @@ there (and rejected as "never received") nor receive its fills.
 
 Per-order broker failures are soft: logged, reported in the summary, and
 the order is left untouched for the next run.
+
+Every status change goes through the order state machine
+(``execution.order_state``): the fine ``orders.state`` and the coarse
+``status`` move together, and a change the machine forbids (a terminal
+order the broker now reports as working, say) is refused and reported as a
+failed order. ``unknown`` orders (a timed-out submit or cancel) are
+resolved here by client id. :func:`startup_reconcile` is the check a submit
+window waits for.
 """
 
 from __future__ import annotations
@@ -41,14 +49,25 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
+from stonks.core.clock import SYSTEM_CLOCK, Clock, FixedClock
 from stonks.core.protocols import Broker
 from stonks.core.types import Fill, Order
 from stonks.execution.brokers.base import (
     QTY_EPSILON,
+    BrokerOrderState,
     Execution,
     ExecutionSource,
+    OrderState,
     OrderStateSource,
     delta_fill,
+)
+from stonks.execution.order_state import (
+    IllegalTransitionError,
+    can_transition,
+    current_state,
+    ledger_status,
+    state_from_status,
+    unknown_orders,
 )
 from stonks.logging import get_logger
 from stonks.production.ledger import ledger_columns, ledger_filter
@@ -188,6 +207,15 @@ def reconcile_order(
         rejected = reject_unknown and _reject_never_received(state, client_id, now)
         return OrderSync(unknown=True, updated=rejected)
 
+    current = current_state(state, client_id)
+    target = broker_target(broker_state, current)
+    if current is not None and not can_transition(current, target):
+        _log.warning(
+            "reconcile.illegal_transition", client_id=client_id, current=current, broker=target
+        )
+        raise IllegalTransitionError(
+            f"order {client_id}: the broker reports {target} but the ledger has {current}"
+        )
     with state.transaction():
         booked_qty, booked_notional = _booked(state, client_id)
         fill = (
@@ -202,32 +230,68 @@ def reconcile_order(
         )
         if fill is not None:
             _insert_fill(state, fill)
-        cur = state.execute(
-            """
-            UPDATE orders
-               SET status = ?, broker_order_id = ?, updated_at = ?
-             WHERE client_id = ?
-               AND (status IS NOT ? OR broker_order_id IS NOT ?)
-            """,
-            [
-                broker_state.status,
-                broker_state.broker_order_id,
-                _iso(now),
-                client_id,
-                broker_state.status,
-                broker_state.broker_order_id,
-            ],
-        )
+        status = ledger_status(target)
+        if _has_state(state):
+            cur = state.execute(
+                """
+                UPDATE orders
+                   SET status = ?, state = ?, broker_order_id = ?, updated_at = ?
+                 WHERE client_id = ?
+                   AND (status IS NOT ? OR state IS NOT ? OR broker_order_id IS NOT ?)
+                """,
+                [
+                    status,
+                    target,
+                    broker_state.broker_order_id,
+                    _iso(now),
+                    client_id,
+                    status,
+                    target,
+                    broker_state.broker_order_id,
+                ],
+            )
+        else:  # pragma: no cover - a state DB before migration 027
+            cur = state.execute(
+                "UPDATE orders SET status = ?, broker_order_id = ?, updated_at = ?"
+                " WHERE client_id = ? AND (status IS NOT ? OR broker_order_id IS NOT ?)",
+                [status, broker_state.broker_order_id, _iso(now), client_id, status,
+                 broker_state.broker_order_id],
+            )  # fmt: skip
     return OrderSync(updated=cur.rowcount > 0, fill_inserted=fill is not None)
 
 
+def broker_target(broker_state: BrokerOrderState, current: OrderState | None) -> OrderState:
+    """The state the broker's answer moves an order to. A broker that only
+    reports the coarse ``pending`` means the order is working: ``accepted``
+    for a row that was not yet known to be at the broker, else its current
+    working state stays."""
+    if broker_state.state is not None:
+        return broker_state.state
+    coarse = state_from_status(broker_state.status)
+    if coarse != "pending":
+        return coarse
+    if current in (None, "pending", "submitted", "unknown"):
+        return "accepted"
+    return current
+
+
+def _has_state(state: SqliteState) -> bool:
+    return "state" in ledger_columns(state, "orders")
+
+
 def _reject_never_received(state: SqliteState, client_id: str, now: datetime) -> bool:
+    # pending, submitted, accepted and unknown may become rejected: the
+    # broker never had it. A pending cancel is left for the next check.
+    with_state = _has_state(state)
+    state_set = ", state = 'rejected'" if with_state else ""
+    not_cancelling = "COALESCE(state, 'pending') <> 'pending_cancel'" if with_state else "1 = 1"
     cur = state.execute(
-        """
+        f"""
         UPDATE orders
-           SET status = 'rejected', status_reason = ?, updated_at = ?
+           SET status = 'rejected', status_reason = ?, updated_at = ?{state_set}
          WHERE client_id = ?
            AND status = 'pending'
+           AND {not_cancelling}
            AND broker_order_id IS NULL
            AND NOT EXISTS (SELECT 1 FROM fills WHERE order_client_id = orders.client_id)
         """,
@@ -267,14 +331,14 @@ def book_executions(
     executions: Sequence[Execution],
     *,
     portfolio_id: str = DEFAULT_PORTFOLIO_ID,
-    now: datetime | None = None,
+    clock: Clock = SYSTEM_CLOCK,
 ) -> ExecutionBooking:
     """Book ``executions`` as fills of ``portfolio_id``'s orders, one row
     per execution id. A known execution only updates its fee when the
     commission is now known and differs. Orders that gained a fill become
     ``filled`` or ``partially_filled`` from the booked quantity (a broker
     with order state corrects that right after, in :func:`reconcile_orders`)."""
-    now = now or datetime.now(UTC)
+    now = clock.now()
     where, params = ledger_filter(state, "orders", portfolio_id)
     inserted = fees = updated = 0
     orphans: list[str] = []
@@ -329,11 +393,17 @@ def _fill_by_exec(state: SqliteState, exec_id: str, portfolio_id: str) -> Any:
 def _status_from_booked(state: SqliteState, client_id: str, now: datetime) -> int:
     order = state.sql("SELECT quantity FROM orders WHERE client_id = ?", [client_id])[0]
     booked, _ = _booked(state, client_id)
-    status = "filled" if booked >= float(order["quantity"]) - QTY_EPSILON else "partially_filled"
+    status: OrderState = (
+        "filled" if booked >= float(order["quantity"]) - QTY_EPSILON else "partially_filled"
+    )
+    current = current_state(state, client_id)
+    if current is None or current == status or not can_transition(current, status):
+        return 0
+    state_set = ", state = ?" if _has_state(state) else ""
+    extra = [status] if state_set else []
     cur = state.execute(
-        "UPDATE orders SET status = ?, updated_at = ? WHERE client_id = ?"
-        " AND status IN ('pending', 'partially_filled') AND status IS NOT ?",
-        [status, _iso(now), client_id, status],
+        f"UPDATE orders SET status = ?, updated_at = ?{state_set} WHERE client_id = ?",
+        [status, _iso(now), *extra, client_id],
     )
     return cur.rowcount
 
@@ -345,7 +415,10 @@ def _reconcile_by_executions(
     # needs its broker id and final status from the broker
     open_ids = _open_client_ids(state, portfolio_id)
     booking = book_executions(
-        state, broker.executions(now - EXECUTIONS_LOOKBACK), portfolio_id=portfolio_id, now=now
+        state,
+        broker.executions(now - EXECUTIONS_LOOKBACK),
+        portfolio_id=portfolio_id,
+        clock=FixedClock(now),
     )
     if isinstance(broker, OrderStateSource):
         synced = _reconcile_by_order_state(
@@ -473,3 +546,33 @@ def fill_live_values(fill: Fill, columns: frozenset[str]) -> dict[str, Any]:
 
 def _iso(ts: datetime) -> str:
     return ts.isoformat(timespec="seconds")
+
+
+# ---- startup check ----------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class StartupReconcile:
+    """What :func:`startup_reconcile` found."""
+
+    summary: ReconcileSummary
+    #: Orders still ``unknown`` after reconciling: nothing may be submitted.
+    unresolved: tuple[str, ...] = ()
+
+    @property
+    def ok(self) -> bool:
+        return not self.unresolved and not self.summary.failed_orders
+
+
+def startup_reconcile(
+    broker: Broker,
+    state: SqliteState,
+    *,
+    portfolio_id: str = DEFAULT_PORTFOLIO_ID,
+    clock: Clock = SYSTEM_CLOCK,
+) -> StartupReconcile:
+    """Reconcile the portfolio before a submit window opens: sync every open
+    order (``unknown`` ones included) by client id, then report what is still
+    unresolved. The submit waits until :attr:`StartupReconcile.ok`."""
+    summary = reconcile_orders(broker, state, now=clock.now(), portfolio_id=portfolio_id)
+    return StartupReconcile(summary=summary, unresolved=unknown_orders(state, portfolio_id))
