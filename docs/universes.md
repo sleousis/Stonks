@@ -161,6 +161,36 @@ Every value is point in time (P12). Returns use adjusted closes up to the date. 
 
 A ticker with no value for a metric fails that metric's filter and sorts last. A loss has no P/E. Negative equity has no P/B or ROE.
 
+### Large screens
+
+A screen over a whole exchange can have thousands of candidates. Three things keep it fast and safe.
+
+```mermaid
+flowchart LR
+  S[POST /size] -->|over the cap| X[Stop: narrow the screen]
+  S -->|above the job threshold| J[POST /jobs: background job with progress]
+  S -->|small| R[POST /run]
+  J --> Res[GET /jobs/ID/result]
+  R --> C[(Result cache: spec and date)]
+  J --> C
+```
+
+- **A candidate cap.** When the rule keeps more than `max_candidates` names, the screen stops before it reads any metric. The API answers 422 with the count, the cap and how to narrow it: a universe, asset classes, sectors, exchanges, `min_price` or `min_adv`.
+- **A background job.** `POST /api/screener/size` counts the candidates and says `use_job` above `job_threshold`. `POST /api/screener/jobs` queues the `screen_run` job. Follow it at `/api/jobs/{id}` or its event stream, with one progress step per metric, and cancel it there. Read the rows at `GET /api/screener/jobs/{id}/result`. The console does this by itself above the threshold.
+- **A short cache.** The same spec on the same date returns the stored result for `cache_seconds`, marked `cached: true`. A new ingest shows up once that time has passed.
+
+Metrics come from a few set-based DuckDB queries over all candidates at once, never a loop per ticker. The point-in-time rules above do not change, and a test checks the batched values against the old per-ticker ones and against data that arrives after the date.
+
+On a synthetic lake of 5,000 tickers with 300 days of bars, every metric took 5.3 seconds before and 0.6 seconds after. Rerun it with `uv run python -m tools.screener_bench`.
+
+```toml
+[screener]
+max_candidates = 10000
+job_threshold = 1000
+cache_seconds = 300   # 0 turns the cache off
+cache_entries = 32
+```
+
 ### Saved screens and universes
 
 Saved screens belong to one person, like watchlists. Another person's screen is a 404.
@@ -182,10 +212,10 @@ uv run stonks screener run --screen ID
 uv run stonks screener universe ID (--spec JSON | --screen ID) [--mode rule|snapshot] [--start ... --end ...] [--rebalance monthly]
 ```
 
-- API: `GET /api/screener/metrics`, `POST /api/screener/run`, `/api/screener/screens` (list, create, get, update, delete) and `POST /api/screener/universes`.
+- API: `GET /api/screener/metrics`, `POST /api/screener/run`, `POST /api/screener/size`, `POST /api/screener/jobs` with `GET /api/screener/jobs/{id}/result`, `/api/screener/screens` (list, create, get, update, delete) and `POST /api/screener/universes`.
 - MCP: `list_screen_metrics`, `run_screen`, `list_screens`, `get_screen`, `create_screen`, `update_screen`, and the guarded `save_screen_as_universe` and `delete_screen`, which need `confirm=true`.
 
-Running a screen needs `data.read`. Saving one needs `portfolio.manage`. Saving it as a universe needs `lab.run`.
+Running a screen, as a job too, needs `data.read`. Saving one needs `portfolio.manage`. Saving it as a universe needs `lab.run`.
 
 ## Adding a kind or an index source
 
