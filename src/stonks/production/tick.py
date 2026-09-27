@@ -521,6 +521,7 @@ def _run_tick_body(
         threshold=settings.threshold,
         workers=settings.scoring_workers,
         min_parallel_estimates=settings.parallel_min_estimates,
+        allow_short=any(b.spec.allow_short for b in plan.books),
     )
     signals = ranker.score(as_of=as_of)
     pool = StrategyPool(registry, lake)
@@ -863,9 +864,10 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     #    (decide or targets, stale buys dropped, then the risk layer).
     strategy_ids = _book_strategies(run, book)
     signal_set = run.all_signals() if _needs_shadow_signals(run) else run.signals
+    book_scores = signal_set.for_book(book.spec.allow_short)
     signals = {
-        sid: _in_universe(signal_set.scores[sid], book.spec.universe)
-        for sid in signal_set.scores
+        sid: _in_universe(book_scores[sid], book.spec.universe)
+        for sid in book_scores
         if sid in strategy_ids
     }
     construction = (

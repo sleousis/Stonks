@@ -16,6 +16,12 @@ strategy's evaluations) reaches its ``decide``. When several consumers
 decide with one strategy, each later one gets a copy taken before the first
 decided, so state a ``decide`` keeps (entry prices, ...) never leaks from
 one portfolio into another.
+
+Shorts (roadmap 16.3): with ``allow_short`` the ranker also keeps the
+negative scores (``score < -threshold``) of strategies that support shorts,
+in :attr:`SignalSet.shorts`, apart from ``scores``. Long-only books read
+``scores`` exactly as before; a book that may short reads
+:meth:`SignalSet.for_book`. Strategies that may short are scored serially.
 """
 
 from __future__ import annotations
@@ -52,11 +58,28 @@ class SignalSet:
       strategy that loaded, in registry order; tickers in universe order.
       An empty map means the strategy was scored and has no opinion today.
     - ``instances``: the strategy objects that computed ``scores``.
+    - ``shorts``: ``strategy_id -> ticker -> negative score`` of strategies
+      that support shorts, only when the ranker ran with ``allow_short``.
     """
 
     as_of: date
     scores: Mapping[str, Mapping[str, float]] = field(default_factory=dict)
     instances: Mapping[str, Strategy] = field(default_factory=dict)
+    shorts: Mapping[str, Mapping[str, float]] = field(default_factory=dict)
+    #: The universe the scores are ordered by (merges keep this order).
+    universe: tuple[str, ...] = ()
+
+    def for_book(self, allow_short: bool) -> dict[str, dict[str, float]]:
+        """The scores a book reads: ``scores`` for a long-only book, plus
+        ``shorts`` in universe order for a book that may short."""
+        if not allow_short or not self.shorts:
+            return {sid: dict(s) for sid, s in self.scores.items()}
+        rank = {t: i for i, t in enumerate(self.universe)}
+        out: dict[str, dict[str, float]] = {}
+        for sid, longs in self.scores.items():
+            merged = {**longs, **self.shorts.get(sid, {})}
+            out[sid] = dict(sorted(merged.items(), key=lambda kv: rank.get(kv[0], len(rank))))
+        return out
 
     def ranked(self, strategy_ids: Sequence[str] | None = None) -> list[RankedPick]:
         """``(expected_return, strategy_id, ticker)`` sorted descending (a
@@ -77,6 +100,8 @@ class SignalSet:
             as_of=self.as_of,
             scores={**self.scores, **other.scores},
             instances={**self.instances, **other.instances},
+            shorts={**self.shorts, **other.shorts},
+            universe=tuple(dict.fromkeys((*self.universe, *other.universe))),
         )
 
 
@@ -90,11 +115,14 @@ class Ranker:
         status: Literal["active", "shadow"] = "active",
         workers: int = 1,
         min_parallel_estimates: int = 2000,
+        allow_short: bool = False,
     ) -> None:
         """``workers`` > 1 scores the strategies that opt in with
         ``parallel_scoring`` in worker processes (``production.scoring``),
         once they need at least ``min_parallel_estimates`` estimates in all
-        (below that a pool costs more than it saves)."""
+        (below that a pool costs more than it saves). ``allow_short`` keeps
+        the short scores of strategies that support shorts (module doc)."""
+        self._allow_short = allow_short
         self._workers = workers
         self._min_parallel = min_parallel_estimates
         self._registry = registry
@@ -130,6 +158,7 @@ class Ranker:
                 hint="run `stonks ingest metadata` to populate instrument profiles",
             )
         scores: dict[str, dict[str, float]] = {}
+        shorts: dict[str, dict[str, float]] = {}
         instances: dict[str, Strategy] = {}
         for handle in handles:
             # One broken strategy (renamed class path, corrupt artifact, …)
@@ -150,8 +179,16 @@ class Ranker:
             if sid in parallel:
                 scores[sid] = parallel[sid]
             else:
-                scores[sid] = self._score_one(sid, strategy, as_of, asset_classes)
-        self.signals = SignalSet(as_of=as_of, scores=scores, instances=instances)
+                scores[sid], short = self._score_one(sid, strategy, as_of, asset_classes)
+                if short:
+                    shorts[sid] = short
+        self.signals = SignalSet(
+            as_of=as_of,
+            scores=scores,
+            instances=instances,
+            shorts=shorts,
+            universe=tuple(self._universe),
+        )
         return self.signals.ranked()
 
     def _tickers_for(self, strategy: Strategy, asset_classes: Mapping[str, str]) -> list[str]:
@@ -168,7 +205,9 @@ class Ranker:
 
         if self._workers <= 1:
             return {}
-        safe = {sid: s for sid, s in instances.items() if parallel_safe(s)}
+        safe = {
+            sid: s for sid, s in instances.items() if parallel_safe(s) and not self._shorts_for(s)
+        }
         tickers = {sid: self._tickers_for(s, asset_classes) for sid, s in safe.items()}
         if not safe or sum(len(t) for t in tickers.values()) < self._min_parallel:
             return {}
@@ -188,9 +227,13 @@ class Ranker:
         strategy: Strategy,
         as_of: date,
         asset_classes: Mapping[str, str],
-    ) -> dict[str, float]:
+    ) -> tuple[dict[str, float], dict[str, float]]:
+        """``(scores above the threshold, short scores below -threshold)``;
+        the second is empty unless this strategy may short here."""
         allowed = set(getattr(strategy, "applicable_asset_classes", ("equity",)))
+        shorting = self._shorts_for(strategy)
         out: dict[str, float] = {}
+        shorts: dict[str, float] = {}
         for ticker in self._universe:
             ticker_class = asset_classes.get(ticker)
             if ticker_class is None or ticker_class not in allowed:
@@ -205,10 +248,16 @@ class Ranker:
                     error=str(exc),
                 )
                 continue
-            if r is None or r <= self._threshold:
+            if r is None:
                 continue
-            out[ticker] = r
-        return out
+            if r > self._threshold:
+                out[ticker] = r
+            elif shorting and r < -self._threshold:
+                shorts[ticker] = r
+        return out, shorts
+
+    def _shorts_for(self, strategy: Strategy) -> bool:
+        return self._allow_short and bool(getattr(strategy, "supports_short", False))
 
 
 class StrategyPool:
