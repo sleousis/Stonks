@@ -112,7 +112,8 @@ agree) the engine:
   the broker sees one close or one open per order;
 - keeps only the closing legs of strategies without ``supports_short``, and
   passes negative scores of strategies that support shorts to the
-  construction pipeline (``|score| > threshold``);
+  construction pipeline, or to the strategy's own ``decide`` as picks
+  (``|score| > threshold``);
 - calls ``broker.accrue`` on every bar after the closes are set (borrow
   fees and debit interest; a no-op without shorts or debit cash, so it runs
   for every book);
@@ -672,10 +673,12 @@ class Backtester:
         is prefixed with ``"<index>:"`` so the broker's idempotency check
         can't drop one instance's order as a duplicate of the other's."""
         picks_by_strategy: list[list[tuple[float, str]]] = [[] for _ in self._strategies]
+        threshold = self._config.threshold
         for index, strategy in enumerate(self._strategies):
+            shorts = self._config.allow_short and getattr(strategy, "supports_short", False)
             for ticker in tradable:
                 r = strategy.estimate_return(ticker, as_of, self._lake)
-                if r is not None and r > self._config.threshold:
+                if r is not None and (r > threshold or (shorts and r < -threshold)):
                     picks_by_strategy[index].append((r, ticker))
 
         portfolio = self._broker.fetch_portfolio()
