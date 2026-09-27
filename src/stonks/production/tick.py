@@ -58,7 +58,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, time
 from typing import Any, Literal, get_args
@@ -93,7 +93,11 @@ from stonks.portfolio.pipeline import (
     build_orders,
     vols_from_history,
 )
-from stonks.production.auto_pause import broker_error_reason, pause_auto
+from stonks.production.auto_pause import (
+    broker_error_reason,
+    pause_auto,
+    strategy_not_active_reason,
+)
 from stonks.production.corporate_actions import (
     CorporateActionPlan,
     adjust_orders_for_splits,
@@ -458,6 +462,8 @@ class _TickRun:
     scoped: bool
     signals: SignalSet
     pool: StrategyPool
+    #: Ids of the strategies that are ``active`` right now (auto needs one).
+    active: frozenset[str] = frozenset()
     _shadow: SignalSet | None = None
     _shadow_error: Exception | None = None
     _vols: dict[str, float] | None = None
@@ -554,6 +560,7 @@ def _run_tick_body(
         scoped=scoped,
         signals=signals,
         pool=pool,
+        active=frozenset(h.id for h in registry.list_all(status="active")),
     )
     _expect_consumers(run)
 
@@ -590,6 +597,7 @@ def _run_tick_body(
                 outcome = _pause_on_broker_error(
                     run, book, outcome, "an order raised at the broker"
                 )
+        outcome = _pause_inactive_auto(run, book, outcome)
         results.append(outcome)
         _record_portfolio_run(run, book, outcome, started_at)
 
@@ -658,23 +666,42 @@ def trades_live(book: TickBook, settings: TickSettings) -> bool:
     return book.portfolio_id == DEFAULT_PORTFOLIO_ID and settings.broker_kind != "simulated"
 
 
-def book_strategies(book: TickBook, scored: Sequence[str], settings: TickSettings) -> list[str]:
+def book_strategies(
+    book: TickBook,
+    scored: Sequence[str],
+    settings: TickSettings,
+    active: Collection[str] | None = None,
+) -> list[str]:
     """The strategies whose signals a book trades. The legacy book trades
     every scored (active) strategy. A subscription book trades its paper and
     auto subscriptions, except at a live broker, where only auto ones place
-    orders: paper money must never reach a real account."""
+    orders: paper money must never reach a real account. An auto
+    subscription trades only while its strategy is ``active`` (BE-01;
+    ``active`` names them, ``None`` skips the check)."""
     if book.legacy or book.spec.strategy_weights is None:
         return list(scored)
     live = trades_live(book, settings)
+    modes = book.spec.strategy_modes
     return [
         s
         for s, w in book.spec.strategy_weights.items()
-        if w > 0 and (not live or book.spec.strategy_modes.get(s) is Mode.AUTO)
+        if w > 0
+        and (not live or modes.get(s) is Mode.AUTO)
+        and (active is None or modes.get(s) is not Mode.AUTO or s in active)
     ]
 
 
+def inactive_auto(book: TickBook, active: Collection[str]) -> list[str]:
+    """Strategies of ``book``'s auto subscriptions that are not active."""
+    if book.legacy or book.spec.strategy_weights is None:
+        return []
+    modes = book.spec.strategy_modes
+    return sorted(s for s in book.spec.strategy_weights if modes.get(s) is Mode.AUTO
+                  and s not in active)  # fmt: skip
+
+
 def _book_strategies(run: _TickRun, book: TickBook) -> list[str]:
-    return book_strategies(book, list(run.signals.scores), run.settings)
+    return book_strategies(book, list(run.signals.scores), run.settings, run.active)
 
 
 def _needs_shadow_signals(run: _TickRun) -> bool:
@@ -1366,6 +1393,38 @@ def _pause_on_broker_error(
     if not paused:
         return outcome
     return replace(outcome, summary={**outcome.summary, "auto_paused": paused})
+
+
+def _pause_inactive_auto(run: _TickRun, book: TickBook, outcome: BookResult) -> BookResult:
+    """Pause the book's auto subscriptions whose strategy is not active
+    (BE-01): the book already left them out, this makes it stick."""
+    if book.mode != "auto" or run.dry_run or not run.scoped:
+        return outcome
+    by_strategy: dict[str, list[str]] = {}
+    for sid in inactive_auto(book, run.active):
+        if sid in book.subscription_ids:
+            by_strategy.setdefault(sid, []).append(book.subscription_ids[sid])
+    if not by_strategy:
+        return outcome
+    statuses = {h.id: h.status for h in run.registry.list_all()}
+    paused: list[str] = []
+    for sid, ids in by_strategy.items():
+        status = statuses.get(sid, "missing")
+        try:
+            paused += pause_auto(
+                run.state,
+                book.portfolio_id,
+                ids,
+                strategy_not_active_reason(status),
+                tick_id=run.tick_id,
+                as_of=run.as_of,
+            )
+        except Exception as exc:  # pragma: no cover - best effort, the tick goes on
+            run.log.error("tick.auto_pause_failed", portfolio_id=book.portfolio_id, error=str(exc))
+    if not paused:
+        return outcome
+    prior = list(outcome.summary.get("auto_paused") or [])
+    return replace(outcome, summary={**outcome.summary, "auto_paused": [*prior, *paused]})
 
 
 def _record_portfolio_run(

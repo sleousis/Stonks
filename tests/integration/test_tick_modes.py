@@ -264,3 +264,48 @@ def test_a_dry_run_writes_no_runs_and_pauses_nothing(world):
     world.tick(DAY1, dry_run=True)
     assert world.state.count_rows("portfolio_runs") == 0
     assert world.subs.get(world.bob, world.bob_auto).paused_reason is None
+
+
+# ---- BE-01: auto only while the strategy is active --------------------------------------
+
+
+def test_be01_a_demotion_pauses_auto_and_the_tick_places_nothing_at_the_broker(world):
+    world.registry.set_status("bh_up", "shadow", actor="service:system", reason="quit rule")
+    auto = world.subs.get(world.bob, world.bob_auto)
+    assert auto.mode is Mode.AUTO
+    assert auto.paused_reason == "strategy_not_active: shadow"
+    [audit] = world.state.sql("SELECT * FROM audit_log WHERE action = 'subscription.auto_paused'")
+    assert audit["target_id"] == world.bob_auto and audit["actor"] == "service:system"
+    [notice] = world.state.sql("SELECT * FROM notification_outbox WHERE category = 'risk'")
+    assert notice["user_id"] == world.bob.user_id
+
+    world.tick(DAY1)
+    assert world.book.orders == {}
+    assert world.orders(world.live) == []
+    # a paper subscription on a shadow strategy keeps trading
+    [alice_order] = world.orders(world.sim)
+    assert alice_order["strategy_id"] == "bh_up"
+
+
+def test_be01_the_tick_refuses_and_pauses_an_auto_subscription_on_an_inactive_strategy(world):
+    # e.g. a strategy demoted before the pause existed: its auto row still runs
+    world.registry.set_status("bh_up", "retired", actor="t", reason="gone for good")
+    world.state.execute("UPDATE subscriptions SET paused_reason = NULL WHERE id = ?",
+                        [world.bob_auto])  # fmt: skip
+    result = world.tick(DAY1)
+    assert world.book.orders == {}
+    assert world.orders(world.live) == []
+    assert world.subs.get(world.bob, world.bob_auto).paused_reason == (
+        "strategy_not_active: retired"
+    )
+    [live] = [r for r in result.portfolios if r.portfolio_id == world.live]
+    assert live.summary.get("auto_paused") == [world.bob_auto]
+
+
+def test_be01_a_dry_run_pauses_nothing_for_an_inactive_strategy(world):
+    world.registry.set_status("bh_up", "shadow", actor="t", reason="quit rule")
+    world.state.execute("UPDATE subscriptions SET paused_reason = NULL WHERE id = ?",
+                        [world.bob_auto])  # fmt: skip
+    world.tick(DAY1, dry_run=True)
+    assert world.book.orders == {}
+    assert world.subs.get(world.bob, world.bob_auto).paused_reason is None
