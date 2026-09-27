@@ -1,5 +1,6 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
 import { TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
@@ -20,7 +21,7 @@ describe('LabRunFormView', () => {
     emitted = [];
     TestBed.configureTestingModule({
       imports: [LabRunFormView],
-      providers: [...provideApi(), provideHttpClientTesting()],
+      providers: [...provideApi(), provideHttpClientTesting(), provideRouter([])],
     });
     controller = TestBed.inject(HttpTestingController);
   });
@@ -137,6 +138,10 @@ describe('LabRunFormView', () => {
     fixture.detectChanges();
     // The typed tickers step aside for the universe.
     expect(el.querySelector('#lr-tickers')).toBeNull();
+    // The picked universe links to its page.
+    expect(el.querySelector('a[href="/universes/sp500"]')?.textContent).toContain(
+      'See its members',
+    );
     el.querySelector<HTMLInputElement>('input[aria-describedby="lr-ensure-hint"]')!.click();
     fixture.detectChanges();
     el.querySelector<HTMLInputElement>(`input[value="${MOMENTUM.class_path}"]`)!.click();
@@ -145,6 +150,12 @@ describe('LabRunFormView', () => {
     expect(emitted).toHaveLength(1);
     expect(emitted[0]).toMatchObject({ universe_id: 'sp500', ensure_data: true });
     expect(emitted[0]).not.toHaveProperty('universe');
+  });
+
+  it('points to the Universes page when none is stored', async () => {
+    await create();
+    expect(el.querySelector('#lr-universe')).toBeNull();
+    expect(el.querySelector('a[href="/universes"]')?.textContent).toContain('Make a universe');
   });
 
   it('uses plain labels for the search settings', async () => {

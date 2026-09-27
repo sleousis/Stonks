@@ -1,5 +1,6 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
 import type { BarSeries, CoverageRow, IngestRunView, InstrumentView, Page } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
@@ -87,7 +88,12 @@ describe('DataPage', () => {
   beforeEach(async () => {
     chart = new FakeChartEngine();
     TestBed.configureTestingModule({
-      providers: [...provideApi(), provideHttpClientTesting(), provideFakeChart(chart)],
+      providers: [
+        ...provideApi(),
+        provideHttpClientTesting(),
+        provideFakeChart(chart),
+        provideRouter([]),
+      ],
     });
     http = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(DataPage);
@@ -105,6 +111,10 @@ describe('DataPage', () => {
     ]);
     (await nextRequest(http, '/api/ingest/runs')).flush(RUNS);
     await settle();
+  });
+
+  it('links to the stored universes', () => {
+    expect(el.querySelector('a[href="/universes"]')?.textContent).toContain('Universes');
   });
 
   it('shows coverage with a freshness pill per series', () => {

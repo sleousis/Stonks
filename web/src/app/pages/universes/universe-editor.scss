@@ -1,17 +1,16 @@
 @use 'breakpoints' as bp;
 
+:host {
+  display: block;
+  min-width: 0;
+}
+
 .form-grid {
   max-width: none;
 }
 
 .span-all {
   grid-column: 1 / -1;
-}
-
-.intro {
-  margin-bottom: var(--space-4);
-  font-size: var(--text-sm);
-  max-width: 70ch;
 }
 
 textarea.input {
@@ -29,6 +28,11 @@ textarea.input {
   min-height: var(--touch-min);
 }
 
+.input[readonly] {
+  background: var(--color-surface-2);
+  color: var(--color-ink-2);
+}
+
 fieldset.source {
   display: flex;
   flex-wrap: wrap;
@@ -44,6 +48,33 @@ fieldset.source {
     margin-bottom: var(--space-1);
     font-size: var(--text-sm);
     font-weight: var(--weight-medium);
+  }
+}
+
+fieldset.group {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3) 0 0;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+
+  legend {
+    padding: 0;
+    font-weight: var(--weight-semibold);
+  }
+}
+
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-4);
+
+  .check {
+    @include bp.coarse {
+      min-height: var(--touch-min);
+    }
   }
 }
 
@@ -66,19 +97,4 @@ label.check.field {
       width: 100%;
     }
   }
-}
-
-// Card title links on phones get a full touch target.
-@include bp.phone {
-  .cell-link {
-    display: inline-flex;
-    align-items: center;
-    min-height: var(--touch-min);
-  }
-}
-
-.stale {
-  display: block;
-  font-size: var(--text-xs);
-  color: var(--color-warn);
 }

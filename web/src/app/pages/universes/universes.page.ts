@@ -18,28 +18,13 @@ import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-tab
 import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
-import { SOURCE_LABELS } from '../data/data-labels';
-import {
-  ASSET_CLASS_LABEL,
-  DEFAULT_FIELDS,
-  KIND_HINT,
-  KIND_LABEL,
-  type KindFields,
-  REBALANCE_LABEL,
-  type Rebalance,
-  type SpecSource,
-  type UniverseForm,
-  type UniverseKind,
-  readFileText,
-  specTemplate,
-  universeCreateBody,
-  universeFormErrors,
-} from './universe-form';
+import { UniverseEditor } from './universe-editor';
+import { KIND_LABEL, isStale, readFileText } from './universe-form';
 
 /**
- * Stored universes: the list with kind, member count and last refresh, a
- * create form (each kind's own fields, a CSV for lists, or the definition
- * as JSON for advanced use) and the index history import.
+ * Stored universes: the list with kind, member count and last refresh
+ * (marked when the definition changed since), the create form
+ * (`<app-universe-editor>`) and the index history import.
  */
 @Component({
   selector: 'app-universes-page',
@@ -54,6 +39,7 @@ import {
     RouterLink,
     DateTimePipe,
     PermissionNote,
+    UniverseEditor,
   ],
   templateUrl: './universes.page.html',
   styleUrl: './universes.page.scss',
@@ -70,14 +56,6 @@ export class UniversesPage {
 
   protected readonly universes = resource({ loader: () => this.api.list() });
 
-  protected readonly kinds: readonly UniverseKind[] = ['list', 'exchange', 'rule', 'index'];
-  protected readonly kindLabel = KIND_LABEL;
-  protected readonly kindHint = KIND_HINT;
-  protected readonly rebalances = Object.entries(REBALANCE_LABEL) as [Rebalance, string][];
-  protected readonly assetClasses = Object.entries(ASSET_CLASS_LABEL);
-  protected readonly dataSources = Object.entries(SOURCE_LABELS).filter(
-    ([id]) => id !== 'defillama',
-  );
   protected readonly universeKey = (u: UniverseView) => u.id;
 
   protected readonly columns: TableColumn<UniverseView>[] = [
@@ -90,78 +68,15 @@ export class UniversesPage {
 
   // ---- create -------------------------------------------------------------
   protected readonly creating = signal(false);
-  protected readonly saving = signal(false);
-  protected readonly submitted = signal(false);
-  protected readonly form = signal<UniverseForm>({
-    id: '',
-    name: '',
-    description: '',
-    kind: 'list',
-    source: 'fields',
-    fields: { ...DEFAULT_FIELDS },
-    specText: specTemplate('list'),
-    csv: '',
-  });
-  protected readonly csvName = signal<string | null>(null);
-  protected readonly errors = computed(() => universeFormErrors(this.form()));
-  protected readonly hasErrors = computed(() => Object.keys(this.errors()).length > 0);
 
-  protected patch(change: Partial<UniverseForm>): void {
-    this.form.update((f) => ({ ...f, ...change }));
-  }
+  /** The definition changed after the last refresh: the members are behind. */
+  protected readonly stale = isStale;
 
-  protected patchFields(change: Partial<KindFields>): void {
-    this.form.update((f) => ({ ...f, fields: { ...f.fields, ...change } }));
-  }
-
-  protected toggleAssetClass(id: string, on: boolean): void {
-    const now = this.form().fields.assetClasses.filter((c) => c !== id);
-    this.patchFields({ assetClasses: on ? [...now, id] : now });
-  }
-
-  protected setKind(kind: UniverseKind): void {
-    this.form.update((f) => ({
-      ...f,
-      kind,
-      // CSV is for list universes only; JSON restarts from the new kind's fields.
-      source: f.source === 'csv' && kind !== 'list' ? 'fields' : f.source,
-      specText: specTemplate(kind, f.fields),
-    }));
-  }
-
-  /** Advanced: edit the definition as JSON, starting from the fields. */
-  protected editAsJson(): void {
-    this.form.update((f) => ({ ...f, source: 'json', specText: specTemplate(f.kind, f.fields) }));
-  }
-
-  protected setSource(source: SpecSource): void {
-    this.patch({ source });
-  }
-
-  protected async pickCsv(input: HTMLInputElement): Promise<void> {
-    const file = input.files?.[0];
-    if (!file) return;
-    this.csvName.set(file.name);
-    this.patch({ csv: await readFileText(file) });
-  }
-
-  async create(): Promise<void> {
-    this.submitted.set(true);
-    if (!this.canEdit() || this.hasErrors() || this.saving()) return;
-    const body = universeCreateBody(this.form());
-    this.saving.set(true);
-    try {
-      const created = await this.api.create(body);
-      this.toasts.success(`Created ${created.id}. Refresh it to fill its members.`);
-      this.creating.set(false);
-      this.submitted.set(false);
-      this.universes.reload();
-      await this.router.navigate(['/universes', created.id]);
-    } catch {
-      // The error interceptor already showed the API's message.
-    } finally {
-      this.saving.set(false);
-    }
+  async created(u: UniverseView): Promise<void> {
+    this.toasts.success(`Created ${u.id}. Refresh it to fill its members.`);
+    this.creating.set(false);
+    this.universes.reload();
+    await this.router.navigate(['/universes', u.id]);
   }
 
   // ---- index history ------------------------------------------------------

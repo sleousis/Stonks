@@ -38,6 +38,27 @@ describe('UniversesService', () => {
     await deleted;
   });
 
+  it('edits a definition, reads membership history and the exchanges', async () => {
+    const updated = universes.update('big', { kind: 'list', spec: { tickers: ['B.US'] } });
+    const put = await nextRequest(controller, '/api/universes/big', 'PUT');
+    expect(put.request.body).toEqual({ kind: 'list', spec: { tickers: ['B.US'] } });
+    put.flush({ id: 'big', kind: 'list', spec: { tickers: ['B.US'] } });
+    expect((await updated).spec).toEqual({ tickers: ['B.US'] });
+
+    const history = universes.history('big', { ticker: 'aa', limit: 50, offset: 50 });
+    const get = await nextRequest(controller, '/api/universes/big/history');
+    expect(get.request.urlWithParams).toContain('ticker=aa');
+    expect(get.request.urlWithParams).toContain('offset=50');
+    get.flush({ items: [], total: 0, limit: 50, offset: 50 });
+    expect((await history).total).toBe(0);
+
+    const exchanges = universes.exchanges();
+    (await nextRequest(controller, '/api/universes/exchanges')).flush([
+      { exchange: 'US', instruments: 3, listed: 2 },
+    ]);
+    expect((await exchanges)[0].exchange).toBe('US');
+  });
+
   it('reads members on a date', async () => {
     const members = universes.members('big', '2024-01-02');
     const req = await nextRequest(controller, '/api/universes/big/members');

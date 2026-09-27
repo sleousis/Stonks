@@ -7,13 +7,28 @@ import {
   ensureUniverseData,
   getUniverse,
   getUniverseEnsureResult,
+  getUniverseHistory,
   getUniverseMembers,
   getUniverseRefreshResult,
   importIndexHistory,
+  listUniverseExchanges,
   listUniverses,
   refreshUniverse,
+  updateUniverse,
 } from './generated/sdk.gen';
-import type { EnsureDataRequest, IndexHistoryImport, UniverseCreate } from './models';
+import type {
+  EnsureDataRequest,
+  IndexHistoryImport,
+  UniverseCreate,
+  UniverseUpdate,
+} from './models';
+
+/** One page of membership history, narrowed to tickers containing `ticker`. */
+export interface HistoryQuery {
+  ticker?: string | null;
+  limit?: number;
+  offset?: number;
+}
 
 /** Stored universes, their point-in-time members, and refresh / ensure-data jobs. */
 @Injectable({ providedIn: 'root' })
@@ -28,6 +43,26 @@ export class UniversesService {
 
   create(body: UniverseCreate) {
     return unwrap(createUniverse({ body }));
+  }
+
+  /** Replace the definition. The members stay until the next refresh. */
+  update(id: string, body: UniverseUpdate) {
+    return unwrap(updateUniverse({ path: { universe_id: id }, body }));
+  }
+
+  /** Membership spans, latest change first. */
+  history(id: string, q: HistoryQuery = {}) {
+    return unwrap(
+      getUniverseHistory({
+        path: { universe_id: id },
+        query: { ticker: q.ticker || null, limit: q.limit, offset: q.offset },
+      }),
+    );
+  }
+
+  /** Exchanges our instruments name, for the exchange picker. */
+  exchanges() {
+    return unwrap(listUniverseExchanges());
   }
 
   delete(id: string) {

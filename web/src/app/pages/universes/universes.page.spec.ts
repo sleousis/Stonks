@@ -19,6 +19,7 @@ const UNIVERSES: UniverseView[] = [
     spec: {},
     member_count: 480,
     refreshed_at: '2026-09-25T06:00:00Z',
+    updated_at: '2026-09-26T08:00:00Z',
   },
   { id: 'watch', name: null, kind: 'list', spec: {}, member_count: null, refreshed_at: null },
 ];
@@ -80,6 +81,9 @@ describe('UniversesPage', () => {
     expect(list.textContent).toContain('Never');
     const link = list.querySelector<HTMLAnchorElement>('a[href="/universes/us-big"]');
     expect(link).not.toBeNull();
+    // Changed after its last refresh: the members are behind.
+    expect(list.textContent).toContain('Changed since');
+    expect(el.querySelector('a[href="/data"]')).not.toBeNull();
   });
 
   it('creates a universe from its fields and opens it', async () => {
@@ -99,6 +103,12 @@ describe('UniversesPage', () => {
     expect(el.querySelector('#u-spec')).toBeNull();
     expect(el.querySelector<HTMLInputElement>('#u-exchange')!.value).toBe('US');
     expect(el.textContent).not.toContain('Spec (JSON)');
+    // The exchange picker offers the exchanges our data holds.
+    (await nextRequest(http, '/api/universes/exchanges')).flush([
+      { exchange: 'LSE', instruments: 12, listed: 10 },
+    ]);
+    await settle();
+    expect(el.querySelector('#u-exchange-options option')?.getAttribute('value')).toBe('LSE');
     // CSV is for lists only.
     expect(el.querySelector('input[name="u-source"]')).toBeNull();
     type('#u-exchange', 'lse');

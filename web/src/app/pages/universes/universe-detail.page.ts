@@ -10,7 +10,13 @@ import {
 } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
-import type { EnsureDataRequest, EnsureReport, UniverseRefreshView } from '../../api/models';
+import type {
+  EnsureDataRequest,
+  EnsureReport,
+  MembershipSpanView,
+  UniverseRefreshView,
+  UniverseView,
+} from '../../api/models';
 import { UniversesService } from '../../api/universes.service';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
@@ -24,7 +30,8 @@ import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { sourceLabel } from '../data/data-labels';
-import { KIND_LABEL } from './universe-form';
+import { UniverseEditor } from './universe-editor';
+import { KIND_LABEL, isStale } from './universe-form';
 
 type EnsureSource = '' | NonNullable<EnsureDataRequest['source']>;
 const SOURCES: readonly { value: EnsureSource; label: string }[] = [
@@ -38,16 +45,20 @@ const SOURCES: readonly { value: EnsureSource; label: string }[] = [
 const INTERVALS = ['1d', '1w', '1h', '4h', '30m', '15m', '5m', '1m'] as const;
 /** Members per page: thousands of tickers never render at once. */
 export const MEMBERS_PAGE_SIZE = 50;
+/** Membership history rows per request. Show more asks for the next page. */
+export const HISTORY_PAGE_SIZE = 50;
 
 interface MemberRow {
   ticker: string;
 }
 
 /**
- * One universe: members on a date (a paged table with a finder), refresh
- * (definition to membership rows) and Fetch missing data (only the missing
- * bars), both background jobs followed to completion with their result
- * reads retryable, and delete.
+ * One universe: members on a date (a paged table with a finder), the
+ * membership history (who joined and left, when), Edit (the same form as
+ * a new universe), refresh (definition to membership rows) and Fetch
+ * missing data (only the missing bars), both background jobs followed to
+ * completion with their result reads retryable, and delete with a typed
+ * confirm.
  */
 @Component({
   selector: 'app-universe-detail-page',
@@ -63,6 +74,7 @@ interface MemberRow {
     NumPipe,
     PermissionNote,
     DataTable,
+    UniverseEditor,
   ],
   templateUrl: './universe-detail.page.html',
   styleUrl: './universe-detail.page.scss',
@@ -121,6 +133,61 @@ export class UniverseDetailPage {
     this.universe.hasValue() ? JSON.stringify(this.universe.value().spec, null, 2) : '',
   );
 
+  /** The definition changed after the last refresh. */
+  protected readonly stale = computed(
+    () => this.universe.hasValue() && isStale(this.universe.value()),
+  );
+
+  // ---- membership history -------------------------------------------------
+  /** Tickers containing this text, applied on Enter or when the field loses focus. */
+  protected readonly historyFind = signal('');
+  protected readonly historyLimit = signal(HISTORY_PAGE_SIZE);
+  protected readonly history = resource({
+    params: () => ({ id: this.id(), ticker: this.historyFind(), limit: this.historyLimit() }),
+    loader: ({ params }) =>
+      this.api.history(params.id, { ticker: params.ticker.trim(), limit: params.limit }),
+  });
+  protected readonly historyColumns: TableColumn<MembershipSpanView>[] = [
+    { key: 'ticker', label: 'Ticker', mobile: 'title' },
+    {
+      key: 'start_date',
+      label: 'Joined',
+      // Open ends sort first (joined) or last (left), and read as words.
+      value: (s) => s.start_date ?? '0000-00-00',
+      display: (s) => (s.start_date ? formatDate(s.start_date) : 'From the start'),
+    },
+    {
+      key: 'end_date',
+      label: 'Left',
+      value: (s) => s.end_date ?? '9999-99-99',
+      display: (s) => (s.end_date ? formatDate(s.end_date) : 'Still a member'),
+    },
+  ];
+  protected readonly historyKey = (s: MembershipSpanView) => `${s.ticker}:${s.start_date ?? ''}`;
+
+  protected findInHistory(text: string): void {
+    this.historyLimit.set(HISTORY_PAGE_SIZE);
+    this.historyFind.set(text);
+  }
+
+  protected moreHistory(): void {
+    this.historyLimit.update((n) => n + HISTORY_PAGE_SIZE);
+  }
+
+  // ---- edit ---------------------------------------------------------------
+  protected readonly editing = signal(false);
+  /** Stored universes a rule may start from, read when the form opens. */
+  protected readonly allUniverses = resource({
+    params: () => (this.editing() ? {} : undefined),
+    loader: () => this.api.list(),
+  });
+
+  protected edited(u: UniverseView): void {
+    this.editing.set(false);
+    this.universe.set(u);
+    this.toasts.success(`Saved ${u.name || u.id}. Refresh it to rebuild the members.`);
+  }
+
   // ---- refresh ------------------------------------------------------------
   protected readonly refreshRun = signal<JobHandle | null>(null);
   /** The refresh's counts; a failed read offers Try again. */
@@ -148,6 +215,7 @@ export class UniverseDetailPage {
       if (last?.status === 'succeeded') {
         this.universe.reload();
         this.members.reload();
+        this.history.reload();
         const result = await this.refreshResult.load(() => this.api.refreshResult(job.id));
         if (result) {
           this.toasts.success(`Refreshed ${this.name()}: ${result.current_members} members today.`);
