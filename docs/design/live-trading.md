@@ -458,7 +458,7 @@ It never transmits. It needs `trade` permission but no step-up, because it canno
 
 ### Broker-side protective stops (optional)
 
-- Off by default (`[production.live.stops] enabled = false`), per portfolio.
+- Off by default, per portfolio (built as `[production.risk.rules.protective_stops]`, see section 14).
 - After an entry fills, the adapter places a GTC `STP` sell (or a buy stop for a short) at the fill price minus `atr_multiple` times ATR. The stop's client id is the entry's plus `:stop`, and the stop is in an OCA group per ticker.
 - The tick re-sizes the stop when the position changes and cancels it when the position closes. Reconciliation treats a stop fill as a normal closing fill attributed to the strategy that held the lots.
 - Stops only reduce risk. They protect a position while Stonks or the gateway is down. A stop fills at the market after a gap, so it limits time exposure, not the size of an overnight loss.
@@ -759,3 +759,30 @@ flowchart LR
 - **The tick.** An external book now runs `startup_reconcile` before it decides and noops (reason `orders_unreconciled`) while an order is `unknown`. It builds `RiskContext.live` with `build_live_context` (quotes for the held and signalled tickers, since the orders do not exist yet). The tick's order rows write the fine `state` with the status, a submit with no answer turns `unknown`, and a sent order turns `submitted`.
 - **Not yet.** The pre-open gap check at submit (19.5), the stage (`broker_paper` or `live`) in the live context (19.9: it is `live` for now), MCP and API tokens approving (never: step-up only), a CLI for tickets (the console approves, `stonks schedule run-now live_submit` sends), and a menu badge with the waiting count (the push and the Approvals page carry it).
 
+
+## 14. What 19.10 built
+
+Protective stops live in `production/live/stops.py`. Where they differ from section 4:
+
+```mermaid
+flowchart LR
+  E[entry fills] --> S{stops on for the<br/>book or strategy?}
+  S -- no --> N[nothing]
+  S -- yes --> P[GTC stop at k ATRs<br/>client id entry:stop]
+  P --> W[working at the broker]
+  W -- position shrinks or grows --> R[cancel, place one<br/>for the new size]
+  W -- position closes --> C[cancelled]
+  W -- price reaches it --> F[filled: a closing fill<br/>and a stop-out]
+  R --> W
+```
+
+- **Settings.** `[production.risk.rules.protective_stops]` (`enabled`, `atr_multiple`, `atr_window`, `fallback_pct`), not `[production.live.stops]`. As a rule setting it gets the tighten-only merge: a portfolio's risk overrides or one strategy's subscription can turn stops on and bring them closer, never turn them off. It is not a risk rule: no order is dropped, and the risk layer's own on and off does not apply.
+- **Price.** The entry price is the average cost of the position from the book's own fills. The ATR is Wilder's over `atr_window` traded daily bars. Without enough bars the distance is `fallback_pct` of the entry. A stop never sits beyond the market: when the price already passed the level, it is measured from the close. A split moves a working stop's price with its shares.
+- **Ids and groups.** The first stop of an entry is `<entry>:stop`, a replacement `<entry>:stop:2` and so on. The OCA group is one per position entry (`stk-oca-` plus a hash), so a new entry never reuses a group whose orders already filled. The tick's exits of that position join the group, and IBKR's OCA type 2 shrinks the other orders by the filled quantity with overfill blocked. An exit is never dropped as a conflict with a working stop.
+- **Resizing.** Cancel first, then place. A smaller position keeps the stop price. A grown one (a new entry) is priced from the new average cost. Duplicates keep one stop.
+- **When.** The tick syncs stops for every book, noop runs included, after its orders are sent. The new `live_stops` job (open plus 30 minutes, every backend) does the same for live books after the opening auction, behind the startup reconciliation gate. A halt of new orders pauses both. The job opens the lake read only for the ATR, and falls back to `fallback_pct` while another process holds it.
+- **Ownership.** The quantity protected is the book's own view: the account position capped by what the book's fills explain, so the owner's manual holdings in a shared account get no stop.
+- **Simulated books.** Paper books keep stops in the ledger (`accepted`). The next tick replays the daily bars since each stop was placed through the simulated broker, whose good till cancelled stops now rest until a bar's low (or high) reaches them, and books the fill with that run's snapshot.
+- **Protections.** `count_losses` of `stop_cooldown` and `stop_guard` is now unset by default: losses count only while the book has no protective stops. With stops on, only stop fills are stop-outs.
+- **Ledger.** Migration 034 adds `orders.oca_group` and `orders.protective`. The orders API returns `protective`, `stop_price` and `time_in_force`, and the console says "Protective stop: sells if the price falls to ..." under the ticker.
+- **Not yet.** The kill switch in stop-all mode cancels stops with every other order, and they come back when trading resumes. Stops trigger on regular hours only (`outside_rth` stays refused).

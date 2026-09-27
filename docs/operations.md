@@ -58,6 +58,7 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `calendars_refresh`: earnings, dividend and economic calendars, then the event alerts (see [calendars](calendars.md)) | 06:00 UTC daily | none |
 | `model_retrain`: refit strategies that learn from data into candidate versions (see [Model lifecycle](model-lifecycle.md)) | Saturday 06:00 UTC | none |
 | `live_submit`: send approved order tickets (see Live trading) | open - 20 min | none |
+| `live_stops`: protective stops for the entries the opening auction filled (see Protective stops) | open + 30 min | none |
 
 Session jobs run on NYSE trading days. The two IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty. `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
 
@@ -442,7 +443,30 @@ These risk rules act only on books at a real broker and never drop a closing ord
 | `stop_guard` | `max_stops`, `window_days`, `count_losses` | A strategy opens nothing after N stop-outs in the window. |
 | `losing_lock` | `max_consecutive_losses`, `lock_days` | A ticker whose last trades for the strategy all lost is locked. |
 
-Until broker-side stops exist, `count_losses = true` counts any losing exit as a stop-out.
+A stop-out is the fill of a protective stop (below). `count_losses` decides whether any losing exit counts too. Left unset, losses count only while the book has no protective stops. `true` always counts them, `false` never does.
+
+### Protective stops
+
+Optional stop orders at the broker that keep a position protected while Stonks or the gateway is down (roadmap 19.10). Off by default:
+
+```toml
+[production.risk.rules.protective_stops]
+enabled = true        # off by default
+atr_multiple = 3.0    # distance from the entry price, in ATRs
+atr_window = 14       # daily bars in the ATR
+fallback_pct = 0.10   # distance as a share of the entry when there is no ATR
+```
+
+- Turn them on for everyone here, for one portfolio in its risk overrides, or for one strategy in its subscription. Overrides only tighten: they can turn stops on and bring them closer, never turn them off.
+- After an entry fills, the position gets one good till cancelled stop: a sell below a long, a buy above a short. Its client id is the entry's plus `:stop`.
+- When the position changes, the stop is cancelled and replaced for the new size. A smaller position keeps the stop price. A bigger one is priced from the new average cost.
+- When the position closes, or stops are turned off, the stop is cancelled.
+- The stop and the exits of its position share one OCA group at the broker, so the position is never sold twice.
+- Only Stonks' own positions get stops. Your own shares in a shared account never do.
+- `live_stops` runs 30 minutes after the open and gives the entries the opening auction filled their stops. The evening tick syncs them too. A halt of new orders pauses both. The job reads the lake only for the ATR. While another process holds the lake it uses `fallback_pct`.
+- Simulated books (paper) keep their stops in the ledger. The next tick fills a stop when a later day's low (or high, for a short) reaches it, at the stop or at a gapped open.
+- A stop fills at the market after a gap. It limits how long a loss runs while nobody watches, not the size of an overnight gap.
+- The kill switch in stop-all mode cancels the stops too. They come back once trading resumes.
 
 ### Order states
 
