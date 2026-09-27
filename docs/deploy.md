@@ -33,7 +33,7 @@ flowchart LR
 
 | File | Purpose |
 |------|---------|
-| `Dockerfile`, `.dockerignore` | Multi-stage build: Node builds the console, uv installs the package, slim runtime with a healthcheck. |
+| `Dockerfile`, `.dockerignore` | Multi-stage build: Node builds the console, uv installs the package, slim runtime with a healthcheck on `/api/health/live`. Compose waits for `/api/health/ready` before Caddy and the scheduler start. |
 | `deploy/compose.yaml` | `api`, `scheduler`, `caddy`, plus a `restic` tool service (profile `backup`). |
 | `deploy/compose.tailscale.yaml` | Lets Caddy get its `*.ts.net` certificate from Tailscale. |
 | `deploy/Caddyfile` | HTTPS, security headers, reverse proxy to the API. |
