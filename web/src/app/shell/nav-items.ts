@@ -13,6 +13,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // The trader's own pages (S9): always on top, never folded away.
   { path: '/', label: 'Today', key: 'm', group: 'You' },
   { path: '/insights', label: 'Insights', key: 'e', group: 'You' },
+  { path: '/charts', label: 'Charts', key: 'z', group: 'You' },
+  { path: '/watchlists', label: 'Watchlists', key: 'x', group: 'You' },
   { path: '/notifications', label: 'Notifications', key: 'n', group: 'You' },
   { path: '/connections', label: 'Broker connections', key: 'c', group: 'You' },
   { path: '/profile', label: 'Profile', key: 'p', group: 'You' },
@@ -20,6 +22,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // Advanced pages.
   { path: '/dashboard', label: 'Dashboard', key: 'd', group: 'Monitor' },
   { path: '/strategies', label: 'Strategies', key: 's', group: 'Monitor' },
+  { path: '/strategies/leaderboard', label: 'Leaderboard', key: 'b', group: 'Monitor' },
   { path: '/shadow', label: 'Shadow', key: 'w', group: 'Monitor' },
   { path: '/orders', label: 'Orders', key: 'o', group: 'Monitor' },
   { path: '/trades', label: 'Trade costs', key: 't', group: 'Monitor' },

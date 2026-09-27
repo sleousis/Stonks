@@ -14,6 +14,10 @@ import { NotificationsService } from '../../api/notifications.service';
 import { TicksService } from '../../api/ticks.service';
 import { formatTime } from '../../core/format/format';
 import { TradingDayService } from '../../core/schedule/trading-day.service';
+import {
+  WatchlistContextService,
+  signalTicker,
+} from '../../core/watchlists/watchlist-context.service';
 import { humanize } from '../../shared/ui/param-form/param-spec';
 import { countdown, nextJob } from '../../shared/ui/session-strip';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -276,6 +280,7 @@ export class SignalsCard {
   private readonly api = inject(NotificationsService);
   private readonly ticksApi = inject(TicksService);
   private readonly day = inject(TradingDayService);
+  private readonly watch = inject(WatchlistContextService);
 
   protected readonly feed = resource({ loader: () => this.api.feed({ limit: FEED_LIMIT }) });
   /** Runs are the second half of the story; if they fail, signals still show. */
@@ -292,9 +297,15 @@ export class SignalsCard {
 
   private readonly now = signal(Date.now());
 
-  protected readonly signals = computed(() =>
-    this.feed.hasValue() ? todaysSignals(this.feed.value().items) : [],
-  );
+  /** Today's signals, narrowed to the picked watchlist (if any). */
+  protected readonly signals = computed(() => {
+    if (!this.feed.hasValue()) return [];
+    const tickers = this.watch.tickers();
+    return todaysSignals(this.feed.value().items).filter((s) => {
+      const ticker = signalTicker(s.title);
+      return !tickers || !ticker || tickers.has(ticker);
+    });
+  });
   protected readonly unread = computed(() => this.signals().filter((s) => !s.read_at));
   protected readonly marking = signal(false);
 

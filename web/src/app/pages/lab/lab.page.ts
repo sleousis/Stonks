@@ -139,6 +139,18 @@ export class LabPage {
 
   /** Query param `?strategy=<id>`: start both forms from a registered strategy. */
   readonly strategy = input<string | undefined>();
+  /** `?tickers=AAPL.US,MSFT.US`: a watchlist opened in the lab. */
+  readonly tickers = input<string | undefined>();
+  protected readonly tickerList = computed(() => {
+    const raw = this.tickers();
+    return raw
+      ? raw
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean)
+          .join(', ')
+      : null;
+  });
   protected readonly registered = resource({
     params: () => {
       const id = this.strategy();

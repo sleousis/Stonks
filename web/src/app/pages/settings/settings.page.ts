@@ -22,6 +22,7 @@ import { type ThemeMode, ThemeService } from '../../core/theme/theme.service';
 import { DisplayPrefs } from '../../shared/ui/display-prefs';
 import { NotificationPrefs } from '../../shared/ui/notification-prefs';
 import { NotificationSettings } from '../../shared/ui/notification-settings';
+import { RiskLimitsPanel } from '../../shared/ui/risk-limits-panel';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
@@ -44,6 +45,7 @@ interface CostRow {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     DisplayPrefs,
+    RiskLimitsPanel,
     NotificationPrefs,
     NotificationSettings,
     PageHeader,

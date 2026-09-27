@@ -33,6 +33,8 @@ describe('Nav', () => {
     expect(mine(render(TRADER))).toEqual([
       'Today',
       'Insights',
+      'Charts',
+      'Watchlists',
       'Notifications',
       'Broker connections',
       'Profile',
@@ -44,6 +46,8 @@ describe('Nav', () => {
     expect(mine(render(ADMIN))).toEqual([
       'Today',
       'Insights',
+      'Charts',
+      'Watchlists',
       'Notifications',
       'Broker connections',
       'Profile',

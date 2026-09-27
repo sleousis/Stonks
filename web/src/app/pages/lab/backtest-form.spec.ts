@@ -59,6 +59,13 @@ describe('BacktestFormView', () => {
     fixture.detectChanges();
   }
 
+  it('starts from the tickers of a watchlist opened in the lab', async () => {
+    await create();
+    fixture.componentRef.setInput('tickers', 'AAPL.US, MSFT.US');
+    fixture.detectChanges();
+    expect(el.querySelector<HTMLTextAreaElement>('#bt-tickers')!.value).toBe('AAPL.US, MSFT.US');
+  });
+
   it('emits the request with parameters, tickers and flat costs', async () => {
     await create();
     el.querySelector<HTMLInputElement>(`input[value="${MOMENTUM.class_path}"]`)!.click();

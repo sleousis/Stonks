@@ -13,6 +13,7 @@ import type { LedgerTrialView } from '../../api/models';
 import { formatDateTime, formatNumber } from '../../core/format/format';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { HelpTip } from '../../shared/ui/help-tip';
+import { ExportButton } from '../../shared/ui/export-button';
 import { PageHeader } from '../../shared/ui/page-header';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -35,6 +36,7 @@ export function paramsText(params: Record<string, unknown>): string {
   imports: [
     RouterLink,
     PageHeader,
+    ExportButton,
     LabNav,
     DataTable,
     TableCell,
@@ -46,7 +48,15 @@ export function paramsText(params: Record<string, unknown>): string {
     LoadingState,
   ],
   template: `
-    <app-page-header title="Lab" description="One recorded lab run and every trial it tried." />
+    <app-page-header title="Lab" description="One recorded lab run and every trial it tried.">
+      <app-export-button
+        actions
+        kind="lab-trials"
+        label="Trials CSV"
+        [ghost]="true"
+        [runId]="runId()"
+      />
+    </app-page-header>
     <app-lab-nav />
 
     <a class="back" routerLink="/lab/ledger">Back to the trial ledger</a>

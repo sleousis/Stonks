@@ -20,6 +20,10 @@ export const routes: Routes = [
   { path: '', pathMatch: 'full', loadChildren: () => import('./pages/home/home.routes') },
   { path: 'profile', loadChildren: () => import('./pages/profile/profile.routes') },
   { path: 'insights', loadChildren: () => import('./pages/insights/insights.routes') },
+  // 13: the first-run guide, watchlists and price charts
+  { path: 'welcome', loadChildren: () => import('./pages/welcome/welcome.routes') },
+  { path: 'watchlists', loadChildren: () => import('./pages/watchlists/watchlists.routes') },
+  { path: 'charts', loadChildren: () => import('./pages/charts/charts.routes') },
   {
     path: 'admin/users',
     canActivate: [adminGuard],

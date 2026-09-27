@@ -1,0 +1,187 @@
+<app-page-header
+  [title]="symbol() || 'Charts'"
+  description="Daily candles with volume, moving averages, your fills and the strategies' signals."
+>
+  <app-watchlist-filter actions ariaLabel="Watchlist to jump between" />
+</app-page-header>
+
+<form class="finder" role="search" (submit)="open($event)">
+  <label for="chart-ticker" class="visually-hidden">Ticker</label>
+  <input
+    id="chart-ticker"
+    class="input num"
+    type="search"
+    list="chart-suggestions"
+    placeholder="Ticker, e.g. AAPL.US"
+    autocomplete="off"
+    autocapitalize="characters"
+    spellcheck="false"
+    maxlength="40"
+    [value]="query()"
+    (input)="onQuery($any($event.target).value)"
+  />
+  <datalist id="chart-suggestions">
+    @for (s of suggestions(); track s) {
+      <option [value]="s"></option>
+    }
+  </datalist>
+  <button type="submit" class="btn btn-primary">Open chart</button>
+</form>
+
+@if (listTickers().length) {
+  <nav class="jump" aria-label="Tickers in your watchlist">
+    @for (t of listTickers(); track t) {
+      <a
+        class="chip num"
+        [routerLink]="['/charts', t]"
+        [attr.aria-current]="t === symbol() ? 'page' : null"
+        >{{ t }}</a
+      >
+    }
+  </nav>
+}
+
+@if (!symbol()) {
+  <app-empty-state
+    title="Pick a ticker"
+    message="Type a ticker above, or pick a watchlist to jump between its tickers."
+  >
+    <a routerLink="/watchlists" class="btn">Your watchlists</a>
+  </app-empty-state>
+} @else {
+  <section class="panel chart-panel" aria-labelledby="chart-title">
+    <div class="panel-head controls">
+      <h2 id="chart-title" class="visually-hidden">Price chart of {{ symbol() }}</h2>
+      <div class="segmented" role="group" aria-label="Range">
+        @for (r of ranges; track r.id) {
+          <button
+            type="button"
+            class="seg num"
+            [attr.aria-pressed]="range() === r.id"
+            (click)="range.set(r.id)"
+          >
+            {{ r.label }}
+          </button>
+        }
+      </div>
+      <div class="toggles" role="group" aria-label="What to draw">
+        @for (a of averages; track a.length) {
+          <label class="toggle">
+            <input
+              type="checkbox"
+              class="check"
+              [checked]="shownAverages().includes(a.length)"
+              (change)="toggleAverage(a.length)"
+            />
+            <span class="swatch" [attr.data-color]="a.color" [class.dashed]="a.dashed"></span>
+            MA {{ a.length }}
+          </label>
+        }
+        <label class="toggle">
+          <input
+            type="checkbox"
+            class="check"
+            [checked]="showFills()"
+            (change)="showFills.set(!showFills())"
+          />
+          Fills
+        </label>
+        <label class="toggle">
+          <input
+            type="checkbox"
+            class="check"
+            [checked]="showSignals()"
+            (change)="showSignals.set(!showSignals())"
+          />
+          Signals
+        </label>
+        <label class="toggle">
+          <input
+            type="checkbox"
+            class="check"
+            [checked]="showVolume()"
+            (change)="showVolume.set(!showVolume())"
+          />
+          Volume
+        </label>
+      </div>
+    </div>
+    <div class="panel-body">
+      @if (chart.error(); as err) {
+        <app-error-state title="Could not load the chart" [error]="err" (retry)="chart.reload()" />
+      } @else if (!chart.hasValue() || !data()) {
+        <app-loading-state label="Loading the chart" [rows]="6" />
+      } @else if (data()!.candles.length === 0) {
+        <app-empty-state
+          title="No prices yet"
+          message="Load prices for this ticker on the Data page, then come back."
+        >
+          <a routerLink="/data" class="btn">Go to Data</a>
+        </app-empty-state>
+      } @else {
+        <app-price-chart
+          [ariaLabel]="symbol() + ' daily candles'"
+          [summary]="summary()"
+          [data]="data()!"
+        />
+        <p class="key">
+          <span class="mark buy" aria-hidden="true">B</span> your buy
+          <span class="mark sell" aria-hidden="true">S</span> your sell
+          <span class="mark dot" aria-hidden="true"></span> a strategy signal
+          @if (chart.value().truncated) {
+            <span class="muted">Older bars are not shown.</span>
+          }
+        </p>
+      }
+    </div>
+  </section>
+
+  @if (chart.hasValue()) {
+    <div class="lists">
+      <section class="panel" aria-labelledby="fills-title">
+        <div class="panel-head">
+          <h2 id="fills-title">Your fills</h2>
+        </div>
+        @if (fills().length === 0) {
+          <p class="panel-body muted">
+            {{
+              chart.value().portfolio_id
+                ? 'No fills of this ticker in this portfolio yet.'
+                : 'Open a portfolio to see your fills here.'
+            }}
+          </p>
+        } @else {
+          <app-data-table
+            [caption]="'Your fills of ' + symbol()"
+            [rows]="fills()"
+            [columns]="fillColumns"
+            [rowKey]="fillKey"
+            [pageSize]="10"
+          >
+            <ng-template appCell="side" [appCellOf]="fills()" let-f>
+              @if (f.side) {
+                <app-side-tag [side]="f.side" />
+              }
+            </ng-template>
+          </app-data-table>
+        }
+      </section>
+      <section class="panel" aria-labelledby="signals-title">
+        <div class="panel-head">
+          <h2 id="signals-title">Strategy signals</h2>
+        </div>
+        @if (signals().length === 0) {
+          <p class="panel-body muted">No strategy has signalled this ticker in this range.</p>
+        } @else {
+          <app-data-table
+            [caption]="'Strategy signals for ' + symbol()"
+            [rows]="signals()"
+            [columns]="signalColumns"
+            [rowKey]="signalKey"
+            [pageSize]="10"
+          />
+        }
+      </section>
+    </div>
+  }
+}

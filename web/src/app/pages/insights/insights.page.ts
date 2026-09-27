@@ -25,6 +25,7 @@ import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
 import { DataTable, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { HelpTip } from '../../shared/ui/help-tip';
+import { ExportButton } from '../../shared/ui/export-button';
 import { PageHeader } from '../../shared/ui/page-header';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -78,6 +79,7 @@ export function agreementLine(h: HoldingAgreement): string {
   imports: [
     RouterLink,
     PageHeader,
+    ExportButton,
     InsightsNav,
     StatTile,
     DataTable,

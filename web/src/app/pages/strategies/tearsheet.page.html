@@ -1,0 +1,184 @@
+<app-page-header
+  [title]="id()"
+  [description]="sheet.hasValue() ? cls() + '. ' + statusWord() + '.' : 'Tear sheet'"
+>
+  <a actions class="btn btn-ghost" routerLink="/strategies/leaderboard">Leaderboard</a>
+  <a actions class="btn btn-ghost" [routerLink]="['/strategies', id()]">Strategy page</a>
+  <a actions class="btn" routerLink="/lab" [queryParams]="{ strategy: id() }">Backtest it</a>
+</app-page-header>
+
+@if (sheet.error(); as err) {
+  <app-error-state title="Could not load the tear sheet" [error]="err" (retry)="sheet.reload()" />
+} @else if (!sheet.hasValue()) {
+  <app-loading-state label="Loading the tear sheet" [rows]="6" />
+} @else {
+  @let s = sheet.value();
+
+  <section class="tiles" aria-label="Paper result">
+    @for (t of tiles(); track t.label) {
+      <app-stat-tile [label]="t.label" [value]="t.value" [help]="t.help" />
+    }
+  </section>
+
+  <div class="grid">
+    <section class="panel span-wide" aria-labelledby="curve-title">
+      <div class="panel-head">
+        <h2 id="curve-title">Paper value</h2>
+        @if (s.paper.latest_day) {
+          <span class="muted num">to {{ day(s.paper.latest_day) }}</span>
+        }
+      </div>
+      <div class="panel-body">
+        @if (s.curve.length < 2) {
+          <app-empty-state
+            title="Not enough paper days"
+            message="The daily run adds a point to this curve each trading day."
+          />
+        } @else {
+          <app-time-series-chart
+            ariaLabel="Paper value, with drawdown below"
+            [summary]="summary()"
+            [series]="series()"
+            [height]="300"
+          />
+        }
+      </div>
+    </section>
+
+    <section class="panel span-wide" aria-labelledby="months-title">
+      <div class="panel-head">
+        <h2 id="months-title">Monthly returns</h2>
+      </div>
+      @if (years().length === 0) {
+        <p class="panel-body muted">No full month on paper yet.</p>
+      } @else {
+        <div class="months-scroll">
+          <table class="months">
+            <caption class="visually-hidden">
+              Paper return by month
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Year</th>
+                @for (m of months; track m) {
+                  <th scope="col">{{ m }}</th>
+                }
+                <th scope="col">Year</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (y of years(); track y.year) {
+                <tr>
+                  <th scope="row" class="num">{{ y.year }}</th>
+                  @for (c of y.cells; track c.month) {
+                    <td class="num cell" [attr.data-tone]="c.tone">{{ c.text }}</td>
+                  }
+                  <td class="num total" [attr.data-tone]="y.totalTone">{{ y.total }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+
+    <section class="panel" aria-labelledby="golive-title">
+      <div class="panel-head">
+        <h2 id="golive-title">Go-live check</h2>
+        <span class="verdict" [attr.data-passed]="s.golive?.passed">{{ golive() }}</span>
+      </div>
+      @if (!s.golive) {
+        <p class="panel-body muted">A stopped strategy is not checked.</p>
+      } @else {
+        <ul class="rows">
+          @for (c of checks(); track c.name) {
+            <li class="row">
+              <app-status-pill [status]="c.passed ? 'passed' : 'failed'" />
+              <div class="row-text">
+                <span class="row-title">{{ c.label }}</span>
+                <span class="row-detail num">{{ c.value }} against {{ c.limit }}</span>
+              </div>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <section class="panel" aria-labelledby="tests-title">
+      <div class="panel-head">
+        <h2 id="tests-title">Survival tests</h2>
+        @if (tests().length) {
+          <span class="muted num">{{ s.strategy.survival_reports.length }} run</span>
+        }
+      </div>
+      @if (tests().length === 0) {
+        <p class="panel-body muted">No lab verdicts are stored for this strategy.</p>
+      } @else {
+        <ul class="rows">
+          @for (t of tests(); track t.id) {
+            <li class="row">
+              <app-status-pill [status]="t.passed ? 'passed' : 'failed'" />
+              <div class="row-text">
+                <span class="row-title">{{ t.id }}</span>
+                <span class="row-detail">
+                  @for (f of t.figures; track f.key) {
+                    <span class="figure-pair"
+                      >{{ f.label }} <span class="num">{{ f.value }}</span></span
+                    >
+                  }
+                </span>
+              </div>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <section class="panel span-wide" aria-labelledby="trades-title">
+      <div class="panel-head">
+        <h2 id="trades-title">Recent model-book trades</h2>
+      </div>
+      @if (s.recent_trades.length === 0) {
+        <p class="panel-body muted">No trades in the model book yet.</p>
+      } @else {
+        <app-data-table
+          caption="Recent trades of the strategy's model book"
+          [rows]="s.recent_trades"
+          [columns]="tradeColumns"
+          [rowKey]="tradeKey"
+          [pageSize]="10"
+        >
+          <ng-template appCell="side" [appCellOf]="s.recent_trades" let-d>
+            <app-side-tag [side]="d.side" />
+          </ng-template>
+        </app-data-table>
+      }
+    </section>
+
+    <section class="panel span-wide" aria-labelledby="history-title">
+      <div class="panel-head">
+        <h2 id="history-title">Status history</h2>
+      </div>
+      @if (history().length === 0) {
+        <p class="panel-body muted">No status changes yet.</p>
+      } @else {
+        <ol class="history">
+          @for (h of history(); track h.id) {
+            <li>
+              <span class="num when">{{ when(h.created_at) }}</span>
+              <span class="what"
+                >{{ statusName(h.from_status) }} to {{ statusName(h.to_status) }}
+                @if (h.override) {
+                  <strong>(override)</strong>
+                }
+              </span>
+              @if (h.reason) {
+                <span class="why">{{ h.reason }}</span>
+              }
+            </li>
+          }
+        </ol>
+      }
+    </section>
+  </div>
+}

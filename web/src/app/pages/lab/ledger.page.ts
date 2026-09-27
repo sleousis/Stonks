@@ -15,6 +15,7 @@ import { SystemService } from '../../api/system.service';
 import { formatDateTime, formatNumber } from '../../core/format/format';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { keepLatest } from '../../shared/ui/data-table/keep-latest';
+import { ExportButton } from '../../shared/ui/export-button';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
@@ -44,6 +45,7 @@ export function scoreText(score: number | null | undefined): string {
   imports: [
     RouterLink,
     PageHeader,
+    ExportButton,
     LabNav,
     DataTable,
     TableCell,
@@ -56,7 +58,9 @@ export function scoreText(score: number | null | undefined): string {
     <app-page-header
       title="Lab"
       description="Every lab run on record, the idea it tested and how many trials it took."
-    />
+    >
+      <app-export-button actions kind="lab-trials" label="All trials CSV" [ghost]="true" />
+    </app-page-header>
     <app-lab-nav />
 
     <section class="panel" aria-labelledby="ledger-title">

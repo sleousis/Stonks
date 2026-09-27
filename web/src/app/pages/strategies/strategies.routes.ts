@@ -7,6 +7,16 @@ export default [
     loadComponent: () => import('./strategies.page').then((m) => m.StrategiesPage),
   },
   {
+    path: 'leaderboard',
+    title: 'Leaderboard',
+    loadComponent: () => import('./leaderboard.page').then((m) => m.LeaderboardPage),
+  },
+  {
+    path: ':id/tearsheet',
+    title: 'Tear sheet',
+    loadComponent: () => import('./tearsheet.page').then((m) => m.TearsheetPage),
+  },
+  {
     path: ':id',
     title: 'Strategy',
     loadComponent: () => import('./strategy-detail.page').then((m) => m.StrategyDetailPage),
