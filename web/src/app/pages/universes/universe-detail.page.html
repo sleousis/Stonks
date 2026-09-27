@@ -52,7 +52,7 @@
       <h2 id="members-title">Members on a date</h2>
       @if (members.hasValue()) {
         <span class="muted num"
-          >{{ members.value().count | num: { digits: 0 } }} on {{ members.value().as_of }}</span
+          >{{ members.value().count | num: { digits: 0 } }} on {{ day(members.value().as_of) }}</span
         >
       }
     </div>
@@ -67,6 +67,19 @@
           (change)="asOf.set($any($event.target).value)"
         />
       </div>
+      <div class="field">
+        <label for="m-find">Find a ticker</label>
+        <input
+          id="m-find"
+          class="input"
+          type="search"
+          placeholder="e.g. AAPL"
+          autocapitalize="characters"
+          spellcheck="false"
+          [value]="find()"
+          (input)="find.set($any($event.target).value)"
+        />
+      </div>
     </div>
     @if (members.error(); as err) {
       <app-error-state title="Could not load members" [error]="err" (retry)="members.reload()" />
@@ -78,11 +91,14 @@
         message="Refresh the universe to build its membership, or pick a date inside its window."
       />
     } @else {
-      <ul class="chips panel-body" aria-label="Members">
-        @for (t of members.value().tickers; track t) {
-          <li class="num">{{ t }}</li>
-        }
-      </ul>
+      <app-data-table
+        caption="Members on this date"
+        [rows]="memberRows()"
+        [columns]="memberColumns"
+        [rowKey]="memberKey"
+        [pageSize]="membersPageSize"
+        emptyMessage="No member matches."
+      />
     }
   </section>
 
@@ -104,10 +120,10 @@
       </div>
     </div>
     @if (refreshRun(); as run) {
-      <app-job-progress label="Refresh" [handle]="run" />
+      <app-job-progress label="Refresh" [handle]="run" [result]="refreshResult" />
     }
     <div class="panel-body">
-      @if (refreshResult(); as r) {
+      @if (refreshResult.value(); as r) {
         <dl class="facts compact" aria-label="Refresh result">
           <div>
             <dt>Members today</dt>
@@ -141,10 +157,10 @@
   <!-- Ensure data ---------------------------------------------------------->
   <section class="panel span-12" aria-labelledby="ensure-title">
     <div class="panel-head">
-      <h2 id="ensure-title">Ensure data</h2>
+      <h2 id="ensure-title">Fetch missing data</h2>
     </div>
     @if (ensureRun(); as run) {
-      <app-job-progress label="Ensure data" [handle]="run" />
+      <app-job-progress label="Fetch missing data" [handle]="run" [result]="ensureResult" />
     }
     <form class="panel-body" novalidate (submit)="$event.preventDefault(); ensure()">
       <p class="muted intro">
@@ -211,12 +227,12 @@
           [disabled]="ensuring() || !u || !canRefresh()"
           [attr.aria-busy]="ensuring()"
         >
-          {{ ensuring() ? 'Fetching…' : 'Ensure data' }}
+          {{ ensuring() ? 'Fetching…' : 'Fetch missing data' }}
         </button>
         <app-permission-note permission="lab.run" />
       </div>
-      @if (ensureResult(); as r) {
-        <dl class="facts compact result" aria-label="Ensure data result">
+      @if (ensureResult.value(); as r) {
+        <dl class="facts compact result" aria-label="Fetch missing data result">
           <div>
             <dt>Requested</dt>
             <dd class="num">{{ r.tickers_requested ?? 0 | num: { digits: 0 } }}</dd>
@@ -237,11 +253,11 @@
           </div>
           <div>
             <dt>Window</dt>
-            <dd class="num">{{ r.clipped_start ?? r.start }} to {{ r.end }}</dd>
+            <dd class="num">{{ day(r.clipped_start ?? r.start) }} to {{ day(r.end) }}</dd>
           </div>
         </dl>
         @if (r.warnings?.length) {
-          <ul class="warnings" aria-label="Ensure data warnings">
+          <ul class="warnings" aria-label="Fetch missing data warnings">
             @for (w of r.warnings; track $index) {
               <li>{{ w }}</li>
             }

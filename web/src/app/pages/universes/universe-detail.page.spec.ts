@@ -8,6 +8,7 @@ import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
+import { isoDay } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
@@ -92,8 +93,86 @@ describe('UniverseDetailPage', () => {
     expect(el.querySelector('h1')!.textContent).toContain('US large caps');
     expect(el.textContent).toContain('Rule');
     expect(el.textContent).toContain('"rebalance": "monthly"');
-    const chips = [...el.querySelectorAll('.chips li')].map((li) => li.textContent?.trim());
-    expect(chips).toEqual(['AAPL.US', 'MSFT.US']);
+    const members = el.querySelector('[aria-labelledby="members-title"]')!;
+    const rows = [...members.querySelectorAll('tbody tr')].map((tr) => tr.textContent?.trim());
+    expect(rows).toEqual(['AAPL.US', 'MSFT.US']);
+    expect(el.querySelector<HTMLInputElement>('#m-date')!.value).toBe(isoDay());
+  });
+
+  it('5,000 members render one page', async () => {
+    const tickers = Array.from({ length: 5000 }, (_, i) => `T${String(i).padStart(4, '0')}.US`);
+    const date = el.querySelector<HTMLInputElement>('#m-date')!;
+    date.value = '2024-01-02';
+    date.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    await flushMembers(tickers, '2024-01-02');
+    await settle();
+    const members = el.querySelector('[aria-labelledby="members-title"]')!;
+    expect(members.querySelectorAll('tbody tr').length).toBeLessThanOrEqual(50);
+    expect(members.textContent).toContain('of 5000');
+    expect(members.querySelector('.chips')).toBeNull();
+
+    const find = el.querySelector<HTMLInputElement>('#m-find')!;
+    find.value = 't4999';
+    find.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect([...members.querySelectorAll('tbody tr')].map((tr) => tr.textContent?.trim())).toEqual([
+      'T4999.US',
+    ]);
+  });
+
+  it('result 500 after success shows inline error with retry (refresh)', async () => {
+    button('Refresh')!.click();
+    (await nextRequest(http, '/api/universes/us-big/refresh', 'POST')).flush({ id: 'job_r' });
+    (await nextRequest(http, '/api/universes/refresh/job_r/result')).flush(
+      { title: 'x', status: 500, detail: 'Result store unavailable.' },
+      { status: 500, statusText: 'Server Error' },
+    );
+    // The membership changed either way, so the page reloads it.
+    (await nextRequest(http, '/api/universes/us-big')).flush(UNIVERSE);
+    await flushMembers(['AAPL.US', 'MSFT.US']);
+    await settle();
+    const error = el.querySelector('app-job-progress app-error-state')!;
+    expect(error.textContent).toContain('Refresh finished, but its result could not load');
+    error.querySelector('button')!.click();
+    (await nextRequest(http, '/api/universes/refresh/job_r/result')).flush({
+      universe_id: 'us-big',
+      kind: 'rule',
+      members: 5,
+      current_members: 3,
+      spans: 6,
+      warnings: [],
+    });
+    await settle();
+    expect(el.querySelector('[aria-label="Refresh result"]')).not.toBeNull();
+    expect(el.querySelector('app-job-progress app-error-state')).toBeNull();
+  });
+
+  it('result 500 after success shows inline error with retry (fetch missing data)', async () => {
+    button('Fetch missing data')!.click();
+    (await nextRequest(http, '/api/universes/us-big/ensure', 'POST')).flush({ id: 'job_e' });
+    (await nextRequest(http, '/api/universes/ensure/job_e/result')).flush(
+      { title: 'x', status: 500, detail: 'Result store unavailable.' },
+      { status: 500, statusText: 'Server Error' },
+    );
+    await settle();
+    const error = el.querySelector('app-job-progress app-error-state')!;
+    expect(error.textContent).toContain('Fetch missing data finished, but its result could not load');
+    error.querySelector('button')!.click();
+    (await nextRequest(http, '/api/universes/ensure/job_e/result')).flush({
+      interval: '1d',
+      start: '2025-01-01',
+      end: '2025-06-30',
+      source: 'eodhd',
+      tickers_requested: 3,
+      tickers_fetched: 2,
+      tickers_up_to_date: 1,
+      tickers_failed: 0,
+      warnings: [],
+      failed: [],
+    });
+    await settle();
+    expect(el.querySelector('[aria-label="Fetch missing data result"]')).not.toBeNull();
   });
 
   it('reads members on another date', async () => {
@@ -139,7 +218,8 @@ describe('UniverseDetailPage', () => {
     end.dispatchEvent(new Event('change'));
     fixture.detectChanges();
 
-    button('Ensure data')!.click();
+    expect(confirm).not.toHaveBeenCalled();
+    button('Fetch missing data')!.click();
     const post = await nextRequest(http, '/api/universes/us-big/ensure', 'POST');
     expect(post.request.body).toEqual({
       start: '2025-01-01',
@@ -161,7 +241,10 @@ describe('UniverseDetailPage', () => {
       failed: [],
     });
     await settle();
-    const result = el.querySelector('[aria-label="Ensure data result"]')!;
+    expect(confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ confirmLabel: 'Fetch missing data' }),
+    );
+    const result = el.querySelector('[aria-label="Fetch missing data result"]')!;
     expect(result.textContent).toContain('Fetched');
     expect(result.textContent).toContain('2025-01-01 to 2025-06-30');
   });
@@ -171,7 +254,7 @@ describe('UniverseDetailPage', () => {
     start.value = '2026-12-01';
     start.dispatchEvent(new Event('change'));
     fixture.detectChanges();
-    button('Ensure data')!.click();
+    button('Fetch missing data')!.click();
     await settle();
     expect(el.textContent).toContain('start date must be on or before');
     expect(confirm).not.toHaveBeenCalled();
@@ -195,7 +278,7 @@ describe('UniverseDetailPage', () => {
 
     it('can refresh and fetch data, but only admins delete', () => {
       expect(button('Refresh')!.disabled).toBe(false);
-      expect(button('Ensure data')!.disabled).toBe(false);
+      expect(button('Fetch missing data')!.disabled).toBe(false);
       expect(button('Delete')!.disabled).toBe(true);
       expect(el.querySelector('app-page-header')!.textContent).toContain('Admins only.');
       expect(el.textContent).not.toContain('the lake');

@@ -41,25 +41,11 @@
 }
 
 .date-row {
-  max-width: 16rem;
-  padding-bottom: 0;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  margin: 0;
-  list-style: none;
-  max-height: 20rem;
-  overflow-y: auto;
-
-  li {
-    padding: 2px var(--space-2);
-    border-radius: var(--radius-sm);
-    background: var(--color-surface-3);
-    font-size: var(--text-xs);
-  }
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  max-width: 28rem;
+  padding-bottom: var(--space-3);
 }
 
 .intro {
