@@ -2,7 +2,7 @@
 
 Design for roadmap Phase 21. It takes Stonks from one decision a day to decisions on minute bars, with live prices, a live event engine, intraday strategies, and the risk and monitoring an always-on loop needs.
 
-Status: 21.1 (streaming data) built. 21.2 and 21.3 are planned and split into small work packages (section 9).
+Status: 21.1 (streaming data) and 21.3.4 (monitoring) built. The rest of 21.2 and 21.3 is split into small work packages (section 9).
 
 Owner decisions this page follows:
 
@@ -102,7 +102,7 @@ flowchart LR
 
 - **Strategies**: a few reference strategies that declare minute intervals (opening range breakout, VWAP reversion, intraday time-series momentum), each with a hypothesis card (P1) and lab support on sessions (walk-forward by session, embargo in bars, P9).
 - **Risk**: registered `RiskRule`s and halts for the intraday loop (section 6).
-- **Monitoring**: stream and engine health on the metrics endpoint, a dead-man on the engine heartbeat, event-to-order latency, a live panel in the console, and alerts.
+- **Monitoring** (21.3.4, built): stream and engine health on the metrics endpoint, a dead-man on bar closes, event-to-order latency, a live panel in the console, and alerts. See section 10.
 
 ## 4. Session rules
 
@@ -148,7 +148,7 @@ flowchart LR
 - No migration. Bars go to the existing `bars` store and recordings are Parquet files.
 - Tests: unit tests per module, `tests/fakes/eodhd_ws.py` (the fake server), EODHD message fixtures in `tests/fixtures/streaming/` shaped after the vendor's documented messages, end to end runner tests (drop, reconnect, backfill, record and replay into the same bars), and a live contract test.
 - The lake has one writer. `python -m stonks.streaming run` opens the lake itself, so it cannot run next to `stonks serve` on the DuckDB bar table. The Parquet bar store, or running the stream inside the process that owns the lake (21.2.5), avoids that.
-- Not yet: the quality checker on streamed bars (the REST ingest keeps it), a scheduler job that starts the runner at the open (21.2.5), and the stream health on the API metrics endpoint (21.3.4).
+- Not yet: the quality checker on streamed bars (the REST ingest keeps it) and a scheduler job that starts the runner at the open (21.2.5). The stream health reaches the API metrics endpoint through the engine status row (21.3.4, section 10).
 
 ## 9. Work packages
 
@@ -174,3 +174,26 @@ Waves:
 2. 21.2.1, 21.2.4 and 21.3.1 in parallel.
 3. 21.2.2, 21.2.3 and 21.3.2.
 4. 21.2.5, 21.3.3, 21.3.4 and 21.3.5.
+
+## 10. Monitoring (21.3.4)
+
+The engine runs in its own process, so the API cannot read its memory. It writes a status row, and everything else reads that row.
+
+```mermaid
+flowchart LR
+  DRV[EventDriver] -->|first handler| MON[EngineMonitor<br/>dispatch lag,<br/>event to order]
+  RUN[StreamRunner health] --> MON
+  MON -->|every publish_seconds| ROW[(engine_status<br/>SQLite 038)]
+  ROW --> MET[GET /metrics<br/>stream and engine families]
+  ROW --> API[GET /api/stream/status<br/>console Live engine, MCP]
+  ROW --> DOG[scheduler watchdog<br/>engine dead-man]
+  DOG -->|silent in market hours| NOT[Notifier<br/>one alert per stretch]
+```
+
+- **`EngineMonitor`** (`engine/monitor.py`) registers two driver handlers. `monitor.dispatch` runs first on every bar close and records the dispatch lag, the clock time past the close plus settle (zero in a replay, by construction). `monitor.publish` runs last and writes the row, at most every `publish_seconds`. `record_order(event)` records event to order latency, from the dispatch of that bar close to the order. The decision step and the router call it. A failed write is logged and never reaches the engine.
+- **Latency** lives in `LatencyHistogram`: fixed buckets from 10 ms to 60 s that render as Prometheus histograms. The console shows upper estimates of the median and the 95th percentile.
+- **`engine_status`** (`engine/status.py`): one row per engine with its calendar, state, start, last update, stop, last dispatch and a JSON snapshot (stream health, driver counters, histograms). A row not updated for `stale_after_seconds` belongs to an engine that is not live, so its stream reports down too.
+- **Metrics**: `engine_metric_families` renders the stream families of 21.1 plus the last event age, and the engine families (up, last dispatch age, bar closes, late bars, handler errors, both histograms), merged so each name appears once. `GET /metrics` appends them.
+- **Dead-man** (`engine/deadman.py`): no bar close for `deadman_minutes` while the engine's market is open alerts the operator. It runs inside the scheduler's `DeadlineWatchdog` as an extra check and deduplicates in `scheduler_deadline_alerts`, like a missed deadline.
+- **Status route**: `GET /api/stream/status` (`data.read`) adds live or not, market open, the dead-man state and scrubbed stream errors. Intraday P&L per book comes with 21.3.3. Until then the route carries a note, and the console shows it.
+- **Settings**: `[streaming.monitor]` with `deadman_minutes` (5), `stale_after_seconds` (120) and `publish_seconds` (15).

@@ -721,6 +721,32 @@ flowchart LR
   paused books show as a count only. The `broker:<gateway>` health checks
   still count toward the overall state, but leave the Runs list.
 
+## Live engine (Phase 21.3.4)
+
+| Page | Route | What it does |
+|---|---|---|
+| Live engine | `/live` | Each intraday engine: running or not, its market, the silent-engine alarm, the price stream, speed from bar close to decision and from decision to order, and steps that failed |
+
+- **Getting there.** System group, admins. The page reads `GET
+  /api/stream/status` (`data.read`) every 15 seconds and on Refresh.
+- **Engine card.** One card per engine, headed by its id, with a status
+  pill in words: Running, Market closed, Reconnecting, Silent, Not
+  reporting or Stopped. A line under it says what that means for trading.
+  A silent engine shows how long it has been silent, and a banner counts
+  the engines that need a look.
+- **Price stream.** Connected or not, the source, the age of the last
+  price, bars built, late prices dropped, connection drops, gaps, and the
+  last problem (scrubbed of keys by the API).
+- **Speed.** Median and 95% upper estimates from the histograms, the
+  slowest order and how many orders were measured. Nothing measured yet
+  reads so.
+- **Intraday P&L.** A panel for P&L per portfolio. Until live marks exist
+  (21.3.3) it shows the API's note.
+- **No engine.** An empty state says intraday trading is off, or that live
+  prices are on and the engine has not reported yet.
+- Words avoid system names: "late prices", not ticks. `live-state.ts`
+  holds them, with tests.
+
 ## Assistant, cash flows and tax (Phase 20)
 
 | Page | Route | What it does |
@@ -1008,6 +1034,7 @@ about the same thing.
 | Your risk limits | `/api/risk/limits` | none | `get_my_risk_limits` |
 | Live settings (allocation, account profile, live safeguards, account rules) | `/api/portfolios/{id}/live/*` | none | none |
 | Broker gateways (Health) | `/api/brokers/gateways` | none | none |
+| Live engine | `/api/stream/status` | none | `get_stream_status` |
 | Download CSV | `/api/exports/*` | none | none |
 | New order, orders by hand | `/api/orders/manual`, `origin=manual` | `stonks orders` | `place_order`, `change_order`, `cancel_order` |
 | Drafts (to approve) | `/api/orders/drafts` | none | `draft_order`, `list_order_drafts` |
@@ -1331,7 +1358,7 @@ flowchart LR
   |---|---|---|
   | (top) | Today, Strategies, Orders (tabs: Orders, Fills, Trading runs, Trade costs), Charts, Watchlists, Insights, Notifications | everyone signed in |
   | Research | Paper trading, Leaderboard, Studio, Lab, Go live, Assistant | Studio and Lab need `lab.run`, the rest are for all |
-  | System | Overview (`/dashboard`), Health, Schedule, Data, Data quality, Universes, Halts, Users | admins |
+  | System | Overview (`/dashboard`), Health, Live engine, Schedule, Data, Data quality, Universes, Halts, Users | admins |
   | Account menu (by your name) | Profile, Settings, Broker connections, Get set up, Glossary, Sign out | everyone signed in |
 
   With open reads and nobody signed in (dev) everything shows.
