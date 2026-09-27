@@ -8,6 +8,7 @@ import { splitMetrics } from '../metrics';
 import { HelpTip } from '../ui/help-tip';
 import { StatTile } from '../ui/stat-tile';
 import { StatusPill } from '../ui/status-pill';
+import { ParamHeatmap } from './param-heatmap';
 import { PreflightIssues } from './preflight-issues';
 import { testLabel } from './survival-tests';
 import { FigureGrid, benchmarkFigures, benchmarkName } from './result-figures';
@@ -30,7 +31,7 @@ function paramText(v: unknown): string {
 @Component({
   selector: 'app-lab-run-result',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FigureGrid, HelpTip, PreflightIssues, RouterLink, StatTile, StatusPill],
+  imports: [FigureGrid, HelpTip, ParamHeatmap, PreflightIssues, RouterLink, StatTile, StatusPill],
   template: `
     @let r = result();
     <div class="summary">
@@ -99,6 +100,13 @@ function paramText(v: unknown): string {
         <h3 id="lr-bench-title">Against the benchmark</h3>
         <p class="muted bench-name">{{ benchName() }}</p>
         <app-figure-grid label="Benchmark figures" [figures]="bench()" />
+      </section>
+    }
+
+    @if (r.heatmap; as h) {
+      <section aria-labelledby="lr-heatmap-result-title">
+        <h3 id="lr-heatmap-result-title">Parameter heatmap</h3>
+        <app-param-heatmap [heatmap]="h" />
       </section>
     }
 
