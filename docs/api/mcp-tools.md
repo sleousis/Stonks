@@ -1182,8 +1182,8 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 | `exclude` | list[string] \| null | no | `null` | strategies to leave out |
 | `preset` | "quick" \| "standard" \| "promotion" \| null | no | `null` | named survival suite when survival_tests is omitted (default: promotion when registering, else quick) |
 | `survival_tests` | list[string] \| null | no | `null` | survival suite for every strategy, the server default when omitted |
-| `tuner` | "grid" \| "random" | no | `"random"` |  |
-| `objective` | "sharpe" \| "cagr" \| "final_return" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no | `"sharpe"` |  |
+| `tuner` | "grid" \| "random" \| "optuna" | no | `"random"` |  |
+| `objective` | "sharpe" \| "cagr" \| "final_return" \| "sortino" \| "calmar" \| "sharpe_dd" \| "multi" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no | `"sharpe"` |  |
 | `budget` | integer | no | `20` | tuner trials each |
 | `train_ratio` | number | no | `0.7` |  |
 | `interval` | string | no | `"1d"` |  |
@@ -1379,8 +1379,8 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 | `start` | date | yes |  | YYYY-MM-DD |
 | `end` | date | yes |  | YYYY-MM-DD |
 | `survival_tests` | list[string] \| null | no | `null` | survival suite; server default when omitted |
-| `tuner` | "grid" \| "random" | no | `"random"` |  |
-| `objective` | "sharpe" \| "cagr" \| "final_return" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no | `"sharpe"` |  |
+| `tuner` | "grid" \| "random" \| "optuna" | no | `"random"` |  |
+| `objective` | "sharpe" \| "cagr" \| "final_return" \| "sortino" \| "calmar" \| "sharpe_dd" \| "multi" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no | `"sharpe"` |  |
 | `budget` | integer | no | `20` | tuner trials |
 | `train_ratio` | number | no | `0.7` |  |
 | `interval` | string | no | `"1d"` |  |
@@ -1468,8 +1468,8 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 | `start` | date | yes |  | YYYY-MM-DD |
 | `end` | date | yes |  | YYYY-MM-DD |
 | `survival_tests` | list[string] \| null | no | `null` | survival suite; server default when omitted |
-| `tuner` | "grid" \| "random" | no | `"random"` |  |
-| `objective` | "sharpe" \| "cagr" \| "final_return" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no | `"sharpe"` |  |
+| `tuner` | "grid" \| "random" \| "optuna" | no | `"random"` |  |
+| `objective` | "sharpe" \| "cagr" \| "final_return" \| "sortino" \| "calmar" \| "sharpe_dd" \| "multi" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no | `"sharpe"` |  |
 | `budget` | integer | no | `20` | tuner trials |
 | `train_ratio` | number | no | `0.7` |  |
 | `interval` | string | no | `"1d"` |  |
@@ -1508,8 +1508,10 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 | `preflight` | boolean \| null | no | `null` | check the data before tuning (missing bars, gaps). Default [lab] preflight |
 | `strict_preflight` | boolean \| null | no | `null` | treat preflight warnings as errors. Default [lab] strict_preflight |
 | `survival_tests` | list[string] \| null | no | `null` | survival suite; server default when omitted |
-| `tuner` | "grid" \| "random" | no | `"random"` |  |
-| `objective` | "sharpe" \| "cagr" \| "final_return" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no | `"sharpe"` |  |
+| `tuner` | "grid" \| "random" \| "optuna" | no | `"random"` |  |
+| `sampler` | "tpe" \| "nsga2" \| "random" | no | `"tpe"` | optuna tuner: tpe, nsga2 (Pareto over multi) or random |
+| `prune` | boolean | no | `false` | optuna tuner: stop trials whose fast score trails |
+| `objective` | "sharpe" \| "cagr" \| "final_return" \| "sortino" \| "calmar" \| "sharpe_dd" \| "multi" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no | `"sharpe"` |  |
 | `budget` | integer | no | `20` | tuner trials |
 | `train_ratio` | number | no | `0.7` |  |
 | `interval` | string | no | `"1d"` |  |
@@ -1526,6 +1528,7 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 | `test_options` | object \| null | no | `null` | options per survival test id, validated by each test (422 on an unknown test or option), e.g. {"oos": {"mode": "sharpe", "min_trades": 0}, "deflated_sharpe": {"min_dsr": 0.9}, "pbo": {"max_pbo": 0.3}, "mc_trades": {"n_paths": 2000}, "cost_stress": {"stress_multiplier": 3}}; each test must be in the suite |
 | `benchmark` | string \| null | no | `null` | benchmark to compare against: auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark |
 | `embargo_bars` | integer \| null | no | `null` | trading bars skipped between the train and validation windows (a strategy's label horizon raises it); default [lab] embargo_bars |
+| `heatmap` | any \| null | no | `null` | parameter heatmap around the tuned set (22.5) |
 
 ### `run_tick`
 

@@ -2195,6 +2195,16 @@
             "title": "Grid Size",
             "type": "integer"
           },
+          "heatmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HeatmapOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "hypothesis": {
             "anyOf": [
               {
@@ -2228,6 +2238,10 @@
               "sharpe",
               "cagr",
               "final_return",
+              "sortino",
+              "calmar",
+              "sharpe_dd",
+              "multi",
               "cv_sharpe",
               "cv_cagr",
               "cv_final_return"
@@ -2274,6 +2288,11 @@
             ],
             "title": "Preset"
           },
+          "prune": {
+            "default": false,
+            "title": "Prune",
+            "type": "boolean"
+          },
           "register_if_passes": {
             "default": false,
             "title": "Register If Passes",
@@ -2283,6 +2302,16 @@
             "default": false,
             "title": "Register Strategy",
             "type": "boolean"
+          },
+          "sampler": {
+            "default": "tpe",
+            "enum": [
+              "tpe",
+              "nsga2",
+              "random"
+            ],
+            "title": "Sampler",
+            "type": "string"
           },
           "seed": {
             "default": 0,
@@ -2398,7 +2427,8 @@
             "default": "random",
             "enum": [
               "grid",
-              "random"
+              "random",
+              "optuna"
             ],
             "title": "Tuner",
             "type": "string"
@@ -3493,6 +3523,135 @@
           }
         },
         "title": "HealthRunRequest",
+        "type": "object"
+      },
+      "HeatmapOptions": {
+        "additionalProperties": false,
+        "description": "Which two parameters to sweep and how finely.",
+        "properties": {
+          "fast": {
+            "default": true,
+            "description": "Score cells on the vectorised fast path when the strategy has one.",
+            "title": "Fast",
+            "type": "boolean"
+          },
+          "grid_size": {
+            "default": 7,
+            "description": "Points per axis.",
+            "maximum": 15.0,
+            "minimum": 2.0,
+            "title": "Grid Size",
+            "type": "integer"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Parameter across the map. Default: the first numeric tunable one.",
+            "title": "X"
+          },
+          "y": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Parameter down the map. Default: the next numeric tunable one.",
+            "title": "Y"
+          }
+        },
+        "title": "HeatmapOptions",
+        "type": "object"
+      },
+      "HeatmapView": {
+        "description": "Scores over ``y_values`` (rows) by ``x_values`` (columns), ``None``\nfor a cell that failed. ``metric`` is the run's objective, or\n``fast_sharpe`` when the cells were scored on the vectorised fast path.\nEvery cell is a trial in the ledger.",
+        "properties": {
+          "best": {
+            "additionalProperties": true,
+            "title": "Best",
+            "type": "object"
+          },
+          "fast": {
+            "title": "Fast",
+            "type": "boolean"
+          },
+          "fixed": {
+            "additionalProperties": true,
+            "title": "Fixed",
+            "type": "object"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "plateau": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlateauOverlayView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scores": {
+            "items": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "Scores",
+            "type": "array"
+          },
+          "x": {
+            "title": "X",
+            "type": "string"
+          },
+          "x_values": {
+            "items": {},
+            "title": "X Values",
+            "type": "array"
+          },
+          "y": {
+            "title": "Y",
+            "type": "string"
+          },
+          "y_values": {
+            "items": {},
+            "title": "Y Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "x_values",
+          "y_values",
+          "scores",
+          "metric",
+          "fast",
+          "best",
+          "fixed"
+        ],
+        "title": "HeatmapView",
         "type": "object"
       },
       "HoldingAgreement": {
@@ -4788,6 +4947,16 @@
             "title": "Grid Size",
             "type": "integer"
           },
+          "heatmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HeatmapOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "hypothesis": {
             "anyOf": [
               {
@@ -4821,6 +4990,10 @@
               "sharpe",
               "cagr",
               "final_return",
+              "sortino",
+              "calmar",
+              "sharpe_dd",
+              "multi",
               "cv_sharpe",
               "cv_cagr",
               "cv_final_return"
@@ -4867,6 +5040,11 @@
             ],
             "title": "Preset"
           },
+          "prune": {
+            "default": false,
+            "title": "Prune",
+            "type": "boolean"
+          },
           "register_if_passes": {
             "default": false,
             "title": "Register If Passes",
@@ -4876,6 +5054,16 @@
             "default": false,
             "title": "Register Strategy",
             "type": "boolean"
+          },
+          "sampler": {
+            "default": "tpe",
+            "enum": [
+              "tpe",
+              "nsga2",
+              "random"
+            ],
+            "title": "Sampler",
+            "type": "string"
           },
           "seed": {
             "default": 0,
@@ -4994,7 +5182,8 @@
             "default": "random",
             "enum": [
               "grid",
-              "random"
+              "random",
+              "optuna"
             ],
             "title": "Tuner",
             "type": "string"
@@ -5079,6 +5268,16 @@
               }
             ],
             "title": "Ensure Job Id"
+          },
+          "heatmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HeatmapView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "n_trials_class": {
             "default": 0,
@@ -7860,6 +8059,73 @@
           "change_pct"
         ],
         "title": "PeriodPnl",
+        "type": "object"
+      },
+      "PlateauOverlayView": {
+        "description": "The plateau test's verdict on the tuned set, laid over the map.",
+        "properties": {
+          "metrics": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "default": {},
+            "title": "Metrics",
+            "type": "object"
+          },
+          "notes": {
+            "title": "Notes",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "step": {
+            "title": "Step",
+            "type": "number"
+          },
+          "x_range": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Range"
+          },
+          "y_range": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Range"
+          }
+        },
+        "required": [
+          "passed",
+          "notes",
+          "step"
+        ],
+        "title": "PlateauOverlayView",
         "type": "object"
       },
       "PnlRowView": {
@@ -12043,6 +12309,16 @@
             "title": "Grid Size",
             "type": "integer"
           },
+          "heatmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HeatmapOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "hypothesis": {
             "anyOf": [
               {
@@ -12076,6 +12352,10 @@
               "sharpe",
               "cagr",
               "final_return",
+              "sortino",
+              "calmar",
+              "sharpe_dd",
+              "multi",
               "cv_sharpe",
               "cv_cagr",
               "cv_final_return"
@@ -12122,6 +12402,11 @@
             ],
             "title": "Preset"
           },
+          "prune": {
+            "default": false,
+            "title": "Prune",
+            "type": "boolean"
+          },
           "register_if_passes": {
             "default": false,
             "title": "Register If Passes",
@@ -12131,6 +12416,16 @@
             "default": false,
             "title": "Register Strategy",
             "type": "boolean"
+          },
+          "sampler": {
+            "default": "tpe",
+            "enum": [
+              "tpe",
+              "nsga2",
+              "random"
+            ],
+            "title": "Sampler",
+            "type": "string"
           },
           "seed": {
             "default": 0,
@@ -12261,7 +12556,8 @@
             "default": "random",
             "enum": [
               "grid",
-              "random"
+              "random",
+              "optuna"
             ],
             "title": "Tuner",
             "type": "string"

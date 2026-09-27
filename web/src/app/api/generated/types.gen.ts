@@ -1152,6 +1152,7 @@ export type DraftLabRunRequest = {
      * Grid Size
      */
     grid_size?: number;
+    heatmap?: HeatmapOptions | null;
     /**
      * Hypothesis
      */
@@ -1164,7 +1165,7 @@ export type DraftLabRunRequest = {
     /**
      * Objective
      */
-    objective?: 'sharpe' | 'cagr' | 'final_return' | 'cv_sharpe' | 'cv_cagr' | 'cv_final_return';
+    objective?: 'sharpe' | 'cagr' | 'final_return' | 'sortino' | 'calmar' | 'sharpe_dd' | 'multi' | 'cv_sharpe' | 'cv_cagr' | 'cv_final_return';
     /**
      * Preflight
      */
@@ -1178,6 +1179,10 @@ export type DraftLabRunRequest = {
      */
     preset?: 'promotion' | 'quick' | 'standard' | null;
     /**
+     * Prune
+     */
+    prune?: boolean;
+    /**
      * Register If Passes
      */
     register_if_passes?: boolean;
@@ -1185,6 +1190,10 @@ export type DraftLabRunRequest = {
      * Register Strategy
      */
     register_strategy?: boolean;
+    /**
+     * Sampler
+     */
+    sampler?: 'tpe' | 'nsga2' | 'random';
     /**
      * Seed
      */
@@ -1216,7 +1225,7 @@ export type DraftLabRunRequest = {
     /**
      * Tuner
      */
-    tuner?: 'grid' | 'random';
+    tuner?: 'grid' | 'random' | 'optuna';
     /**
      * Universe
      */
@@ -1841,6 +1850,90 @@ export type HealthRunRequest = {
      * Tickers
      */
     tickers?: Array<string> | null;
+};
+
+/**
+ * HeatmapOptions
+ *
+ * Which two parameters to sweep and how finely.
+ */
+export type HeatmapOptions = {
+    /**
+     * Fast
+     *
+     * Score cells on the vectorised fast path when the strategy has one.
+     */
+    fast?: boolean;
+    /**
+     * Grid Size
+     *
+     * Points per axis.
+     */
+    grid_size?: number;
+    /**
+     * X
+     *
+     * Parameter across the map. Default: the first numeric tunable one.
+     */
+    x?: string | null;
+    /**
+     * Y
+     *
+     * Parameter down the map. Default: the next numeric tunable one.
+     */
+    y?: string | null;
+};
+
+/**
+ * HeatmapView
+ *
+ * Scores over ``y_values`` (rows) by ``x_values`` (columns), ``None``
+ * for a cell that failed. ``metric`` is the run's objective, or
+ * ``fast_sharpe`` when the cells were scored on the vectorised fast path.
+ * Every cell is a trial in the ledger.
+ */
+export type HeatmapView = {
+    /**
+     * Best
+     */
+    best: {
+        [key: string]: unknown;
+    };
+    /**
+     * Fast
+     */
+    fast: boolean;
+    /**
+     * Fixed
+     */
+    fixed: {
+        [key: string]: unknown;
+    };
+    /**
+     * Metric
+     */
+    metric: string;
+    plateau?: PlateauOverlayView | null;
+    /**
+     * Scores
+     */
+    scores: Array<Array<number | null>>;
+    /**
+     * X
+     */
+    x: string;
+    /**
+     * X Values
+     */
+    x_values: Array<unknown>;
+    /**
+     * Y
+     */
+    y: string;
+    /**
+     * Y Values
+     */
+    y_values: Array<unknown>;
 };
 
 /**
@@ -2526,6 +2619,7 @@ export type LabRunRequest = {
      * Grid Size
      */
     grid_size?: number;
+    heatmap?: HeatmapOptions | null;
     /**
      * Hypothesis
      */
@@ -2538,7 +2632,7 @@ export type LabRunRequest = {
     /**
      * Objective
      */
-    objective?: 'sharpe' | 'cagr' | 'final_return' | 'cv_sharpe' | 'cv_cagr' | 'cv_final_return';
+    objective?: 'sharpe' | 'cagr' | 'final_return' | 'sortino' | 'calmar' | 'sharpe_dd' | 'multi' | 'cv_sharpe' | 'cv_cagr' | 'cv_final_return';
     /**
      * Preflight
      */
@@ -2552,6 +2646,10 @@ export type LabRunRequest = {
      */
     preset?: 'promotion' | 'quick' | 'standard' | null;
     /**
+     * Prune
+     */
+    prune?: boolean;
+    /**
      * Register If Passes
      */
     register_if_passes?: boolean;
@@ -2559,6 +2657,10 @@ export type LabRunRequest = {
      * Register Strategy
      */
     register_strategy?: boolean;
+    /**
+     * Sampler
+     */
+    sampler?: 'tpe' | 'nsga2' | 'random';
     /**
      * Seed
      */
@@ -2591,7 +2693,7 @@ export type LabRunRequest = {
     /**
      * Tuner
      */
-    tuner?: 'grid' | 'random';
+    tuner?: 'grid' | 'random' | 'optuna';
     /**
      * Universe
      */
@@ -2626,6 +2728,7 @@ export type LabRunView = {
      * Ensure Job Id
      */
     ensure_job_id?: string | null;
+    heatmap?: HeatmapView | null;
     /**
      * N Trials Class
      */
@@ -4241,6 +4344,40 @@ export type PeriodPnl = {
      * Start Value
      */
     start_value: number | null;
+};
+
+/**
+ * PlateauOverlayView
+ *
+ * The plateau test's verdict on the tuned set, laid over the map.
+ */
+export type PlateauOverlayView = {
+    /**
+     * Metrics
+     */
+    metrics?: {
+        [key: string]: number | null;
+    };
+    /**
+     * Notes
+     */
+    notes: string;
+    /**
+     * Passed
+     */
+    passed: boolean;
+    /**
+     * Step
+     */
+    step: number;
+    /**
+     * X Range
+     */
+    x_range?: Array<number> | null;
+    /**
+     * Y Range
+     */
+    y_range?: Array<number> | null;
 };
 
 /**
@@ -6537,6 +6674,7 @@ export type SweepRequest = {
      * Grid Size
      */
     grid_size?: number;
+    heatmap?: HeatmapOptions | null;
     /**
      * Hypothesis
      */
@@ -6549,7 +6687,7 @@ export type SweepRequest = {
     /**
      * Objective
      */
-    objective?: 'sharpe' | 'cagr' | 'final_return' | 'cv_sharpe' | 'cv_cagr' | 'cv_final_return';
+    objective?: 'sharpe' | 'cagr' | 'final_return' | 'sortino' | 'calmar' | 'sharpe_dd' | 'multi' | 'cv_sharpe' | 'cv_cagr' | 'cv_final_return';
     /**
      * Preflight
      */
@@ -6563,6 +6701,10 @@ export type SweepRequest = {
      */
     preset?: 'promotion' | 'quick' | 'standard' | null;
     /**
+     * Prune
+     */
+    prune?: boolean;
+    /**
      * Register If Passes
      */
     register_if_passes?: boolean;
@@ -6570,6 +6712,10 @@ export type SweepRequest = {
      * Register Strategy
      */
     register_strategy?: boolean;
+    /**
+     * Sampler
+     */
+    sampler?: 'tpe' | 'nsga2' | 'random';
     /**
      * Seed
      */
@@ -6605,7 +6751,7 @@ export type SweepRequest = {
     /**
      * Tuner
      */
-    tuner?: 'grid' | 'random';
+    tuner?: 'grid' | 'random' | 'optuna';
     /**
      * Universe
      */

@@ -1996,6 +1996,10 @@
               "sharpe",
               "cagr",
               "final_return",
+              "sortino",
+              "calmar",
+              "sharpe_dd",
+              "multi",
               "cv_sharpe",
               "cv_cagr",
               "cv_final_return"
@@ -2104,7 +2108,8 @@
             "default": "random",
             "enum": [
               "grid",
-              "random"
+              "random",
+              "optuna"
             ],
             "title": "Tuner",
             "type": "string"
@@ -3968,6 +3973,10 @@
               "sharpe",
               "cagr",
               "final_return",
+              "sortino",
+              "calmar",
+              "sharpe_dd",
+              "multi",
               "cv_sharpe",
               "cv_cagr",
               "cv_final_return"
@@ -4076,7 +4085,8 @@
             "default": "random",
             "enum": [
               "grid",
-              "random"
+              "random",
+              "optuna"
             ],
             "title": "Tuner",
             "type": "string"
@@ -4213,6 +4223,66 @@
       "description": "Queue a lab run: tune a strategy class, fit, run the survival suite and\ngive a pass/fail verdict. Returns the job; use wait_for_job for the result.\nEvery run and trial is recorded in the trial ledger (with the hypothesis).\nGive typed tickers (universe) or a stored universe (universe_id), and\nensure_data=true to fetch missing bars first.\nRegistering (register_strategy, or register_if_passes to register only a\npassing run) needs confirm=true (preview otherwise).",
       "input_schema": {
         "$defs": {
+          "HeatmapOptions": {
+            "additionalProperties": false,
+            "description": "A 2D sweep of two parameters around the tuned set, with the plateau\nverdict on it. Every cell counts as a trial.",
+            "properties": {
+              "fast": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "score cells on the vectorised fast path (default true)",
+                "title": "Fast"
+              },
+              "grid_size": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "points per axis, 2..15 (default 7)",
+                "title": "Grid Size"
+              },
+              "x": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "param across (default: first numeric)",
+                "title": "X"
+              },
+              "y": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "param down (default: next numeric)",
+                "title": "Y"
+              }
+            },
+            "title": "HeatmapOptions",
+            "type": "object"
+          },
           "McptOptions": {
             "additionalProperties": false,
             "description": "Settings of the ``permutation`` (Monte-Carlo permutation) survival test.",
@@ -4503,6 +4573,18 @@
             "title": "Ensure Data",
             "type": "boolean"
           },
+          "heatmap": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/HeatmapOptions"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "parameter heatmap around the tuned set (22.5)"
+          },
           "hypothesis": {
             "anyOf": [
               {
@@ -4540,6 +4622,10 @@
               "sharpe",
               "cagr",
               "final_return",
+              "sortino",
+              "calmar",
+              "sharpe_dd",
+              "multi",
               "cv_sharpe",
               "cv_cagr",
               "cv_final_return"
@@ -4592,6 +4678,12 @@
             "description": "named survival suite when survival_tests is omitted (default: promotion when registering, else quick)",
             "title": "Preset"
           },
+          "prune": {
+            "default": false,
+            "description": "optuna tuner: stop trials whose fast score trails",
+            "title": "Prune",
+            "type": "boolean"
+          },
           "register_if_passes": {
             "default": false,
             "description": "register the result in shadow only if every survival test passes (needs confirm=true)",
@@ -4603,6 +4695,17 @@
             "description": "register the result in shadow status whatever the verdict (needs confirm=true)",
             "title": "Register Strategy",
             "type": "boolean"
+          },
+          "sampler": {
+            "default": "tpe",
+            "description": "optuna tuner: tpe, nsga2 (Pareto over multi) or random",
+            "enum": [
+              "tpe",
+              "nsga2",
+              "random"
+            ],
+            "title": "Sampler",
+            "type": "string"
           },
           "seed": {
             "default": 0,
@@ -4674,7 +4777,8 @@
             "default": "random",
             "enum": [
               "grid",
-              "random"
+              "random",
+              "optuna"
             ],
             "title": "Tuner",
             "type": "string"
@@ -4963,6 +5067,10 @@
               "sharpe",
               "cagr",
               "final_return",
+              "sortino",
+              "calmar",
+              "sharpe_dd",
+              "multi",
               "cv_sharpe",
               "cv_cagr",
               "cv_final_return"
@@ -5085,7 +5193,8 @@
             "default": "random",
             "enum": [
               "grid",
-              "random"
+              "random",
+              "optuna"
             ],
             "title": "Tuner",
             "type": "string"
