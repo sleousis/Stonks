@@ -753,6 +753,7 @@ class Backtester:
         self, as_of: datetime, prices: dict[str, float], tradable: Sequence[str]
     ) -> list[Order]:
         """The production pipeline over this bar's signals; see the module doc."""
+        from stonks.portfolio import returns as portfolio_returns
         from stonks.portfolio.pipeline import (
             PORTFOLIO_STRATEGY,
             BookInput,
@@ -785,6 +786,12 @@ class Backtester:
             asset_classes=self._asset_classes,
             vols_annual={} if construction.is_single_winner else vols_from_history(history),
         )
+        lookback = portfolio_returns.returns_lookback(construction)
+        if lookback is not None:
+            # 9.5.1: daily returns through this decision's point-in-time view
+            names = {t for scores in signals.values() for t in scores} | set(portfolio.positions)
+            past = portfolio_returns.market_history(self._view, names, lookback=lookback)
+            market = replace(market, returns_history=past.returns, volumes=past.volumes)
         weights = self._config.strategy_weights
         policy = self._config.risk
         context = None

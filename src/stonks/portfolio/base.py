@@ -101,6 +101,8 @@ class ConstructionInput:
     - ``betas``: optional beta per ticker for beta-neutral books; missing
       ones are estimated from ``returns_history`` (:func:`estimate_betas`),
       else taken as 1.0.
+    - ``volumes``: the decision bar's share volume per ticker, for the
+      square-root impact term of ``mean_variance_costs``.
     """
 
     signals: Mapping[StrategyId, Mapping[Ticker, float]]
@@ -113,6 +115,7 @@ class ConstructionInput:
     forecast_history: pd.DataFrame | None = None
     returns_history: pd.DataFrame | None = None
     betas: Mapping[Ticker, float] = field(default_factory=dict)
+    volumes: Mapping[Ticker, float] = field(default_factory=dict)
 
     def betas_for(self, tickers: Iterable[Ticker]) -> dict[Ticker, float]:
         """Beta per ticker: given, else estimated, else 1.0."""
@@ -226,6 +229,11 @@ class PortfolioConstructor(ABC):
 
     @abstractmethod
     def target_weights(self, inp: ConstructionInput) -> TargetBook: ...
+
+    def returns_lookback(self) -> int | None:
+        """Daily return rows this constructor reads from ``returns_history``
+        (``None``: it reads none, so callers load nothing)."""
+        return None
 
     def normalization(self) -> str:
         """The signal normalisation this constructor's mode needs."""

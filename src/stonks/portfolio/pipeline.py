@@ -101,7 +101,8 @@ class MarketView:
 
     ``buyable``: tickers with a fresh price (``None`` = every priced one).
     ``vols_annual`` and ``returns_history`` feed the volatility-aware
-    constructors; nothing in them may be dated after ``as_of``."""
+    constructors (the history from :mod:`stonks.portfolio.returns`); nothing
+    in them may be dated after ``as_of``."""
 
     as_of: date | datetime
     prices: Mapping[str, float]
@@ -377,6 +378,7 @@ def _construction_input(
         vols_annual=market.vols_annual,
         asset_classes=market.asset_classes,  # type: ignore[arg-type]
         returns_history=market.returns_history,
+        volumes=market.volumes or {},
     )
 
 

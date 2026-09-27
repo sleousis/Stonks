@@ -184,8 +184,8 @@ class MeanVarianceCosts(PortfolioConstructor):
     - ``mu_i = ic * sigma_i * score_i``; covariance as in ``hrp``/``erc``.
     - Weights stay in ``[0, max_weight]`` (``[-max_weight, max_weight]``
       when not long-only) with gross at most ``max_gross``.
-    - Impact needs daily share volumes on the input (``volumes``, read
-      duck-typed); names without one pay only ``spread_cost``.
+    - Impact needs daily share volumes on the input (``volumes``); names
+      without one pay only ``spread_cost``.
     - An infeasible turnover cap (the book already breaks a limit) is
       dropped for that decision and ``meta["turnover_relaxed"]`` is set.
       Any other solver failure holds the current weights.
@@ -200,6 +200,9 @@ class MeanVarianceCosts(PortfolioConstructor):
         super().__init__(settings)
         self.solver = get_solver(self.settings.solver)  # type: ignore[attr-defined]
         self.solver.check()
+
+    def returns_lookback(self) -> int | None:
+        return self.settings.lookback  # type: ignore[attr-defined]
 
     def target_weights(self, inp: ConstructionInput) -> TargetBook:
         s: MeanVarianceSettings = self.settings  # type: ignore[assignment]
@@ -257,7 +260,7 @@ class MeanVarianceCosts(PortfolioConstructor):
         upper = np.full(n, s.max_weight)
         lower = np.zeros(n) if s.long_only else -upper
         impact = np.zeros(n)
-        volumes = getattr(inp, "volumes", None) or {}
+        volumes = inp.volumes
         if s.impact > 0 and equity > 0:
             daily = sigma / math.sqrt(s.periods_per_year)
             for i, t in enumerate(tickers):

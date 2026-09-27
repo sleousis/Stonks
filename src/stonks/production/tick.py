@@ -86,6 +86,7 @@ from stonks.execution.reconcile import (
 )
 from stonks.logging import get_logger
 from stonks.notify import Notification, Notifier
+from stonks.portfolio import returns as portfolio_returns
 from stonks.portfolio.pipeline import (
     PORTFOLIO_STRATEGY,
     BookInput,
@@ -141,6 +142,7 @@ from stonks.production.signals import record_signals, signals_recorded
 from stonks.production.tca import annotate_orders, decision_values, tca_recorded
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
+from stonks.store.pit import PitSession
 from stonks.store.state import SqliteState
 from stonks.strategies._common import decision_interval
 
@@ -504,6 +506,7 @@ class _TickRun:
     _shadow: SignalSet | None = None
     _shadow_error: Exception | None = None
     _vols: dict[str, float] | None = None
+    _pit: PitSession | None = None
 
     def shadow_signals(self) -> SignalSet:
         """Shadow strategies scored once per tick (raises what the scoring
@@ -548,6 +551,16 @@ class _TickRun:
             history = load_history(self.lake, missing, self.as_of, bars=_VOL_HISTORY_BARS)
             self._vols.update(vols_from_history(history))
         return self._vols
+
+    def market_history(
+        self, tickers: Collection[str], lookback: int
+    ) -> portfolio_returns.MarketHistory:
+        """Daily returns up to ``as_of`` through one point-in-time session
+        per tick, so every book reads each ticker's bars once (P12)."""
+        if self._pit is None:
+            self._pit = PitSession(self.lake)
+        view = self._pit.at(self.as_of, decision_interval=Interval.DAY_1)
+        return portfolio_returns.market_history(view, tickers, lookback=lookback)
 
 
 def _run_tick_body(
@@ -974,6 +987,12 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         asset_classes=asset_classes,
         vols_annual=({} if construction.is_single_winner else run.vols([*universe, *held])),
     )
+    lookback = portfolio_returns.returns_lookback(construction)
+    if lookback is not None:
+        # 9.5.1: the covariance constructors read daily returns up to as_of
+        # (the market's volumes, from the priced bars, feed the impact term)
+        names = {t for scores in signals.values() for t in scores} | set(held)
+        market = replace(market, returns_history=run.market_history(names, lookback).returns)
     # Rules that need history (W3.1) run only with a context: built when the
     # book's policy (or a strategy slice's) enables one.
     risk_context = None

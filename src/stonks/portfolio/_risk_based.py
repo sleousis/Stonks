@@ -176,6 +176,9 @@ class RiskBasedConstructor(PortfolioConstructor):
 
     Settings = RiskBasedSettings
 
+    def returns_lookback(self) -> int | None:
+        return self.settings.lookback  # type: ignore[attr-defined]
+
     @abstractmethod
     def raw_weights(self, cov: CovarianceView, scores: np.ndarray) -> np.ndarray: ...
 

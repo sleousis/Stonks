@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 import sys
-from dataclasses import dataclass, field
 from datetime import date
 
 import numpy as np
@@ -110,11 +109,6 @@ def test_unknown_solver() -> None:
 # --- constructor ----------------------------------------------------------------
 
 
-@dataclass(frozen=True, kw_only=True)
-class _WithVolumes(ConstructionInput):
-    volumes: dict = field(default_factory=dict)
-
-
 def _inp(scores, vols, *, positions=None, cash=1000.0, cls=ConstructionInput, **kw):
     tickers = set(scores) | set(positions or {})
     return cls(
@@ -203,9 +197,7 @@ def test_volumes_add_impact_when_present() -> None:
     vols = {"A": 0.2}
     c = get_constructor("mean_variance_costs", ic=0.2, trade_aversion=1.0, spread_cost=0.0)
     plain = c.target_weights(_inp({"A": 1.0}, vols, cash=1e6)).weights["A"]
-    thin = c.target_weights(
-        _inp({"A": 1.0}, vols, cash=1e6, cls=_WithVolumes, volumes={"A": 100.0})
-    ).weights["A"]
+    thin = c.target_weights(_inp({"A": 1.0}, vols, cash=1e6, volumes={"A": 100.0})).weights["A"]
     assert thin < plain
 
 
