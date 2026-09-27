@@ -174,6 +174,7 @@ A trader's own webhook URL points at a host they chose. So it must be `https`, i
 - The bot never has a fresh second factor, so step-up actions are refused. Resuming the kill switch is done in the web app.
 - `/kill` needs the typed confirmation `KILL ALL` as the next message, within 2 minutes.
 - Only private chats are answered. If a person blocks the bot, their link is removed.
+- An admin or shell reset of a person's password or second factor removes their link and any unused link code. They link again after they sign in.
 - Linking, unlinking and making a code write an `audit_log` row.
 
 ## Model endpoint (AI assistant)

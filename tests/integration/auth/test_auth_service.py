@@ -420,6 +420,50 @@ def test_admin_resets_password_and_second_factor(svc, db, clock):
         svc.reset_password(admin, "usr_missing", "another long passphrase")
 
 
+def _link_telegram(db, uid: str, chat_id: str) -> None:
+    with SqliteState(db) as state:
+        state.execute(
+            "INSERT INTO telegram_links (chat_id, user_id, username, linked_at)"
+            " VALUES (?, ?, 'x', '2026-09-27T00:00:00+00:00')",
+            [chat_id, uid],
+        )
+        state.execute(
+            "INSERT INTO telegram_link_codes (code_hash, user_id, created_at, expires_at)"
+            " VALUES (?, ?, '2026-09-27T00:00:00+00:00', '2999-01-01T00:00:00+00:00')",
+            [f"h{chat_id}", uid],
+        )
+
+
+def _telegram_rows(db, uid: str) -> tuple[int, int]:
+    with SqliteState(db) as state:
+        links = state.sql("SELECT COUNT(*) AS n FROM telegram_links WHERE user_id = ?", [uid])
+        codes = state.sql(
+            "SELECT COUNT(*) AS n FROM telegram_link_codes WHERE user_id = ? AND used_at IS NULL",
+            [uid],
+        )
+        return links[0]["n"], codes[0]["n"]
+
+
+@pytest.mark.parametrize("how", ["reset_password", "reset_mfa", "shell_password", "shell_mfa"])
+def test_a_password_or_second_factor_reset_drops_the_telegram_link(svc, db, how):
+    uid = add_user(db, "alice@example.com")
+    other = add_user(db, "bob@example.com")
+    _link_telegram(db, uid, "42")
+    _link_telegram(db, other, "43")
+    admin = session_principal(DEFAULT_OWNER_ID, Role.ADMIN)
+    if how == "reset_password":
+        svc.reset_password(admin, uid, "another long passphrase")
+    elif how == "reset_mfa":
+        svc.reset_mfa(admin, uid)
+    elif how == "shell_password":
+        svc.set_password_by_email("alice@example.com", "another long passphrase")
+    else:
+        svc.reset_mfa_from_shell("alice@example.com")
+    assert _telegram_rows(db, uid) == (0, 0)
+    assert _telegram_rows(db, other) == (1, 1)
+    assert _audit(db, "telegram.unlink")
+
+
 def test_regenerate_recovery_codes_needs_step_up(svc, db, clock):
     uid = add_user(db, "alice@example.com")
     enrol(svc, "alice@example.com", clock)
