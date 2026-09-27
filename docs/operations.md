@@ -446,6 +446,18 @@ The go-live report shows the strategy's live shortfall next to the modelled cost
 
 Backtests use the same math. `Backtester.decision_prices` holds the close each order was decided at, and `production.tca.backtest_shortfalls` prices the simulated fills against it.
 
+## Options research
+
+Options are research only for now: chains in the lake, pricing, backtests and validation. Nothing in the tick trades them.
+
+```bash
+uv run stonks options ingest --underlyings AAPL.US,MSFT.US --since 2025-01-01   # EODHD options
+uv run stonks options chain AAPL.US --as-of 2025-06-02                          # IV and Greeks
+uv run stonks options backtest vertical_spread --underlyings AAPL.US --start 2025-01-01 --end 2025-12-31
+```
+
+EODHD serves US options as a separate Marketplace subscription (not part of All-In-One). `ingest` keeps strikes within 30% of spot and expiries within a year by default (`--strike-band`, `--max-expiry-days`). Each run writes one `ingest_runs` row of kind `options`, and a failed underlying is a soft fail.
+
 ## Without the scheduler
 
 Plain cron works too. After the US close in UTC terms (22:30 UTC is safe all year):

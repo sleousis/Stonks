@@ -345,15 +345,15 @@ Every trader gets a simple experience: connect a broker for insights, pick strat
 
 ## Phase 17: Options
 
-**Status:** planned. Design: `docs/design/options.md`.
+**Status:** 17.1 to 17.5 done as research, off by default. Nothing in the tick, the console or MCP trades options. Design and what changed from it: `docs/design/options.md`. Still open: live options through Interactive Brokers (after Phase 19), options in the console and MCP, Treasury rates and dividends in pricing, and a paid chain history for real validation.
 
 | WP | Scope |
 |----|-------|
-| 17.1 Instruments and data | An option contract model (underlying, expiry, strike, right, multiplier) and an options chain data source behind the `DataSource` seam, with daily chain snapshots in the lake. Stage 1 with 17.2 is read-only analytics; nothing trades options until 17.3 to 17.5. |
-| 17.2 Pricing and Greeks | Black-Scholes and implied volatility through a maintained library (for example py_vollib or QuantLib), wrapped behind a seam; volatility surface basics. |
-| 17.3 Backtesting options | Fills on option prices, expiry and assignment handling, early exercise rules, and multi-leg positions. |
-| 17.4 Risk for options | Greek limits (delta, gamma, vega), max loss per spread, and margin. |
-| 17.5 Options strategies | Covered calls, cash-secured puts, protective puts, vertical spreads, and volatility strategies from the book research (Sinclair, Natenberg). |
+| 17.1 Instruments and data | Done. `core/options.py` holds the contract (underlying, expiry, strike, right, multiplier, style, settlement), its canonical id, OCC symbols and the OCC split adjustment. Lake migration 017 adds `option_contracts` and `option_quotes` with the vendor's IV and Greeks. The EODHD Marketplace options API sits behind `DataSource.fetch_option_quotes`, and a synthetic source is the hermetic test path. `stonks options ingest` fills the lake. |
+| 17.2 Pricing and Greeks | Done. A `PricingModel` seam over QuantLib: Black-Scholes with a dividend yield, Black-76, and the Barone-Adesi-Whaley, Bjerksund-Stensland and binomial American models. Implied vol that cannot be solved is empty, never a guess. A basic volatility surface interpolates the smile and total variance. |
+| 17.3 Backtesting options | Done. A separate options backtest (`backtest/options_engine.py`): an options ledger with multipliers and position groups, fills from the next day's quotes with a spread share, all-or-none combo orders, expiry with exercise by exception, physical and cash settlement, early assignment through an `AssignmentModel` with risk flags, and split and dividend handling. |
+| 17.4 Risk for options | Done. Portfolio and position Greeks, max loss of any structure, Reg T strategy-based and risk-based margin (`options/risk.py`), and four registered rules, all off: `option_greek_limits`, `option_max_loss`, `option_margin` and `short_option_guard`. They check a combo as one unit. |
+| 17.5 Options strategies | Done. `covered_call`, `cash_secured_put` (with the wheel), `protective_put`, `vertical_spread` and `vol_premium_condor`, each with a hypothesis, built from a structure registry and a leg selector. `stonks options backtest --validate` runs the survival tests that apply: out of sample PSR, deflated Sharpe, wider fills, missing quote days and doubled fees. |
 
 ## Phase 18: Review, polish and prove it
 
