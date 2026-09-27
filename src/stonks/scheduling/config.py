@@ -97,7 +97,9 @@ def default_jobs() -> list[JobConfig]:
     every four hours; a backup every night; due broker syncs every hour.
     ``universes_refresh`` skips while no universe is stored. The IB Gateway
     jobs (``broker_health`` every 5 minutes, ``ibkr_reauth_reminder`` on
-    Sunday at 18:00 New York time) skip while no gateway is configured."""
+    Sunday at 18:00 New York time, and the reconciliation checks
+    ``live_sod_check`` an hour before the open and ``live_eod_check`` 15
+    minutes after the close) skip while no gateway is configured."""
     return [
         JobConfig(
             name="universes_refresh",
@@ -162,6 +164,23 @@ def default_jobs() -> list[JobConfig]:
             name="ibkr_reauth_reminder",
             action="ibkr_reauth_reminder",
             trigger=DailyTriggerConfig(at=time(18, 0), timezone="America/New_York", weekdays=[6]),
+            catch_up="none",
+        ),
+        # Reconciliation of every live portfolio against its broker (roadmap
+        # 19.5): start of day before the submit window, end of day before
+        # the tick decides.
+        JobConfig(
+            name="live_sod_check",
+            action="live_reconcile",
+            trigger=SessionTriggerConfig(anchor="open", offset_minutes=-60),
+            params={"kind": "sod"},
+            catch_up="none",
+        ),
+        JobConfig(
+            name="live_eod_check",
+            action="live_reconcile",
+            trigger=SessionTriggerConfig(offset_minutes=15),
+            params={"kind": "eod"},
             catch_up="none",
         ),
         # Earnings, dividend and economic calendars, then the upcoming-event

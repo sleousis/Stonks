@@ -325,6 +325,14 @@ def api_broker_health(ctx: RunContext) -> JobOutcome:
     return broker_health_action(ctx)
 
 
+@API_ACTIONS.register("live_reconcile")
+def api_live_reconcile(ctx: RunContext) -> JobOutcome:
+    """State DB and the gateway only: runs in this process."""
+    from stonks.scheduling.local import live_reconcile_action
+
+    return live_reconcile_action(ctx)
+
+
 @API_ACTIONS.register("ibkr_reauth_reminder")
 def api_ibkr_reauth_reminder(ctx: RunContext) -> JobOutcome:
     from stonks.scheduling.local import ibkr_reauth_reminder_action

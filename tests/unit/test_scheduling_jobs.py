@@ -49,6 +49,8 @@ def test_default_jobs_build():
         "price_alerts",
         "broker_health",
         "ibkr_reauth_reminder",
+        "live_sod_check",
+        "live_eod_check",
         "calendars_refresh",
     }
     tick = by_name["tick"]
@@ -65,6 +67,11 @@ def test_default_jobs_build():
     assert by_name["ingest_metadata"].trigger.offset < tick.trigger.offset
     # price alerts check the closes the ingest just stored (roadmap 20.2)
     assert ingest_at < by_name["price_alerts"].trigger.offset
+    # reconciliation (roadmap 19.5): before the open, and after the close
+    # but before the tick decides
+    sod = by_name["live_sod_check"].trigger
+    assert sod.anchor == "open" and sod.offset == timedelta(minutes=-60)
+    assert by_name["live_eod_check"].trigger.offset < tick.trigger.offset
 
 
 @pytest.mark.parametrize("registry", [LOCAL_ACTIONS, API_ACTIONS, IN_PROCESS_ACTIONS])
