@@ -597,9 +597,12 @@ class DataEnsurer:
                 prefetcher.cancel()
         # Stored bars older than a refetch (past the vendor's history
         # limit) were scaled onto the new basis by the pipeline (BE-09).
-        self._record_ranges(gaps, fetched, interval)
-        report.readjusted = sorted(t for t in readjusted if t in fetched)
-        failed = [t for t in tickers if t not in fetched]
+        # The pipeline's own per-ticker outcomes (BE-35): a ticker a
+        # fallback rescued is not failed, and a failed write is.
+        failed = [t for t in tickers if t in set(result.failed)]
+        written = {t: rows for t, rows in fetched.items() if t not in set(failed)}
+        self._record_ranges(gaps, written, interval)
+        report.readjusted = sorted(t for t in readjusted if t in written)
         report.run_id = result.run_id
         report.status = result.status
         report.tickers_fetched = result.tickers_ok

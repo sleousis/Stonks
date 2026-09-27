@@ -452,6 +452,28 @@ def test_the_fallback_fetches_only_the_failed_tickers_own_gap(lake):
     assert report.tickers_fetched == 2
     # the gap plus the 5-bar overlap, so its adjustment basis is checked (BE-36)
     assert fallback.price_calls == [("A.US", date(2025, 6, 23), date(2025, 6, 30))]
+    # BE-35: a ticker the fallback rescued is not reported as failed
+    assert report.tickers_failed == 0
+    assert report.failed == []
+
+
+def test_failed_lists_the_pipelines_failures():
+    """BE-35: ``failed`` comes from the pipeline's per-ticker outcomes."""
+    from stonks.ingest.pipeline import IngestPipeline
+    from stonks.store.lake import DuckDBLake
+
+    lake = DuckDBLake(":memory:")
+    lake.migrate()
+    try:
+        primary = _source("B.US", failing=["A.US"])
+        result = IngestPipeline(primary, lake).run_prices(
+            ["A.US", "B.US"], since=date(2025, 6, 2), until=date(2025, 6, 6)
+        )
+        assert result.failed == ("A.US",)
+        report = _ensurer(lake, primary).ensure(["A.US", "C.US"], date(2025, 6, 2), date(2025, 6, 6))
+        assert report.failed == ["A.US"]
+    finally:
+        lake.close()
 
 
 # ---- edge cases ------------------------------------------------------------------------------

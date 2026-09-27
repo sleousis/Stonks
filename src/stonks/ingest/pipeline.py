@@ -69,6 +69,8 @@ class IngestRunResult:
     tickers_failed: int
     # Bar runs only: the quality summary stored on ``ingest_runs.quality_json``.
     quality: dict[str, Any] | None = None
+    #: The units that failed, by ticker (or their log context), in run order.
+    failed: tuple[str, ...] = ()
 
 
 class IngestPipeline:
@@ -580,6 +582,7 @@ class IngestPipeline:
 
         ok = 0
         failed = 0
+        failed_units: list[str] = []
         last_error: str | None = None
         try:
             for context, work in units:
@@ -587,6 +590,7 @@ class IngestPipeline:
                     fields = work()
                 except _SOFT_FAIL_EXCEPTIONS as exc:
                     failed += 1
+                    failed_units.append(str(context.get("ticker", context)))
                     last_error = format_exception(exc)
                     log.warning(f"{event}.failed", **context, error=last_error)
                     continue
@@ -621,6 +625,7 @@ class IngestPipeline:
             status=status,
             tickers_ok=ok,
             tickers_failed=failed,
+            failed=tuple(failed_units),
         )
 
 
