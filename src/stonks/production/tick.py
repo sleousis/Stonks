@@ -86,6 +86,7 @@ from stonks.execution.reconcile import (
     reconcile_order,
     reconcile_orders,
 )
+from stonks.factors.style import safe_style_exposures, uses_style_model
 from stonks.logging import get_logger
 from stonks.notify import Notification, Notifier
 from stonks.portfolio import returns as portfolio_returns
@@ -1013,6 +1014,10 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         # (the market's volumes, from the priced bars, feed the impact term)
         names = {t for scores in signals.values() for t in scores} | set(held)
         market = replace(market, returns_history=run.market_history(names, lookback).returns)
+        if uses_style_model(construction):
+            # 22.4: the style risk model reads exposures known at as_of
+            exposures = safe_style_exposures(lake, sorted(names), as_of)
+            market = replace(market, factor_exposures=exposures)
     # Rules that need history (W3.1) run only with a context: built when the
     # book's policy (or a strategy slice's) enables one.
     risk_context = None

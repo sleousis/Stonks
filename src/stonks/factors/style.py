@@ -46,7 +46,14 @@ from stonks.portfolio.factor_model import (
 )
 from stonks.strategies._common import as_datetime
 
-__all__ = ["STYLE_FACTOR_IDS", "sectors_of", "style_exposures", "style_factor_returns"]
+__all__ = [
+    "STYLE_FACTOR_IDS",
+    "safe_style_exposures",
+    "sectors_of",
+    "style_exposures",
+    "style_factor_returns",
+    "uses_style_model",
+]
 
 _log = get_logger("stonks.factors.style")
 
@@ -106,6 +113,29 @@ def style_exposures(
         if known:
             frame[SECTOR] = pd.Series(known, dtype=object).reindex(names)
     return frame
+
+
+def uses_style_model(construction: Any) -> bool:
+    """The book's constructor sizes with the ``style`` covariance estimator,
+    so the market view should carry style exposures."""
+    if getattr(construction, "is_single_winner", True):
+        return False
+    return getattr(construction, "params", {}).get("estimator") == "style"
+
+
+def safe_style_exposures(
+    lake: Any, tickers: Sequence[str], as_of: date | datetime
+) -> pd.DataFrame | None:
+    """:func:`style_exposures`, or ``None`` (logged) when it fails, so a
+    decision falls back to exposures read from returns or bars."""
+    if not tickers:
+        return None
+    try:
+        frame = style_exposures(lake, tickers, as_of)
+    except Exception as exc:
+        _log.warning("factor.style.exposures_failed", error=str(exc))
+        return None
+    return frame if not frame.empty and len(frame.columns) else None
 
 
 def _month_ends(index: pd.DatetimeIndex) -> pd.DatetimeIndex:
