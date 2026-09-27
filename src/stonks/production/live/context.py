@@ -10,21 +10,18 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any, Literal
+from typing import Any
 
 from stonks.accounts.rules import AccountRuleInputs, InstrumentFacts
 from stonks.execution.brokers.base import AccountReader, LiveAccountState, Quote, QuoteSource
 from stonks.logging import get_logger
 from stonks.production.ledger import ledger_columns
+from stonks.production.live.stages import LiveStage, get_stage
 from stonks.production.live.trades import ClosedTrade, closed_trades
 from stonks.production.rules._account_settings import AccountRulesSettings
 from stonks.store.state import SqliteState
 
 _log = get_logger("stonks.production.live.context")
-
-#: ``broker_paper``: the broker's paper account. ``live``: real money. The
-#: safeguards run in both, so the paper soak exercises them.
-LiveStage = Literal["broker_paper", "live"]
 
 
 @dataclass(frozen=True)
@@ -33,7 +30,9 @@ class LiveContext:
     #: The amount the owner lets Stonks trade in this portfolio, in the
     #: account's base currency. ``None``: no allocation set, nothing opens.
     allocation: float | None = None
-    stage: LiveStage = "live"
+    #: The portfolio's live stage (roadmap 19.9). The safeguards run at
+    #: every stage, so the broker paper soak exercises them.
+    stage: LiveStage = "sim_paper"
     #: The account as the broker reports it (``None`` when it could not be
     #: read: rules that need it refuse opening orders).
     account: LiveAccountState | None = None
@@ -133,14 +132,15 @@ def build_live_context(
     tickers: Sequence[str] = (),
     lake: Any = None,
     account_settings: AccountRulesSettings | None = None,
-    stage: LiveStage = "live",
+    stage: LiveStage | None = None,
     external_positions: Mapping[str, float] | None = None,
     shortable: Mapping[str, float | None] | None = None,
 ) -> LiveContext:
     """The live context of ``portfolio_id`` for a run that executes on
     ``as_of``. The broker's account and quotes are read through its
     optional capabilities (``AccountReader``, ``QuoteSource``). A read that
-    fails leaves the field empty: the rules then refuse to open."""
+    fails leaves the field empty: the rules then refuse to open. ``stage``
+    defaults to the portfolio's stored stage."""
     from stonks.accounts.rules.inputs import load_account_inputs
     from stonks.production.live.allocation import get_allocation
 
@@ -169,7 +169,7 @@ def build_live_context(
     return LiveContext(
         portfolio_id=portfolio_id,
         allocation=None if allocation is None else allocation.amount,
-        stage=stage,
+        stage=stage or get_stage(state, portfolio_id),
         account=account,
         quotes=quotes,
         sent_today=sent_notional_today(state, as_of, portfolio_ids=[portfolio_id]),

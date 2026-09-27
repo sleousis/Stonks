@@ -83,6 +83,18 @@ def test_build_reads_the_broker_and_the_state(state):
     assert live.account_rules is not None and live.account_rules.account is live.account
 
 
+def test_the_context_carries_the_stored_stage(state):
+    from stonks.production.live.stages import change_stage
+
+    assert build_live_context(state, "pf_default", DAY).stage == "sim_paper"
+    change_stage(
+        state, "pf_default", "broker_paper", actor="user:u", reason="soak",
+        gate_report={"target": "broker_paper", "passed": True},
+    )  # fmt: skip
+    assert build_live_context(state, "pf_default", DAY).stage == "broker_paper"
+    assert build_live_context(state, "pf_default", DAY, stage="live_small").stage == "live_small"
+
+
 def test_a_failing_broker_leaves_the_account_and_quotes_empty(state):
     live = build_live_context(state, "pf_default", DAY, broker=_Broker(fail=True), tickers=["A"])
     assert live.account is None and live.quotes == {}
