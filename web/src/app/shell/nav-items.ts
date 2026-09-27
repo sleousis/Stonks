@@ -65,6 +65,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
     keywords: ['screen', 'filter', 'fundamentals', 'universe'],
   },
   {
+    path: '/options',
+    label: 'Options',
+    group: 'Research',
+    keywords: ['chain', 'greeks', 'payoff', 'calls', 'puts', 'implied vol'],
+  },
+  {
     path: '/studio',
     label: 'Studio',
     key: 'u',

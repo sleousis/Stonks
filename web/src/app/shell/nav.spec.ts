@@ -61,6 +61,7 @@ describe('Nav', () => {
       'Paper trading',
       'Leaderboard',
       'Screener',
+      'Options',
       'Studio',
       'Lab',
       'Go live',
@@ -84,6 +85,7 @@ describe('Nav', () => {
       'Paper trading',
       'Leaderboard',
       'Screener',
+      'Options',
       'Go live',
       'Assistant',
     ]);
