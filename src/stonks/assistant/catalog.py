@@ -152,6 +152,8 @@ NEVER: frozenset[str] = frozenset(
         "promote_strategy",
         "shadow_strategy",
         "retire_strategy",
+        "swap_model_version",
+        "reject_model_version",
         "sync_connection",
     }
 )

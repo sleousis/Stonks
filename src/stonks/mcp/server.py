@@ -34,7 +34,8 @@ from stonks.mcp.tools.common import ToolContext
 INSTRUCTIONS = """Stonks research + trading system. Tools talk to the local REST API started
 with `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs,
 sweeps, signal IC analyses and ingests. Follow up with wait_for_job, and stop
-one with cancel_job. Check get_golive_report before promote_strategy. Status changes,
+one with cancel_job. Check get_golive_report before promote_strategy, and
+check_model_swap before swap_model_version. Status changes, model swaps,
 draft register/enable/disable, broker syncs, manual orders (place_order,
 change_order, cancel_order) and production ticks need confirm=true; call them
 first without it to get a preview and show it to the user before confirming.
