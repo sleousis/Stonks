@@ -208,7 +208,7 @@ class ScreenData:
             return {}
         then = stats[f"price_{sessions}"]
         ok = (stats["n_prices"] > sessions) & (then > 0)
-        return finite((stats["price"][ok] / then[ok] - 1.0).to_dict())
+        return finite((stats["price"] / then - 1.0).where(ok).to_dict())
 
     @property
     def volatility(self) -> dict[str, float]:
@@ -218,7 +218,7 @@ class ScreenData:
         if stats.empty:
             return {}
         ok = (stats["n_vol"] >= MIN_VOL_PRICES) & (stats["low_vol"] > 0)
-        return finite(stats["volatility"][ok].to_dict())
+        return finite(stats["volatility"].where(ok).to_dict())
 
     @property
     def from_high(self) -> dict[str, float]:
@@ -227,7 +227,7 @@ class ScreenData:
         if stats.empty:
             return {}
         ok = stats["high_252"] > 0
-        return finite((stats["price"][ok] / stats["high_252"][ok] - 1.0).to_dict())
+        return finite((stats["price"] / stats["high_252"] - 1.0).where(ok).to_dict())
 
     @property
     def dollar_volume(self) -> dict[str, float]:
