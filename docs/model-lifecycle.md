@@ -105,3 +105,7 @@ max_underperformance = 0.02
 | Retrain | `POST /api/model-versions/retrain` (lab.run), `GET /api/model-versions/jobs/{job_id}/result` | `retrain_models` (confirm) |
 
 The assistant never gets the swap or reject tools.
+
+## Console
+
+Each strategy page has a Model versions tab: the versions, the candidate's model book against the live model, the swap check, Swap in (a reason, then a fresh code), Reject, a retrain of that strategy, and the log. Admins see every candidate and Retrain all on `/ops/models`. See `docs/ui.md`.
