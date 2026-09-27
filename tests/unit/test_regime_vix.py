@@ -94,3 +94,42 @@ def test_regime_filter_accepts_the_condition():
         }
     )
     assert isinstance(f.conditions[0], VixTermStructureCondition)
+
+
+# ---- intraday decisions never read the day's own close (BE-20) ------------------------
+
+
+class _StubLake:
+    def get_macro_series(self, country, indicator, stamped_at="period_end"):
+        spot = [15.0, 40.0] if indicator == "vix_spot" else [20.0, 20.0]
+        return pd.DataFrame(
+            {"observation_date": [date(2020, 3, 9), date(2020, 3, 10)], "value": spot}
+        )
+
+    def get_bond_yields(self, ticker):
+        yields = [2.0, 0.5] if ticker == "US10Y.GBOND" else [1.0, 1.0]
+        return pd.DataFrame(
+            {"date": [date(2020, 3, 9), date(2020, 3, 10)], "yield_to_maturity": yields}
+        )
+
+
+def test_an_intraday_decision_does_not_see_that_days_vix_close():
+    from stonks.core.interval import Interval
+    from stonks.strategies._common import decision_interval
+
+    cond = VixTermStructureCondition()
+    ctx = ConditionContext(lake=_StubLake(), bars=object())
+    assert cond.triggered(datetime(2020, 3, 10, 9, 30), ctx) is False
+    with decision_interval(Interval.HOUR_1):
+        assert cond.triggered(datetime(2020, 3, 10, 9, 30), ctx) is False
+    # a daily decision on 03-10 stands on that day's close
+    assert cond.triggered(date(2020, 3, 10), ctx) is True
+
+
+def test_an_intraday_decision_does_not_see_that_days_yields():
+    from stonks.features.regime_conditions import YieldCurveCondition
+
+    cond = YieldCurveCondition()
+    ctx = ConditionContext(lake=_StubLake(), bars=object())
+    assert cond.triggered(datetime(2020, 3, 10, 9, 30), ctx) is False
+    assert cond.triggered(date(2020, 3, 10), ctx) is True

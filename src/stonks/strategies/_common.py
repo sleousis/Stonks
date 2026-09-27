@@ -44,7 +44,7 @@ import weakref
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import numpy as np
@@ -52,6 +52,7 @@ import pandas as pd
 
 from stonks.core.corporate_actions import CorporateAction, PriceBasis
 from stonks.core.interval import Interval
+from stonks.core.interval import known_through as core_known_through
 from stonks.core.interval import visible_cutoff as core_visible_cutoff
 from stonks.core.timeutil import as_datetime, iso
 from stonks.core.types import Order, Portfolio
@@ -107,6 +108,14 @@ def visible_cutoff(as_of: Any, interval: Interval) -> datetime:
     :func:`stonks.core.interval.visible_cutoff`; this reads ``L`` from
     :func:`decision_interval`."""
     return core_visible_cutoff(as_datetime(as_of), interval, _DECISION_INTERVAL.get())
+
+
+def known_day(as_of: Any) -> date:
+    """The last calendar day whose day-stamped rows (a macro print, a
+    yield, a filing) are known at a decision on the bar starting at
+    ``as_of``: that day for a daily decision, the day before for an
+    intraday one (BE-20). Reads ``L`` from :func:`decision_interval`."""
+    return core_known_through(as_datetime(as_of), _DECISION_INTERVAL.get())
 
 
 def _initial_span(interval: Interval, n: int) -> timedelta:
