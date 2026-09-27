@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from stonks.app.context import AppContext
 from stonks.app.errors import ConfigurationError
+from stonks.auth.errors import PermissionDenied
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.logging import get_logger
@@ -61,8 +62,12 @@ class TelegramService:
         )
 
     def create_code(self, principal: Principal) -> TelegramLinkCodeView:
-        """A one-time code for linking a chat to the caller."""
+        """A one-time code for linking a chat to the caller. Browser session
+        only: a linked chat acts as the person with their whole role, so an
+        API token (which may carry fewer scopes, or leak) cannot mint one."""
         require(principal, Permission.NOTIFICATIONS_MANAGE)
+        if principal.via != "session":
+            raise PermissionDenied("a Telegram link code needs a signed-in browser session")
         if not bot_configured():
             raise ConfigurationError(
                 "the Telegram bot is not set up on this server (STONKS_TELEGRAM_BOT_TOKEN)"

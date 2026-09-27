@@ -15,6 +15,7 @@ from stonks.telegram.bot import HostedTelegramBot, TelegramBot
 from stonks.telegram.commands import KILL_PHRASE, CommandHandler
 from stonks.telegram.fake import FakeTelegramApi
 from stonks.telegram.settings import TelegramConfig
+from tests.integration.app.stepup import allow_step_up
 
 
 @pytest.fixture(autouse=True)
@@ -46,6 +47,7 @@ def books(settings, people) -> dict[str, str]:
 
 
 def _code(client, people, name: str) -> str:
+    allow_step_up(client.app)  # a code is minted from a signed-in browser session
     resp = client.post("/api/telegram/link-code", headers=people[name]["headers"])
     assert resp.status_code == 201, resp.text
     return resp.json()["code"]
@@ -77,6 +79,7 @@ def test_viewer_cannot_make_a_code_and_no_token_is_503(client, people, monkeypat
         403
     )
     monkeypatch.delenv("STONKS_TELEGRAM_BOT_TOKEN")
+    allow_step_up(client.app)
     resp = client.post("/api/telegram/link-code", headers=people["alice"]["headers"])
     assert resp.status_code == 503 and resp.json()["code"] == "not_configured"
 
@@ -218,3 +221,10 @@ def test_hosted_bot_runs_only_when_enabled(app):
         time.sleep(0.01)
     hosted.stop()
     assert api.replies(8) and not hosted.running
+
+
+def test_an_api_token_cannot_make_a_link_code(client, people):
+    # a leaked token must not link an attacker's chat, which then acts as
+    # the person with their full role (review 2026-09-27)
+    resp = client.post("/api/telegram/link-code", headers=people["alice"]["headers"])
+    assert resp.status_code == 403
