@@ -177,9 +177,7 @@ def _errors() -> Iterator[None]:
 
 
 class TicketService:
-    def __init__(
-        self, context: AppContext, *, clock: Callable[[], datetime] | None = None
-    ) -> None:
+    def __init__(self, context: AppContext, *, clock: Callable[[], datetime] | None = None) -> None:
         self._ctx = context
         self._clock = clock or (lambda: datetime.now(UTC))
 

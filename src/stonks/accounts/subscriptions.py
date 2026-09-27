@@ -269,9 +269,7 @@ class SubscriptionRepository:
                 f"strategy {strategy_id!r} is {status}; {mode.value} mode is not allowed"
             )
 
-    def _auto_blockers(
-        self, scope: Scope, sub: Subscription, mode: Mode = Mode.AUTO
-    ) -> list[str]:
+    def _auto_blockers(self, scope: Scope, sub: Subscription, mode: Mode = Mode.AUTO) -> list[str]:
         reasons: list[str] = []
         if self._strategy_status(sub.strategy_id) != "active":
             reasons.append("the strategy is not active")
