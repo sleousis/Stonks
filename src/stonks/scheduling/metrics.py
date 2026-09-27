@@ -30,7 +30,7 @@ from stonks.store.state import MIGRATIONS_DIR, SqliteState
 
 CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 
-MetricType = Literal["gauge", "counter"]
+MetricType = Literal["gauge", "counter", "histogram"]
 
 #: Data-age buckets (inclusive upper bound in days, label).
 AGE_BUCKETS: tuple[tuple[int, str], ...] = ((1, "0-1d"), (3, "2-3d"), (7, "4-7d"))
@@ -42,6 +42,8 @@ AGE_MISSING = "missing"
 class Sample:
     value: float
     labels: Mapping[str, str] = field(default_factory=dict)
+    #: Appended to the family name: ``_bucket``, ``_sum`` or ``_count`` in a histogram.
+    suffix: str = ""
 
 
 @dataclass(frozen=True)
@@ -79,14 +81,58 @@ def render_prometheus(families: Iterable[MetricFamily]) -> str:
         lines.append(f"# HELP {fam.name} {_escape_help(fam.help)}")
         lines.append(f"# TYPE {fam.name} {fam.type}")
         for s in fam.samples:
+            name = fam.name + s.suffix
             if s.labels:
                 labels = ",".join(
                     f'{k}="{_escape_label(str(v))}"' for k, v in sorted(s.labels.items())
                 )
-                lines.append(f"{fam.name}{{{labels}}} {_format_value(s.value)}")
+                lines.append(f"{name}{{{labels}}} {_format_value(s.value)}")
             else:
-                lines.append(f"{fam.name} {_format_value(s.value)}")
+                lines.append(f"{name} {_format_value(s.value)}")
     return "\n".join(lines) + "\n"
+
+
+def histogram_family(
+    name: str,
+    help_: str,
+    *,
+    bounds: Sequence[float],
+    counts: Sequence[int],
+    total: float,
+    labels: Mapping[str, str] | None = None,
+) -> MetricFamily:
+    """A Prometheus histogram. ``counts`` holds one count per bucket (not
+    cumulative), with the ``+Inf`` bucket last, so it is one longer than
+    ``bounds``. ``total`` is the sum of every observation."""
+    if len(counts) != len(bounds) + 1:
+        raise ValueError("counts needs one entry per bound plus the +Inf bucket")
+    base = dict(labels or {})
+    samples: list[Sample] = []
+    running = 0
+    for bound, n in zip([*bounds, math.inf], counts, strict=True):
+        running += int(n)
+        le = "+Inf" if math.isinf(bound) else _format_value(bound)
+        samples.append(Sample(running, {**base, "le": le}, "_bucket"))
+    samples.append(Sample(total, base, "_sum"))
+    samples.append(Sample(running, base, "_count"))
+    return MetricFamily(name, help_, "histogram", samples)
+
+
+def merge_families(groups: Iterable[Iterable[MetricFamily]]) -> list[MetricFamily]:
+    """Join families of the same name (one per engine, say) under one
+    header, keeping the order names first appear in. The text format
+    allows each name once."""
+    merged: dict[str, MetricFamily] = {}
+    for group in groups:
+        for fam in group:
+            seen = merged.get(fam.name)
+            if seen is None:
+                merged[fam.name] = MetricFamily(fam.name, fam.help, fam.type, list(fam.samples))
+            else:
+                merged[fam.name] = MetricFamily(
+                    seen.name, seen.help, seen.type, [*seen.samples, *fam.samples]
+                )
+    return list(merged.values())
 
 
 # ---- snapshot -> families (pure) -----------------------------------------------------
