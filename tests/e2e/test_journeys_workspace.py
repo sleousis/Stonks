@@ -80,11 +80,12 @@ def test_an_admin_sees_whether_the_install_is_ready(browse, stack, viewport):
     expect(install).to_contain_text("Your install")
     expect(install).to_contain_text("Data source key")
     expect(install).to_contain_text("First data load")
-    # The stack loaded prices, so the first load is done; no backup yet.
+    # The stack loaded prices, so the first load is done. Whether a backup
+    # exists depends on the other journeys, so only check the item is there.
     expect(install.locator(".check", has_text="First data load")).to_have_attribute(
         "data-done", "true"
     )
-    expect(install.locator(".check", has_text="Backups")).to_have_attribute("data-done", "false")
+    expect(install.locator(".check", has_text="Backups")).to_contain_text("on disk")
     v.check_page("welcome-admin")
     v.guard.assert_clean()
 

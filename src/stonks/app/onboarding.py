@@ -203,7 +203,7 @@ class OnboardingService:
         if n == 0:
             return SystemCheckView(id="first_ingest", done=False, detail="no prices loaded yet")
         return SystemCheckView(
-            id="first_ingest", done=True, detail=f"{n} data loads finished with prices"
+            id="first_ingest", done=True, detail=f"{n} {_plural(n, 'data load')} with prices"
         )
 
     def _backup(self) -> SystemCheckView:
@@ -216,7 +216,8 @@ class OnboardingService:
             found = []
         if not found:
             return SystemCheckView(id="backup", done=False, detail="no backup on disk yet")
-        return SystemCheckView(id="backup", done=True, detail=f"{len(found)} backups on disk")
+        n = len(found)
+        return SystemCheckView(id="backup", done=True, detail=f"{n} {_plural(n, 'backup')} on disk")
 
     def _scheduler(self, now: datetime | None) -> SystemCheckView:
         from stonks.scheduling.metrics import scheduler_liveness
@@ -231,6 +232,10 @@ class OnboardingService:
         return SystemCheckView(
             id="scheduler", done=probe.ok, detail=probe.checks.get("scheduler", "")
         )
+
+
+def _plural(n: int, word: str) -> str:
+    return word if n == 1 else f"{word}s"
 
 
 def _derived(state: SqliteState, user_id: str) -> dict[StepId, bool]:
