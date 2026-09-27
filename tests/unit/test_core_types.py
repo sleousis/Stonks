@@ -112,6 +112,21 @@ def test_portfolio_total_value_treats_missing_price_as_zero():
     assert total == pytest.approx(50.0)
 
 
+def test_portfolio_reports_held_tickers_without_a_mark():
+    # DS-13: a held ticker with no price is not silently a total loss
+    from stonks.core.types import MissingPriceError
+
+    p = Portfolio(cash=0.0, positions={"AAPL.US": 1.0, "NEW.US": 10.0})
+    prices = {"AAPL.US": 50.0, "MSFT.US": 1.0}
+    assert p.unmarked(prices) == ["NEW.US"]
+    with pytest.raises(MissingPriceError, match=r"NEW.US") as err:
+        p.total_value(prices, strict=True)
+    assert err.value.tickers == ["NEW.US"]
+    assert p.total_value({"AAPL.US": 50.0, "NEW.US": 2.0}, strict=True) == pytest.approx(70.0)
+    # a NaN mark counts as missing too
+    assert p.unmarked({"AAPL.US": 50.0, "NEW.US": float("nan")}) == ["NEW.US"]
+
+
 def test_features_dict_access_and_get_default():
     f = Features(values={"r_20": 0.05, "vol": 0.2})
     assert f.get("r_20") == 0.05

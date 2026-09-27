@@ -20,7 +20,7 @@ from stonks.app.halts import (
     KillSwitchRequest,
     ResumeRequest,
 )
-from stonks.auth import Principal, StepUpRequired
+from stonks.auth import PermissionDenied, Principal, StepUpRequired
 from stonks.auth.principal import ROLE_SCOPES
 from stonks.production.halts import trip_halt
 from stonks.store.state import SqliteState
@@ -63,12 +63,12 @@ def test_an_admin_engages_the_global_kill_switch_and_it_is_audited(halts, people
 
 
 def test_only_an_admin_can_stop_everyone(halts, people):
-    with pytest.raises(ValidationError, match="admin"):
+    with pytest.raises(PermissionDenied, match="admin"):
         halts.engage_kill(people["trader"], KillSwitchRequest(scope="global", reason="r"))
 
 
 def test_a_viewer_cannot_use_the_kill_switch(halts, people):
-    with pytest.raises(ValidationError, match="trade"):
+    with pytest.raises(PermissionDenied, match="trade"):
         halts.engage_kill(people["viewer"], KillSwitchRequest(scope="user", reason="r"))
 
 
@@ -106,7 +106,7 @@ def test_resume_needs_the_typed_confirmation(halts, people, settings):
 
 def test_a_trader_cannot_resume_the_global_switch(halts, people):
     view = halts.engage_kill(people["owner"], KillSwitchRequest(scope="global", reason="panic"))
-    with pytest.raises(ValidationError, match="admin"):
+    with pytest.raises(PermissionDenied, match="admin"):
         halts.resume_kill(
             people["trader"], view.id, ResumeRequest(confirmation=RESUME_PHRASE, reason="r")
         )
@@ -150,7 +150,7 @@ def test_the_rest_routes_engage_list_and_resume(client):
     r = client.post("/api/halts/kill", json={"scope": "global", "reason": "panic"}, headers=AUTH)
     assert r.status_code == 201, r.text
     halt_id = r.json()["id"]
-    listed = client.get("/api/halts", headers=AUTH).json()
+    listed = client.get("/api/halts", headers=AUTH).json()["items"]
     assert [h["id"] for h in listed] == [halt_id]
     bad = client.post(
         f"/api/halts/{halt_id}/resume",
@@ -178,8 +178,8 @@ def test_the_rest_routes_engage_list_and_resume(client):
     finally:
         client.app.dependency_overrides.clear()
     assert ok.status_code == 200 and ok.json()["active"] is False
-    assert client.get("/api/halts", headers=AUTH).json() == []
-    assert len(client.get("/api/halts?include_cleared=true", headers=AUTH).json()) == 1
+    assert client.get("/api/halts", headers=AUTH).json()["items"] == []
+    assert client.get("/api/halts?include_cleared=true", headers=AUTH).json()["total"] == 1
 
 
 def test_the_rest_routes_need_the_token(client):
@@ -226,3 +226,136 @@ def test_engage_and_list_accept_a_principal(halts, people):
     view = halts.engage_kill(p, KillSwitchRequest(scope="user", reason="away"))
     assert view.user_id == trader.user_id
     assert [h.id for h in halts.list(p)] == [view.id]
+
+
+# ---- escalating the kill switch (TO-07) ------------------------------------------
+
+
+def test_flatten_escalates_to_stop_all(halts, people, settings):
+    from datetime import UTC, datetime
+
+    from stonks.production.halts import active_halts
+
+    owner = people["owner"]
+    flat = halts.engage_kill(
+        owner, KillSwitchRequest(scope="user", flatten=True, reason="exit slowly")
+    )
+    assert flat.halt == "buys"
+    stop = halts.engage_kill(owner, KillSwitchRequest(scope="user", reason="fills look wrong"))
+    assert stop.halt == "all" and stop.active
+    with SqliteState(settings.state.path) as state:
+        [open_halt] = active_halts(
+            state, datetime.now(UTC).date(), portfolio_id="pf_default", user_id=DEFAULT_OWNER_ID
+        )
+    assert open_halt.id == stop.id and open_halt.halt == "all"
+    [row] = _audit(settings, "kill_switch.escalate")
+    assert json.loads(row["details_json"])["escalated_from"] == flat.id
+    # the replaced row says why it closed, and nothing counts it as a reset
+    old = halts.get(owner, flat.id)
+    assert not old.active and old.clear_reason.startswith("escalated to all")
+
+
+def test_the_escalated_halt_stops_sells_at_the_gate(halts, people, settings):
+    from datetime import UTC, datetime
+
+    from stonks.production.hooks import GateContext
+    from stonks.production.hooks.risk_halts import RiskHaltGate
+
+    trader, pf = people["trader"], people["trader_pf"]
+    req = KillSwitchRequest(scope="portfolio", portfolio_id=pf, flatten=True, reason="exit")
+    halts.engage_kill(trader, req)
+    halts.engage_kill(
+        trader, KillSwitchRequest(scope="portfolio", portfolio_id=pf, reason="stop all")
+    )
+    with SqliteState(settings.state.path) as state:
+        verdict = RiskHaltGate().check(
+            GateContext(
+                state=state,
+                as_of=datetime.now(UTC).date(),
+                portfolio_id=pf,
+                owner_id=trader.user_id,
+                dry_run=False,
+                policy=None,
+            )
+        )
+    assert verdict is not None and verdict.halt == "all"
+
+
+def test_flatten_never_downgrades_a_stop_all(halts, people):
+    owner = people["owner"]
+    stop = halts.engage_kill(owner, KillSwitchRequest(scope="global", reason="stop"))
+    again = halts.engage_kill(
+        owner, KillSwitchRequest(scope="global", flatten=True, reason="flatten")
+    )
+    assert again.id == stop.id and again.halt == "all"
+
+
+# ---- cancelling working broker orders (TO-08) ------------------------------------
+
+
+def _pending_order(settings, client_id, *, side="buy", portfolio_id="pf_default"):
+    with SqliteState(settings.state.path) as state:
+        state.execute(
+            "INSERT INTO orders (client_id, ticker, side, quantity, order_type, status,"
+            " created_at, updated_at, portfolio_id)"
+            " VALUES (?, 'UP.US', ?, 5, 'market', 'pending', 'x', 'x', ?)",
+            [client_id, side, portfolio_id],
+        )
+
+
+def _order_status(settings, client_id):
+    with SqliteState(settings.state.path) as state:
+        return state.sql("SELECT status FROM orders WHERE client_id = ?", [client_id])[0][0]
+
+
+@pytest.fixture
+def broker():
+    from tests.integration.test_cancel_working_orders import CancellingBroker
+
+    return CancellingBroker()
+
+
+@pytest.fixture
+def live_halts(services, broker) -> HaltService:
+    """pf_default trades at a (fake) external broker."""
+    return HaltService(
+        services.context, brokers=lambda pid: broker if pid == "pf_default" else None
+    )
+
+
+def test_the_global_kill_switch_cancels_working_broker_orders(live_halts, people, broker, settings):
+    _pending_order(settings, "2026-03-20:bh:UP.US:buy")
+    broker.set("2026-03-20:bh:UP.US:buy", "pending", 0.0, None)
+    live_halts.engage_kill(people["owner"], KillSwitchRequest(scope="global", reason="bad tick"))
+    assert broker.cancelled == ["2026-03-20:bh:UP.US:buy"]
+    assert _order_status(settings, "2026-03-20:bh:UP.US:buy") == "cancelled"
+    [row] = _audit(settings, "kill_switch.cancel_orders")
+    assert json.loads(row["details_json"])["cancelled"] == ["2026-03-20:bh:UP.US:buy"]
+
+
+def test_flatten_cancels_working_buys_only(live_halts, people, broker, settings):
+    _pending_order(settings, "b1")
+    _pending_order(settings, "s1", side="sell")
+    broker.set("b1", "pending", 0.0, None)
+    broker.set("s1", "pending", 0.0, None, side="sell")
+    live_halts.engage_kill(
+        people["owner"], KillSwitchRequest(scope="user", flatten=True, reason="exit")
+    )
+    assert broker.cancelled == ["b1"]
+    assert _order_status(settings, "s1") == "pending"
+
+
+def test_another_users_kill_switch_cancels_nothing_of_mine(live_halts, people, broker, settings):
+    _pending_order(settings, "b1")
+    broker.set("b1", "pending", 0.0, None)
+    live_halts.engage_kill(people["trader"], KillSwitchRequest(scope="user", reason="mine"))
+    assert broker.cancelled == []
+
+
+def test_a_broker_failure_never_undoes_the_halt(services, people, settings):
+    def broken(pid):
+        raise RuntimeError("no keys")
+
+    halts = HaltService(services.context, brokers=broken)
+    view = halts.engage_kill(people["owner"], KillSwitchRequest(scope="global", reason="x"))
+    assert view.active

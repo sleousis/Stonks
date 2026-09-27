@@ -38,17 +38,82 @@ describe('toApiError', () => {
     );
   });
 
-  it('adds a Settings hint to 401s', () => {
+  it('adds a sign-in hint to 401s', () => {
     const body = { title: 'Unauthorized', status: 401, detail: 'missing or invalid bearer token' };
     const err = toApiError(body, new HttpErrorResponse({ status: 401, error: body }));
     expect(err.isAuth).toBe(true);
-    expect(err.message).toBe('missing or invalid bearer token. Enter the API token in Settings.');
+    expect(err.message).toBe(
+      'missing or invalid bearer token. Sign in, or enter an API token in Settings.',
+    );
+  });
+
+  it('reads the auth code at the start of the detail and says it plainly', () => {
+    const cases: [number, string, string, string][] = [
+      [401, 'mfa_required: finish signing in', 'mfa_required', 'Finish signing in with your code.'],
+      [
+        401,
+        'not_authenticated: missing or invalid credentials',
+        'not_authenticated',
+        'You are signed out. Sign in, or enter an API token in Settings.',
+      ],
+      [401, 'invalid_credentials', 'invalid_credentials', 'That did not match. Try again.'],
+      [
+        403,
+        'step_up_required: users.manage needs a fresh second factor',
+        'step_up_required',
+        'Confirm it is you with a code from your authenticator app.',
+      ],
+      [
+        429,
+        'too_many_attempts: too many failed attempts; try again later',
+        'too_many_attempts',
+        'Too many tries. Wait a few minutes, then try again.',
+      ],
+      [
+        403,
+        'csrf_failed: bad token',
+        'csrf_failed',
+        'Your session is out of date. Reload the page.',
+      ],
+      [403, 'forbidden: users.read is not allowed', 'forbidden', 'Your role cannot do this.'],
+    ];
+    for (const [status, detail, code, message] of cases) {
+      const body = { title: 'x', status, detail };
+      const err = toApiError(body, new HttpErrorResponse({ status, error: body }));
+      expect(err.code).toBe(code);
+      expect(err.message).toBe(message);
+    }
+  });
+
+  it('has no code when the detail does not start with one', () => {
+    const body = { title: 'Conflict', status: 409, detail: 'strategy is already active' };
+    expect(toApiError(body).code).toBeNull();
   });
 
   it('explains a network failure (status 0)', () => {
     const err = toApiError(new ProgressEvent('error'), new HttpErrorResponse({ status: 0 }));
     expect(err.isNetwork).toBe(true);
-    expect(err.message).toContain('stonks serve');
+    expect(err.message).toContain('Cannot reach the Stonks server');
+    expect(err.message).not.toMatch(/stonks serve|`/);
+  });
+
+  it('reads a separate problem code field', () => {
+    const body = {
+      title: 'Forbidden',
+      status: 403,
+      detail: 'fresh code needed',
+      code: 'step_up_required',
+    };
+    const err = toApiError(body);
+    expect(err.code).toBe('step_up_required');
+    expect(err.message).toContain('authenticator');
+  });
+
+  it('keeps an unknown code but the API message', () => {
+    const body = { title: 'Conflict', status: 409, detail: 'gate refused', code: 'gate_failed' };
+    const err = toApiError(body);
+    expect(err.code).toBe('gate_failed');
+    expect(err.message).toBe('gate refused');
   });
 
   it('uses a plain-text error body', () => {

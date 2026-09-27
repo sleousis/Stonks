@@ -115,8 +115,8 @@ export function checkThreshold(name: string, t: HealthConfig | null | undefined)
 
 /** Human names for the run checks. */
 export const CHECK_TITLES: Record<string, string> = {
-  stuck_ticks: 'Stuck ticks',
-  stuck_ingest_runs: 'Stuck ingest runs',
-  ingest_failures: 'Recent ingest failures',
+  stuck_ticks: 'Stuck trading runs',
+  stuck_ingest_runs: 'Stuck data updates',
+  ingest_failures: 'Recent data update failures',
   freshness: 'Freshness check',
 };

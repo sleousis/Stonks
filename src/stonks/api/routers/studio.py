@@ -14,7 +14,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, HTTPException, Response
 
-from stonks.api.deps import PageDep, PrincipalDep, ServicesDep, needs
+from stonks.api.deps import OptionalPrincipalDep, PageDep, PrincipalDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES, ProblemDetails
 from stonks.api.routers._jobs_common import JOB_CREATED, accepted
 from stonks.app.jobs import Job
@@ -55,8 +55,9 @@ def _call[T](services: Any, fn: Callable[[StudioService], T]) -> T:
 
 
 def _guard_code(services: Any, principal: Principal, draft_id: str) -> None:
-    """Code drafts are admin-only (design section 10)."""
-    draft = _call(services, lambda s: s.get_draft(draft_id))
+    """The draft must be the caller's (404 otherwise; admins reach every
+    draft), and code drafts are admin-only (design section 10)."""
+    draft = _call(services, lambda s: s.get_draft(draft_id, principal))
     if draft.kind == "code":
         require(principal, Permission.CODE_STRATEGIES)
 
@@ -94,8 +95,14 @@ def validate_spec(body: SpecValidateRequest, services: ServicesDep) -> DraftVali
 
 
 @router.get("/drafts", response_model=Page[Draft], operation_id="listDrafts")
-def list_drafts(services: ServicesDep, page: PageDep) -> Page[Draft]:
-    return _call(services, lambda s: s.list_drafts(limit=page.limit, offset=page.offset))
+def list_drafts(
+    services: ServicesDep, principal: OptionalPrincipalDep, page: PageDep
+) -> Page[Draft]:
+    """Your drafts, newest first. Admins see every draft."""
+    return _call(
+        services,
+        lambda s: s.list_drafts(limit=page.limit, offset=page.offset, principal=principal),
+    )
 
 
 @router.post(
@@ -108,12 +115,13 @@ def list_drafts(services: ServicesDep, page: PageDep) -> Page[Draft]:
 def create_draft(body: DraftCreate, services: ServicesDep, principal: PrincipalDep) -> Draft:
     if body.kind == "code":
         require(principal, Permission.CODE_STRATEGIES)
-    return _call(services, lambda s: s.create_draft(body))
+    return _call(services, lambda s: s.create_draft(body, owner_id=principal.user_id))
 
 
 @router.get("/drafts/{draft_id}", response_model=Draft, operation_id="getDraft")
-def get_draft(draft_id: str, services: ServicesDep) -> Draft:
-    return _call(services, lambda s: s.get_draft(draft_id))
+def get_draft(draft_id: str, services: ServicesDep, principal: OptionalPrincipalDep) -> Draft:
+    """One of your drafts (another user's draft is a 404; admins see all)."""
+    return _call(services, lambda s: s.get_draft(draft_id, principal))
 
 
 @router.patch(
@@ -174,7 +182,10 @@ def start_backtest(
 ) -> Job:
     """Queue a backtest of the draft; the job result is a ``BacktestResult``."""
     _guard_code(services, principal, draft_id)
-    return accepted(_call(services, lambda s: s.submit_backtest(draft_id, body)), response)
+    return accepted(
+        _call(services, lambda s: s.submit_backtest(draft_id, body, owner_id=principal.user_id)),
+        response,
+    )
 
 
 @router.post(
@@ -195,7 +206,10 @@ def start_lab_run(
     _guard_code(services, principal, draft_id)
     if body.registers:
         require(principal, Permission.STRATEGY_PROMOTE)
-    return accepted(_call(services, lambda s: s.submit_lab_run(draft_id, body)), response)
+    return accepted(
+        _call(services, lambda s: s.submit_lab_run(draft_id, body, owner_id=principal.user_id)),
+        response,
+    )
 
 
 @router.post(

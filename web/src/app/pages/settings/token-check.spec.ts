@@ -12,16 +12,23 @@ describe('tokenCheckFromError', () => {
     expect(tokenCheckFromError(new ApiError(401, 'Unauthorized', 'bad')).state).toBe('invalid');
   });
 
-  it('explains 503 as a server without a token, not verifiable yet', () => {
+  it('explains 503 as a server that cannot check tokens yet', () => {
     const check = tokenCheckFromError(new ApiError(503, 'Unavailable', 'no token'));
     expect(check.state).toBe('unverified');
-    expect(check.message).toContain("can't be verified");
+    expect(check.message).toContain("can't check tokens");
   });
 
   it('explains a network failure', () => {
     const check = tokenCheckFromError(new ApiError(0, 'Network error', 'down'));
     expect(check.state).toBe('unverified');
-    expect(check.message).toContain('Cannot reach the API');
+    expect(check.message).toContain('Cannot reach the server');
+  });
+
+  it('never sends the trader to a terminal or a config file', () => {
+    for (const status of [0, 401, 403, 503]) {
+      const { message } = tokenCheckFromError(new ApiError(status, 'x', 'y'));
+      expect(message).not.toMatch(/stonks |STONKS_|`/);
+    }
   });
 
   it('falls back to the error message for anything else', () => {

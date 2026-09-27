@@ -1,5 +1,23 @@
 import { Injectable, signal } from '@angular/core';
 
+/** One line of an order ticket: a label and its value (shown in mono). */
+export interface TicketLine {
+  label: string;
+  value: string;
+}
+
+/**
+ * Shows the confirmation as an order ticket, for actions that move money:
+ * the lines in tabular mono, the side mark and PAPER or LIVE.
+ */
+export interface ConfirmTicket {
+  lines: readonly TicketLine[];
+  /** `buy` or `sell`, shown with <app-side-tag>. */
+  side?: string;
+  /** Real money (brass LIVE stamp) or simulated (grey PAPER). */
+  live: boolean;
+}
+
 export interface ConfirmOptions {
   title: string;
   /** What will happen, in plain words. */
@@ -14,6 +32,8 @@ export interface ConfirmOptions {
    * button. Required for ticks and promotions.
    */
   typedConfirmation?: string;
+  /** Show the request as an order ticket (money actions). */
+  ticket?: ConfirmTicket;
 }
 
 export interface ConfirmRequest extends ConfirmOptions {

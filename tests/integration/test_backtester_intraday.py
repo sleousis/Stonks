@@ -131,3 +131,71 @@ def test_backtest_interval_filter_ignores_other_intervals(lake_intraday, tmp_pat
     )
     report = Backtester([strategy], broker, lake_intraday, config).run()
     assert len(report.equity_curve) == 12  # only the 5m bars
+
+
+# ---- RS-03: the engine declares its bar length to the strategies -----------------
+
+
+class _SeesInterval:
+    """Records the decision interval visible to strategy code."""
+
+    id = "sees_interval"
+    applicable_asset_classes = ("equity", "crypto")
+
+    def __init__(self) -> None:
+        self.seen: list = []
+        self.cutoffs: list = []
+
+    def estimate_return(self, ticker, as_of, lake):
+        from stonks.strategies._common import _DECISION_INTERVAL, visible_cutoff
+
+        self.seen.append(_DECISION_INTERVAL.get())
+        self.cutoffs.append((as_of, visible_cutoff(as_of, Interval.DAY_1)))
+        return
+
+    def decide(self, my_picks, portfolio, prices, as_of):
+        return []
+
+
+@pytest.mark.parametrize("construction", [None, "equal_weight_top_n"])
+def test_strategies_run_inside_the_engine_decision_interval(tmp_path, construction):
+    import pandas as pd
+
+    from stonks.store.lake import DuckDBLake
+
+    lake = DuckDBLake(tmp_path / "lake.duckdb")
+    lake.migrate()
+    stamps = pd.date_range("2026-01-03 22:00", periods=4, freq="h")  # crosses midnight
+    lake.upsert_bars(
+        pd.DataFrame(
+            {
+                "ticker": "BTC-USD.CC",
+                "timestamp": stamps,
+                "open": 100.0,
+                "high": 101.0,
+                "low": 99.0,
+                "close": 100.0,
+                "adj_close": 100.0,
+                "volume": 1.0,
+            }
+        ),
+        interval=Interval.HOUR_1,
+    )
+    strategy = _SeesInterval()
+    Backtester(
+        [strategy],
+        SimulatedBroker(Portfolio(cash=1_000.0)),
+        lake,
+        BacktestConfig(
+            start=stamps[0].to_pydatetime(),
+            end=stamps[-1].to_pydatetime(),
+            universe=["BTC-USD.CC"],
+            interval=Interval.HOUR_1,
+            construction=construction,
+        ),
+    ).run()
+    assert strategy.seen and all(s == Interval.HOUR_1 for s in strategy.seen)
+    # the midnight bar of a 24/7 hourly run never sees that day's daily bar
+    midnight = [(a, c) for a, c in strategy.cutoffs if a.hour == 0]
+    assert midnight and all(c < a for a, c in midnight)
+    lake.close()

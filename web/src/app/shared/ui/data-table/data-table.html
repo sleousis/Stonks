@@ -1,4 +1,14 @@
-<div class="table-wrap" role="region" tabindex="0" [attr.aria-label]="caption()">
+@if (busy()) {
+  <div class="busy-bar" role="progressbar" [attr.aria-label]="'Loading ' + caption()"></div>
+}
+<div
+  class="table-wrap"
+  role="region"
+  tabindex="0"
+  [class.stale]="busy()"
+  [attr.aria-label]="caption() + ', scrollable table'"
+  [attr.aria-busy]="busy()"
+>
   <table>
     <caption class="visually-hidden">
       {{
@@ -36,7 +46,7 @@
             <td
               [attr.data-label]="col.label"
               [class.end]="alignEnd(col)"
-              [class.num]="isNumeric(col)"
+              [class.num]="isFigure(col)"
               [class.cell-title]="col.mobile === 'title'"
               [class.hide-phone]="col.mobile === 'hide'"
               [class]="tone(row, col)"

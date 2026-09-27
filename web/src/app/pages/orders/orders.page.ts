@@ -1,22 +1,30 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { filter, map } from 'rxjs';
 
+import { RefreshStatus, UpdatedAgo } from '../../shared/auto-refresh';
 import { PageHeader } from '../../shared/ui/page-header';
 
 /**
- * Orders and the ticks that produce them. The header and view tabs stay put;
- * the child routes (orders, fills, ticks, ticks/:id) render below.
+ * Orders and the trading runs (ticks) that produce them. The header and view
+ * tabs stay put; the child routes (orders, fills, ticks, ticks/:id) render
+ * below and report their freshness to the header through RefreshStatus.
  */
 @Component({
   selector: 'app-orders-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, PageHeader],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, PageHeader, UpdatedAgo],
+  providers: [RefreshStatus],
   template: `
     <app-page-header
       title="Orders"
-      description="Orders placed by ticks, the fills they received, and the ticks themselves."
+      description="Orders placed by trading runs, the fills they received, and the runs themselves."
     >
-      <a actions class="btn btn-primary" routerLink="/orders/ticks">Run tick</a>
+      <app-updated-ago [at]="status.updatedAt()" />
+      @if (!onRuns()) {
+        <a actions class="btn" routerLink="/orders/ticks">Go to trading runs</a>
+      }
     </app-page-header>
 
     <nav class="tabs" aria-label="Orders views">
@@ -28,7 +36,9 @@ import { PageHeader } from '../../shared/ui/page-header';
         >Orders</a
       >
       <a routerLink="/orders/fills" routerLinkActive="active" ariaCurrentWhenActive="page">Fills</a>
-      <a routerLink="/orders/ticks" routerLinkActive="active" ariaCurrentWhenActive="page">Ticks</a>
+      <a routerLink="/orders/ticks" routerLinkActive="active" ariaCurrentWhenActive="page"
+        >Trading runs</a
+      >
     </nav>
 
     <router-outlet />
@@ -63,7 +73,7 @@ import { PageHeader } from '../../shared/ui/page-header';
     }
     .tabs a.active {
       color: var(--color-ink);
-      border-bottom-color: var(--color-brass);
+      border-bottom-color: var(--color-accent);
     }
     @include bp.phone {
       .tabs a {
@@ -79,4 +89,16 @@ import { PageHeader } from '../../shared/ui/page-header';
     }
   `,
 })
-export class OrdersPage {}
+export class OrdersPage {
+  protected readonly status = inject(RefreshStatus);
+  private readonly router = inject(Router);
+  private readonly url = toSignal(
+    this.router.events.pipe(
+      filter((e) => e instanceof NavigationEnd),
+      map(() => this.router.url),
+    ),
+    { initialValue: this.router.url },
+  );
+  /** On the runs tab the runner is already on screen, so the header link goes. */
+  protected readonly onRuns = computed(() => this.url().startsWith('/orders/ticks'));
+}

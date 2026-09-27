@@ -122,8 +122,9 @@ def lagged_market_stats(bars: pd.DataFrame, spec: MarketStatsSpec) -> pd.DataFra
     optionally ``adj_close``), each from that ticker's **previous** bars
     only. Returned in ``bars``' row order; NaN where a window isn't full.
 
-    High / low / close are rescaled by ``adj_close / close`` so a split
-    inside the window doesn't read as volatility or spread."""
+    High / low / close are rescaled by ``adj_close / close`` and volume by
+    its inverse, so a split inside the window doesn't read as volatility,
+    spread or a drop in volume (RS-20)."""
     out = pd.DataFrame(index=bars.index, columns=["adv", "sigma_daily", "half_spread_bps"])
     if bars.empty:
         return out.astype(float)
@@ -134,7 +135,7 @@ def lagged_market_stats(bars: pd.DataFrame, spec: MarketStatsSpec) -> pd.DataFra
     high = frame["high"].astype(float).fillna(close) * factor
     low = frame["low"].astype(float).fillna(close) * factor
     adj_close = close * factor
-    volume = frame["volume"].astype(float)
+    volume = frame["volume"].astype(float) / factor
     tickers = frame["ticker"]
 
     def per_ticker(series: pd.Series, fn) -> pd.Series:
@@ -147,7 +148,7 @@ def lagged_market_stats(bars: pd.DataFrame, spec: MarketStatsSpec) -> pd.DataFra
     if spec.spread_estimator is not None:
         estimator = corwin_schultz if spec.spread_estimator == "corwin_schultz" else abdi_ranaldo
         parts = []
-        for _, idx in frame.groupby("ticker", sort=False).groups.items():
+        for idx in frame.groupby("ticker", sort=False).groups.values():
             parts.append(
                 half_spread_bps(
                     estimator(high.loc[idx], low.loc[idx], adj_close.loc[idx], spec.spread_window)
@@ -185,6 +186,8 @@ class BarQuote:
     adv: float | None = None
     #: Calendar days from the order's decision to this bar; ``None`` unknown.
     gap_days: float | None = None
+    #: Length of one bar of the backtest interval in days; ``None`` unknown.
+    bar_days: float | None = None
 
 
 @dataclass(frozen=True)
@@ -228,6 +231,8 @@ class FillModelSettings(BaseModel):
     allow_zero_volume: bool = False
     honour_limits: bool = True
     #: Longest decision-to-fill gap, in calendar days; ``None`` disables.
+    #: Never shorter than two bars of the backtest interval (RS-14), so
+    #: weekly, monthly and yearly bars still fill.
     max_gap_days: float | None = Field(7.0, gt=0.0)
     adv_window: int = Field(20, ge=1)
 
@@ -252,8 +257,10 @@ class BarFillModel:
     def decide(self, order: Order, quote: BarQuote) -> FillDecision:
         s = self._s
         gap = quote.gap_days
-        if s.max_gap_days is not None and gap is not None and gap > s.max_gap_days:
-            return FillDecision.none("gap")
+        if s.max_gap_days is not None and gap is not None:
+            limit = max(s.max_gap_days, 2.0 * (quote.bar_days or 0.0))
+            if gap > limit:
+                return FillDecision.none("gap")
         price, reason = self._price(order, quote) if s.honour_limits else (quote.open, None)
         if price is None:
             return FillDecision.none(reason or "not_triggered")  # DAY order expires
@@ -294,7 +301,7 @@ class BarFillModel:
             stop = order.limit_price
         if stop is None:
             return None, "missing_stop_price"
-        if buy and high < stop or not buy and low > stop:
+        if (buy and high < stop) or (not buy and low > stop):
             return None, "stop_not_triggered"
         triggered = max(o, stop) if buy else min(o, stop)
         if kind == "stop":

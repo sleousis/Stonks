@@ -189,3 +189,33 @@ def test_main_report_without_tear_sheets_has_no_backtest_group():
         strategies=[],
     )
     assert "Benchmark statistics" not in render_html(data)
+
+
+# ---- review 18.1 edge cases ----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "curve",
+    [
+        [100, 110, 99, 88, 110, 120, 108, 114, 121, 115],  # ends under water
+        [100, 90, 95, 99, 101, 100, 102],  # every drawdown recovers
+        [100, 90, 80, 70],  # never recovers
+    ],
+)
+def test_drawdown_periods_agree_with_the_report_duration(curve):
+    """``length_bars`` counts bar steps from the peak to the recovery bar, so
+    a recovered episode spends ``length_bars - 1`` bars under water. The
+    longest time under water is the report's ``max_dd_duration_bars``."""
+    d = _days(len(curve))
+    periods = drawdown_periods(d, curve, top=len(curve))
+    under_water = [p.length_bars - (p.recovery is not None) for p in periods]
+    report = compute_report("s", d, [float(v) for v in curve])
+    assert max(under_water) == report.max_dd_duration_bars
+
+
+def test_rolling_sharpe_with_non_positive_equity_stays_finite():
+    d = _days(8)
+    curve = [100.0, 50.0, 0.0, -10.0, 5.0, 10.0, 12.0, 11.0]
+    points = rolling_sharpe(d, curve, window=3)
+    assert len(points) == len(curve) - 3
+    assert all(np.isfinite(v) for _, v in points)

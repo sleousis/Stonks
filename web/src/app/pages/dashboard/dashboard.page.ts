@@ -15,18 +15,34 @@ import {
 } from '../../core/format/format';
 import type { ChartSeries } from '../../shared/chart/chart-engine';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
+import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
+import { CHECK_TITLES } from '../health/health-state';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
+import { DateTimePipe } from '../../shared/format.pipes';
 import { PageHeader } from '../../shared/ui/page-header';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 
 const RECENT_TICKS = 8;
+const FRESHNESS_PREFIX = 'freshness:';
+
+/** A health check's name for people: "Stuck ticks", "Freshness of AAPL.US". */
+export function checkTitle(name: string): string {
+  if (CHECK_TITLES[name]) return CHECK_TITLES[name];
+  if (name.startsWith(FRESHNESS_PREFIX))
+    return `Freshness of ${name.slice(FRESHNESS_PREFIX.length)}`;
+  const words = name.replace(/[_:]+/g, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
 
 /**
  * Reference page: read-only overview built from GET routes. Each panel owns
  * one `resource()` and renders loading / error / empty / data on its own, so
- * one failing route never blanks the whole page.
+ * one failing route never blanks the whole page. Everything reloads every
+ * minute while the tab is visible, and right after a trading run this tab
+ * followed ends.
  */
 @Component({
   selector: 'app-dashboard-page',
@@ -39,6 +55,8 @@ const RECENT_TICKS = 8;
     DataTable,
     TableCell,
     TimeSeriesChart,
+    UpdatedAgo,
+    DateTimePipe,
     LoadingState,
     EmptyState,
     ErrorState,
@@ -52,22 +70,30 @@ export class DashboardPage {
   private readonly healthApi = inject(HealthService);
   private readonly strategiesApi = inject(StrategiesService);
 
-  protected readonly portfolio = resource({ loader: () => this.portfolioApi.get() });
-  protected readonly pnl = resource({ loader: () => this.portfolioApi.pnl() });
+  private readonly portfolioCtx = inject(PortfolioContextService);
+  /** Real money: the headline figure and the value line turn brass. */
+  protected readonly live = this.portfolioCtx.live;
+
+  // The picked portfolio is in the params so a new pick reloads these.
+  protected readonly portfolio = resource({
+    params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
+    loader: () => this.portfolioApi.get(),
+  });
+  protected readonly pnl = resource({
+    params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
+    loader: () => this.portfolioApi.pnl(),
+  });
   protected readonly ticks = resource({
     loader: () => this.ticksApi.list({ limit: RECENT_TICKS }),
   });
   protected readonly health = resource({ loader: () => this.healthApi.report() });
   protected readonly version = resource({ loader: () => this.healthApi.ping() });
-  protected readonly strategyCounts = resource({
-    loader: async () => {
-      const [active, shadow] = await Promise.all([
-        this.strategiesApi.count('active'),
-        this.strategiesApi.count('shadow'),
-      ]);
-      return { active, shadow };
-    },
-  });
+  protected readonly strategyCounts = resource({ loader: () => this.strategiesApi.summary() });
+
+  protected readonly auto = autoRefresh(
+    () => [this.portfolio, this.pnl, this.ticks, this.health, this.version, this.strategyCounts],
+    { triggers: [this.ticksApi.finished] },
+  );
 
   protected readonly refreshing = computed(
     () =>
@@ -84,7 +110,7 @@ export class DashboardPage {
     const takenAt = this.portfolio.value().taken_at;
     return takenAt
       ? `Positions from the snapshot of ${formatDateTime(takenAt)}, valued at the latest prices.`
-      : 'No snapshot yet: the first tick seeds the portfolio.';
+      : 'No snapshot yet. The first trading run seeds the portfolio.';
   });
 
   protected readonly rows = computed(() => (this.pnl.hasValue() ? this.pnl.value().rows : []));
@@ -93,7 +119,7 @@ export class DashboardPage {
   protected readonly dayChange = computed(() => {
     const row = this.latest();
     if (!row || row.daily_change == null) return null;
-    return `${formatMoney(row.daily_change, { signed: true })} (${formatPercent(row.daily_return, { signed: true })}) on ${row.day}`;
+    return `${formatMoney(row.daily_change, { signed: true, currency: this.currency() })} (${formatPercent(row.daily_return, { signed: true })}) on ${row.day}`;
   });
   protected readonly dayTone = computed(() => toneClass(this.latest()?.daily_change));
 
@@ -107,9 +133,15 @@ export class DashboardPage {
 
   protected readonly positionsDetail = computed(() => {
     if (!this.portfolio.hasValue()) return null;
-    const n = this.portfolio.value().positions.length;
-    return n === 1 ? '1 position' : `${n} positions`;
+    const p = this.portfolio.value();
+    const n = p.positions.length;
+    const count = n === 1 ? '1 position' : `${n} positions`;
+    if (!n || p.unrealized_pnl == null) return count;
+    return `${count}, ${formatMoney(p.unrealized_pnl, { signed: true, currency: p.currency })} unrealized`;
   });
+  protected readonly positionsTone = computed(() =>
+    this.portfolio.hasValue() ? toneClass(this.portfolio.value().unrealized_pnl) : '',
+  );
 
   protected readonly drawdownNow = computed(() => this.latest()?.drawdown ?? null);
   protected readonly worstDrawdown = computed(() => {
@@ -117,7 +149,15 @@ export class DashboardPage {
     return rows.length ? Math.min(...rows.map((r) => r.drawdown)) : null;
   });
 
-  protected readonly money = formatMoney;
+  /** The portfolio's currency from the API (USD until it loads). */
+  protected readonly currency = computed(() =>
+    this.portfolio.hasValue() ? (this.portfolio.value().currency ?? null) : null,
+  );
+  protected money(value: number | null | undefined): string {
+    return formatMoney(value, { currency: this.currency() });
+  }
+  /** For the headline count-up. */
+  protected readonly moneyFormat = (value: number) => this.money(value);
   protected readonly percent = formatPercent;
 
   // Chart -------------------------------------------------------------------
@@ -128,7 +168,7 @@ export class DashboardPage {
         id: 'value',
         label: 'Value',
         kind: 'line',
-        color: 'brass',
+        color: this.live() ? 'brass' : 'primary',
         format: 'money',
         points: rows.map((r) => ({ time: r.day, value: r.total_value })),
       },
@@ -150,8 +190,8 @@ export class DashboardPage {
     const last = rows.at(-1);
     if (!first || !last) return null;
     return (
-      `Portfolio value from ${first.day} to ${last.day}: ${formatMoney(first.total_value)} to ` +
-      `${formatMoney(last.total_value)}, cumulative return ${formatPercent(last.cumulative_return, { signed: true })}. ` +
+      `Portfolio value from ${first.day} to ${last.day}: ${this.money(first.total_value)} to ` +
+      `${this.money(last.total_value)}, cumulative return ${formatPercent(last.cumulative_return, { signed: true })}. ` +
       `Current drawdown ${formatPercent(last.drawdown)}, worst ${formatPercent(this.worstDrawdown())}.`
     );
   });
@@ -160,9 +200,30 @@ export class DashboardPage {
   protected readonly positionColumns: TableColumn<PositionView>[] = [
     { key: 'ticker', label: 'Ticker', mobile: 'title' },
     { key: 'quantity', label: 'Quantity', format: 'number' },
-    { key: 'price', label: 'Price', format: 'money' },
+    {
+      key: 'avg_cost',
+      label: 'Avg cost',
+      format: 'money',
+      currency: (p) => p.currency,
+      mobile: 'hide',
+    },
+    { key: 'price', label: 'Price', format: 'money', currency: (p) => p.currency },
     { key: 'price_date', label: 'Priced', format: 'date', mobile: 'hide' },
-    { key: 'market_value', label: 'Value', format: 'money' },
+    { key: 'market_value', label: 'Value', format: 'money', currency: (p) => p.currency },
+    {
+      key: 'unrealized_pnl',
+      label: 'Unrealized P&L',
+      format: 'signedMoney',
+      tone: true,
+      currency: (p) => p.currency,
+    },
+    {
+      key: 'unrealized_pnl_pct',
+      label: 'P&L %',
+      format: 'signedPercent',
+      tone: true,
+      mobile: 'hide',
+    },
     { key: 'weight', label: 'Weight', format: 'percent' },
   ];
   protected readonly positionKey = (p: PositionView) => p.ticker;
@@ -193,6 +254,7 @@ export class DashboardPage {
     },
   ];
   protected readonly tickKey = (t: TickRun) => t.id;
+  protected readonly checkTitle = checkTitle;
 
   // Health ------------------------------------------------------------------
   protected readonly failingChecks = computed(() =>
@@ -200,11 +262,6 @@ export class DashboardPage {
   );
 
   protected refresh(): void {
-    this.portfolio.reload();
-    this.pnl.reload();
-    this.ticks.reload();
-    this.health.reload();
-    this.version.reload();
-    this.strategyCounts.reload();
+    this.auto.refresh();
   }
 }

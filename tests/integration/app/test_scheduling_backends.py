@@ -109,6 +109,10 @@ def test_api_health_reads_the_report(settings, api_executor):
     # seeded bars end 2026-04-01: stale by September
     assert out.status == "failed" and "freshness:UP.US" in out.detail["failed_checks"]
     assert len(notifier.sent) == 1
+    # the scheduled job (not a report read) opens the operational halt
+    with SqliteState(settings.state.path) as s:
+        kinds = [r["kind"] for r in s.sql("SELECT kind FROM risk_halts WHERE cleared_at IS NULL")]
+    assert kinds == ["operational"]
 
 
 def test_scheduler_loop_on_the_api_backend(settings, api_executor, tmp_path):
@@ -135,6 +139,32 @@ def test_in_process_tick_and_ingest(settings, services):
     # asset classes come from the lake here: UP.US is an equity, closed on Thanksgiving
     ctx, _ = _ctx(settings, ex, "tick", date(2026, 11, 26), tickers=["UP.US"])
     assert ex.execute(ctx).detail["reason"] == "market_closed"
+
+
+@pytest.mark.parametrize(("as_of", "buys"), [(date(2026, 4, 2), 0), (date(2026, 4, 1), 1)])
+def test_a_scheduled_tick_after_a_failed_ingest_places_no_buys(settings, services, as_of, buys):
+    """TO-10: the seeded bars end 2026-04-01. On 04-02 the session's bar is
+    missing (the price ingest failed), so the scheduled tick buys nothing,
+    though the 7-day staleness window alone would let it."""
+    from stonks.core.protocols import SurvivalReport
+    from stonks.registry.store import StrategyRegistry
+    from stonks.strategies.examples.buy_and_hold import BuyAndHold
+    from tests.fixtures.governance import seed_status
+
+    with SqliteState(settings.state.path) as s:
+        registry = StrategyRegistry(state=s, artifacts_dir=settings.registry.artifacts_dir)
+        sid = registry.register(
+            BuyAndHold({"ticker": "FLAT.US", "allocation": 0.2}),
+            reports=[SurvivalReport(test_id="oos", passed=True, metrics={})],
+            strategy_id="bah_flat",
+        )
+        seed_status(registry, "bah_active", "retired")
+        seed_status(registry, sid, "active", default_book=True)
+    ex = InProcessExecutor(services)
+    ctx, _ = _ctx(settings, ex, "tick", as_of, tickers=["FLAT.US"])
+    out = ex.execute(ctx)
+    assert out.status == "succeeded", out.detail
+    assert out.detail["orders_placed"] == buys
 
 
 def test_in_process_health(settings, services):

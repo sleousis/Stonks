@@ -20,11 +20,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from stonks.backtest.costs import CostModelSettings
 from stonks.backtest.fills import ExecutionSettings
 from stonks.core.types import AssetClass
+from stonks.ingest.ensure_settings import EnsureSettings
 from stonks.ingest.quality_config import DataQualityConfig, FallbackConfig
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
 from stonks.ops.config import BackupConfig
 from stonks.portfolio.settings import ConstructionSettings
+from stonks.production.decay import DecaySettings
+from stonks.production.monitor_settings import RiskMonitorSettings
 from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.rules.settings import RuleSettings
 from stonks.scheduling.config import SchedulerConfig
@@ -33,13 +36,21 @@ from stonks.store.bars import BarBackend
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
 
+#: Same as ``stonks.universes.base.UNIVERSE_ID_PATTERN`` (importing the
+#: universes package here would be an import cycle; a test keeps them equal).
+UNIVERSE_ID_PATTERN = r"^[a-z0-9][a-z0-9_.-]{0,63}$"
+
 
 class EodhdSourceConfig(BaseModel):
+    # A raw str assigned later (tests, scripts) still becomes a SecretStr.
+    model_config = ConfigDict(validate_assignment=True)
+
     base_url: str = "https://eodhd.com/api"
     timeout_seconds: int = 30
     max_retries: int = 3
     retry_backoff_seconds: float = 1.0
-    api_key: str | None = None
+    #: From ``EODHD_API_KEY``; a SecretStr so it never shows in a repr.
+    api_key: SecretStr | None = None
 
 
 class YahooSourceConfig(BaseModel):
@@ -82,6 +93,8 @@ class AlpacaBrokerConfig(BaseModel):
 
     paper: bool = True
     allow_live: bool = False
+    #: Short sales through Alpaca (roadmap 16.1). Off by default.
+    allow_short: bool = False
     max_retries: int = 3
     retry_backoff_seconds: float = 1.0
     api_key: SecretStr | None = Field(default_factory=lambda: _env_secret("ALPACA_API_KEY"))
@@ -198,7 +211,9 @@ class HealthConfig(BaseModel):
 
 
 class ProductionConfig(BaseModel):
-    universe: list[str] = []
+    # A ticker list, or the id of a stored universe (roadmap 10.5) whose
+    # members on the tick's date are traded (stonks.production.universe).
+    universe: list[str] | Annotated[str, Field(pattern=UNIVERSE_ID_PATTERN)] = []
     threshold: float = 0.0
     initial_cash: float = 10_000.0
     slippage_bps: float = 0.0
@@ -213,20 +228,33 @@ class ProductionConfig(BaseModel):
     health: HealthConfig = HealthConfig()
     # ``[production.construction]``: the global constructor and no-trade
     # buffer (default ``single_winner``, today's behaviour); a portfolio's
-    # ``construction_json`` is merged on top.
-    construction: ConstructionSettings = ConstructionSettings()
+    # ``construction_json`` is merged on top. A factory, so importing this
+    # module does not run constructor discovery (which imports
+    # ``portfolio.pipeline`` and, through it, ``production.risk``).
+    construction: ConstructionSettings = Field(default_factory=ConstructionSettings)
     # Which strategies keep a model book: "shadow" (only shadow strategies)
     # or "all" non-retired ones (design section 5).
     model_books: Literal["shadow", "all"] = "shadow"
     # Trade one book per portfolio from its paper/auto subscriptions (and
-    # record notify signals) instead of the single legacy book over every
-    # active strategy. Off by default. When on, a newly promoted strategy
-    # trades only once a subscription (e.g. on pf_default) includes it.
-    books_from_subscriptions: bool = False
+    # record notify signals). pf_default follows every active strategy: a
+    # promotion subscribes it (accounts.default_book), so it trades like
+    # the old single book. false: the old single book over every active
+    # strategy, other portfolios idle.
+    books_from_subscriptions: bool = True
+    # Worker processes that score strategies opting in with
+    # ``parallel_scoring`` (0 = every core, 1 = in the tick's process). A
+    # pool starts only for at least ``parallel_min_estimates`` estimates.
+    scoring_workers: int = Field(default=0, ge=0)
+    parallel_min_estimates: int = Field(default=2000, ge=1)
     # ``[production.quit_rule]`` (BL-29): alert (and with auto_demote, move
     # to shadow) an active strategy whose attributed drawdown passes
     # quit_multiple x its backtest drawdown.
     quit_rule: QuitRuleSettings = QuitRuleSettings()
+    # ``[production.risk_monitor]`` (BL-47): daily VaR and ES snapshots and
+    # the violation checks after each real tick.
+    risk_monitor: RiskMonitorSettings = RiskMonitorSettings()
+    # ``[production.decay]``: the alpha-decay check per strategy sleeve.
+    decay: DecaySettings = DecaySettings()
 
 
 class GoLivePolicy(BaseModel):
@@ -471,7 +499,7 @@ class Settings(BaseSettings):
     logging: LoggingConfig = LoggingConfig()
     brokers: BrokersConfig = Field(default_factory=BrokersConfig)
     sources: SourcesConfig = SourcesConfig()
-    production: ProductionConfig = ProductionConfig()
+    production: ProductionConfig = Field(default_factory=ProductionConfig)
     notify: NotifyConfig = NotifyConfig()
     api: ApiConfig = Field(default_factory=ApiConfig)
     auth: AuthConfig = AuthConfig()
@@ -481,22 +509,73 @@ class Settings(BaseSettings):
     golive: GoLivePolicy = GoLivePolicy()
     mcp: McpConfig = McpConfig()
     ingest: IngestConfig = IngestConfig()
+    # ``[ensure]``: how on-demand bar fetches run (docs/universes.md).
+    ensure: EnsureSettings = Field(default_factory=EnsureSettings)
     backup: BackupConfig = BackupConfig()
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
 
 
-def configured_secrets(settings: Settings) -> list[str]:
-    """Every credential value the settings hold, for scrubbing text before it
-    is logged, persisted or returned."""
-    alpaca = settings.brokers.alpaca
-    values = [
-        settings.sources.eodhd.api_key,
-        settings.api.token.get_secret_value() if settings.api.token else None,
-        alpaca.api_key.get_secret_value() if alpaca.api_key else None,
-        alpaca.secret_key.get_secret_value() if alpaca.secret_key else None,
-        settings.notify.webhook.url,
-    ]
-    return [v for v in values if v]
+#: Secrets read straight from the environment by blocks that keep their own
+#: settings (notify channels, broker connections, metrics, encryption keys).
+ENV_ONLY_SECRETS: tuple[str, ...] = (
+    "STONKS_SECRET_KEYS",
+    "STONKS_METRICS_TOKEN",
+    "STONKS_SMTP_PASSWORD",
+    "STONKS_VAPID_PRIVATE_KEY",
+    "STONKS_SNAPTRADE_CONSUMER_KEY",
+    "STONKS_API_TOKEN",
+    "EODHD_API_KEY",
+    "ALPACA_API_KEY",
+    "ALPACA_SECRET_KEY",
+)
+
+
+def secret_value(value: SecretStr | str | None) -> str | None:
+    """The plain text of a secret setting (a raw str is accepted too)."""
+    if isinstance(value, SecretStr):
+        return value.get_secret_value()
+    return value
+
+
+def _walk_secrets(obj: object, out: list[str]) -> None:
+    if isinstance(obj, SecretStr):
+        out.append(obj.get_secret_value())
+    elif isinstance(obj, BaseModel):
+        for name in type(obj).model_fields:
+            _walk_secrets(getattr(obj, name, None), out)
+    elif isinstance(obj, dict):
+        for item in obj.values():
+            _walk_secrets(item, out)
+    elif isinstance(obj, list | tuple):
+        for item in obj:
+            _walk_secrets(item, out)
+
+
+def configured_secrets(
+    settings: Settings, *, environ: Mapping[str, str] | None = None
+) -> list[str]:
+    """Every credential value the server holds, for scrubbing text before it
+    is logged, persisted or returned: each ``SecretStr`` in ``settings``, the
+    plain secrets (vendor key, global webhook URL) and :data:`ENV_ONLY_SECRETS`.
+    ``STONKS_SECRET_KEYS`` also adds each key of its ``id:key`` list."""
+    env = os.environ if environ is None else environ
+    values: list[str] = []
+    _walk_secrets(settings, values)
+    values.append(secret_value(settings.sources.eodhd.api_key) or "")
+    values.append(settings.notify.webhook.url or "")
+    for name in ENV_ONLY_SECRETS:
+        raw = env.get(name)
+        if not raw:
+            continue
+        values.append(raw)
+        if name == "STONKS_SECRET_KEYS":
+            for part in raw.split(","):
+                values.append(part.split(":", 1)[-1].strip())
+    out: list[str] = []
+    for value in values:
+        if value and len(value) >= 4 and value not in out:
+            out.append(value)
+    return out
 
 
 def load_settings(config_path: Path | None = None) -> Settings:

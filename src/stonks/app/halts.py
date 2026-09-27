@@ -10,7 +10,11 @@ scopes:
 
 It stops every new order (``halt = all``), or only buys when ``flatten``
 is set so sells and exits still go through. The tick's ``risk_halts`` gate
-enforces it. Engaging, resuming and clearing each write an ``audit_log``
+enforces it. Engaging stop-all over an open flatten escalates it (never
+the other way round). Engaging also cancels the orders a portfolio still
+has working at an external broker (all of them, or only buys with
+``flatten``) through the broker interface (``execution.cancel``); a
+failed cancel is logged and never undoes the halt. Engaging, resuming and clearing each write an ``audit_log``
 row; resuming and clearing also write the ``risk_reset`` row in
 ``status_changes``. Resuming the kill switch needs the typed confirmation
 :data:`RESUME_PHRASE` and a reason. Other halts (the circuit breaker, the
@@ -22,7 +26,7 @@ Other users' portfolios and halts read as missing (404), never forbidden.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, date, datetime
 from typing import Literal
@@ -33,6 +37,7 @@ from stonks.accounts import NotFound, Role, Scope, owned_portfolio
 from stonks.accounts.audit import AuditLog
 from stonks.app.context import AppContext
 from stonks.app.errors import NotFoundError, ValidationError
+from stonks.auth.errors import PermissionDenied
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.logging import get_logger
@@ -40,6 +45,7 @@ from stonks.production.halts import (
     Halt,
     HaltError,
     clear_halt,
+    escalate_halt,
     get_halt,
     list_halts,
     notify_trip,
@@ -139,9 +145,41 @@ def _is_admin(scope: Scope) -> bool:
     return scope.is_service or scope.role == Role.ADMIN
 
 
+#: The broker a portfolio trades at, or ``None`` when it has none with
+#: working orders (simulated books fill inside the tick).
+BrokerLookup = Callable[[str], object | None]
+
+
+def settings_brokers(context: AppContext) -> BrokerLookup:
+    """Today only the default portfolio trades at an external broker
+    (``[brokers].kind``), built the way the tick builds it."""
+
+    def lookup(portfolio_id: str) -> object | None:
+        from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
+        from stonks.core.types import Portfolio
+        from stonks.execution.brokers import make_broker
+
+        settings = context.settings
+        if portfolio_id != DEFAULT_PORTFOLIO_ID or settings.brokers.kind == "simulated":
+            return None
+        return make_broker(settings, Portfolio(cash=0.0))
+
+    return lookup
+
+
+def _check(who: Who, permission: Permission, allowed: bool, message: str) -> None:
+    """A principal needs ``permission`` (role *and* credential scope); a bare
+    scope (CLI, services) needs ``allowed``. Refusals are 403."""
+    if isinstance(who, Principal):
+        require(who, permission)
+    elif not allowed:
+        raise PermissionDenied(message)
+
+
 class HaltService:
-    def __init__(self, context: AppContext) -> None:
+    def __init__(self, context: AppContext, *, brokers: BrokerLookup | None = None) -> None:
         self._context = context
+        self._brokers = brokers or settings_brokers(context)
 
     @contextmanager
     def _state(self) -> Iterator[SqliteState]:
@@ -173,14 +211,22 @@ class HaltService:
         """Stop new orders at ``request.scope``. Idempotent: a kill switch
         already on at that scope is returned as it is."""
         scope = _scope(who)
-        if not (scope.is_service or Role(scope.role).can_trade):
-            raise ValidationError("the kill switch needs a role that can trade")
+        _check(
+            who,
+            Permission.KILLSWITCH_USER,
+            scope.is_service or Role(scope.role).can_trade,
+            "the kill switch needs a role that can trade",
+        )
         user_id: str | None = None
         portfolio_id: str | None = None
         with self._state() as state:
             if request.scope == "global":
-                if not _is_admin(scope):
-                    raise ValidationError("only an admin can stop every portfolio")
+                _check(
+                    who,
+                    Permission.KILLSWITCH_GLOBAL,
+                    _is_admin(scope),
+                    "only an admin can stop every portfolio",
+                )
             elif request.scope == "user":
                 if scope.is_service:
                     raise ValidationError("a service has no portfolios of its own")
@@ -189,6 +235,7 @@ class HaltService:
                 if not request.portfolio_id:
                     raise ValidationError("a portfolio kill switch needs portfolio_id")
                 portfolio_id = self._owned(state, scope, request.portfolio_id)
+            mode = "buys" if request.flatten else "all"
             with state.transaction():
                 halt, created = trip_halt(
                     state,
@@ -198,33 +245,42 @@ class HaltService:
                     scope=request.scope,
                     user_id=user_id,
                     portfolio_id=portfolio_id,
-                    halt="buys" if request.flatten else "all",
+                    halt=mode,
                     on=_today(),
                 )
-                if created:
+                escalated_from = None
+                if not created and mode == "all" and halt.halt == "buys":
+                    escalated_from = halt.id
+                    halt = escalate_halt(state, halt.id, actor=scope.actor, reason=request.reason)
+                if created or escalated_from is not None:
+                    details = {
+                        "scope": request.scope,
+                        "user_id": user_id,
+                        "flatten": request.flatten,
+                        "reason": request.reason,
+                    }
+                    if escalated_from is not None:
+                        details["escalated_from"] = escalated_from
                     AuditLog(state).record(
                         scope.actor,
-                        "kill_switch.engage",
+                        "kill_switch.engage" if created else "kill_switch.escalate",
                         "risk_halt",
                         str(halt.id),
                         portfolio_id=portfolio_id,
-                        details={
-                            "scope": request.scope,
-                            "user_id": user_id,
-                            "flatten": request.flatten,
-                            "reason": request.reason,
-                        },
+                        details=details,
                         ip=ip,
                     )
-            if created:
+            if created or escalated_from is not None:
                 notify_trip(state, halt)
             _log.warning(
                 "kill_switch.engaged",
                 halt_id=halt.id,
                 scope=request.scope,
                 created=created,
+                escalated_from=escalated_from,
                 actor=scope.actor,
             )
+            self._cancel_working(state, scope, halt, ip)
             return HaltView.of(halt, _today())
 
     def resume_kill(
@@ -244,7 +300,7 @@ class HaltService:
             halt = self._load(state, scope, halt_id)
             if halt.kind != "kill":
                 raise ValidationError(f"halt {halt_id} is a {halt.kind} halt; clear it instead")
-            return self._clear(state, scope, halt, request.reason, "kill_switch.resume", ip)
+            return self._clear(state, who, halt, request.reason, "kill_switch.resume", ip)
 
     # ---- other halts -------------------------------------------------------------------
 
@@ -257,21 +313,56 @@ class HaltService:
             halt = self._load(state, scope, halt_id)
             if halt.kind == "kill":
                 raise ValidationError("the kill switch is turned off with resume")
-            return self._clear(state, scope, halt, request.reason, "risk_halt.clear", ip)
+            return self._clear(state, who, halt, request.reason, "risk_halt.clear", ip)
 
     # ---- helpers -----------------------------------------------------------------------
+
+    def _cancel_working(self, state: SqliteState, scope: Scope, halt: Halt, ip: str | None) -> None:
+        """Cancel the working broker orders of every portfolio ``halt``
+        covers (only buys for a ``buys`` halt). Runs on every engage, so
+        pressing again retries a cancel that failed. Never raises."""
+        from stonks.execution.cancel import cancel_working_orders
+
+        sides = ("buy",) if halt.halt == "buys" else ("buy", "sell")
+        for portfolio_id in _covered_portfolios(state, halt):
+            try:
+                broker = self._brokers(portfolio_id)
+                if broker is None:
+                    continue
+                summary = cancel_working_orders(
+                    broker, state, portfolio_id=portfolio_id, sides=sides
+                )
+            except Exception as exc:
+                _log.error("kill_switch.cancel_failed", portfolio_id=portfolio_id, error=str(exc))
+                continue
+            if summary.cancelled or summary.failed:
+                AuditLog(state).record(
+                    scope.actor,
+                    "kill_switch.cancel_orders",
+                    "risk_halt",
+                    str(halt.id),
+                    portfolio_id=portfolio_id,
+                    details={"cancelled": list(summary.cancelled), "failed": list(summary.failed)},
+                    ip=ip,
+                )
 
     def _clear(
         self,
         state: SqliteState,
-        scope: Scope,
+        who: Who,
         halt: Halt,
         reason: str,
         action: str,
         ip: str | None,
     ) -> HaltView:
-        if halt.scope == "global" and not _is_admin(scope):
-            raise ValidationError("only an admin can clear a global halt")
+        scope = _scope(who)
+        if halt.scope == "global":
+            _check(
+                who,
+                Permission.KILLSWITCH_GLOBAL if halt.kind == "kill" else Permission.RISK_GLOBAL,
+                _is_admin(scope),
+                "only an admin can clear a global halt",
+            )
         if halt.cleared:
             raise ValidationError(f"halt {halt.id} was already cleared")
         try:
@@ -315,3 +406,17 @@ class HaltService:
         if halt is None or not self._visible(state, scope, halt):
             raise NotFoundError(f"halt {halt_id} not found")
         return halt
+
+
+def _covered_portfolios(state: SqliteState, halt: Halt) -> list[str]:
+    """The ids of the open portfolios a halt stops."""
+    if halt.scope == "portfolio":
+        return [halt.portfolio_id] if halt.portfolio_id else []
+    if halt.scope == "user":
+        rows = state.sql(
+            "SELECT id FROM portfolios WHERE owner_id = ? AND status != 'archived' ORDER BY id",
+            [halt.user_id],
+        )
+    else:
+        rows = state.sql("SELECT id FROM portfolios WHERE status != 'archived' ORDER BY id")
+    return [r["id"] for r in rows]

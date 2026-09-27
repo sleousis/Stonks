@@ -9,7 +9,15 @@ Metadata (BL-26) is a set of duck-typed class attributes with safe defaults:
 ``hypothesis``, ``alpha_family``, ``premise``, ``label_horizon_bars`` and
 ``required_history_bars``. Callers read them through :func:`strategy_metadata`
 (``getattr`` with defaults), so strategies that don't subclass
-``BaseStrategy`` work too. An optional ``asset_classes`` instance param
+``BaseStrategy`` work too. A strategy whose horizon or history depends on
+its params returns them from ``param_metadata()``: ``BaseStrategy.__init__``
+sets them on the instance (RS-07, RS-30), and the class attribute stays the
+value for the default params (the catalog and the API read it).
+
+``data_tickers()`` names the tickers a strategy reads but does not trade (a
+reference market, an index filter, a regime condition's ticker). The lab
+copies their data into every worker snapshot and modified lake, next to the
+universe (RS-01). Read it through :func:`strategy_data_tickers`. An optional ``asset_classes`` instance param
 overrides ``applicable_asset_classes``, for opt-in use of a strategy outside
 its evidence base.
 """
@@ -81,6 +89,19 @@ def strategy_metadata(target: Any) -> StrategyMetadata:
     )
 
 
+def strategy_data_tickers(target: Any) -> tuple[str, ...]:
+    """The tickers ``target`` reads but never trades (``data_tickers()``),
+    empty when it declares none. Blank names are dropped, order is kept."""
+    fn = getattr(target, "data_tickers", None)
+    if not callable(fn):
+        return ()
+    try:
+        tickers = fn()
+    except TypeError:  # called on a class: the hook needs bound params
+        return ()
+    return tuple(dict.fromkeys(str(t) for t in tickers if t))
+
+
 def _check_metadata(cls: type) -> None:
     name = cls.__name__
     if not isinstance(cls.hypothesis, str):  # type: ignore[attr-defined]
@@ -124,6 +145,14 @@ class BaseStrategy:
     # strategy equity-only without an opt-in change. Cross-class
     # strategies override (e.g. ``("equity", "crypto")``).
     applicable_asset_classes: ClassVar[tuple[AssetClass, ...]] = ("equity",)
+    #: Negative scores mean "short", not only "less long" (roadmap 16).
+    #: A short opens only when the strategy and the book both allow it;
+    #: off by default. Read with ``getattr`` so any Strategy works.
+    supports_short: ClassVar[bool] = False
+    #: ``estimate_return`` keeps no per-day state that ``decide`` reads, so
+    #: the tick may score this strategy in worker processes (see
+    #: ``stonks.production.scoring``). Off unless a strategy opts in.
+    parallel_scoring: ClassVar[bool] = False
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         # Catch the ``applicable_asset_classes = ()`` footgun at class
@@ -158,6 +187,16 @@ class BaseStrategy:
         if override is not None:
             self.applicable_asset_classes = override  # type: ignore[misc]
             self._asset_classes_override = override
+        for attr, value in self.param_metadata().items():
+            if attr not in ("label_horizon_bars", "required_history_bars"):
+                raise ValueError(f"param_metadata may not set {attr!r}")
+            setattr(self, attr, max(0, int(value)))
+
+    def param_metadata(self) -> dict[str, int]:
+        """``label_horizon_bars`` / ``required_history_bars`` that depend on
+        the params (see the module doc); empty keeps the class values. May
+        read ``self.params`` only: it runs inside ``__init__``."""
+        return {}
 
     def __setattr__(self, name: str, value: Any) -> None:
         # An explicit ``asset_classes`` override wins over classes a subclass
@@ -173,6 +212,10 @@ class BaseStrategy:
 
     def fit(self, dataset: Any) -> None:
         return None
+
+    def data_tickers(self) -> tuple[str, ...]:
+        """Tickers this strategy reads but does not trade (see module doc)."""
+        return ()
 
     # --- persistence ---------------------------------------------------------
 

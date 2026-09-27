@@ -52,6 +52,7 @@ def backtest_config(
         interval=getattr(dataset, "interval", Interval.DAY_1),
         threshold=0.0,
         construction=getattr(dataset, "construction", None),
+        universe_id=getattr(dataset, "universe_id", None),
     )
 
 

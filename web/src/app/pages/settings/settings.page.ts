@@ -7,6 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 
 import { IngestService } from '../../api/ingest.service';
 import { AuthService } from '../../api/auth.service';
@@ -14,10 +15,12 @@ import { LabService } from '../../api/lab.service';
 import type { AssetClassCosts, CostModelPreset, RiskPolicy } from '../../api/models';
 import { SystemService } from '../../api/system.service';
 import { AuthTokenService } from '../../core/auth/auth-token.service';
+import { SessionService } from '../../core/auth/session.service';
 import { formatDateTime, formatMoney, formatNumber, formatPercent } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
 import { type ThemeMode, ThemeService } from '../../core/theme/theme.service';
 import { DisplayPrefs } from '../../shared/ui/display-prefs';
+import { NotificationPrefs } from '../../shared/ui/notification-prefs';
 import { NotificationSettings } from '../../shared/ui/notification-settings';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -41,9 +44,11 @@ interface CostRow {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     DisplayPrefs,
+    NotificationPrefs,
     NotificationSettings,
     PageHeader,
     ReactiveFormsModule,
+    RouterLink,
     StatusPill,
     LoadingState,
     ErrorState,
@@ -54,6 +59,7 @@ interface CostRow {
 })
 export class SettingsPage {
   private readonly auth = inject(AuthTokenService);
+  private readonly session = inject(SessionService);
   private readonly toasts = inject(ToastService);
   private readonly authApi = inject(AuthService);
   private readonly system = inject(SystemService);
@@ -72,29 +78,48 @@ export class SettingsPage {
     token: ['', [Validators.required, Validators.maxLength(512)]],
   });
 
-  protected readonly readsForm = this.fb.group({
-    sendOnReads: [this.auth.sendOnReads()],
-  });
-
   protected readonly themes: readonly { value: ThemeMode; label: string }[] = [
     { value: 'system', label: 'Match the system' },
     { value: 'light', label: 'Light' },
     { value: 'dark', label: 'Dark' },
   ];
 
-  // Read-only configuration -------------------------------------------------
-  protected readonly broker = resource({ loader: () => this.system.broker() });
+  // System (admins only) ---------------------------------------------------
+  /**
+   * The server's setup: broker, risk policy, data sources and cost models.
+   * Only admins see it, and only their browser asks for it.
+   */
+  protected readonly showSystem = computed(() => this.session.can('operations.run'));
+  private readonly systemParams = () => (this.showSystem() ? {} : undefined);
+
+  protected readonly broker = resource({
+    params: this.systemParams,
+    loader: () => this.system.broker(),
+  });
   /** Only asked for when the broker is Alpaca (the route is 409 otherwise). */
   protected readonly alpaca = resource({
     params: () =>
-      this.broker.hasValue() && this.broker.value().kind === 'alpaca'
+      this.showSystem() && this.broker.hasValue() && this.broker.value().kind === 'alpaca'
         ? { kind: 'alpaca' }
         : undefined,
     loader: () => this.system.alpacaStatus(),
   });
-  protected readonly risk = resource({ loader: () => this.system.riskPolicy() });
-  protected readonly sources = resource({ loader: () => this.ingestApi.sources() });
-  protected readonly costModels = resource({ loader: () => this.labApi.costModels() });
+  protected readonly risk = resource({
+    params: this.systemParams,
+    loader: () => this.system.riskPolicy(),
+  });
+  protected readonly sources = resource({
+    params: this.systemParams,
+    loader: () => this.ingestApi.sources(),
+  });
+  protected readonly costModels = resource({
+    params: this.systemParams,
+    loader: () => this.labApi.costModels(),
+  });
+
+  protected sourceName(id: string): string {
+    return SOURCE_NAMES[id] ?? capitalize(id);
+  }
 
   protected readonly brokerFacts = computed<Fact[]>(() => {
     if (!this.broker.hasValue()) return [];
@@ -192,10 +217,6 @@ export class SettingsPage {
     }
   }
 
-  protected toggleReads(): void {
-    this.auth.setSendOnReads(this.readsForm.controls.sendOnReads.value);
-  }
-
   protected setTheme(mode: ThemeMode): void {
     this.theme.setMode(mode);
   }
@@ -208,6 +229,13 @@ export class SettingsPage {
     this.costModels.reload();
   }
 }
+
+/** Display names for the data sources the server knows. */
+const SOURCE_NAMES: Record<string, string> = {
+  eodhd: 'EODHD',
+  yahoo: 'Yahoo Finance',
+  defillama: 'DefiLlama',
+};
 
 function riskFacts(r: RiskPolicy): Fact[] {
   const facts: Fact[] = [

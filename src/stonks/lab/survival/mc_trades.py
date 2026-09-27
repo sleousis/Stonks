@@ -55,13 +55,34 @@ _DEFAULT_SEED = 17
 class MonteCarloTradesOptions(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    n_paths: int = Field(default=5000, ge=1000, le=20000)
+    n_paths: int = Field(
+        default=5000,
+        ge=1000,
+        le=20000,
+        description="How many reshuffled trade sequences to simulate.",
+    )
     #: Drawdown (fraction of peak equity) at which a path is ruined.
-    ruin_drawdown: float = Field(default=0.40, gt=0.0, lt=1.0)
-    min_trades: int = Field(default=30, ge=1)
-    max_risk_of_ruin: float = Field(default=0.10, ge=0.0, le=1.0)
-    min_return_to_dd: float = Field(default=2.0, ge=0.5, le=4.0)
-    min_prob_profit: float = Field(default=0.8, ge=0.0, le=1.0)
+    ruin_drawdown: float = Field(
+        default=0.40,
+        gt=0.0,
+        lt=1.0,
+        description="Fall from the peak, as a fraction, that counts as ruin.",
+    )
+    min_trades: int = Field(
+        default=30, ge=1, description="Fewest round trips to judge. Fewer fails for lack of data."
+    )
+    max_risk_of_ruin: float = Field(
+        default=0.10, ge=0.0, le=1.0, description="Highest share of paths that may hit ruin."
+    )
+    min_return_to_dd: float = Field(
+        default=2.0,
+        ge=0.5,
+        le=4.0,
+        description="Lowest ratio of median return to median worst drop.",
+    )
+    min_prob_profit: float = Field(
+        default=0.8, ge=0.0, le=1.0, description="Lowest share of paths that must end in profit."
+    )
     #: ``None``: the run's root seed (see module doc).
     seed: int | None = None
 

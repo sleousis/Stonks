@@ -113,13 +113,6 @@
   font-weight: var(--weight-semibold);
 }
 
-.check-name {
-  flex-basis: 100%;
-  color: var(--color-ink-3);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: var(--text-xs);
-}
-
 // Ready for a human ----------------------------------------------------------
 .ready {
   display: grid;
@@ -229,17 +222,6 @@
 .check-measures {
   color: var(--color-ink-2);
   font-size: var(--text-xs);
-}
-
-.cli {
-  display: grid;
-  gap: var(--space-2);
-  border-top: 1px solid var(--color-border);
-
-  p {
-    color: var(--color-ink-2);
-    font-size: var(--text-sm);
-  }
 }
 
 .aside {

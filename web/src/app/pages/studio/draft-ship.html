@@ -3,7 +3,7 @@
   <div class="panel-head">
     <h2 id="ship-title">Ship</h2>
     @if (stage() === 'draft') {
-      <app-status-pill status="draft" label="Not registered" />
+      <app-status-pill status="draft" label="Not started" />
     } @else {
       <app-status-pill [status]="stage()" />
     }
@@ -28,60 +28,62 @@
     @switch (stage()) {
       @case ('draft') {
         <p>
-          Register the saved rules as a strategy. It starts in <strong>shadow</strong>, so you can
-          watch its decisions on real data before it trades.
+          Start paper trading the saved rules. It decides on real data every run without real
+          orders, so you can watch it before it trades.
         </p>
         <div>
           <button
             type="button"
             class="btn btn-primary"
-            [disabled]="busy()"
+            [disabled]="busy() || !canShip()"
             [attr.aria-busy]="busy()"
             (click)="register()"
           >
-            {{ busy() ? 'Registering…' : 'Register in shadow' }}
+            {{ busy() ? 'Starting…' : labels.paper.label }}
           </button>
+          <app-permission-note permission="strategy.promote" />
         </div>
       }
       @case ('retired') {
         <p>
-          <strong class="mono">{{ strategyId() }}</strong> was retired in Strategies and can no
-          longer be enabled from here.
+          It was stopped on the strategy page and cannot go live from here.
+          <a [routerLink]="['/strategies', strategyId()]">Open the strategy</a>
         </p>
       }
       @default {
         <p>
-          Registered as <strong class="mono">{{ strategyId() }}</strong
-          >.
           @if (enabled()) {
-            It is <strong>active</strong> and places orders on each tick.
+            It is <strong>live</strong> and places orders on every run.
           } @else {
-            It is in <strong>shadow</strong>: evaluated on each tick, no orders.
+            It is <strong>paper trading</strong>: it decides on every run, no real orders.
           }
         </p>
-        <button
-          type="button"
-          role="switch"
-          class="toggle"
-          [attr.aria-checked]="enabled()"
-          [disabled]="busy()"
-          [attr.aria-busy]="busy()"
-          aria-describedby="ship-toggle-hint"
-          (click)="toggle()"
-        >
-          <span class="track" aria-hidden="true"><span class="thumb"></span></span>
-          <span class="toggle-label">{{ enabled() ? 'Enabled' : 'Disabled' }}</span>
-        </button>
-        <p id="ship-toggle-hint" class="hint">
+        <div class="actions">
+          <button
+            type="button"
+            class="btn"
+            [class.btn-primary]="!enabled()"
+            [class.btn-danger]="enabled()"
+            [disabled]="busy() || !canShip()"
+            [attr.aria-busy]="busy()"
+            (click)="enabled() ? disable() : enable()"
+          >
+            {{ busy() ? 'Working…' : enabled() ? labels.pause.label : labels.live.label }}
+          </button>
+          <app-permission-note permission="strategy.promote" />
+        </div>
+        <p class="hint">
           {{
             enabled()
-              ? 'Turn off to move it back to shadow. You will be asked to confirm.'
-              : 'Turn on to make it active. You will be asked to type its id.'
+              ? 'It stops placing orders. You will be asked for a reason.'
+              : 'You will see the go-live check, give a reason and hold to confirm.'
           }}
         </p>
         <div class="links">
           <a class="btn btn-ghost" routerLink="/shadow">Watch in Shadow</a>
-          <a class="btn btn-ghost" routerLink="/strategies">Open Strategies</a>
+          <a class="btn btn-ghost" [routerLink]="['/strategies', strategyId()]"
+            >Open the strategy</a
+          >
         </div>
       }
     }

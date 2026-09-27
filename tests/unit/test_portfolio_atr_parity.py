@@ -164,3 +164,23 @@ def test_resize_cadence_is_configurable():
         {"A": 1.0}, {"A": 2.0}, {"A": 50.0}, cash=95_000.0, positions={"A": 100.0}, as_of=HOLD_DAY
     )
     assert c.target_weights(inp).meta["resize"] is True
+
+
+def test_held_weights_above_max_gross_are_scaled_down_and_buy_nothing_new():
+    """Edge case: held names already exceed ``max_gross`` (cash went
+    negative, or the book rallied). Hold weights shrink pro rata to the cap
+    and no new name is funded."""
+    c = get_constructor("atr_parity")
+    inp = _inp(
+        {"A": 2.0, "B": 1.5, "C": 1.0},
+        {"A": 2.0, "B": 2.0, "C": 2.0},
+        {"A": 50.0, "B": 50.0, "C": 50.0},
+        cash=-20_000.0,
+        positions={"A": 1_200.0, "B": 1_200.0},
+        as_of=HOLD_DAY,
+    )
+    book = c.target_weights(inp)
+    assert set(book.weights) == {"A", "B"}
+    assert sum(book.weights.values()) == pytest.approx(1.0)
+    assert book.weights["A"] == pytest.approx(book.weights["B"])
+    assert book.meta["unfunded"] == ["C"]

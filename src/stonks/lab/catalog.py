@@ -4,8 +4,11 @@ Every concrete strategy defined in a public ``stonks.strategies.examples``
 module (modules starting with ``_`` hold shared helpers and are skipped),
 plus the wrapper strategies (:class:`MacroRegimeFilter`,
 :class:`FeatureRegimeFilter`, :class:`LastTradeFilter`,
-:class:`RegimeFilter`, :class:`TrailingStopWrapper`), keyed by ``id``. ``resolve_strategy``
-also accepts a class name or a ``module:Class`` path.
+:class:`RegimeFilter`, :class:`TrailingStopWrapper`,
+:class:`LatentRegimeFilter`), keyed by ``id``. ``resolve_strategy``
+also accepts a class name or a ``module:Class`` path, and
+``load_strategy_class`` returns the same class typed as a tradable
+:class:`~stonks.core.protocols.Strategy` for the lab.
 """
 
 from __future__ import annotations
@@ -13,14 +16,19 @@ from __future__ import annotations
 import importlib
 import inspect
 import pkgutil
+from typing import TYPE_CHECKING, cast
 
 import stonks.strategies.examples as _examples
 from stonks.strategies.base import BaseStrategy
 from stonks.strategies.feature_regime import FeatureRegimeFilter
 from stonks.strategies.last_trade_filter import LastTradeFilter
+from stonks.strategies.latent_regime import LatentRegimeFilter
 from stonks.strategies.macro_regime import MacroRegimeFilter
 from stonks.strategies.regime import RegimeFilter
 from stonks.strategies.trailing_stop import TrailingStopWrapper
+
+if TYPE_CHECKING:  # pragma: no cover
+    from stonks.core.protocols import Strategy
 
 _WRAPPERS: tuple[type[BaseStrategy], ...] = (
     MacroRegimeFilter,
@@ -28,6 +36,7 @@ _WRAPPERS: tuple[type[BaseStrategy], ...] = (
     LastTradeFilter,
     RegimeFilter,
     TrailingStopWrapper,
+    LatentRegimeFilter,
 )
 
 
@@ -63,3 +72,14 @@ def resolve_strategy(name: str) -> type[BaseStrategy]:
         if name in (cls.__name__, f"{cls.__module__}:{cls.__name__}"):
             return cls
     raise ValueError(f"unknown strategy {name!r}; choose one of {sorted(catalog)}")
+
+
+def load_strategy_class(name: str) -> type[Strategy]:
+    """``resolve_strategy`` for code that runs the strategy (the lab, a
+    sweep). Checks the class can rank and decide, so it satisfies the
+    ``Strategy`` protocol. Raises ``ValueError`` when it cannot."""
+    cls = resolve_strategy(name)
+    missing = [m for m in ("estimate_return", "decide") if not callable(getattr(cls, m, None))]
+    if missing:
+        raise ValueError(f"strategy {cls.id!r} cannot trade: it has no {', '.join(missing)}")
+    return cast("type[Strategy]", cls)

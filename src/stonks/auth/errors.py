@@ -29,6 +29,17 @@ class NotAuthenticated(AuthError):
         super().__init__(message, headers={"WWW-Authenticate": "Bearer"})
 
 
+class ReadsOpen(NotAuthenticated):
+    """No credential on a route about the caller, while this server answers
+    reads without one (``open_reads_on_loopback`` from a loopback peer). A
+    signed-out console reads this instead of probing a data route."""
+
+    code = "reads_open"
+
+    def __init__(self) -> None:
+        super().__init__("nobody is signed in; this server answers reads without a credential")
+
+
 class InvalidCredentials(AuthError):
     """Wrong email, password or second-factor code (never says which)."""
 
@@ -36,9 +47,18 @@ class InvalidCredentials(AuthError):
 
 
 class MfaRequired(AuthError):
-    """The session passed the password step but not the second factor."""
+    """The session passed the password step but not the second factor.
+    ``next_step`` tells the client which screen to show: ``enrol`` (set up
+    the authenticator) or ``verify`` (enter a code)."""
 
     code = "mfa_required"
+
+    def __init__(self, message: str = "", *, next_step: str | None = None) -> None:
+        super().__init__(message)
+        self.next_step = next_step
+
+    def problem_extensions(self) -> dict[str, str]:
+        return {"next_step": self.next_step} if self.next_step else {}
 
 
 class PermissionDenied(AuthError):

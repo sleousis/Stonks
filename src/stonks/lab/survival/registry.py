@@ -19,12 +19,14 @@ from __future__ import annotations
 import importlib
 import inspect
 import pkgutil
+import types
+import typing
 from collections.abc import Mapping, Sequence
 from functools import cache
 from types import ModuleType
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, create_model
 from pydantic import ValidationError as PydanticValidationError
 
 from stonks.core.protocols import SurvivalTest
@@ -34,7 +36,10 @@ __all__ = [
     "PRESET_OPTIONS",
     "SUITE_PRESETS",
     "build_survival_test",
+    "config_model",
+    "describe",
     "discover_survival_tests",
+    "options_model",
     "preset_names",
     "preset_options",
     "resolve_preset",
@@ -77,14 +82,23 @@ SUITE_PRESETS: dict[str, tuple[str, ...]] = {
         "mcpt",
         "event_study",
         "vs_random",
+        # 9.5.2 and 9.5.5: combinatorial purged CV, named crisis windows
+        "cpcv",
+        "crisis",
     ),
 }
 
 #: Options a preset gives its tests (``test id -> options``); a request's
 #: own options for a test are applied over them. The promotion MCPT runs
 #: 200 permutations and re-tunes only strategies with a non-trivial fit.
+#: Its cross-instrument test adds held-out tickers from the lake so a small
+#: universe still has enough names to be judged (RS-24).
 PRESET_OPTIONS: dict[str, dict[str, dict[str, Any]]] = {
-    "promotion": {"mcpt": {"n_permutations": 200, "retune": "auto"}},
+    "promotion": {
+        "mcpt": {"n_permutations": 200, "retune": "auto"},
+        "cross_instrument": {"held_out_auto": 3},
+        "cpcv": {"n_groups": 6, "n_test_groups": 2},
+    },
 }
 
 
@@ -157,6 +171,102 @@ def build_survival_test(
         return cls(**raw)
     except (TypeError, PydanticValidationError) as exc:
         raise ValueError(f"invalid options for survival test {name!r}: {exc}") from None
+
+
+#: Constructor parameters that are objects the lab builds, never options.
+LAB_BUILT_PARAMS = frozenset({"config", "tuning"})
+#: Options a request may still set but the console never shows: a seed and a
+#: worker count are plumbing, not research choices.
+HIDDEN_OPTIONS = frozenset({"seed", "max_workers"})
+
+
+def _test_class(name: str) -> type:
+    cls = _default_tests().get(name)
+    if cls is None:
+        raise ValueError(f"unknown survival test {name!r}; choose from {survival_test_names()}")
+    return cls
+
+
+def _init_hints(cls: type) -> dict[str, Any]:
+    try:
+        return typing.get_type_hints(cls.__init__)
+    except Exception:  # an annotation only importable under TYPE_CHECKING
+        return {}
+
+
+def _model_in(annotation: Any) -> type[BaseModel] | None:
+    """The pydantic model in ``annotation`` (``Model`` or ``Model | None``)."""
+    candidates = (
+        typing.get_args(annotation)
+        if isinstance(annotation, types.UnionType) or typing.get_origin(annotation) is typing.Union
+        else (annotation,)
+    )
+    for candidate in candidates:
+        if isinstance(candidate, type) and issubclass(candidate, BaseModel):
+            return candidate
+    return None
+
+
+@cache
+def options_model(name: str) -> type[BaseModel]:
+    """The pydantic model of test ``name``'s options (what a request's
+    ``test_options[name]`` may set), whichever way the test declares them:
+    an ``Options`` class, an ``options=`` constructor parameter typed as a
+    model, or plain keyword arguments (``config`` and ``tuning`` are objects
+    the lab builds, so they are left out)."""
+    cls = _test_class(name)
+    declared = getattr(cls, "Options", None)
+    if isinstance(declared, type) and issubclass(declared, BaseModel):
+        return declared
+    hints = _init_hints(cls)
+    fields: dict[str, Any] = {}
+    for param in list(inspect.signature(cls.__init__).parameters.values())[1:]:
+        if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD):
+            continue
+        if param.name in LAB_BUILT_PARAMS:
+            continue
+        annotation = hints.get(param.name, Any)
+        if param.name == "options":
+            model = _model_in(annotation)
+            if model is not None:
+                return model
+        default = ... if param.default is param.empty else param.default
+        help_text = getattr(cls, "option_help", {}).get(param.name)
+        fields[param.name] = (annotation, Field(default, description=help_text))
+    return create_model(  # type: ignore[call-overload]
+        f"{cls.__name__}Options", __config__=ConfigDict(extra="forbid"), **fields
+    )
+
+
+def options_schema(name: str) -> dict[str, Any]:
+    """JSON Schema of test ``name``'s options for an editor: the model's
+    schema without :data:`HIDDEN_OPTIONS`. Requests still accept those."""
+    schema = options_model(name).model_json_schema()
+    props = schema.get("properties", {})
+    for key in HIDDEN_OPTIONS:
+        props.pop(key, None)
+    required = [k for k in schema.get("required", []) if k not in HIDDEN_OPTIONS]
+    if required:
+        schema["required"] = required
+    else:
+        schema.pop("required", None)
+    return schema
+
+
+def config_model(name: str) -> type[BaseModel] | None:
+    """The model of test ``name``'s ``config`` parameter, set through its own
+    request field (``walk_forward``), or ``None``."""
+    annotation = _init_hints(_test_class(name)).get("config")
+    return _model_in(annotation) if annotation is not None else None
+
+
+def describe(name: str) -> str:
+    """The first paragraph of test ``name``'s docstring (else its module's),
+    on one line."""
+    cls = _test_class(name)
+    doc = cls.__dict__.get("__doc__") or inspect.getmodule(cls).__doc__ or ""
+    doc = inspect.cleandoc(doc)
+    return " ".join(doc.split("\n\n", 1)[0].split())
 
 
 def preset_names() -> list[str]:

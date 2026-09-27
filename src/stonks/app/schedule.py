@@ -26,6 +26,7 @@ from stonks.accounts import AuditLog, Scope
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
 from stonks.logging import get_logger
+from stonks.scheduling.calendar import US_CALENDAR, get_calendar
 from stonks.scheduling.config import SchedulerConfig, resolve_backend, scheduler_config_from
 from stonks.scheduling.in_process import (
     IN_PROCESS_ACTIONS,
@@ -66,7 +67,10 @@ class RunNowView(BaseModel):
 class ScheduledJobView(BaseModel):
     name: str
     action: str
+    #: Short form, as the CLI prints it (``XNYS close + 45 min on trading days``).
     trigger: str
+    #: When it runs in plain English, for people.
+    trigger_text: str = ""
     next_run_at: datetime | None
     next_as_of: date | None
 
@@ -90,6 +94,29 @@ class ScheduledRunView(BaseModel):
         return cls(**{f: getattr(r, f) for f in cls.model_fields})
 
 
+#: The console's "market opens soon" window starts this long before the open.
+PRE_OPEN_MINUTES = 30
+
+
+class SessionTimesView(BaseModel):
+    #: The session's local trading date.
+    date: date
+    #: ``PRE_OPEN_MINUTES`` before the open (UTC).
+    pre_open: datetime
+    open: datetime
+    close: datetime
+
+
+class MarketSessionsView(BaseModel):
+    #: The exchange calendar the scheduler's session triggers follow.
+    calendar: str
+    is_open: bool
+    #: Today's session, or null when the market does not trade today.
+    today: SessionTimesView | None
+    #: The first session after today.
+    next: SessionTimesView
+
+
 class ScheduleView(BaseModel):
     #: The backend ``[scheduler].backend`` resolves to.
     backend: str
@@ -97,6 +124,8 @@ class ScheduleView(BaseModel):
     hosted: bool
     jobs: list[ScheduledJobView]
     recent: list[ScheduledRunView]
+    #: Market session times from the calendar (null if it cannot be read).
+    market: MarketSessionsView | None = None
 
 
 class ProbeView(BaseModel):
@@ -194,6 +223,7 @@ class ScheduleService:
                     name=spec.name,
                     action=spec.action,
                     trigger=spec.trigger.describe(),
+                    trigger_text=spec.trigger.plain(),
                     next_run_at=fire.scheduled_for if fire else None,
                     next_as_of=fire.as_of if fire else None,
                 )
@@ -204,6 +234,43 @@ class ScheduleService:
             hosted=self.handle is not None,
             jobs=jobs,
             recent=[ScheduledRunView.of(r) for r in recent],
+            market=self.market_sessions(now),
+        )
+
+    def market_sessions(self, now: datetime | None = None) -> MarketSessionsView | None:
+        """Pre-open, open and close for today and the next session, from
+        the calendar of the first session trigger (``XNYS`` by default)."""
+        now = now or self._clock()
+        name = next(
+            (
+                cal
+                for job in self.config.jobs
+                if (cal := getattr(job.trigger, "calendar", None)) and job.trigger.type == "session"
+            ),
+            US_CALENDAR,
+        )
+        try:
+            calendar = get_calendar(name)
+            day = now.astimezone(UTC).date()
+            today = calendar.session(day)
+            upcoming = calendar.next_session(day)
+        except Exception as exc:  # outside the calendar's range, unknown name
+            _log.warning("schedule.market_sessions_failed", calendar=name, error=str(exc))
+            return None
+
+        def times(s: Any) -> SessionTimesView:
+            return SessionTimesView(
+                date=s.date,
+                pre_open=s.open - timedelta(minutes=PRE_OPEN_MINUTES),
+                open=s.open,
+                close=s.close,
+            )
+
+        return MarketSessionsView(
+            calendar=name,
+            is_open=today is not None and today.open <= now < today.close,
+            today=times(today) if today is not None else None,
+            next=times(upcoming),
         )
 
     # ---- run now ---------------------------------------------------------------------
@@ -280,10 +347,14 @@ class ScheduleService:
         except ValidationError:
             specs = []
         bars = None
-        universe = list(settings.production.universe)
-        if universe:
+        from stonks.production.universe import production_tickers
+
+        if settings.production.universe:
             try:
                 with self._ctx.lake() as lake:
+                    universe = production_tickers(
+                        lake, settings.production.universe, self._clock().date()
+                    )
                     bars = latest_daily_bars(lake, universe)
             except Exception as exc:  # data age is optional; the rest still renders
                 _log.warning("metrics.data_age_failed", error_type=type(exc).__name__)

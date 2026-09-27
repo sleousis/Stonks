@@ -4,7 +4,7 @@ import { HelpTip } from '../../shared/ui/help-tip';
 import type { BenchmarkChoice, BenchmarkForm } from './lab-requests';
 
 const CHOICES: readonly { value: BenchmarkChoice; label: string }[] = [
-  { value: 'default', label: 'Settings default' },
+  { value: 'default', label: 'Default' },
   { value: 'auto', label: 'Auto: SPY.US, or the equal-weight universe' },
   { value: 'EW', label: 'Equal-weight universe' },
   { value: 'ticker', label: 'A ticker…' },

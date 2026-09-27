@@ -11,36 +11,64 @@ import {
 import { RouterLink } from '@angular/router';
 
 import type {
+  OrderView,
+  PnlRowView,
   StatusChangeView,
   StrategyMetadataView,
-  StrategyStatus,
   SurvivalReportView,
 } from '../../api/models';
+import { OrdersService } from '../../api/orders.service';
+import { ShadowService } from '../../api/shadow.service';
 import { StrategiesService } from '../../api/strategies.service';
-import { formatDate, formatDateTime } from '../../core/format/format';
+import { SessionService } from '../../core/auth/session.service';
+import { formatDate, formatDateTime, formatMoney, formatPercent } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
+import type { ChartSeries } from '../../shared/chart/chart-engine';
+import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
 import { promoteThroughGate } from '../../shared/governance';
+import { LIFECYCLE, type LifecycleAction, STATUS_WORDS } from '../../shared/governance-labels';
+import { testLabel } from '../../shared/lab-results/survival-tests';
 import { formatMetric, metricLabel } from '../../shared/metrics';
+import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { PageHeader } from '../../shared/ui/page-header';
+import { PermissionNote } from '../../shared/ui/permission-note';
+import { SideTag } from '../../shared/ui/side-tag';
 import { ErrorState, EmptyState, LoadingState } from '../../shared/ui/states';
 import { StatusChangeDialog } from '../../shared/ui/status-change-dialog';
 import { StatusPill } from '../../shared/ui/status-pill';
-import { formatParam, shortClassName } from './strategy-format';
+import { StageBar } from './stage-bar';
+import { formatParam, strategyKindName } from './strategy-format';
 
-type Action = 'promote' | 'shadow' | 'retire';
+/** Recent orders shown on the page; the Orders page has the rest. */
+export const RECENT_ORDERS = 10;
 
-const ACTION_LABELS: Record<Action, string> = {
-  promote: 'Promote to active',
-  shadow: 'Move to shadow',
-  retire: 'Retire',
-};
+/** Paper performance from a shadow P&L series. */
+export interface PaperPerformance {
+  totalReturn: number | null;
+  maxDrawdown: number | null;
+  days: number;
+  firstValue: number;
+  lastValue: number;
+  firstDay: string;
+  lastDay: string;
+}
 
-const TARGET: Record<Action, StrategyStatus> = {
-  promote: 'active',
-  shadow: 'shadow',
-  retire: 'retired',
-};
+export function paperPerformance(rows: readonly PnlRowView[]): PaperPerformance | null {
+  if (!rows.length) return null;
+  const first = rows[0];
+  const last = rows[rows.length - 1];
+  return {
+    totalReturn: last.cumulative_return ?? null,
+    maxDrawdown: rows.reduce((worst, r) => Math.min(worst, r.drawdown), 0),
+    days: last.days_elapsed ?? rows.length,
+    firstValue: first.total_value,
+    lastValue: last.total_value,
+    firstDay: first.day,
+    lastDay: last.day,
+  };
+}
 
 /** Research-card labels for the metadata enums. */
 export const ALPHA_FAMILY_LABELS: Record<StrategyMetadataView['alpha_family'], string> = {
@@ -108,6 +136,12 @@ function metricList(report: SurvivalReportView): { key: string; label: string; v
     PageHeader,
     StatusPill,
     StatusChangeDialog,
+    StageBar,
+    PermissionNote,
+    TimeSeriesChart,
+    DataTable,
+    TableCell,
+    SideTag,
     LoadingState,
     EmptyState,
     ErrorState,
@@ -117,7 +151,11 @@ function metricList(report: SurvivalReportView): { key: string; label: string; v
 })
 export class StrategyDetailPage {
   private readonly strategiesApi = inject(StrategiesService);
+  private readonly shadowApi = inject(ShadowService);
+  private readonly ordersApi = inject(OrdersService);
+  private readonly portfolioCtx = inject(PortfolioContextService);
   private readonly toasts = inject(ToastService);
+  protected readonly session = inject(SessionService);
   private readonly dialog = viewChild.required(StatusChangeDialog);
 
   /** Route param `:id`. */
@@ -137,24 +175,99 @@ export class StrategyDetailPage {
     this.history.hasValue() ? historyEntries(this.history.value()) : [],
   );
 
-  protected readonly busy = signal<Action | null>(null);
+  protected readonly busy = signal<LifecycleAction | null>(null);
 
   protected readonly detail = computed(() =>
     this.strategy.hasValue() ? this.strategy.value() : null,
   );
+  private readonly status = computed(() => this.detail()?.status ?? null);
+
+  /** The go-live verdict of a paper strategy, for the stage bar. */
+  protected readonly golive = resource({
+    params: () => (this.status() === 'shadow' ? { id: this.id() } : undefined),
+    loader: ({ params }) => this.strategiesApi.golive(params.id),
+  });
+  protected readonly golivePassed = computed(() =>
+    this.golive.hasValue() ? this.golive.value().passed : null,
+  );
+
+  /** Its paper book's daily value (shadow strategies only). */
+  protected readonly pnl = resource({
+    params: () => (this.status() === 'shadow' ? { id: this.id() } : undefined),
+    loader: ({ params }) => this.shadowApi.pnl(params.id),
+  });
+  protected readonly performance = computed(() =>
+    this.pnl.hasValue() ? paperPerformance(this.pnl.value().rows) : null,
+  );
+  protected readonly chartSeries = computed<ChartSeries[]>(() => {
+    const rows = this.pnl.hasValue() ? this.pnl.value().rows : [];
+    return [
+      {
+        id: 'value',
+        label: 'Paper value',
+        kind: 'line',
+        color: 'primary',
+        format: 'money',
+        points: rows.map((r) => ({ time: r.day, value: r.total_value })),
+      },
+      {
+        id: 'drawdown',
+        label: 'Drawdown',
+        kind: 'area',
+        color: 'loss',
+        pane: 1,
+        format: 'percent',
+        points: rows.map((r) => ({ time: r.day, value: r.drawdown })),
+      },
+    ];
+  });
+  protected readonly chartSummary = computed(() => {
+    const p = this.performance();
+    if (!p) return null;
+    return (
+      `Paper value went from ${formatMoney(p.firstValue)} on ${formatDate(p.firstDay)} to ` +
+      `${formatMoney(p.lastValue)} on ${formatDate(p.lastDay)}, a return of ` +
+      `${formatPercent(p.totalReturn, { signed: true })}. ` +
+      `The worst drawdown was ${formatPercent(p.maxDrawdown)}.`
+    );
+  });
+
+  /** Orders it placed, newest first, for the picked portfolio. */
+  protected readonly orders = resource({
+    params: () => ({ id: this.id(), portfolio: this.portfolioCtx.selectedId() }),
+    loader: ({ params }) => this.ordersApi.list({ strategy_id: params.id, limit: RECENT_ORDERS }),
+  });
+  protected readonly orderColumns: TableColumn<OrderView>[] = [
+    { key: 'ticker', label: 'Ticker', mobile: 'title' },
+    { key: 'side', label: 'Side' },
+    { key: 'quantity', label: 'Qty', format: 'number' },
+    { key: 'status', label: 'Status' },
+    { key: 'created_at', label: 'Placed', format: 'datetime' },
+  ];
+  protected readonly orderKey = (o: OrderView) => o.client_id;
+
+  protected readonly kindName = computed(() => {
+    const s = this.detail();
+    return s ? strategyKindName(s.class_path) : null;
+  });
 
   protected readonly description = computed(() => {
     const s = this.detail();
-    return s ? s.class_path : 'Status, parameters and survival evidence.';
+    return s
+      ? `${strategyKindName(s.class_path)}. ${STATUS_WORDS[s.status]}.`
+      : 'Status, parameters and survival evidence.';
   });
 
+  protected readonly canPromote = computed(() => this.session.can('strategy.promote'));
+
   /** Actions that change the current status, in the order they are offered. */
-  protected readonly actions = computed<{ key: Action; label: string }[]>(() => {
+  protected readonly actions = computed<{ key: LifecycleAction; label: string }[]>(() => {
     const s = this.detail();
     if (!s) return [];
-    return (['promote', 'shadow', 'retire'] as const)
-      .filter((key) => TARGET[key] !== s.status)
-      .map((key) => ({ key, label: ACTION_LABELS[key] }));
+    const toPaper: LifecycleAction = s.status === 'active' ? 'pause' : 'paper';
+    return (['live', toPaper, 'stop'] as const)
+      .filter((key) => LIFECYCLE[key].target !== s.status)
+      .map((key) => ({ key, label: LIFECYCLE[key].label }));
   });
 
   protected readonly research = computed(() => {
@@ -176,7 +289,11 @@ export class StrategyDetailPage {
   });
 
   protected readonly reports = computed(() =>
-    (this.detail()?.survival_reports ?? []).map((r) => ({ ...r, metricList: metricList(r) })),
+    (this.detail()?.survival_reports ?? []).map((r) => ({
+      ...r,
+      label: testLabel(r.test_id),
+      metricList: metricList(r),
+    })),
   );
 
   protected readonly reportSummary = computed(() => {
@@ -191,14 +308,16 @@ export class StrategyDetailPage {
     };
   });
 
-  protected readonly shortClass = shortClassName;
   protected readonly date = formatDate;
   protected readonly dateTime = formatDateTime;
+  protected pct(value: number | null, signed = false): string {
+    return formatPercent(value, { signed });
+  }
 
-  protected async run(action: Action): Promise<void> {
+  protected async run(action: LifecycleAction): Promise<void> {
     const s = this.detail();
-    if (!s || this.busy()) return;
-    const done = action === 'promote' ? await this.promote(s.id) : await this.demote(action, s);
+    if (!s || this.busy() || !this.canPromote()) return;
+    const done = action === 'live' ? await this.promote(s.id) : await this.demote(action, s);
     if (!done) return;
     this.strategy.reload();
     this.history.reload();
@@ -211,45 +330,47 @@ export class StrategyDetailPage {
       toasts: this.toasts,
       golive: () => this.strategiesApi.golive(id),
       promote: (body) => this.strategiesApi.promote(id, body, true),
-      title: `Promote ${id}?`,
-      message: 'It becomes active and places orders from the next tick.',
-      confirmLabel: 'Promote',
-      busy: (on) => this.busy.set(on ? 'promote' : null),
+      title: `Go live with ${id}?`,
+      message: 'It places orders through the broker from the next trading run.',
+      confirmLabel: LIFECYCLE.live.label,
+      busy: (on) => this.busy.set(on ? 'live' : null),
     });
     if (!result) return false;
-    this.toasts.success(`Promoted ${id}.`);
+    this.toasts.success(LIFECYCLE.live.done(id));
     return true;
   }
 
-  private async demote(action: 'shadow' | 'retire', s: { id: string; status: string }) {
-    const retire = action === 'retire';
+  private async demote(action: LifecycleAction, s: { id: string; status: string }) {
+    const stop = action === 'stop';
+    const words = LIFECYCLE[action];
     const body = await this.dialog().open(
-      retire
+      stop
         ? {
-            title: `Retire ${s.id}?`,
+            title: `Stop ${s.id}?`,
             message:
-              'It stops trading and stops shadow decisions from the next tick. Its artifacts and reports stay in the registry.',
-            confirmLabel: 'Retire',
+              'It stops trading and stops paper decisions from the next run. Its reports and history stay.',
+            confirmLabel: words.label,
             tone: 'danger',
             minReason: 1,
           }
         : {
-            title: `Move ${s.id} to shadow?`,
+            title:
+              s.status === 'active'
+                ? `Move ${s.id} back to paper trading?`
+                : `Start paper trading ${s.id}?`,
             message:
               s.status === 'active'
-                ? 'It stops trading from the next tick and keeps making virtual decisions you can compare in Shadow.'
-                : 'It makes virtual decisions from the next tick without placing orders.',
-            confirmLabel: 'Move to shadow',
+                ? 'It stops placing orders from the next run and keeps making paper decisions you can compare in Shadow.'
+                : 'It makes paper decisions from the next run without placing orders.',
+            confirmLabel: words.label,
             minReason: 1,
           },
     );
     if (!body) return false;
     this.busy.set(action);
     try {
-      await (retire
-        ? this.strategiesApi.retire(s.id, body)
-        : this.strategiesApi.shadow(s.id, body));
-      this.toasts.success(retire ? `Retired ${s.id}.` : `Moved ${s.id} to shadow.`);
+      await (stop ? this.strategiesApi.retire(s.id, body) : this.strategiesApi.shadow(s.id, body));
+      this.toasts.success(words.done(s.id));
       return true;
     } catch {
       return false; // The error interceptor already showed the API's message.

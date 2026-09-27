@@ -1,5 +1,5 @@
 {
-  "instructions": "Stonks research + trading system. Tools talk to the local REST API started\nwith `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs,\nsignal IC analyses and ingests; follow up with wait_for_job. Status changes,\ndraft register/enable/disable, broker syncs and production ticks need\nconfirm=true; call them first without it to get a preview and show it to the\nuser before confirming.\nrun_tick is a dry run unless dry_run=false, and a real tick is refused unless\nthe API reports a paper/simulated broker. No tool can change broker settings\nor enable live trading.",
+  "instructions": "Stonks research + trading system. Tools talk to the local REST API started\nwith `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs,\nsignal IC analyses and ingests; follow up with wait_for_job. Status changes,\ndraft register/enable/disable, broker syncs and production ticks need\nconfirm=true; call them first without it to get a preview and show it to the\nuser before confirming.\nrun_tick is a dry run unless dry_run=false, and a real tick is refused unless\nthe API reports a paper/simulated broker. No tool can change broker settings\nor enable live trading.\nEvery tool acts as the user who owns this server's API token (whoami shows the\nuser, role and scopes) and sees only that user's portfolios. Actions that need\na fresh second factor (switching to auto, connecting a broker, resuming the\nkill switch) are refused here; the user does them in the web app.",
   "resource_templates": [],
   "resources": [
     {
@@ -283,6 +283,37 @@
     {
       "annotations": {
         "destructive": true,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Delete a stored universe and its membership rows (admins only).\nLab runs, ticks and scheduled jobs that name it stop resolving.\nWithout confirm=true returns a preview.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "universe_id": {
+            "description": "universe id, e.g. sp500 or us_common",
+            "title": "Universe Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "universe_id"
+        ],
+        "title": "delete_universeArguments",
+        "type": "object"
+      },
+      "name": "delete_universe",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
         "idempotent": true,
         "open_world": false,
         "read_only": false
@@ -381,7 +412,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Stop new orders at once. Without confirm=true returns a preview\nand changes nothing. Resuming is done in the console or the CLI with\na typed confirmation.",
+      "description": "Stop new orders at once and cancel the orders still working at the\nbroker. Without confirm=true returns a preview and changes nothing.\nResuming is done in the console or the CLI with a typed confirmation\nand a fresh 2FA code.",
       "input_schema": {
         "properties": {
           "confirm": {
@@ -392,7 +423,7 @@
           },
           "flatten": {
             "default": false,
-            "description": "stop buys only; sells and exits still go through",
+            "description": "stop buys and cancel working buy orders only: sells and exits still go through, and no position is closed",
             "title": "Flatten",
             "type": "boolean"
           },
@@ -752,6 +783,68 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Insights for one of your portfolios (a synced broker account too):\nallocation by asset class, sector, currency and ticker; exposure\n(gross, net, beta); P&L over 1d, 1w, 1m, 3m, ytd, 1y and since\ninception; risk (volatility, drawdown, VaR, concentration).",
+      "input_schema": {
+        "properties": {
+          "benchmark": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "pattern": "^[A-Za-z0-9_.\\-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "ticker beta is measured against; default SPY.US",
+            "title": "Benchmark"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          }
+        },
+        "title": "get_insightsArguments",
+        "type": "object"
+      },
+      "name": "get_insights",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Admins only: asset-class allocation and exposure summed over every active portfolio (no tickers, no per-person numbers).",
+      "input_schema": {
+        "properties": {},
+        "title": "toolArguments",
+        "type": "object"
+      },
+      "name": "get_insights_totals",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "One background job: status, progress, and its result once finished.",
       "input_schema": {
         "properties": {
@@ -962,6 +1055,37 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "For each holding of one of your portfolios: whether each active\nstrategy's latest signal agrees or disagrees with it, and why.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          }
+        },
+        "title": "get_strategy_agreementArguments",
+        "type": "object"
+      },
+      "name": "get_strategy_agreement",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "A strategy's audited status changes (actor, reason, override, go-live\nresult), oldest first.",
       "input_schema": {
         "properties": {
@@ -986,9 +1110,23 @@
         "open_world": false,
         "read_only": true
       },
-      "description": "One production tick run with the orders it placed.",
+      "description": "One production tick run with the orders it placed in your\nportfolios (or in ``portfolio_id`` only).",
       "input_schema": {
         "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
           "tick_id": {
             "title": "Tick Id",
             "type": "string"
@@ -1233,7 +1371,10 @@
             "enum": [
               "sharpe",
               "cagr",
-              "final_return"
+              "final_return",
+              "cv_sharpe",
+              "cv_cagr",
+              "cv_final_return"
             ],
             "title": "Objective",
             "type": "string"
@@ -1808,6 +1949,22 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Your portfolios, oldest first, each marked paper or live.",
+      "input_schema": {
+        "properties": {},
+        "title": "list_portfoliosArguments",
+        "type": "object"
+      },
+      "name": "list_portfolios",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Virtual orders shadow strategies placed (never sent to a broker), newest first.",
       "input_schema": {
         "properties": {
@@ -2080,7 +2237,23 @@
         "open_world": false,
         "read_only": true
       },
-      "description": "Production tick runs, newest first, with their summaries.",
+      "description": "Your subscriptions: strategy, portfolio, mode (notify, paper,\nauto), whether it is on, the paper-day count and what still blocks\nauto.",
+      "input_schema": {
+        "properties": {},
+        "title": "list_subscriptionsArguments",
+        "type": "object"
+      },
+      "name": "list_subscriptions",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Production tick runs, newest first. Summaries show the global\noutcome and the parts about your own portfolios only.",
       "input_schema": {
         "properties": {
           "limit": {
@@ -2124,6 +2297,22 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "For each of your portfolios: paper or live money, and the broker\n(simulated ledger, the configured Alpaca account, or a linked\nconnection).",
+      "input_schema": {
+        "properties": {},
+        "title": "list_trading_modesArguments",
+        "type": "object"
+      },
+      "name": "list_trading_modes",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Stored universes: id, kind, spec, last refresh and member count.",
       "input_schema": {
         "properties": {},
@@ -2131,6 +2320,59 @@
         "type": "object"
       },
       "name": "list_universes",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "One of your portfolios on its latest tick day: one-day 95% and\n99% VaR and expected shortfall (fractions of value, loss positive),\nthe rolling VaR violation ratio (1.0 is right, outside 0.5 to 1.5\nmeans the risk model is off) with its Kupiec p-value, and per\nstrategy sleeve the same plus the alpha-decay check against the\nbacktest's IR.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          }
+        },
+        "title": "live_riskArguments",
+        "type": "object"
+      },
+      "name": "live_risk",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "One of your orders in full: decision price and context, arrival\nand fill prices, the shortfall split and the notes.",
+      "input_schema": {
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id"
+        ],
+        "title": "order_tcaArguments",
+        "type": "object"
+      },
+      "name": "order_tca",
       "needs_confirm": false
     },
     {
@@ -2287,6 +2529,74 @@
       },
       "name": "retire_strategy",
       "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Daily risk snapshots of one of your portfolios, newest first:\nVaR, ES, the day's hypothetical return, violations and decay.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Since"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one strategy's sleeve; default the whole portfolio",
+            "title": "Strategy Id"
+          }
+        },
+        "title": "risk_snapshotsArguments",
+        "type": "object"
+      },
+      "name": "risk_snapshots",
+      "needs_confirm": false
     },
     {
       "annotations": {
@@ -2866,7 +3176,10 @@
             "enum": [
               "sharpe",
               "cagr",
-              "final_return"
+              "final_return",
+              "cv_sharpe",
+              "cv_cagr",
+              "cv_final_return"
             ],
             "title": "Objective",
             "type": "string"
@@ -3323,6 +3636,59 @@
     {
       "annotations": {
         "destructive": true,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Follow a strategy in notify or paper mode. Without confirm=true\nreturns a preview and changes nothing.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "mode": {
+            "default": "notify",
+            "description": "notify: signals only; paper: simulated orders on one of your portfolios",
+            "enum": [
+              "notify",
+              "paper"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (needed for paper)",
+            "title": "Portfolio Id"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_id"
+        ],
+        "title": "subscribeArguments",
+        "type": "object"
+      },
+      "name": "subscribe",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
         "idempotent": true,
         "open_world": true,
         "read_only": false
@@ -3349,6 +3715,179 @@
       },
       "name": "sync_connection",
       "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Implementation shortfall of your orders in bps of notional:\ndelay (decision to arrival), impact (arrival to fill), fees and the\nopportunity cost of what did not fill, next to the cost model's\nestimate (model_gap_bps = realised minus modelled).",
+      "input_schema": {
+        "properties": {
+          "by": {
+            "default": "all",
+            "description": "how to group the orders",
+            "enum": [
+              "all",
+              "strategy",
+              "ticker",
+              "portfolio",
+              "day",
+              "week",
+              "month"
+            ],
+            "title": "By",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Since"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Strategy Id"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ticker"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Until"
+          }
+        },
+        "title": "tca_summaryArguments",
+        "type": "object"
+      },
+      "name": "tca_summary",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Your orders, newest first: why each was placed (trigger, signal\nscore and rank), the outcome (shortfall, next-day move) and notes.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Since"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Strategy Id"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ticker"
+          }
+        },
+        "title": "trade_journalArguments",
+        "type": "object"
+      },
+      "name": "trade_journal",
+      "needs_confirm": false
     },
     {
       "annotations": {
@@ -3414,6 +3953,80 @@
       },
       "name": "update_draft",
       "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Turn one of your subscriptions on or off, or move it between\nnotify and paper. Auto is refused here (it needs the web app).\nWithout confirm=true returns a preview and changes nothing.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Enabled"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "notify",
+                  "paper",
+                  "auto"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "notify or paper; auto is switched on in the web app (second factor)",
+            "title": "Mode"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "audited",
+            "title": "Reason"
+          },
+          "subscription_id": {
+            "title": "Subscription Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subscription_id"
+        ],
+        "title": "update_subscriptionArguments",
+        "type": "object"
+      },
+      "name": "update_subscription",
+      "needs_confirm": true
     },
     {
       "annotations": {
@@ -3547,6 +4160,22 @@
         "type": "object"
       },
       "name": "wait_for_job",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Who this MCP server acts as: the token's user, role and scopes. Every tool does only what that user may do.",
+      "input_schema": {
+        "properties": {},
+        "title": "toolArguments",
+        "type": "object"
+      },
+      "name": "whoami",
       "needs_confirm": false
     }
   ]

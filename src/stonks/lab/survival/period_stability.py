@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import statistics
 from datetime import timedelta
+from typing import ClassVar
 
 from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.lab.backtesting import run_backtest
@@ -32,6 +33,14 @@ from stonks.lab.dataset import LabDataset, ScoringWindow, scoring_window
 
 class PeriodStabilityTest:
     id = "period_stability"
+
+    #: Plain words for each option, shown by the console's options editor.
+    option_help: ClassVar[dict[str, str]] = {
+        "n_windows": "How many equal pieces to split the window into.",
+        "max_sharpe_std": "Largest spread of Sharpe between pieces that passes.",
+        "min_period_sharpe": "Lowest Sharpe any piece may have.",
+        "window": "Which data to test on: val is the held-out window, full is all of it.",
+    }
 
     def __init__(
         self,

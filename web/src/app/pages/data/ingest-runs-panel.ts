@@ -12,6 +12,7 @@ import { IngestService } from '../../api/ingest.service';
 import type { IngestRunView } from '../../api/models';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
+import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { INGEST_KINDS } from './ingest-request';
 
@@ -39,8 +40,8 @@ const STATUSES = ['running', 'ok', 'partial', 'error'] as const;
     <section class="panel" aria-labelledby="runs-title">
       <div class="panel-head">
         <h2 id="runs-title">Ingest history</h2>
-        @if (list.hasValue()) {
-          <span class="muted num count">{{ list.value().total }} runs</span>
+        @if (page(); as p) {
+          <span class="muted num count">{{ p.total }} runs</span>
         }
       </div>
       <div class="filters">
@@ -73,33 +74,36 @@ const STATUSES = ['running', 'ok', 'partial', 'error'] as const;
           </select>
         </div>
       </div>
+      @let p = page();
       @if (list.error(); as err) {
         <app-error-state title="Could not load ingest runs" [error]="err" (retry)="list.reload()" />
-      } @else if (!list.hasValue()) {
+      } @else if (!p) {
         <app-loading-state label="Loading ingest runs" [rows]="5" />
-      } @else if (list.value().items.length === 0) {
+      } @else if (p.items.length === 0) {
         <app-empty-state
           title="No ingest runs"
           [message]="
             status() || kind()
               ? 'No runs match these filters.'
-              : 'Runs appear here after Run ingest or stonks ingest on the command line.'
+              : 'Runs appear here after an ingest, from Run ingest or the daily schedule.'
           "
         />
       } @else {
         <app-data-table
           caption="Ingest runs, newest first"
-          [rows]="list.value().items"
+          [rows]="p.items"
           [columns]="columns"
           [rowKey]="key"
-          [total]="list.value().total"
+          [total]="p.total"
+          [offset]="p.offset"
+          [busy]="list.isLoading()"
           [pageSize]="pageSize"
           (pageChange)="offset.set($event.offset)"
         >
-          <ng-template appCell="status" [appCellOf]="list.value().items" let-run>
+          <ng-template appCell="status" [appCellOf]="p.items" let-run>
             <app-status-pill [status]="run.status ?? 'unknown'" />
           </ng-template>
-          <ng-template appCell="error" [appCellOf]="list.value().items" let-run>
+          <ng-template appCell="error" [appCellOf]="p.items" let-run>
             @if (run.error) {
               <span class="error-text">{{ run.error }}</span>
             } @else {
@@ -139,6 +143,8 @@ export class IngestRunsPanel {
     },
     loader: ({ params }) => this.ingestApi.runs(params),
   });
+  /** The last loaded page stays on screen while the next one loads. */
+  protected readonly page = keepLatest(this.list);
 
   protected readonly columns: TableColumn<IngestRunView>[] = [
     { key: 'id', label: 'Run', mobile: 'title', value: (r) => `#${r.id}`, sortable: false },

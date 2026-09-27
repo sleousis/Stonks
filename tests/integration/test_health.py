@@ -155,3 +155,45 @@ def test_health_with_halts_opens_the_operational_halt_and_reports_it(state, lake
     healthy = run_health(state, lake_trending, UNIVERSE, HealthConfig(), now=NOW)
     assert healthy.healthy, healthy.failures
     assert _by_name(healthy)["risk_halts"].ok
+
+
+@pytest.mark.parametrize(
+    ("last_bar", "ok"),
+    [
+        # Friday 11/27 (early close) ingested: Monday morning is 3 days on
+        ("2026-11-27", True),
+        # Friday's ingest failed: Wednesday's bar is 5 days old on Monday
+        ("2026-11-25", False),
+    ],
+)
+def test_freshness_across_the_thanksgiving_weekend(state, tmp_path, last_bar, ok):
+    """Thanksgiving Thursday is closed. With ``max_bar_age_days = 4`` a
+    Monday check passes on Friday's bar and fails when Friday is missing."""
+    import pandas as pd
+
+    from stonks.store.lake import DuckDBLake
+
+    lake = DuckDBLake(tmp_path / "holiday.duckdb")
+    lake.migrate()
+    days = [d.date() for d in pd.bdate_range("2026-11-16", last_bar) if d.day != 26]
+    lake.upsert_prices(
+        pd.DataFrame(
+            {
+                "ticker": "AAPL.US",
+                "date": days,
+                "open": 1.0,
+                "high": 1.0,
+                "low": 1.0,
+                "close": 1.0,
+                "adj_close": 1.0,
+                "volume": 10,
+            }
+        )
+    )
+    monday = datetime(2026, 11, 30, 12, 0, tzinfo=UTC)
+    config = HealthConfig(max_bar_age_days=4)
+    try:
+        report = check_health(state, lake, ["AAPL.US"], config, now=monday)
+    finally:
+        lake.close()
+    assert _by_name(report)["freshness:AAPL.US"].ok is ok

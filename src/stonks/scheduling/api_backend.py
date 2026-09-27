@@ -7,8 +7,10 @@ it. This backend starts each job on the API's own job routes and waits on
 
 - ``ingest_prices``: ``POST /api/ingest/runs`` (kind ``prices``) for the
   universe over the last ``lookback_days`` up to the fire's date;
+- ``ingest_metadata``: ``POST /api/ingest/runs`` with ``kind = metadata``;
 - ``tick``: ``POST /api/ticks`` for the fire's date;
-- ``health``: ``GET /api/health/report``, alerting here when unhealthy;
+- ``health``: ``POST /api/health/run`` (checks plus the operational
+  halt), alerting here when unhealthy;
 - ``report``: reads only the state DB, so it runs in this process.
 
 The closed-day check uses ticker suffixes for calendars (``.CC`` is
@@ -32,9 +34,13 @@ from stonks.scheduling.jobs import (
     ActionRegistry,
     JobExecutor,
     JobOutcome,
+    MembersResolver,
     RunContext,
     closed_day_outcome,
+    ensure_window,
+    job_is_scoped,
     job_universe,
+    universes_outcome,
 )
 
 API_ACTIONS = ActionRegistry("api")
@@ -183,6 +189,16 @@ def _executor(ctx: RunContext) -> ApiExecutor:
     return executor
 
 
+def _members(ex: ApiExecutor) -> MembersResolver:
+    """Reads a stored universe's members on a day from the API."""
+
+    def members(universe_id: str, day: Any) -> list[str]:
+        view = ex.client.get(f"/api/universes/{universe_id}/members", {"as_of": day.isoformat()})
+        return [str(t) for t in view["tickers"]]
+
+    return members
+
+
 def _run_job(
     ex: ApiExecutor, start_path: str, body: dict[str, Any], result_path: str
 ) -> tuple[str, str, str | None, dict[str, Any] | None]:
@@ -198,7 +214,7 @@ def _run_job(
 @API_ACTIONS.register("ingest_prices")
 def api_ingest_prices(ctx: RunContext) -> JobOutcome:
     ex = _executor(ctx)
-    universe = job_universe(ctx)
+    universe = job_universe(ctx, _members(ex))
     if not universe:
         return JobOutcome("skipped", {"reason": "empty_universe"})
     closed = closed_day_outcome(ctx, universe, {})
@@ -218,10 +234,30 @@ def api_ingest_prices(ctx: RunContext) -> JobOutcome:
     return ingest_job_outcome(status, error, result, job_id)
 
 
+@API_ACTIONS.register("ingest_metadata")
+def api_ingest_metadata(ctx: RunContext) -> JobOutcome:
+    ex = _executor(ctx)
+    universe = job_universe(ctx, _members(ex))
+    if not universe:
+        return JobOutcome("skipped", {"reason": "empty_universe"})
+    closed = closed_day_outcome(ctx, universe, {})
+    if closed is not None:
+        return closed
+    body = {
+        "kind": "metadata",
+        "source": str(ctx.params.get("source", "eodhd")),
+        "tickers": universe,
+    }
+    job_id, status, error, result = _run_job(
+        ex, "/api/ingest/runs", body, "/api/ingest/jobs/{job_id}/result"
+    )
+    return ingest_job_outcome(status, error, result, job_id)
+
+
 @API_ACTIONS.register("tick")
 def api_tick(ctx: RunContext) -> JobOutcome:
     ex = _executor(ctx)
-    universe = job_universe(ctx)
+    universe = job_universe(ctx, _members(ex))
     if not universe:
         return JobOutcome("skipped", {"reason": "empty_universe"})
     closed = closed_day_outcome(ctx, universe, {})
@@ -230,6 +266,8 @@ def api_tick(ctx: RunContext) -> JobOutcome:
     body = {
         "as_of": ctx.fire.as_of.isoformat(),
         "tickers": universe,
+        "scoped": job_is_scoped(ctx),
+        "bars_due_at": ctx.fire.scheduled_for.isoformat(),
         "dry_run": bool(ctx.params.get("dry_run", False)),
     }
     job_id, status, error, result = _run_job(
@@ -240,7 +278,8 @@ def api_tick(ctx: RunContext) -> JobOutcome:
 
 @API_ACTIONS.register("health")
 def api_health(ctx: RunContext) -> JobOutcome:
-    view = _executor(ctx).client.get("/api/health/report", {"tickers": job_universe(ctx)})
+    ex = _executor(ctx)
+    view = ex.client.post("/api/health/run", {"tickers": job_universe(ctx, _members(ex))})
     return health_view_outcome(ctx, view)
 
 
@@ -265,3 +304,53 @@ def api_connections_sync(ctx: RunContext) -> JobOutcome:
     from stonks.scheduling.local import connections_sync_action
 
     return connections_sync_action(ctx)
+
+
+def ensure_body(ctx: RunContext) -> dict[str, Any]:
+    """The ensure request of the ``universes_refresh`` job."""
+    start, end = ensure_window(ctx)
+    body: dict[str, Any] = {
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "interval": str(ctx.params.get("interval", "1d")),
+    }
+    if ctx.params.get("source"):
+        body["source"] = str(ctx.params["source"])
+    return body
+
+
+def ensure_step(status: str, error: str | None, result: Mapping[str, Any] | None) -> dict[str, Any]:
+    step: dict[str, Any] = {"ensure": status}
+    if result is not None:
+        step |= {k: result.get(k) for k in ("tickers_fetched", "tickers_failed", "warnings")}
+    if error:
+        step["ensure_error"] = error
+    return step
+
+
+@API_ACTIONS.register("universes_refresh")
+def api_universes_refresh(ctx: RunContext) -> JobOutcome:
+    """Refresh every stored universe, then fetch its members' missing bars
+    over the trailing ``ensure_days`` (both as lake-writer jobs in the API)."""
+    ex = _executor(ctx)
+    results: dict[str, dict[str, Any]] = {}
+    for universe in ex.client.get_all("/api/universes"):
+        uid = universe["id"]
+        _, status, error, result = _run_job(
+            ex, f"/api/universes/{uid}/refresh", {}, "/api/universes/refresh/{job_id}/result"
+        )
+        step: dict[str, Any] = {"refresh": status}
+        if error:
+            step["refresh_error"] = error
+        if result is not None:
+            step["members"] = result.get("members")
+        if status == "succeeded" and ctx.params.get("ensure", True):
+            _, e_status, e_error, e_result = _run_job(
+                ex,
+                f"/api/universes/{uid}/ensure",
+                ensure_body(ctx),
+                "/api/universes/ensure/{job_id}/result",
+            )
+            step |= ensure_step(e_status, e_error, e_result)
+        results[uid] = step
+    return universes_outcome(results)

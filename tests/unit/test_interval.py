@@ -54,7 +54,7 @@ def test_equality_and_hashability():
 
 
 def test_parse_normalizes_whitespace_and_case():
-    assert Interval.parse(" 5M ") == Interval.parse("5m")
+    assert Interval.parse(" 5H ") == Interval.parse("5h")
 
 
 def test_parse_rejects_unknown_unit():
@@ -154,3 +154,26 @@ def test_amount_and_unit_split_the_canonical_code():
     assert (Interval.HOUR_4.amount, Interval.HOUR_4.unit) == (4, "h")
     assert (Interval.MONTH_6.amount, Interval.MONTH_6.unit) == (6, "mo")
     assert (Interval.YEAR_1.amount, Interval.YEAR_1.unit) == (1, "y")
+
+
+# ---- ambiguous and equivalent codes (DS-11) ---------------------------------------
+
+
+def test_upper_case_m_is_refused_as_ambiguous():
+    # pandas and some vendors mean month by "M"; never read it as a minute
+    with pytest.raises(ValueError, match="ambiguous"):
+        Interval.parse("1M")
+    with pytest.raises(ValueError, match="ambiguous"):
+        Interval.parse(" 3M ")
+    assert Interval.parse("1MO") == Interval.MONTH_1
+    assert Interval.parse("1H") == Interval.HOUR_1
+
+
+def test_equivalent_codes_are_one_series():
+    assert Interval.parse("60m") == Interval.HOUR_1
+    assert Interval.parse("240m") == Interval.HOUR_4
+    assert Interval.parse("24h") == Interval.DAY_1
+    assert Interval.parse("7d") == Interval.WEEK_1
+    assert Interval.parse("12mo") == Interval.YEAR_1
+    assert Interval.parse("90m").code == "90m"
+    assert Interval.parse("5d").code == "5d"

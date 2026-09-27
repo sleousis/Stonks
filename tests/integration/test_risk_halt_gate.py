@@ -153,3 +153,64 @@ def test_a_kill_switch_stops_the_tick(tmp_path, lake_trending):
         assert summary["halted"]["halt"] == "all"
     finally:
         s.close()
+
+
+def _legacy_tick_with_halt(tmp_path, lake, **halt):
+    """Trip ``halt`` and run the default plan (the legacy ``pf_default`` book,
+    whose TickBook carries no owner id); return (state, result)."""
+    from stonks.core.protocols import SurvivalReport
+    from stonks.production.tick import TickSettings, run_tick
+    from stonks.registry.store import StrategyRegistry
+    from stonks.strategies.examples.buy_and_hold import BuyAndHold
+    from tests.fixtures.governance import seed_status
+
+    s = SqliteState(tmp_path / "state.sqlite")
+    s.migrate()
+    registry = StrategyRegistry(state=s, artifacts_dir=tmp_path / "artifacts")
+    registry.register(
+        BuyAndHold({"ticker": "UP.US", "allocation": 0.4}),
+        reports=[SurvivalReport(test_id="oos", passed=True, metrics={})],
+        strategy_id="bh_up",
+    )
+    seed_status(registry, "bh_up", "active")
+    trip_halt(s, "kill", reason="stop mine", actor="user:usr_owner", **halt)
+    settings = TickSettings(universe=["UP.US"], initial_cash=10_000.0)
+    result = run_tick(s, lake, registry, settings, as_of=date(2026, 3, 20))
+    return s, result
+
+
+def test_a_user_kill_switch_stops_the_legacy_default_book(tmp_path, lake_trending):
+    """TO-02: pf_default belongs to the bootstrap admin; their user-scope
+    kill switch must stop it although the legacy book has no owner id."""
+    s, result = _legacy_tick_with_halt(
+        tmp_path, lake_trending, scope="user", user_id=OWNER, halt="all"
+    )
+    try:
+        assert result.orders_placed == 0 and s.count_rows("orders") == 0
+    finally:
+        s.close()
+
+
+def test_a_portfolio_kill_switch_stops_the_legacy_default_book(tmp_path, lake_trending):
+    s, result = _legacy_tick_with_halt(
+        tmp_path, lake_trending, scope="portfolio", portfolio_id=PF, halt="all"
+    )
+    try:
+        assert result.orders_placed == 0 and s.count_rows("orders") == 0
+    finally:
+        s.close()
+
+
+def test_another_users_kill_switch_leaves_the_default_book_trading(tmp_path, lake_trending):
+    s, result = _legacy_tick_with_halt(
+        tmp_path, lake_trending, scope="user", user_id="usr_someone_else", halt="all"
+    )
+    try:
+        assert result.orders_placed == 1
+    finally:
+        s.close()
+
+
+def test_the_gate_resolves_the_owner_when_the_book_has_none(state):
+    trip_halt(state, "kill", reason="m", actor="user:usr_owner", scope="user", user_id=OWNER)
+    assert RiskHaltGate().check(_ctx(state, owner=None)).halt == "buys"

@@ -111,7 +111,9 @@ def test_runs_test_survival_skips_when_no_bars(tmp_path):
         test = RunsTestSurvivalTest()
         strategy = BuyAndHold({"ticker": "Z.US"})
         report = test.run(strategy, ds)
-        assert "insufficient" in report.notes.lower() or report.passed in (True, False)
+        # RS-23: no data is not a pass
+        assert report.passed is False
+        assert "insufficient data" in report.notes.lower()
     finally:
         lake.close()
 
@@ -155,18 +157,26 @@ def test_trade_level_runs_test_scores_signs_of_round_trip_returns(lake_random_wa
     assert bar_level.metrics["n_positive"] + bar_level.metrics["n_negative"] > len(signs)
 
 
-def test_trade_level_runs_test_passes_with_too_few_trades(lake_random_walk):
+def test_trade_level_runs_test_fails_with_too_few_trades(lake_random_walk):
     lake, dates = lake_random_walk
     ds = _dataset(lake, dates)
     # buy-and-hold never closes a trade
     report = RunsTestSurvivalTest(trade_level=True).run(
         BuyAndHold({"ticker": "R.US", "allocation": 1.0}), ds
     )
-    assert report.passed is True
+    assert report.passed is False  # RS-23: zero trades is no evidence
     assert report.metrics["n_trades"] == 0.0
-    assert "insufficient" in report.notes
+    assert "insufficient data" in report.notes
 
 
 def test_runs_test_rejects_bad_max_abs_z_score():
     with pytest.raises(ValueError):
         RunsTestSurvivalTest(max_abs_z_score=-1.0)
+
+
+def test_all_same_sign_outcomes_fail_as_insufficient_data():
+    import numpy as np
+
+    report = RunsTestSurvivalTest()._score(np.array([0.1, 0.2, 0.3]), level="trade")
+    assert report.passed is False
+    assert "insufficient data" in report.notes

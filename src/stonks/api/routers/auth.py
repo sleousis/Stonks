@@ -27,12 +27,15 @@ from stonks.api.deps import (
     CSRF_COOKIE,
     SESSION_COOKIE,
     AuthDep,
+    PageDep,
     PrincipalDep,
     SessionDep,
+    client_ip,
     needs,
     require_permission,
 )
 from stonks.api.errors import PROBLEM_RESPONSES, ProblemDetails
+from stonks.app.pagination import Page, page_of
 from stonks.auth import (
     ApiScope,
     ApiTokenInfo,
@@ -198,10 +201,6 @@ def _user_view(info: UserAuthInfo) -> UserView:
 # ---- cookies --------------------------------------------------------------------
 
 
-def _ip(request: Request) -> str | None:
-    return request.client.host if request.client else None
-
-
 def _set_cookies(response: Response, auth: AuthService, session: NewSession) -> None:
     max_age = max(1, int((session.expires_at - datetime.now(UTC)).total_seconds()))
     secure = auth.settings.cookie_secure
@@ -241,7 +240,10 @@ def login(body: LoginRequest, request: Request, response: Response, auth: AuthDe
     factor is always required next (``next_step``). Five failures per 15
     minutes per account or per IP lock further attempts (429)."""
     result = auth.login(
-        body.email, body.password, ip=_ip(request), user_agent=request.headers.get("user-agent")
+        body.email,
+        body.password,
+        ip=client_ip(request),
+        user_agent=request.headers.get("user-agent"),
     )
     _set_cookies(response, auth, result.session)
     return LoginView(
@@ -271,7 +273,7 @@ def confirm_enrolment(
     result = auth.enrol_confirm(
         session,
         body.code or "",
-        ip=_ip(request),
+        ip=client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
     if result.session is not None:
@@ -295,7 +297,7 @@ def verify_mfa(
         session,
         code=body.code,
         recovery_code=body.recovery_code,
-        ip=_ip(request),
+        ip=client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
     if result.session is not None:
@@ -319,7 +321,7 @@ def logout(request: Request, response: Response, auth: AuthDep) -> Response:
     except NotAuthenticated:
         session = None
     if session is not None:
-        auth.logout(session.id_hash, actor=f"user:{session.user.id}", ip=_ip(request))
+        auth.logout(session.id_hash, actor=f"user:{session.user.id}", ip=client_ip(request))
     response.status_code = 204
     _clear_cookies(response, auth)
     return response
@@ -362,7 +364,7 @@ def change_password(
 ) -> Response:
     """Change your password (fresh second factor needed). Your other
     sessions are signed out."""
-    auth.change_password(principal, body.current_password, body.new_password, ip=_ip(request))
+    auth.change_password(principal, body.current_password, body.new_password, ip=client_ip(request))
     return Response(status_code=204)
 
 
@@ -378,17 +380,17 @@ def regenerate_recovery_codes(
     """Ten new recovery codes; the old ones stop working. Needs a fresh
     second factor."""
     return RecoveryCodesView(
-        recovery_codes=auth.regenerate_recovery_codes(principal, ip=_ip(request))
+        recovery_codes=auth.regenerate_recovery_codes(principal, ip=client_ip(request))
     )
 
 
 # ---- API tokens -------------------------------------------------------------------
 
 
-@router.get("/tokens", response_model=list[TokenView], operation_id="listApiTokens")
-def list_tokens(principal: PrincipalDep, auth: AuthDep) -> list[TokenView]:
+@router.get("/tokens", response_model=Page[TokenView], operation_id="listApiTokens")
+def list_tokens(principal: PrincipalDep, auth: AuthDep, page: PageDep) -> Page[TokenView]:
     """Your API tokens (never the secret), revoked ones included."""
-    return [_token_view(t) for t in auth.list_tokens(principal)]
+    return page_of([_token_view(t) for t in auth.list_tokens(principal)], page)
 
 
 @router.post(
@@ -409,7 +411,7 @@ def create_token(
         name=body.name,
         scopes=body.scopes,
         expires_in_days=body.expires_in_days,
-        ip=_ip(request),
+        ip=client_ip(request),
     )
     return TokenCreatedView(token=token, info=_token_view(info))
 
@@ -424,7 +426,7 @@ def revoke_token(
     token_id: str, request: Request, principal: PrincipalDep, auth: AuthDep
 ) -> Response:
     """Revoke one of your tokens (another user's token is a 404)."""
-    auth.revoke_token(principal, token_id, ip=_ip(request))
+    auth.revoke_token(principal, token_id, ip=client_ip(request))
     return Response(status_code=204)
 
 
@@ -434,11 +436,11 @@ _users_read = Depends(require_permission(Permission.USERS_READ))
 
 
 @router.get(
-    "/users", response_model=list[UserView], operation_id="listUsers", dependencies=[_users_read]
+    "/users", response_model=Page[UserView], operation_id="listUsers", dependencies=[_users_read]
 )
-def list_users(principal: PrincipalDep, auth: AuthDep) -> list[UserView]:
+def list_users(principal: PrincipalDep, auth: AuthDep, page: PageDep) -> Page[UserView]:
     """Every person with an account: identity, role, status. No holdings."""
-    return [_user_view(u) for u in auth.list_users(principal)]
+    return page_of([_user_view(u) for u in auth.list_users(principal)], page)
 
 
 @router.post(
@@ -459,7 +461,7 @@ def create_user(
         display_name=body.display_name,
         role=body.role,
         password=body.password,
-        ip=_ip(request),
+        ip=client_ip(request),
     )
     return _user_view(info)
 
@@ -479,7 +481,9 @@ def update_user(
 ) -> UserView:
     """Change role or status. Disabling signs the person out everywhere and
     revokes their tokens. The last active admin stays an admin."""
-    info = auth.update_user(principal, user_id, role=body.role, status=body.status, ip=_ip(request))
+    info = auth.update_user(
+        principal, user_id, role=body.role, status=body.status, ip=client_ip(request)
+    )
     return _user_view(info)
 
 
@@ -497,7 +501,7 @@ def reset_user_password(
     auth: AuthDep,
 ) -> Response:
     """Set a new password for a person and sign them out."""
-    auth.reset_password(principal, user_id, body.new_password, ip=_ip(request))
+    auth.reset_password(principal, user_id, body.new_password, ip=client_ip(request))
     return Response(status_code=204)
 
 
@@ -512,5 +516,5 @@ def reset_user_mfa(
 ) -> Response:
     """Clear a person's second factor (lost phone). They set it up again at
     the next login."""
-    auth.reset_mfa(principal, user_id, ip=_ip(request))
+    auth.reset_mfa(principal, user_id, ip=client_ip(request))
     return Response(status_code=204)

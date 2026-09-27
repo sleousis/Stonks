@@ -154,7 +154,7 @@ def test_drop_column_with_values_is_guarded(empty_lake, tmp_path, monkeypatch):
     empty_lake.migrate()
     _write_migration(tmp_path / "migs", version=2, sql="ALTER TABLE legacy DROP COLUMN y;")
     monkeypatch.delenv("STONKS_ALLOW_DESTRUCTIVE_MIGRATIONS", raising=False)
-    with pytest.raises(RuntimeError, match="DROP COLUMN legacy.y"):
+    with pytest.raises(RuntimeError, match=r"DROP COLUMN legacy\.y"):
         empty_lake.migrate()
     assert empty_lake.sql("SELECT y FROM legacy")["y"].tolist() == [2]
 

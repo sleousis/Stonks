@@ -1,11 +1,12 @@
 import { Injectable } from '@angular/core';
 
 import { SILENT_HEADERS } from '../core/http/interceptors';
-import { unwrap } from './api-call';
+import { allItems, unwrap } from './api-call';
 import {
   getGoLiveReport,
   getStrategy,
   getStrategyHistory,
+  getStrategySummary,
   listStrategies,
   promoteStrategy,
   retireStrategy,
@@ -26,6 +27,11 @@ export class StrategiesService {
     return page.total;
   }
 
+  /** How many strategies are active, in shadow and retired, in one call. */
+  summary() {
+    return unwrap(getStrategySummary());
+  }
+
   get(strategyId: string) {
     return unwrap(getStrategy({ path: { strategy_id: strategyId } }));
   }
@@ -39,7 +45,9 @@ export class StrategiesService {
 
   /** Audited status changes and interventions, oldest first. */
   history(strategyId: string) {
-    return unwrap(getStrategyHistory({ path: { strategy_id: strategyId } }));
+    return allItems((query) =>
+      unwrap(getStrategyHistory({ path: { strategy_id: strategyId }, query })),
+    );
   }
 
   /**

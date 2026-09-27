@@ -17,12 +17,12 @@ export default [
       },
       {
         path: 'ticks',
-        title: 'Ticks',
+        title: 'Trading runs',
         loadComponent: () => import('./ticks.page').then((m) => m.TicksPage),
       },
       {
         path: 'ticks/:id',
-        title: 'Tick',
+        title: 'Trading run',
         loadComponent: () => import('./tick-detail.page').then((m) => m.TickDetailPage),
       },
     ],

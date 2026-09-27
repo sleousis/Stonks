@@ -33,6 +33,12 @@ from stonks.mcp.tools.common import (
 ROUTE_READS: tuple[RouteRead, ...] = (
     RouteRead("health", "/api/health", "Check that the Stonks API is up and report its version."),
     RouteRead(
+        "whoami",
+        "/api/auth/me",
+        "Who this MCP server acts as: the token's user, role and scopes. Every tool does "
+        "only what that user may do.",
+    ),
+    RouteRead(
         "get_portfolio_totals",
         "/api/portfolio/totals",
         "Admins only: cash and value summed across every active portfolio (no holdings).",
@@ -205,13 +211,15 @@ def register(t: ToolContext) -> None:
     async def list_ticks(
         status: str | None = None, limit: Limit = 50, offset: Offset = 0
     ) -> dict[str, Any]:
-        """Production tick runs, newest first, with their summaries."""
+        """Production tick runs, newest first. Summaries show the global
+        outcome and the parts about your own portfolios only."""
         return await t.get("/api/ticks", {"status": status, "limit": limit, "offset": offset})
 
     @server.tool(annotations=READ)
-    async def get_tick(tick_id: str) -> dict[str, Any]:
-        """One production tick run with the orders it placed."""
-        return await t.get(f"/api/ticks/{seg(tick_id)}")
+    async def get_tick(tick_id: str, portfolio_id: PortfolioId = None) -> dict[str, Any]:
+        """One production tick run with the orders it placed in your
+        portfolios (or in ``portfolio_id`` only)."""
+        return await t.get(f"/api/ticks/{seg(tick_id)}", {"portfolio_id": portfolio_id})
 
     @server.tool(annotations=READ)
     async def list_ingest_runs(

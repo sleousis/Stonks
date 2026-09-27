@@ -65,9 +65,31 @@ def test_sharpe_variance_rejects_bad_inputs():
 # ---- psr ---------------------------------------------------------------------
 
 
-def test_psr_reference_check_value():
+def test_psr_reference_check_value_under_the_null():
     # Lopez de Prado, Lipton & Zoonekynd (2025) reference: null variance, /T.
-    assert psr(0.456, 0.0, 24, -2.448, 10.164) == pytest.approx(0.987, abs=5e-4)
+    v = sharpe_variance(0.0, 24, -2.448, 10.164)
+    assert psr(0.456, 0.0, 24, -2.448, 10.164, variance=v) == pytest.approx(0.987, abs=5e-4)
+
+
+def test_psr_default_is_the_classic_form_at_the_observed_sharpe():
+    # RS-08 / P8: Bailey and Lopez de Prado (2012), the estimate's own
+    # variance with T - 1 observations, so skew and kurtosis count.
+    v = sharpe_variance(0.456, 23, -2.448, 10.164)
+    expected = norm.cdf(0.456 / math.sqrt(v))
+    assert psr(0.456, 0.0, 24, -2.448, 10.164) == pytest.approx(expected)
+
+
+def test_fat_tails_and_negative_skew_lower_psr_and_lengthen_min_trl():
+    # RS-08: at sr0 = 0 the null form drops skew and kurtosis entirely.
+    normal = psr(0.1, 0.0, 252, 0.0, 3.0)
+    fat = psr(0.1, 0.0, 252, -3.0, 30.0)
+    assert fat < normal
+    assert min_trl(0.1, 0.0, -3.0, 30.0) > min_trl(0.1, 0.0, 0.0, 3.0)
+
+
+def test_psr_needs_more_than_one_bar():
+    with pytest.raises(ValueError):
+        psr(0.1, 0.0, 1, 0.0, 3.0)
 
 
 def test_psr_is_one_half_at_the_benchmark():
@@ -96,9 +118,9 @@ def test_min_trl_is_the_length_at_which_psr_hits_the_confidence():
 
 
 def test_min_trl_normal_closed_form():
-    # skew 0, kurt 3, sr0 0: V1 = 1 -> T = (z / sr)^2.
+    # Bailey and Lopez de Prado (2012): 1 + (1 + sr^2 / 2) * (z / sr)^2.
     z = norm.ppf(0.95)
-    assert min_trl(0.1, 0.0, 0.0, 3.0) == pytest.approx((z / 0.1) ** 2)
+    assert min_trl(0.1, 0.0, 0.0, 3.0) == pytest.approx(1 + (1 + 0.01 / 2) * (z / 0.1) ** 2)
 
 
 def test_min_trl_shrinks_as_sharpe_grows():
@@ -239,3 +261,25 @@ def test_deflated_sharpe_inputs_raw_method_uses_the_trial_count():
     trials = rng.normal(0, 0.01, (300, 4))
     inputs = deflated_sharpe_inputs(trials, n_eff_method="raw")
     assert inputs.n_eff == 4
+
+
+# ---- edge cases (review 18.1) ----------------------------------------------------
+
+
+def test_deflation_with_far_more_trials_than_matrix_columns():
+    rng = np.random.default_rng(4)
+    m = rng.normal(0.0, 0.01, size=(300, 3))
+    own = deflated_sharpe_inputs(m)
+    many = deflated_sharpe_inputs(m, n_trials=1000)
+    assert many.n_trials == 1000
+    assert many.n_eff == pytest.approx(own.n_eff * 1000 / 3)
+    assert math.isfinite(many.sr0) and many.sr0 > own.sr0 > 0
+
+
+def test_identical_trial_columns_count_as_one_trial():
+    rng = np.random.default_rng(5)
+    col = rng.normal(0.0, 0.01, size=300)
+    inputs = deflated_sharpe_inputs(np.column_stack([col, col, col]))
+    assert inputs.n_eff == pytest.approx(1.0)
+    assert inputs.var_sr == pytest.approx(0.0, abs=1e-15)
+    assert inputs.sr0 == pytest.approx(0.0, abs=1e-9)

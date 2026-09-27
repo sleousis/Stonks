@@ -81,6 +81,7 @@ from stonks.lab.parallel import (
 from stonks.logging import get_logger
 from stonks.stats.hac import newey_west_se
 from stonks.store.corporate_actions import LakeCorporateActions
+from stonks.strategies.base import strategy_data_tickers
 
 _log = get_logger("stonks.lab.signal_eval")
 
@@ -239,7 +240,7 @@ def map_over_tickers[T, R](
         problem = _unpicklable(strategy, dataset, fn, tasks[0])
         if problem is None:
             saved = PortableStrategy(strategy).__getstate__()["portable"]
-            with dataset_snapshot(dataset) as shipped:
+            with dataset_snapshot(dataset, strategy_data_tickers(strategy)) as shipped:
                 return run_tasks(
                     _run_fn,
                     [(fn, t) for t in tasks],
@@ -352,16 +353,35 @@ def ic_by_date(scores: pd.DataFrame, fwd: pd.DataFrame, *, min_names: int = 5) -
 
 
 def _mean_se(x: np.ndarray, lags: int) -> tuple[float, float, float, float]:
-    """``(mean, std ddof=1, iid se, HAC se)`` of the finite values."""
-    v = x[np.isfinite(x)]
+    """``(mean, std ddof=1, iid se, HAC se)`` of the finite values.
+
+    The HAC se keeps the dates of missing values (RS-28): the lag-``l``
+    autocovariance sums only pairs of observed values that are ``l`` dates
+    apart, divided by the number of observed dates (Parzen's amplitude-
+    modulated series). Dropping the gaps first would pair dates further
+    apart than ``l`` and break the ``ceil(h/k) - 1`` overlap the lags model.
+    With no gaps this is :func:`~stonks.stats.hac.newey_west_se`."""
+    ok = np.isfinite(x)
+    v = x[ok]
     if v.size < 2:
         return (float(v.mean()) if v.size else math.nan, math.nan, math.nan, math.nan)
     return (
         float(v.mean()),
         float(v.std(ddof=1)),
         newey_west_se(v, 0),
-        newey_west_se(v, lags),
+        _gap_aware_hac_se(x, lags) if not ok.all() else newey_west_se(v, lags),
     )
+
+
+def _gap_aware_hac_se(x: np.ndarray, lags: int) -> float:
+    ok = np.isfinite(x)
+    n = int(ok.sum())
+    d = np.where(ok, x - x[ok].mean(), 0.0)
+    n_lags = min(max(int(lags), 0), len(x) - 1)
+    s = float(d @ d) / n
+    for lag in range(1, n_lags + 1):
+        s += 2 * (1 - lag / (n_lags + 1)) * float(d[lag:] @ d[:-lag]) / n
+    return math.sqrt(max(s, 0.0) / n)
 
 
 def _ratio(a: float, b: float) -> float:

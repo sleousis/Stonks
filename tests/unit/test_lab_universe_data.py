@@ -82,6 +82,23 @@ def test_prepare_ensures_data_including_warmup(lake):
     assert sorted(lake.sql("SELECT DISTINCT ticker FROM bars").ticker) == ["A.US", "DEAD.US"]
 
 
+def test_prepare_ensures_reference_tickers_too(lake):
+    source = FakeListingSource(
+        prices={
+            "A.US": bars("A.US", date(2023, 1, 2), date(2024, 6, 28)),
+            "DEAD.US": bars("DEAD.US", date(2023, 1, 2), date(2024, 2, 29)),
+            "REF.US": bars("REF.US", date(2023, 1, 2), date(2024, 6, 28)),
+        }
+    )
+    _, report = prepare_dataset(
+        _ds(lake, reference_tickers=("REF.US",)),
+        ensurer=_ensurer(lake, source),
+        strategy=BuyAndHold,
+    )
+    assert report is not None and report.tickers_fetched == 3
+    assert "REF.US" in set(lake.sql("SELECT DISTINCT ticker FROM bars").ticker)
+
+
 def test_lab_runner_ensures_before_the_preflight(lake):
     source = FakeListingSource(
         prices={

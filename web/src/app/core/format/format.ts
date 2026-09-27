@@ -9,8 +9,8 @@
 
 import { signal } from '@angular/core';
 
-/** The API does not report a portfolio currency yet; the console shows USD. */
-export const DISPLAY_CURRENCY = 'USD';
+/** Used when the API sends no currency for a figure. */
+export const DEFAULT_CURRENCY = 'USD';
 export const MISSING = '–';
 
 /** `iso` shows 2026-09-26 (unambiguous everywhere); `locale` follows the locale. */
@@ -50,6 +50,8 @@ export interface NumberOptions {
   /** 1.2K / 3.4M (axes, tight tiles). */
   compact?: boolean;
   digits?: number;
+  /** ISO 4217 code from the API (`PortfolioView.currency`); defaults to USD. */
+  currency?: string | null;
 }
 
 // Intl formatters are costly to build; keep one per locale and option set.
@@ -86,13 +88,13 @@ export function formatMoney(value: Num, opts: NumberOptions = {}): string {
   const options: Intl.NumberFormatOptions = opts.compact
     ? {
         style: 'currency',
-        currency: DISPLAY_CURRENCY,
+        currency: opts.currency || DEFAULT_CURRENCY,
         notation: 'compact',
         maximumFractionDigits: 1,
       }
     : {
         style: 'currency',
-        currency: DISPLAY_CURRENCY,
+        currency: opts.currency || DEFAULT_CURRENCY,
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       };
@@ -153,6 +155,36 @@ export function formatDateTime(value: string | null | undefined): string {
     timeZone,
   }).format(d);
   return `${isoDate(d, timeZone)} ${time}`;
+}
+
+/** Clock time in the preferred zone, 24-hour: "14:05". For the tape and the session strip. */
+export function formatTime(value: string | null | undefined): string {
+  if (!value) return MISSING;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return dateFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: activeFormat().timeZone,
+  }).format(d);
+}
+
+/** A day spelled out in the preferred zone and locale: "Sunday, September 27". */
+export function formatLongDay(value: Date | string): string {
+  const d = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return MISSING;
+  const { locale, timeZone } = activeFormat();
+  return dateFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', timeZone }).format(d);
+}
+
+/** Short weekday in the preferred zone and locale: "Mon". */
+export function formatWeekday(value: string | null | undefined): string {
+  if (!value) return MISSING;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  const { locale, timeZone } = activeFormat();
+  return dateFormat(locale, { weekday: 'short', timeZone }).format(d);
 }
 
 function isoDate(d: Date, timeZone: string): string {

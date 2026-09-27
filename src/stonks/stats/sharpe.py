@@ -9,7 +9,14 @@ References:
   (PSR, MinTRL).
 - Bailey & Lopez de Prado (2014), "The Deflated Sharpe Ratio".
 - Lopez de Prado, Lipton & Zoonekynd (2025), "How to use the Sharpe ratio":
-  the variance with an AR(1) correction, evaluated under the null.
+  the variance with an AR(1) correction.
+
+PSR, DSR and MinTRL evaluate the variance at the **observed** Sharpe with
+``T - 1`` observations, the classic 2012 form (RS-08). Skew and kurtosis
+then always count: a fat-tailed, negatively skewed series gets a lower PSR
+and a longer MinTRL than a normal one with the same Sharpe, as P8 asks.
+The 2025 paper's null form (variance at ``sr0``) drops both at ``sr0 = 0``,
+so it is available only through ``psr(..., variance=...)``.
 """
 
 from __future__ import annotations
@@ -57,11 +64,17 @@ def psr(
 ) -> float:
     """Probabilistic Sharpe ratio: ``P(true SR > sr0)``.
 
-    ``Phi((sr - sr0) / sqrt(V))`` where ``V`` defaults to
-    :func:`sharpe_variance` evaluated **under the null** (at ``sr0``).
-    Pass ``variance`` to use another form, e.g. the classic Bailey & Lopez
-    de Prado (2012) ``sharpe_variance(sr, t - 1, ...)``."""
-    v = sharpe_variance(sr0, t, skew, kurt, rho) if variance is None else variance
+    ``Phi((sr - sr0) / sqrt(V))`` where ``V`` defaults to the classic
+    Bailey & Lopez de Prado (2012) ``sharpe_variance(sr, t - 1, ...)``: the
+    estimate's own variance at the observed Sharpe, so skew and kurtosis
+    always count (``t`` must exceed 1). Pass ``variance`` to use another
+    form, e.g. the null form ``sharpe_variance(sr0, t, ...)``."""
+    if variance is None:
+        if t <= 1:
+            raise ValueError(f"psr needs more than one bar, got t={t}")
+        v = sharpe_variance(sr, t - 1, skew, kurt, rho)
+    else:
+        v = variance
     if v <= 0:
         raise ValueError(f"Sharpe variance must be positive, got {v}")
     return float(norm.cdf((sr - sr0) / math.sqrt(v)))
@@ -75,13 +88,15 @@ def min_trl(
     rho: float = 0.0,
     alpha: float = 0.05,
 ) -> float:
-    """Minimum track record length, in bars, for ``psr(...) >= 1 - alpha``:
-    ``sharpe_variance(sr0, 1, ...) * (z_{1-alpha} / (sr - sr0))^2``.
-    Infinite when ``sr <= sr0`` (no track record is long enough)."""
+    """Minimum track record length, in bars, for ``psr(...) >= 1 - alpha``
+    (Bailey & Lopez de Prado 2012):
+    ``1 + sharpe_variance(sr, 1, ...) * (z_{1-alpha} / (sr - sr0))^2``, the
+    variance at the observed Sharpe so skew and kurtosis count. Infinite
+    when ``sr <= sr0`` (no track record is long enough)."""
     if sr <= sr0:
         return math.inf
-    v1 = sharpe_variance(sr0, 1, skew, kurt, rho)
-    return v1 * (norm.ppf(1 - alpha) / (sr - sr0)) ** 2
+    v1 = sharpe_variance(sr, 1, skew, kurt, rho)
+    return 1 + v1 * (norm.ppf(1 - alpha) / (sr - sr0)) ** 2
 
 
 def expected_max_sharpe(n: float, var_sr: float, mean: float = 0.0) -> float:

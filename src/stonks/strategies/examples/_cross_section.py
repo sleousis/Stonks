@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import weakref
 from collections.abc import Callable, Iterable
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from stonks.core.interval import Interval
@@ -34,10 +34,12 @@ MAX_STALENESS_DAYS = 10
 
 
 def session_cutoff(as_of: Any) -> tuple[date, datetime]:
-    """``as_of``'s calendar day and the cutoff that sees exactly the daily
-    bars dated on or before it (a daily bar's timestamp is its session)."""
-    day = as_datetime(as_of).date()
-    return day, datetime.combine(day, time.max)
+    """``as_of``'s calendar day and the decision time to hand the bar
+    cache. The cache's "as of" readers show only daily bars complete at that
+    decision (``strategies._common.visible_cutoff``, RS-03): the day's own
+    bar at a daily decision, the previous session's mid-session."""
+    at = as_datetime(as_of)
+    return at.date(), at
 
 
 def parse_universe(spec: str) -> list[str]:

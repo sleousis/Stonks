@@ -16,6 +16,14 @@ allows it, time-in-force DAY) and crypto pairs (``BTC-USD.CC``, GTC).
 Before the first order an instance checks the account can trade; before
 each order it checks the asset is tradable and fits quantity and price to
 the asset's increments, so avoidable rejections never reach the API.
+
+Short sales (roadmap 16.1) are off by default (``allow_short=False``,
+``brokers.alpaca.allow_short``). A sell with ``position_effect="open"`` is
+a short sale: with shorts on it is sent as a plain sell once the asset is
+``shortable`` and ``easy_to_borrow`` (Alpaca shorts only easy-to-borrow
+US equities, in whole shares), and it skips the "sell within the holding"
+guard. A cover is an ordinary buy. Any other sell beyond the holding is
+still refused, so nothing opens a short by accident.
 """
 
 from __future__ import annotations
@@ -104,8 +112,10 @@ class AlpacaBroker:
         max_retries: int = 3,
         retry_backoff_seconds: float = 1.0,
         sleep: Callable[[float], None] = time.sleep,
+        allow_short: bool = False,
     ) -> None:
         self._client = client
+        self.allow_short = allow_short
         self.paper = paper
         self._max_retries = max(0, max_retries)
         self._backoff = retry_backoff_seconds
@@ -126,6 +136,7 @@ class AlpacaBroker:
         allow_live: bool = False,
         max_retries: int = 3,
         retry_backoff_seconds: float = 1.0,
+        allow_short: bool = False,
     ) -> AlpacaBroker:
         if not paper and not allow_live:
             raise LiveTradingRefusedError(
@@ -143,6 +154,7 @@ class AlpacaBroker:
             paper=paper,
             max_retries=max_retries,
             retry_backoff_seconds=retry_backoff_seconds,
+            allow_short=allow_short,
         )
 
     # ---- Broker protocol ----------------------------------------------------
@@ -169,10 +181,12 @@ class AlpacaBroker:
         if raw is not None:
             _log.info("alpaca.order.already_submitted", client_id=order.client_id)
         else:
-            request = self._build_request(order, symbol)
+            request, qty = self._build_request(order, symbol)
             self._ensure_account_can_trade()
-            if order.side == "sell":
-                self._ensure_sellable(order, symbol, request.qty)
+            if _is_short_sale(order):
+                self._ensure_shortable(order, symbol)
+            elif order.side == "sell":
+                self._ensure_sellable(order, symbol, qty)
             raw = self._submit(order, request)
         state = self._to_state(raw)
         self._warn_on_mismatch(order, state)
@@ -298,6 +312,22 @@ class AlpacaBroker:
                 "refusing to open a short"
             )
 
+    def _ensure_shortable(self, order: Order, symbol: str) -> None:
+        """Refuse a short sale unless shorts are on and Alpaca can borrow
+        the asset (shortable and easy to borrow; never crypto)."""
+        if not self.allow_short:
+            raise OrderRejectedError(
+                f"short sale of {order.ticker} refused: short selling is off "
+                "(brokers.alpaca.allow_short)"
+            )
+        if is_crypto_ticker(order.ticker):
+            raise OrderRejectedError(f"{order.ticker}: Alpaca does not short crypto")
+        asset = self._asset(symbol)
+        if not asset.get("shortable", False):
+            raise OrderRejectedError(f"{order.ticker} is not shortable at Alpaca")
+        if not asset.get("easy_to_borrow", False):
+            raise OrderRejectedError(f"{order.ticker} is hard to borrow at Alpaca")
+
     # ---- internals ----------------------------------------------------------
 
     @staticmethod
@@ -332,12 +362,17 @@ class AlpacaBroker:
         except _Unprocessable as exc:
             raise OrderRejectedError(f"Alpaca rejected order {order.client_id!r}: {exc}") from None
 
-    def _build_request(self, order: Order, symbol: str) -> MarketOrderRequest | LimitOrderRequest:
+    def _build_request(
+        self, order: Order, symbol: str
+    ) -> tuple[MarketOrderRequest | LimitOrderRequest, float]:
+        """The Alpaca request and the fitted quantity it sends."""
         crypto = is_crypto_ticker(order.ticker)
         asset = self._asset(symbol)
         if not asset.get("tradable", False) or str(asset.get("status", "")).lower() != "active":
             raise OrderRejectedError(f"{order.ticker} is not tradable at Alpaca")
-        qty = _fit_quantity(order, asset, crypto)
+        # Short sales are whole shares only.
+        fit_asset = {**asset, "fractionable": False} if _is_short_sale(order) else asset
+        qty = _fit_quantity(order, fit_asset, crypto)
         common = {
             "symbol": symbol,
             "qty": qty,
@@ -348,9 +383,11 @@ class AlpacaBroker:
             "client_order_id": order.client_id,
         }
         if order.order_type == "market":
-            return MarketOrderRequest(**common)
+            return MarketOrderRequest(**common), qty
+        if order.limit_price is None:
+            raise OrderRejectedError(f"limit order {order.client_id!r} has no limit price")
         limit_price = _fit_limit_price(float(order.limit_price), asset, crypto, order.side)
-        return LimitOrderRequest(limit_price=limit_price, **common)
+        return LimitOrderRequest(limit_price=limit_price, **common), qty
 
     def _fetch_order(self, client_id: str) -> dict | None:
         try:
@@ -445,6 +482,10 @@ def map_status(alpaca_status: str, filled_quantity: float) -> OrderStatus:
 
 def fill_time(raw: dict) -> datetime:
     return _parse_ts(raw.get("filled_at")) or _parse_ts(raw.get("updated_at")) or datetime.now(UTC)
+
+
+def _is_short_sale(order: Order) -> bool:
+    return order.side == "sell" and order.position_effect == "open"
 
 
 def _fit_quantity(order: Order, asset: dict, crypto: bool) -> float:

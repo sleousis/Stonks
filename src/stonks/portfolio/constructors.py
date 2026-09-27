@@ -125,8 +125,13 @@ class EqualWeightSettings(ConstructorSettings):
 
 @register_constructor("equal_weight_top_n")
 class EqualWeightTopN(PortfolioConstructor):
-    """Equal weight across the ``n`` best positive combined scores."""
+    """Equal weight across the ``n`` best positive combined scores.
 
+    Signals are percentile ranks (RS-06): the pipeline passes only scores
+    above the threshold, so every input is a buy, and a z-score would clip
+    the below-mean half to 0 in long-only mode."""
+
+    signal_method = "rank"
     Settings = EqualWeightSettings
 
     def target_weights(self, inp: ConstructionInput) -> TargetBook:
@@ -147,8 +152,10 @@ class InverseVolSettings(ConstructorSettings):
 @register_constructor("inverse_vol")
 class InverseVol(PortfolioConstructor):
     """``w_i ∝ 1/sigma_i`` across the ``top_n`` best positive combined scores
-    that have a usable volatility, scaled to ``max_gross``."""
+    that have a usable volatility, scaled to ``max_gross``. Signals are
+    percentile ranks, as for ``equal_weight_top_n`` (RS-06)."""
 
+    signal_method = "rank"
     Settings = InverseVolSettings
 
     def target_weights(self, inp: ConstructionInput) -> TargetBook:
@@ -184,7 +191,10 @@ class VolTarget(PortfolioConstructor):
     - ``w_i = tau * IDM * iw_i * F_i / 10 / sigma_i``. With
       ``instrument_weight="equal"`` (default) ``iw_i = 1/N`` over the N
       tradable names with a forecast and a volatility, so the book targets
-      ``tau`` when forecasts average 10 (Carver ch. 11); ``"unit"`` sets
+      ``tau`` when forecasts average 10 (Carver ch. 11). A name whose
+      forecast is 0 holds nothing but keeps its slice: instrument weights
+      are a fixed allocation over the instrument set, not over today's
+      longs; ``"unit"`` sets
       ``iw_i = 1`` (every name sized for ``tau`` on its own).
     - ``idm="auto"`` estimates it from ``returns_history`` with the same
       weights; otherwise the given value.

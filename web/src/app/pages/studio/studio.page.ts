@@ -1,6 +1,9 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
+  Injector,
+  afterNextRender,
   computed,
   inject,
   resource,
@@ -10,11 +13,13 @@ import { Router, RouterLink } from '@angular/router';
 
 import type { Draft, DraftCreate } from '../../api/models';
 import { StudioService } from '../../api/studio.service';
+import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ApiError } from '../../core/http/api-error';
 import { ToastService } from '../../core/notify/toast.service';
 import { AgoPipe } from '../../shared/format.pipes';
 import { PageHeader } from '../../shared/ui/page-header';
+import { PermissionNote } from '../../shared/ui/permission-note';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { blankSpec } from './rule-spec';
@@ -75,7 +80,16 @@ interface StartOption {
 @Component({
   selector: 'app-studio-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, PageHeader, StatusPill, LoadingState, EmptyState, ErrorState, AgoPipe],
+  imports: [
+    RouterLink,
+    PageHeader,
+    PermissionNote,
+    StatusPill,
+    LoadingState,
+    EmptyState,
+    ErrorState,
+    AgoPipe,
+  ],
   templateUrl: './studio.page.html',
   styleUrl: './studio.page.scss',
 })
@@ -84,6 +98,12 @@ export class StudioPage {
   private readonly confirm = inject(ConfirmService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly session = inject(SessionService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+
+  /** Creating, renaming and deleting drafts need `lab.run`. */
+  protected readonly canLab = computed(() => this.session.can('lab.run'));
 
   protected readonly drafts = resource({
     loader: () => this.studio.drafts({ limit: PAGE_SIZE }),
@@ -131,6 +151,7 @@ export class StudioPage {
   );
 
   protected openCreate(): void {
+    if (!this.canLab()) return;
     this.creating.set(true);
     this.nameTouched.set(false);
   }
@@ -158,7 +179,7 @@ export class StudioPage {
 
   async create(): Promise<void> {
     this.nameTouched.set(true);
-    if (!this.newName().trim() || this.createBusy()) return;
+    if (!this.newName().trim() || this.createBusy() || !this.canLab()) return;
     this.createBusy.set(true);
     try {
       const draft = await this.studio.create(this.buildCreate());
@@ -178,21 +199,36 @@ export class StudioPage {
   protected readonly renameText = signal('');
 
   protected startRename(d: Draft): void {
+    if (!this.canLab()) return;
     this.renamingId.set(d.id);
     this.renameText.set(d.name);
+    this.focusAfterRender(`#rename-${CSS.escape(d.id)}`);
+  }
+
+  /** Close the rename form and give focus back to that draft's Rename button. */
+  protected cancelRename(): void {
+    const id = this.renamingId();
+    this.renamingId.set(null);
+    if (id) this.focusAfterRender(`[data-rename-for="${CSS.escape(id)}"]`);
+  }
+
+  private focusAfterRender(selector: string): void {
+    afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>(selector)?.focus(), {
+      injector: this.injector,
+    });
   }
 
   async rename(d: Draft): Promise<void> {
     const name = this.renameText().trim();
     if (!name) return;
     if (name === d.name) {
-      this.renamingId.set(null);
+      this.cancelRename();
       return;
     }
     try {
       await this.studio.update(d.id, { name });
       this.toasts.success(`Renamed to ${name}.`);
-      this.renamingId.set(null);
+      this.cancelRename();
       this.drafts.reload();
     } catch {
       // The error interceptor already showed the API's message.
@@ -202,6 +238,7 @@ export class StudioPage {
   protected readonly deletingId = signal<string | null>(null);
 
   async remove(d: Draft): Promise<void> {
+    if (!this.canLab()) return;
     const ok = await this.confirm.confirm({
       title: `Delete ${d.name}?`,
       message:

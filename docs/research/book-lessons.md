@@ -152,7 +152,7 @@ These apply to every package below. They are how the principles P43-P48 turn int
   - `sharpe.py`:
     - `sharpe_variance(sr, T, skew, kurt, rho=0) = (a − b·skew·sr + c·(kurt−1)/4·sr²)/T`, with `a = 1+2ρ/(1−ρ)`, `b = 1+ρ/(1−ρ)+ρ²/(1−ρ²)` and `c = 1+2ρ²/(1−ρ²)`;
     - `psr(sr, sr0, T, skew, kurt, rho=0) = Φ((sr−sr0)/sqrt(sharpe_variance(sr0, …)))`, with the variance taken under the null;
-    - `min_trl(sr, sr0, skew, kurt, rho, alpha=0.05) = sharpe_variance(sr0,T=1,…)·(z_{1−α}/(sr−sr0))²`, in bars;
+    - `min_trl(sr, sr0, skew, kurt, rho, alpha=0.05) = 1 + sharpe_variance(sr,T=1,…)·(z_{1−α}/(sr−sr0))²`, in bars. The variance is taken at the observed Sharpe, so fat tails and negative skew make the track record longer. It is infinite when `sr ≤ sr0`;
     - `expected_max_sharpe(n, var_sr) = sqrt(var_sr)·((1−γ)Φ⁻¹(1−1/n) + γΦ⁻¹(1−1/(n·e)))`, with γ = 0.5772156649;
     - `dsr(...) = psr(sr, expected_max_sharpe(...), ...)`;
     - `sharpe_se_annual(sr, years) = sqrt((1+0.5·sr²)/years)`;
@@ -183,7 +183,7 @@ These apply to every package below. They are how the principles P43-P48 turn int
   - `git_sha` and `git_dirty` (from `git rev-parse`, or `None` when git isn't available);
   - `stonks_version`;
   - `config_hash`: sha256 of the resolved Settings JSON, secrets excluded;
-  - `data_fingerprint`: for each universe ticker, `count`, `min(ts)`, `max(ts)` and `hash(list(close ORDER BY timestamp))` over the lab window, computed in DuckDB with one query;
+  - `data_fingerprint`: for each universe ticker, `count`, `first`, `last` and `bars_hash`, an md5 of every bar column in timestamp order. It covers the lab window plus a warm-up before it, computed in DuckDB with one query. Splits and dividends up to the window end get their own hash;
   - `costs`, the `CostModelSettings` in force;
   - `seeds`.
 
@@ -191,7 +191,7 @@ These apply to every package below. They are how the principles P43-P48 turn int
 - **Seam:** a pure builder. The runner calls it once.
 - **Owns:** `lab/manifest.py` (new) and `registry/artifact.py`.
 - **Parallel:** none.
-- **Tests:** the fingerprint changes when one close changes and is stable otherwise; secrets are absent from the hash input; no git gives `None`.
+- **Tests:** the fingerprint changes when one bar value, a warm-up bar or a corporate action changes and is stable otherwise; secrets are absent from the hash input; no git gives `None`.
 - **Size:** M / S.
 - **Deps:** BL-04 (same package).
 

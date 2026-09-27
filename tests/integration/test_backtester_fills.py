@@ -68,7 +68,7 @@ class _Once:
     id = "once"
     applicable_asset_classes = ("equity",)
 
-    def __init__(self, orders: Sequence[Order], later: Mapping[int, Sequence[Order]] = {}) -> None:  # noqa: B006
+    def __init__(self, orders: Sequence[Order], later: Mapping[int, Sequence[Order]] = {}) -> None:
         self._orders = list(orders)
         self._later = dict(later)
         self._calls = 0
@@ -374,4 +374,61 @@ def test_warm_up_query_works_on_both_bar_backends(tmp_path, backend):
     assert report.equity_dates[0].date() >= date(2024, 3, 1)
     (trade,) = spy.trades
     assert trade.adv is not None and trade.sigma_daily is not None  # warmed up
+    lake.close()
+
+
+# ---- RS-14: the gap guard scales with the bar length -------------------------------
+
+
+@pytest.mark.parametrize(
+    ("interval", "step_days"), [(Interval.WEEK_1, 7), (Interval.MONTH_1, 31)], ids=["1w", "1mo"]
+)
+def test_weekly_and_monthly_backtests_still_fill(tmp_path, interval, step_days):
+    rows = [_row("X.US", i * step_days, 10.0 + i) for i in range(4)]
+    lake = DuckDBLake(tmp_path / "lake.duckdb")
+    lake.migrate()
+    lake.upsert_bars(pd.DataFrame(rows), interval=interval)
+    broker = _bar_broker()
+    config = BacktestConfig(
+        start=_day(0),
+        end=_day(3 * step_days),
+        universe=["X.US"],
+        interval=interval,
+        rebalance_every_bars=1_000,
+    )
+    Backtester([_Once([_buy(1.0)])], broker, lake, config).run()
+    assert len(broker.fills) == 1
+    lake.close()
+
+
+def test_a_missing_monthly_bar_beyond_two_bars_still_expires(tmp_path):
+    rows = [_row("X.US", 0, 10.0), _row("X.US", 95, 11.0)]
+    lake = DuckDBLake(tmp_path / "lake.duckdb")
+    lake.migrate()
+    lake.upsert_bars(pd.DataFrame(rows), interval=Interval.MONTH_1)
+    broker = _bar_broker()
+    config = BacktestConfig(
+        start=_day(0),
+        end=_day(95),
+        universe=["X.US"],
+        interval=Interval.MONTH_1,
+        rebalance_every_bars=1_000,
+    )
+    Backtester([_Once([_buy(1.0)])], broker, lake, config).run()
+    assert broker.fills == ()
+    lake.close()
+
+
+def test_a_limit_order_carried_by_the_participation_cap_keeps_its_limit(tmp_path):
+    """Edge case: the carried child of a capped limit order is still a limit
+    order. It fills while the bar reaches the limit, then expires (a DAY
+    order) on the first bar whose range stays above it."""
+    lake = _lake(tmp_path, [_row("X.US", i, 10.0 + i) for i in range(5)])
+    broker = _bar_broker()
+    order = _buy(250.0, kind="limit", limit=11.5)
+    Backtester([_Once([order])], broker, lake, _config(0, 4)).run()
+    fills = broker.fills
+    assert [f.quantity for f in fills] == pytest.approx([100.0, 100.0])
+    # bar 1 opens below the limit; bar 2's range touches it; bar 3's low is above
+    assert [f.price for f in fills] == pytest.approx([11.0, 11.5])
     lake.close()

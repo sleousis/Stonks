@@ -15,16 +15,29 @@ sells never exceed the position, and buys are scaled down pro rata so they
 never spend more than cash plus this batch's sell proceeds. Tickers
 without a positive price are skipped. Client ids come from
 :func:`stonks.execution.orders.make_client_id`, so a rerun is idempotent.
+
+Long/short books (``allow_short=True``, roadmap 16.1)
+-----------------------------------------------------
+Targets may be negative (a short weight). The band works on ``|target|``
+(``buffer_fraction * |target|``), and a target whose sign differs from the
+position always trades, to the band edge on the new side. Every order
+carries its position effect and is split at zero
+(:func:`stonks.execution.orders.classify`): long 10, target short 5 gives
+sell-close 10 then sell-open (``short``) 5. Covers are never scaled; only
+opening buys are scaled to cash plus this batch's sale proceeds (margin is
+the risk layer's and the broker's job). With ``allow_short=False`` (the
+default) the long-only rules above apply unchanged.
 """
 
 from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from dataclasses import replace
 from datetime import date
 
 from stonks.core.types import Order, OrderSide, Portfolio
-from stonks.execution.orders import make_client_id
+from stonks.execution.orders import classify, make_client_id
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.portfolio.orders")
@@ -46,13 +59,25 @@ def orders_from_targets(
     *,
     as_of: date,
     strategy_id: str = DEFAULT_STRATEGY_ID,
+    allow_short: bool = False,
 ) -> list[Order]:
     """Orders that move ``portfolio`` towards ``target_weights`` (fractions
-    of total value). Sells first, then buys, each in ticker order."""
+    of total value). Sells first, then buys, each in ticker order.
+    ``allow_short`` accepts negative targets (see the module doc)."""
     if not 0.0 <= buffer_fraction <= 0.5:
         raise ValueError(f"buffer_fraction must be in [0, 0.5], got {buffer_fraction}")
     if min_trade_weight < 0:
         raise ValueError(f"min_trade_weight must be >= 0, got {min_trade_weight}")
+    if allow_short:
+        return _long_short_orders(
+            target_weights,
+            portfolio,
+            prices,
+            buffer_fraction,
+            min_trade_weight,
+            as_of=as_of,
+            strategy_id=strategy_id,
+        )
     shorts = {t: w for t, w in target_weights.items() if not (w >= 0 and math.isfinite(w))}
     if shorts:
         raise ValueError(f"targets must be finite and >= 0 (no short positions): {shorts}")
@@ -111,3 +136,86 @@ def orders_from_targets(
     sells = [order(t, "sell", -q) for t, q in trades.items() if q < 0]
     buys = [order(t, "buy", q * scale) for t, q in trades.items() if q > 0 and q * scale > 0]
     return sells + buys
+
+
+def _long_short_orders(
+    target_weights: Mapping[str, float],
+    portfolio: Portfolio,
+    prices: Mapping[str, float],
+    buffer_fraction: float,
+    min_trade_weight: float,
+    *,
+    as_of: date,
+    strategy_id: str,
+) -> list[Order]:
+    """The ``allow_short`` route of :func:`orders_from_targets`."""
+    bad = {t: w for t, w in target_weights.items() if not math.isfinite(w)}
+    if bad:
+        raise ValueError(f"targets must be finite: {bad}")
+    equity = portfolio.total_value(prices)
+    if not equity > 0:
+        return []
+
+    trades: dict[str, float] = {}  # ticker -> signed quantity
+    unpriced: list[str] = []
+    for ticker in sorted({*portfolio.positions, *target_weights}):
+        price = _price(prices, ticker)
+        if price is None:
+            unpriced.append(ticker)
+            continue
+        held = portfolio.positions.get(ticker, 0.0)
+        target = float(target_weights.get(ticker, 0.0))
+        if target == 0.0:
+            if held != 0.0:
+                trades[ticker] = -held  # full exit, exact quantity
+            continue
+        current = held * price / equity
+        flip = held != 0.0 and (held > 0) != (target > 0)
+        band = buffer_fraction * abs(target)
+        if not flip and abs(current - target) <= band:
+            continue
+        edge = target - band if current < target else target + band
+        delta = edge - current
+        if not flip and abs(delta) < min_trade_weight:
+            continue
+        trades[ticker] = delta * equity / price
+    if unpriced:
+        _log.warning("portfolio.orders.unpriced.skipped", tickers=unpriced)
+
+    legs: list[Order] = []
+    for ticker, qty in trades.items():
+        side: OrderSide = "buy" if qty > 0 else "sell"
+        order = Order(
+            client_id=make_client_id(
+                as_of=as_of, strategy_id=strategy_id, ticker=ticker, side=side
+            ),
+            ticker=ticker,
+            side=side,
+            quantity=abs(qty),
+            strategy_id=strategy_id,
+        )
+        legs.extend(classify(order, portfolio.positions.get(ticker, 0.0)))
+
+    proceeds = sum(o.quantity * prices[o.ticker] for o in legs if o.side == "sell")
+    covers = sum(
+        o.quantity * prices[o.ticker]
+        for o in legs
+        if o.side == "buy" and o.position_effect == "close"
+    )
+    spend = sum(
+        o.quantity * prices[o.ticker]
+        for o in legs
+        if o.side == "buy" and o.position_effect == "open"
+    )
+    budget = max(portfolio.cash + proceeds - covers, 0.0)
+    scale = 1.0 if spend <= budget else budget / spend
+    if scale < 1.0:
+        _log.info("portfolio.orders.buys_scaled", scale=scale, spend=spend, budget=budget)
+    out: list[Order] = []
+    for o in legs:
+        if o.side == "buy" and o.position_effect == "open" and scale < 1.0:
+            if o.quantity * scale <= 0:
+                continue
+            o = replace(o, quantity=o.quantity * scale)
+        out.append(o)
+    return [o for o in out if o.side == "sell"] + [o for o in out if o.side == "buy"]

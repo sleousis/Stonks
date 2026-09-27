@@ -5,7 +5,7 @@ import { TicksService } from '../api/ticks.service';
 import { type PaletteCommand, CommandRegistry } from '../core/commands/command-registry';
 import { type KeySequence, ShortcutsService } from '../core/commands/shortcuts.service';
 import { ConfirmService } from '../core/confirm/confirm.service';
-import { WIKI_GLOSSARY_URL } from '../core/help/glossary';
+import { GLOSSARY_PATH } from '../core/help/glossary';
 import { JobsService } from '../core/jobs/jobs.service';
 import { ToastService } from '../core/notify/toast.service';
 import { ThemeService } from '../core/theme/theme.service';
@@ -23,7 +23,7 @@ export const NEW_BACKTEST = 'action.new-backtest';
 /** Action shortcuts: `n` then a key. Page shortcuts come from NAV_ITEMS (`g` then a key). */
 const ACTION_SEQUENCES: readonly KeySequence[] = [
   { prefix: 'n', key: 'b', label: 'New backtest', commandId: NEW_BACKTEST },
-  { prefix: 'n', key: 't', label: 'Run a dry-run tick', commandId: DRY_RUN_TICK },
+  { prefix: 'n', key: 't', label: 'Try a dry run', commandId: DRY_RUN_TICK },
 ];
 
 /**
@@ -63,7 +63,7 @@ export function registerShellCommands(): void {
 
   async function dryRunTick(): Promise<void> {
     const ok = await confirm.confirm({
-      title: 'Run a dry-run tick?',
+      title: 'Try a dry run?',
       message:
         'Strategies decide and orders are sized, but nothing is sent to the broker and no fills are recorded.',
       confirmLabel: 'Run dry run',
@@ -71,10 +71,11 @@ export function registerShellCommands(): void {
     if (!ok) return;
     try {
       const job = await ticks.start({ dry_run: true, as_of: null, tickers: null });
-      toasts.info('Follow it on the Ticks page.', 'Dry run started');
+      toasts.info('Follow it on the Trading runs page.', 'Dry run started');
       const last = await jobs.track(job.id, destroyRef).finished;
+      ticks.announceFinished();
       if (last?.status === 'succeeded')
-        toasts.success('See the sized orders on the Ticks page.', 'Dry run finished');
+        toasts.success('See the sized orders on the Trading runs page.', 'Dry run finished');
       else if (last?.status === 'failed')
         toasts.error(last.error ?? 'The dry run failed.', 'Dry run failed');
     } catch {
@@ -85,7 +86,7 @@ export function registerShellCommands(): void {
   const actions: PaletteCommand[] = [
     {
       id: DRY_RUN_TICK,
-      label: 'Run a dry-run tick',
+      label: 'Try a dry run',
       group: 'Actions',
       keywords: ['tick', 'dry run', 'simulate', 'orders'],
       hint: 'n t',
@@ -119,9 +120,7 @@ export function registerShellCommands(): void {
       label: 'Open the glossary',
       group: 'Actions',
       keywords: ['help', 'metrics', 'definitions', 'sharpe'],
-      run: () => {
-        globalThis.open?.(WIKI_GLOSSARY_URL, '_blank', 'noopener');
-      },
+      run: () => void router.navigateByUrl(GLOSSARY_PATH),
     },
   ];
 

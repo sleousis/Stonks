@@ -15,6 +15,7 @@ import random
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from typing import ClassVar
 
 from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.lab.dataset import LabDataset
@@ -25,6 +26,13 @@ _log = get_logger("stonks.lab.survival.drift")
 
 class DriftTest:
     id = "drift"
+
+    #: Plain words for each option, shown by the console's options editor.
+    option_help: ClassVar[dict[str, str]] = {
+        "max_psi": "Largest shift in feature values between tuning and held-out data (PSI) that passes.",
+        "sample_dates": "How many dates to sample in each window.",
+        "bins": "How many buckets to sort feature values into.",
+    }
 
     def __init__(
         self,
@@ -66,12 +74,16 @@ class DriftTest:
             )
 
         psis: dict[str, float] = {}
-        for name in set(train_features) & set(val_features):
+        n_values = n_nan = 0
+        for name in sorted(set(train_features) & set(val_features)):
             t_vals = train_features[name]
             v_vals = val_features[name]
-            if len(t_vals) < 2 or len(v_vals) < 2:
+            n_values += len(t_vals) + len(v_vals)
+            n_nan += len(t_vals) + len(v_vals) - len(_finite(t_vals)) - len(_finite(v_vals))
+            if len(_finite(t_vals)) < 2 or len(_finite(v_vals)) < 2:
                 continue
             psis[name] = _psi(t_vals, v_vals, bins=self._bins)
+        error_metrics["nan_share"] = n_nan / n_values if n_values else 0.0
 
         if not psis:
             return SurvivalReport(
@@ -147,7 +159,16 @@ def _collect_features(
     return out
 
 
+def _finite(values: Sequence[float]) -> list[float]:
+    return [v for v in values if math.isfinite(v)]
+
+
 def _psi(expected: Sequence[float], actual: Sequence[float], bins: int) -> float:
+    """PSI over the finite values only (RS-11): a NaN or inf never picks a
+    bin edge or lands in a bin. The NaN share is reported separately."""
+    expected, actual = _finite(expected), _finite(actual)
+    if not expected or not actual:
+        return 0.0
     lo = min(min(expected), min(actual))
     hi = max(max(expected), max(actual))
     if not math.isfinite(lo) or not math.isfinite(hi) or hi <= lo:

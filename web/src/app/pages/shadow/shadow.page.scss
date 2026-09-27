@@ -49,6 +49,14 @@
   font-size: var(--text-sm);
   color: var(--color-ink-3);
   max-width: 72ch;
+
+  &.warn {
+    margin-top: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    border-left: 3px solid var(--color-warn);
+    background: var(--color-warn-soft);
+    color: var(--color-ink);
+  }
 }
 
 .count {
@@ -101,7 +109,7 @@
 }
 
 .mono {
-  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
 }
 

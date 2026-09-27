@@ -85,6 +85,10 @@ class Trade:
     sigma_daily: float | None = None
     #: Per-ticker half-spread estimate in bps (lagged); ``None`` = unknown.
     half_spread_bps: float | None = None
+    #: Bars per year of the backtest interval on this asset class's calendar
+    #: (``backtest.calendar``), to annualise ``sigma_daily``; ``None`` falls
+    #: back to ``IStarSettings.periods_per_year``.
+    periods_per_year: float | None = None
 
 
 @dataclass(frozen=True)
@@ -142,7 +146,8 @@ class IStarSettings(BaseModel):
     b1: float = Field(0.98, ge=0.0, le=1.0)
     #: Assumed participation rate of the execution (percent of volume).
     pov: float = Field(0.10, gt=0.0, le=1.0)
-    #: Bars per year, to annualise ``sigma_daily`` (252 for daily bars).
+    #: Bars per year, to annualise ``sigma_daily`` when the trade does not
+    #: carry its own (RS-19: the broker fills it per interval and class).
     periods_per_year: float = Field(252.0, gt=0.0)
 
 
@@ -253,7 +258,8 @@ class AssetClassCostModel:
         if s.impact_model == "sqrt_vol":
             return min(s.impact_gamma * sigma * _BPS * math.sqrt(size), s.max_impact_bps), 0.0
         p = s.istar
-        sigma_annual = sigma * math.sqrt(p.periods_per_year)
+        periods = trade.periods_per_year or p.periods_per_year
+        sigma_annual = sigma * math.sqrt(periods)
         i_star = p.a1 * size**p.a2 * sigma_annual**p.a3
         temporary = p.b1 * i_star * p.pov**p.a4
         permanent = (1.0 - p.b1) * i_star

@@ -70,7 +70,7 @@ StrategyStatus = Literal["active", "shadow", "retired"]
 JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 AssetClass = Literal["equity", "crypto", "commodity", "bond"]
 TunerName = Literal["grid", "random"]
-ObjectiveName = Literal["sharpe", "cagr", "final_return"]
+ObjectiveName = Literal["sharpe", "cagr", "final_return", "cv_sharpe", "cv_cagr", "cv_final_return"]
 SurvivalTestName = Literal[
     "oos", "period_stability", "perturbation", "drift", "runs_test", "permutation", "walk_forward"
 ]
@@ -233,6 +233,9 @@ class ToolContext:
 
     async def patch(self, path: str, body: dict[str, Any], *, hints: Hints | None = None) -> Any:
         return await self.call(self.api.patch(path, body), hints)
+
+    async def delete(self, path: str, *, hints: Hints | None = None) -> Any:
+        return await self.call(self.api.delete(path), hints)
 
 
 async def queue_lab_run(

@@ -1,9 +1,10 @@
 import { Injectable } from '@angular/core';
 
 import { SILENT_HEADERS } from '../core/http/interceptors';
-import { unwrap } from './api-call';
+import { allItems, unwrap } from './api-call';
 import {
   createPushSubscription,
+  deletePushDevice,
   deletePushSubscription,
   getNotificationPreferences,
   getVapidKey,
@@ -43,7 +44,12 @@ export class NotificationsService {
   }
 
   pushDevices() {
-    return unwrap(listPushSubscriptions());
+    return allItems((query) => unwrap(listPushSubscriptions({ query })));
+  }
+
+  /** Remove another registered device by the id the device list shows. Silent. */
+  async removePushDevice(id: string): Promise<void> {
+    await unwrap(deletePushDevice({ path: { device_id: id }, headers: SILENT_HEADERS }));
   }
 
   preferences() {
@@ -63,8 +69,9 @@ export class NotificationsService {
     return unwrap(setNotificationWebhook({ body: { url } }));
   }
 
-  feed(query?: ListNotificationsData['query']) {
-    return unwrap(listNotifications({ query }));
+  /** `silent` skips error toasts (the bell's background refresh). */
+  feed(query?: ListNotificationsData['query'], silent = false) {
+    return unwrap(listNotifications({ query, headers: silent ? SILENT_HEADERS : undefined }));
   }
 
   /** Mark these ids read, or every notification when `ids` is omitted. */

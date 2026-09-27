@@ -13,9 +13,15 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 .coverage
+coverage.json
+mutation-summary.json
 htmlcov/
 .vs/
 *.egg-info/
 dist/
 build/
 .claude/worktrees/
+
+# End-to-end test output (traces, axe report, server log)
+test-results/
+.e2e-stack/

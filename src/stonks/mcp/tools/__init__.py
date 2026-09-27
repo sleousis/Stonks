@@ -3,10 +3,34 @@
 
 from __future__ import annotations
 
-from stonks.mcp.tools import connections, guarded, halts, jobs, reads, studio, universes
+from stonks.mcp.tools import (
+    connections,
+    guarded,
+    halts,
+    insights,
+    jobs,
+    reads,
+    risk,
+    studio,
+    subscriptions,
+    tca,
+    universes,
+)
 from stonks.mcp.tools.common import ToolContext
 
-MODULES = (reads, jobs, guarded, studio, connections, halts, universes)
+MODULES = (
+    reads,
+    jobs,
+    guarded,
+    studio,
+    connections,
+    halts,
+    universes,
+    tca,
+    subscriptions,
+    insights,
+    risk,
+)
 
 
 def register_all(t: ToolContext) -> None:

@@ -7,15 +7,19 @@ import {
   signal,
 } from '@angular/core';
 
+import { RouterLink } from '@angular/router';
+
 import { HealthService } from '../../api/health.service';
 import { IngestService } from '../../api/ingest.service';
 import type { IngestRunView, TickRun } from '../../api/models';
 import { TicksService } from '../../api/ticks.service';
 import { formatAgo, formatDateTime } from '../../core/format/format';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
+import { AlertsPanel } from '../../shared/ui/alerts-panel';
 import { PageHeader } from '../../shared/ui/page-header';
 import { StatTile, type StatTone } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
+import { humanize } from '../../shared/ui/param-form/param-spec';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { parseTickers } from '../data/ingest-request';
 import {
@@ -32,10 +36,21 @@ import {
 
 const RECENT_FAILURES = 10;
 
+const SOURCE_NAMES: Record<string, string> = {
+  eodhd: 'EODHD',
+  yahoo: 'Yahoo Finance',
+  defillama: 'DefiLlama',
+};
+
+function sourceName(id: string | null | undefined): string {
+  return id ? (SOURCE_NAMES[id] ?? humanize(id)) : '';
+}
+
 @Component({
   selector: 'app-health-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    RouterLink,
     PageHeader,
     StatTile,
     StatusPill,
@@ -44,6 +59,7 @@ const RECENT_FAILURES = 10;
     LoadingState,
     EmptyState,
     ErrorState,
+    AlertsPanel,
   ],
   templateUrl: './health.page.html',
   styleUrl: './health.page.scss',
@@ -109,9 +125,9 @@ export class HealthPage {
   protected readonly advice = computed(() => {
     switch (this.level()) {
       case 'good':
-        return 'Data is fresh and no ticks or ingest runs are stuck or failing.';
+        return 'Data is fresh and no trading runs or data updates are stuck or failing.';
       case 'warning':
-        return 'Something needs a look soon: stale data or a recent ingest failure. Details below.';
+        return 'Something needs a look soon: stale data or a recent data update failure. Details below.';
       default:
         return 'Act now: data is missing or far out of date, a run is stuck, or a check could not run.';
     }
@@ -167,10 +183,9 @@ export class HealthPage {
   protected readonly freshnessKey = (r: FreshnessRow) => r.ticker;
 
   protected readonly ingestColumns: TableColumn<IngestRunView>[] = [
-    { key: 'id', label: 'Run', mobile: 'title', value: (r) => `#${r.id}` },
-    { key: 'started_at', label: 'Started', format: 'datetime' },
-    { key: 'source', label: 'Source', mobile: 'hide' },
-    { key: 'kind', label: 'Kind' },
+    { key: 'started_at', label: 'Started', format: 'datetime', mobile: 'title' },
+    { key: 'source', label: 'Source', value: (r) => sourceName(r.source), mobile: 'hide' },
+    { key: 'kind', label: 'Update', value: (r) => humanize(r.kind) },
     {
       key: 'tickers',
       label: 'Tickers ok / failed',
@@ -192,7 +207,6 @@ export class HealthPage {
       sortable: false,
       value: (t) => t.summary?.error ?? t.summary?.reason ?? null,
     },
-    { key: 'id', label: 'Tick', mobile: 'hide' },
   ];
   protected readonly tickKey = (t: TickRun) => t.id;
 

@@ -100,6 +100,12 @@ class QuantMomentum(BaseStrategy):
     # it twice), and Barroso vol scaling (126 bars) is not implemented.
     required_history_bars = 253
 
+    def param_metadata(self) -> dict[str, int]:
+        p = self.params
+        return {
+            "required_history_bars": int(p["formation_bars"]) + 1,
+        }
+
     def __init__(self, params: Any) -> None:
         super().__init__(params)
         if int(self.params["skip_bars"]) >= int(self.params["formation_bars"]):

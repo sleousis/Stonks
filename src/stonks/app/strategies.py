@@ -10,10 +10,12 @@ audit row. Views carry each strategy's metadata card (BL-26) and history.
 
 from __future__ import annotations
 
+import math
 from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from stonks.accounts.default_book import default_mode, ensure_default_subscription
 from stonks.app.catalog import CatalogService, class_path_of
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
@@ -36,14 +38,34 @@ _STATUSES = ("active", "shadow", "retired")
 _log = get_logger("stonks.app.strategies")
 
 
+class FailingCheck(BaseModel):
+    """One go-live check that failed (``GoLiveCheck`` without ``passed``)."""
+
+    name: str
+    detail: str = ""
+    value: float | None = None
+    limit: float | None = None
+
+
 class PromotionRefusedError(ConflictError):
     """A promotion the go-live gate refused (HTTP 409). ``failures`` lists
     the failing go-live checks as ``"name: detail"`` lines, so transports
-    can show them one per line."""
+    can show them one per line; ``checks`` holds them structured, and the
+    API returns them as the problem's ``failing_checks``."""
 
-    def __init__(self, message: str, failures: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        failures: list[str] | None = None,
+        checks: list[FailingCheck] | None = None,
+    ) -> None:
         super().__init__(message)
         self.failures = list(failures or [])
+        self.checks = list(checks or [])
+
+    def problem_extensions(self) -> dict[str, Any]:
+        """Extra problem-details members (``api.errors`` adds them)."""
+        return {"failing_checks": [c.model_dump() for c in self.checks]}
 
 
 class StrategyRef(BaseModel):
@@ -300,7 +322,9 @@ def change_status(
     A move to ``active`` evaluates the go-live gate (``[golive]`` policy)
     and passes the report to the registry, which refuses the promotion
     unless it passed or ``override`` comes with a long enough reason; the
-    report is stored with the audit row either way. Demotions need a
+    report is stored with the audit row either way. A promotion also
+    subscribes ``pf_default`` to the strategy when it has no subscription
+    (``accounts.default_book``), in the same transaction. Demotions need a
     reason. Maps registry errors onto service errors: unknown id ->
     ``NotFoundError``, refused promotion -> ``ConflictError``, a broken
     rule (missing actor / reason) -> ``ValidationError``.
@@ -315,18 +339,26 @@ def change_status(
                 if status == "active"
                 else None
             )
-            change = registry.set_status(
-                strategy_id,
-                status,
-                actor=actor,
-                reason=reason,
-                golive_report=report,
-                override=override,
-            )
+            with state.transaction():
+                change = registry.set_status(
+                    strategy_id,
+                    status,
+                    actor=actor,
+                    reason=reason,
+                    golive_report=report,
+                    override=override,
+                )
+                if change is not None and status == "active":
+                    # the default book keeps trading every active strategy
+                    ensure_default_subscription(
+                        state, strategy_id, default_mode(ctx.settings.brokers.kind)
+                    )
         except KeyError:
             raise NotFoundError(f"no strategy with id {strategy_id!r}") from None
         except PromotionRefused as exc:
-            raise PromotionRefusedError(str(exc), _failed_checks(report)) from None
+            raise PromotionRefusedError(
+                str(exc), _failed_checks(report), _failing_checks(report)
+            ) from None
         except GovernanceError as exc:
             raise ValidationError(str(exc)) from None
         if change is not None and status == "active":
@@ -352,6 +384,27 @@ def _failed_checks(report: Any) -> list[str]:
         for c in getattr(report, "checks", None) or []
         if not c.passed
     ]
+
+
+def _failing_checks(report: Any) -> list[FailingCheck]:
+    return [
+        FailingCheck(
+            name=c.name,
+            detail=c.detail or "",
+            value=_finite_or_none(c.value),
+            limit=_finite_or_none(c.limit),
+        )
+        for c in getattr(report, "checks", None) or []
+        if not c.passed
+    ]
+
+
+def _finite_or_none(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
 
 
 def _promotion_warnings(meta: StrategyMetadata | StrategyMetadataView) -> list[str]:

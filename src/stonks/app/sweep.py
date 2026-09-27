@@ -25,16 +25,23 @@ import json
 import math
 from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, field
+from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, Self
 
-from stonks.app.lab import LabRunRequest, execute_lab_run
+from pydantic import BaseModel, Field, model_validator
+
+from stonks.app.lab import LabRunOptions, LabRunRequest, execute_lab_run
 from stonks.app.strategies import StrategyRef
-from stonks.lab.catalog import is_wrapper, resolve_strategy, strategy_catalog
+from stonks.lab.catalog import is_wrapper, load_strategy_class, resolve_strategy, strategy_catalog
+from stonks.lab.dataset import data_tickers
 from stonks.lab.parallel import LakeSnapshot, ParallelSettings, planned_workers, run_tasks
 from stonks.logging import get_logger
+from stonks.production.universe import window_tickers
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
+from stonks.strategies.base import strategy_data_tickers
+from stonks.universes.base import UNIVERSE_ID_PATTERN
 
 _log = get_logger("stonks.app.sweep")
 
@@ -117,7 +124,7 @@ def _run_task(worker: _WorkerState, task: SweepTask) -> SweepRow:
         update={"strategy": StrategyRef(class_path=task.class_path), "universe": universe}
     )
     try:
-        cls = resolve_strategy(task.class_path)
+        cls = load_strategy_class(task.class_path)
         pinned = {"ticker": task.ticker} if task.ticker is not None else None
         result = execute_lab_run(
             payload.settings,
@@ -157,6 +164,25 @@ def _run_task(worker: _WorkerState, task: SweepTask) -> SweepRow:
     )
 
 
+def snapshot_tickers(
+    request: LabRunRequest, tasks: Sequence[SweepTask], *, default_benchmark: str = "auto"
+) -> list[str]:
+    """Every ticker a sweep reads (RS-01), through the lab's shared
+    :func:`~stonks.lab.dataset.data_tickers`: the basket, each strategy's
+    ``data_tickers()`` (reference tickers it reads but never trades, from
+    default params) and the benchmark ticker (``request.benchmark``, else
+    ``default_benchmark``)."""
+    extra: list[str] = []
+    for task in tasks:
+        try:
+            strategy = resolve_strategy(task.class_path)({})
+        except Exception:  # an unbuildable strategy fails in its own task
+            continue
+        extra.extend(strategy_data_tickers(strategy))
+    context = request.model_copy(update={"benchmark": request.benchmark or default_benchmark})
+    return data_tickers(context, extra)
+
+
 def run_sweep(
     settings: Any,
     tasks: Sequence[SweepTask],
@@ -174,7 +200,11 @@ def run_sweep(
     with SqliteState(settings.state.path) as state:
         state.migrate()
     parallel = parallel or settings.lab.parallel
-    with LakeSnapshot.build(lake, list(request.universe), end=request.end) as snapshot:
+    with LakeSnapshot.build(
+        lake,
+        snapshot_tickers(request, tasks, default_benchmark=settings.lab.benchmark),
+        end=request.end,
+    ) as snapshot:
         payload = _Payload(settings, request, snapshot.path)
         if planned_workers(len(tasks), settings=parallel) > 1:
             return run_tasks(
@@ -241,3 +271,88 @@ def _finite(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return value if math.isfinite(value) else None
+
+
+# ---- API: request and result views -----------------------------------------------------
+
+
+class SweepRequest(LabRunOptions):
+    """A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every
+    member during the window). ``strategies`` default to every catalogued
+    non-wrapper strategy. The lab options apply to every run; sweeps never
+    register strategies."""
+
+    universe: list[str] = Field(default_factory=list)
+    universe_id: str | None = Field(default=None, pattern=UNIVERSE_ID_PATTERN)
+    start: date
+    end: date
+    interval: str = "1d"
+    #: Strategy ids, class names or ``module:Class`` (default: all).
+    strategies: list[str] | None = Field(default=None, max_length=200)
+    exclude: list[str] = Field(default_factory=list, max_length=200)
+
+    @model_validator(mode="after")
+    def _valid(self) -> Self:
+        if self.start >= self.end:
+            raise ValueError("start must be before end")
+        if not self.universe and not self.universe_id:
+            raise ValueError("give universe (tickers) or universe_id")
+        if self.registers:
+            raise ValueError("a sweep never registers strategies")
+        plan_sweep(["X"], self.strategies, self.exclude)  # unknown names fail here
+        return self
+
+
+class SweepRowView(BaseModel):
+    strategy: str
+    #: ``None`` for a basket-wide run.
+    ticker: str | None
+    verdict: Literal["pass", "fail", "error"]
+    best_score: float | None = None
+    best_params: dict[str, Any] = Field(default_factory=dict)
+    n_trials: int = 0
+    run_id: str = ""
+    #: ``test_id -> {"passed": bool, "metrics": {...}}``.
+    survival: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    error: str | None = None
+
+
+class SweepResultView(BaseModel):
+    universe: list[str]
+    universe_id: str | None = None
+    rows: list[SweepRowView]
+    passed: int
+    failed: int
+    errors: int
+
+
+def execute_sweep(
+    settings: Any,
+    request: SweepRequest,
+    *,
+    lake: DuckDBLake,
+    parallel: ParallelSettings | None = None,
+) -> SweepResultView:
+    """Plan and run ``request`` on ``lake`` (the API's sweep job)."""
+    basket = list(request.universe) or window_tickers(
+        lake, request.universe_id or [], request.start, request.end
+    )
+    tasks = plan_sweep(basket, request.strategies, request.exclude)
+    if not tasks:
+        raise ValueError("no strategies left to sweep")
+    options = request.model_dump(exclude={"strategies", "exclude", "universe", "universe_id"})
+    lab_request = LabRunRequest(
+        **options,
+        strategy=StrategyRef(class_path=tasks[0].class_path),
+        universe=basket,
+        universe_id=request.universe_id,
+    )
+    rows = run_sweep(settings, tasks, lab_request, lake=lake, parallel=parallel)
+    return SweepResultView(
+        universe=basket,
+        universe_id=request.universe_id,
+        rows=[SweepRowView(**asdict(r)) for r in rows],
+        passed=sum(r.verdict == "pass" for r in rows),
+        failed=sum(r.verdict == "fail" for r in rows),
+        errors=sum(r.verdict == "error" for r in rows),
+    )

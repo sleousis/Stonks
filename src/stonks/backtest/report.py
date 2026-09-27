@@ -69,6 +69,9 @@ class BacktestReport:
     # ---- return-series metrics (``stonks.backtest.metrics``) ----
     #: Bars per year the annualized figures use.
     periods_per_year: float = _TRADING_DAYS_PER_YEAR
+    #: Trading days (sessions) per year of the curve's calendar: 252 for
+    #: exchange sessions, 365 for crypto. Turns annual into daily turnover.
+    sessions_per_year: float = _TRADING_DAYS_PER_YEAR
     n_bars: int = 0
     sortino: float = 0.0
     calmar: float = 0.0
@@ -87,7 +90,7 @@ class BacktestReport:
     # ---- trade ledger (``stonks.backtest.trades.with_trades``) ----
     #: Round trips; empty until a caller attaches the ledger.
     trades: tuple[RoundTrip, ...] = ()
-    trade_stats: TradeStats = TradeStats()
+    trade_stats: TradeStats = TradeStats()  # noqa: RUF009 - frozen, safe to share
     #: Tulchinsky fitness; needs turnover, so ``None`` until trades attach.
     fitness: float | None = None
 
@@ -109,9 +112,11 @@ def compute_report(
     periods_per_year: float = _TRADING_DAYS_PER_YEAR,
     corporate_actions: Iterable[CorporateActionRecord] = (),
     risk_free_rate: float = 0.0,
+    sessions_per_year: float = _TRADING_DAYS_PER_YEAR,
 ) -> BacktestReport:
     """Report of an equity curve; ``risk_free_rate`` is annual and only
-    affects Sharpe and Sortino."""
+    affects Sharpe and Sortino. ``sessions_per_year`` is the calendar's
+    trading days a year (``BacktestReport.sessions_per_year``)."""
     dates = list(equity_dates)
     curve = list(equity_curve)
     events = tuple(corporate_actions)
@@ -126,6 +131,7 @@ def compute_report(
             cagr=0.0,
             corporate_actions=events,
             periods_per_year=periods_per_year,
+            sessions_per_year=sessions_per_year,
         )
 
     start = curve[0]
@@ -145,6 +151,7 @@ def compute_report(
         bar_profit_factor=metrics.profit_factor(returns),
         corporate_actions=events,
         periods_per_year=periods_per_year,
+        sessions_per_year=sessions_per_year,
         n_bars=len(curve),
         sortino=metrics.sortino(returns, periods_per_year, risk_free_rate),
         calmar=metrics.calmar(cagr, max_dd),

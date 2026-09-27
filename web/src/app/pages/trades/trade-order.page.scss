@@ -1,0 +1,238 @@
+@use 'breakpoints' as bp;
+
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--control-h);
+  margin-bottom: var(--space-2);
+  font-size: var(--text-sm);
+
+  @include bp.phone {
+    min-height: var(--touch-min);
+  }
+
+  @include bp.coarse {
+    min-height: var(--touch-min);
+  }
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.small {
+  font-size: var(--text-sm);
+}
+
+h3 {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  margin-bottom: var(--space-1);
+}
+
+dl {
+  margin: 0;
+}
+
+dt {
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+}
+
+dd {
+  margin: 0;
+}
+
+/* The order ticket: a paper slip with a perforated edge between sections. */
+.ticket {
+  max-width: 48rem;
+  padding: var(--space-4);
+  border-top: 3px solid var(--color-ink);
+
+  > section {
+    margin-top: var(--space-4);
+    padding-top: var(--space-4);
+    border-top: 1px dashed var(--color-border-strong);
+  }
+}
+
+.ticket-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.ticket-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--text-xl);
+  overflow-wrap: anywhere;
+
+  .muted {
+    font-size: var(--text-md);
+    font-weight: var(--weight-regular);
+  }
+}
+
+.ticket-id {
+  margin-top: var(--space-1);
+  color: var(--color-ink-3);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.reason {
+  margin-top: var(--space-2);
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+}
+
+.prices {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: var(--space-4);
+
+  @include bp.from-tablet {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  dd {
+    margin-top: 2px;
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+  }
+}
+
+.cost-lines {
+  margin-top: var(--space-3);
+
+  > div {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  > div.total {
+    border-bottom: 1px solid var(--color-border-strong);
+
+    dt,
+    dd {
+      color: var(--color-ink);
+      font-weight: var(--weight-semibold);
+    }
+  }
+
+  dt {
+    min-width: 0;
+  }
+
+  dd {
+    display: grid;
+    justify-items: end;
+    text-align: right;
+  }
+}
+
+.hint {
+  display: block;
+  color: var(--color-ink-3);
+  font-size: var(--text-xs);
+}
+
+.money {
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+}
+
+.compare,
+.facts {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr);
+  margin-top: var(--space-3);
+
+  @include bp.from-tablet {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  dd {
+    margin-top: 2px;
+    overflow-wrap: anywhere;
+  }
+}
+
+.notes {
+  max-width: 48rem;
+  margin-top: var(--space-4);
+}
+
+.note-list {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+
+.note {
+  display: grid;
+  gap: var(--space-2);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.note-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: var(--color-ink-3);
+  font-size: var(--text-xs);
+}
+
+.note-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.note-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.note .btn-ghost {
+  justify-self: start;
+}
+
+.add-note {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+
+  .field {
+    width: 100%;
+  }
+}
+
+textarea.input {
+  height: auto;
+  min-height: 5rem;
+  padding-block: var(--space-2);
+  resize: vertical;
+}

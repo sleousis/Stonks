@@ -1,7 +1,8 @@
 """Wald-Wolfowitz runs-test survival check.
 
-Runs a backtest of the strategy over ``context.full_window`` and computes
-the runs-test Z-score of a ±1 outcome sequence:
+Runs a backtest of the strategy over the validation window (``window="val"``,
+the default, embargoed for the strategy; ``window="full"`` scores the whole
+dataset) and computes the runs-test Z-score of a ±1 outcome sequence:
 
 - **bar level (default)** — the sign of each bar's change in equity
   (skipping zeros);
@@ -24,11 +25,16 @@ positive Z means the sequence over-alternates (too many runs), large
 negative Z means wins/losses cluster (too few runs). Strategies whose
 outcomes show strong dependence are flagged, since dependence often
 signals regime lock-in that the backtest window happened to capture.
+
+No evidence is never a pass (RS-23): fewer than two non-zero outcomes, an
+equity curve shorter than three bars, or a sequence of one sign only (the
+Z-score is undefined) fail with "insufficient data".
 """
 
 from __future__ import annotations
 
 import math
+from typing import ClassVar
 
 import numpy as np
 
@@ -49,6 +55,13 @@ def round_trip_trades(report: BacktestReport) -> list[RoundTrip]:
 
 class RunsTestSurvivalTest:
     id = "runs_test"
+
+    #: Plain words for each option, shown by the console's options editor.
+    option_help: ClassVar[dict[str, str]] = {
+        "max_abs_z_score": "Largest runs test z-score, up or down, that passes. Big values mean wins and losses cluster.",
+        "trade_level": "Test the order of wins and losses per trade instead of per bar.",
+        "window": "Which data to test on: val is the held-out window, full is all of it.",
+    }
 
     def __init__(
         self,
@@ -73,7 +86,8 @@ class RunsTestSurvivalTest:
         curve = np.asarray(report.equity_curve, dtype=float)
         if curve.size < 3:
             return self._skip(
-                f"bar_level; window={self._window}; insufficient equity-curve length for a runs test",
+                f"bar_level; window={self._window}; insufficient data: "
+                "equity curve too short for a runs test",
                 "bar",
             )
         diffs = np.diff(curve)
@@ -83,7 +97,9 @@ class RunsTestSurvivalTest:
         """Runs test on the signs of the non-zero ``outcomes``."""
         tag = ("trade_level" if level == "trade" else "bar_level") + f"; window={self._window}"
         if outcomes.size < 2:
-            return self._skip(f"{tag}; insufficient variance in per-{level} returns", level)
+            return self._skip(
+                f"{tag}; insufficient data: fewer than 2 non-zero per-{level} returns", level
+            )
 
         signs = np.sign(outcomes).astype(int)
         z = runs_test_z_score(signs)
@@ -99,9 +115,9 @@ class RunsTestSurvivalTest:
         if math.isnan(z):
             return SurvivalReport(
                 test_id=self.id,
-                passed=True,
+                passed=False,
                 metrics=metrics,
-                notes=f"{tag}; degenerate sign sequence (all positive or all negative)",
+                notes=f"{tag}; insufficient data: every outcome has the same sign",
             )
         return SurvivalReport(
             test_id=self.id, passed=abs(z) <= self._max_abs_z, metrics=metrics, notes=tag
@@ -111,7 +127,7 @@ class RunsTestSurvivalTest:
         extra = {"n_trades": 0.0} if level == "trade" else {}
         return SurvivalReport(
             test_id=self.id,
-            passed=True,
+            passed=False,
             metrics={
                 "z_score": 0.0,
                 "n_positive": 0.0,

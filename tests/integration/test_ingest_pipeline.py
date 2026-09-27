@@ -18,7 +18,6 @@ from stonks.ingest.schemas import (
     RawPriceBar,
 )
 from stonks.ingest.sources.base import DataSource, DataSourceError
-from stonks.store.lake import DuckDBLake
 
 
 class FakeDataSource(DataSource):
@@ -96,14 +95,6 @@ def _cashflow(ticker: str, **values: float) -> CashFlowStatementRow:
         frequency="Q",
         **values,
     )
-
-
-@pytest.fixture
-def lake(tmp_path):
-    lake = DuckDBLake(tmp_path / "lake.duckdb")
-    lake.migrate()
-    yield lake
-    lake.close()
 
 
 def test_run_prices_happy_path(lake):

@@ -67,6 +67,7 @@ from stonks.config import GoLivePolicy
 from stonks.core.protocols import SurvivalReport
 from stonks.production.ledger import ledger_filter
 from stonks.production.pnl import PnlRow, daily_pnl, load_pnl
+from stonks.production.tca import cost_comparison
 from stonks.registry.store import StrategyRegistry
 from stonks.stats.sharpe import min_trl
 from stonks.store.state import SqliteState
@@ -212,6 +213,10 @@ class GoLiveReport:
     checks: list[GoLiveCheck]
     #: Promotion context for the reviewer (see :func:`promotion_checklist`).
     checklist: dict[str, Any] = field(default_factory=dict)
+    #: Live shortfall against the modelled cost of the strategy's real
+    #: orders (``production.tca.cost_comparison``); empty without a real
+    #: paper period.
+    costs: dict[str, Any] = field(default_factory=dict)
 
     @property
     def passed(self) -> bool:
@@ -273,6 +278,11 @@ def evaluate_golive(
         source=period.source,
         checks=gate_checks(period, policy),
         checklist=promotion_checklist(period),
+        costs=(
+            cost_comparison(state, strategy_id, DEFAULT_PORTFOLIO_ID, since=since)
+            if period.source == "portfolio"
+            else {}
+        ),
     )
 
 

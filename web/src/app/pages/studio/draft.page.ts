@@ -2,6 +2,8 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -14,11 +16,13 @@ import { RouterLink } from '@angular/router';
 
 import type { Draft, DraftValidation } from '../../api/models';
 import { StudioService } from '../../api/studio.service';
+import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ApiError } from '../../core/http/api-error';
 import { ToastService } from '../../core/notify/toast.service';
 import { AgoPipe } from '../../shared/format.pipes';
 import { PageHeader } from '../../shared/ui/page-header';
+import { PermissionNote } from '../../shared/ui/permission-note';
 import { ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { DraftShip } from './draft-ship';
@@ -61,6 +65,7 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
   imports: [
     RouterLink,
     PageHeader,
+    PermissionNote,
     StatusPill,
     LoadingState,
     ErrorState,
@@ -79,6 +84,11 @@ export class DraftPage {
   private readonly confirm = inject(ConfirmService);
   private readonly toasts = inject(ToastService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+  private readonly session = inject(SessionService);
+
+  /** Saving, renaming, checking and testing need `lab.run`. */
+  protected readonly canLab = computed(() => this.session.can('lab.run'));
 
   readonly id = input.required<string>();
 
@@ -151,7 +161,7 @@ export class DraftPage {
   // ---- validation --------------------------------------------------------------
   /** Validates the working spec against the API as you type (debounced, silent). */
   protected readonly validation = resource({
-    params: () => (this.isCode() ? undefined : (this.spec() ?? undefined)),
+    params: () => (this.isCode() || !this.canLab() ? undefined : (this.spec() ?? undefined)),
     loader: async ({ params, abortSignal }) => {
       await sleep(VALIDATE_DEBOUNCE_MS, abortSignal);
       return this.studio.validateSpec({ spec: params as Record<string, unknown> }, true);
@@ -248,6 +258,7 @@ export class DraftPage {
     const d = this.draft();
     if (!d) return false;
     if (!this.dirty()) return true;
+    if (!this.canLab()) return false;
     if (d.kind === 'code' && this.paramsError()) {
       this.toasts.error(this.paramsError() ?? '', 'Cannot save');
       return false;
@@ -293,7 +304,7 @@ export class DraftPage {
   /** Save, then smoke-run the strategy on sample data (or the given tickers). */
   async check(): Promise<void> {
     const d = this.draft();
-    if (!d || this.checking()) return;
+    if (!d || this.checking() || !this.canLab()) return;
     this.checking.set(true);
     try {
       if (!(await this.save())) return;
@@ -307,8 +318,22 @@ export class DraftPage {
 
   // ---- rename ----------------------------------------------------------------
   protected startRename(): void {
+    if (!this.canLab()) return;
     this.nameDraft.set(this.draft()?.name ?? '');
     this.renaming.set(true);
+    this.focusAfterRender('#draft-rename');
+  }
+
+  /** Close the rename form and give focus back to the Rename button. */
+  protected closeRename(): void {
+    this.renaming.set(false);
+    this.focusAfterRender('#draft-rename-button');
+  }
+
+  private focusAfterRender(selector: string): void {
+    afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>(selector)?.focus(), {
+      injector: this.injector,
+    });
   }
 
   async rename(): Promise<void> {
@@ -316,13 +341,13 @@ export class DraftPage {
     const name = this.nameDraft().trim();
     if (!d || !name) return;
     if (name === d.name) {
-      this.renaming.set(false);
+      this.closeRename();
       return;
     }
     try {
       const next = await this.studio.update(d.id, { name });
       this.draft.set(next);
-      this.renaming.set(false);
+      this.closeRename();
       this.toasts.success(`Renamed to ${next.name}.`);
     } catch {
       // The error interceptor already showed the API's message.

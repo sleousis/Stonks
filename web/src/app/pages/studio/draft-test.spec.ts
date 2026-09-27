@@ -1,14 +1,16 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideRouter } from '@angular/router';
 import { signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 
 import type { BacktestResult, CostModelPreset, Job, LabRunView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
+import { SessionService } from '../../core/auth/session.service';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { FakeChartEngine, provideFakeChart } from '../../../testing/fake-chart';
 import { nextRequest, tick } from '../../../testing/http';
 import { makeDraft } from '../../../testing/studio-fixtures';
-import { DraftTest, costsFor, drawdowns, parseTickers } from './draft-test';
+import { DraftTest, costsFor, parseTickers } from './draft-test';
 
 const PRESETS: CostModelPreset[] = [
   { name: 'zero', description: 'No costs.', settings: {} },
@@ -87,12 +89,6 @@ describe('draft test helpers', () => {
     expect(costsFor(undefined, 'equity')).toEqual({ slippage_bps: 0, fee_per_trade: 0 });
   });
 
-  it('computes running drawdowns', () => {
-    const dd = drawdowns(RESULT.equity);
-    expect(dd.slice(0, 2)).toEqual([0, 0]);
-    expect(dd[2]).toBeCloseTo(-0.1);
-  });
-
   it('parses tickers typed with commas or spaces', () => {
     expect(parseTickers(' aapl.us, msft.us  AAPL.US;nvda.us')).toEqual([
       'AAPL.US',
@@ -101,6 +97,8 @@ describe('draft test helpers', () => {
     ]);
   });
 });
+
+const labAllowed = signal(true);
 
 describe('DraftTest', () => {
   let fixture: ComponentFixture<DraftTest>;
@@ -118,10 +116,16 @@ describe('DraftTest', () => {
         ...provideApi(),
         provideHttpClientTesting(),
         provideFakeChart(chart),
+        provideRouter([]),
         { provide: JobsService, useValue: { track } },
       ],
     });
     controller = TestBed.inject(HttpTestingController);
+    const session = TestBed.inject(SessionService);
+    vi.spyOn(session, 'can').mockImplementation(() => labAllowed());
+    vi.spyOn(session, 'whyNot').mockImplementation(() =>
+      labAllowed() ? null : 'Traders and admins only.',
+    );
     fixture = TestBed.createComponent(DraftTest);
     fixture.componentRef.setInput('draft', makeDraft());
     fixture.componentRef.setInput('specTickers', ['AAPL.US']);
@@ -137,7 +141,10 @@ describe('DraftTest', () => {
     await settle();
   });
 
-  afterEach(() => controller.verify());
+  afterEach(() => {
+    labAllowed.set(true);
+    controller.verify();
+  });
 
   async function settle(): Promise<void> {
     for (let i = 0; i < 4; i++) {
@@ -185,6 +192,7 @@ describe('DraftTest', () => {
     await settle();
 
     expect(track).toHaveBeenCalledWith('job_bt', expect.anything());
+    expect(el.querySelector('app-backtest-result')).not.toBeNull();
     const text = el.textContent ?? '';
     expect(text).toContain('-1.00%');
     expect(text).toContain('0.35');
@@ -218,12 +226,22 @@ describe('DraftTest', () => {
     await settle();
 
     const text = el.textContent ?? '';
-    expect(text).toContain('Did not survive');
-    const pills = [...el.querySelectorAll('.reports app-status-pill')].map((p) =>
+    expect(el.querySelector('app-lab-run-result')).not.toBeNull();
+    expect(text).toContain('Failed');
+    const pills = [...el.querySelectorAll('app-lab-run-result .test app-status-pill')].map((p) =>
       p.textContent?.trim(),
     );
     expect(pills).toEqual(['pass', 'fail']);
     expect(text).toContain('Out of sample');
     expect(text).toContain('Unstable');
+  });
+
+  it('disables backtests and lab runs with a reason without lab.run (UI-06)', () => {
+    labAllowed.set(false);
+    fixture.detectChanges();
+    expect(buttonNamed('Run backtest').disabled).toBe(true);
+    expect(buttonNamed('Run lab').disabled).toBe(true);
+    expect(el.querySelectorAll('app-permission-note p')).toHaveLength(2);
+    expect(el.textContent).toContain('Traders and admins only.');
   });
 });

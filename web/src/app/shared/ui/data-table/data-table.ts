@@ -41,6 +41,8 @@ export interface TableColumn<T> {
   sortable?: boolean;
   /** Colour numbers by sign (gain/loss). */
   tone?: boolean;
+  /** Money columns: the row's currency (ISO 4217); USD when missing. */
+  currency?: (row: T) => string | null | undefined;
   /**
    * Phone card layout: `title` is the card heading (use it for the key
    * column, e.g. ticker or id), `hide` drops the column on phones, and the
@@ -104,8 +106,10 @@ const NUMERIC: readonly CellFormat[] = [
  * Sortable, paginated table that turns into stacked cards on phones.
  *
  * Client mode (default): pass all rows; sorting and paging happen here.
- * Server mode: pass `total` (the API page's `total`) and handle `pageChange`
- * by refetching with `{ offset, limit }`; sorting then applies within the page.
+ * Server mode: pass `total` (the API page's `total`) and `offset`, and handle
+ * `pageChange` by refetching with `{ offset, limit }`. Rows stay in the API's
+ * order and the headers are not sort buttons: sorting one page of 50 rows
+ * would claim an order the other pages do not follow.
  */
 @Component({
   selector: 'app-data-table',
@@ -125,7 +129,18 @@ export class DataTable<T extends object> {
   readonly initialSort = input<SortState | null>(null);
   /** Server mode: total rows across all pages. */
   readonly total = input<number | null>(null);
+  /**
+   * Server mode: the offset of the rows shown (the API page's `offset`). The
+   * pager reads its page from it, so a table re-created after a load still
+   * shows the right range.
+   */
+  readonly offset = input<number | null>(null);
   readonly emptyMessage = input('No rows to show.');
+  /**
+   * The next page is loading while these rows stay on screen: dims them and
+   * shows a thin progress bar (see `keepLatest()`).
+   */
+  readonly busy = input(false);
   readonly pageChange = output<PageRequest>();
 
   protected readonly cells = contentChildren(TableCell);
@@ -136,23 +151,30 @@ export class DataTable<T extends object> {
   });
 
   protected readonly sort = linkedSignal<SortState | null>(() => this.initialSort());
-  protected readonly page = linkedSignal<readonly T[], number>({
-    source: () => this.rows(),
-    // New rows in client mode start from page one; server mode keeps the page.
-    computation: (_rows, prev) => (this.total() !== null && prev ? prev.value : 0),
+  protected readonly page = linkedSignal<{ rows: readonly T[]; offset: number | null }, number>({
+    source: () => ({ rows: this.rows(), offset: this.offset() }),
+    // Client mode: new rows start from page one. Server mode: the page comes
+    // from the offset when given, else it stays where it was.
+    computation: ({ offset }, prev) => {
+      if (this.total() === null) return 0;
+      const size = this.pageSize();
+      if (offset !== null && size > 0) return Math.floor(offset / size);
+      return prev ? prev.value : 0;
+    },
   });
   protected readonly liveMessage = signal('');
 
   protected readonly sortedRows = computed(() => {
     const rows = this.rows();
     const sort = this.sort();
-    if (!sort) return rows;
+    if (!sort || this.serverMode()) return rows;
     const col = this.columns().find((c) => c.key === sort.key);
     if (!col) return rows;
     const factor = sort.dir === 'asc' ? 1 : -1;
     return [...rows].sort((a, b) => factor * compare(this.raw(a, col), this.raw(b, col)));
   });
 
+  protected readonly serverMode = computed(() => this.total() !== null);
   protected readonly totalRows = computed(() => this.total() ?? this.rows().length);
   protected readonly pageCount = computed(() => {
     const size = this.pageSize();
@@ -181,6 +203,11 @@ export class DataTable<T extends object> {
     return !!col.format && NUMERIC.includes(col.format);
   }
 
+  /** Numbers, dates and times are set in the mono figure face. */
+  protected isFigure(col: TableColumn<T>): boolean {
+    return this.isNumeric(col) || col.format === 'date' || col.format === 'datetime';
+  }
+
   protected alignEnd(col: TableColumn<T>): boolean {
     return (col.align ?? (this.isNumeric(col) ? 'end' : 'start')) === 'end';
   }
@@ -190,10 +217,11 @@ export class DataTable<T extends object> {
   }
 
   protected sortable(col: TableColumn<T>): boolean {
-    return col.sortable !== false;
+    return !this.serverMode() && col.sortable !== false;
   }
 
   protected ariaSort(col: TableColumn<T>): 'ascending' | 'descending' | null {
+    if (this.serverMode()) return null;
     const sort = this.sort();
     if (!sort || sort.key !== col.key) return null;
     return sort.dir === 'asc' ? 'ascending' : 'descending';
@@ -222,9 +250,9 @@ export class DataTable<T extends object> {
     if (value === null || value === undefined || value === '') return '–';
     switch (col.format) {
       case 'money':
-        return formatMoney(value as number);
+        return formatMoney(value as number, { currency: col.currency?.(row) });
       case 'signedMoney':
-        return formatMoney(value as number, { signed: true });
+        return formatMoney(value as number, { signed: true, currency: col.currency?.(row) });
       case 'percent':
         return formatPercent(value as number);
       case 'signedPercent':

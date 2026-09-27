@@ -1,0 +1,295 @@
+<app-page-header
+  title="Universes"
+  description="The tickers a strategy may trade, kept point in time so backtests see the names of each date."
+>
+  @if (canEdit()) {
+    <button
+      actions
+      type="button"
+      class="btn btn-primary"
+      [attr.aria-expanded]="creating()"
+      aria-controls="create-panel"
+      (click)="creating.set(!creating())"
+    >
+      {{ creating() ? 'Close form' : 'New universe' }}
+    </button>
+  } @else {
+    <ng-container actions>
+      <button type="button" class="btn btn-primary" disabled>New universe</button>
+      <app-permission-note permission="lab.run" />
+    </ng-container>
+  }
+</app-page-header>
+
+<div class="page-grid">
+  @if (creating() && canEdit()) {
+    <!-- Create -------------------------------------------------------------->
+    <section id="create-panel" class="panel span-12" aria-labelledby="create-title">
+      <div class="panel-head">
+        <h2 id="create-title">New universe</h2>
+      </div>
+      <form class="panel-body" novalidate (submit)="$event.preventDefault(); create()">
+        @let f = form();
+        <div class="form-grid form-grid-2">
+          <div class="field">
+            <label for="u-id">Id</label>
+            <input
+              id="u-id"
+              class="input"
+              placeholder="e.g. us-large-caps"
+              spellcheck="false"
+              autocapitalize="off"
+              [attr.aria-invalid]="submitted() && !!errors().id"
+              [value]="f.id"
+              (input)="patch({ id: $any($event.target).value })"
+            />
+            @if (submitted() && errors().id; as e) {
+              <p class="error">{{ e }}</p>
+            }
+          </div>
+          <div class="field">
+            <label for="u-name">Name (optional)</label>
+            <input
+              id="u-name"
+              class="input"
+              [value]="f.name"
+              (input)="patch({ name: $any($event.target).value })"
+            />
+          </div>
+          <div class="field">
+            <label for="u-kind">Kind</label>
+            <select
+              id="u-kind"
+              class="input"
+              aria-describedby="u-kind-hint"
+              [value]="f.kind"
+              (change)="setKind($any($event.target).value)"
+            >
+              @for (k of kinds; track k) {
+                <option [value]="k" [selected]="k === f.kind">{{ kindLabel[k] }}</option>
+              }
+            </select>
+            <p id="u-kind-hint" class="hint">{{ kindHint[f.kind] }}</p>
+          </div>
+          <div class="field">
+            <label for="u-description">Description (optional)</label>
+            <input
+              id="u-description"
+              class="input"
+              [value]="f.description"
+              (input)="patch({ description: $any($event.target).value })"
+            />
+          </div>
+
+          @if (f.kind === 'list') {
+            <fieldset class="span-all source">
+              <legend>Members from</legend>
+              <label class="check">
+                <input
+                  type="radio"
+                  name="u-source"
+                  [checked]="f.source === 'spec'"
+                  (change)="setSource('spec')"
+                />
+                A spec
+              </label>
+              <label class="check">
+                <input
+                  type="radio"
+                  name="u-source"
+                  [checked]="f.source === 'csv'"
+                  (change)="setSource('csv')"
+                />
+                A CSV file
+              </label>
+            </fieldset>
+          }
+
+          @if (f.source === 'csv') {
+            <div class="field span-all">
+              <label for="u-csv">CSV file</label>
+              <input
+                #csvInput
+                id="u-csv"
+                class="input file"
+                type="file"
+                accept=".csv,text/csv,text/plain"
+                aria-describedby="u-csv-hint"
+                [attr.aria-invalid]="submitted() && !!errors().csv"
+                (change)="pickCsv(csvInput)"
+              />
+              <p id="u-csv-hint" class="hint">
+                A ticker column, and optional start_date and end_date columns for dated spans.
+                @if (csvName(); as n) {
+                  Chosen: {{ n }}.
+                }
+              </p>
+              @if (submitted() && errors().csv; as e) {
+                <p class="error">{{ e }}</p>
+              }
+            </div>
+          } @else {
+            <div class="field span-all">
+              <label for="u-spec">Spec (JSON)</label>
+              <textarea
+                id="u-spec"
+                class="input code"
+                rows="8"
+                spellcheck="false"
+                aria-describedby="u-spec-hint"
+                [attr.aria-invalid]="submitted() && !!errors().spec"
+                [value]="f.specText"
+                (input)="patch({ specText: $any($event.target).value })"
+              ></textarea>
+              <p id="u-spec-hint" class="hint">
+                Starts from an example for the kind. Change the values to suit.
+              </p>
+              @if (submitted() && errors().spec; as e) {
+                <p class="error">{{ e }}</p>
+              }
+            </div>
+          }
+        </div>
+        <div class="form-actions">
+          <button
+            type="submit"
+            class="btn btn-primary"
+            [disabled]="saving()"
+            [attr.aria-busy]="saving()"
+          >
+            {{ saving() ? 'Creating…' : 'Create universe' }}
+          </button>
+        </div>
+      </form>
+    </section>
+  }
+
+  <!-- List ------------------------------------------------------------------>
+  <section class="panel span-12" aria-labelledby="list-title">
+    <div class="panel-head">
+      <h2 id="list-title">Stored universes</h2>
+      @if (universes.hasValue()) {
+        <span class="muted">{{ universes.value().length }} stored</span>
+      }
+    </div>
+    @if (universes.error(); as err) {
+      <app-error-state
+        title="Could not load universes"
+        [error]="err"
+        (retry)="universes.reload()"
+      />
+    } @else if (!universes.hasValue()) {
+      <app-loading-state label="Loading universes" [rows]="4" />
+    } @else if (universes.value().length === 0) {
+      <app-empty-state
+        title="No universes yet"
+        message="Create one with New universe. Lab runs and the daily trading run can then use it."
+      />
+    } @else {
+      @let rows = universes.value();
+      <app-data-table
+        caption="Stored universes"
+        [rows]="rows"
+        [columns]="columns"
+        [rowKey]="universeKey"
+        [initialSort]="{ key: 'name', dir: 'asc' }"
+      >
+        <ng-template appCell="name" [appCellOf]="rows" let-u>
+          <a class="cell-link" [routerLink]="['/universes', u.id]">{{ u.name || u.id }}</a>
+        </ng-template>
+        <ng-template appCell="refreshed_at" [appCellOf]="rows" let-u>
+          @if (!u.refreshed_at) {
+            <span class="muted">Never</span>
+          } @else {
+            <span class="num">{{ u.refreshed_at | dateTime }}</span>
+          }
+        </ng-template>
+      </app-data-table>
+    }
+  </section>
+
+  <!-- Index history --------------------------------------------------------->
+  <section class="panel span-12" aria-labelledby="index-title">
+    <div class="panel-head">
+      <h2 id="index-title">Index history</h2>
+      <span class="muted">For index universes</span>
+    </div>
+    <form class="panel-body" novalidate (submit)="$event.preventDefault(); importHistory()">
+      <p class="muted intro">
+        A member snapshot plus dated additions and removals. CSV columns: date, ticker, action
+        (member, add or remove).
+      </p>
+      <div class="form-grid form-grid-2">
+        <div class="field">
+          <label for="ix-id">Index id</label>
+          <input
+            id="ix-id"
+            class="input"
+            placeholder="e.g. sp500"
+            spellcheck="false"
+            autocapitalize="off"
+            [attr.aria-invalid]="indexSubmitted() && !!indexErrors().id"
+            [value]="indexId()"
+            (input)="indexId.set($any($event.target).value)"
+          />
+          @if (indexSubmitted() && indexErrors().id; as e) {
+            <p class="error">{{ e }}</p>
+          }
+        </div>
+        <div class="field">
+          <label for="ix-format">Format</label>
+          <select
+            id="ix-format"
+            class="input"
+            [value]="indexFormat()"
+            (change)="indexFormat.set($any($event.target).value)"
+          >
+            <option value="csv">CSV</option>
+            <option value="json">JSON</option>
+          </select>
+        </div>
+        <div class="field span-all">
+          <label for="ix-file">File</label>
+          <input
+            #indexInput
+            id="ix-file"
+            class="input file"
+            type="file"
+            accept=".csv,.json,text/csv,application/json,text/plain"
+            (change)="pickIndexFile(indexInput)"
+          />
+          @if (indexFile(); as n) {
+            <p class="hint">Chosen: {{ n }}.</p>
+          }
+        </div>
+        <div class="field span-all">
+          <label for="ix-content">Or paste the history</label>
+          <textarea
+            id="ix-content"
+            class="input code"
+            rows="5"
+            spellcheck="false"
+            placeholder="date,ticker,action"
+            [attr.aria-invalid]="indexSubmitted() && !!indexErrors().content"
+            [value]="indexContent()"
+            (input)="indexContent.set($any($event.target).value)"
+          ></textarea>
+          @if (indexSubmitted() && indexErrors().content; as e) {
+            <p class="error">{{ e }}</p>
+          }
+        </div>
+      </div>
+      <div class="form-actions">
+        <button
+          type="submit"
+          class="btn"
+          [disabled]="importing() || !canEdit()"
+          [attr.aria-busy]="importing()"
+        >
+          {{ importing() ? 'Importing…' : 'Import history' }}
+        </button>
+        <app-permission-note permission="lab.run" />
+      </div>
+    </form>
+  </section>
+</div>

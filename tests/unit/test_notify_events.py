@@ -169,8 +169,8 @@ class _Session:
         self.exc = exc
         self.calls: list[dict] = []
 
-    def post(self, url, json=None, timeout=None, headers=None):
-        self.calls.append({"url": url, "json": json})
+    def post(self, url, json=None, timeout=None, headers=None, allow_redirects=True):
+        self.calls.append({"url": url, "json": json, "allow_redirects": allow_redirects})
         if self.exc:
             raise self.exc
         return _Resp(self.status)
@@ -179,9 +179,19 @@ class _Session:
 URL = "https://hooks.example/T0/SECRET"
 
 
+def _resolve_to(address: str):
+    def resolve(host, port, *args, **kwargs):
+        return [(2, 1, 6, "", (address, port))]
+
+    return resolve
+
+
+PUBLIC = _resolve_to("93.184.216.34")
+
+
 def test_webhook_channel_posts_minimal_body():
     session = _Session()
-    result = WebhookChannel(session=session).send(_message(), URL)
+    result = WebhookChannel(session=session, resolver=PUBLIC).send(_message(), URL)
     assert result.outcome == "sent"
     [call] = session.calls
     assert call["url"] == URL
@@ -193,14 +203,28 @@ def test_webhook_channel_posts_minimal_body():
     ("status", "outcome"), [(500, "retry"), (429, "retry"), (404, "dead"), (400, "dead")]
 )
 def test_webhook_channel_classifies_http_errors_and_redacts(status, outcome):
-    result = WebhookChannel(session=_Session(status)).send(_message(), URL)
+    result = WebhookChannel(session=_Session(status), resolver=PUBLIC).send(_message(), URL)
     assert result.outcome == outcome
     assert "SECRET" not in (result.error or "")
 
 
+def test_as05_webhook_channel_refuses_a_name_that_resolves_inside():
+    session = _Session()
+    result = WebhookChannel(session=session, resolver=_resolve_to("10.0.0.5")).send(_message(), URL)
+    assert result.outcome == "dead" and session.calls == []
+    assert "SECRET" not in (result.error or "")
+
+
+def test_as05_webhook_channel_never_follows_a_redirect():
+    session = _Session(302)
+    result = WebhookChannel(session=session, resolver=PUBLIC).send(_message(), URL)
+    assert result.outcome == "dead"
+    assert session.calls[0]["allow_redirects"] is False
+
+
 def test_webhook_channel_network_error_retries_redacted():
     exc = requests.ConnectionError(f"Max retries exceeded with url: {URL}")
-    result = WebhookChannel(session=_Session(exc=exc)).send(_message(), URL)
+    result = WebhookChannel(session=_Session(exc=exc), resolver=PUBLIC).send(_message(), URL)
     assert result.outcome == "retry"
     assert "SECRET" not in (result.error or "")
 

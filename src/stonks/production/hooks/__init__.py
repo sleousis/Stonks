@@ -139,6 +139,9 @@ class GateContext:
     #: The book's risk policy (``RiskPolicy`` with ``rules``); gates that
     #: evaluate a rule (the circuit breaker) skip it when ``None``.
     policy: Any = None
+    #: The broker portfolio whose paper account this book is: halts on it
+    #: (the portfolio kill switch) stop the paper account too.
+    parent_portfolio_id: str | None = None
 
 
 @dataclass(frozen=True)

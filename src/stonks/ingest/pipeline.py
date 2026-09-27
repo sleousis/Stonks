@@ -10,7 +10,7 @@ succeeded, ``"error"`` when all failed, and always ``"ok"`` for an empty batch
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from functools import partial
@@ -25,6 +25,7 @@ from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.quality import (
     BarQualityChecker,
     RunQuality,
+    SeriesWarning,
     history_before,
     quarantine_bars,
     record_run_quality,
@@ -38,6 +39,7 @@ from stonks.ingest.schemas import (
     MacroIndicatorRow,
     RawPriceBar,
 )
+from stonks.ingest.sessions import SessionCloses, default_sessions, drop_open_sessions
 from stonks.ingest.sources.base import DataSource, DataSourceError
 from stonks.logging import get_logger
 from stonks.notify.base import Notification, Notifier
@@ -53,6 +55,8 @@ _SOFT_FAIL_EXCEPTIONS = (
     json.JSONDecodeError,
     pydantic.ValidationError,
 )
+
+DateRanges = Mapping[str, Sequence[tuple[date, date]]]
 
 
 @dataclass(frozen=True)
@@ -81,9 +85,13 @@ class IngestPipeline:
       :class:`BarQualityChecker` when omitted; disable it through its
       config) and write rejected rows to ``quarantined_bars`` instead of
       the bar store;
+    - drop daily bars whose session has not closed at ``clock()`` (a
+      vendor's "today" bar during the session is not final; the next
+      ingest after the close stores it);
     - retry a ticker whose primary fetch soft-fails on ``fallback`` (when
       given), recording the supplier in the run's quality summary; the
-      ``ingest_runs`` row keeps the primary's id as its ``source``;
+      ``ingest_runs`` row keeps the primary's id as its ``source``. With
+      ``ranges`` the fallback is asked only for that ticker's ranges;
     - store the run's quality summary on ``ingest_runs.quality_json`` and
       send one warning through ``notifier`` when it breaches the
       checker's alert thresholds.
@@ -97,12 +105,16 @@ class IngestPipeline:
         quality: BarQualityChecker | None = None,
         fallback: DataSource | None = None,
         notifier: Notifier | None = None,
+        clock: Callable[[], datetime] | None = None,
+        sessions: SessionCloses | None = None,
     ):
         self._source = source
         self._lake = lake
         self._quality = quality if quality is not None else BarQualityChecker()
         self._fallback = fallback
         self._notifier = notifier
+        self._clock = clock or (lambda: datetime.now(UTC))
+        self._sessions = sessions if sessions is not None else default_sessions()
         self._log = get_logger("stonks.ingest.pipeline").bind(source=source.source_id)
 
     def run_prices(
@@ -110,12 +122,22 @@ class IngestPipeline:
         tickers: Sequence[str],
         since: date | None = None,
         until: date | None = None,
+        *,
+        ranges: DateRanges | None = None,
     ) -> IngestRunResult:
+        """Daily bars of ``tickers`` over ``[since, until]``. ``ranges``
+        (ticker to date ranges) narrows what a fallback source is asked
+        for when the primary fails."""
+
+        def fetch(src: DataSource, t: str, s: date | None, u: date | None) -> Iterable[Any]:
+            return src.fetch_prices(t, since=s, until=u)
+
         return self._run_bars(
             kind="prices",
             tickers=tickers,
             interval=Interval.DAY_1,
-            fetch=lambda src, t: src.fetch_prices(t, since=since, until=until),
+            fetch=lambda src, t: fetch(src, t, since, until),
+            fallback_fetch=_ranged(fetch, ranges, since, until),
             to_df=_prices_to_df,
             upsert=self._lake.upsert_prices,
             as_of=until,
@@ -127,12 +149,18 @@ class IngestPipeline:
         interval: Interval,
         since: date | None = None,
         until: date | None = None,
+        *,
+        ranges: DateRanges | None = None,
     ) -> IngestRunResult:
+        def fetch(src: DataSource, t: str, s: date | None, u: date | None) -> Iterable[Any]:
+            return src.fetch_intraday_bars(t, interval, s, u)
+
         return self._run_bars(
             kind=f"intraday:{interval.code}",
             tickers=tickers,
             interval=interval,
-            fetch=lambda src, t: src.fetch_intraday_bars(t, interval, since, until),
+            fetch=lambda src, t: fetch(src, t, since, until),
+            fallback_fetch=_ranged(fetch, ranges, since, until),
             to_df=_intraday_to_df,
             upsert=lambda df: self._lake.upsert_bars(df, interval=interval),
             as_of=until,
@@ -292,6 +320,7 @@ class IngestPipeline:
         to_df: Callable[[Iterable[Any]], pd.DataFrame],
         upsert: Callable[[pd.DataFrame], Any],
         as_of: date | None,
+        fallback_fetch: Callable[[DataSource, str], Iterable[Any]] | None = None,
     ) -> IngestRunResult:
         """Bar flavour of :meth:`_run_units`: fetch (with fallback) →
         DataFrame → validate → upsert the clean rows, quarantine the rest."""
@@ -300,10 +329,21 @@ class IngestPipeline:
         stale_ref = as_of or datetime.now(UTC).date()
 
         def ingest(ticker: str) -> dict[str, Any]:
-            rows, supplier = self._fetch_with_fallback(fetch, ticker)
+            rows, supplier = self._fetch_with_fallback(fetch, ticker, fallback_fetch)
             if supplier != self._source.source_id:
                 quality.supplied_by[ticker] = supplier
+            if not rows:
+                quality.warnings.append(
+                    SeriesWarning(ticker, "no_data", 0, "the source returned no bars")
+                )
             frame = to_df(rows)
+            if not frame.empty:
+                # a source may answer with its own symbol; the series is the
+                # ticker that was asked for
+                frame["ticker"] = ticker
+            if interval == Interval.DAY_1:
+                cls = self._lake.get_asset_classes([ticker]).get(ticker)
+                frame = drop_open_sessions(frame, self._sessions, ticker, self._clock(), cls)
             clean, quarantined = self._validate(
                 frame, ticker, interval, stale_ref, run["id"], supplier, quality
             )
@@ -326,7 +366,10 @@ class IngestPipeline:
         return replace(result, quality=summary)
 
     def _fetch_with_fallback(
-        self, fetch: Callable[[DataSource, str], Iterable[Any]], ticker: str
+        self,
+        fetch: Callable[[DataSource, str], Iterable[Any]],
+        ticker: str,
+        fallback_fetch: Callable[[DataSource, str], Iterable[Any]] | None = None,
     ) -> tuple[list[Any], str]:
         """Rows for ``ticker`` and the id of the source that supplied them.
         A soft-fail on the primary is retried once on the fallback; if both
@@ -342,7 +385,7 @@ class IngestPipeline:
             "ticker.fallback", ticker=ticker, fallback=fallback_id, error=primary_error
         )
         try:
-            return list(fetch(self._fallback, ticker)), fallback_id
+            return list((fallback_fetch or fetch)(self._fallback, ticker)), fallback_id
         except _SOFT_FAIL_EXCEPTIONS as exc:
             raise DataSourceError(
                 f"{self._source.source_id}: {primary_error}; "
@@ -386,7 +429,64 @@ class IngestPipeline:
         if rejected.any():
             bad = timed[rejected].assign(reasons=batch.reasons[rejected])
             quarantine_bars(self._lake, bad, run_id=run_id, interval=interval, source=supplier)
+        spiked = rejected & batch.reasons.str.contains("price_spike").to_numpy(dtype=bool)
+        self._drop_stored_spikes(
+            ticker,
+            interval,
+            history,
+            [ts for t, ts in batch.stored_spikes if t == ticker],
+            timed[spiked],
+            run_id,
+            supplier,
+            quality,
+        )
         return frame[~rejected], int(rejected.sum())
+
+    def _drop_stored_spikes(
+        self,
+        ticker: str,
+        interval: Interval,
+        history: pd.DataFrame,
+        stored: list[pd.Timestamp],
+        batch_spikes: pd.DataFrame,
+        run_id: int,
+        supplier: str,
+        quality: RunQuality,
+    ) -> None:
+        """Remove spikes that already sit in the bar store: stored bars the
+        batch showed to be spikes (moved to quarantine here), and stored
+        copies of batch rows rejected as spikes (already quarantined) when
+        the stored close is the same bad value."""
+        if stored and not history.empty:
+            hist = history.assign(timestamp=pd.to_datetime(history["timestamp"]))
+            rows = hist[hist["timestamp"].isin(stored)].assign(reasons="price_spike")
+            if not rows.empty:
+                quarantine_bars(self._lake, rows, run_id=run_id, interval=interval, source=supplier)
+                self._lake.delete_bars(ticker, interval, list(rows["timestamp"]))
+                quality.bars_quarantined += len(rows)
+                quality.reasons.update(["price_spike"] * len(rows))
+                self._log.warning(
+                    "bars.stored_spike_removed",
+                    ticker=ticker,
+                    timestamps=[str(t) for t in rows["timestamp"]],
+                )
+        if batch_spikes.empty:
+            return
+        stamps = pd.to_datetime(batch_spikes["timestamp"])
+        on_disk = self._lake.get_bars(
+            ticker, interval, stamps.min().to_pydatetime(), stamps.max().to_pydatetime()
+        )
+        if on_disk.empty:
+            return
+        bad_close = dict(zip(stamps, batch_spikes["close"].astype(float), strict=True))
+        on_disk = on_disk.assign(timestamp=pd.to_datetime(on_disk["timestamp"]))
+        same = [
+            ts
+            for ts, close in zip(on_disk["timestamp"], on_disk["close"], strict=True)
+            if ts in bad_close and abs(float(close) - bad_close[ts]) <= 1e-9 * abs(bad_close[ts])
+        ]
+        if same:
+            self._lake.delete_bars(ticker, interval, same)
 
     def _alert(self, result: IngestRunResult, summary: dict[str, Any], breaches: list[str]) -> None:
         if not breaches or self._notifier is None:
@@ -474,6 +574,22 @@ class IngestPipeline:
             tickers_ok=ok,
             tickers_failed=failed,
         )
+
+
+def _ranged(
+    fetch: Callable[[DataSource, str, date | None, date | None], Iterable[Any]],
+    ranges: DateRanges | None,
+    since: date | None,
+    until: date | None,
+) -> Callable[[DataSource, str], Iterable[Any]]:
+    """A per-ticker fetch over that ticker's own ``ranges`` (the whole
+    ``[since, until]`` when it has none)."""
+
+    def run(src: DataSource, ticker: str) -> list[Any]:
+        spans = (ranges or {}).get(ticker) or [(since, until)]
+        return [row for s, u in spans for row in fetch(src, ticker, s, u)]
+
+    return run
 
 
 def _status(ok: int, failed: int) -> str:

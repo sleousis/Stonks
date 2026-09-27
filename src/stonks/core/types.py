@@ -7,6 +7,7 @@ a Fill, and a Portfolio are.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -15,6 +16,11 @@ from typing import Any, Literal
 OrderSide = Literal["buy", "sell"]
 OrderType = Literal["market", "limit", "stop", "stop_limit"]
 OrderStatus = Literal["pending", "filled", "partially_filled", "rejected", "cancelled"]
+#: Whether an order opens (or grows) a position or closes (shrinks) one.
+#: ``sell`` + ``open`` is a short sale, ``buy`` + ``close`` a cover
+#: (``docs/design/shorting.md``).
+PositionEffect = Literal["open", "close"]
+_POSITION_EFFECTS = ("open", "close")
 
 # Top-level asset class. Closed set; future additions (forex, fund, index)
 # are non-breaking. Lives in core so every block (ingest, lake, strategies,
@@ -32,10 +38,29 @@ class Order:
     limit_price: float | None = None
     strategy_id: str | None = None
     tick_id: str | None = None
+    #: The portfolio the order trades for (``None``: the caller's only book).
+    portfolio_id: str | None = None
+    # ---- decision context (BL-32, TCA) ----
+    #: The price the strategy decided at (the latest close it saw).
+    decision_price: float | None = None
+    #: When it decided.
+    decided_at: datetime | None = None
+    #: Why: trigger, signal score and rank, constructor, target weight.
+    #: JSON-safe values only. Not part of equality or hashing.
+    decision_context: Mapping[str, Any] | None = field(default=None, compare=False)
+    #: The cost model's estimate at ``decision_price``, in bps of notional.
+    expected_cost_bps: float | None = None
+    #: ``open`` or ``close``; ``None`` (legacy) means infer it from the
+    #: position when filling. See ``execution.orders.classify``.
+    position_effect: PositionEffect | None = None
 
     def __post_init__(self) -> None:
         if self.quantity <= 0:
             raise ValueError(f"Order.quantity must be positive, got {self.quantity}")
+        if self.position_effect is not None and self.position_effect not in _POSITION_EFFECTS:
+            raise ValueError(
+                f"Order.position_effect must be open or close, got {self.position_effect!r}"
+            )
         if self.order_type in ("limit", "stop_limit") and self.limit_price is None:
             raise ValueError(f"Order.limit_price is required for order_type={self.order_type!r}")
 
@@ -70,9 +95,58 @@ class Portfolio:
         cash_delta = -fill.signed_quantity * fill.price - fill.fee
         self.cash += cash_delta
 
-    def total_value(self, prices: Mapping[str, float]) -> float:
+    def long_value(self, prices: Mapping[str, float]) -> float:
+        """Market value of the long positions (unpriced ones count as 0)."""
+        return sum(q * _mark(prices, t) for t, q in self.positions.items() if q > 0)
+
+    def short_value(self, prices: Mapping[str, float]) -> float:
+        """Market value of the short positions, as a positive magnitude."""
+        return sum(-q * _mark(prices, t) for t, q in self.positions.items() if q < 0)
+
+    def gross(self, prices: Mapping[str, float]) -> float:
+        """Long value plus short value."""
+        return self.long_value(prices) + self.short_value(prices)
+
+    def net(self, prices: Mapping[str, float]) -> float:
+        """Long value minus short value."""
+        return self.long_value(prices) - self.short_value(prices)
+
+    def unmarked(self, prices: Mapping[str, float]) -> list[str]:
+        """Held tickers with no usable price in ``prices`` (absent or not a
+        finite number), sorted. Callers decide what to do: carry the last
+        mark forward, skip a risk rule, or refuse to trade."""
+        return sorted(t for t in self.positions if not _finite(prices.get(t)))
+
+    def total_value(self, prices: Mapping[str, float], *, strict: bool = False) -> float:
+        """Cash plus every position marked at ``prices``. A held ticker with
+        no price counts as 0 unless ``strict``, which raises
+        :class:`MissingPriceError` naming them (see :meth:`unmarked`)."""
+        if strict:
+            missing = self.unmarked(prices)
+            if missing:
+                raise MissingPriceError(missing)
         mark = sum(qty * prices.get(t, 0.0) for t, qty in self.positions.items())
         return self.cash + mark
+
+
+class MissingPriceError(KeyError):
+    """Held tickers have no price to mark them at."""
+
+    def __init__(self, tickers: list[str]) -> None:
+        super().__init__(f"no price for held ticker(s): {', '.join(tickers)}")
+        self.tickers = tickers
+
+
+def _mark(prices: Mapping[str, float], ticker: str) -> float:
+    price = prices.get(ticker)
+    return float(price) if _finite(price) else 0.0  # type: ignore[arg-type]
+
+
+def _finite(value: Any) -> bool:
+    try:
+        return math.isfinite(float(value))
+    except (TypeError, ValueError):
+        return False
 
 
 @dataclass(frozen=True)

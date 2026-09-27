@@ -434,3 +434,45 @@ def test_pre_trade_rejection_records_its_reason(env):
     [row] = _orders(state)
     assert row["status"] == "rejected"
     assert "ACCOUNT_CLOSED" in row["status_reason"]
+
+
+def test_the_second_risk_pass_never_places_a_forced_sell_twice(env):
+    """An external broker's portfolio isn't updated by fills, so the buys'
+    second risk pass sees the expired holding again and max_holding forces
+    the same sell. Its client id is already in the ledger: it is skipped."""
+    from stonks.config import RiskPolicy
+
+    lake, state, registry, sid, client, factory, _ = env
+    flat = registry.register(
+        BuyAndHold({"ticker": "FLAT.US", "allocation": 0.2}),
+        reports=[SurvivalReport(test_id="oos", passed=True, metrics={})],
+        strategy_id="bh_flat",
+    )
+    seed_status(registry, flat, "active")
+    seed_status(registry, sid, "retired")  # FLAT's strategy decides, and buys
+    client.positions = [{"symbol": "UP", "qty": "10", "side": "long"}]
+    state.execute(
+        "INSERT INTO orders (client_id, strategy_id, ticker, side, quantity, order_type, status,"
+        " created_at, updated_at) VALUES ('2026-03-02:x:UP.US:buy', ?, 'UP.US', 'buy', 10,"
+        " 'market', 'filled', '2026-03-02T21:00:00', '2026-03-02T21:00:00')",
+        [sid],
+    )
+    state.execute(
+        "INSERT INTO fills (order_client_id, ticker, quantity, price, fee, filled_at)"
+        " VALUES ('2026-03-02:x:UP.US:buy', 'UP.US', 10, 150, 0, '2026-03-02T21:00:00')"
+    )
+    settings = TickSettings(
+        universe=["UP.US", "FLAT.US"],
+        initial_cash=10_000.0,
+        broker_kind="alpaca",
+        risk=RiskPolicy(rules={"max_holding": {"max_holding_bars": 2}}),
+    )
+
+    run_tick(state, lake, registry, settings, as_of=AS_OF, broker_factory=factory)
+
+    sells = [o for o in client.submitted if "sell" in str(getattr(o, "side", "")).lower()]
+    assert len(sells) == 1
+    # the FLAT.US buy went through the second pass
+    assert state.sql("SELECT 1 FROM orders WHERE side = 'buy' AND ticker = 'FLAT.US'")
+    rows = state.sql("SELECT client_id FROM orders WHERE side = 'sell'")
+    assert [r["client_id"] for r in rows] == ["2026-03-20:risk.max_holding:UP.US:sell"]

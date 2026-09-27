@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CancelJobData, CancelJobErrors, CancelJobResponses, ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CheckAuthData, CheckAuthErrors, CheckAuthResponses, ClearHaltData, ClearHaltErrors, ClearHaltResponses, CompleteConnectionPortalData, CompleteConnectionPortalErrors, CompleteConnectionPortalResponses, ConfirmMfaEnrolmentData, ConfirmMfaEnrolmentErrors, ConfirmMfaEnrolmentResponses, ConnectWithKeysData, ConnectWithKeysErrors, ConnectWithKeysResponses, CreateApiTokenData, CreateApiTokenErrors, CreateApiTokenResponses, CreateDraftData, CreateDraftErrors, CreateDraftResponses, CreatePushSubscriptionData, CreatePushSubscriptionErrors, CreatePushSubscriptionResponses, CreateStreamTokenData, CreateStreamTokenErrors, CreateStreamTokenResponses, CreateUniverseData, CreateUniverseErrors, CreateUniverseResponses, CreateUserData, CreateUserErrors, CreateUserResponses, DeleteConnectionData, DeleteConnectionErrors, DeleteConnectionResponses, DeleteDraftData, DeleteDraftErrors, DeleteDraftResponses, DeletePushSubscriptionData, DeletePushSubscriptionErrors, DeletePushSubscriptionResponses, DeleteUniverseData, DeleteUniverseErrors, DeleteUniverseResponses, DisableDraftData, DisableDraftErrors, DisableDraftResponses, EnableDraftData, EnableDraftErrors, EnableDraftResponses, EngageKillSwitchData, EngageKillSwitchErrors, EngageKillSwitchResponses, EnsureUniverseDataData, EnsureUniverseDataErrors, EnsureUniverseDataResponses, GetAlpacaStatusData, GetAlpacaStatusErrors, GetAlpacaStatusResponses, GetBacktestResultData, GetBacktestResultErrors, GetBacktestResultResponses, GetBackupResultData, GetBackupResultErrors, GetBackupResultResponses, GetBarsData, GetBarsErrors, GetBarsResponses, GetBrokerInfoData, GetBrokerInfoErrors, GetBrokerInfoResponses, GetConnectionData, GetConnectionErrors, GetConnectionResponses, GetDraftData, GetDraftErrors, GetDraftResponses, GetGoLiveReportData, GetGoLiveReportErrors, GetGoLiveReportResponses, GetHaltData, GetHaltErrors, GetHaltResponses, GetHealthData, GetHealthReportData, GetHealthReportErrors, GetHealthReportResponses, GetHealthResponses, GetIngestResultData, GetIngestResultErrors, GetIngestResultResponses, GetJobData, GetJobErrors, GetJobResponses, GetLabRunResultData, GetLabRunResultErrors, GetLabRunResultResponses, GetLivenessData, GetLivenessErrors, GetLivenessResponses, GetMeData, GetMeErrors, GetMeResponses, GetNotificationPreferencesData, GetNotificationPreferencesErrors, GetNotificationPreferencesResponses, GetPnlData, GetPnlErrors, GetPnlResponses, GetPortfolioData, GetPortfolioErrors, GetPortfolioResponses, GetPortfolioTotalsData, GetPortfolioTotalsErrors, GetPortfolioTotalsResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetRiskPolicyData, GetRiskPolicyErrors, GetRiskPolicyResponses, GetRuleSpecSchemaData, GetRuleSpecSchemaErrors, GetRuleSpecSchemaResponses, GetScheduleData, GetScheduleErrors, GetScheduleResponses, GetShadowPnlData, GetShadowPnlErrors, GetShadowPnlResponses, GetSignalIcResultData, GetSignalIcResultErrors, GetSignalIcResultResponses, GetStrategyData, GetStrategyErrors, GetStrategyHistoryData, GetStrategyHistoryErrors, GetStrategyHistoryResponses, GetStrategyResponses, GetStrategySummaryData, GetStrategySummaryErrors, GetStrategySummaryResponses, GetStudioCapabilitiesData, GetStudioCapabilitiesErrors, GetStudioCapabilitiesResponses, GetTickData, GetTickErrors, GetTickResponses, GetTickResultData, GetTickResultErrors, GetTickResultResponses, GetUniverseData, GetUniverseEnsureResultData, GetUniverseEnsureResultErrors, GetUniverseEnsureResultResponses, GetUniverseErrors, GetUniverseMembersData, GetUniverseMembersErrors, GetUniverseMembersResponses, GetUniverseRefreshResultData, GetUniverseRefreshResultErrors, GetUniverseRefreshResultResponses, GetUniverseResponses, GetVapidKeyData, GetVapidKeyErrors, GetVapidKeyResponses, ImportIndexHistoryData, ImportIndexHistoryErrors, ImportIndexHistoryResponses, LinkConnectionAccountData, LinkConnectionAccountErrors, LinkConnectionAccountResponses, ListAlertsData, ListAlertsErrors, ListAlertsResponses, ListApiTokensData, ListApiTokensErrors, ListApiTokensResponses, ListAssetClassesData, ListAssetClassesErrors, ListAssetClassesResponses, ListConnectionAccountsData, ListConnectionAccountsErrors, ListConnectionAccountsResponses, ListConnectionsData, ListConnectionsErrors, ListConnectionsResponses, ListCostModelsData, ListCostModelsErrors, ListCostModelsResponses, ListCoverageData, ListCoverageErrors, ListCoverageResponses, ListDataSourcesData, ListDataSourcesErrors, ListDataSourcesResponses, ListDraftsData, ListDraftsErrors, ListDraftsResponses, ListFillsData, ListFillsErrors, ListFillsResponses, ListHaltsData, ListHaltsErrors, ListHaltsResponses, ListIngestRunsData, ListIngestRunsErrors, ListIngestRunsResponses, ListInstrumentsData, ListInstrumentsErrors, ListInstrumentsResponses, ListIntervalsData, ListIntervalsErrors, ListIntervalsResponses, ListJobsData, ListJobsErrors, ListJobsResponses, ListNotificationsData, ListNotificationsErrors, ListNotificationsResponses, ListOrdersData, ListOrdersErrors, ListOrdersResponses, ListPortfolioSnapshotsData, ListPortfolioSnapshotsErrors, ListPortfolioSnapshotsResponses, ListProvidersData, ListProvidersErrors, ListProvidersResponses, ListPushSubscriptionsData, ListPushSubscriptionsErrors, ListPushSubscriptionsResponses, ListShadowDecisionsData, ListShadowDecisionsErrors, ListShadowDecisionsResponses, ListShadowPnlData, ListShadowPnlErrors, ListShadowPnlResponses, ListStatementFlagsData, ListStatementFlagsErrors, ListStatementFlagsResponses, ListStrategiesData, ListStrategiesErrors, ListStrategiesResponses, ListStrategyClassesData, ListStrategyClassesErrors, ListStrategyClassesResponses, ListStudioTemplatesData, ListStudioTemplatesErrors, ListStudioTemplatesResponses, ListTicksData, ListTicksErrors, ListTicksResponses, ListUniversesData, ListUniversesErrors, ListUniversesResponses, ListUsersData, ListUsersErrors, ListUsersResponses, LoginData, LoginErrors, LoginResponses, LogoutData, LogoutErrors, LogoutResponses, MarkNotificationsReadData, MarkNotificationsReadErrors, MarkNotificationsReadResponses, PromoteStrategyData, PromoteStrategyErrors, PromoteStrategyResponses, RefreshUniverseData, RefreshUniverseErrors, RefreshUniverseResponses, RegenerateRecoveryCodesData, RegenerateRecoveryCodesErrors, RegenerateRecoveryCodesResponses, RegisterDraftData, RegisterDraftErrors, RegisterDraftResponses, ResetUserMfaData, ResetUserMfaErrors, ResetUserMfaResponses, ResetUserPasswordData, ResetUserPasswordErrors, ResetUserPasswordResponses, ResumeKillSwitchData, ResumeKillSwitchErrors, ResumeKillSwitchResponses, RetireStrategyData, RetireStrategyErrors, RetireStrategyResponses, RevokeApiTokenData, RevokeApiTokenErrors, RevokeApiTokenResponses, RunScheduledJobNowData, RunScheduledJobNowErrors, RunScheduledJobNowResponses, SetNotificationWebhookData, SetNotificationWebhookErrors, SetNotificationWebhookResponses, SetQuietHoursData, SetQuietHoursErrors, SetQuietHoursResponses, ShadowStrategyData, ShadowStrategyErrors, ShadowStrategyResponses, StartBacktestData, StartBacktestErrors, StartBacktestResponses, StartBackupData, StartBackupErrors, StartBackupResponses, StartConnectionPortalData, StartConnectionPortalErrors, StartConnectionPortalResponses, StartDraftBacktestData, StartDraftBacktestErrors, StartDraftBacktestResponses, StartDraftLabRunData, StartDraftLabRunErrors, StartDraftLabRunResponses, StartIngestData, StartIngestErrors, StartIngestResponses, StartLabRunData, StartLabRunErrors, StartLabRunResponses, StartMfaEnrolmentData, StartMfaEnrolmentErrors, StartMfaEnrolmentResponses, StartSignalIcData, StartSignalIcErrors, StartSignalIcResponses, StartTickData, StartTickErrors, StartTickResponses, StreamJobEventsData, StreamJobEventsErrors, StreamJobEventsResponses, SyncConnectionData, SyncConnectionErrors, SyncConnectionResponses, UpdateDraftData, UpdateDraftErrors, UpdateDraftResponses, UpdateNotificationPreferencesData, UpdateNotificationPreferencesErrors, UpdateNotificationPreferencesResponses, UpdateUserData, UpdateUserErrors, UpdateUserResponses, ValidateDraftData, ValidateDraftErrors, ValidateDraftResponses, ValidateRuleSpecData, ValidateRuleSpecErrors, ValidateRuleSpecResponses, VerifyMfaData, VerifyMfaErrors, VerifyMfaResponses } from './types.gen';
+import type { AddJournalNoteData, AddJournalNoteErrors, AddJournalNoteResponses, CancelJobData, CancelJobErrors, CancelJobResponses, ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CheckAuthData, CheckAuthErrors, CheckAuthResponses, ClearHaltData, ClearHaltErrors, ClearHaltResponses, CompleteConnectionPortalData, CompleteConnectionPortalErrors, CompleteConnectionPortalResponses, ConfirmMfaEnrolmentData, ConfirmMfaEnrolmentErrors, ConfirmMfaEnrolmentResponses, ConnectWithKeysData, ConnectWithKeysErrors, ConnectWithKeysResponses, CreateApiTokenData, CreateApiTokenErrors, CreateApiTokenResponses, CreateDraftData, CreateDraftErrors, CreateDraftResponses, CreatePushSubscriptionData, CreatePushSubscriptionErrors, CreatePushSubscriptionResponses, CreateStreamTokenData, CreateStreamTokenErrors, CreateStreamTokenResponses, CreateUniverseData, CreateUniverseErrors, CreateUniverseResponses, CreateUserData, CreateUserErrors, CreateUserResponses, DeleteConnectionData, DeleteConnectionErrors, DeleteConnectionResponses, DeleteDraftData, DeleteDraftErrors, DeleteDraftResponses, DeletePushDeviceData, DeletePushDeviceErrors, DeletePushDeviceResponses, DeletePushSubscriptionData, DeletePushSubscriptionErrors, DeletePushSubscriptionResponses, DeleteUniverseData, DeleteUniverseErrors, DeleteUniverseResponses, DisableDraftData, DisableDraftErrors, DisableDraftResponses, EnableDraftData, EnableDraftErrors, EnableDraftResponses, EngageKillSwitchData, EngageKillSwitchErrors, EngageKillSwitchResponses, EnsureUniverseDataData, EnsureUniverseDataErrors, EnsureUniverseDataResponses, GetAlpacaStatusData, GetAlpacaStatusErrors, GetAlpacaStatusResponses, GetBacktestResultData, GetBacktestResultErrors, GetBacktestResultResponses, GetBackupResultData, GetBackupResultErrors, GetBackupResultResponses, GetBarsData, GetBarsErrors, GetBarsResponses, GetBrokerInfoData, GetBrokerInfoErrors, GetBrokerInfoResponses, GetConnectionData, GetConnectionErrors, GetConnectionResponses, GetDraftData, GetDraftErrors, GetDraftResponses, GetGoLiveReportData, GetGoLiveReportErrors, GetGoLiveReportResponses, GetHaltData, GetHaltErrors, GetHaltResponses, GetHealthData, GetHealthReportData, GetHealthReportErrors, GetHealthReportResponses, GetHealthResponses, GetIngestResultData, GetIngestResultErrors, GetIngestResultResponses, GetInsightsData, GetInsightsErrors, GetInsightsResponses, GetInsightsTotalsData, GetInsightsTotalsErrors, GetInsightsTotalsResponses, GetJobData, GetJobErrors, GetJobResponses, GetLabEnsureResultData, GetLabEnsureResultErrors, GetLabEnsureResultResponses, GetLabRunResultData, GetLabRunResultErrors, GetLabRunResultResponses, GetLivenessData, GetLivenessErrors, GetLivenessResponses, GetLiveRiskData, GetLiveRiskErrors, GetLiveRiskResponses, GetMeData, GetMeErrors, GetMeResponses, GetNotificationPreferencesData, GetNotificationPreferencesErrors, GetNotificationPreferencesResponses, GetOrderTcaData, GetOrderTcaErrors, GetOrderTcaResponses, GetPnlData, GetPnlErrors, GetPnlResponses, GetPortfolioData, GetPortfolioErrors, GetPortfolioResponses, GetPortfolioTotalsData, GetPortfolioTotalsErrors, GetPortfolioTotalsResponses, GetReadinessData, GetReadinessErrors, GetReadinessResponses, GetRestoreResultData, GetRestoreResultErrors, GetRestoreResultResponses, GetRiskPolicyData, GetRiskPolicyErrors, GetRiskPolicyResponses, GetRuleSpecSchemaData, GetRuleSpecSchemaErrors, GetRuleSpecSchemaResponses, GetScheduleData, GetScheduleErrors, GetScheduleResponses, GetShadowPnlData, GetShadowPnlErrors, GetShadowPnlResponses, GetSignalIcResultData, GetSignalIcResultErrors, GetSignalIcResultResponses, GetStrategyAgreementData, GetStrategyAgreementErrors, GetStrategyAgreementResponses, GetStrategyData, GetStrategyErrors, GetStrategyHistoryData, GetStrategyHistoryErrors, GetStrategyHistoryResponses, GetStrategyResponses, GetStrategySummaryData, GetStrategySummaryErrors, GetStrategySummaryResponses, GetStudioCapabilitiesData, GetStudioCapabilitiesErrors, GetStudioCapabilitiesResponses, GetSweepResultData, GetSweepResultErrors, GetSweepResultResponses, GetTcaSummaryData, GetTcaSummaryErrors, GetTcaSummaryResponses, GetTickData, GetTickErrors, GetTickResponses, GetTickResultData, GetTickResultErrors, GetTickResultResponses, GetUniverseData, GetUniverseEnsureResultData, GetUniverseEnsureResultErrors, GetUniverseEnsureResultResponses, GetUniverseErrors, GetUniverseMembersData, GetUniverseMembersErrors, GetUniverseMembersResponses, GetUniverseRefreshResultData, GetUniverseRefreshResultErrors, GetUniverseRefreshResultResponses, GetUniverseResponses, GetVapidKeyData, GetVapidKeyErrors, GetVapidKeyResponses, ImportIndexHistoryData, ImportIndexHistoryErrors, ImportIndexHistoryResponses, LinkConnectionAccountData, LinkConnectionAccountErrors, LinkConnectionAccountResponses, ListAlertsData, ListAlertsErrors, ListAlertsResponses, ListApiTokensData, ListApiTokensErrors, ListApiTokensResponses, ListAssetClassesData, ListAssetClassesErrors, ListAssetClassesResponses, ListBackupsData, ListBackupsErrors, ListBackupsResponses, ListConnectionAccountsData, ListConnectionAccountsErrors, ListConnectionAccountsResponses, ListConnectionsData, ListConnectionsErrors, ListConnectionsResponses, ListCostModelsData, ListCostModelsErrors, ListCostModelsResponses, ListCoverageData, ListCoverageErrors, ListCoverageResponses, ListDataSourcesData, ListDataSourcesErrors, ListDataSourcesResponses, ListDraftsData, ListDraftsErrors, ListDraftsResponses, ListFillsData, ListFillsErrors, ListFillsResponses, ListHaltsData, ListHaltsErrors, ListHaltsResponses, ListIngestRunsData, ListIngestRunsErrors, ListIngestRunsResponses, ListInstrumentsData, ListInstrumentsErrors, ListInstrumentsResponses, ListIntervalsData, ListIntervalsErrors, ListIntervalsResponses, ListJobsData, ListJobsErrors, ListJobsResponses, ListJournalData, ListJournalErrors, ListJournalResponses, ListNotificationsData, ListNotificationsErrors, ListNotificationsResponses, ListOrdersData, ListOrdersErrors, ListOrdersResponses, ListPortfoliosData, ListPortfoliosErrors, ListPortfolioSnapshotsData, ListPortfolioSnapshotsErrors, ListPortfolioSnapshotsResponses, ListPortfoliosResponses, ListProvidersData, ListProvidersErrors, ListProvidersResponses, ListPushSubscriptionsData, ListPushSubscriptionsErrors, ListPushSubscriptionsResponses, ListRiskSnapshotsData, ListRiskSnapshotsErrors, ListRiskSnapshotsResponses, ListShadowDecisionsData, ListShadowDecisionsErrors, ListShadowDecisionsResponses, ListShadowPnlData, ListShadowPnlErrors, ListShadowPnlResponses, ListStatementFlagsData, ListStatementFlagsErrors, ListStatementFlagsResponses, ListStrategiesData, ListStrategiesErrors, ListStrategiesResponses, ListStrategyClassesData, ListStrategyClassesErrors, ListStrategyClassesResponses, ListStudioTemplatesData, ListStudioTemplatesErrors, ListStudioTemplatesResponses, ListSubscriptionsData, ListSubscriptionsErrors, ListSubscriptionsResponses, ListSurvivalPresetsData, ListSurvivalPresetsErrors, ListSurvivalPresetsResponses, ListSurvivalTestsData, ListSurvivalTestsErrors, ListSurvivalTestsResponses, ListTicksData, ListTicksErrors, ListTicksResponses, ListTradingModesData, ListTradingModesErrors, ListTradingModesResponses, ListUniversesData, ListUniversesErrors, ListUniversesResponses, ListUsersData, ListUsersErrors, ListUsersResponses, LoginData, LoginErrors, LoginResponses, LogoutData, LogoutErrors, LogoutResponses, MarkNotificationsReadData, MarkNotificationsReadErrors, MarkNotificationsReadResponses, PromoteStrategyData, PromoteStrategyErrors, PromoteStrategyResponses, RefreshUniverseData, RefreshUniverseErrors, RefreshUniverseResponses, RegenerateRecoveryCodesData, RegenerateRecoveryCodesErrors, RegenerateRecoveryCodesResponses, RegisterDraftData, RegisterDraftErrors, RegisterDraftResponses, ResetUserMfaData, ResetUserMfaErrors, ResetUserMfaResponses, ResetUserPasswordData, ResetUserPasswordErrors, ResetUserPasswordResponses, RestoreBackupData, RestoreBackupErrors, RestoreBackupResponses, ResumeKillSwitchData, ResumeKillSwitchErrors, ResumeKillSwitchResponses, RetireStrategyData, RetireStrategyErrors, RetireStrategyResponses, RevokeApiTokenData, RevokeApiTokenErrors, RevokeApiTokenResponses, RunHealthChecksData, RunHealthChecksErrors, RunHealthChecksResponses, RunScheduledJobNowData, RunScheduledJobNowErrors, RunScheduledJobNowResponses, SetNotificationWebhookData, SetNotificationWebhookErrors, SetNotificationWebhookResponses, SetQuietHoursData, SetQuietHoursErrors, SetQuietHoursResponses, ShadowStrategyData, ShadowStrategyErrors, ShadowStrategyResponses, StartBacktestData, StartBacktestErrors, StartBacktestResponses, StartBackupData, StartBackupErrors, StartBackupResponses, StartConnectionPortalData, StartConnectionPortalErrors, StartConnectionPortalResponses, StartDraftBacktestData, StartDraftBacktestErrors, StartDraftBacktestResponses, StartDraftLabRunData, StartDraftLabRunErrors, StartDraftLabRunResponses, StartIngestData, StartIngestErrors, StartIngestResponses, StartLabRunData, StartLabRunErrors, StartLabRunResponses, StartMfaEnrolmentData, StartMfaEnrolmentErrors, StartMfaEnrolmentResponses, StartSignalIcData, StartSignalIcErrors, StartSignalIcResponses, StartSweepData, StartSweepErrors, StartSweepResponses, StartTickData, StartTickErrors, StartTickResponses, StreamJobEventsData, StreamJobEventsErrors, StreamJobEventsResponses, SubscribeData, SubscribeErrors, SubscribeResponses, SyncConnectionData, SyncConnectionErrors, SyncConnectionResponses, UpdateDraftData, UpdateDraftErrors, UpdateDraftResponses, UpdateJournalNoteData, UpdateJournalNoteErrors, UpdateJournalNoteResponses, UpdateNotificationPreferencesData, UpdateNotificationPreferencesErrors, UpdateNotificationPreferencesResponses, UpdateSubscriptionData, UpdateSubscriptionErrors, UpdateSubscriptionResponses, UpdateUserData, UpdateUserErrors, UpdateUserResponses, ValidateDraftData, ValidateDraftErrors, ValidateDraftResponses, ValidateRuleSpecData, ValidateRuleSpecErrors, ValidateRuleSpecResponses, VerifyBackupData, VerifyBackupErrors, VerifyBackupResponses, VerifyMfaData, VerifyMfaErrors, VerifyMfaResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -21,7 +21,8 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 /**
  * List Alerts
  *
- * Every notification the ``store`` backend recorded, newest first.
+ * Your notifications, newest first. Admins also see the admin audience
+ * (operational alerts with no single recipient).
  */
 export const listAlerts = <ThrowOnError extends boolean = false>(options?: Options<ListAlertsData, ThrowOnError>): RequestResult<ListAlertsResponses, ListAlertsErrors, ThrowOnError> => (options?.client ?? client).get<ListAlertsResponses, ListAlertsErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -252,6 +253,17 @@ export const resetUserPassword = <ThrowOnError extends boolean = false>(options:
 });
 
 /**
+ * List Backups
+ *
+ * Backups under ``[backup].dir``, newest first.
+ */
+export const listBackups = <ThrowOnError extends boolean = false>(options?: Options<ListBackupsData, ThrowOnError>): RequestResult<ListBackupsResponses, ListBackupsErrors, ThrowOnError> => (options?.client ?? client).get<ListBackupsResponses, ListBackupsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/backups',
+    ...options
+});
+
+/**
  * Start Backup
  *
  * Queue a backup of the lake, state DB and artifacts to ``[backup]``'s
@@ -275,6 +287,47 @@ export const getBackupResult = <ThrowOnError extends boolean = false>(options: O
 });
 
 /**
+ * Get Restore Result
+ *
+ * Where a succeeded restore job put the data (409 until it has succeeded).
+ */
+export const getRestoreResult = <ThrowOnError extends boolean = false>(options: Options<GetRestoreResultData, ThrowOnError>): RequestResult<GetRestoreResultResponses, GetRestoreResultErrors, ThrowOnError> => (options.client ?? client).get<GetRestoreResultResponses, GetRestoreResultErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/backups/restores/{job_id}/result',
+    ...options
+});
+
+/**
+ * Restore Backup
+ *
+ * Queue a staged restore: the backup is verified and restored into a new
+ * data folder beside the backups, with migrations applied. The live data
+ * is not touched; the result says how to switch. Needs a second factor
+ * from the last few minutes and ``confirmation`` = ``RESTORE <backup id>``.
+ */
+export const restoreBackup = <ThrowOnError extends boolean = false>(options: Options<RestoreBackupData, ThrowOnError>): RequestResult<RestoreBackupResponses, RestoreBackupErrors, ThrowOnError> => (options.client ?? client).post<RestoreBackupResponses, RestoreBackupErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/backups/{backup_id}/restore',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Verify Backup
+ *
+ * Re-check a backup's checksums, schema versions and row counts. Takes a
+ * while for a large lake.
+ */
+export const verifyBackup = <ThrowOnError extends boolean = false>(options: Options<VerifyBackupData, ThrowOnError>): RequestResult<VerifyBackupResponses, VerifyBackupErrors, ThrowOnError> => (options.client ?? client).post<VerifyBackupResponses, VerifyBackupErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/backups/{backup_id}/verify',
+    ...options
+});
+
+/**
  * Get Broker Info
  *
  * The broker the production tick trades through (keys never shown).
@@ -289,8 +342,10 @@ export const getBrokerInfo = <ThrowOnError extends boolean = false>(options?: Op
  * Get Alpaca Status
  *
  * Connect to Alpaca and read the account and market clock (read-only).
- * 409 unless ``[brokers].kind`` is ``alpaca``; missing keys or API errors
- * come back as ``connected=false`` with the reason.
+ * Only the owner of the book the account backs may read it (404 for
+ * anyone else). Answers are cached for 30 seconds. 409 unless
+ * ``[brokers].kind`` is ``alpaca``; missing keys or API errors come back
+ * as ``connected=false`` with the reason.
  */
 export const getAlpacaStatus = <ThrowOnError extends boolean = false>(options?: Options<GetAlpacaStatusData, ThrowOnError>): RequestResult<GetAlpacaStatusResponses, GetAlpacaStatusErrors, ThrowOnError> => (options?.client ?? client).get<GetAlpacaStatusResponses, GetAlpacaStatusErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -385,8 +440,9 @@ export const startConnectionPortal = <ThrowOnError extends boolean = false>(opti
 /**
  * List Providers
  *
- * Providers an admin enabled (``[connections].enabled_providers``) and
- * configured; nothing else can be connected.
+ * Every provider. ``enabled`` marks the ones an admin turned on
+ * (``[connections].enabled_providers``) and configured: nothing else can
+ * be connected. ``has_paper`` marks providers with paper accounts.
  */
 export const listProviders = <ThrowOnError extends boolean = false>(options?: Options<ListProvidersData, ThrowOnError>): RequestResult<ListProvidersResponses, ListProvidersErrors, ThrowOnError> => (options?.client ?? client).get<ListProvidersResponses, ListProvidersErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -545,12 +601,30 @@ export const getReadiness = <ThrowOnError extends boolean = false>(options?: Opt
  * Health Report
  *
  * Every ``stonks health`` check: bar freshness, stuck ticks and ingest
- * runs, recent ingest failures. Always 200; see ``healthy``.
+ * runs, recent ingest failures, open halts. Always 200; see ``healthy``.
+ * Read-only: it never opens or clears the operational halt.
  */
 export const getHealthReport = <ThrowOnError extends boolean = false>(options?: Options<GetHealthReportData, ThrowOnError>): RequestResult<GetHealthReportResponses, GetHealthReportErrors, ThrowOnError> => (options?.client ?? client).get<GetHealthReportResponses, GetHealthReportErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/health/report',
     ...options
+});
+
+/**
+ * Run Health Checks
+ *
+ * The scheduled health job: every check, then the global operational
+ * halt is opened on stale data or a stuck run and cleared when the checks
+ * pass again. The caller is recorded as the actor.
+ */
+export const runHealthChecks = <ThrowOnError extends boolean = false>(options: Options<RunHealthChecksData, ThrowOnError>): RequestResult<RunHealthChecksResponses, RunHealthChecksErrors, ThrowOnError> => (options.client ?? client).post<RunHealthChecksResponses, RunHealthChecksErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/health/run',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -589,7 +663,46 @@ export const startIngest = <ThrowOnError extends boolean = false>(options: Optio
 });
 
 /**
+ * Get Insights
+ *
+ * Allocation (asset class, sector, currency, ticker), exposure (gross,
+ * net, beta), P&L over periods and risk (volatility, drawdown, VaR,
+ * concentration) of one of your portfolios.
+ */
+export const getInsights = <ThrowOnError extends boolean = false>(options?: Options<GetInsightsData, ThrowOnError>): RequestResult<GetInsightsResponses, GetInsightsErrors, ThrowOnError> => (options?.client ?? client).get<GetInsightsResponses, GetInsightsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/insights',
+    ...options
+});
+
+/**
+ * Get Agreement
+ *
+ * For each holding, whether every active strategy's latest signal
+ * agrees or disagrees with it, and why.
+ */
+export const getStrategyAgreement = <ThrowOnError extends boolean = false>(options?: Options<GetStrategyAgreementData, ThrowOnError>): RequestResult<GetStrategyAgreementResponses, GetStrategyAgreementErrors, ThrowOnError> => (options?.client ?? client).get<GetStrategyAgreementResponses, GetStrategyAgreementErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/insights/agreement',
+    ...options
+});
+
+/**
+ * Get Totals
+ *
+ * Admins: asset-class allocation and exposure summed over every active
+ * portfolio. No tickers and no per-person numbers.
+ */
+export const getInsightsTotals = <ThrowOnError extends boolean = false>(options?: Options<GetInsightsTotalsData, ThrowOnError>): RequestResult<GetInsightsTotalsResponses, GetInsightsTotalsErrors, ThrowOnError> => (options?.client ?? client).get<GetInsightsTotalsResponses, GetInsightsTotalsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/insights/totals',
+    ...options
+});
+
+/**
  * List Jobs
+ *
+ * Your jobs, newest first. Admins see every job.
  */
 export const listJobs = <ThrowOnError extends boolean = false>(options?: Options<ListJobsData, ThrowOnError>): RequestResult<ListJobsResponses, ListJobsErrors, ThrowOnError> => (options?.client ?? client).get<ListJobsResponses, ListJobsErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -599,6 +712,8 @@ export const listJobs = <ThrowOnError extends boolean = false>(options?: Options
 
 /**
  * Get Job
+ *
+ * One of your jobs (another user's job is a 404; admins see all).
  */
 export const getJob = <ThrowOnError extends boolean = false>(options: Options<GetJobData, ThrowOnError>): RequestResult<GetJobResponses, GetJobErrors, ThrowOnError> => (options.client ?? client).get<GetJobResponses, GetJobErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -611,7 +726,8 @@ export const getJob = <ThrowOnError extends boolean = false>(options: Options<Ge
  *
  * Cancel a queued job, or ask a running lab run to stop at its next
  * trial (it ends ``cancelled``). Other running jobs cannot be interrupted
- * (409). Ticks, ingests and backups need an admin.
+ * (409). Ticks, ingests and backups need an admin. Another user's job
+ * is a 404 (admins may cancel any job).
  */
 export const cancelJob = <ThrowOnError extends boolean = false>(options: Options<CancelJobData, ThrowOnError>): RequestResult<CancelJobResponses, CancelJobErrors, ThrowOnError> => (options.client ?? client).post<CancelJobResponses, CancelJobErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -689,6 +805,18 @@ export const listCostModels = <ThrowOnError extends boolean = false>(options?: O
 });
 
 /**
+ * Get Lab Ensure Result
+ *
+ * The report of a lab run's chained data job (``ensure_data``; the
+ * run's ``ensure_job_id``), 409 until it has succeeded.
+ */
+export const getLabEnsureResult = <ThrowOnError extends boolean = false>(options: Options<GetLabEnsureResultData, ThrowOnError>): RequestResult<GetLabEnsureResultResponses, GetLabEnsureResultErrors, ThrowOnError> => (options.client ?? client).get<GetLabEnsureResultResponses, GetLabEnsureResultErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/lab/ensure/{job_id}/result',
+    ...options
+});
+
+/**
  * Start Lab Run
  *
  * Queue tune → fit → survival suite; fetch the typed result from
@@ -743,6 +871,57 @@ export const startSignalIc = <ThrowOnError extends boolean = false>(options: Opt
 export const getSignalIcResult = <ThrowOnError extends boolean = false>(options: Options<GetSignalIcResultData, ThrowOnError>): RequestResult<GetSignalIcResultResponses, GetSignalIcResultErrors, ThrowOnError> => (options.client ?? client).get<GetSignalIcResultResponses, GetSignalIcResultErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/lab/signal-ic/{job_id}/result',
+    ...options
+});
+
+/**
+ * List Survival Presets
+ *
+ * The named suites, their tests and the options they give them.
+ */
+export const listSurvivalPresets = <ThrowOnError extends boolean = false>(options?: Options<ListSurvivalPresetsData, ThrowOnError>): RequestResult<ListSurvivalPresetsResponses, ListSurvivalPresetsErrors, ThrowOnError> => (options?.client ?? client).get<ListSurvivalPresetsResponses, ListSurvivalPresetsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/lab/survival-presets',
+    ...options
+});
+
+/**
+ * List Survival Tests
+ *
+ * Every survival test with the JSON Schema of its options (what
+ * ``test_options[id]`` on a lab run may set) and the presets that run it.
+ */
+export const listSurvivalTests = <ThrowOnError extends boolean = false>(options?: Options<ListSurvivalTestsData, ThrowOnError>): RequestResult<ListSurvivalTestsResponses, ListSurvivalTestsErrors, ThrowOnError> => (options?.client ?? client).get<ListSurvivalTestsResponses, ListSurvivalTestsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/lab/survival-tests',
+    ...options
+});
+
+/**
+ * Start Sweep
+ *
+ * Queue a sweep: every catalogued strategy (or ``strategies``) through
+ * the lab on one basket. Nothing is registered; every run lands in the
+ * trial ledger. Fetch the rows from ``GET /api/lab/sweeps/{job_id}/result``.
+ */
+export const startSweep = <ThrowOnError extends boolean = false>(options: Options<StartSweepData, ThrowOnError>): RequestResult<StartSweepResponses, StartSweepErrors, ThrowOnError> => (options.client ?? client).post<StartSweepResponses, StartSweepErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/lab/sweeps',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get Sweep Result
+ *
+ * The rows of a succeeded sweep job (409 until it has succeeded).
+ */
+export const getSweepResult = <ThrowOnError extends boolean = false>(options: Options<GetSweepResultData, ThrowOnError>): RequestResult<GetSweepResultResponses, GetSweepResultErrors, ThrowOnError> => (options.client ?? client).get<GetSweepResultResponses, GetSweepResultErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/lab/sweeps/{job_id}/result',
     ...options
 });
 
@@ -831,7 +1010,8 @@ export const setQuietHours = <ThrowOnError extends boolean = false>(options: Opt
 /**
  * Mark Read
  *
- * Mark notifications read (all of yours when ``ids`` is omitted).
+ * Mark notifications read (all of yours when ``ids`` is omitted). Only
+ * touches your own rows, so viewers may do it too.
  */
 export const markNotificationsRead = <ThrowOnError extends boolean = false>(options: Options<MarkNotificationsReadData, ThrowOnError>): RequestResult<MarkNotificationsReadResponses, MarkNotificationsReadErrors, ThrowOnError> => (options.client ?? client).post<MarkNotificationsReadResponses, MarkNotificationsReadErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -922,6 +1102,30 @@ export const getPortfolioTotals = <ThrowOnError extends boolean = false>(options
 });
 
 /**
+ * List Portfolios
+ *
+ * Your portfolios, oldest first, each marked paper or live. Empty
+ * for someone who only follows strategies for signals.
+ */
+export const listPortfolios = <ThrowOnError extends boolean = false>(options?: Options<ListPortfoliosData, ThrowOnError>): RequestResult<ListPortfoliosResponses, ListPortfoliosErrors, ThrowOnError> => (options?.client ?? client).get<ListPortfoliosResponses, ListPortfoliosErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/portfolios',
+    ...options
+});
+
+/**
+ * List Trading Modes
+ *
+ * For each of your portfolios: does it trade paper or live money, and
+ * through which broker.
+ */
+export const listTradingModes = <ThrowOnError extends boolean = false>(options?: Options<ListTradingModesData, ThrowOnError>): RequestResult<ListTradingModesResponses, ListTradingModesErrors, ThrowOnError> => (options?.client ?? client).get<ListTradingModesResponses, ListTradingModesErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/portfolios/trading-modes',
+    ...options
+});
+
+/**
  * Delete Push Subscription
  *
  * Unregister a browser by its endpoint (404 when it isn't yours).
@@ -964,6 +1168,18 @@ export const createPushSubscription = <ThrowOnError extends boolean = false>(opt
 });
 
 /**
+ * Delete Push Device
+ *
+ * Unregister one of your devices by the id the list shows, for
+ * removing another browser from Settings (404 when it isn't yours).
+ */
+export const deletePushDevice = <ThrowOnError extends boolean = false>(options: Options<DeletePushDeviceData, ThrowOnError>): RequestResult<DeletePushDeviceResponses, DeletePushDeviceErrors, ThrowOnError> => (options.client ?? client).delete<DeletePushDeviceResponses, DeletePushDeviceErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/push/subscriptions/{device_id}',
+    ...options
+});
+
+/**
  * Vapid Key
  *
  * The VAPID public key browsers subscribe with; null when this server
@@ -976,6 +1192,19 @@ export const getVapidKey = <ThrowOnError extends boolean = false>(options?: Opti
 });
 
 /**
+ * Get Live Risk
+ *
+ * One of your portfolios on its latest tick day: one-day 95% and 99%
+ * VaR and expected shortfall, the rolling violation ratio and Kupiec test,
+ * and per strategy sleeve the same plus the alpha-decay check (BL-47).
+ */
+export const getLiveRisk = <ThrowOnError extends boolean = false>(options?: Options<GetLiveRiskData, ThrowOnError>): RequestResult<GetLiveRiskResponses, GetLiveRiskErrors, ThrowOnError> => (options?.client ?? client).get<GetLiveRiskResponses, GetLiveRiskErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/risk/live',
+    ...options
+});
+
+/**
  * Get Risk Policy
  *
  * The ``[production.risk]`` limits applied between a strategy's orders
@@ -984,6 +1213,17 @@ export const getVapidKey = <ThrowOnError extends boolean = false>(options?: Opti
 export const getRiskPolicy = <ThrowOnError extends boolean = false>(options?: Options<GetRiskPolicyData, ThrowOnError>): RequestResult<GetRiskPolicyResponses, GetRiskPolicyErrors, ThrowOnError> => (options?.client ?? client).get<GetRiskPolicyResponses, GetRiskPolicyErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/risk/policy',
+    ...options
+});
+
+/**
+ * List Risk Snapshots
+ *
+ * Daily risk snapshots of one of your portfolios, newest first.
+ */
+export const listRiskSnapshots = <ThrowOnError extends boolean = false>(options?: Options<ListRiskSnapshotsData, ThrowOnError>): RequestResult<ListRiskSnapshotsResponses, ListRiskSnapshotsErrors, ThrowOnError> => (options?.client ?? client).get<ListRiskSnapshotsResponses, ListRiskSnapshotsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/risk/snapshots',
     ...options
 });
 
@@ -1184,6 +1424,8 @@ export const getStudioCapabilities = <ThrowOnError extends boolean = false>(opti
 
 /**
  * List Drafts
+ *
+ * Your drafts, newest first. Admins see every draft.
  */
 export const listDrafts = <ThrowOnError extends boolean = false>(options?: Options<ListDraftsData, ThrowOnError>): RequestResult<ListDraftsResponses, ListDraftsErrors, ThrowOnError> => (options?.client ?? client).get<ListDraftsResponses, ListDraftsErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -1217,6 +1459,8 @@ export const deleteDraft = <ThrowOnError extends boolean = false>(options: Optio
 
 /**
  * Get Draft
+ *
+ * One of your drafts (another user's draft is a 404; admins see all).
  */
 export const getDraft = <ThrowOnError extends boolean = false>(options: Options<GetDraftData, ThrowOnError>): RequestResult<GetDraftResponses, GetDraftErrors, ThrowOnError> => (options.client ?? client).get<GetDraftResponses, GetDraftErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -1366,7 +1610,120 @@ export const listStudioTemplates = <ThrowOnError extends boolean = false>(option
 });
 
 /**
+ * List Subscriptions
+ *
+ * Your subscriptions, with the paper-day count and what still blocks auto.
+ */
+export const listSubscriptions = <ThrowOnError extends boolean = false>(options?: Options<ListSubscriptionsData, ThrowOnError>): RequestResult<ListSubscriptionsResponses, ListSubscriptionsErrors, ThrowOnError> => (options?.client ?? client).get<ListSubscriptionsResponses, ListSubscriptionsErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/subscriptions',
+    ...options
+});
+
+/**
+ * Subscribe
+ *
+ * Follow a strategy: ``notify`` (signals only) or ``paper`` on one of
+ * your portfolios. ``auto`` is never the starting mode (409).
+ */
+export const subscribe = <ThrowOnError extends boolean = false>(options: Options<SubscribeData, ThrowOnError>): RequestResult<SubscribeResponses, SubscribeErrors, ThrowOnError> => (options.client ?? client).post<SubscribeResponses, SubscribeErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/subscriptions',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Update Subscription
+ *
+ * Turn a subscription on or off, or change its mode. Switching to
+ * ``auto`` needs a second factor from the last few minutes (403
+ * ``step_up_required``) and a passing checklist, including 20 paper
+ * trading days (409 ``auto_blocked`` with ``blockers``).
+ */
+export const updateSubscription = <ThrowOnError extends boolean = false>(options: Options<UpdateSubscriptionData, ThrowOnError>): RequestResult<UpdateSubscriptionResponses, UpdateSubscriptionErrors, ThrowOnError> => (options.client ?? client).patch<UpdateSubscriptionResponses, UpdateSubscriptionErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/subscriptions/{subscription_id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List Journal
+ *
+ * The trade journal, newest first: each order with its reason, the
+ * signal context, the outcome and your notes.
+ */
+export const listJournal = <ThrowOnError extends boolean = false>(options?: Options<ListJournalData, ThrowOnError>): RequestResult<ListJournalResponses, ListJournalErrors, ThrowOnError> => (options?.client ?? client).get<ListJournalResponses, ListJournalErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/tca/journal',
+    ...options
+});
+
+/**
+ * Update Journal Note
+ *
+ * Replace the text of a note you wrote.
+ */
+export const updateJournalNote = <ThrowOnError extends boolean = false>(options: Options<UpdateJournalNoteData, ThrowOnError>): RequestResult<UpdateJournalNoteResponses, UpdateJournalNoteErrors, ThrowOnError> => (options.client ?? client).put<UpdateJournalNoteResponses, UpdateJournalNoteErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/tca/notes/{note_id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Get Order Tca
+ *
+ * One of your orders in full: decision, context, shortfall and notes.
+ */
+export const getOrderTca = <ThrowOnError extends boolean = false>(options: Options<GetOrderTcaData, ThrowOnError>): RequestResult<GetOrderTcaResponses, GetOrderTcaErrors, ThrowOnError> => (options.client ?? client).get<GetOrderTcaResponses, GetOrderTcaErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/tca/orders/{client_id}',
+    ...options
+});
+
+/**
+ * Add Journal Note
+ *
+ * Add a free-text note to one of your orders.
+ */
+export const addJournalNote = <ThrowOnError extends boolean = false>(options: Options<AddJournalNoteData, ThrowOnError>): RequestResult<AddJournalNoteResponses, AddJournalNoteErrors, ThrowOnError> => (options.client ?? client).post<AddJournalNoteResponses, AddJournalNoteErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/tca/orders/{client_id}/notes',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Tca Summary
+ *
+ * Implementation shortfall (delay, impact, fees, opportunity) against
+ * the cost model's estimate, weighted by notional, in bps.
+ */
+export const getTcaSummary = <ThrowOnError extends boolean = false>(options?: Options<GetTcaSummaryData, ThrowOnError>): RequestResult<GetTcaSummaryResponses, GetTcaSummaryErrors, ThrowOnError> => (options?.client ?? client).get<GetTcaSummaryResponses, GetTcaSummaryErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/tca/summary',
+    ...options
+});
+
+/**
  * List Ticks
+ *
+ * Every tick run, newest first. Summaries keep the global outcome
+ * and the parts about your own portfolios only.
  */
 export const listTicks = <ThrowOnError extends boolean = false>(options?: Options<ListTicksData, ThrowOnError>): RequestResult<ListTicksResponses, ListTicksErrors, ThrowOnError> => (options?.client ?? client).get<ListTicksResponses, ListTicksErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -1402,6 +1759,9 @@ export const getTickResult = <ThrowOnError extends boolean = false>(options: Opt
 
 /**
  * Get Tick
+ *
+ * One tick run with the orders it placed in your portfolios (or in
+ * ``portfolio_id`` only). Another user's portfolio is a 404.
  */
 export const getTick = <ThrowOnError extends boolean = false>(options: Options<GetTickData, ThrowOnError>): RequestResult<GetTickResponses, GetTickErrors, ThrowOnError> => (options.client ?? client).get<GetTickResponses, GetTickErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],

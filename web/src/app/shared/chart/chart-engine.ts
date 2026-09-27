@@ -12,7 +12,13 @@ export interface ChartPoint {
   value: number;
 }
 
-export type ChartColor = 'brass' | 'primary' | 'gain' | 'loss' | 'muted';
+/**
+ * Named line colours, each read from a design token. `brass` is the real
+ * portfolio, `gain`/`loss` carry meaning (drawdown), `muted` a benchmark;
+ * `primary`, `info`, `warn` and `ink` are categorical, for lines that only
+ * need telling apart (see CATEGORICAL_LINES).
+ */
+export type ChartColor = 'brass' | 'primary' | 'gain' | 'loss' | 'muted' | 'info' | 'warn' | 'ink';
 export type ChartValueFormat = 'money' | 'percent' | 'number';
 
 export interface ChartSeries {
@@ -24,8 +30,24 @@ export interface ChartSeries {
   /** 0 = main pane; 1 = a lower pane (e.g. drawdown under equity). */
   pane?: number;
   format?: ChartValueFormat;
+  /** Dashed line; pairs with a colour so more lines stay distinct. */
+  dashed?: boolean;
   points: readonly ChartPoint[];
 }
+
+/**
+ * Line styles for series that are peers (several strategies on one chart),
+ * with no gain or loss meaning. Colours alternate hue and lightness, then
+ * repeat dashed, so six lines stay apart; show at most this many.
+ */
+export const CATEGORICAL_LINES: readonly { color: ChartColor; dashed: boolean }[] = [
+  { color: 'primary', dashed: false },
+  { color: 'warn', dashed: false },
+  { color: 'ink', dashed: false },
+  { color: 'info', dashed: true },
+  { color: 'warn', dashed: true },
+  { color: 'ink', dashed: true },
+];
 
 export interface ChartTheme {
   background: string;

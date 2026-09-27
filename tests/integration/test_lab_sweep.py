@@ -45,6 +45,7 @@ def test_plan_defaults_to_every_non_wrapper_strategy_and_honours_exclude():
         "last_trade_filter",
         "regime_filter",
         "trailing_stop",
+        "latent_regime_filter",
     }
 
 
@@ -208,3 +209,57 @@ def test_cli_sweep_rejects_unknown_strategies(tmp_path, monkeypatch):
     )
     assert result.exit_code == 2
     assert "unknown strategy" in result.output
+
+
+@pytest.mark.parametrize(("benchmark", "expected"), [("QQQ.US", "QQQ.US"), ("auto", "SPY.US")])
+def test_rs01_the_snapshot_holds_the_benchmark_ticker(
+    sweep_settings, lake_trending, monkeypatch, benchmark, expected
+):
+    import stonks.app.sweep as sweep
+
+    seen: list[list[str]] = []
+    real = sweep.LakeSnapshot.build
+
+    def spy(lake, universe, **kwargs):
+        seen.append(list(universe))
+        return real(lake, universe, **kwargs)
+
+    monkeypatch.setattr(sweep.LakeSnapshot, "build", staticmethod(spy))
+    run_sweep(
+        sweep_settings,
+        plan_sweep(BASKET, ["momentum"]),
+        _request(benchmark=benchmark),
+        lake=lake_trending,
+        parallel=ParallelSettings(max_workers=1),
+    )
+    [tickers] = seen
+    assert tickers[: len(BASKET)] == BASKET and expected in tickers
+
+
+def test_the_snapshot_holds_each_strategys_reference_tickers():
+    """A strategy's ``data_tickers()`` (read but never traded) must be in the
+    snapshot, or its workers see no bars for the reference market."""
+    from stonks.app.sweep import snapshot_tickers
+
+    tasks = plan_sweep(["ETH-USD.CC"], ["intramarket_difference"])
+    request = _request(benchmark="none").model_copy(update={"universe": ["ETH-USD.CC"]})
+    assert snapshot_tickers(request, tasks) == ["ETH-USD.CC", "BTC-USD.CC"]
+
+
+def test_load_strategy_class_returns_a_tradable_class():
+    from stonks.lab.catalog import load_strategy_class
+
+    cls = load_strategy_class("momentum")
+    assert cls.id == "momentum"
+    assert callable(cls.estimate_return) and callable(cls.decide)
+
+
+def test_load_strategy_class_refuses_a_class_that_cannot_trade(monkeypatch):
+    import stonks.lab.catalog as catalog
+
+    class Half(catalog.BaseStrategy):
+        id = "half"
+
+    monkeypatch.setattr(catalog, "strategy_catalog", lambda: {"half": Half})
+    with pytest.raises(ValueError, match="cannot trade"):
+        catalog.load_strategy_class("half")

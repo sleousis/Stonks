@@ -1,9 +1,21 @@
-"""Machine-learning seams: :class:`Classifier` and :class:`Clusterer`.
+"""Machine-learning seams: :class:`Classifier` and :class:`Clusterer`, plus
+bet sizing from a predicted probability (BL-45).
 
 scikit-learn is the backend, but its types never leave this module: models
 take and return plain numpy arrays, and persistence is behind ``save`` /
 ``load``. Swapping the backend (LightGBM, a hand-rolled model, ...) means a
 new subclass here and no change in any strategy.
+
+Bet sizing (López de Prado, *AFML* ch. 10): :func:`bet_size` turns a
+classifier's ``P(win)`` into a signed size in ``[-1, 1]``,
+``2 * Phi((p - 1/K) / sqrt(p (1 - p))) - 1``, discretised to steps of 0.1
+so small changes in ``p`` do not trade. :func:`break_even_probability` is
+the ``P(win)`` at which a take profit ``tp`` and a stop ``sl`` have zero
+expectancy, ``sl / (tp + sl)``: a meta-label threshold below it takes
+losing bets on average.
+
+Classifiers accept ``sample_weight`` (for example the average uniqueness of
+overlapping labels, :func:`stonks.features.labels.avg_uniqueness`).
 
 Persistence and trust: a fitted forest is saved with ``joblib`` (a pickle
 format; loading one can run arbitrary code). :meth:`ForestClassifier.load`
@@ -22,10 +34,20 @@ import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
+from scipy.stats import norm
 
-__all__ = ["Classifier", "Clusterer", "Clustering", "ForestClassifier", "SilhouetteKMeans"]
+__all__ = [
+    "Classifier",
+    "Clusterer",
+    "Clustering",
+    "ForestClassifier",
+    "SilhouetteKMeans",
+    "bet_size",
+    "break_even_probability",
+]
 
 _MODEL_FILE = "model.joblib"
 _META_FILE = "model.json"
@@ -38,7 +60,8 @@ class Classifier(ABC):
     """Binary classifier over a numeric feature matrix."""
 
     @abstractmethod
-    def fit(self, x: np.ndarray, y: np.ndarray) -> None: ...
+    def fit(self, x: np.ndarray, y: np.ndarray, sample_weight: np.ndarray | None = None) -> None:
+        """Fit on ``x`` and ``y``; ``sample_weight`` weighs each row."""
 
     @abstractmethod
     def predict_proba(self, x: np.ndarray) -> np.ndarray:
@@ -71,13 +94,16 @@ class ForestClassifier(Classifier):
     def is_fitted(self) -> bool:
         return self._model is not None or self._constant is not None
 
-    def fit(self, x: np.ndarray, y: np.ndarray) -> None:
+    def fit(self, x: np.ndarray, y: np.ndarray, sample_weight: np.ndarray | None = None) -> None:
         from sklearn.ensemble import RandomForestClassifier
 
         x = np.asarray(x, dtype=float)
         y = np.asarray(y, dtype=int)
         if len(x) == 0 or len(x) != len(y):
             raise ValueError("x and y must be non-empty and of equal length")
+        weights = None if sample_weight is None else np.asarray(sample_weight, dtype=float)
+        if weights is not None and weights.shape != (len(y),):
+            raise ValueError("sample_weight must have one weight per row")
         classes = np.unique(y)
         if len(classes) == 1:
             self._model = None
@@ -89,7 +115,7 @@ class ForestClassifier(Classifier):
             random_state=self.seed,
             n_jobs=1,
         )
-        model.fit(x, y)
+        model.fit(x, y, sample_weight=weights)
         self._model = model
         self._constant = None
 
@@ -124,12 +150,12 @@ class ForestClassifier(Classifier):
             joblib.dump(self._model, blob)
             meta["file"] = _MODEL_FILE
             meta["sha256"] = _sha256(blob)
-        (path / _META_FILE).write_text(json.dumps(meta, indent=2, sort_keys=True))
+        (path / _META_FILE).write_text(json.dumps(meta, indent=2, sort_keys=True), encoding="utf-8")
 
     @classmethod
     def load(cls, path: Path) -> ForestClassifier:
         path = Path(path)
-        meta = json.loads((path / _META_FILE).read_text())
+        meta = json.loads((path / _META_FILE).read_text(encoding="utf-8"))
         if meta.get("kind") != cls.kind:
             raise ValueError(f"not a {cls.kind} model: {meta.get('kind')!r}")
         instance = cls(meta["n_estimators"], meta["max_depth"], meta["seed"])
@@ -155,6 +181,40 @@ class ForestClassifier(Classifier):
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+# ---- bet sizing ---------------------------------------------------------------
+
+
+def bet_size(p: float | np.ndarray, n_classes: int = 2, step: float | None = 0.1) -> Any:
+    """Signed bet size in ``[-1, 1]`` for probability ``p`` of the
+    predicted class (see the module doc): 0 at ``p = 1/K``, rounded to
+    multiples of ``step`` (``None`` keeps it continuous). Scalar in,
+    float out; array in, array out."""
+    if n_classes < 2:
+        raise ValueError(f"n_classes must be >= 2, got {n_classes}")
+    if step is not None and not step > 0:
+        raise ValueError(f"step must be positive, got {step}")
+    prob = np.asarray(p, dtype=float)
+    if np.any((prob < 0) | (prob > 1)):
+        raise ValueError("probabilities must lie in [0, 1]")
+    centre = 1.0 / n_classes
+    with np.errstate(divide="ignore", invalid="ignore"):
+        z = (prob - centre) / np.sqrt(prob * (1.0 - prob))
+    z = np.where(prob == centre, 0.0, z)
+    size = 2.0 * norm.cdf(z) - 1.0
+    if step is not None:
+        size = np.round(size / step) * step
+    size = np.clip(size, -1.0, 1.0) + 0.0  # + 0.0 turns -0.0 into 0.0
+    return float(size) if size.ndim == 0 else size
+
+
+def break_even_probability(tp: float, sl: float) -> float:
+    """``P(win)`` at which a ``tp`` take profit and an ``sl`` stop (same
+    units) break even: ``sl / (tp + sl)``."""
+    if not (tp > 0 and sl > 0):
+        raise ValueError("tp and sl must be positive")
+    return float(sl) / (float(tp) + float(sl))
 
 
 # ---- clusterer ----------------------------------------------------------------

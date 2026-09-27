@@ -226,7 +226,7 @@ def test_personal_token_works_as_bearer_and_respects_scopes(remote, settings):
     ).json()
     token = created["token"]
     assert token.startswith("stk_")
-    listed = remote.get("/api/auth/tokens").json()
+    listed = remote.get("/api/auth/tokens").json()["items"]
     assert [t["id"] for t in listed] == [created["info"]["id"]]
     assert "token" not in listed[0]
 
@@ -306,7 +306,7 @@ def test_admin_user_management_over_http(app, settings, auth):
         )
         assert created.status_code == 201, created.text
         bob_id = created.json()["id"]
-        users = admin.get("/api/auth/users").json()
+        users = admin.get("/api/auth/users").json()["items"]
         assert {u["email"] for u in users} >= {"owner@example.com", "bob@example.com"}
         assert all(set(u) == set(users[0]) for u in users)  # identity only
         patched = admin.patch(
@@ -419,7 +419,7 @@ def test_user_a_cannot_reach_user_b_resources_through_any_scoped_route(app, sett
         assert c.get(f"/api/connections/{bob_conn}", headers=alice).status_code == 404
         assert c.delete(f"/api/connections/{bob_conn}", headers=alice).status_code == 404
         assert c.delete(f"/api/auth/tokens/{bob_token_info.id}", headers=alice).status_code == 404
-        assert c.get("/api/connections", headers=alice).json() == []
+        assert c.get("/api/connections", headers=alice).json()["items"] == []
         assert c.get("/api/notifications", headers=alice).json()["unread_count"] == 0
 
         # Bob's things are untouched.
@@ -428,7 +428,104 @@ def test_user_a_cannot_reach_user_b_resources_through_any_scoped_route(app, sett
         assert c.get("/api/notifications", headers=bob).json()["unread_count"] == 1
 
 
+def _every_get_route() -> list[str]:
+    """Every mounted GET route, whatever its dependencies (review finding
+    AS-08: a route that forgot the principal is exactly the one that leaks)."""
+    from fastapi.routing import APIRoute
+
+    from stonks.api import routers
+
+    mounted = [
+        *routers.API_ROUTERS,
+        *routers.TOKEN_ROUTERS,
+        *routers.STREAM_ROUTERS,
+        *routers.PUBLIC_ROUTERS,
+    ]
+    return sorted(
+        {
+            route.path
+            for router in mounted
+            for route in router.routes
+            if isinstance(route, APIRoute) and "GET" in route.methods
+        }
+    )
+
+
+def test_no_get_route_shows_another_users_data(app, settings, auth):
+    """Seed Bob's private rows (a notification, a job, a draft, a portfolio
+    with an order and a snapshot) and walk every GET route as Alice, with
+    Bob's ids in the path and in ``portfolio_id``. None of Bob's markers may
+    come back."""
+    from stonks.accounts import PortfolioRepository
+    from stonks.accounts.scope import Scope
+
+    path = settings.state.path
+    alice_id = add_user(path, "alice@example.com")
+    bob_id = add_user(path, "bob@example.com")
+    _, alice_token = auth.create_token(
+        session_principal(alice_id, Role.TRADER), name="a", scopes=["read", "trade", "lab"]
+    )
+    alice = {"Authorization": f"Bearer {alice_token}"}
+    services = app.state.services
+    bob_job = services.runner.store.create("backtest", {"marker": "BOBJOBPARAM"}, owner_id=bob_id)
+    with SqliteState(path) as state:
+        bob_scope = Scope(user_id=bob_id, role=Role.TRADER)
+        bob_pf = PortfolioRepository(state).create(bob_scope, name="BOBBOOK").id
+        state.execute(
+            "INSERT INTO alerts (level, title, message, created_at, user_id, category)"
+            " VALUES ('info', 'BOBALERT', 'for bob', '2026-09-26T00:00:00+00:00', ?, 'system')",
+            [bob_id],
+        )
+        state.execute(
+            "INSERT INTO orders (client_id, ticker, side, quantity, order_type, status,"
+            " created_at, updated_at, portfolio_id) VALUES ('bob-order-1', 'BOBSECRET.US',"
+            " 'buy', 7, 'market', 'filled', '2026-03-20T00:00:00+00:00',"
+            " '2026-03-20T00:00:00+00:00', ?)",
+            [bob_pf],
+        )
+        state.execute(
+            "INSERT INTO portfolio_snapshots (taken_at, cash, positions_json, total_value,"
+            " portfolio_id) VALUES ('2026-03-20T00:00:00+00:00', 4242.42,"
+            " '{\"BOBSECRET.US\": 7}', 9999.99, ?)",
+            [bob_pf],
+        )
+        state.execute(
+            "INSERT INTO strategy_drafts (id, name, kind, spec_json, status, created_at,"
+            " updated_at, owner_id) VALUES ('draft_bob', 'BOBDRAFT', 'rule', '{}', 'draft',"
+            " '2026-09-26', '2026-09-26', ?)",
+            [bob_id],
+        )
+    markers = ["BOBALERT", "BOBSECRET", "BOBBOOK", "BOBDRAFT", "BOBJOBPARAM", bob_job.id]
+    ids = {"job_id": bob_job.id, "draft_id": "draft_bob", "portfolio_id": bob_pf}
+    routes = _every_get_route()
+    assert "/api/alerts" in routes and "/api/jobs/{job_id}" in routes
+    with _client(app) as c:
+        for route in routes:
+            url = re.sub(r"\{(\w+)\}", lambda m: ids.get(m.group(1), "x"), route)
+            for params in ({}, {"portfolio_id": bob_pf}):
+                resp = c.get(url, params=params, headers=alice)
+                assert resp.status_code in (200, 403, 404, 409, 422, 503), (
+                    route,
+                    resp.status_code,
+                )
+                for marker in markers:
+                    if marker in url:
+                        continue  # a 404 may echo the id Alice sent herself
+                    assert marker not in resp.text, (route, params, marker)
+
+
 def test_open_reads_on_loopback_still_work_without_credentials(app):
     with _client(app, peer=LOOPBACK) as c:
         assert c.get("/api/strategies").status_code == 200
         assert c.get("/api/auth/me").status_code == 401
+
+
+def test_me_tells_a_signed_out_console_whether_reads_are_open(app):
+    """BUG-1: the console learns this from /api/auth/me alone, so it never
+    probes a data route (and gets a 401) before anyone signs in."""
+    with _client(app, peer=LOOPBACK) as c:
+        resp = c.get("/api/auth/me")
+        assert resp.status_code == 401 and resp.json()["code"] == "reads_open"
+    with _client(app, peer=REMOTE) as c:
+        resp = c.get("/api/auth/me")
+        assert resp.status_code == 401 and resp.json()["code"] == "not_authenticated"

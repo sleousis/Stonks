@@ -44,7 +44,7 @@ class PushSubscriptionRequest(BaseModel):
 
     endpoint: str = Field(min_length=1, max_length=ENDPOINT_MAX)
     keys: PushKeys
-    expirationTime: float | None = None  # noqa: N815 - the browser's field name
+    expirationTime: float | None = None  # the browser's field name
     user_agent: str | None = Field(default=None, max_length=USER_AGENT_MAX)
 
 
@@ -105,6 +105,14 @@ class PushDeviceView(BaseModel):
     failure_count: int
 
 
+class ChannelDefaultView(BaseModel):
+    channel: str
+    #: On for a category you never set.
+    default_enabled: bool
+    #: Used instead of push for high urgency when you have no working device.
+    fallback: bool
+
+
 class PreferencesView(BaseModel):
     preferences: list[PreferenceItem]
     quiet_start: str | None
@@ -114,6 +122,8 @@ class PreferencesView(BaseModel):
     webhook: str | None
     #: Channels a preference can name.
     channels: list[str]
+    #: What each channel does when you have not set it.
+    channel_defaults: list[ChannelDefaultView] = Field(default_factory=list)
 
 
 class FeedItemView(BaseModel):
@@ -174,6 +184,10 @@ def _prefs(p: notify.NotificationPreferences) -> PreferencesView:
         timezone=p.timezone,
         webhook=p.webhook,
         channels=list(p.channels),
+        channel_defaults=[
+            ChannelDefaultView(channel=name, default_enabled=enabled, fallback=fallback)
+            for name, enabled, fallback in p.channel_defaults
+        ],
     )
 
 
@@ -220,6 +234,11 @@ class NotificationsAppService:
     def unsubscribe(self, scope: Scope, endpoint: str) -> None:
         with self._state() as state:
             notify.remove_push_subscription_by_endpoint(state, scope, endpoint)
+
+    def remove_device(self, scope: Scope, device_id: str) -> None:
+        """Unregister one of your devices by its id (404 when it isn't yours)."""
+        with self._state() as state:
+            notify.remove_push_subscription(state, scope, device_id)
 
     def devices(self, scope: Scope) -> list[PushDeviceView]:
         with self._state() as state:

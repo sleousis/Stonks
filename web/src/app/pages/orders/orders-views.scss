@@ -42,7 +42,7 @@ select.input {
 
 // Cells ---------------------------------------------------------------------
 .mono {
-  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
   overflow-wrap: anywhere;
 }

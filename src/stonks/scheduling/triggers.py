@@ -68,6 +68,11 @@ class Trigger(ABC):
     @abstractmethod
     def describe(self) -> str: ...
 
+    @abstractmethod
+    def plain(self) -> str:
+        """When it runs, in plain English for the console (``describe`` is
+        the short form the CLI prints)."""
+
 
 @dataclass(frozen=True)
 class SessionTrigger(Trigger):
@@ -98,6 +103,15 @@ class SessionTrigger(Trigger):
         minutes = int(self.offset.total_seconds() // 60)
         sign = "+" if minutes >= 0 else "-"
         return f"{self.calendar} {self.anchor} {sign} {abs(minutes)} min on trading days"
+
+    def plain(self) -> str:
+        edge = "opens" if self.anchor == "open" else "closes"
+        market = f"the {_market(self.calendar)} market {edge}"
+        seconds = int(self.offset.total_seconds())
+        if seconds == 0:
+            return f"When {market}, on trading days"
+        side = "after" if seconds > 0 else "before"
+        return f"{_span(abs(seconds))} {side} {market}, on trading days"
 
 
 @dataclass(frozen=True)
@@ -152,6 +166,16 @@ class DailyTrigger(Trigger):
         where = f" on {self.calendar} trading days" if self.calendar else ""
         return f"daily at {self.at.strftime('%H:%M')} {self.tz}{where}"
 
+    def plain(self) -> str:
+        at = f"at {self.at.strftime('%H:%M')} {self.tz}"
+        if self.weekdays is not None and len(self.weekdays) < 7:
+            names = [_WEEKDAYS[d] for d in sorted(self.weekdays)]
+            days = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+            return f"{days} {at}"
+        if self.calendar:
+            return f"Every {_market(self.calendar)} trading day {at}"
+        return f"Every day {at}"
+
 
 @dataclass(frozen=True)
 class IntervalTrigger(Trigger):
@@ -183,3 +207,34 @@ class IntervalTrigger(Trigger):
 
     def describe(self) -> str:
         return f"every {int(self.every.total_seconds() // 60)} min"
+
+    def plain(self) -> str:
+        text = _span(int(self.every.total_seconds()))
+        return "Every " + (text[2:] if text.startswith("1 ") else text)
+
+
+#: Exchange calendar codes a trader knows by city.
+_MARKETS = {
+    "XNYS": "New York",
+    "XNAS": "Nasdaq",
+    "XLON": "London",
+    "XETR": "Frankfurt",
+    "XPAR": "Paris",
+    "XTSE": "Toronto",
+    "XTKS": "Tokyo",
+    "XASX": "Sydney",
+}
+_WEEKDAYS = ("Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays", "Sundays")
+
+
+def _market(calendar: str) -> str:
+    return _MARKETS.get(calendar.upper(), calendar)
+
+
+def _span(seconds: int) -> str:
+    """``2 hours``, ``45 minutes``, ``90 seconds``: the largest whole unit."""
+    for size, unit in ((3600, "hour"), (60, "minute"), (1, "second")):
+        if seconds % size == 0 and seconds >= size:
+            n = seconds // size
+            return f"{n} {unit}{'' if n == 1 else 's'}"
+    return f"{seconds} seconds"

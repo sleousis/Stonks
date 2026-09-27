@@ -40,6 +40,7 @@ from stonks.lab.parallel import (
 )
 from stonks.lab.tuning.base import evaluate_trial
 from stonks.logging import get_logger
+from stonks.strategies.base import strategy_data_tickers
 
 _log = get_logger("stonks.lab.survival.reruns")
 
@@ -106,7 +107,8 @@ def run_reruns(
         problem = _unpicklable(_State(saved, objective, _without_lake(dataset)), reruns[0])
         if problem is None:
             universe = _union_universe(dataset, reruns)
-            with dataset_snapshot(_with_universe(dataset, universe)) as shipped:
+            extra = strategy_data_tickers(strategy)
+            with dataset_snapshot(_with_universe(dataset, universe), extra) as shipped:
                 return run_tasks(
                     _run_one,
                     reruns,

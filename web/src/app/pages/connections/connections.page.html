@@ -1,0 +1,195 @@
+<app-page-header
+  title="Broker connections"
+  description="Link your brokerage so Stonks can read your positions, cash and activity. It never places trades there."
+/>
+
+<div class="page-grid">
+  <!-- Your connections ------------------------------------------------------>
+  <section class="panel span-12" aria-labelledby="connections-title">
+    <div class="panel-head">
+      <h2 id="connections-title">Your connections</h2>
+    </div>
+    @if (connections.error(); as err) {
+      <app-error-state
+        title="Could not load your connections"
+        [error]="err"
+        (retry)="connections.reload()"
+      />
+    } @else if (!connections.hasValue()) {
+      <app-loading-state label="Loading your connections" [rows]="2" />
+    } @else if (connections.value().length === 0) {
+      <app-empty-state
+        title="No broker connected yet"
+        message="Connecting lets Stonks read your real positions, cash and activity, so you can see them next to your strategies. Stonks only reads. It never trades in your brokerage account."
+      >
+        @if (canManage()) {
+          <button type="button" class="btn btn-primary" (click)="showProviders()">
+            Connect a broker
+          </button>
+        }
+      </app-empty-state>
+    } @else {
+      <ul class="connection-list">
+        @for (row of connections.value(); track row.connection.id) {
+          <li>
+            <a class="connection" [routerLink]="['/connections', row.connection.id]">
+              <span class="connection-name">
+                {{ providerName(row.connection.provider) }}
+                @if (row.connection.label) {
+                  <span class="muted">{{ row.connection.label }}</span>
+                }
+              </span>
+              <app-status-pill
+                [status]="row.connection.status"
+                [label]="statusLabel[row.connection.status]"
+              />
+              <span class="fact">
+                <span class="muted">Last sync</span>
+                {{ row.connection.last_sync_at ? (row.connection.last_sync_at | ago) : 'Not yet' }}
+              </span>
+              <span class="fact">
+                <span class="muted">Accounts</span>
+                <span class="num">{{ row.accounts ?? 'n/a' }}</span>
+              </span>
+            </a>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+
+  <!-- Providers ------------------------------------------------------------->
+  <section class="panel span-12" aria-labelledby="providers-title">
+    <div class="panel-head">
+      <h2 id="providers-title" tabindex="-1" #providersHeading>Connect a broker</h2>
+    </div>
+    <div class="panel-body">
+      <app-permission-note permission="connection.manage" />
+      @if (providers.error(); as err) {
+        <app-error-state
+          title="Could not load the brokers"
+          [error]="err"
+          (retry)="providers.reload()"
+        />
+      } @else if (!providers.hasValue()) {
+        <app-loading-state label="Loading brokers" [rows]="2" />
+      } @else {
+        @if (noneEnabled()) {
+          <app-empty-state
+            title="No brokers are turned on yet"
+            message="An admin must turn on a broker before anyone can connect one. Ask your admin."
+          />
+        }
+        <ul class="providers">
+          @for (p of providers.value(); track p.name) {
+            <li class="provider" [class.off]="!p.enabled">
+              <div class="provider-head">
+                <h3>{{ p.display_name }}</h3>
+                @if (p.enabled) {
+                  <app-status-pill status="active" label="Turned on" />
+                } @else {
+                  <app-status-pill status="disabled" tone="neutral" label="Turned off" />
+                }
+              </div>
+              <p>
+                {{ gives(p) }} Read only.
+                @if (p.has_paper) {
+                  Paper accounts work too.
+                }
+              </p>
+              <p class="muted">{{ flow(p) }}</p>
+              @if (canManage() && p.enabled) {
+                @if (p.auth_flow === 'portal') {
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    [disabled]="busy() === p.name"
+                    [attr.aria-busy]="busy() === p.name"
+                    (click)="startPortal(p)"
+                  >
+                    {{ busy() === p.name ? 'Opening…' : 'Sign in at ' + p.display_name }}
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    class="btn"
+                    [attr.aria-expanded]="keysFor() === p.name"
+                    [attr.aria-controls]="'keys-' + p.name"
+                    (click)="toggleKeys(p)"
+                  >
+                    {{ keysFor() === p.name ? 'Close' : 'Connect with keys' }}
+                  </button>
+                  @if (keysFor() === p.name) {
+                    <form
+                      class="form-grid keys"
+                      [id]="'keys-' + p.name"
+                      autocomplete="off"
+                      novalidate
+                      (submit)="$event.preventDefault(); connectWithKeys(p)"
+                    >
+                      @for (f of p.credential_fields; track f) {
+                        <div class="field">
+                          <label [for]="'key-' + p.name + '-' + f">{{ fieldLabel(f) }}</label>
+                          <input
+                            class="input"
+                            type="password"
+                            autocomplete="off"
+                            spellcheck="false"
+                            [id]="'key-' + p.name + '-' + f"
+                            [attr.name]="f"
+                            [attr.aria-invalid]="missing(p, f)"
+                            [attr.aria-describedby]="
+                              missing(p, f) ? 'key-' + p.name + '-' + f + '-error' : null
+                            "
+                            (input)="setKey(f, $any($event.target).value)"
+                          />
+                          @if (missing(p, f)) {
+                            <p class="error" [id]="'key-' + p.name + '-' + f + '-error'">
+                              Enter the {{ fieldLabel(f).toLowerCase() }}.
+                            </p>
+                          }
+                        </div>
+                      }
+                      <div class="field">
+                        <label [for]="'key-' + p.name + '-label'">Name (optional)</label>
+                        <input
+                          class="input"
+                          type="text"
+                          maxlength="120"
+                          [id]="'key-' + p.name + '-label'"
+                          [value]="keyLabel()"
+                          (input)="keyLabel.set($any($event.target).value)"
+                        />
+                        <p class="hint">Helps you tell two accounts at the same broker apart.</p>
+                      </div>
+                      @if (offersPaper(p)) {
+                        <label class="check">
+                          <input
+                            type="checkbox"
+                            [checked]="paper()"
+                            (change)="paper.set($any($event.target).checked)"
+                          />
+                          These are paper account keys (simulated money)
+                        </label>
+                      }
+                      <div class="form-actions">
+                        <button
+                          type="submit"
+                          class="btn btn-primary"
+                          [disabled]="busy() === p.name"
+                          [attr.aria-busy]="busy() === p.name"
+                        >
+                          {{ busy() === p.name ? 'Connecting…' : 'Connect' }}
+                        </button>
+                      </div>
+                    </form>
+                  }
+                }
+              }
+            </li>
+          }
+        </ul>
+      }
+    </div>
+  </section>
+</div>

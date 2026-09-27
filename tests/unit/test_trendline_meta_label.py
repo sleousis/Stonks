@@ -108,7 +108,9 @@ def test_surface_and_params():
     assert spec["hold_period"].bounds == (4, 48)
     assert spec["tp_mult"].bounds == (1, 6) and spec["sl_mult"].bounds == (1, 6)
     assert spec["atr_lookback"].bounds == (50, 400)
-    assert spec["prob_thresh"].bounds == (0.5, 0.8)
+    assert spec["prob_thresh"].bounds == (0.0, 0.8)
+    assert spec["prob_margin"].bounds == (0.0, 0.2)
+    assert not spec["bet_sizing"].tunable and not spec["cv_folds"].tunable
     assert not spec["seed"].tunable and not spec["n_estimators"].tunable
     assert FEATURE_NAMES == ("resist_slope", "tl_err", "max_dist", "volume", "adx")
 
@@ -252,3 +254,72 @@ def test_short_backtest_runs(lake):
     report = Backtester([s], broker, lake, config).run()
     assert len(report.equity_curve) == 140
     assert all(np.isfinite(report.equity_curve))
+
+
+# ---- ML hygiene (BL-45) -------------------------------------------------------------
+
+
+def test_threshold_is_the_break_even_probability_plus_margin():
+    assert _strategy().threshold == pytest.approx(0.5)  # tp = sl
+    assert _strategy(tp_mult=3.0, sl_mult=1.0).threshold == pytest.approx(0.25)
+    assert _strategy(tp_mult=3.0, sl_mult=1.0, prob_margin=0.1).threshold == pytest.approx(0.35)
+    assert _strategy(tp_mult=3.0, sl_mult=1.0, prob_thresh=0.6).threshold == pytest.approx(0.6)
+
+
+def test_break_even_threshold_admits_a_cheap_win(lake):
+    """With tp = 3 * sl a 40% win rate has a positive expectancy, so it trades."""
+    s = _strategy(tp_mult=3.0, sl_mult=1.0)
+    s.fit(_dataset(lake))
+    as_of = _open_trade_day(s, lake)
+    s._classifier = _FixedProb(0.4)
+    s._prob_memo.clear()
+    assert s.estimate_return("X.US", as_of, lake) is not None
+    s._classifier = _FixedProb(0.2)
+    s._prob_memo.clear()
+    assert s.estimate_return("X.US", as_of, lake) is None
+
+
+def test_fit_records_uniqueness_and_the_purged_cv_diagnostic(lake):
+    s = _strategy()
+    s.fit(_dataset(lake))
+    state = s.fitted_state()
+    assert state["n_segments"] == 1
+    assert state["mean_uniqueness"] == pytest.approx(1.0)  # base trades never overlap
+    assert state["cv_folds"] == 3.0
+    assert 0.0 <= state["cv_accuracy"] <= 1.0 and 0.0 <= state["cv_brier"] <= 1.0
+    off = _strategy(cv_folds=0)
+    off.fit(_dataset(lake))
+    assert "cv_accuracy" not in off.fitted_state()
+
+
+def test_fit_on_cv_segments_never_spans_a_gap(lake):
+    """A CV fold trains on segments either side of a test block: no trade
+    may start in one segment and end in another, and nothing is read from
+    the gap."""
+    ds = _dataset(lake)
+    gap_start, gap_end = DATES[200].date(), DATES[300].date()
+    fold = ds.with_train_segments(
+        [(DATES[0].date(), DATES[199].date()), (DATES[301].date(), TRAIN_END)]
+    )
+    s = _strategy()
+    s.fit(fold)
+    assert s.fitted_state()["n_segments"] == 2
+    for t in s.training_trades:
+        entry, exit_ = t.entry_ts.date(), t.exit_ts.date()
+        assert not (gap_start <= entry <= gap_end) and not (gap_start <= exit_ <= gap_end)
+        assert (entry < gap_start) == (exit_ < gap_start)
+
+
+def test_bet_sizing_scales_the_entry(lake):
+    s = _strategy(bet_sizing=True)
+    s.fit(_dataset(lake))
+    as_of = _open_trade_day(s, lake)
+    s._classifier = _FixedProb(0.7)
+    s._prob_memo.clear()
+    assert s.estimate_return("X.US", as_of, lake) is not None
+    orders = s.decide([(1.0, "X.US")], Portfolio(cash=1000.0), {"X.US": 10.0}, as_of)
+    # bet_size(0.7) = 2 * Phi(0.436) - 1 = 0.337, rounded to 0.3
+    assert orders[0].quantity == pytest.approx(1000.0 * 0.3 / 10.0)
+    s._classifier = _FixedProb(0.52)  # admitted, but the bet size rounds to 0
+    s._prob_memo.clear()
+    assert s.estimate_return("X.US", as_of, lake) is None

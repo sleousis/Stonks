@@ -36,10 +36,23 @@ class PBOTest:
     class Options(BaseModel):
         model_config = ConfigDict(extra="forbid")
 
-        n_blocks: int = Field(10, ge=8, le=16)
-        max_combinations: int = Field(5000, ge=1)
-        max_pbo: float = Field(0.2, ge=0.0, le=1.0)
-        min_trials: int = Field(8, ge=2)
+        n_blocks: int = Field(
+            10,
+            ge=8,
+            le=16,
+            description="How many blocks to cut the history into for the split test.",
+        )
+        max_combinations: int = Field(
+            5000,
+            ge=1,
+            description="Most train and test splits to try. More are sampled down to this.",
+        )
+        max_pbo: float = Field(
+            0.2, ge=0.0, le=1.0, description="Highest chance of overfitting that passes."
+        )
+        min_trials: int = Field(
+            8, ge=2, description="Fewest tried settings to judge. Fewer fails for lack of data."
+        )
         seed: int = 0
 
         @field_validator("n_blocks")

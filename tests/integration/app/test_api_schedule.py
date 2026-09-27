@@ -140,6 +140,37 @@ def test_schedule_lists_jobs_and_recent_runs(client):
     assert body["recent"] == []
 
 
+def _sessions_at(settings, fake_source, tmp_path, now):
+    svc = _services(settings, fake_source, _config(tmp_path))
+    svc.schedule = ScheduleService(svc.context, config=_config(tmp_path), clock=lambda: now)
+    svc.schedule.bind(svc)
+    with TestClient(create_app(settings, services=svc), client=LOOPBACK) as c:
+        return c.get("/api/schedule").json()["market"]
+
+
+def test_schedule_gives_todays_and_the_next_market_session(settings, seeded, fake_source, tmp_path):
+    from datetime import UTC, datetime
+
+    # Friday 2026-09-25, 12:00 UTC: before the NYSE open (13:30 UTC in summer).
+    market = _sessions_at(settings, fake_source, tmp_path, datetime(2026, 9, 25, 12, tzinfo=UTC))
+    assert market["calendar"] == "XNYS" and market["is_open"] is False
+    today = market["today"]
+    assert today["date"] == "2026-09-25"
+    assert today["open"].startswith("2026-09-25T13:30:00")
+    assert today["close"].startswith("2026-09-25T20:00:00")
+    assert today["pre_open"].startswith("2026-09-25T13:00:00")
+    assert market["next"]["date"] == "2026-09-28"
+    assert market["next"]["open"].startswith("2026-09-28T13:30:00")
+
+
+def test_schedule_has_no_session_today_on_a_weekend(settings, seeded, fake_source, tmp_path):
+    from datetime import UTC, datetime
+
+    market = _sessions_at(settings, fake_source, tmp_path, datetime(2026, 9, 26, 15, tzinfo=UTC))
+    assert market["today"] is None and market["is_open"] is False
+    assert market["next"]["date"] == "2026-09-28"
+
+
 def test_run_now_is_audited_and_recorded(client, settings):
     resp = client.post("/api/schedule/health/run-now", json={}, headers=AUTH)
     assert resp.status_code == 202, resp.text
@@ -183,3 +214,9 @@ def test_lifespan_hosts_the_in_process_scheduler(settings, seeded, fake_source, 
         assert live.status_code == 200, live.text
         assert live.json()["checks"] == {"process": "ok", "scheduler": "ok"}
     assert services.schedule.handle is None  # stopped with the app
+
+
+def test_schedule_says_when_each_job_runs_in_plain_words(client):
+    [job] = client.get("/api/schedule", headers=AUTH).json()["jobs"]
+    assert job["trigger"] == "every 10000 min"
+    assert job["trigger_text"] == "Every 10000 minutes"

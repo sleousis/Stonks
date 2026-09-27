@@ -10,6 +10,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`backtest_draft`](#backtest_draft) | job | no |
 | [`create_draft`](#create_draft) | job | no |
 | [`create_universe`](#create_universe) | guarded | yes |
+| [`delete_universe`](#delete_universe) | guarded | yes |
 | [`disable_draft`](#disable_draft) | guarded | yes |
 | [`enable_draft`](#enable_draft) | guarded | yes |
 | [`engage_kill_switch`](#engage_kill_switch) | guarded | yes |
@@ -21,6 +22,8 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_coverage`](#get_coverage) | read | no |
 | [`get_draft`](#get_draft) | read | no |
 | [`get_health_report`](#get_health_report) | read | no |
+| [`get_insights`](#get_insights) | read | no |
+| [`get_insights_totals`](#get_insights_totals) | read | no |
 | [`get_job`](#get_job) | read | no |
 | [`get_pnl`](#get_pnl) | read | no |
 | [`get_portfolio`](#get_portfolio) | read | no |
@@ -29,6 +32,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_rule_schema`](#get_rule_schema) | read | no |
 | [`get_shadow_pnl`](#get_shadow_pnl) | read | no |
 | [`get_strategy`](#get_strategy) | read | no |
+| [`get_strategy_agreement`](#get_strategy_agreement) | read | no |
 | [`get_strategy_history`](#get_strategy_history) | read | no |
 | [`get_tick`](#get_tick) | read | no |
 | [`get_universe`](#get_universe) | read | no |
@@ -45,18 +49,24 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_jobs`](#list_jobs) | read | no |
 | [`list_orders`](#list_orders) | read | no |
 | [`list_portfolio_snapshots`](#list_portfolio_snapshots) | read | no |
+| [`list_portfolios`](#list_portfolios) | read | no |
 | [`list_shadow_decisions`](#list_shadow_decisions) | read | no |
 | [`list_shadow_pnl`](#list_shadow_pnl) | read | no |
 | [`list_sources`](#list_sources) | read | no |
 | [`list_statement_flags`](#list_statement_flags) | read | no |
 | [`list_strategies`](#list_strategies) | read | no |
 | [`list_studio_templates`](#list_studio_templates) | read | no |
+| [`list_subscriptions`](#list_subscriptions) | read | no |
 | [`list_ticks`](#list_ticks) | read | no |
+| [`list_trading_modes`](#list_trading_modes) | read | no |
 | [`list_universes`](#list_universes) | read | no |
+| [`live_risk`](#live_risk) | read | no |
+| [`order_tca`](#order_tca) | read | no |
 | [`promote_strategy`](#promote_strategy) | guarded | yes |
 | [`refresh_universe`](#refresh_universe) | guarded | yes |
 | [`register_draft`](#register_draft) | guarded | yes |
 | [`retire_strategy`](#retire_strategy) | guarded | yes |
+| [`risk_snapshots`](#risk_snapshots) | read | no |
 | [`run_backtest`](#run_backtest) | job | no |
 | [`run_ingest`](#run_ingest) | job | no |
 | [`run_lab`](#run_lab) | guarded | yes |
@@ -64,11 +74,16 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`run_tick`](#run_tick) | guarded | yes |
 | [`search_instruments`](#search_instruments) | read | no |
 | [`shadow_strategy`](#shadow_strategy) | guarded | yes |
+| [`subscribe`](#subscribe) | guarded | yes |
 | [`sync_connection`](#sync_connection) | guarded | yes |
+| [`tca_summary`](#tca_summary) | read | no |
+| [`trade_journal`](#trade_journal) | read | no |
 | [`update_draft`](#update_draft) | job | no |
+| [`update_subscription`](#update_subscription) | guarded | yes |
 | [`validate_draft`](#validate_draft) | job | no |
 | [`validate_rule_spec`](#validate_rule_spec) | read | no |
 | [`wait_for_job`](#wait_for_job) | read | no |
+| [`whoami`](#whoami) | read | no |
 
 ## Read tools
 
@@ -150,6 +165,28 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `tickers` | list[string] \| null | no | `null` | bar-freshness tickers; default [production].universe |
 
+### `get_insights`
+
+Insights for one of your portfolios (a synced broker account too):
+allocation by asset class, sector, currency and ticker; exposure
+(gross, net, beta); P&L over 1d, 1w, 1m, 3m, ytd, 1y and since
+inception; risk (volatility, drawdown, VaR, concentration).
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
+| `benchmark` | string \| null | no | `null` | ticker beta is measured against; default SPY.US |
+
+### `get_insights_totals`
+
+Admins only: asset-class allocation and exposure summed over every active portfolio (no tickers, no per-person numbers).
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
 ### `get_job`
 
 One background job: status, progress, and its result once finished.
@@ -228,6 +265,17 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `strategy_id` | string | yes |  |  |
 
+### `get_strategy_agreement`
+
+For each holding of one of your portfolios: whether each active
+strategy's latest signal agrees or disagrees with it, and why.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
+
 ### `get_strategy_history`
 
 A strategy's audited status changes (actor, reason, override, go-live
@@ -241,13 +289,15 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 ### `get_tick`
 
-One production tick run with the orders it placed.
+One production tick run with the orders it placed in your
+portfolios (or in ``portfolio_id`` only).
 
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `tick_id` | string | yes |  |  |
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
 
 ### `get_universe`
 
@@ -388,6 +438,14 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
 
+### `list_portfolios`
+
+Your portfolios, oldest first, each marked paper or live.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
 ### `list_shadow_decisions`
 
 Virtual orders shadow strategies placed (never sent to a broker), newest first.
@@ -461,9 +519,20 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
 
+### `list_subscriptions`
+
+Your subscriptions: strategy, portfolio, mode (notify, paper,
+auto), whether it is on, the paper-day count and what still blocks
+auto.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
 ### `list_ticks`
 
-Production tick runs, newest first, with their summaries.
+Production tick runs, newest first. Summaries show the global
+outcome and the parts about your own portfolios only.
 
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
@@ -473,6 +542,16 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
 
+### `list_trading_modes`
+
+For each of your portfolios: paper or live money, and the broker
+(simulated ledger, the configured Alpaca account, or a linked
+connection).
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
 ### `list_universes`
 
 Stored universes: id, kind, spec, last refresh and member count.
@@ -480,6 +559,47 @@ Stored universes: id, kind, spec, last refresh and member count.
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
+
+### `live_risk`
+
+One of your portfolios on its latest tick day: one-day 95% and
+99% VaR and expected shortfall (fractions of value, loss positive),
+the rolling VaR violation ratio (1.0 is right, outside 0.5 to 1.5
+means the risk model is off) with its Kupiec p-value, and per
+strategy sleeve the same plus the alpha-decay check against the
+backtest's IR.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string \| null | no | `null` |  |
+
+### `order_tca`
+
+One of your orders in full: decision price and context, arrival
+and fill prices, the shortfall split and the notes.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `client_id` | string | yes |  |  |
+
+### `risk_snapshots`
+
+Daily risk snapshots of one of your portfolios, newest first:
+VaR, ES, the day's hypothetical return, violations and decay.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string \| null | no | `null` |  |
+| `strategy_id` | string \| null | no | `null` | one strategy's sleeve; default the whole portfolio |
+| `since` | string \| null | no | `null` | YYYY-MM-DD |
+| `limit` | integer | no | `50` |  |
+| `offset` | integer | no | `0` |  |
 
 ### `search_instruments`
 
@@ -493,6 +613,40 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `asset_class` | "equity" \| "crypto" \| "commodity" \| "bond" \| null | no | `null` |  |
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
+
+### `tca_summary`
+
+Implementation shortfall of your orders in bps of notional:
+delay (decision to arrival), impact (arrival to fill), fees and the
+opportunity cost of what did not fill, next to the cost model's
+estimate (model_gap_bps = realised minus modelled).
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `by` | "all" \| "strategy" \| "ticker" \| "portfolio" \| "day" \| "week" \| "month" | no | `"all"` | how to group the orders |
+| `since` | string \| null | no | `null` | YYYY-MM-DD |
+| `until` | string \| null | no | `null` | YYYY-MM-DD |
+| `strategy_id` | string \| null | no | `null` |  |
+| `ticker` | string \| null | no | `null` |  |
+| `portfolio_id` | string \| null | no | `null` |  |
+
+### `trade_journal`
+
+Your orders, newest first: why each was placed (trigger, signal
+score and rank), the outcome (shortfall, next-day move) and notes.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `since` | string \| null | no | `null` | YYYY-MM-DD |
+| `strategy_id` | string \| null | no | `null` |  |
+| `ticker` | string \| null | no | `null` |  |
+| `portfolio_id` | string \| null | no | `null` |  |
+| `limit` | integer | no | `50` |  |
+| `offset` | integer | no | `0` |  |
 
 ### `validate_rule_spec`
 
@@ -518,6 +672,14 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `job_id` | string | yes |  |  |
 | `timeout_seconds` | number | no | `120.0` | give up after this long (max 600) |
 | `poll_seconds` | number | no | `1.0` |  |
+
+### `whoami`
+
+Who this MCP server acts as: the token's user, role and scopes. Every tool does only what that user may do.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
 
 ## Job tools
 
@@ -673,6 +835,19 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 | `csv` | string \| null | no | `null` | list only: CSV with a ticker column (replaces spec) |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
+### `delete_universe`
+
+Delete a stored universe and its membership rows (admins only).
+Lab runs, ticks and scheduled jobs that name it stop resolving.
+Without confirm=true returns a preview.
+
+Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `universe_id` | string | yes |  | universe id, e.g. sp500 or us_common |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
 ### `disable_draft`
 
 Move a registered draft's strategy back to shadow (stops trading it).
@@ -704,9 +879,10 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 
 ### `engage_kill_switch`
 
-Stop new orders at once. Without confirm=true returns a preview
-and changes nothing. Resuming is done in the console or the CLI with
-a typed confirmation.
+Stop new orders at once and cancel the orders still working at the
+broker. Without confirm=true returns a preview and changes nothing.
+Resuming is done in the console or the CLI with a typed confirmation
+and a fresh 2FA code.
 
 Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 
@@ -715,7 +891,7 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 | `scope` | "global" \| "user" \| "portfolio" | yes |  | global: every portfolio (admins only); user: all of yours; portfolio: one of yours (give portfolio_id) |
 | `reason` | string | yes |  | audited |
 | `portfolio_id` | string \| null | no | `null` |  |
-| `flatten` | boolean | no | `false` | stop buys only; sells and exits still go through |
+| `flatten` | boolean | no | `false` | stop buys and cancel working buy orders only: sells and exits still go through, and no position is closed |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
 ### `ensure_universe_data`
@@ -768,7 +944,7 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 | `end` | date | yes |  | YYYY-MM-DD |
 | `survival_tests` | list["oos" \| "period_stability" \| "perturbation" \| "drift" \| "runs_test" \| "permutation" \| "walk_forward"] \| null | no | `null` | survival suite; server default when omitted |
 | `tuner` | "grid" \| "random" | no | `"random"` |  |
-| `objective` | "sharpe" \| "cagr" \| "final_return" | no | `"sharpe"` |  |
+| `objective` | "sharpe" \| "cagr" \| "final_return" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no | `"sharpe"` |  |
 | `budget` | integer | no | `20` | tuner trials |
 | `train_ratio` | number | no | `0.7` |  |
 | `interval` | string | no | `"1d"` |  |
@@ -857,7 +1033,7 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 | `end` | date | yes |  | YYYY-MM-DD |
 | `survival_tests` | list["oos" \| "period_stability" \| "perturbation" \| "drift" \| "runs_test" \| "permutation" \| "walk_forward"] \| null | no | `null` | survival suite; server default when omitted |
 | `tuner` | "grid" \| "random" | no | `"random"` |  |
-| `objective` | "sharpe" \| "cagr" \| "final_return" | no | `"sharpe"` |  |
+| `objective` | "sharpe" \| "cagr" \| "final_return" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no | `"sharpe"` |  |
 | `budget` | integer | no | `20` | tuner trials |
 | `train_ratio` | number | no | `0.7` |  |
 | `interval` | string | no | `"1d"` |  |
@@ -905,6 +1081,20 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 | `reason` | string \| null | no | `null` | why (logged in the audit trail); required for demotions and overrides |
 
+### `subscribe`
+
+Follow a strategy in notify or paper mode. Without confirm=true
+returns a preview and changes nothing.
+
+Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `strategy_id` | string | yes |  |  |
+| `mode` | "notify" \| "paper" | no | `"notify"` | notify: signals only; paper: simulated orders on one of your portfolios |
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (needed for paper) |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
 ### `sync_connection`
 
 Sync one of your connections now: read balances, positions and
@@ -916,6 +1106,22 @@ Safety: writes, destructive, idempotent, open world. Needs confirm: **yes**.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `connection_id` | string | yes |  |  |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
+### `update_subscription`
+
+Turn one of your subscriptions on or off, or move it between
+notify and paper. Auto is refused here (it needs the web app).
+Without confirm=true returns a preview and changes nothing.
+
+Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `subscription_id` | string | yes |  |  |
+| `enabled` | boolean \| null | no | `null` |  |
+| `mode` | "notify" \| "paper" \| "auto" \| null | no | `null` | notify or paper; auto is switched on in the web app (second factor) |
+| `reason` | string \| null | no | `null` | audited |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
 ## Resources

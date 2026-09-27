@@ -317,6 +317,60 @@ def test_one_failing_book_does_not_stop_the_others(env, monkeypatch):
     assert books[pf_b]["status"] == "error" and "corrupt" in books[pf_b]["error"]
 
 
+def test_a_single_book_tick_names_its_portfolio_in_the_summary(env):
+    """AS-02: readers see a single-book tick's details only for their own
+    portfolio, so the summary says whose they are."""
+    lake, state, registry = env
+    people = People(state)
+    pf_b = people.book(people.trader("Bob"), "Bob", {"bh_up": 1.0})
+    result = run_tick(
+        state, lake, registry, SETTINGS, as_of=AS_OF, plan=load_tick_plan(state, SETTINGS)
+    )
+    assert _summary(state, result.tick_id)["portfolio_id"] == pf_b
+    default = run_tick(state, lake, registry, SETTINGS, as_of=AS_OF)
+    assert _summary(state, default.tick_id)["portfolio_id"] == DEFAULT_PORTFOLIO_ID
+
+
+def test_the_partial_alert_names_the_failed_book(env, monkeypatch):
+    """TO-12: the operator alert says which book failed and why, not only
+    that "orders raised at the broker"."""
+    from stonks.notify import Notification, Notifier
+
+    class Recorder(Notifier):
+        def __init__(self) -> None:
+            self.sent: list[Notification] = []
+
+        def _send(self, notification: Notification) -> None:
+            self.sent.append(notification)
+
+    lake, state, registry = env
+    people = People(state)
+    people.book(people.trader("Alice"), "Alice", {"bh_up": 1.0})
+    pf_b = people.book(people.trader("Bob"), "Bob", {"bh_up": 1.0})
+    real = tick_mod._load_or_seed_portfolio
+
+    def flaky(state, initial_cash, portfolio_id=None):
+        if portfolio_id == pf_b:
+            raise RuntimeError("bob's book is corrupt")
+        return real(state, initial_cash, portfolio_id)
+
+    monkeypatch.setattr(tick_mod, "_load_or_seed_portfolio", flaky)
+    rec = Recorder()
+    run_tick(
+        state,
+        lake,
+        registry,
+        SETTINGS,
+        as_of=AS_OF,
+        plan=load_tick_plan(state, SETTINGS),
+        notifier=rec,
+    )
+
+    [alert] = [n for n in rec.sent if n.title == "tick partially failed"]
+    assert alert.fields["failed_portfolios"] == {pf_b: "RuntimeError: bob's book is corrupt"}
+    assert pf_b in alert.message
+
+
 # ---- hooks and gates -------------------------------------------------------------
 
 
@@ -405,7 +459,8 @@ def test_a_gate_halting_everything_places_nothing(env, monkeypatch):
 
 def test_paper_subscriptions_never_reach_a_live_broker(env):
     """On an install whose default portfolio trades at a real broker, only
-    auto subscriptions place orders there; paper ones stay out of it."""
+    auto subscriptions place orders there; paper ones trade its simulated
+    paper account."""
     _, state, _ = env
     owner = Scope.for_user(UserRepository(state).get("usr_owner"))
     subs = SubscriptionRepository(state)
@@ -414,8 +469,12 @@ def test_paper_subscriptions_never_reach_a_live_broker(env):
     state.execute("UPDATE subscriptions SET mode = 'auto' WHERE strategy_id = 'mom'")
     live = TickSettings(universe=UNIVERSE, broker_kind="alpaca")
 
-    [book] = load_tick_plan(state, live).books
-    assert tick_mod.book_strategies(book, ["bh_up", "mom"], live) == ["mom"]
+    auto, paper = load_tick_plan(state, live).books
+    assert (auto.portfolio_id, auto.mode) == (DEFAULT_PORTFOLIO_ID, "auto")
+    assert tick_mod.book_strategies(auto, ["bh_up", "mom"], live) == ["mom"]
+    assert (paper.portfolio_id, paper.mode) == ("pf_default_paper", "paper")
+    assert paper.parent_id == DEFAULT_PORTFOLIO_ID and paper.spec.broker == "simulated"
+    assert tick_mod.book_strategies(paper, ["bh_up", "mom"], live) == ["bh_up"]
     [book] = load_tick_plan(state, SETTINGS).books
     # simulated: paper trades, and auto has no broker to reach (left out)
     assert tick_mod.book_strategies(book, ["bh_up", "mom"], SETTINGS) == ["bh_up"]

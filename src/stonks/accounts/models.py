@@ -149,6 +149,9 @@ class Subscription:
     weight: float
     risk_overrides: dict[str, Any]
     enabled: bool
+    #: Filled from ``portfolio_runs`` by ``SubscriptionRepository`` reads
+    #: (``stonks.accounts.paper``); a bare ``from_row`` reads the unused
+    #: legacy column (always 0).
     paper_days_completed: int
     paper_last_as_of: str | None
     auto_enabled_at: str | None

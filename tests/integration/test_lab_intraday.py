@@ -91,5 +91,7 @@ def test_perturbation_backtests_at_dataset_interval(lake_hourly):
     report = PerturbationTest(noise_sigmas=[0.001], min_correlation=-1.0).run(
         _strategy(), _dataset(lake_hourly)
     )
-    # an empty equity curve would yield a correlation of 0.0
-    assert report.metrics["correlation_min"] > 0.9
+    # an empty equity curve would yield a correlation of 0.0 (the level
+    # correlation: a linear price path has near-constant returns, so the
+    # return correlation under noise says nothing here)
+    assert report.metrics["level_correlation_min"] > 0.9

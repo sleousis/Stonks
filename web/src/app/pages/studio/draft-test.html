@@ -156,13 +156,16 @@
     <button
       type="button"
       class="btn btn-primary"
-      [disabled]="btBusy()"
+      [disabled]="btBusy() || !canLab()"
       [attr.aria-busy]="btBusy()"
       (click)="runBacktest()"
     >
       {{ btBusy() ? 'Running…' : 'Run backtest' }}
     </button>
   </div>
+  @if (!canLab()) {
+    <div class="lock-note"><app-permission-note permission="lab.run" /></div>
+  }
   @let bt = btRun();
   @if (bt) {
     <div class="job" aria-live="polite">
@@ -185,35 +188,8 @@
     </div>
   }
   @if (btResult(); as r) {
-    <div class="panel-body results">
-      <div class="tiles" role="group" aria-label="Backtest metrics">
-        <app-stat-tile
-          class="tile-main"
-          label="Return"
-          featured
-          [value]="percent(r.final_return, { signed: true })"
-          [detail]="r.start + ' to ' + r.end"
-          [detailTone]="''"
-        />
-        <app-stat-tile label="CAGR" [value]="percent(r.cagr, { signed: true })" />
-        <app-stat-tile label="Sharpe" [value]="number(r.sharpe, { digits: 2 })" />
-        <app-stat-tile label="Max drawdown" [value]="percent(r.max_drawdown)" />
-        <app-stat-tile label="Profit factor" [value]="number(r.profit_factor, { digits: 2 })" />
-      </div>
-      @if (r.equity.length) {
-        <app-time-series-chart
-          ariaLabel="Backtest equity, with drawdown below"
-          [summary]="chartSummary()"
-          [series]="equitySeries()"
-          [height]="300"
-        />
-      } @else {
-        <p class="muted">No equity points: the window had no bars for these tickers.</p>
-      }
-      <p class="hint">
-        The backtest API returns the equity curve and metrics; a per-trade list is not available
-        yet.
-      </p>
+    <div class="panel-body">
+      <app-backtest-result [result]="r" />
     </div>
   } @else if (!bt) {
     <p class="panel-body muted">
@@ -230,13 +206,16 @@
     <button
       type="button"
       class="btn btn-primary"
-      [disabled]="labBusy() || !tests().length"
+      [disabled]="labBusy() || !tests().length || !canLab()"
       [attr.aria-busy]="labBusy()"
       (click)="runLab()"
     >
       {{ labBusy() ? 'Running…' : 'Run lab' }}
     </button>
   </div>
+  @if (!canLab()) {
+    <div class="lock-note"><app-permission-note permission="lab.run" /></div>
+  }
   <div class="panel-body lab-options">
     <fieldset class="plain">
       <legend>Survival tests</legend>
@@ -295,39 +274,8 @@
     </div>
   }
   @if (labResult(); as v) {
-    <div class="panel-body verdict">
-      <div class="verdict-line">
-        <app-status-pill
-          [status]="v.verdict"
-          [label]="v.verdict === 'pass' ? 'Survived' : 'Did not survive'"
-        />
-        <span class="muted num">Best score {{ number(v.best_score, { digits: 3 }) }}</span>
-      </div>
-      <ul class="reports">
-        @for (rep of v.survival_reports; track rep.test_id) {
-          <li>
-            <div class="report-head">
-              <app-status-pill [status]="rep.passed ? 'pass' : 'fail'" />
-              <span class="test-name">{{ testLabel(rep.test_id) }}</span>
-            </div>
-            @if (rep.notes) {
-              <p class="report-notes">{{ rep.notes }}</p>
-            }
-            @if (metricEntries(rep.metrics).length) {
-              <dl class="metrics">
-                @for (m of metricEntries(rep.metrics); track m[0]) {
-                  <div>
-                    <dt>{{ m[0] }}</dt>
-                    <dd class="num">{{ m[1] }}</dd>
-                  </div>
-                }
-              </dl>
-            }
-          </li>
-        } @empty {
-          <li class="muted">No survival reports came back.</li>
-        }
-      </ul>
+    <div class="panel-body">
+      <app-lab-run-result [result]="v" />
     </div>
   }
 </section>

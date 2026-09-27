@@ -17,14 +17,20 @@ import httpx2
 
 _LOOPBACK_NAMES = frozenset({"localhost"})
 _MAX_DETAIL = 200
+_TOKEN_HINT = (
+    "set STONKS_MCP_TOKEN (or STONKS_API_TOKEN) for `stonks mcp` to your personal API token "
+    "(create one in the web app under Settings > API tokens)"
+)
 
 
 class ApiError(Exception):
     """The API answered with an error (or a request could not be made)."""
 
-    def __init__(self, message: str, *, status: int | None = None) -> None:
+    def __init__(self, message: str, *, status: int | None = None, code: str | None = None) -> None:
         super().__init__(message)
         self.status = status
+        #: The API's stable machine code (``forbidden``, ``step_up_required``, ...).
+        self.code = code
 
 
 class ApiUnavailableError(ApiError):
@@ -112,6 +118,10 @@ class ApiClient:
         self._require_token()
         return await self._request("PATCH", path, json=body)
 
+    async def delete(self, path: str) -> Any:
+        self._require_token()
+        return await self._request("DELETE", path)
+
     def _require_token(self) -> None:
         if not self.has_token:
             raise ApiError(
@@ -128,7 +138,7 @@ class ApiClient:
                 "Start it with `stonks serve` (or fix [mcp].api_url)."
             ) from None
         if resp.status_code >= 400:
-            raise ApiError(self._error_message(resp), status=resp.status_code)
+            raise ApiError(self._error_message(resp), status=resp.status_code, code=_code(resp))
         if not resp.content:
             return None
         return resp.json()
@@ -154,6 +164,26 @@ class ApiClient:
                 if isinstance(e, dict)
             )
             msg += f" [{listed}]"
+        code = body.get("code")
         if status == 401:
-            msg += " - set STONKS_API_TOKEN for `stonks mcp` to the token `stonks serve` uses"
+            msg += f" - {_TOKEN_HINT}"
+        elif code == "step_up_required":
+            msg = (
+                "This action needs a fresh second factor, which an MCP token can never give. "
+                f"Do it in the web app ({self.base_url}) while signed in. {msg}"
+            )
+        elif status == 403:
+            msg += (
+                " - your token's role or scopes do not allow this (the whoami tool shows "
+                "them). An MCP tool can do only what its token's user may do."
+            )
         return self.redact(msg)
+
+
+def _code(resp: httpx2.Response) -> str | None:
+    try:
+        body = resp.json()
+    except ValueError:
+        return None
+    code = body.get("code") if isinstance(body, dict) else None
+    return code if isinstance(code, str) else None

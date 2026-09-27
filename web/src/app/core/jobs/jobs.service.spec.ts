@@ -182,4 +182,61 @@ describe('JobsService', () => {
     expect(handle.done()).toBe(true);
     expect(handle.error()).toBe('job not found');
   });
+
+  it('polls with the credential (UI-02)', async () => {
+    TestBed.inject(AuthTokenService).setToken('bearer-secret');
+    fetchMock.mockRejectedValue(new TypeError('network'));
+    const done = firstValueFrom(jobs.watch('j1').pipe(toArray()));
+    (await nextRequest(controller, '/api/jobs/j1/stream-token', 'POST')).flush(
+      { title: 'Gone', status: 404 },
+      { status: 404, statusText: 'Not Found' },
+    );
+    const poll = await nextRequest(controller, '/api/jobs/j1');
+    expect(poll.request.headers.get('Authorization')).toBe('Bearer bearer-secret');
+    expect(poll.request.withCredentials).toBe(true);
+    poll.flush(job({ status: 'succeeded', progress: 1 }));
+    await done;
+  });
+
+  it('opens the stream with the session cookie', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: sseBody([event('done', { status: 'succeeded', progress: 1 })]),
+    });
+    await firstValueFrom(jobs.watch('j1').pipe(toArray()));
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ credentials: 'include' });
+  });
+
+  it('stop() settles finished with the last event (UI-19)', async () => {
+    fetchMock.mockRejectedValue(new TypeError('network'));
+    const handle = jobs.track('j1');
+    (await nextRequest(controller, '/api/jobs/j1')).flush(job({ progress: 0.3 }));
+    await tick();
+    handle.stop();
+    const last = await handle.finished;
+    expect(last?.progress).toBe(0.3);
+    expect(handle.done()).toBe(true);
+    controller.match('/api/jobs/j1').forEach((r) => r.flush(job({ progress: 0.3 })));
+  });
+
+  it('polling leaves no abort listeners behind (UI-19)', async () => {
+    const added = vi.spyOn(AbortSignal.prototype, 'addEventListener');
+    const removed = vi.spyOn(AbortSignal.prototype, 'removeEventListener');
+    fetchMock.mockRejectedValue(new TypeError('network'));
+    const done = firstValueFrom(jobs.watch('j1').pipe(toArray()));
+    for (let i = 0; i < 3; i++) {
+      (await nextRequest(controller, '/api/jobs/j1')).flush(job({ progress: i / 10 }));
+    }
+    (await nextRequest(controller, '/api/jobs/j1')).flush(
+      job({ status: 'succeeded', progress: 1 }),
+    );
+    await done;
+    const abortAdds = added.mock.calls.filter(([type]) => type === 'abort').length;
+    const abortRemoves = removed.mock.calls.filter(([type]) => type === 'abort').length;
+    expect(abortAdds).toBeGreaterThan(0);
+    expect(abortRemoves).toBe(abortAdds);
+    added.mockRestore();
+    removed.mockRestore();
+  });
 });

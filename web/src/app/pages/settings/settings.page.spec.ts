@@ -1,10 +1,19 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
-import type { BrokerInfo, CostModelPreset, DataSourceInfo, RiskPolicy } from '../../api/models';
+import type {
+  BrokerInfo,
+  CostModelPreset,
+  DataSourceInfo,
+  MeView,
+  RiskPolicy,
+} from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { AuthTokenService } from '../../core/auth/auth-token.service';
+import { SessionService } from '../../core/auth/session.service';
 import { ToastService } from '../../core/notify/toast.service';
+import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
 import { SettingsPage } from './settings.page';
 
@@ -46,11 +55,29 @@ describe('SettingsPage', () => {
   let http: HttpTestingController;
   let el: HTMLElement;
 
-  async function flushConfig(broker: BrokerInfo = BROKER): Promise<void> {
-    (await nextRequest(http, '/api/brokers')).flush(broker);
-    (await nextRequest(http, '/api/risk/policy')).flush(RISK);
-    (await nextRequest(http, '/api/sources')).flush(SOURCES);
-    (await nextRequest(http, '/api/lab/cost-models')).flush(COSTS);
+  /** Sign in as `me`, render the page and answer its reads. */
+  async function setup(me: MeView = ADMIN, broker: BrokerInfo = BROKER): Promise<void> {
+    const session = TestBed.inject(SessionService);
+    const loading = session.load();
+    (await nextRequest(http, '/api/auth/me')).flush(me);
+    await loading;
+    fixture = TestBed.createComponent(SettingsPage);
+    el = fixture.nativeElement;
+    fixture.detectChanges();
+    if (me.role === 'admin') {
+      (await nextRequest(http, '/api/brokers')).flush(broker);
+      (await nextRequest(http, '/api/risk/policy')).flush(RISK);
+      (await nextRequest(http, '/api/sources')).flush(SOURCES);
+      (await nextRequest(http, '/api/lab/cost-models')).flush(COSTS);
+    }
+    (await nextRequest(http, '/api/notifications/preferences')).flush({
+      channels: ['inapp'],
+      preferences: [],
+      quiet_start: null,
+      quiet_end: null,
+      timezone: 'UTC',
+      webhook: null,
+    });
     await tick();
     fixture.detectChanges();
   }
@@ -71,12 +98,9 @@ describe('SettingsPage', () => {
   beforeEach(() => {
     sessionStorage.clear();
     TestBed.configureTestingModule({
-      providers: [...provideApi(), provideHttpClientTesting()],
+      providers: [...provideApi(), provideHttpClientTesting(), provideRouter([])],
     });
     http = TestBed.inject(HttpTestingController);
-    fixture = TestBed.createComponent(SettingsPage);
-    el = fixture.nativeElement;
-    fixture.detectChanges();
   });
 
   afterEach(() => {
@@ -84,14 +108,48 @@ describe('SettingsPage', () => {
     sessionStorage.clear();
   });
 
+  function headings(): string[] {
+    return [...el.querySelectorAll('h2')].map((h) => h.textContent?.trim() ?? '');
+  }
+
+  it('shows a trader their account sections only', async () => {
+    await setup(TRADER);
+    const h = headings();
+    expect(h).toContain('Your account');
+    expect(h).toContain('API token');
+    expect(h).toContain('Theme');
+    expect(h).not.toContain('System');
+    expect(h).not.toContain('Broker');
+    expect(h).not.toContain('Risk policy');
+    expect(h).not.toContain('Data sources');
+    expect(h).not.toContain('Cost-model presets');
+    expect(el.querySelector('a[href="/profile"]')?.textContent).toContain('Open profile');
+    expect(el.textContent).not.toContain('Reload system settings');
+    // No system reads for a trader.
+    http.expectNone('/api/brokers');
+    http.expectNone('/api/risk/policy');
+    http.verify();
+  });
+
+  it('shows an admin the System sections too', async () => {
+    await setup(ADMIN);
+    const h = headings();
+    expect(h).toContain('Your account');
+    expect(h).toContain('System');
+    expect(h).toContain('Broker');
+    expect(h).toContain('Risk policy');
+    expect(h.filter((x) => x === 'Risk policy')).toHaveLength(1);
+  });
+
   it('shows the broker, risk policy, data sources and cost presets', async () => {
-    await flushConfig();
+    await setup();
     const text = el.textContent ?? '';
+    expect(text).not.toContain('[production');
     expect(text).toContain('Simulated');
     expect(text).toContain('Paper');
     expect(text).toContain('25.0%');
     expect(text).toContain('Max weight, crypto');
-    expect(text).toContain('eodhd');
+    expect(text).toContain('EODHD');
     expect(text).toContain('install the yahoo extra');
     expect(text).toContain('realistic');
     expect(text).toContain('Crypto');
@@ -101,7 +159,7 @@ describe('SettingsPage', () => {
   });
 
   it('checks the Alpaca connection only when the broker is Alpaca', async () => {
-    await flushConfig({ ...BROKER, kind: 'alpaca', credentials_configured: true });
+    await setup(ADMIN, { ...BROKER, kind: 'alpaca', credentials_configured: true });
     (await nextRequest(http, '/api/brokers/alpaca/status')).flush({
       connected: false,
       paper: true,
@@ -116,7 +174,7 @@ describe('SettingsPage', () => {
   });
 
   it('keeps the token masked and in sessionStorage only', async () => {
-    await flushConfig();
+    await setup(TRADER);
     const input = el.querySelector<HTMLInputElement>('#api-token')!;
     expect(input.type).toBe('password');
     typeToken(SECRET);
@@ -134,7 +192,7 @@ describe('SettingsPage', () => {
       vi.spyOn(console, m).mockImplementation(() => undefined),
     );
     const toasts = TestBed.inject(ToastService);
-    await flushConfig();
+    await setup(TRADER);
 
     typeToken(SECRET);
     button('Save token').click();
@@ -158,7 +216,7 @@ describe('SettingsPage', () => {
 
   it('reports a rejected token without a toast', async () => {
     const toasts = TestBed.inject(ToastService);
-    await flushConfig();
+    await setup(TRADER);
     typeToken('wrong');
     button('Save token').click();
     fixture.detectChanges();
@@ -177,7 +235,7 @@ describe('SettingsPage', () => {
   });
 
   it('explains that a token cannot be verified when none is saved', async () => {
-    await flushConfig();
+    await setup(TRADER);
     button('Test token').click();
     fixture.detectChanges();
     expect(el.textContent).toContain('Save a token first');

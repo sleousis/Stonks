@@ -22,8 +22,13 @@ from stonks.store.state import SqliteState
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
 from tests.fixtures.governance import seed_status
 
-#: Promotion is logged at the wall-clock time, so the book starts today.
-START = datetime.now(UTC).date()
+#: A pinned day (TT-06). The registry's clock logs the promotion on it, so
+#: the book starts here whatever the wall clock says.
+START = date(2026, 3, 2)
+
+
+def _clock() -> datetime:
+    return datetime(START.year, START.month, START.day, 15, 0, tzinfo=UTC)
 
 
 def _closes(values: list[float], start: date = START) -> pd.Series:
@@ -67,7 +72,7 @@ def test_no_attribution_means_no_drawdown():
 def env(tmp_path):
     state = SqliteState(tmp_path / "state.sqlite")
     state.migrate()
-    registry = StrategyRegistry(state=state, artifacts_dir=tmp_path / "artifacts")
+    registry = StrategyRegistry(state=state, artifacts_dir=tmp_path / "artifacts", clock=_clock)
     registry.register(
         BuyAndHold({"ticker": "X", "allocation": 1.0}),
         reports=[
@@ -134,6 +139,16 @@ def test_a_small_drawdown_changes_nothing(env):
     )
     assert not check.breached
     assert state.sql("SELECT COUNT(*) FROM notification_outbox")[0][0] == 0
+
+
+def test_the_promotion_day_comes_from_the_registry_clock(env):
+    state, _ = env
+    [check] = apply_quit_rule(
+        state, _loader([100.0, 99.0]), START + timedelta(days=1), QuitRuleSettings()
+    )
+    assert check.promoted_on == START
+    [row] = state.sql("SELECT created_at FROM status_changes WHERE to_status = 'active'")
+    assert row["created_at"] == "2026-03-02T15:00:00+00:00"
 
 
 def test_the_hook_is_registered_and_skips_dry_runs(env):

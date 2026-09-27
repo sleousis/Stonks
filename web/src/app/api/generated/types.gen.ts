@@ -5,6 +5,38 @@ export type ClientOptions = {
 };
 
 /**
+ * AgreementView
+ */
+export type AgreementView = {
+    /**
+     * As Of
+     *
+     * The price day the strategies scored.
+     */
+    as_of: string | null;
+    /**
+     * Holdings
+     */
+    holdings: Array<HoldingAgreement>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Skipped
+     *
+     * Active strategies that could not be loaded.
+     */
+    skipped: Array<string>;
+    /**
+     * Strategies
+     *
+     * Active strategies asked, in registry order.
+     */
+    strategies: Array<string>;
+};
+
+/**
  * AlertView
  */
 export type AlertView = {
@@ -34,6 +66,58 @@ export type AlertView = {
      * Title
      */
     title: string;
+};
+
+/**
+ * AllocationSlice
+ */
+export type AllocationSlice = {
+    /**
+     * Holdings
+     *
+     * Holdings in the group (0 for cash).
+     */
+    holdings: number;
+    /**
+     * Key
+     *
+     * The group: an asset class, sector, currency or ticker.
+     */
+    key: string;
+    /**
+     * Value
+     *
+     * Market value of the group (shorts count negative).
+     */
+    value: number;
+    /**
+     * Weight
+     *
+     * value / the book's total value; null when the total is zero or less.
+     */
+    weight: number | null;
+};
+
+/**
+ * AllocationView
+ */
+export type AllocationView = {
+    /**
+     * Asset Class
+     */
+    asset_class: Array<AllocationSlice>;
+    /**
+     * Currency
+     */
+    currency: Array<AllocationSlice>;
+    /**
+     * Sector
+     */
+    sector: Array<AllocationSlice>;
+    /**
+     * Ticker
+     */
+    ticker: Array<AllocationSlice>;
 };
 
 /**
@@ -259,6 +343,24 @@ export type BackupResultView = {
 };
 
 /**
+ * BackupView
+ */
+export type BackupView = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Size Bytes
+     */
+    size_bytes: number;
+};
+
+/**
  * BarSeries
  */
 export type BarSeries = {
@@ -400,6 +502,48 @@ export type BenchmarkStatsView = {
 };
 
 /**
+ * BorrowCheckSettings
+ */
+export type BorrowCheckSettings = {
+    borrow?: BorrowSettings | null;
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Max Borrow Fee
+     */
+    max_borrow_fee?: number | null;
+};
+
+/**
+ * BorrowSettings
+ *
+ * ``FlatBorrow`` knobs: the general-collateral fee per asset class and
+ * the tickers that are hard to borrow or not borrowable at all.
+ */
+export type BorrowSettings = {
+    /**
+     * Fee Rate Annual
+     */
+    fee_rate_annual?: {
+        [key: string]: number;
+    };
+    /**
+     * Hard
+     */
+    hard?: Array<string>;
+    /**
+     * Hard Fee Rate Annual
+     */
+    hard_fee_rate_annual?: number;
+    /**
+     * None
+     */
+    none?: Array<string>;
+};
+
+/**
  * BrokerInfo
  */
 export type BrokerInfo = {
@@ -419,6 +563,24 @@ export type BrokerInfo = {
      * Paper
      */
     paper: boolean;
+};
+
+/**
+ * ChannelDefaultView
+ */
+export type ChannelDefaultView = {
+    /**
+     * Channel
+     */
+    channel: string;
+    /**
+     * Default Enabled
+     */
+    default_enabled: boolean;
+    /**
+     * Fallback
+     */
+    fallback: boolean;
 };
 
 /**
@@ -458,6 +620,44 @@ export type ClearHaltRequest = {
 };
 
 /**
+ * Concentration
+ */
+export type Concentration = {
+    /**
+     * Effective Holdings
+     *
+     * 1 / hhi.
+     */
+    effective_holdings: number | null;
+    /**
+     * Hhi
+     *
+     * Herfindahl index of the holding weights (0 to 1).
+     */
+    hhi: number | null;
+    /**
+     * Holdings
+     *
+     * Priced holdings.
+     */
+    holdings: number;
+    /**
+     * Largest
+     */
+    largest: string | null;
+    /**
+     * Top5 Weight
+     */
+    top5_weight: number | null;
+    /**
+     * Top Weight
+     *
+     * Largest holding's share of gross holdings.
+     */
+    top_weight: number | null;
+};
+
+/**
  * ConnectWithKeysRequest
  *
  * API-key connect. ``fields`` are the provider's ``credential_fields``
@@ -479,6 +679,10 @@ export type ConnectWithKeysRequest = {
  * ConnectionView
  */
 export type ConnectionView = {
+    /**
+     * Accounts Count
+     */
+    accounts_count?: number;
     /**
      * Consecutive Failures
      */
@@ -523,6 +727,31 @@ export type ConnectionView = {
      * Updated At
      */
     updated_at: string;
+};
+
+/**
+ * CostComparisonView
+ *
+ * Live shortfall of the strategy's real orders against the cost
+ * model's estimate (BL-32, P22), in bps.
+ */
+export type CostComparisonView = {
+    /**
+     * Live Is Bps
+     */
+    live_is_bps?: number | null;
+    /**
+     * Model Gap Bps
+     */
+    model_gap_bps?: number | null;
+    /**
+     * Modelled Bps
+     */
+    modelled_bps?: number | null;
+    /**
+     * Orders
+     */
+    orders?: number;
 };
 
 /**
@@ -684,6 +913,10 @@ export type Draft = {
      */
     name: string;
     /**
+     * Owner Id
+     */
+    owner_id?: string | null;
+    /**
      * Registered Strategy Id
      */
     registered_strategy_id: string | null;
@@ -834,7 +1067,7 @@ export type DraftLabRunRequest = {
     /**
      * Objective
      */
-    objective?: 'sharpe' | 'cagr' | 'final_return';
+    objective?: 'sharpe' | 'cagr' | 'final_return' | 'cv_sharpe' | 'cv_cagr' | 'cv_final_return';
     /**
      * Preflight
      */
@@ -870,7 +1103,7 @@ export type DraftLabRunRequest = {
     /**
      * Survival Tests
      */
-    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'runs_test' | 'signal_ic' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
+    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cpcv' | 'crisis' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'pool_correlation' | 'runs_test' | 'signal_ic' | 'stress' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
     /**
      * Test Options
      */
@@ -1013,6 +1246,10 @@ export type EnsureReport = {
      */
     interval: string;
     /**
+     * Readjusted
+     */
+    readjusted?: Array<string>;
+    /**
      * Run Id
      */
     run_id?: number | null;
@@ -1062,6 +1299,74 @@ export type EquityPoint = {
      * Value
      */
     value: number;
+};
+
+/**
+ * Exposure
+ */
+export type Exposure = {
+    /**
+     * Benchmark
+     */
+    benchmark: string | null;
+    /**
+     * Beta
+     *
+     * Sum of each holding's weight times its beta to the benchmark, over the holdings with a beta. Null when none has one.
+     */
+    beta: number | null;
+    /**
+     * Beta Coverage
+     *
+     * Share of the gross holdings (by value) that have a beta.
+     */
+    beta_coverage: number;
+    /**
+     * Gross
+     *
+     * (long - short) / total value; null without value.
+     */
+    gross: number | null;
+    /**
+     * Long Value
+     */
+    long_value: number;
+    /**
+     * Net
+     *
+     * (long + short) / total value; null without value.
+     */
+    net: number | null;
+    /**
+     * Short Value
+     *
+     * Market value of short holdings (zero or negative).
+     */
+    short_value: number;
+};
+
+/**
+ * FailingCheck
+ *
+ * One go-live check that failed (``GoLiveCheck`` without ``passed``).
+ */
+export type FailingCheck = {
+    /**
+     * Detail
+     */
+    detail?: string;
+    /**
+     * Limit
+     */
+    limit?: number | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Value
+     */
+    value?: number | null;
 };
 
 /**
@@ -1256,6 +1561,7 @@ export type GoLiveReport = {
      * Checks
      */
     checks: Array<GoLiveCheckView>;
+    costs?: CostComparisonView | null;
     /**
      * Passed
      */
@@ -1273,6 +1579,16 @@ export type GoLiveReport = {
      * Strategy Id
      */
     strategy_id: string;
+};
+
+/**
+ * GrossExposureSettings
+ */
+export type GrossExposureSettings = {
+    /**
+     * Max Gross
+     */
+    max_gross?: number | null;
 };
 
 /**
@@ -1410,6 +1726,46 @@ export type HealthReportView = {
      */
     healthy: boolean;
     thresholds: HealthConfig;
+};
+
+/**
+ * HealthRunRequest
+ */
+export type HealthRunRequest = {
+    /**
+     * Tickers
+     */
+    tickers?: Array<string> | null;
+};
+
+/**
+ * HoldingAgreement
+ */
+export type HoldingAgreement = {
+    /**
+     * Agree
+     */
+    agree: number;
+    /**
+     * Disagree
+     */
+    disagree: number;
+    /**
+     * Opinions
+     */
+    opinions: Array<Opinion>;
+    /**
+     * Side
+     */
+    side: 'long' | 'short';
+    /**
+     * Symbol
+     */
+    symbol: string;
+    /**
+     * Ticker
+     */
+    ticker: string | null;
 };
 
 /**
@@ -1656,6 +2012,95 @@ export type IngestRunView = {
 };
 
 /**
+ * InsightsTotalsView
+ *
+ * Sums over every active portfolio's latest snapshot, for admins. No
+ * tickers, sectors or per-person numbers (decision 2026-09-26).
+ */
+export type InsightsTotalsView = {
+    /**
+     * Asset Class
+     */
+    asset_class: Array<AllocationSlice>;
+    /**
+     * Cash
+     */
+    cash: number;
+    exposure: Exposure;
+    /**
+     * Owners
+     */
+    owners: number;
+    /**
+     * Portfolios
+     */
+    portfolios: number;
+    /**
+     * Total Value
+     */
+    total_value: number;
+};
+
+/**
+ * InsightsView
+ */
+export type InsightsView = {
+    allocation: AllocationView;
+    /**
+     * Cash
+     */
+    cash: number;
+    /**
+     * Currency
+     *
+     * Reporting currency. Amounts are not FX-converted.
+     */
+    currency: string;
+    exposure: Exposure;
+    /**
+     * Notes
+     */
+    notes: Array<string>;
+    /**
+     * Pnl
+     */
+    pnl: Array<PeriodPnl>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    risk: RiskView;
+    /**
+     * Source
+     *
+     * tick (the Stonks ledger) or sync (a broker).
+     */
+    source: 'tick' | 'sync' | null;
+    /**
+     * Taken At
+     *
+     * When the snapshot read was taken.
+     */
+    taken_at: string | null;
+    /**
+     * Total Value
+     */
+    total_value: number;
+    /**
+     * Uncovered
+     *
+     * Broker symbols no ticker maps to.
+     */
+    uncovered: Array<string>;
+    /**
+     * Unpriced
+     *
+     * Holdings without a price, left out of the numbers.
+     */
+    unpriced: Array<string>;
+};
+
+/**
  * InstrumentView
  */
 export type InstrumentView = {
@@ -1740,6 +2185,10 @@ export type Job = {
      */
     message?: string | null;
     /**
+     * Owner Id
+     */
+    owner_id?: string | null;
+    /**
      * Params
      */
     params: {
@@ -1796,6 +2245,108 @@ export type JobEvent = {
 };
 
 /**
+ * JournalEntryView
+ *
+ * One order: why it was placed, the signal context, the outcome and the
+ * notes people added.
+ */
+export type JournalEntryView = {
+    /**
+     * Client Id
+     */
+    client_id: string;
+    /**
+     * Context
+     */
+    context: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Decided At
+     */
+    decided_at: string | null;
+    /**
+     * Decision Price
+     */
+    decision_price: number | null;
+    /**
+     * Next Session Move Bps
+     */
+    next_session_move_bps: number | null;
+    /**
+     * Notes
+     */
+    notes: Array<JournalNoteView>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string | null;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    shortfall: ShortfallView | null;
+    /**
+     * Side
+     */
+    side: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Status Reason
+     */
+    status_reason: string | null;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Trigger
+     */
+    trigger: string | null;
+};
+
+/**
+ * JournalNoteView
+ */
+export type JournalNoteView = {
+    /**
+     * Author
+     */
+    author: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Note
+     */
+    note: string;
+    /**
+     * Order Client Id
+     */
+    order_client_id: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+};
+
+/**
  * KillSwitchRequest
  */
 export type KillSwitchRequest = {
@@ -1822,6 +2373,10 @@ export type KillSwitchRequest = {
  *
  * Tunes the class the ``strategy`` ref points at (its ``params`` are
  * ignored: the tuner searches the class's parameter space).
+ *
+ * Give ``universe`` (tickers), ``universe_id`` (a stored universe: every
+ * member on any day of the window, delisted names included), or both
+ * (the preflight then reports members missing from the list).
  */
 export type LabRunRequest = {
     /**
@@ -1845,6 +2400,10 @@ export type LabRunRequest = {
      */
     end: string;
     /**
+     * Ensure Data
+     */
+    ensure_data?: boolean;
+    /**
      * Grid Size
      */
     grid_size?: number;
@@ -1860,7 +2419,7 @@ export type LabRunRequest = {
     /**
      * Objective
      */
-    objective?: 'sharpe' | 'cagr' | 'final_return';
+    objective?: 'sharpe' | 'cagr' | 'final_return' | 'cv_sharpe' | 'cv_cagr' | 'cv_final_return';
     /**
      * Preflight
      */
@@ -1897,7 +2456,7 @@ export type LabRunRequest = {
     /**
      * Survival Tests
      */
-    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'runs_test' | 'signal_ic' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
+    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cpcv' | 'crisis' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'pool_correlation' | 'runs_test' | 'signal_ic' | 'stress' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
     /**
      * Test Options
      */
@@ -1917,7 +2476,11 @@ export type LabRunRequest = {
     /**
      * Universe
      */
-    universe: Array<string>;
+    universe?: Array<string>;
+    /**
+     * Universe Id
+     */
+    universe_id?: string | null;
     walk_forward?: WalkForwardConfig | null;
 };
 
@@ -1940,6 +2503,10 @@ export type LabRunView = {
      * Class Path
      */
     class_path: string;
+    /**
+     * Ensure Job Id
+     */
+    ensure_job_id?: string | null;
     /**
      * N Trials Class
      */
@@ -2058,6 +2625,68 @@ export type LoginView = {
 };
 
 /**
+ * MarginCallSettings
+ */
+export type MarginCallSettings = {
+    /**
+     * Buffer
+     */
+    buffer?: number;
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    margin?: MarginSettings;
+};
+
+/**
+ * MarginRates
+ *
+ * Requirement rates, as fractions of a position's market value.
+ */
+export type MarginRates = {
+    /**
+     * Initial Long
+     */
+    initial_long?: number;
+    /**
+     * Initial Short
+     */
+    initial_short?: number;
+    /**
+     * Maintenance Long
+     */
+    maintenance_long?: number;
+    /**
+     * Maintenance Short
+     */
+    maintenance_short?: number;
+};
+
+/**
+ * MarginSettings
+ *
+ * Which margin model a book uses, and its rates.
+ */
+export type MarginSettings = {
+    /**
+     * Debit Rate Annual
+     */
+    debit_rate_annual?: number;
+    /**
+     * Model
+     */
+    model?: 'cash' | 'reg_t';
+    /**
+     * Overrides
+     */
+    overrides?: {
+        [key: string]: MarginRates;
+    };
+    rates?: MarginRates;
+};
+
+/**
  * MarkReadRequest
  */
 export type MarkReadRequest = {
@@ -2104,6 +2733,22 @@ export type MarketClockView = {
 };
 
 /**
+ * MarketSessionsView
+ */
+export type MarketSessionsView = {
+    /**
+     * Calendar
+     */
+    calendar: string;
+    /**
+     * Is Open
+     */
+    is_open: boolean;
+    next: SessionTimesView;
+    today: SessionTimesView | null;
+};
+
+/**
  * MaxHoldingSettings
  */
 export type MaxHoldingSettings = {
@@ -2126,7 +2771,7 @@ export type McptOptions = {
     /**
      * Metric
      */
-    metric?: 'profit_factor' | 'sharpe' | 'final_return' | 'cagr';
+    metric?: 'profit_factor' | 'bar_profit_factor' | 'sharpe' | 'final_return' | 'cagr';
     /**
      * N Permutations
      */
@@ -2213,6 +2858,30 @@ export type MfaView = {
 };
 
 /**
+ * NetExposureSettings
+ */
+export type NetExposureSettings = {
+    /**
+     * Max Net
+     */
+    max_net?: number | null;
+    /**
+     * Min Net
+     */
+    min_net?: number | null;
+};
+
+/**
+ * NoteRequest
+ */
+export type NoteRequest = {
+    /**
+     * Note
+     */
+    note: string;
+};
+
+/**
  * OperationalHaltSettings
  */
 export type OperationalHaltSettings = {
@@ -2220,6 +2889,28 @@ export type OperationalHaltSettings = {
      * Max Bar Age Days
      */
     max_bar_age_days?: number | null;
+};
+
+/**
+ * Opinion
+ */
+export type Opinion = {
+    /**
+     * Expected Return
+     */
+    expected_return: number | null;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Stance
+     */
+    stance: 'agree' | 'disagree' | 'no_view' | 'not_applicable' | 'error';
+    /**
+     * Strategy Id
+     */
+    strategy_id: string;
 };
 
 /**
@@ -2303,6 +2994,72 @@ export type PageAlertView = {
 };
 
 /**
+ * Page[BackupView]
+ */
+export type PageBackupView = {
+    /**
+     * Items
+     */
+    items: Array<BackupView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[BrokerAccountView]
+ */
+export type PageBrokerAccountView = {
+    /**
+     * Items
+     */
+    items: Array<StonksAppConnectionsBrokerAccountView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[ConnectionView]
+ */
+export type PageConnectionView = {
+    /**
+     * Items
+     */
+    items: Array<ConnectionView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[CoverageRow]
  */
 export type PageCoverageRow = {
@@ -2354,6 +3111,28 @@ export type PageFillView = {
      * Items
      */
     items: Array<FillView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[HaltView]
+ */
+export type PageHaltView = {
+    /**
+     * Items
+     */
+    items: Array<HaltView>;
     /**
      * Limit
      */
@@ -2435,6 +3214,28 @@ export type PageJob = {
 };
 
 /**
+ * Page[JournalEntryView]
+ */
+export type PageJournalEntryView = {
+    /**
+     * Items
+     */
+    items: Array<JournalEntryView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[OrderView]
  */
 export type PageOrderView = {
@@ -2442,6 +3243,72 @@ export type PageOrderView = {
      * Items
      */
     items: Array<OrderView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[PortfolioSummaryView]
+ */
+export type PagePortfolioSummaryView = {
+    /**
+     * Items
+     */
+    items: Array<PortfolioSummaryView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[PushDeviceView]
+ */
+export type PagePushDeviceView = {
+    /**
+     * Items
+     */
+    items: Array<PushDeviceView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[RiskSnapshotView]
+ */
+export type PageRiskSnapshotView = {
+    /**
+     * Items
+     */
+    items: Array<RiskSnapshotView>;
     /**
      * Limit
      */
@@ -2545,6 +3412,28 @@ export type PageStatementFlagView = {
 };
 
 /**
+ * Page[StatusChangeView]
+ */
+export type PageStatusChangeView = {
+    /**
+     * Items
+     */
+    items: Array<StatusChangeView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[StrategySummary]
  */
 export type PageStrategySummary = {
@@ -2567,6 +3456,28 @@ export type PageStrategySummary = {
 };
 
 /**
+ * Page[SubscriptionView]
+ */
+export type PageSubscriptionView = {
+    /**
+     * Items
+     */
+    items: Array<SubscriptionView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[TickRun]
  */
 export type PageTickRun = {
@@ -2574,6 +3485,94 @@ export type PageTickRun = {
      * Items
      */
     items: Array<TickRun>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[TokenView]
+ */
+export type PageTokenView = {
+    /**
+     * Items
+     */
+    items: Array<TokenView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[TradingModeView]
+ */
+export type PageTradingModeView = {
+    /**
+     * Items
+     */
+    items: Array<TradingModeView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[UniverseView]
+ */
+export type PageUniverseView = {
+    /**
+     * Items
+     */
+    items: Array<UniverseView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[UserView]
+ */
+export type PageUserView = {
+    /**
+     * Items
+     */
+    items: Array<UserView>;
     /**
      * Limit
      */
@@ -2643,6 +3642,46 @@ export type PasswordResetRequest = {
 };
 
 /**
+ * PeriodPnl
+ */
+export type PeriodPnl = {
+    /**
+     * Change
+     *
+     * Value change, deposits and withdrawals included.
+     */
+    change: number | null;
+    /**
+     * Change Pct
+     *
+     * change / start_value (0.05 = +5%).
+     */
+    change_pct: number | null;
+    /**
+     * End Day
+     */
+    end_day: string;
+    /**
+     * End Value
+     */
+    end_value: number;
+    /**
+     * Period
+     */
+    period: '1d' | '1w' | '1m' | '3m' | 'ytd' | '1y' | 'inception';
+    /**
+     * Start Day
+     *
+     * Day of the start value; null without history.
+     */
+    start_day: string | null;
+    /**
+     * Start Value
+     */
+    start_value: number | null;
+};
+
+/**
  * PnlRowView
  */
 export type PnlRowView = {
@@ -2709,6 +3748,52 @@ export type PortalLinkView = {
      * Url
      */
     url: string;
+};
+
+/**
+ * PortfolioSummaryView
+ */
+export type PortfolioSummaryView = {
+    /**
+     * Base Currency
+     */
+    base_currency: string;
+    /**
+     * Broker Connection Id
+     */
+    broker_connection_id: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Initial Cash
+     */
+    initial_cash: number | null;
+    /**
+     * Is Default
+     */
+    is_default?: boolean;
+    /**
+     * Kind
+     */
+    kind: 'simulated' | 'broker';
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Status
+     */
+    status: 'active' | 'paused' | 'archived';
+    /**
+     * Trading
+     */
+    trading: 'paper' | 'live';
 };
 
 /**
@@ -2943,6 +4028,10 @@ export type PreferencesUpdate = {
  */
 export type PreferencesView = {
     /**
+     * Channel Defaults
+     */
+    channel_defaults?: Array<ChannelDefaultView>;
+    /**
      * Channels
      */
     channels: Array<string>;
@@ -3034,6 +4123,14 @@ export type ProbeView = {
  */
 export type ProblemDetails = {
     /**
+     * Blockers
+     */
+    blockers?: Array<string> | null;
+    /**
+     * Code
+     */
+    code?: string | null;
+    /**
      * Detail
      */
     detail?: string | null;
@@ -3044,9 +4141,17 @@ export type ProblemDetails = {
         [key: string]: unknown;
     }> | null;
     /**
+     * Failing Checks
+     */
+    failing_checks?: Array<FailingCheck> | null;
+    /**
      * Instance
      */
     instance?: string | null;
+    /**
+     * Next Step
+     */
+    next_step?: string | null;
     /**
      * Status
      */
@@ -3118,6 +4223,14 @@ export type ProviderView = {
      * Display Name
      */
     display_name: string;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Has Paper
+     */
+    has_paper: boolean;
     /**
      * Name
      */
@@ -3226,6 +4339,42 @@ export type RecoveryCodesView = {
 };
 
 /**
+ * RestoreRequest
+ */
+export type RestoreRequest = {
+    /**
+     * Confirmation
+     */
+    confirmation: string;
+};
+
+/**
+ * RestoreResultView
+ */
+export type RestoreResultView = {
+    /**
+     * Backup Id
+     */
+    backup_id: string;
+    /**
+     * Data Dir
+     */
+    data_dir: string;
+    /**
+     * Lake Migrations Applied
+     */
+    lake_migrations_applied: Array<number>;
+    /**
+     * Next Steps
+     */
+    next_steps: Array<string>;
+    /**
+     * State Migrations Applied
+     */
+    state_migrations_applied: Array<number>;
+};
+
+/**
  * ResumeRequest
  */
 export type ResumeRequest = {
@@ -3331,6 +4480,219 @@ export type RiskPolicy = {
 };
 
 /**
+ * RiskSnapshotView
+ *
+ * One book on one day. Figures are fractions of ``value``; a loss is
+ * positive. ``strategy_id`` is null for the whole portfolio.
+ */
+export type RiskSnapshotView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Decay Days
+     */
+    decay_days: number | null;
+    /**
+     * Decay Reason
+     */
+    decay_reason: string | null;
+    /**
+     * Decayed
+     */
+    decayed: boolean;
+    /**
+     * Es 95
+     */
+    es_95: number | null;
+    /**
+     * Es 99
+     */
+    es_99: number | null;
+    /**
+     * Expected Ir
+     */
+    expected_ir: number | null;
+    /**
+     * Exposures
+     */
+    exposures: {
+        [key: string]: number;
+    };
+    /**
+     * Ir Long
+     */
+    ir_long: number | null;
+    /**
+     * Ir Short
+     */
+    ir_short: number | null;
+    /**
+     * Kupiec P 95
+     */
+    kupiec_p_95: number | null;
+    /**
+     * Kupiec P 99
+     */
+    kupiec_p_99: number | null;
+    /**
+     * Observations
+     */
+    observations: number;
+    /**
+     * Pnl
+     */
+    pnl: number | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Ratio Out Of Band
+     */
+    ratio_out_of_band: boolean;
+    /**
+     * Realized Return
+     */
+    realized_return: number | null;
+    /**
+     * Sigma
+     */
+    sigma: number | null;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string | null;
+    /**
+     * Tick Id
+     */
+    tick_id: string | null;
+    /**
+     * Value
+     */
+    value: number;
+    /**
+     * Var 95
+     */
+    var_95: number | null;
+    /**
+     * Var 99
+     */
+    var_99: number | null;
+    /**
+     * Violation 95
+     */
+    violation_95: boolean | null;
+    /**
+     * Violation 99
+     */
+    violation_99: boolean | null;
+    /**
+     * Violation Ratio 95
+     */
+    violation_ratio_95: number | null;
+    /**
+     * Violation Ratio 99
+     */
+    violation_ratio_99: number | null;
+    /**
+     * Violations 95
+     */
+    violations_95: number;
+    /**
+     * Violations 99
+     */
+    violations_99: number;
+    /**
+     * Window Days
+     */
+    window_days: number;
+};
+
+/**
+ * RiskStats
+ */
+export type RiskStats = {
+    /**
+     * Current Drawdown
+     *
+     * Latest value against its peak, <= 0.
+     */
+    current_drawdown: number;
+    /**
+     * Expected Shortfall 95
+     *
+     * Mean return at or below var_95.
+     */
+    expected_shortfall_95: number;
+    /**
+     * Max Drawdown
+     *
+     * Worst fall from a peak, <= 0.
+     */
+    max_drawdown: number;
+    /**
+     * Observations
+     *
+     * Daily returns the numbers use.
+     */
+    observations: number;
+    /**
+     * Var 95
+     *
+     * One-day historical value at risk, a return (loss < 0).
+     */
+    var_95: number;
+    /**
+     * Volatility
+     *
+     * Annualized (252 days) standard deviation.
+     */
+    volatility: number | null;
+};
+
+/**
+ * RiskSummaryView
+ */
+export type RiskSummaryView = {
+    /**
+     * As Of
+     */
+    as_of: string | null;
+    portfolio: RiskSnapshotView | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Strategies
+     */
+    strategies: Array<RiskSnapshotView>;
+};
+
+/**
+ * RiskView
+ */
+export type RiskView = {
+    concentration: Concentration;
+    /**
+     * From the portfolio's own daily values; null with under three days.
+     */
+    history: RiskStats | null;
+    /**
+     * Today's weights applied to the last year of price returns; null without enough prices.
+     */
+    holdings: RiskStats | null;
+    /**
+     * Returns As Of
+     *
+     * Last price day behind holdings risk and beta.
+     */
+    returns_as_of: string | null;
+};
+
+/**
  * Role
  */
 export type Role = 'viewer' | 'trader' | 'admin';
@@ -3339,14 +4701,20 @@ export type Role = 'viewer' | 'trader' | 'admin';
  * RuleSettings
  */
 export type RuleSettings = {
+    borrow_check?: BorrowCheckSettings;
     circuit_breaker?: CircuitBreakerSettings;
     drawdown_scaling?: DrawdownScalingSettings;
+    gross_exposure?: GrossExposureSettings;
     liquidity?: LiquiditySettings;
+    margin_call?: MarginCallSettings;
     max_holding?: MaxHoldingSettings;
+    net_exposure?: NetExposureSettings;
     operational_halt?: OperationalHaltSettings;
     portfolio_vol?: PortfolioVolSettings;
     risk_per_position?: RiskPerPositionSettings;
     sector_cap?: SectorCapSettings;
+    short_caps?: ShortCapsSettings;
+    squeeze_guard?: SqueezeGuardSettings;
 };
 
 /**
@@ -3421,6 +4789,7 @@ export type ScheduleView = {
      * Jobs
      */
     jobs: Array<ScheduledJobView>;
+    market?: MarketSessionsView | null;
     /**
      * Recent
      */
@@ -3451,6 +4820,10 @@ export type ScheduledJobView = {
      * Trigger
      */
     trigger: string;
+    /**
+     * Trigger Text
+     */
+    trigger_text?: string;
 };
 
 /**
@@ -3517,6 +4890,28 @@ export type SectorCapSettings = {
      * Max Weight Per Sector
      */
     max_weight_per_sector?: number | null;
+};
+
+/**
+ * SessionTimesView
+ */
+export type SessionTimesView = {
+    /**
+     * Close
+     */
+    close: string;
+    /**
+     * Date
+     */
+    date: string;
+    /**
+     * Open
+     */
+    open: string;
+    /**
+     * Pre Open
+     */
+    pre_open: string;
 };
 
 /**
@@ -3633,6 +5028,102 @@ export type ShadowPnlSummary = {
      * Total Value
      */
     total_value: number | null;
+};
+
+/**
+ * ShortCapsSettings
+ */
+export type ShortCapsSettings = {
+    /**
+     * Max Short Total
+     */
+    max_short_total?: number | null;
+    /**
+     * Max Short Weight
+     */
+    max_short_weight?: number | null;
+};
+
+/**
+ * ShortfallView
+ *
+ * Implementation shortfall of one order. Costs are positive, in bps of
+ * the filled quantity's value at the decision price; ``null`` while an
+ * input is not known yet.
+ */
+export type ShortfallView = {
+    /**
+     * Arrival Price
+     */
+    arrival_price: number | null;
+    /**
+     * Benchmark Price
+     */
+    benchmark_price: number | null;
+    /**
+     * Convention Bps
+     */
+    convention_bps: number | null;
+    /**
+     * Decision Price
+     */
+    decision_price: number;
+    /**
+     * Delay Bps
+     */
+    delay_bps: number | null;
+    /**
+     * Expected Bps
+     */
+    expected_bps: number | null;
+    /**
+     * Fee Bps
+     */
+    fee_bps: number | null;
+    /**
+     * Fill Price
+     */
+    fill_price: number | null;
+    /**
+     * Filled Quantity
+     */
+    filled_quantity: number;
+    /**
+     * Impact Bps
+     */
+    impact_bps: number | null;
+    /**
+     * Is Bps
+     */
+    is_bps: number | null;
+    /**
+     * Is Cost
+     */
+    is_cost: number | null;
+    /**
+     * Opportunity Bps
+     */
+    opportunity_bps: number | null;
+    /**
+     * Opportunity Cost
+     */
+    opportunity_cost: number | null;
+    /**
+     * Ordered Quantity
+     */
+    ordered_quantity: number;
+    /**
+     * Post Close Price
+     */
+    post_close_price: number | null;
+    /**
+     * Side
+     */
+    side: string;
+    /**
+     * Total Bps
+     */
+    total_bps: number | null;
 };
 
 /**
@@ -3809,6 +5300,33 @@ export type SpecValidateRequest = {
     spec: {
         [key: string]: unknown;
     };
+};
+
+/**
+ * SqueezeGuardSettings
+ */
+export type SqueezeGuardSettings = {
+    /**
+     * Atr Multiple
+     */
+    atr_multiple?: number | null;
+    borrow?: BorrowSettings | null;
+    /**
+     * Max Adverse Pct
+     */
+    max_adverse_pct?: number | null;
+    /**
+     * Max Borrow Fee
+     */
+    max_borrow_fee?: number | null;
+    /**
+     * Spike Bars
+     */
+    spike_bars?: number;
+    /**
+     * Spike Pct
+     */
+    spike_pct?: number | null;
 };
 
 /**
@@ -4161,6 +5679,130 @@ export type StudioCapabilities = {
 };
 
 /**
+ * SubscribeRequest
+ */
+export type SubscribeRequest = {
+    /**
+     * Mode
+     */
+    mode?: 'notify' | 'paper' | 'auto';
+    /**
+     * Portfolio Id
+     */
+    portfolio_id?: string | null;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string;
+    /**
+     * Weight
+     */
+    weight?: number;
+};
+
+/**
+ * SubscriptionUpdate
+ */
+export type SubscriptionUpdate = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean | null;
+    /**
+     * Mode
+     */
+    mode?: 'notify' | 'paper' | 'auto' | null;
+    /**
+     * Reason
+     */
+    reason?: string | null;
+};
+
+/**
+ * SubscriptionView
+ */
+export type SubscriptionView = {
+    /**
+     * Auto Blockers
+     */
+    auto_blockers: Array<string>;
+    /**
+     * Auto Enabled At
+     */
+    auto_enabled_at: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Mode
+     */
+    mode: 'notify' | 'paper' | 'auto';
+    /**
+     * Paper Days Completed
+     */
+    paper_days_completed: number;
+    /**
+     * Paper Days Required
+     */
+    paper_days_required: number;
+    /**
+     * Paused Reason
+     */
+    paused_reason: string | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string | null;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string;
+    /**
+     * Strategy Status
+     */
+    strategy_status: string | null;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Weight
+     */
+    weight: number;
+};
+
+/**
+ * SurvivalPresetInfo
+ */
+export type SurvivalPresetInfo = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Options
+     */
+    options: {
+        [key: string]: {
+            [key: string]: unknown;
+        };
+    };
+    /**
+     * Tests
+     */
+    tests: Array<string>;
+};
+
+/**
  * SurvivalReportView
  */
 export type SurvivalReportView = {
@@ -4182,6 +5824,234 @@ export type SurvivalReportView = {
      * Test Id
      */
     test_id: string;
+};
+
+/**
+ * SurvivalTestInfo
+ *
+ * A survival test and the options a request's ``test_options[id]`` may
+ * set, as JSON Schema from the backend's own options model.
+ */
+export type SurvivalTestInfo = {
+    /**
+     * Config Schema
+     */
+    config_schema?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Options Schema
+     */
+    options_schema: {
+        [key: string]: unknown;
+    };
+    /**
+     * Presets
+     */
+    presets: Array<string>;
+};
+
+/**
+ * SweepRequest
+ *
+ * A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every
+ * member during the window). ``strategies`` default to every catalogued
+ * non-wrapper strategy. The lab options apply to every run; sweeps never
+ * register strategies.
+ */
+export type SweepRequest = {
+    /**
+     * Benchmark
+     */
+    benchmark?: string | null;
+    /**
+     * Budget
+     */
+    budget?: number;
+    /**
+     * Cost Model
+     */
+    cost_model?: 'zero' | 'realistic' | CostModelSettings | null;
+    /**
+     * Embargo Bars
+     */
+    embargo_bars?: number | null;
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Exclude
+     */
+    exclude?: Array<string>;
+    /**
+     * Grid Size
+     */
+    grid_size?: number;
+    /**
+     * Hypothesis
+     */
+    hypothesis?: string | null;
+    /**
+     * Interval
+     */
+    interval?: string;
+    mcpt?: McptOptions | null;
+    /**
+     * Objective
+     */
+    objective?: 'sharpe' | 'cagr' | 'final_return' | 'cv_sharpe' | 'cv_cagr' | 'cv_final_return';
+    /**
+     * Preflight
+     */
+    preflight?: boolean | null;
+    /**
+     * Premortem
+     */
+    premortem?: string | null;
+    /**
+     * Preset
+     */
+    preset?: 'promotion' | 'quick' | 'standard' | null;
+    /**
+     * Register If Passes
+     */
+    register_if_passes?: boolean;
+    /**
+     * Register Strategy
+     */
+    register_strategy?: boolean;
+    /**
+     * Seed
+     */
+    seed?: number;
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * Strategies
+     */
+    strategies?: Array<string> | null;
+    /**
+     * Strict Preflight
+     */
+    strict_preflight?: boolean | null;
+    /**
+     * Survival Tests
+     */
+    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cpcv' | 'crisis' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'pool_correlation' | 'runs_test' | 'signal_ic' | 'stress' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
+    /**
+     * Test Options
+     */
+    test_options?: {
+        [key: string]: {
+            [key: string]: unknown;
+        };
+    } | null;
+    /**
+     * Train Ratio
+     */
+    train_ratio?: number;
+    /**
+     * Tuner
+     */
+    tuner?: 'grid' | 'random';
+    /**
+     * Universe
+     */
+    universe?: Array<string>;
+    /**
+     * Universe Id
+     */
+    universe_id?: string | null;
+    walk_forward?: WalkForwardConfig | null;
+};
+
+/**
+ * SweepResultView
+ */
+export type SweepResultView = {
+    /**
+     * Errors
+     */
+    errors: number;
+    /**
+     * Failed
+     */
+    failed: number;
+    /**
+     * Passed
+     */
+    passed: number;
+    /**
+     * Rows
+     */
+    rows: Array<SweepRowView>;
+    /**
+     * Universe
+     */
+    universe: Array<string>;
+    /**
+     * Universe Id
+     */
+    universe_id?: string | null;
+};
+
+/**
+ * SweepRowView
+ */
+export type SweepRowView = {
+    /**
+     * Best Params
+     */
+    best_params?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Best Score
+     */
+    best_score?: number | null;
+    /**
+     * Error
+     */
+    error?: string | null;
+    /**
+     * N Trials
+     */
+    n_trials?: number;
+    /**
+     * Run Id
+     */
+    run_id?: string;
+    /**
+     * Strategy
+     */
+    strategy: string;
+    /**
+     * Survival
+     */
+    survival?: {
+        [key: string]: {
+            [key: string]: unknown;
+        };
+    };
+    /**
+     * Ticker
+     */
+    ticker: string | null;
+    /**
+     * Verdict
+     */
+    verdict: 'pass' | 'fail' | 'error';
 };
 
 /**
@@ -4215,6 +6085,96 @@ export type SyncResultView = {
 };
 
 /**
+ * TcaGroupView
+ *
+ * Costs of a group of orders, weighted by notional, in bps.
+ */
+export type TcaGroupView = {
+    /**
+     * Convention Bps
+     */
+    convention_bps: number | null;
+    /**
+     * Delay Bps
+     */
+    delay_bps: number | null;
+    /**
+     * Expected Bps
+     */
+    expected_bps: number | null;
+    /**
+     * Fee Bps
+     */
+    fee_bps: number | null;
+    /**
+     * Filled Notional
+     */
+    filled_notional: number;
+    /**
+     * Filled Orders
+     */
+    filled_orders: number;
+    /**
+     * Impact Bps
+     */
+    impact_bps: number | null;
+    /**
+     * Is Bps
+     */
+    is_bps: number | null;
+    /**
+     * Is Cost
+     */
+    is_cost: number;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Model Gap Bps
+     */
+    model_gap_bps: number | null;
+    /**
+     * Opportunity Bps
+     */
+    opportunity_bps: number | null;
+    /**
+     * Opportunity Cost
+     */
+    opportunity_cost: number;
+    /**
+     * Orders
+     */
+    orders: number;
+};
+
+/**
+ * TcaSummaryView
+ */
+export type TcaSummaryView = {
+    /**
+     * By
+     */
+    by: 'all' | 'strategy' | 'ticker' | 'portfolio' | 'day' | 'week' | 'month';
+    /**
+     * Groups
+     */
+    groups: Array<TcaGroupView>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Since
+     */
+    since: string | null;
+    /**
+     * Until
+     */
+    until: string | null;
+};
+
+/**
  * TickRequest
  */
 export type TickRequest = {
@@ -4227,9 +6187,21 @@ export type TickRequest = {
      */
     asset_class?: 'equity' | 'crypto' | 'commodity' | 'bond' | null;
     /**
+     * Bars Due At
+     *
+     * Buy only tickers whose latest session that closed by this time has its daily bar in the lake (scheduled ticks send their fire time). Tickers whose bar is missing are marked and sellable, not buyable.
+     */
+    bars_due_at?: string | null;
+    /**
      * Dry Run
      */
     dry_run?: boolean;
+    /**
+     * Scoped
+     *
+     * Trade only the tick's tickers and leave other holdings alone, not even selling them. Default: true when tickers or asset_class narrow the universe.
+     */
+    scoped?: boolean | null;
     /**
      * Tickers
      */
@@ -4333,6 +6305,12 @@ export type TickRunWithOrders = {
  */
 export type TickSummary = {
     /**
+     * Deferred Corporate Actions
+     */
+    deferred_corporate_actions?: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
      * Error
      */
     error?: string | null;
@@ -4352,6 +6330,14 @@ export type TickSummary = {
      * Orders Placed
      */
     orders_placed?: number | null;
+    /**
+     * Outside Universe Skipped
+     */
+    outside_universe_skipped?: Array<string>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id?: string | null;
     /**
      * Reason
      */
@@ -4558,6 +6544,38 @@ export type TradeView = {
      * Ticker
      */
     ticker: string;
+};
+
+/**
+ * TradingModeView
+ *
+ * Whether a portfolio trades paper or live money, and through what.
+ */
+export type TradingModeView = {
+    /**
+     * Broker
+     *
+     * simulated (the Stonks ledger), alpaca (the configured account, default portfolio only) or connection (a linked broker account, synced read-only).
+     */
+    broker: 'simulated' | 'alpaca' | 'connection';
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Trading
+     *
+     * paper: simulated fills or a paper broker account. live: real money.
+     */
+    trading: 'paper' | 'live';
 };
 
 /**
@@ -4802,6 +6820,24 @@ export type VapidKeyView = {
      * Public Key
      */
     public_key: string | null;
+};
+
+/**
+ * VerifyView
+ */
+export type VerifyView = {
+    /**
+     * Backup Id
+     */
+    backup_id: string;
+    /**
+     * Ok
+     */
+    ok: boolean;
+    /**
+     * Problems
+     */
+    problems: Array<string>;
 };
 
 /**
@@ -5492,7 +7528,18 @@ export type RegenerateRecoveryCodesResponse = RegenerateRecoveryCodesResponses[k
 export type ListApiTokensData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/auth/tokens';
 };
 
@@ -5531,11 +7578,9 @@ export type ListApiTokensError = ListApiTokensErrors[keyof ListApiTokensErrors];
 
 export type ListApiTokensResponses = {
     /**
-     * Response Listapitokens
-     *
      * Successful Response
      */
-    200: Array<TokenView>;
+    200: PageTokenView;
 };
 
 export type ListApiTokensResponse = ListApiTokensResponses[keyof ListApiTokensResponses];
@@ -5646,7 +7691,18 @@ export type RevokeApiTokenResponse = RevokeApiTokenResponses[keyof RevokeApiToke
 export type ListUsersData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/auth/users';
 };
 
@@ -5685,11 +7741,9 @@ export type ListUsersError = ListUsersErrors[keyof ListUsersErrors];
 
 export type ListUsersResponses = {
     /**
-     * Response Listusers
-     *
      * Successful Response
      */
-    200: Array<UserView>;
+    200: PageUserView;
 };
 
 export type ListUsersResponse = ListUsersResponses[keyof ListUsersResponses];
@@ -5905,6 +7959,58 @@ export type ResetUserPasswordResponses = {
 
 export type ResetUserPasswordResponse = ResetUserPasswordResponses[keyof ResetUserPasswordResponses];
 
+export type ListBackupsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/backups';
+};
+
+export type ListBackupsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListBackupsError = ListBackupsErrors[keyof ListBackupsErrors];
+
+export type ListBackupsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageBackupView;
+};
+
+export type ListBackupsResponse = ListBackupsResponses[keyof ListBackupsResponses];
+
 export type StartBackupData = {
     body?: never;
     path?: never;
@@ -5991,6 +8097,144 @@ export type GetBackupResultResponses = {
 };
 
 export type GetBackupResultResponse = GetBackupResultResponses[keyof GetBackupResultResponses];
+
+export type GetRestoreResultData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/backups/restores/{job_id}/result';
+};
+
+export type GetRestoreResultErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetRestoreResultError = GetRestoreResultErrors[keyof GetRestoreResultErrors];
+
+export type GetRestoreResultResponses = {
+    /**
+     * Successful Response
+     */
+    200: RestoreResultView;
+};
+
+export type GetRestoreResultResponse = GetRestoreResultResponses[keyof GetRestoreResultResponses];
+
+export type RestoreBackupData = {
+    body: RestoreRequest;
+    path: {
+        /**
+         * Backup Id
+         */
+        backup_id: string;
+    };
+    query?: never;
+    url: '/api/backups/{backup_id}/restore';
+};
+
+export type RestoreBackupErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RestoreBackupError = RestoreBackupErrors[keyof RestoreBackupErrors];
+
+export type RestoreBackupResponses = {
+    /**
+     * Successful Response
+     */
+    202: Job;
+};
+
+export type RestoreBackupResponse = RestoreBackupResponses[keyof RestoreBackupResponses];
+
+export type VerifyBackupData = {
+    body?: never;
+    path: {
+        /**
+         * Backup Id
+         */
+        backup_id: string;
+    };
+    query?: never;
+    url: '/api/backups/{backup_id}/verify';
+};
+
+export type VerifyBackupErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type VerifyBackupError = VerifyBackupErrors[keyof VerifyBackupErrors];
+
+export type VerifyBackupResponses = {
+    /**
+     * Successful Response
+     */
+    200: VerifyView;
+};
+
+export type VerifyBackupResponse = VerifyBackupResponses[keyof VerifyBackupResponses];
 
 export type GetBrokerInfoData = {
     body?: never;
@@ -6206,7 +8450,18 @@ export type ListStrategyClassesResponse = ListStrategyClassesResponses[keyof Lis
 export type ListConnectionsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/connections';
 };
 
@@ -6237,11 +8492,9 @@ export type ListConnectionsError = ListConnectionsErrors[keyof ListConnectionsEr
 
 export type ListConnectionsResponses = {
     /**
-     * Response Listconnections
-     *
      * Successful Response
      */
-    200: Array<ConnectionView>;
+    200: PageConnectionView;
 };
 
 export type ListConnectionsResponse = ListConnectionsResponses[keyof ListConnectionsResponses];
@@ -6527,7 +8780,18 @@ export type ListConnectionAccountsData = {
          */
         connection_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/connections/{connection_id}/accounts';
 };
 
@@ -6558,11 +8822,9 @@ export type ListConnectionAccountsError = ListConnectionAccountsErrors[keyof Lis
 
 export type ListConnectionAccountsResponses = {
     /**
-     * Response Listconnectionaccounts
-     *
      * Successful Response
      */
-    200: Array<StonksAppConnectionsBrokerAccountView>;
+    200: PageBrokerAccountView;
 };
 
 export type ListConnectionAccountsResponse = ListConnectionAccountsResponses[keyof ListConnectionAccountsResponses];
@@ -6669,6 +8931,16 @@ export type ListHaltsData = {
          * also cleared and expired halts
          */
         include_cleared?: boolean;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
     };
     url: '/api/halts';
 };
@@ -6700,11 +8972,9 @@ export type ListHaltsError = ListHaltsErrors[keyof ListHaltsErrors];
 
 export type ListHaltsResponses = {
     /**
-     * Response Listhalts
-     *
      * Successful Response
      */
-    200: Array<HaltView>;
+    200: PageHaltView;
 };
 
 export type ListHaltsResponse = ListHaltsResponses[keyof ListHaltsResponses];
@@ -7002,6 +9272,47 @@ export type GetHealthReportResponses = {
 
 export type GetHealthReportResponse = GetHealthReportResponses[keyof GetHealthReportResponses];
 
+export type RunHealthChecksData = {
+    body: HealthRunRequest;
+    path?: never;
+    query?: never;
+    url: '/api/health/run';
+};
+
+export type RunHealthChecksErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RunHealthChecksError = RunHealthChecksErrors[keyof RunHealthChecksErrors];
+
+export type RunHealthChecksResponses = {
+    /**
+     * Successful Response
+     */
+    200: HealthReportView;
+};
+
+export type RunHealthChecksResponse = RunHealthChecksResponses[keyof RunHealthChecksResponses];
+
 export type GetIngestResultData = {
     body?: never;
     path: {
@@ -7148,6 +9459,149 @@ export type StartIngestResponses = {
 };
 
 export type StartIngestResponse = StartIngestResponses[keyof StartIngestResponses];
+
+export type GetInsightsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Benchmark
+         *
+         * Ticker beta is measured against. Default SPY.US.
+         */
+        benchmark?: string | null;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/insights';
+};
+
+export type GetInsightsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetInsightsError = GetInsightsErrors[keyof GetInsightsErrors];
+
+export type GetInsightsResponses = {
+    /**
+     * Successful Response
+     */
+    200: InsightsView;
+};
+
+export type GetInsightsResponse = GetInsightsResponses[keyof GetInsightsResponses];
+
+export type GetStrategyAgreementData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/insights/agreement';
+};
+
+export type GetStrategyAgreementErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetStrategyAgreementError = GetStrategyAgreementErrors[keyof GetStrategyAgreementErrors];
+
+export type GetStrategyAgreementResponses = {
+    /**
+     * Successful Response
+     */
+    200: AgreementView;
+};
+
+export type GetStrategyAgreementResponse = GetStrategyAgreementResponses[keyof GetStrategyAgreementResponses];
+
+export type GetInsightsTotalsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/insights/totals';
+};
+
+export type GetInsightsTotalsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetInsightsTotalsError = GetInsightsTotalsErrors[keyof GetInsightsTotalsErrors];
+
+export type GetInsightsTotalsResponses = {
+    /**
+     * Successful Response
+     */
+    200: InsightsTotalsView;
+};
+
+export type GetInsightsTotalsResponse = GetInsightsTotalsResponses[keyof GetInsightsTotalsResponses];
 
 export type ListJobsData = {
     body?: never;
@@ -7528,6 +9982,52 @@ export type ListCostModelsResponses = {
 
 export type ListCostModelsResponse = ListCostModelsResponses[keyof ListCostModelsResponses];
 
+export type GetLabEnsureResultData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/lab/ensure/{job_id}/result';
+};
+
+export type GetLabEnsureResultErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetLabEnsureResultError = GetLabEnsureResultErrors[keyof GetLabEnsureResultErrors];
+
+export type GetLabEnsureResultResponses = {
+    /**
+     * Successful Response
+     */
+    200: EnsureReport;
+};
+
+export type GetLabEnsureResultResponse = GetLabEnsureResultResponses[keyof GetLabEnsureResultResponses];
+
 export type StartLabRunData = {
     body: LabRunRequest;
     path?: never;
@@ -7701,6 +10201,179 @@ export type GetSignalIcResultResponses = {
 };
 
 export type GetSignalIcResultResponse = GetSignalIcResultResponses[keyof GetSignalIcResultResponses];
+
+export type ListSurvivalPresetsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/lab/survival-presets';
+};
+
+export type ListSurvivalPresetsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListSurvivalPresetsError = ListSurvivalPresetsErrors[keyof ListSurvivalPresetsErrors];
+
+export type ListSurvivalPresetsResponses = {
+    /**
+     * Response Listsurvivalpresets
+     *
+     * Successful Response
+     */
+    200: Array<SurvivalPresetInfo>;
+};
+
+export type ListSurvivalPresetsResponse = ListSurvivalPresetsResponses[keyof ListSurvivalPresetsResponses];
+
+export type ListSurvivalTestsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/lab/survival-tests';
+};
+
+export type ListSurvivalTestsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListSurvivalTestsError = ListSurvivalTestsErrors[keyof ListSurvivalTestsErrors];
+
+export type ListSurvivalTestsResponses = {
+    /**
+     * Response Listsurvivaltests
+     *
+     * Successful Response
+     */
+    200: Array<SurvivalTestInfo>;
+};
+
+export type ListSurvivalTestsResponse = ListSurvivalTestsResponses[keyof ListSurvivalTestsResponses];
+
+export type StartSweepData = {
+    body: SweepRequest;
+    path?: never;
+    query?: never;
+    url: '/api/lab/sweeps';
+};
+
+export type StartSweepErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type StartSweepError = StartSweepErrors[keyof StartSweepErrors];
+
+export type StartSweepResponses = {
+    /**
+     * Successful Response
+     */
+    202: Job;
+};
+
+export type StartSweepResponse = StartSweepResponses[keyof StartSweepResponses];
+
+export type GetSweepResultData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/lab/sweeps/{job_id}/result';
+};
+
+export type GetSweepResultErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetSweepResultError = GetSweepResultErrors[keyof GetSweepResultErrors];
+
+export type GetSweepResultResponses = {
+    /**
+     * Successful Response
+     */
+    200: SweepResultView;
+};
+
+export type GetSweepResultResponse = GetSweepResultResponses[keyof GetSweepResultResponses];
 
 export type GetBarsData = {
     body?: never;
@@ -8490,6 +11163,110 @@ export type GetPortfolioTotalsResponses = {
 
 export type GetPortfolioTotalsResponse = GetPortfolioTotalsResponses[keyof GetPortfolioTotalsResponses];
 
+export type ListPortfoliosData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/portfolios';
+};
+
+export type ListPortfoliosErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListPortfoliosError = ListPortfoliosErrors[keyof ListPortfoliosErrors];
+
+export type ListPortfoliosResponses = {
+    /**
+     * Successful Response
+     */
+    200: PagePortfolioSummaryView;
+};
+
+export type ListPortfoliosResponse = ListPortfoliosResponses[keyof ListPortfoliosResponses];
+
+export type ListTradingModesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/portfolios/trading-modes';
+};
+
+export type ListTradingModesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListTradingModesError = ListTradingModesErrors[keyof ListTradingModesErrors];
+
+export type ListTradingModesResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageTradingModeView;
+};
+
+export type ListTradingModesResponse = ListTradingModesResponses[keyof ListTradingModesResponses];
+
 export type DeletePushSubscriptionData = {
     body: PushUnsubscribeRequest;
     path?: never;
@@ -8534,7 +11311,18 @@ export type DeletePushSubscriptionResponse = DeletePushSubscriptionResponses[key
 export type ListPushSubscriptionsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/push/subscriptions';
 };
 
@@ -8565,11 +11353,9 @@ export type ListPushSubscriptionsError = ListPushSubscriptionsErrors[keyof ListP
 
 export type ListPushSubscriptionsResponses = {
     /**
-     * Response Listpushsubscriptions
-     *
      * Successful Response
      */
-    200: Array<PushDeviceView>;
+    200: PagePushDeviceView;
 };
 
 export type ListPushSubscriptionsResponse = ListPushSubscriptionsResponses[keyof ListPushSubscriptionsResponses];
@@ -8615,6 +11401,52 @@ export type CreatePushSubscriptionResponses = {
 
 export type CreatePushSubscriptionResponse = CreatePushSubscriptionResponses[keyof CreatePushSubscriptionResponses];
 
+export type DeletePushDeviceData = {
+    body?: never;
+    path: {
+        /**
+         * Device Id
+         */
+        device_id: string;
+    };
+    query?: never;
+    url: '/api/push/subscriptions/{device_id}';
+};
+
+export type DeletePushDeviceErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type DeletePushDeviceError = DeletePushDeviceErrors[keyof DeletePushDeviceErrors];
+
+export type DeletePushDeviceResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeletePushDeviceResponse = DeletePushDeviceResponses[keyof DeletePushDeviceResponses];
+
 export type GetVapidKeyData = {
     body?: never;
     path?: never;
@@ -8656,6 +11488,54 @@ export type GetVapidKeyResponses = {
 
 export type GetVapidKeyResponse = GetVapidKeyResponses[keyof GetVapidKeyResponses];
 
+export type GetLiveRiskData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/risk/live';
+};
+
+export type GetLiveRiskErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetLiveRiskError = GetLiveRiskErrors[keyof GetLiveRiskErrors];
+
+export type GetLiveRiskResponses = {
+    /**
+     * Successful Response
+     */
+    200: RiskSummaryView;
+};
+
+export type GetLiveRiskResponse = GetLiveRiskResponses[keyof GetLiveRiskResponses];
+
 export type GetRiskPolicyData = {
     body?: never;
     path?: never;
@@ -8696,6 +11576,76 @@ export type GetRiskPolicyResponses = {
 };
 
 export type GetRiskPolicyResponse = GetRiskPolicyResponses[keyof GetRiskPolicyResponses];
+
+export type ListRiskSnapshotsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Strategy Id
+         *
+         * one strategy's sleeve; default the whole portfolio
+         */
+        strategy_id?: string | null;
+        /**
+         * Since
+         *
+         * days on or after this one
+         */
+        since?: string | null;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/risk/snapshots';
+};
+
+export type ListRiskSnapshotsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListRiskSnapshotsError = ListRiskSnapshotsErrors[keyof ListRiskSnapshotsErrors];
+
+export type ListRiskSnapshotsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageRiskSnapshotView;
+};
+
+export type ListRiskSnapshotsResponse = ListRiskSnapshotsResponses[keyof ListRiskSnapshotsResponses];
 
 export type GetScheduleData = {
     body?: never;
@@ -9273,7 +12223,18 @@ export type GetStrategyHistoryData = {
          */
         strategy_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/strategies/{strategy_id}/history';
 };
 
@@ -9304,11 +12265,9 @@ export type GetStrategyHistoryError = GetStrategyHistoryErrors[keyof GetStrategy
 
 export type GetStrategyHistoryResponses = {
     /**
-     * Response Getstrategyhistory
-     *
      * Successful Response
      */
-    200: Array<StatusChangeView>;
+    200: PageStatusChangeView;
 };
 
 export type GetStrategyHistoryResponse = GetStrategyHistoryResponses[keyof GetStrategyHistoryResponses];
@@ -10206,6 +13165,433 @@ export type ListStudioTemplatesResponses = {
 
 export type ListStudioTemplatesResponse = ListStudioTemplatesResponses[keyof ListStudioTemplatesResponses];
 
+export type ListSubscriptionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/subscriptions';
+};
+
+export type ListSubscriptionsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListSubscriptionsError = ListSubscriptionsErrors[keyof ListSubscriptionsErrors];
+
+export type ListSubscriptionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageSubscriptionView;
+};
+
+export type ListSubscriptionsResponse = ListSubscriptionsResponses[keyof ListSubscriptionsResponses];
+
+export type SubscribeData = {
+    body: SubscribeRequest;
+    path?: never;
+    query?: never;
+    url: '/api/subscriptions';
+};
+
+export type SubscribeErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SubscribeError = SubscribeErrors[keyof SubscribeErrors];
+
+export type SubscribeResponses = {
+    /**
+     * Successful Response
+     */
+    201: SubscriptionView;
+};
+
+export type SubscribeResponse = SubscribeResponses[keyof SubscribeResponses];
+
+export type UpdateSubscriptionData = {
+    body: SubscriptionUpdate;
+    path: {
+        /**
+         * Subscription Id
+         */
+        subscription_id: string;
+    };
+    query?: never;
+    url: '/api/subscriptions/{subscription_id}';
+};
+
+export type UpdateSubscriptionErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type UpdateSubscriptionError = UpdateSubscriptionErrors[keyof UpdateSubscriptionErrors];
+
+export type UpdateSubscriptionResponses = {
+    /**
+     * Successful Response
+     */
+    200: SubscriptionView;
+};
+
+export type UpdateSubscriptionResponse = UpdateSubscriptionResponses[keyof UpdateSubscriptionResponses];
+
+export type ListJournalData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Since
+         *
+         * orders decided on or after this day
+         */
+        since?: string | null;
+        /**
+         * Strategy Id
+         */
+        strategy_id?: string | null;
+        /**
+         * Ticker
+         */
+        ticker?: string | null;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/tca/journal';
+};
+
+export type ListJournalErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListJournalError = ListJournalErrors[keyof ListJournalErrors];
+
+export type ListJournalResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageJournalEntryView;
+};
+
+export type ListJournalResponse = ListJournalResponses[keyof ListJournalResponses];
+
+export type UpdateJournalNoteData = {
+    body: NoteRequest;
+    path: {
+        /**
+         * Note Id
+         */
+        note_id: number;
+    };
+    query?: never;
+    url: '/api/tca/notes/{note_id}';
+};
+
+export type UpdateJournalNoteErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type UpdateJournalNoteError = UpdateJournalNoteErrors[keyof UpdateJournalNoteErrors];
+
+export type UpdateJournalNoteResponses = {
+    /**
+     * Successful Response
+     */
+    200: JournalNoteView;
+};
+
+export type UpdateJournalNoteResponse = UpdateJournalNoteResponses[keyof UpdateJournalNoteResponses];
+
+export type GetOrderTcaData = {
+    body?: never;
+    path: {
+        /**
+         * Client Id
+         *
+         * the order's client id
+         */
+        client_id: string;
+    };
+    query?: never;
+    url: '/api/tca/orders/{client_id}';
+};
+
+export type GetOrderTcaErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetOrderTcaError = GetOrderTcaErrors[keyof GetOrderTcaErrors];
+
+export type GetOrderTcaResponses = {
+    /**
+     * Successful Response
+     */
+    200: JournalEntryView;
+};
+
+export type GetOrderTcaResponse = GetOrderTcaResponses[keyof GetOrderTcaResponses];
+
+export type AddJournalNoteData = {
+    body: NoteRequest;
+    path: {
+        /**
+         * Client Id
+         *
+         * the order's client id
+         */
+        client_id: string;
+    };
+    query?: never;
+    url: '/api/tca/orders/{client_id}/notes';
+};
+
+export type AddJournalNoteErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type AddJournalNoteError = AddJournalNoteErrors[keyof AddJournalNoteErrors];
+
+export type AddJournalNoteResponses = {
+    /**
+     * Successful Response
+     */
+    201: JournalNoteView;
+};
+
+export type AddJournalNoteResponse = AddJournalNoteResponses[keyof AddJournalNoteResponses];
+
+export type GetTcaSummaryData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * By
+         *
+         * group by strategy, ticker, portfolio, day, week or month
+         */
+        by?: 'all' | 'strategy' | 'ticker' | 'portfolio' | 'day' | 'week' | 'month';
+        /**
+         * Since
+         *
+         * orders decided on or after this day
+         */
+        since?: string | null;
+        /**
+         * Until
+         *
+         * orders decided on or before this day
+         */
+        until?: string | null;
+        /**
+         * Strategy Id
+         */
+        strategy_id?: string | null;
+        /**
+         * Ticker
+         */
+        ticker?: string | null;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/tca/summary';
+};
+
+export type GetTcaSummaryErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetTcaSummaryError = GetTcaSummaryErrors[keyof GetTcaSummaryErrors];
+
+export type GetTcaSummaryResponses = {
+    /**
+     * Successful Response
+     */
+    200: TcaSummaryView;
+};
+
+export type GetTcaSummaryResponse = GetTcaSummaryResponses[keyof GetTcaSummaryResponses];
+
 export type ListTicksData = {
     body?: never;
     path?: never;
@@ -10357,7 +13743,14 @@ export type GetTickData = {
          */
         tick_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise).
+         */
+        portfolio_id?: string | null;
+    };
     url: '/api/ticks/{tick_id}';
 };
 
@@ -10398,7 +13791,18 @@ export type GetTickResponse = GetTickResponses[keyof GetTickResponses];
 export type ListUniversesData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/universes';
 };
 
@@ -10429,11 +13833,9 @@ export type ListUniversesError = ListUniversesErrors[keyof ListUniversesErrors];
 
 export type ListUniversesResponses = {
     /**
-     * Response Listuniverses
-     *
      * Successful Response
      */
-    200: Array<UniverseView>;
+    200: PageUniverseView;
 };
 
 export type ListUniversesResponse = ListUniversesResponses[keyof ListUniversesResponses];

@@ -17,19 +17,42 @@ one row per base trade: features at entry
 - ``volume``: entry-bar volume / rolling median volume (``atr_lookback``)
 - ``adx``: ADX(``lookback``) on raw prices
 
-and label ``trade log return > 0``. Only trades whose exit bar lies inside
-the train window are used, so neither features nor labels read anything
-after ``train_end``. A random forest (``n_estimators``, ``max_depth``,
-fixed ``seed``; behind the :class:`~stonks.features.ml.Classifier` seam)
-learns ``P(win)``.
+and label ``trade log return > 0``. The base trade is a triple-barrier
+label on closes (take profit, stop, time; see :mod:`stonks.features.labels`).
+Only trades whose exit bar lies inside the train window are used, so
+neither features nor labels read anything after ``train_end``. A random
+forest (``n_estimators``, ``max_depth``, fixed ``seed``; behind the
+:class:`~stonks.features.ml.Classifier` seam) learns ``P(win)``.
+
+ML hygiene (BL-45):
+
+- A CV fold's dataset has several purged training segments
+  (``LabDataset.train_windows``). The base signal is replayed on each
+  segment from a flat start, so no trade and no label ever spans a test
+  block.
+- Each trade is weighted by its average uniqueness
+  (:func:`~stonks.features.labels.avg_uniqueness`). Base trades of one
+  replay never overlap, so today the weights are all 1. They start to
+  matter as soon as labels overlap.
+- With ``cv_folds >= 2`` the fit also scores the forest on purged k-fold
+  out-of-fold predictions (``cv_accuracy``, ``cv_brier`` in the fitted
+  state). This is a diagnostic: the model is still fitted on all trades.
 
 ``estimate_return``: replays the base signal over the last
 ``3 * hold_period`` bars (flat start, bars ``<= as_of`` only). If a base
 trade is open at ``as_of`` and the model's ``P(win)`` for its entry
-features exceeds ``prob_thresh``, returns the model-implied expected log
+features exceeds the threshold, returns the model-implied expected log
 return ``p * tp_mult * ATR - (1 - p) * sl_mult * ATR`` (floored at a tiny
 positive number so an admitted trade is always a pick); otherwise
 ``None``, which makes ``decide`` exit. Unfitted: always ``None``.
+
+The threshold is the break-even probability of the barriers plus a
+margin, ``p* = sl_mult / (tp_mult + sl_mult) + prob_margin``
+(:func:`~stonks.features.ml.break_even_probability`), and never below
+``prob_thresh``. Below ``p*`` the expected return of a trade is negative.
+With ``bet_sizing`` on, a fresh entry deploys ``allocation`` times the
+bet size of ``P(win)`` (:func:`~stonks.features.ml.bet_size`), and a
+trade whose bet size rounds to zero is skipped.
 
 Persistence: the sklearn model is saved with joblib under ``model/`` (see
 :mod:`stonks.features.ml` for the digest check and trust model) plus
@@ -51,8 +74,9 @@ implementation, no code copied. Deviations:
   walk-forward retrain (the lab's walk-forward folds do that job).
 - Run-time trade state is re-derived from a flat start ``3 * hold_period``
   bars back instead of carried across the whole history.
-- ``prob_thresh`` is a param (the original hard-coded 0.5) and the forest
-  defaults to 300 trees (the original used 1000).
+- The threshold is the barriers' break-even probability plus a margin
+  (the original hard-coded 0.5) and the forest defaults to 300 trees
+  (the original used 1000).
 - Long-only, single ticker.
 """
 
@@ -71,12 +95,14 @@ from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
 from stonks.features.indicators import atr, true_range
+from stonks.features.labels import avg_uniqueness
 from stonks.features.library import fit_trendlines_single
-from stonks.features.ml import ForestClassifier
-from stonks.strategies._common import LakeBarCaches
+from stonks.features.ml import ForestClassifier, bet_size, break_even_probability
+from stonks.lab.cv import PurgedKFold
+from stonks.strategies._common import LakeBarCaches, iso
 from stonks.strategies._wrapping import INTERVALS
 from stonks.strategies.base import BaseStrategy
-from stonks.strategies.examples._nt888_common import long_only_decide, train_bars
+from stonks.strategies.examples._nt888_common import long_only_decide, train_bar_segments
 
 FEATURE_NAMES = ("resist_slope", "tl_err", "max_dist", "volume", "adx")
 _STATE_FILE = "fitted_state.json"
@@ -134,6 +160,15 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
     alpha_family = "data_driven"
     premise = "trend"
     label_horizon_bars = 12
+    required_history_bars = 169
+
+    def param_metadata(self) -> dict[str, int]:
+        p = self.params
+        return {
+            "label_horizon_bars": int(p["hold_period"]),
+            "required_history_bars": max(int(p["lookback"]), int(p["atr_lookback"])) + 1,
+        }
+
     applicable_asset_classes = ("crypto", "equity")
 
     @classmethod
@@ -177,9 +212,32 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
             ParameterSpec(
                 name="prob_thresh",
                 kind="float",
-                default=0.5,
-                bounds=(0.5, 0.8),
-                description="Take a base entry only if P(win) exceeds this.",
+                default=0.0,
+                bounds=(0.0, 0.8),
+                description="Floor on the P(win) threshold (the threshold is the "
+                "break-even probability plus prob_margin, and never below this).",
+            ),
+            ParameterSpec(
+                name="prob_margin",
+                kind="float",
+                default=0.0,
+                bounds=(0.0, 0.2),
+                description="Added to the break-even probability sl / (tp + sl).",
+            ),
+            ParameterSpec(
+                name="bet_sizing",
+                kind="bool",
+                default=False,
+                tunable=False,
+                description="Scale fresh entries by the bet size of P(win).",
+            ),
+            ParameterSpec(
+                name="cv_folds",
+                kind="int",
+                default=3,
+                bounds=(0, 10),
+                tunable=False,
+                description="Purged k-fold folds of the fit diagnostic (0 or 1 turns it off).",
             ),
             ParameterSpec(
                 name="n_estimators",
@@ -239,6 +297,7 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
         self._bar_caches = LakeBarCaches()
         self._line_memo: dict[bytes, tuple[float, float] | None] = {}
         self._prob_memo: dict[tuple[float, ...], float] = {}
+        self._sizes: dict[str, float] = {}
 
     # ---- geometry ----------------------------------------------------------------
 
@@ -347,10 +406,22 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
 
     def fit(self, dataset: Any) -> None:
         interval = Interval.parse(self.params["interval"])
-        bars = train_bars(dataset, self.params["ticker"], interval, caches=self._bar_caches)
-        # completed trades only: a trade still open at the last training bar
-        # would need bars after train_end for its label
-        trades, _still_open = self._simulate(bars)
+        segments = train_bar_segments(
+            dataset, self.params["ticker"], interval, caches=self._bar_caches
+        )
+        # One replay per training segment, completed trades only: a trade
+        # still open at a segment's last bar would need bars after it (a
+        # test block or the validation window) for its label.
+        trades: list[BaseTrade] = []
+        spans: list[tuple[int, int]] = []
+        offset = 0
+        for bars in segments:
+            done, _still_open = self._simulate(bars)
+            stamps = pd.to_datetime(bars["timestamp"]).tolist()
+            where = {ts: i for i, ts in enumerate(stamps)}
+            spans.extend((offset + where[t.entry_ts], offset + where[t.exit_ts]) for t in done)
+            trades.extend(done)
+            offset += len(bars)
         if len(trades) < _MIN_TRADES:
             raise ValueError(
                 f"only {len(trades)} complete base trades in the training window; "
@@ -358,21 +429,57 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
             )
         x = np.array([t.features for t in trades], dtype=float)
         y = np.array([t.label for t in trades], dtype=int)
-        clf = ForestClassifier(
-            n_estimators=int(self.params["n_estimators"]),
-            max_depth=int(self.params["max_depth"]),
-            seed=int(self.params["seed"]),
-        )
-        clf.fit(x, y)
+        weights = avg_uniqueness([a for a, _ in spans], [b for _, b in spans])
+        clf = self._new_classifier()
+        clf.fit(x, y, sample_weight=weights)
         self._classifier = clf
         self._prob_memo = {}
+        self._sizes = {}
         self.training_trades = trades
         self._state = {
             "feature_names": list(FEATURE_NAMES),
             "n_trades": len(trades),
+            "n_segments": len(segments),
             "win_rate": float(y.mean()),
+            "mean_uniqueness": float(weights.mean()),
             "first_entry": trades[0].entry_ts.isoformat(),
             "last_exit": trades[-1].exit_ts.isoformat(),
+            **self._cv_diagnostic(trades, x, y, weights),
+        }
+
+    def _new_classifier(self) -> ForestClassifier:
+        return ForestClassifier(
+            n_estimators=int(self.params["n_estimators"]),
+            max_depth=int(self.params["max_depth"]),
+            seed=int(self.params["seed"]),
+        )
+
+    def _cv_diagnostic(
+        self, trades: list[BaseTrade], x: np.ndarray, y: np.ndarray, weights: np.ndarray
+    ) -> dict[str, float]:
+        """Purged k-fold out-of-fold accuracy and Brier score of the
+        forest over the training trades (empty when turned off or when
+        there are too few trades)."""
+        folds = int(self.params["cv_folds"])
+        if folds < 2 or len(trades) < 2 * folds:
+            return {}
+        t0 = np.array([t.entry_ts for t in trades], dtype="datetime64[ns]")
+        t1 = np.array([t.exit_ts for t in trades], dtype="datetime64[ns]")
+        oof = np.full(len(trades), np.nan)
+        for train, test in PurgedKFold(folds, embargo_pct=0.0).split(t0, t1):
+            if len(train) == 0:
+                continue
+            clf = self._new_classifier()
+            clf.fit(x[train], y[train], sample_weight=weights[train])
+            oof[test] = clf.predict_proba(x[test])
+        scored = np.isfinite(oof)
+        if not scored.any():
+            return {}
+        hits = (oof[scored] > 0.5).astype(int) == y[scored]
+        return {
+            "cv_folds": float(folds),
+            "cv_accuracy": float(hits.mean()),
+            "cv_brier": float(np.mean((oof[scored] - y[scored]) ** 2)),
         }
 
     def fitted_state(self) -> dict[str, Any]:
@@ -406,6 +513,14 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
             self._prob_memo[features] = p
         return p
 
+    @property
+    def threshold(self) -> float:
+        """``P(win)`` a base entry must exceed: the barriers' break-even
+        probability plus ``prob_margin``, never below ``prob_thresh``."""
+        p = self.params
+        p_star = break_even_probability(float(p["tp_mult"]), float(p["sl_mult"]))
+        return max(float(p["prob_thresh"]), p_star + float(p["prob_margin"]))
+
     def estimate_return(self, ticker: str, as_of: Any, lake: Any) -> float | None:
         if not self.is_fitted:
             return None
@@ -413,8 +528,15 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
         if trade is None:
             return None
         p = self._probability(trade.features)
-        if not p > float(self.params["prob_thresh"]):
+        if not p > self.threshold:
             return None
+        if self.params["bet_sizing"]:
+            size = float(bet_size(p))
+            if size <= 0:
+                return None
+            if len(self._sizes) > _MEMO_MAX:
+                self._sizes.clear()
+            self._sizes[iso(as_of)] = size
         expected = trade.atr * (
             p * float(self.params["tp_mult"]) - (1 - p) * float(self.params["sl_mult"])
         )
@@ -436,10 +558,13 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
         prices: Mapping[str, float],
         as_of: Any,
     ) -> list[Order]:
+        allocation = float(self.params["allocation"])
+        if self.params["bet_sizing"]:
+            allocation *= self._sizes.get(iso(as_of), 1.0)
         return long_only_decide(
             self.id,
             self.params["ticker"],
-            self.params["allocation"],
+            allocation,
             my_picks,
             portfolio,
             prices,

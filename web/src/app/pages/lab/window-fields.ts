@@ -28,7 +28,7 @@ import type { FormErrors, WindowForm } from './lab-requests';
         <span class="error" [id]="p + '-tickers-hint'">{{ e }}</span>
       } @else {
         <span class="hint" [id]="p + '-tickers-hint'">
-          Separate with commas, spaces or new lines. Bars must already be in the lake.
+          Separate with commas, spaces or new lines. Each needs price history in our data.
         </span>
       }
     </div>

@@ -11,20 +11,23 @@ import {
   viewChild,
 } from '@angular/core';
 
-import { WIKI_GLOSSARY_URL, findGlossary } from '../../core/help/glossary';
+import { Router } from '@angular/router';
+
+import { findGlossary, glossaryUrl } from '../../core/help/glossary';
 
 let nextId = 0;
 
 /**
  * A small "?" button that explains a metric in one plain sentence, with a
- * link to the wiki glossary. `term` is a glossary key or a visible label
+ * link to the term on the in-app glossary page. `term` is a glossary key or a visible label
  * ("Max drawdown", "max_drawdown"); unknown terms render nothing, so it is
  * safe to drop next to any label.
  *
  *   <dt>{{ m.label }} <app-help-tip [term]="m.key" /></dt>
  *
  * Opens on click or tap (never on hover alone), closes on Escape, outside
- * click or a second click. Uses the native popover so it sits in the top
+ * click, a second click or when the page scrolls (it would drift away from
+ * its button otherwise). Uses the native popover so it sits in the top
  * layer above tables and sticky headers. The text renders only while open,
  * so labels' text content stays just the label.
  */
@@ -65,9 +68,7 @@ let nextId = 0;
         @if (open()) {
           <span class="term">{{ m.entry.term }}</span>
           <span class="text">{{ m.entry.short }}</span>
-          <a class="more" [href]="wikiUrl" target="_blank" rel="noopener">
-            More in the glossary<span class="visually-hidden"> (opens in a new tab)</span>
-          </a>
+          <a class="more" [href]="href()" (click)="openGlossary($event)">More in the glossary</a>
         }
       </span>
     }
@@ -105,7 +106,7 @@ let nextId = 0;
     }
     .trigger:hover,
     .trigger[aria-expanded='true'] {
-      color: var(--color-brass);
+      color: var(--color-accent);
     }
     .panel-tip:popover-open {
       display: block;
@@ -151,18 +152,47 @@ export class HelpTip {
 
   protected readonly match = computed(() => findGlossary(this.term()));
   protected readonly id = `help-tip-${nextId++}`;
-  protected readonly wikiUrl = WIKI_GLOSSARY_URL;
+  protected readonly href = computed(() => glossaryUrl(this.match()?.key));
 
   protected readonly open = signal(false);
 
   private readonly injector = inject(Injector);
   private readonly trigger = viewChild<ElementRef<HTMLButtonElement>>('trigger');
   private readonly panel = viewChild<ElementRef<HTMLElement>>('panel');
+  private readonly router = inject(Router, { optional: true });
+  private readonly onScroll = () => this.close();
 
   protected onToggle(event: Event): void {
     const open = (event as Event & { newState?: string }).newState === 'open';
     this.open.set(open);
-    if (open) afterNextRender(() => this.place(), { injector: this.injector });
+    const view = this.trigger()?.nativeElement.ownerDocument.defaultView;
+    if (open) {
+      afterNextRender(() => this.place(), { injector: this.injector });
+      view?.addEventListener('scroll', this.onScroll, { capture: true, passive: true, once: true });
+    } else {
+      view?.removeEventListener('scroll', this.onScroll, { capture: true });
+    }
+  }
+
+  /** In-app navigation, so the page does not reload. Modified clicks open a tab as usual. */
+  protected openGlossary(event: MouseEvent): void {
+    if (!this.router || event.ctrlKey || event.metaKey || event.shiftKey || event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    this.close();
+    void this.router.navigateByUrl(this.href());
+  }
+
+  private close(): void {
+    const panel = this.panel()?.nativeElement as
+      (HTMLElement & { hidePopover?: () => void }) | undefined;
+    try {
+      panel?.hidePopover?.();
+    } catch {
+      // Already closed.
+    }
+    this.open.set(false);
   }
 
   /** Place the panel under the button (above if no room), inside the viewport. */

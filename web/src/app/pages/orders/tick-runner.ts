@@ -7,39 +7,49 @@ import {
   output,
   resource,
   signal,
+  viewChild,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import type { BrokerInfo, TickResultView } from '../../api/models';
 import { SystemService } from '../../api/system.service';
 import { TicksService } from '../../api/ticks.service';
+import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
+import { ModeStamp } from '../../shared/ui/mode-stamp';
+import { PermissionNote } from '../../shared/ui/permission-note';
+import { ErrorState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
-import { brokerLabel, isLiveBroker, tickConfirmOptions, tickRequest } from './tick-confirm';
+import {
+  brokerLabel,
+  isLiveBroker,
+  tickConfirmOptions,
+  tickRequest,
+  tickTicket,
+} from './tick-confirm';
+import { TickTicketDialog } from './tick-ticket-dialog';
 
 /**
- * Starts a production tick. Dry run is on by default and needs one click to
- * confirm; a real tick shows the broker first and needs its label typed.
- * Progress follows the tick's background job; the result links to the tick.
+ * Starts a trading run (a production tick). Dry run is on by default and
+ * needs one click to confirm; a real run shows an order ticket with the
+ * broker's PAPER or LIVE stamp and needs the broker label typed. Both need
+ * `operations.run` (admins). Progress follows the run's background job; the
+ * result links to the run, and a failed result load offers Retry.
  */
 @Component({
   selector: 'app-tick-runner',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, StatusPill],
+  imports: [RouterLink, StatusPill, ModeStamp, PermissionNote, ErrorState, TickTicketDialog],
   template: `
     <section class="panel runner" aria-labelledby="run-title" id="run">
       <div class="panel-head">
-        <h2 id="run-title">Run tick</h2>
+        <h2 id="run-title">Start a trading run</h2>
         @if (broker.hasValue()) {
           <span class="broker">
-            Broker
-            <app-status-pill
-              [status]="live() ? 'warning' : 'info'"
-              [tone]="live() ? 'warn' : 'info'"
-              [label]="brokerText()"
-            />
+            {{ brokerText() }}
+            <app-mode-stamp [live]="live()" />
           </span>
         }
       </div>
@@ -58,22 +68,22 @@ import { brokerLabel, isLiveBroker, tickConfirmOptions, tickRequest } from './ti
           @if (dryRun()) {
             Decides and sizes orders without sending them. Nothing reaches the broker.
           } @else {
-            Sends orders to the broker and records fills in the ledger.
+            Sends orders to the broker and records the fills.
           }
         </p>
 
         @if (!dryRun()) {
           <div class="alert" role="note">
             @if (broker.error()) {
-              Could not read the broker configuration. A real tick is blocked until it loads.
+              Could not read the broker. A real run is blocked until it loads.
             } @else if (broker.hasValue()) {
-              Real tick on the <strong>{{ brokerText() }}</strong> broker.
+              Real run on the <strong>{{ brokerText() }}</strong> broker.
               @if (live()) {
                 This account trades real money.
               }
               You will be asked to type <strong>{{ brokerText() }}</strong> to confirm.
             } @else {
-              Loading the broker configuration…
+              Loading the broker…
             }
           </div>
         }
@@ -88,7 +98,7 @@ import { brokerLabel, isLiveBroker, tickConfirmOptions, tickRequest } from './ti
               [value]="asOf()"
               (change)="asOf.set($any($event.target).value)"
             />
-            <span class="hint">Blank uses today. Real ticks cannot be backdated.</span>
+            <span class="hint">Blank uses today. Real runs cannot be backdated.</span>
           </div>
           <div class="field">
             <label for="tick-tickers">Tickers</label>
@@ -113,8 +123,9 @@ import { brokerLabel, isLiveBroker, tickConfirmOptions, tickRequest } from './ti
             [disabled]="!canRun()"
             [attr.aria-busy]="running()"
           >
-            {{ running() ? 'Running…' : dryRun() ? 'Run dry run' : 'Run tick' }}
+            {{ running() ? 'Running…' : dryRun() ? 'Start dry run' : 'Start trading run' }}
           </button>
+          <app-permission-note permission="operations.run" />
         </div>
       </form>
 
@@ -125,11 +136,21 @@ import { brokerLabel, isLiveBroker, tickConfirmOptions, tickRequest } from './ti
             <span class="muted">{{ h.message() ?? 'Waiting for the worker' }}</span>
           </div>
           @if (!h.done()) {
-            <progress [value]="h.progress()" max="1" aria-label="Tick progress"></progress>
+            <progress [value]="h.progress()" max="1" aria-label="Trading run progress"></progress>
           }
           @if (h.error(); as err) {
             <p class="alert error" role="alert">{{ err }}</p>
           }
+        </div>
+      }
+
+      @if (resultError(); as err) {
+        <div class="result">
+          <app-error-state
+            title="The run finished, but its result could not load"
+            [error]="err"
+            (retry)="reloadResult()"
+          />
         </div>
       }
 
@@ -153,10 +174,11 @@ import { brokerLabel, isLiveBroker, tickConfirmOptions, tickRequest } from './ti
               <dd>{{ r.winner_strategy_id ?? 'None' }}</dd>
             </div>
           </dl>
-          <a class="btn" [routerLink]="['/orders/ticks', r.tick_id]">Open tick {{ r.tick_id }}</a>
+          <a class="btn" [routerLink]="['/orders/ticks', r.tick_id]">Open this run</a>
         </div>
       }
     </section>
+    <app-tick-ticket-dialog />
   `,
   styles: `
     @use 'breakpoints' as bp;
@@ -203,7 +225,8 @@ import { brokerLabel, isLiveBroker, tickConfirmOptions, tickRequest } from './ti
     }
     .actions {
       display: flex;
-      justify-content: flex-end;
+      flex-direction: column;
+      align-items: flex-end;
     }
     @include bp.phone {
       .actions .btn {
@@ -227,7 +250,7 @@ import { brokerLabel, isLiveBroker, tickConfirmOptions, tickRequest } from './ti
     progress {
       width: 100%;
       height: 6px;
-      accent-color: var(--color-brass);
+      accent-color: var(--color-accent);
     }
     h3 {
       display: flex;
@@ -265,8 +288,10 @@ export class TickRunner {
   private readonly jobs = inject(JobsService);
   private readonly toasts = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly session = inject(SessionService);
+  private readonly ticket = viewChild.required(TickTicketDialog);
 
-  /** Emits after a tick ends, so the history can reload. */
+  /** Emits after a run ends, so the history can reload. */
   readonly finished = output<TickResultView | null>();
 
   protected readonly dryRun = signal(true);
@@ -275,6 +300,11 @@ export class TickRunner {
   protected readonly starting = signal(false);
   protected readonly job = signal<JobHandle | null>(null);
   protected readonly result = signal<TickResultView | null>(null);
+  /** The job succeeded but GET result failed (GETs are not toasted). */
+  protected readonly resultError = signal<unknown>(null);
+  private resultJobId: string | null = null;
+  /** POST /api/ticks needs operations.run, dry runs included. */
+  protected readonly allowed = computed(() => this.session.can('operations.run'));
 
   protected readonly broker = resource({ loader: () => this.system.broker() });
   protected readonly brokerText = computed(() =>
@@ -289,18 +319,24 @@ export class TickRunner {
     return this.starting() || (!!h && !h.done());
   });
   protected readonly canRun = computed(
-    () => !this.running() && (this.dryRun() || this.broker.hasValue()),
+    () => this.allowed() && !this.running() && (this.dryRun() || this.broker.hasValue()),
   );
 
   async run(): Promise<void> {
     if (!this.canRun()) return;
     const dryRun = this.dryRun();
     const broker: BrokerInfo | null = this.broker.hasValue() ? this.broker.value() : null;
-    const ok = await this.confirm.confirm(tickConfirmOptions(dryRun, dryRun ? null : broker));
+    const ok =
+      dryRun || !broker
+        ? await this.confirm.confirm(tickConfirmOptions(dryRun, dryRun ? null : broker))
+        : await this.ticket().open(
+            tickTicket(broker, { asOf: this.asOf(), tickers: this.tickers() }),
+          );
     if (!ok) return;
 
     this.starting.set(true);
     this.result.set(null);
+    this.resultError.set(null);
     try {
       const job = await this.ticksApi.start(
         tickRequest({ dryRun, asOf: this.asOf(), tickers: this.tickers() }),
@@ -308,24 +344,41 @@ export class TickRunner {
       const handle = this.jobs.track(job.id, this.destroyRef);
       this.job.set(handle);
       this.starting.set(false);
-      this.toasts.info(dryRun ? 'Started a dry-run tick.' : 'Started a tick.');
+      this.toasts.info(dryRun ? 'Started a dry run.' : 'Started a trading run.');
 
       const last = await handle.finished;
+      this.ticksApi.announceFinished();
       let result: TickResultView | null = null;
-      if (last?.status === 'succeeded') {
-        result = await this.ticksApi.result(job.id);
-        this.result.set(result);
-        this.toasts.success(
-          `Ran ${result.dry_run ? 'dry-run ' : ''}tick ${result.tick_id}: ` +
-            `${result.orders_placed} order${result.orders_placed === 1 ? '' : 's'}, ` +
-            `${result.fills} fill${result.fills === 1 ? '' : 's'}.`,
-        );
-      }
+      if (last?.status === 'succeeded') result = await this.loadResult(job.id);
       this.finished.emit(result);
     } catch {
       // The error interceptor already showed the API's message.
     } finally {
       this.starting.set(false);
+    }
+  }
+
+  /** Retry after the result GET failed. */
+  protected async reloadResult(): Promise<void> {
+    if (this.resultJobId) await this.loadResult(this.resultJobId);
+  }
+
+  private async loadResult(jobId: string): Promise<TickResultView | null> {
+    this.resultJobId = jobId;
+    this.resultError.set(null);
+    try {
+      const result = await this.ticksApi.result(jobId);
+      this.result.set(result);
+      this.toasts.success(
+        `Ran the ${result.dry_run ? 'dry run' : 'trading run'}: ` +
+          `${result.orders_placed} order${result.orders_placed === 1 ? '' : 's'}, ` +
+          `${result.fills} fill${result.fills === 1 ? '' : 's'}.`,
+      );
+      return result;
+    } catch (err) {
+      // GET failures are not toasted, so say it here with a Retry.
+      this.resultError.set(err);
+      return null;
     }
   }
 }

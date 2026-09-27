@@ -14,7 +14,6 @@ import pytest
 from stonks.core.params import tunable_only
 from stonks.core.protocols import Strategy
 from stonks.core.types import Portfolio
-from stonks.store.lake import DuckDBLake
 from stonks.strategies.examples.quality_value import QualityValue
 
 QUARTERS_2023 = [date(2023, 3, 31), date(2023, 6, 30), date(2023, 9, 30), date(2023, 12, 31)]
@@ -77,14 +76,6 @@ def _quarter(
     lake.upsert_income_statement(pd.DataFrame(inc))
     lake.upsert_cash_flow_statement(pd.DataFrame(cf))
     lake.upsert_balance_sheet(pd.DataFrame(bs))
-
-
-@pytest.fixture
-def lake(tmp_path):
-    db = DuckDBLake(tmp_path / "lake.duckdb")
-    db.migrate()
-    yield db
-    db.close()
 
 
 @pytest.fixture

@@ -19,16 +19,16 @@ import type {
   Draft,
   DraftBacktestRequest,
   DraftLabRunRequest,
-  EquityPoint,
   LabRunView,
 } from '../../api/models';
 import { StudioService } from '../../api/studio.service';
-import { formatMoney, formatNumber, formatPercent, toneClass } from '../../core/format/format';
+import { SessionService } from '../../core/auth/session.service';
+import { formatMoney, formatNumber, formatPercent } from '../../core/format/format';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
-import type { ChartSeries } from '../../shared/chart/chart-engine';
-import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
-import { StatTile } from '../../shared/ui/stat-tile';
+import { BacktestResultView } from '../../shared/lab-results/backtest-result';
+import { LabRunResultView } from '../../shared/lab-results/lab-run-result';
+import { PermissionNote } from '../../shared/ui/permission-note';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { INTERVALS } from './rule-spec';
 
@@ -59,15 +59,6 @@ export function costsFor(
   };
 }
 
-/** Running drawdown (≤ 0, a fraction) of an equity curve. */
-export function drawdowns(equity: readonly EquityPoint[]): number[] {
-  let peak = -Infinity;
-  return equity.map((p) => {
-    peak = Math.max(peak, p.value);
-    return peak > 0 ? p.value / peak - 1 : 0;
-  });
-}
-
 export function parseTickers(raw: string): string[] {
   return [
     ...new Set(
@@ -95,7 +86,7 @@ function isoDay(d: Date): string {
 @Component({
   selector: 'app-draft-test',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [StatTile, StatusPill, TimeSeriesChart],
+  imports: [BacktestResultView, LabRunResultView, StatusPill, PermissionNote],
   templateUrl: './draft-test.html',
   styleUrl: './draft-test.scss',
 })
@@ -107,6 +98,10 @@ export class DraftTest {
   private readonly jobsApi = inject(JobsApiService);
   private readonly toasts = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly session = inject(SessionService);
+
+  /** Backtests and lab runs need `lab.run`. */
+  protected readonly canLab = computed(() => this.session.can('lab.run'));
 
   readonly draft = input.required<Draft>();
   /** Interval and allow-list of the spec being edited (defaults for the form). */
@@ -198,49 +193,7 @@ export class DraftTest {
   protected readonly labResult = signal<LabRunView | null>(null);
   protected readonly labBusy = signal(false);
 
-  protected readonly equitySeries = computed<ChartSeries[]>(() => {
-    const r = this.btResult();
-    if (!r) return [];
-    const daily = !['1m', '5m', '15m', '30m', '1h', '4h', '12h'].includes(r.interval);
-    const time = (t: string) => (daily ? t.slice(0, 10) : t);
-    const dd = drawdowns(r.equity);
-    return [
-      {
-        id: 'equity',
-        label: 'Equity',
-        kind: 'line',
-        color: 'brass',
-        format: 'money',
-        points: r.equity.map((p) => ({ time: time(p.timestamp), value: p.value })),
-      },
-      {
-        id: 'drawdown',
-        label: 'Drawdown',
-        kind: 'area',
-        color: 'loss',
-        pane: 1,
-        format: 'percent',
-        points: r.equity.map((p, i) => ({ time: time(p.timestamp), value: dd[i] })),
-      },
-    ];
-  });
-
-  protected readonly chartSummary = computed(() => {
-    const r = this.btResult();
-    const first = r?.equity[0];
-    const last = r?.equity.at(-1);
-    if (!r || !first || !last) return null;
-    return (
-      `Backtest equity from ${r.start} to ${r.end}: ${formatMoney(first.value)} to ` +
-      `${formatMoney(last.value)}, return ${formatPercent(r.final_return, { signed: true })}. ` +
-      `Worst drawdown ${formatPercent(r.max_drawdown)}.`
-    );
-  });
-
-  protected readonly money = formatMoney;
   protected readonly percent = formatPercent;
-  protected readonly number = formatNumber;
-  protected readonly tone = toneClass;
 
   protected isRunning(h: JobHandle | null): boolean {
     return !!h && !h.done();
@@ -266,7 +219,7 @@ export class DraftTest {
 
   async runBacktest(): Promise<void> {
     this.submitted.set(true);
-    if (!this.formValid() || this.btBusy()) return;
+    if (!this.formValid() || this.btBusy() || !this.canLab()) return;
     this.btBusy.set(true);
     try {
       if (!(await this.ensureSaved()())) return;
@@ -296,7 +249,7 @@ export class DraftTest {
 
   async runLab(): Promise<void> {
     this.submitted.set(true);
-    if (!this.formValid() || this.labBusy() || !this.tests().length) return;
+    if (!this.formValid() || this.labBusy() || !this.tests().length || !this.canLab()) return;
     this.labBusy.set(true);
     try {
       if (!(await this.ensureSaved()())) return;
@@ -331,13 +284,5 @@ export class DraftTest {
     } catch {
       // Toasted by the interceptor (e.g. a running backtest cannot be cancelled).
     }
-  }
-
-  protected testLabel(id: string): string {
-    return SURVIVAL_TESTS.find((t) => t.id === id)?.label ?? id;
-  }
-
-  protected metricEntries(metrics: Record<string, number | null>): [string, string][] {
-    return Object.entries(metrics).map(([k, v]) => [k.replace(/_/g, ' '), formatNumber(v)]);
   }
 }

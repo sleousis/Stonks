@@ -2,6 +2,7 @@
   title="Shadow"
   description="Shadow strategies trade on paper next to the real portfolio. Compare them on the same days before sending one to go-live."
 >
+  <app-updated-ago [at]="auto.updatedAt()" />
   <button
     actions
     type="button"
@@ -26,14 +27,14 @@
     class="tile-leader"
     label="Leading vs real"
     featured
-    [loading]="series.isLoading() && !series.hasValue()"
+    [loading]="!seriesReady() && !series.error() && !summaries.error()"
     [value]="leader()?.strategy_id ?? '–'"
     [detail]="leaderDetail()"
     [detailTone]="leaderTone()"
   />
   <app-stat-tile
     label="Compared since"
-    [loading]="series.isLoading() && !series.hasValue()"
+    [loading]="!seriesReady() && !series.error() && !summaries.error()"
     [value]="baseDay() ?? '–'"
     [detail]="chartDays() ? chartDays() + ' days on the chart' : null"
   />
@@ -44,7 +45,7 @@
   <section class="panel span-12" aria-labelledby="compare-title">
     <div class="panel-head">
       <h2 id="compare-title">Shadow vs real, rebased to 100</h2>
-      @if (summaries.hasValue() && summaries.value().items.length > 1) {
+      @if ((strategyIds()?.length ?? 0) > 1) {
         <div class="head-tools">
           <label for="compare-focus">Show</label>
           <select
@@ -54,10 +55,8 @@
             (change)="focus.set($any($event.target).value)"
           >
             <option value="">All shadow strategies</option>
-            @for (s of summaries.value().items; track s.strategy_id) {
-              <option [value]="s.strategy_id" [selected]="s.strategy_id === focus()">
-                {{ s.strategy_id }}
-              </option>
+            @for (id of strategyIds(); track id) {
+              <option [value]="id" [selected]="id === focus()">{{ id }}</option>
             }
           </select>
         </div>
@@ -85,13 +84,13 @@
       } @else if (
         !summaries.hasValue() ||
         !real.hasValue() ||
-        (!series.hasValue() && summaries.value().items.length > 0)
+        (!seriesReady() && summaries.value().items.length > 0)
       ) {
         <app-loading-state label="Loading shadow P&L" [rows]="6" />
       } @else if (chartSeries().length === 0) {
         <app-empty-state
           title="Nothing to compare yet"
-          message="Move a strategy to shadow from Strategies. Its paper P&L starts with the next real tick."
+          message="Move a strategy to shadow from Strategies. Its paper P&L starts with the next real trading run."
         >
           <a class="btn" routerLink="/strategies">Open strategies</a>
         </app-empty-state>
@@ -109,7 +108,16 @@
         <p class="chart-note">
           Every line starts at 100 on {{ baseDay() }}, so the gap between lines is how far a shadow
           strategy is ahead or behind the real portfolio over the same days.
+          @if (hiddenCount()) {
+            The chart shows the {{ strategyIds()?.length }} with the best return. The table below
+            lists all of them.
+          }
         </p>
+        @if (failedSeries().length) {
+          <p class="chart-note warn" role="status">
+            Could not load {{ failedSeries().join(', ') }}. Refresh to try again.
+          </p>
+        }
       }
     </div>
   </section>
@@ -127,7 +135,9 @@
       <app-empty-state
         title="No shadow strategies"
         message="A strategy in shadow trades on paper with every real tick. Move one to shadow from its strategy page."
-      />
+      >
+        <a class="btn" routerLink="/strategies">Open strategies</a>
+      </app-empty-state>
     } @else {
       <app-data-table
         caption="Shadow strategies against the real portfolio over the same days"
@@ -160,8 +170,8 @@
   <section class="panel span-12" aria-labelledby="decisions-title">
     <div class="panel-head">
       <h2 id="decisions-title">Shadow decisions</h2>
-      @if (decisions.hasValue()) {
-        <span class="count num">{{ decisions.value().total }} matching</span>
+      @if (decisionsPageShown(); as dp) {
+        <span class="count num">{{ dp.total }} matching</span>
       }
     </div>
     <form
@@ -200,41 +210,42 @@
         />
       </div>
     </form>
+    @let dp = decisionsPageShown();
     @if (decisions.error(); as err) {
       <app-error-state
         title="Could not load shadow decisions"
         [error]="err"
         (retry)="decisions.reload()"
       />
-    } @else if (!decisions.hasValue()) {
+    } @else if (!dp) {
       <app-loading-state label="Loading shadow decisions" [rows]="5" />
-    } @else if (decisions.value().items.length === 0) {
+    } @else if (dp.items.length === 0) {
       <app-empty-state
         title="No shadow decisions"
-        message="Each real tick records what every shadow strategy would have traded. They appear here after the next tick."
+        message="Each real trading run records what every shadow strategy would have traded. They appear here after the next run."
       />
     } @else {
       @for (k of [decisionKey()]; track k) {
         <app-data-table
           caption="What shadow strategies would have traded, newest first"
-          [rows]="decisions.value().items"
+          [rows]="dp.items"
           [columns]="decisionColumns"
           [rowKey]="decisionRowKey"
-          [total]="decisions.value().total"
+          [total]="dp.total"
+          [offset]="dp.offset"
+          [busy]="decisions.isLoading()"
           [pageSize]="decisionsPage"
           [initialSort]="{ key: 'as_of', dir: 'desc' }"
           (pageChange)="decisionOffset.set($event.offset)"
         >
-          <ng-template appCell="side" [appCellOf]="decisions.value().items" let-d>
-            <span class="side" [attr.data-side]="d.side">{{ d.side }}</span>
+          <ng-template appCell="side" [appCellOf]="dp.items" let-d>
+            <app-side-tag [side]="d.side" />
           </ng-template>
-          <ng-template appCell="status" [appCellOf]="decisions.value().items" let-d>
+          <ng-template appCell="status" [appCellOf]="dp.items" let-d>
             <app-status-pill [status]="d.status" />
           </ng-template>
-          <ng-template appCell="tick_id" [appCellOf]="decisions.value().items" let-d>
-            <a class="cell-link mono" [routerLink]="['/orders/ticks', d.tick_id]">{{
-              d.tick_id
-            }}</a>
+          <ng-template appCell="tick_id" [appCellOf]="dp.items" let-d>
+            <a class="cell-link" [routerLink]="['/orders/ticks', d.tick_id]">View run</a>
           </ng-template>
         </app-data-table>
       }

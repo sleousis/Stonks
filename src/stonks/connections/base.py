@@ -263,6 +263,8 @@ class BrokerConnection(ABC):
     rate_limit: ClassVar[RateLimit]
     #: For ``api_key`` flows: the fields a user supplies.
     credential_fields: ClassVar[tuple[str, ...]] = ()
+    #: The provider offers paper (simulated money) accounts.
+    has_paper: ClassVar[bool] = False
 
     @classmethod
     @abstractmethod

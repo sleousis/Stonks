@@ -9,7 +9,7 @@ import { PageHeader } from '../shared/ui/page-header';
   imports: [PageHeader, RouterLink],
   template: `
     <app-page-header title="Page not found" description="There is no page at this address." />
-    <a routerLink="/" class="btn">Go to the dashboard</a>
+    <a routerLink="/" class="btn">Go home</a>
   `,
 })
 export class NotFoundPage {}

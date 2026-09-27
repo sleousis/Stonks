@@ -1,5 +1,7 @@
 import { CATALOG, MOMENTUM } from '../../../testing/lab-fixtures';
 import { defaultParamValues } from '../../shared/ui/param-form/param-spec';
+import { SURVIVAL_TEST_CATALOG } from './lab-test-fixtures';
+import { optionCatalog } from './test-options';
 import {
   type BacktestForm,
   type LabRunForm,
@@ -238,6 +240,14 @@ describe('lab requests', () => {
       expect(buildLabRunRequest(labForm({ wfSplits: 5 }))).not.toHaveProperty('walk_forward');
     });
 
+    it('sends a cross-validated objective and scores walk-forward on its plain metric', () => {
+      const body = buildLabRunRequest(
+        labForm({ objective: 'cv_sharpe', suite: 'custom', tests: ['walk_forward'], wfSplits: 4 }),
+      );
+      expect(body.objective).toBe('cv_sharpe');
+      expect(body.walk_forward).toEqual({ n_splits: 4, metric: 'sharpe' });
+    });
+
     it('validates tuner and survival options', () => {
       const errors = labRunErrors(
         labForm({
@@ -269,34 +279,36 @@ describe('lab requests', () => {
       expect(labRunErrors(labForm())).toEqual({});
     });
 
-    it('builds test_options per test from the advanced editor, with field errors', () => {
+    it('builds test_options per test from the API catalog, with field errors', () => {
+      const catalog = optionCatalog(SURVIVAL_TEST_CATALOG);
       const form = labForm({
-        suite: 'promotion',
+        suite: 'standard',
         testOptions: {
-          pbo: { max_pbo: '0.3', n_blocks: '' },
-          cross_instrument: { held_out: 'qqq.us, iwm.us' },
+          oos: { min_psr: '0.9', mode: '' },
+          cost_stress: { multipliers: '1, 2' },
           deflated_sharpe: { include_prior_runs: 'false' },
-          // Not in the promotion suite: ignored.
-          drift: { max_psi: '0.5' },
+          // Not in the standard suite: ignored.
+          mcpt: { seed: '3' },
         },
       });
-      expect(labRunErrors(form)).toEqual({});
-      expect(buildLabRunRequest(form).test_options).toEqual({
+      expect(labRunErrors(form, catalog)).toEqual({});
+      expect(buildLabRunRequest(form, catalog).test_options).toEqual({
+        oos: { min_psr: 0.9 },
         deflated_sharpe: { include_prior_runs: false },
-        pbo: { max_pbo: 0.3 },
-        cross_instrument: { held_out: ['QQQ.US', 'IWM.US'] },
+        cost_stress: { multipliers: [1, 2] },
       });
 
       const bad = labForm({
-        suite: 'promotion',
-        testOptions: { pbo: { n_blocks: '9', max_pbo: '2' }, mc_trades: { n_paths: 'lots' } },
+        suite: 'standard',
+        testOptions: { deflated_sharpe: { min_dsr: '2' }, oos: { min_trades: 'lots' } },
       });
-      expect(labRunErrors(bad)).toEqual({
-        'opt.pbo.n_blocks': 'Must be an even number.',
-        'opt.pbo.max_pbo': 'Must be at least 0 and at most 1.',
-        'opt.mc_trades.n_paths': 'Enter a number.',
+      expect(labRunErrors(bad, catalog)).toEqual({
+        'opt.deflated_sharpe.min_dsr': 'Must be at least 0.8 and at most 0.99.',
+        'opt.oos.min_trades': 'Enter a number.',
       });
-      expect(buildLabRunRequest(labForm()).test_options).toBeUndefined();
+      expect(buildLabRunRequest(labForm(), catalog).test_options).toBeUndefined();
+      // Without the catalog nothing can be checked or sent.
+      expect(buildLabRunRequest(form).test_options).toBeUndefined();
     });
   });
 

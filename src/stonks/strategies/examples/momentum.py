@@ -19,13 +19,13 @@ Old param sets: a param set that sets ``lookback_days`` but not
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from datetime import date, datetime, time
+from datetime import date
 from typing import Any
 
 from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
-from stonks.strategies._common import LakeBarCaches, as_datetime
+from stonks.strategies._common import LakeBarCaches
 from stonks.strategies.base import BaseStrategy
 
 
@@ -40,6 +40,14 @@ class Momentum(BaseStrategy):
     alpha_family = "trend"
     premise = "trend"
     label_horizon_bars = 21
+    required_history_bars = 148
+    parallel_scoring = True
+
+    def param_metadata(self) -> dict[str, int]:
+        p = self.params
+        return {
+            "required_history_bars": int(p["lookback_days"]) + int(p["skip_days"]) + 1,
+        }
 
     def __init__(self, params: Any) -> None:
         params = dict(params)
@@ -158,11 +166,10 @@ class Momentum(BaseStrategy):
             return None
         lookback = int(self.params["lookback_days"])
         skip = int(self.params["skip_days"])
-        # Daily bars dated on or before ``as_of``'s calendar day are visible
-        # (a daily bar's timestamp is its session date); nothing later.
-        cutoff = datetime.combine(as_datetime(as_of).date(), time.max)
+        # Only daily bars complete at this decision (RS-03): the day's own
+        # bar at a daily decision, the previous session's mid-session.
         closes = self._bar_caches.for_lake(lake).last_n_closes(
-            ticker, Interval.DAY_1, cutoff, lookback + skip + 1
+            ticker, Interval.DAY_1, as_of, lookback + skip + 1
         )
         if len(closes) < lookback + skip + 1:
             return None

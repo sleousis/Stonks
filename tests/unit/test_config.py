@@ -43,7 +43,7 @@ base_url = "https://example.test/api"
     )
 
     settings = load_settings(config_path=cfg)
-    assert settings.sources.eodhd.api_key == "env-key-123"
+    assert settings.sources.eodhd.api_key.get_secret_value() == "env-key-123"
 
 
 def test_missing_api_key_is_none_not_error(tmp_path, monkeypatch):
@@ -257,3 +257,81 @@ def test_lab_preflight_and_audit_defaults(tmp_path):
     s = load_settings(config_path=cfg)
     assert (s.lab.preflight, s.lab.strict_preflight) == (True, False)
     assert s.audit.tolerances() == AuditTolerances()
+
+
+def test_ensure_section_defaults_to_the_eodhd_free_plan(tmp_path):
+    from stonks.ingest.ensure import EnsureSettings
+
+    settings = load_settings(config_path=tmp_path / "missing.toml")
+    assert isinstance(settings.ensure, EnsureSettings)
+    assert settings.ensure.plans == {"eodhd": "free"}
+
+
+def test_ensure_section_reads_from_toml(tmp_path):
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text('[ensure]\nmax_workers = 3\nplans = { eodhd = "all_world" }\n')
+    settings = load_settings(config_path=cfg)
+    assert settings.ensure.max_workers == 3
+    assert settings.ensure.plans == {"eodhd": "all_world"}
+
+
+def test_default_toml_has_an_ensure_section():
+    import tomllib
+    from pathlib import Path
+
+    data = tomllib.loads(Path("config/default.toml").read_text(encoding="utf-8"))
+    assert data["ensure"]["plans"] == {"eodhd": "free"}
+    assert load_settings(Path("config/default.toml")).ensure.plans == {"eodhd": "free"}
+
+
+def test_production_universe_accepts_a_list_or_a_universe_id(tmp_path):
+    import pytest
+    from pydantic import ValidationError
+
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text('[production]\nuniverse = ["A.US", "B.US"]\n')
+    assert load_settings(config_path=cfg).production.universe == ["A.US", "B.US"]
+    cfg.write_text('[production]\nuniverse = "sp500"\n')
+    assert load_settings(config_path=cfg).production.universe == "sp500"
+    cfg.write_text('[production]\nuniverse = "Not An Id"\n')
+    with pytest.raises(ValidationError):
+        load_settings(config_path=cfg)
+
+
+def test_config_universe_id_pattern_matches_the_universes_block():
+    from stonks import config
+    from stonks.universes.base import UNIVERSE_ID_PATTERN
+
+    assert config.UNIVERSE_ID_PATTERN == UNIVERSE_ID_PATTERN
+
+
+def test_risk_monitor_and_decay_read_from_toml(tmp_path):
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text(
+        """
+[production.risk_monitor]
+enabled = false
+lam = 0.97
+window = 120
+
+[production.decay]
+short_window = 30
+negative_days = 10
+""".strip()
+    )
+    s = load_settings(config_path=cfg)
+    monitor = s.production.risk_monitor
+    assert (monitor.enabled, monitor.lam, monitor.window) == (False, 0.97, 120)
+    decay = s.production.decay
+    assert (decay.short_window, decay.negative_days, decay.long_window) == (30, 10, 120)
+
+
+def test_the_default_config_keeps_the_risk_monitor_defaults():
+    from pathlib import Path
+
+    from stonks.production.decay import DecaySettings
+    from stonks.production.monitor_settings import RiskMonitorSettings
+
+    s = load_settings(config_path=Path("config/default.toml"))
+    assert s.production.risk_monitor == RiskMonitorSettings()
+    assert s.production.decay == DecaySettings()

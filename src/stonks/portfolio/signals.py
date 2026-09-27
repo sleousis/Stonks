@@ -18,8 +18,9 @@ strategy's scores independently:
   strategy's information coefficient (default 0.02) and annual sigma.
 - ``"raw"``: pass-through (for :class:`single_winner`).
 
-A cross section needs at least 3 names; a strategy with fewer gets a
-sign-only conviction of 1.0 on the method's scale (1.0 for z-score, rank and
+A cross section needs at least 3 names; a strategy with fewer, or with a
+constant cross section (every name equally liked, RS-06), gets a sign-only
+conviction of 1.0 on the method's scale (1.0 for z-score, rank and
 the ``z`` of alpha; 10, the average forecast, for ``forecast``). In
 long-only mode negative outputs are clipped to 0. Non-finite scores are
 dropped. Methods live in a registry; :func:`register_normalizer` adds one.
@@ -77,9 +78,13 @@ def _raw(strategy_id: str, s: pd.Series, ctx: SignalContext) -> pd.Series:
     return s
 
 
+def _constant(s: pd.Series) -> bool:
+    return bool((s == s.iloc[0]).all())
+
+
 @register_normalizer("zscore")
 def _zscore(strategy_id: str, s: pd.Series, ctx: SignalContext) -> pd.Series:
-    if len(s) < MIN_CROSS_SECTION:
+    if len(s) < MIN_CROSS_SECTION or _constant(s):
         return _sign(s)
     return cs_zscore(s, winsor=ZSCORE_WINSOR)
 

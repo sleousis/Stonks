@@ -6,21 +6,11 @@ from __future__ import annotations
 from datetime import date
 
 import pandas as pd
-import pytest
 
 from stonks.ingest.pipeline import IngestPipeline
 from stonks.ingest.schemas import DefiTvlRow, FinancialStatementsBundle
 from stonks.ingest.sources.base import DataSource, UnsupportedCapabilityError
 from stonks.ingest.sources.defillama import DefiLlamaUnknownChainError
-from stonks.store.lake import DuckDBLake
-
-
-@pytest.fixture()
-def lake(tmp_path):
-    db = DuckDBLake(tmp_path / "lake.duckdb")
-    db.migrate()
-    yield db
-    db.close()
 
 
 def _row(chain: str, day: date, tvl: float | None, source: str = "stub") -> DefiTvlRow:

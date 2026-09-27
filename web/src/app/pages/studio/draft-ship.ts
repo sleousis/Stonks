@@ -13,23 +13,32 @@ import { RouterLink } from '@angular/router';
 import type { Draft } from '../../api/models';
 import { StrategiesService } from '../../api/strategies.service';
 import { StudioService } from '../../api/studio.service';
+import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { promoteThroughGate } from '../../shared/governance';
+import {
+  LIFECYCLE,
+  STAGES,
+  type Stage as LifeStage,
+  stageState,
+} from '../../shared/governance-labels';
+import { PermissionNote } from '../../shared/ui/permission-note';
 import { StatusChangeDialog } from '../../shared/ui/status-change-dialog';
 import { StatusPill } from '../../shared/ui/status-pill';
 
 type Stage = 'draft' | 'shadow' | 'active' | 'retired';
 
 /**
- * Ship a draft: register it (it lands in shadow, trading on paper), then
- * enable it (active, trades from the next tick) or disable it (back to
- * shadow) with a toggle. Every step asks first.
+ * Ship a draft: start paper trading it (it is registered in shadow), then
+ * go live (active, trades from the next run) or move it back to paper
+ * trading. Every step asks first. Same words as the strategy page
+ * (`shared/governance-labels.ts`).
  */
 @Component({
   selector: 'app-draft-ship',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, StatusPill, StatusChangeDialog],
+  imports: [RouterLink, StatusPill, StatusChangeDialog, PermissionNote],
   templateUrl: './draft-ship.html',
   styleUrl: './draft-ship.scss',
 })
@@ -39,6 +48,7 @@ export class DraftShip {
   private readonly dialog = viewChild.required(StatusChangeDialog);
   private readonly confirm = inject(ConfirmService);
   private readonly toasts = inject(ToastService);
+  private readonly session = inject(SessionService);
 
   readonly draft = input.required<Draft>();
   readonly ensureSaved = input<() => Promise<boolean>>(() => Promise.resolve(true));
@@ -46,6 +56,9 @@ export class DraftShip {
   readonly changed = output<Draft>();
 
   protected readonly busy = signal(false);
+  protected readonly labels = LIFECYCLE;
+  /** Starting paper trading, going live and back need `strategy.promote`. */
+  protected readonly canShip = computed(() => this.session.can('strategy.promote'));
 
   protected readonly stage = computed<Stage>(() => {
     const d = this.draft();
@@ -55,34 +68,31 @@ export class DraftShip {
   protected readonly enabled = computed(() => this.stage() === 'active');
   protected readonly strategyId = computed(() => this.draft().registered_strategy_id ?? '');
 
-  protected readonly steps: { id: Stage; label: string; detail: string }[] = [
-    { id: 'draft', label: 'Draft', detail: 'Edit and test freely' },
-    { id: 'shadow', label: 'Shadow', detail: 'Decides every tick, no orders' },
-    { id: 'active', label: 'Active', detail: 'Places orders from the next tick' },
-  ];
+  /** Draft, Paper and Live (Ready is shown on the strategy page, after the go-live check). */
+  protected readonly steps = STAGES.filter((s) => s.id !== 'ready');
 
-  protected stepState(id: Stage): 'done' | 'current' | 'todo' {
-    const order: Stage[] = ['draft', 'shadow', 'active'];
-    const current = order.indexOf(this.stage() === 'retired' ? 'shadow' : this.stage());
-    const i = order.indexOf(id);
-    return i < current ? 'done' : i === current ? 'current' : 'todo';
+  protected stepState(id: LifeStage): 'done' | 'current' | 'todo' {
+    const stage = this.stage();
+    const current: LifeStage = stage === 'draft' ? 'draft' : stage === 'active' ? 'live' : 'paper';
+    return stageState(id, current);
   }
 
   async register(): Promise<void> {
+    if (!this.canShip()) return;
     const d = this.draft();
     const ok = await this.confirm.confirm({
-      title: `Register ${d.name}?`,
+      title: `Start paper trading ${d.name}?`,
       message:
-        'The saved rules become a registered strategy in shadow: it is evaluated on every tick ' +
-        'but places no orders until you enable it. Later edits to the draft do not change it.',
-      confirmLabel: 'Register',
+        'The saved rules become a registered strategy that trades on paper. It decides on every ' +
+        'run but places no real orders until you go live. Later edits to the draft do not change it.',
+      confirmLabel: LIFECYCLE.paper.label,
     });
     if (!ok) return;
     this.busy.set(true);
     try {
       if (!(await this.ensureSaved()())) return;
       const next = await this.studio.register(d.id);
-      this.toasts.success(`Registered ${next.registered_strategy_id ?? d.name} in shadow.`);
+      this.toasts.success(LIFECYCLE.paper.done(next.registered_strategy_id ?? d.name));
       this.changed.emit(next);
     } catch {
       // The error interceptor already showed the API's message.
@@ -91,12 +101,9 @@ export class DraftShip {
     }
   }
 
-  async toggle(): Promise<void> {
-    return this.enabled() ? this.disable() : this.enable();
-  }
-
   /** Same go-live gate as promoting in Strategies: report first, override on a 409. */
   async enable(): Promise<void> {
+    if (!this.canShip()) return;
     const id = this.strategyId();
     const draftId = this.draft().id;
     const next = await promoteThroughGate({
@@ -105,25 +112,24 @@ export class DraftShip {
       toasts: this.toasts,
       golive: () => this.strategies.golive(id),
       promote: (body) => this.studio.enable(draftId, body, true),
-      title: `Enable ${id}?`,
-      message:
-        'It becomes active and places orders through the configured broker from the next tick.',
-      confirmLabel: 'Enable',
+      title: `Go live with ${id}?`,
+      message: 'It places orders through the broker from the next trading run.',
+      confirmLabel: LIFECYCLE.live.label,
       busy: (on) => this.busy.set(on),
     });
     if (!next) return;
-    this.toasts.success(`Enabled ${id}; it is now active.`);
+    this.toasts.success(LIFECYCLE.live.done(id));
     this.changed.emit(next);
   }
 
   async disable(): Promise<void> {
+    if (!this.canShip()) return;
     const id = this.strategyId();
     const body = await this.dialog().open({
-      title: `Disable ${id}?`,
+      title: `Move ${id} back to paper trading?`,
       message:
-        'It goes back to shadow: it keeps being evaluated but places no new orders. Open ' +
-        'positions are not closed.',
-      confirmLabel: 'Disable',
+        'It keeps deciding on every run but places no new orders. Open positions are not closed.',
+      confirmLabel: LIFECYCLE.pause.label,
       tone: 'danger',
       minReason: 1,
     });
@@ -131,7 +137,7 @@ export class DraftShip {
     this.busy.set(true);
     try {
       const next = await this.studio.disable(this.draft().id, body);
-      this.toasts.success(`Disabled ${id}; it is back in shadow.`);
+      this.toasts.success(LIFECYCLE.pause.done(id));
       this.changed.emit(next);
     } catch {
       // The error interceptor already showed the API's message.

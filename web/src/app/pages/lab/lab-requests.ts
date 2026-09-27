@@ -6,18 +6,25 @@ import type {
   WalkForwardConfig,
 } from '../../api/models';
 import { type ParamValues, paramErrors, paramPayload } from '../../shared/ui/param-form/param-spec';
-import { type TestOptionValues, buildTestOptions, testOptionErrors } from './test-options';
+import { SURVIVAL_TESTS, type SurvivalTestName } from '../../shared/lab-results/survival-tests';
+import {
+  type OptionCatalog,
+  type TestOptionValues,
+  buildTestOptions,
+  testOptionErrors,
+} from './test-options';
 
 /**
  * Form state for the lab page and the pure functions that turn it into API
  * request bodies. Kept free of Angular so the payloads are easy to test.
  */
 
-export type SurvivalTestName = NonNullable<LabRunRequest['survival_tests']>[number];
+export type { SurvivalTestInfo, SurvivalTestName } from '../../shared/lab-results/survival-tests';
+export { SURVIVAL_TESTS } from '../../shared/lab-results/survival-tests';
 export type SuitePreset = NonNullable<LabRunRequest['preset']>;
 export type SuiteChoice = SuitePreset | 'custom';
 export type CostChoice = 'configured' | 'zero' | 'realistic' | 'flat';
-/** `default` sends nothing (the server's `[lab] benchmark`). */
+/** `default` sends nothing: the server's default benchmark. */
 export type BenchmarkChoice = 'default' | 'auto' | 'EW' | 'ticker' | 'none';
 export type RetuneChoice = 'default' | 'auto' | 'yes' | 'no';
 
@@ -50,7 +57,7 @@ export interface LabRunForm extends WindowForm, BenchmarkForm {
   seed: number | null;
   objective: NonNullable<LabRunRequest['objective']>;
   trainRatio: number | null;
-  /** Blank = the server's `[lab] embargo_bars` (raised to the strategy's horizon). */
+  /** Blank = the server's default gap (raised to the strategy's horizon). */
   embargoBars: number | null;
   suite: SuiteChoice;
   /** The tests ticked for a custom suite. */
@@ -75,46 +82,6 @@ export interface LabRunForm extends WindowForm, BenchmarkForm {
   premortem: string;
 }
 
-export interface SurvivalTestInfo {
-  id: SurvivalTestName;
-  label: string;
-  hint: string;
-}
-
-/** Every survival test, in the order a suite runs them. */
-export const SURVIVAL_TESTS: readonly SurvivalTestInfo[] = [
-  { id: 'oos', label: 'Out of sample', hint: 'Score on data the tuner never saw.' },
-  {
-    id: 'period_stability',
-    label: 'Period stability',
-    hint: 'Similar results across sub-periods.',
-  },
-  { id: 'perturbation', label: 'Perturbation', hint: 'Small noise does not break it.' },
-  { id: 'walk_forward', label: 'Walk-forward', hint: 'Re-tune and test fold by fold.' },
-  {
-    id: 'deflated_sharpe',
-    label: 'Deflated Sharpe',
-    hint: 'The Sharpe survives the number of trials.',
-  },
-  { id: 'pbo', label: 'Overfitting (PBO)', hint: 'The best trial is not just the luckiest.' },
-  { id: 'mc_trades', label: 'Monte Carlo trades', hint: 'Reshuffled trades rarely ruin it.' },
-  { id: 'cost_stress', label: 'Cost stress', hint: 'Still works at two or three times the costs.' },
-  { id: 'plateau', label: 'Parameter plateau', hint: 'Nearby parameters also work.' },
-  { id: 'cross_instrument', label: 'Cross-instrument', hint: 'Works on other tickers too.' },
-  { id: 'benchmark_relative', label: 'Beats the benchmark', hint: 'Positive IR and excess CAGR.' },
-  { id: 'mcpt', label: 'Monte Carlo permutation', hint: 'Beats shuffled prices (MCPT).' },
-  { id: 'drift', label: 'Drift', hint: 'Train and test returns look alike.' },
-  { id: 'runs_test', label: 'Runs test', hint: 'Wins and losses are not clustered.' },
-  {
-    id: 'walk_forward_mcpt',
-    label: 'Walk-forward permutation',
-    hint: 'The walk-forward result beats shuffled prices. Slow.',
-  },
-  // Legacy alias of `mcpt`, still in stored reports.
-  { id: 'permutation', label: 'Monte Carlo permutation', hint: 'Beats shuffled prices (MCPT).' },
-];
-
-/** Tests offered for a custom suite (the legacy alias is hidden). */
 export const PICKABLE_TESTS = SURVIVAL_TESTS.filter((t) => t.id !== 'permutation');
 
 export interface SuiteInfo {
@@ -271,7 +238,7 @@ function benchmarkErrors(f: BenchmarkForm): FormErrors {
   return {};
 }
 
-function windowErrors(f: WindowForm): FormErrors {
+export function windowErrors(f: WindowForm): FormErrors {
   const e: FormErrors = {};
   if (!f.classPath) e['strategy'] = 'Pick a strategy class.';
   if (parseTickers(f.tickers).length === 0) e['tickers'] = 'Enter at least one ticker.';
@@ -300,8 +267,11 @@ export function backtestErrors(f: BacktestForm, cls: StrategyClassInfo | null): 
   return e;
 }
 
-/** Field → message; `opt.<test>.<field>` keys are advanced test options. */
-export function labRunErrors(f: LabRunForm): FormErrors {
+/**
+ * Field → message; `opt.<test>.<field>` keys are advanced test options,
+ * checked against `catalog` (from `GET /api/lab/survival-tests`).
+ */
+export function labRunErrors(f: LabRunForm, catalog: OptionCatalog = {}): FormErrors {
   const e = { ...windowErrors(f), ...benchmarkErrors(f) };
   const tests = suiteTests(f);
   if (!isInt(f.budget) || f.budget < 1 || f.budget > 1000) e['budget'] = 'Between 1 and 1000.';
@@ -335,7 +305,7 @@ export function labRunErrors(f: LabRunForm): FormErrors {
     e['hypothesis'] = 'Say why it should make money before registering it.';
   if (f.hypothesis.length > 4000) e['hypothesis'] = 'At most 4000 characters.';
   if (f.premortem.length > 4000) e['premortem'] = 'At most 4000 characters.';
-  for (const [key, msg] of Object.entries(testOptionErrors(tests, f.testOptions))) {
+  for (const [key, msg] of Object.entries(testOptionErrors(tests, f.testOptions, catalog))) {
     e[`opt.${key}`] = msg;
   }
   return e;
@@ -368,7 +338,7 @@ export function buildBacktestRequest(
   return body;
 }
 
-export function buildLabRunRequest(f: LabRunForm): LabRunRequest {
+export function buildLabRunRequest(f: LabRunForm, catalog: OptionCatalog = {}): LabRunRequest {
   const tests = suiteTests(f);
   const body: LabRunRequest = {
     // The tuner searches the class's parameter space; params are ignored.
@@ -407,7 +377,9 @@ export function buildLabRunRequest(f: LabRunForm): LabRunRequest {
     if (f.wfMinWfe !== null) wf.min_wfe = f.wfMinWfe;
     if (f.wfMatrix) wf.matrix = true;
     // Only send a config when something differs from the test's defaults.
-    if (Object.keys(wf).length) body.walk_forward = { ...wf, metric: f.objective };
+    // A cv_ objective scores walk-forward on its plain metric.
+    const metric = f.objective.replace(/^cv_/, '') as NonNullable<WalkForwardConfig['metric']>;
+    if (Object.keys(wf).length) body.walk_forward = { ...wf, metric };
   }
   if (tests.includes('mcpt')) {
     const mcpt: McptOptions = {};
@@ -418,7 +390,7 @@ export function buildLabRunRequest(f: LabRunForm): LabRunRequest {
       mcpt.retune = f.mcptRetune === 'auto' ? 'auto' : f.mcptRetune === 'yes';
     if (Object.keys(mcpt).length) body.mcpt = mcpt;
   }
-  const options = buildTestOptions(tests, f.testOptions);
+  const options = buildTestOptions(tests, f.testOptions, catalog);
   if (options) body.test_options = options;
   return body;
 }

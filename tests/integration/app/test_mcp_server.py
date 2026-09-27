@@ -120,6 +120,18 @@ READ_TOOLS = {
     "get_connection_accounts",
     "list_halts",
     "list_statement_flags",
+    "tca_summary",
+    "trade_journal",
+    "order_tca",
+    "list_portfolios",
+    "list_trading_modes",
+    "list_subscriptions",
+    "whoami",
+    "get_insights",
+    "get_strategy_agreement",
+    "get_insights_totals",
+    "live_risk",
+    "risk_snapshots",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
@@ -138,6 +150,7 @@ GUARDED_TOOLS = {
     "create_universe",
     "refresh_universe",
     "ensure_universe_data",
+    "delete_universe",
     "import_index_history",
     "promote_strategy",
     "retire_strategy",
@@ -148,6 +161,8 @@ GUARDED_TOOLS = {
     "disable_draft",
     "sync_connection",
     "engage_kill_switch",
+    "subscribe",
+    "update_subscription",
 }
 
 
@@ -205,6 +220,23 @@ async def test_portfolio_tools_take_a_portfolio_id_that_must_be_yours(mcp):
         assert "not found" in text.lower(), (tool, text)
     totals = await call(mcp, "get_portfolio_totals")
     assert totals["portfolios"] >= 1 and "positions" not in totals
+
+
+@pytest.mark.anyio
+async def test_insight_tools(mcp):
+    me = await call(mcp, "whoami")
+    assert me["user_id"] == "usr_owner" and "read" in me["scopes"]
+    insights = await call(mcp, "get_insights", {"benchmark": "UP.US"})
+    assert insights["portfolio_id"] == "pf_default"
+    assert {s["key"] for s in insights["allocation"]["ticker"]} >= {"UP.US"}
+    assert insights["exposure"]["beta"] is not None
+    agreement = await call(mcp, "get_strategy_agreement", {"portfolio_id": "pf_default"})
+    assert agreement["holdings"][0]["opinions"][0]["stance"] == "agree"
+    totals = await call(mcp, "get_insights_totals")
+    assert totals["portfolios"] >= 1 and "UP.US" not in str(totals)
+    for tool in ("get_insights", "get_strategy_agreement"):
+        text = await call_error(mcp, tool, {"portfolio_id": "pf_someone_else"})
+        assert "not found" in text.lower(), (tool, text)
 
 
 @pytest.mark.anyio

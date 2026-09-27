@@ -114,12 +114,12 @@ def test_typed_ingest_and_tick_result_routes(client):
 
 
 def test_tick_runs_have_a_typed_summary(client, seeded):
-    page = client.get("/api/ticks").json()
+    page = client.get("/api/ticks", headers=AUTH).json()
     summary = page["items"][0]["summary"]
     assert summary["orders_placed"] >= 0
     assert isinstance(summary["risk_adjustments"], list)
     assert {s["strategy_id"] for s in summary["shadow"]} == {"bah_shadow"}
-    detail = client.get(f"/api/ticks/{seeded['tick_id']}").json()
+    detail = client.get(f"/api/ticks/{seeded['tick_id']}", headers=AUTH).json()
     assert detail["summary"]["winner_strategy_id"] == seeded["active_id"]
 
 
@@ -317,9 +317,8 @@ def test_health_report(client):
     assert checks["stuck_ticks"]["ok"] is True
     assert body["healthy"] is False
     assert body["checked_at"]
-    # stale data opens the global operational halt, and the report lists it
-    assert checks["risk_halts"]["ok"] is False
-    assert "operational" in checks["risk_halts"]["detail"]
+    # reading the report never opens the operational halt (TO-03)
+    assert checks["risk_halts"]["ok"] is True
 
 
 def test_health_report_exposes_its_thresholds(client, settings):
@@ -341,14 +340,14 @@ def test_broker_info_defaults_to_simulated_without_keys(client):
         "credentials_configured": False,
     }
     # the alpaca status route only applies when alpaca is the configured broker
-    assert client.get("/api/brokers/alpaca/status").status_code == 409
+    assert client.get("/api/brokers/alpaca/status", headers=AUTH).status_code == 409
 
 
 def test_alpaca_status_without_keys_reports_not_connected(settings, seeded):
     settings.api.allowed_hosts = ["testserver"]
     settings.brokers.kind = "alpaca"
     with TestClient(create_app(settings), client=LOOPBACK) as c:
-        body = c.get("/api/brokers/alpaca/status").json()
+        body = c.get("/api/brokers/alpaca/status", headers=AUTH).json()
     assert body["connected"] is False
     assert "ALPACA_API_KEY" in body["error"]
     assert body["account"] is None
@@ -379,7 +378,7 @@ def test_alpaca_status_with_a_fake_connection(settings, seeded):
     settings.brokers.alpaca.secret_key = SecretStr("s-456")
     svc = Services.create(AppContext(settings), broker_connector=lambda s: FakeAlpaca())
     with TestClient(create_app(settings, services=svc), client=LOOPBACK) as c:
-        body = c.get("/api/brokers/alpaca/status").json()
+        body = c.get("/api/brokers/alpaca/status", headers=AUTH).json()
         info = c.get("/api/brokers").json()
     assert body["connected"] is True
     assert body["account"]["equity"] == 150.0
@@ -404,7 +403,7 @@ def test_alpaca_status_scrubs_errors(settings, seeded):
     settings.brokers.alpaca.secret_key = SecretStr("s-456")
     svc = Services.create(AppContext(settings), broker_connector=boom)
     with TestClient(create_app(settings, services=svc), client=LOOPBACK) as c:
-        body = c.get("/api/brokers/alpaca/status").json()
+        body = c.get("/api/brokers/alpaca/status", headers=AUTH).json()
     assert body["connected"] is False
     assert "k-123" not in body["error"]
 

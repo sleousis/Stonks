@@ -79,11 +79,14 @@ def apply_risk(
     cost_model: CostModel | CostModelSettings | None = None,
     volumes: Mapping[str, float] | None = None,
     context: RiskContext | None = None,
+    allow_short: bool = False,
 ) -> RiskResult:
     """``cost_model`` (exclusive with ``slippage_bps`` / ``fee_per_trade``)
     prices the cash estimate like the broker will; ``volumes`` feed its
     impact term. ``context`` adds history for rules that need it; the
-    explicit arguments win over its fields."""
+    explicit arguments win over its fields. ``allow_short`` (the book's
+    switch, or the context's) lets opening sells through the caps; the
+    orders are then classified (split at zero) before any rule runs."""
     if not policy.enabled:
         return RiskResult(orders=list(orders), adjustments=[])
     model = cost_model.build() if isinstance(cost_model, CostModelSettings) else cost_model
@@ -100,6 +103,7 @@ def apply_risk(
         volumes=volumes if volumes is not None else base.volumes,
         slippage_bps=slippage_bps,
         fee_per_trade=fee_per_trade,
+        allow_short=allow_short or base.allow_short,
     )
 
     rules: list[RiskRule] = []
@@ -115,6 +119,10 @@ def apply_risk(
         _log.info("risk.rules_skipped", reason="no_context", rules=skipped)
 
     current = list(orders)
+    if ctx.allow_short:
+        from stonks.execution.orders import classify_all
+
+        current = classify_all(current, portfolio.positions)
     adjustments: list[RiskAdjustment] = []
     for stage in _stages(rules):
         if isinstance(stage, list):

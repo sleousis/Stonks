@@ -55,6 +55,14 @@ class VSAStrategy(SingleTickerLongFlat):
     alpha_family = "reversion"
     premise = "mean_reversion"
     label_horizon_bars = 24
+    required_history_bars = 337
+
+    def param_metadata(self) -> dict[str, int]:
+        p = self.params
+        return {
+            "label_horizon_bars": int(p["hold_bars"]),
+            "required_history_bars": 2 * int(p["norm_lookback"]) + 1,
+        }
 
     @classmethod
     def parameter_spec(cls):

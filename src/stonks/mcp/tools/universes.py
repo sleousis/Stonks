@@ -1,6 +1,5 @@
 """Universe tools: read stored universes and their point-in-time members,
-plus guarded writes (create, refresh, ensure data, index import). Deleting
-a universe stays in the console and the REST API.
+plus guarded writes (create, refresh, ensure data, index import, delete).
 Every write needs ``confirm=true``; without it the tool returns a preview
 and sends nothing mutating."""
 
@@ -26,6 +25,11 @@ from stonks.mcp.tools.common import (
 #: Changes which names a universe holds; repeating the same write converges.
 UNIVERSE_WRITE = ToolAnnotations(
     read_only_hint=False, destructive_hint=True, idempotent_hint=True, open_world_hint=False
+)
+#: Removes a definition and its membership rows; lab runs and ticks that
+#: name it stop resolving.
+UNIVERSE_DELETE = ToolAnnotations(
+    read_only_hint=False, destructive_hint=True, idempotent_hint=False, open_world_hint=False
 )
 #: Fetches from a vendor and writes the lake (membership rows or bars).
 UNIVERSE_FETCH = ToolAnnotations(
@@ -171,3 +175,22 @@ def register(t: ToolContext) -> None:
             )
         result = await t.post("/api/universes/index-history", body)
         return {"preview": False, "applied": True, "result": result}
+
+    @server.tool(annotations=UNIVERSE_DELETE)
+    async def delete_universe(universe_id: UniverseId, confirm: Confirm = False) -> dict[str, Any]:
+        """Delete a stored universe and its membership rows (admins only).
+        Lab runs, ticks and scheduled jobs that name it stop resolving.
+        Without confirm=true returns a preview."""
+        uid = seg(universe_id)
+        current = await t.get(f"/api/universes/{uid}")
+        if not confirm:
+            return _preview(
+                "delete",
+                current,
+                [
+                    "removes the definition and every membership row",
+                    "lab runs and ticks that name this universe stop resolving",
+                ],
+            )
+        deleted = await t.delete(f"/api/universes/{uid}")
+        return {"preview": False, "applied": True, "universe": deleted}

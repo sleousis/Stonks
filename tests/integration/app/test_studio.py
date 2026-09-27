@@ -231,7 +231,7 @@ def test_backtest_rule_draft_goes_through_the_lab_job(svc, studio):
 
 def test_backtest_invalid_draft_is_rejected_before_queueing(svc, studio):
     draft = studio.create_draft(DraftCreate(name="t", spec={**TREND, "rank": {"by": "zz"}}))
-    with pytest.raises(ValidationError, match="rank.by"):
+    with pytest.raises(ValidationError, match=r"rank\.by"):
         studio.submit_backtest(draft.id, _bt())
     assert svc.jobs.list(limit=10, offset=0).total == 0
 

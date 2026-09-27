@@ -6,14 +6,20 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
-from stonks.api.deps import ServicesDep
+from stonks.api.deps import PrincipalDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.app.operations import HealthReportView
+from stonks.auth import Permission
 
 #: Public liveness probe.
 router = APIRouter(prefix="/api/health", tags=["health"])
 #: The full report reads the stores, so it sits behind auth like other reads.
 report_router = APIRouter(prefix="/api/health", tags=["health"], responses=PROBLEM_RESPONSES)
+
+
+class HealthRunRequest(BaseModel):
+    #: Freshness check tickers; default ``[production].universe``.
+    tickers: list[str] | None = None
 
 
 class Health(BaseModel):
@@ -42,5 +48,21 @@ def health_report(
     ] = None,
 ) -> HealthReportView:
     """Every ``stonks health`` check: bar freshness, stuck ticks and ingest
-    runs, recent ingest failures. Always 200; see ``healthy``."""
+    runs, recent ingest failures, open halts. Always 200; see ``healthy``.
+    Read-only: it never opens or clears the operational halt."""
     return services.operations.health_report(tickers)
+
+
+@report_router.post(
+    "/run",
+    response_model=HealthReportView,
+    operation_id="runHealthChecks",
+    dependencies=needs(Permission.OPERATIONS_RUN),
+)
+def run_health_checks(
+    body: HealthRunRequest, services: ServicesDep, principal: PrincipalDep
+) -> HealthReportView:
+    """The scheduled health job: every check, then the global operational
+    halt is opened on stale data or a stuck run and cleared when the checks
+    pass again. The caller is recorded as the actor."""
+    return services.operations.run_health(body.tickers, actor=principal.scope.actor)

@@ -4,15 +4,24 @@ the same risk policy, shadow switch, alert routing and broker."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date
 
+from stonks.accounts.models import Portfolio as AccountPortfolio
 from stonks.config import Settings
 from stonks.core.protocols import Broker
 from stonks.core.types import Portfolio
 from stonks.execution.brokers import SimulatedCosts, make_broker
+from stonks.lab.parallel import default_max_workers
 from stonks.notify import Notifier, notifier_from_settings
-from stonks.production.tick import BrokerFactory, TickPlan, TickSettings, load_tick_plan
+from stonks.production.tick import (
+    BrokerFactory,
+    TickPlan,
+    TickSettings,
+    TraderFactory,
+    load_tick_plan,
+)
 from stonks.store.state import SqliteState
 
 
@@ -23,7 +32,7 @@ class TickRuntime:
     #: None for the default simulated broker (the tick builds it itself).
     broker_factory: BrokerFactory | None = None
     #: ``[production].books_from_subscriptions``.
-    books_from_subscriptions: bool = False
+    books_from_subscriptions: bool = True
 
     def plan_for(self, state: SqliteState) -> TickPlan | None:
         """The books to trade: one per portfolio from its subscriptions when
@@ -31,13 +40,39 @@ class TickRuntime:
         default single book over every active strategy)."""
         if not self.books_from_subscriptions:
             return None
-        return load_tick_plan(state, self.settings)
+        return load_tick_plan(state, self.settings, traders=connection_traders(state))
 
 
-def build_tick_settings(settings: Settings, universe: Sequence[str]) -> TickSettings:
+def connection_traders(state: SqliteState) -> TraderFactory:
+    """Auto books trade through their portfolio's connection
+    (``ConnectionService.open_trader`` as ``service:scheduler``). The
+    connections config and the master key load on first use, inside the
+    tick, so a broken connection fails (and pauses) only its own book."""
+
+    def open_trader(account: AccountPortfolio) -> Broker:
+        from stonks.accounts.scope import Scope
+        from stonks.connections.service import ConnectionService
+        from stonks.connections.settings import ConnectionsConfig
+
+        service = ConnectionService(state, ConnectionsConfig.load())
+        return service.open_trader(Scope.service("scheduler"), account.id)
+
+    return open_trader
+
+
+def build_tick_settings(
+    settings: Settings,
+    universe: Sequence[str],
+    *,
+    scoped: bool = False,
+    bars_due: Mapping[str, date] | None = None,
+) -> TickSettings:
     """Simulated fill costs follow ``SimulatedCosts.from_settings``:
     ``[backtest.costs]`` when configured (legacy ``[production]``
-    ``slippage_bps`` / ``fee_per_trade`` then ignored), else the legacy pair."""
+    ``slippage_bps`` / ``fee_per_trade`` then ignored), else the legacy pair.
+    ``scoped``: the universe was narrowed by the caller (explicit tickers),
+    so holdings outside it are left alone (``TickSettings.scoped``).
+    ``bars_due``: a scheduled tick's due session bars (``TickSettings.bars_due``)."""
     p = settings.production
     costs = SimulatedCosts.from_settings(settings)
     return TickSettings(
@@ -55,10 +90,22 @@ def build_tick_settings(settings: Settings, universe: Sequence[str]) -> TickSett
         construction=p.construction,
         model_books=p.model_books,
         quit_rule=p.quit_rule,
+        risk_monitor=p.risk_monitor,
+        decay=p.decay,
+        scoped=scoped,
+        bars_due=dict(bars_due) if bars_due else None,
+        scoring_workers=p.scoring_workers or default_max_workers(),
+        parallel_min_estimates=p.parallel_min_estimates,
     )
 
 
-def build_tick_runtime(settings: Settings, universe: Sequence[str]) -> TickRuntime:
+def build_tick_runtime(
+    settings: Settings,
+    universe: Sequence[str],
+    *,
+    scoped: bool = False,
+    bars_due: Mapping[str, date] | None = None,
+) -> TickRuntime:
     """The simulated default gets no factory (the tick builds its in-memory
     broker, no keys needed). ``alpaca`` is strictly opt-in via
     ``[brokers].kind``; its factory connects lazily, inside the tick, so a
@@ -70,7 +117,7 @@ def build_tick_runtime(settings: Settings, universe: Sequence[str]) -> TickRunti
             return make_broker(settings, portfolio)
 
     return TickRuntime(
-        settings=build_tick_settings(settings, universe),
+        settings=build_tick_settings(settings, universe, scoped=scoped, bars_due=bars_due),
         notifier=notifier_from_settings(settings),
         broker_factory=factory,
         books_from_subscriptions=settings.production.books_from_subscriptions,

@@ -56,6 +56,14 @@ def portfolio_curve(state: SqliteState, portfolio_id: str, as_of: date) -> list[
     return sorted(by_day.items())
 
 
+def portfolio_owner(state: SqliteState, portfolio_id: str) -> str | None:
+    """The owner of ``portfolio_id`` (the legacy ``pf_default`` book carries
+    no owner id, but its row names the bootstrap admin), or ``None`` when
+    the portfolio is missing. ``risk_halts`` (016) implies ``portfolios``."""
+    rows = state.sql("SELECT owner_id FROM portfolios WHERE id = ?", [portfolio_id])
+    return rows[0]["owner_id"] if rows else None
+
+
 def _utc_day(value: str) -> date:
     parsed = datetime.fromisoformat(value)
     return (parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)).astimezone(UTC).date()
@@ -82,7 +90,15 @@ class RiskHaltGate(TradeGate):
         if not halts_enabled(state):
             return None
         pending = self._breaker(ctx)
-        halts = active_halts(state, ctx.as_of, portfolio_id=ctx.portfolio_id, user_id=ctx.owner_id)
+        owner = ctx.owner_id or portfolio_owner(state, ctx.portfolio_id)
+        halts = active_halts(state, ctx.as_of, portfolio_id=ctx.portfolio_id, user_id=owner)
+        if ctx.parent_portfolio_id is not None:
+            seen = {h.id for h in halts}
+            halts += [
+                h
+                for h in active_halts(state, ctx.as_of, portfolio_id=ctx.parent_portfolio_id)
+                if h.id not in seen
+            ]
         reasons = [f"{h.kind} ({h.target}): {h.reason}" for h in halts]
         reasons += [f"{t.kind} (portfolio {ctx.portfolio_id}): {t.reason}" for t in pending]
         if not reasons:

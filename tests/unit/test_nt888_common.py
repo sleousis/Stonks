@@ -26,7 +26,7 @@ CASES = [
     (VSAStrategy, {"norm_lookback": 48, "threshold": 0.5, "hold_bars": 6}),
     (MarketProfileSRStrategy, {"lookback": 100}),
     (IntramarketDifferenceStrategy, {"lookback": 6, "atr_lookback": 24, "reference_ticker": "REF"}),
-    (MACrossoverStrategy, {"fast": 3, "slow": 10}),
+    (MACrossoverStrategy, {"fast": 3, "slow": 26}),
 ]
 IDS = [c[0].__name__ for c in CASES]
 

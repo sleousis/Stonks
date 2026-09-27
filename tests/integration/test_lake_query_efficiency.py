@@ -10,10 +10,8 @@ import re
 from datetime import date, datetime, timedelta
 
 import pandas as pd
-import pytest
 
 from stonks.core.interval import Interval
-from stonks.store.lake import DuckDBLake
 
 
 class _SpyConnection:
@@ -29,14 +27,6 @@ class _SpyConnection:
 
     def __getattr__(self, name):
         return getattr(self._con, name)
-
-
-@pytest.fixture
-def lake(tmp_path):
-    lk = DuckDBLake(tmp_path / "lake.duckdb")
-    lk.migrate()
-    yield lk
-    lk.close()
 
 
 def _spy(lake) -> _SpyConnection:
@@ -113,9 +103,9 @@ def test_upsert_on_change_ranks_only_incoming_identities(lake):
     spy = _spy(lake)
     lake.upsert_ticker_snapshots(pd.DataFrame([{**snap, "beta": 2.0}]))
     [stmt] = [s for s in spy.statements if "ROW_NUMBER" in s]
-    ranked = re.search(r"ranked AS \((.*?)\),\s*latest AS", stmt, re.S)
-    assert ranked is not None
-    assert "_in" in ranked.group(1), "ranked CTE must be restricted to identities in the batch"
+    assert re.search(r"WHERE EXISTS \(SELECT 1 FROM _ids WHERE", stmt), (
+        "the latest-row query must be restricted to identities in the batch"
+    )
     # Behaviour unchanged: only AAPL's row was updated.
     got = lake.sql("SELECT ticker, beta FROM ticker_snapshots ORDER BY ticker")
     assert got.values.tolist() == [["AAPL.US", 2.0], ["MSFT.US", 1.0]]

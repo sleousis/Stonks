@@ -145,3 +145,32 @@ def test_line_chart_handles_empty_single_and_flat_series():
 def test_line_chart_escapes_labels():
     svg = line_chart([(EVIL, [(date(2026, 1, 1), 1.0), (date(2026, 1, 2), 2.0)], EVIL)])
     assert "<script" not in svg
+
+
+def test_line_chart_spreads_intraday_points():
+    """RS-21: points an hour apart get different x values."""
+    from datetime import datetime
+
+    pts = [
+        (
+            datetime(2026, 1, 5, 9, 30) + (datetime(2026, 1, 5, 10) - datetime(2026, 1, 5, 9)) * i,
+            float(i),
+        )
+        for i in range(4)
+    ]
+    svg = line_chart([("v", pts, "s1")])
+    coords = re.search(r'class="line s1" points="([^"]+)"', svg).group(1).split()
+    xs = [float(c.split(",")[0]) for c in coords]
+    assert len(set(xs)) == 4 and xs == sorted(xs)
+
+
+def test_line_chart_mixes_dates_and_datetimes():
+    from datetime import datetime
+
+    svg = line_chart(
+        [
+            ("a", [(date(2026, 1, 1), 1.0), (date(2026, 1, 3), 2.0)], "s1"),
+            ("b", [(datetime(2026, 1, 2, 12), 1.5)], "s2"),
+        ]
+    )
+    assert "<svg" in svg and "nan" not in svg.lower()

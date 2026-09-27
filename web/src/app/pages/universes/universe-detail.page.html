@@ -1,0 +1,265 @@
+@let u = universe.hasValue() ? universe.value() : null;
+<app-page-header [title]="u?.name || id()" [description]="u?.description ?? null">
+  <a actions class="btn btn-ghost" routerLink="/universes">All universes</a>
+  <button
+    actions
+    type="button"
+    class="btn btn-danger"
+    [disabled]="deleting() || !u || !canDelete()"
+    [attr.aria-busy]="deleting()"
+    (click)="remove()"
+  >
+    Delete
+  </button>
+  <app-permission-note actions permission="strategy.promote" />
+</app-page-header>
+
+@if (universe.error(); as err) {
+  <app-error-state title="Could not load this universe" [error]="err" (retry)="universe.reload()" />
+} @else if (!u) {
+  <app-loading-state label="Loading the universe" [rows]="2" />
+} @else {
+  <dl class="facts" aria-label="Universe facts">
+    <div>
+      <dt>Id</dt>
+      <dd class="num">{{ u.id }}</dd>
+    </div>
+    <div>
+      <dt>Kind</dt>
+      <dd>{{ kindLabel[u.kind] }}</dd>
+    </div>
+    <div>
+      <dt>Members</dt>
+      <dd class="num">
+        {{
+          u.member_count === null || u.member_count === undefined
+            ? 'Not refreshed'
+            : (u.member_count | num: { digits: 0 })
+        }}
+      </dd>
+    </div>
+    <div>
+      <dt>Last refresh</dt>
+      <dd class="num">{{ u.refreshed_at ? (u.refreshed_at | dateTime) : 'Never' }}</dd>
+    </div>
+  </dl>
+}
+
+<div class="page-grid">
+  <!-- Members on a date --------------------------------------------------->
+  <section class="panel span-6" aria-labelledby="members-title">
+    <div class="panel-head">
+      <h2 id="members-title">Members on a date</h2>
+      @if (members.hasValue()) {
+        <span class="muted num"
+          >{{ members.value().count | num: { digits: 0 } }} on {{ members.value().as_of }}</span
+        >
+      }
+    </div>
+    <div class="panel-body date-row">
+      <div class="field">
+        <label for="m-date">Date</label>
+        <input
+          id="m-date"
+          class="input"
+          type="date"
+          [value]="asOf()"
+          (change)="asOf.set($any($event.target).value)"
+        />
+      </div>
+    </div>
+    @if (members.error(); as err) {
+      <app-error-state title="Could not load members" [error]="err" (retry)="members.reload()" />
+    } @else if (!members.hasValue()) {
+      <app-loading-state label="Loading members" [rows]="3" />
+    } @else if (members.value().tickers.length === 0) {
+      <app-empty-state
+        title="No members on this date"
+        message="Refresh the universe to build its membership, or pick a date inside its window."
+      />
+    } @else {
+      <ul class="chips panel-body" aria-label="Members">
+        @for (t of members.value().tickers; track t) {
+          <li class="num">{{ t }}</li>
+        }
+      </ul>
+    }
+  </section>
+
+  <!-- Refresh -------------------------------------------------------------->
+  <section class="panel span-6" aria-labelledby="refresh-title">
+    <div class="panel-head">
+      <h2 id="refresh-title">Refresh</h2>
+      <div class="head-action">
+        <button
+          type="button"
+          class="btn btn-primary"
+          [disabled]="refreshing() || !u || !canRefresh()"
+          [attr.aria-busy]="refreshing()"
+          (click)="refresh()"
+        >
+          {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
+        </button>
+        <app-permission-note permission="lab.run" />
+      </div>
+    </div>
+    @if (refreshRun(); as run) {
+      <app-job-progress label="Refresh" [handle]="run" />
+    }
+    <div class="panel-body">
+      @if (refreshResult(); as r) {
+        <dl class="facts compact" aria-label="Refresh result">
+          <div>
+            <dt>Members today</dt>
+            <dd class="num">{{ r.current_members | num: { digits: 0 } }}</dd>
+          </div>
+          <div>
+            <dt>Members ever</dt>
+            <dd class="num">{{ r.members | num: { digits: 0 } }}</dd>
+          </div>
+          <div>
+            <dt>Spans</dt>
+            <dd class="num">{{ r.spans | num: { digits: 0 } }}</dd>
+          </div>
+        </dl>
+        @if (r.warnings?.length) {
+          <ul class="warnings" aria-label="Refresh warnings">
+            @for (w of r.warnings; track $index) {
+              <li>{{ w }}</li>
+            }
+          </ul>
+        }
+      } @else {
+        <p class="muted">
+          Turns the definition into dated membership rows. Rule universes read our price data, so
+          fetch the data first.
+        </p>
+      }
+    </div>
+  </section>
+
+  <!-- Ensure data ---------------------------------------------------------->
+  <section class="panel span-12" aria-labelledby="ensure-title">
+    <div class="panel-head">
+      <h2 id="ensure-title">Ensure data</h2>
+    </div>
+    @if (ensureRun(); as run) {
+      <app-job-progress label="Ensure data" [handle]="run" />
+    }
+    <form class="panel-body" novalidate (submit)="$event.preventDefault(); ensure()">
+      <p class="muted intro">
+        Fetches only the prices our data is missing for the members over the window. The free EODHD
+        plan keeps one year of daily prices, so the start may move.
+      </p>
+      <div class="ensure-grid">
+        <div class="field">
+          <label for="e-start">From</label>
+          <input
+            id="e-start"
+            class="input"
+            type="date"
+            [attr.aria-invalid]="ensureSubmitted() && !!windowError()"
+            [value]="start()"
+            (change)="start.set($any($event.target).value)"
+          />
+        </div>
+        <div class="field">
+          <label for="e-end">To</label>
+          <input
+            id="e-end"
+            class="input"
+            type="date"
+            [attr.aria-invalid]="ensureSubmitted() && !!windowError()"
+            [value]="end()"
+            (change)="end.set($any($event.target).value)"
+          />
+        </div>
+        <div class="field">
+          <label for="e-interval">Interval</label>
+          <select
+            id="e-interval"
+            class="input"
+            [value]="interval()"
+            (change)="interval.set($any($event.target).value)"
+          >
+            @for (iv of intervals; track iv) {
+              <option [value]="iv" [selected]="iv === interval()">{{ iv }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label for="e-source">Source</label>
+          <select
+            id="e-source"
+            class="input"
+            [value]="source()"
+            (change)="source.set($any($event.target).value)"
+          >
+            @for (s of sources; track s.value) {
+              <option [value]="s.value" [selected]="s.value === source()">{{ s.label }}</option>
+            }
+          </select>
+        </div>
+      </div>
+      @if (ensureSubmitted() && windowError(); as e) {
+        <p class="error">{{ e }}</p>
+      }
+      <div class="form-actions">
+        <button
+          type="submit"
+          class="btn"
+          [disabled]="ensuring() || !u || !canRefresh()"
+          [attr.aria-busy]="ensuring()"
+        >
+          {{ ensuring() ? 'Fetching…' : 'Ensure data' }}
+        </button>
+        <app-permission-note permission="lab.run" />
+      </div>
+      @if (ensureResult(); as r) {
+        <dl class="facts compact result" aria-label="Ensure data result">
+          <div>
+            <dt>Requested</dt>
+            <dd class="num">{{ r.tickers_requested ?? 0 | num: { digits: 0 } }}</dd>
+          </div>
+          <div>
+            <dt>Fetched</dt>
+            <dd class="num">{{ r.tickers_fetched ?? 0 | num: { digits: 0 } }}</dd>
+          </div>
+          <div>
+            <dt>Up to date</dt>
+            <dd class="num">{{ r.tickers_up_to_date ?? 0 | num: { digits: 0 } }}</dd>
+          </div>
+          <div>
+            <dt>Failed</dt>
+            <dd class="num" [class.loss]="!!r.tickers_failed">
+              {{ r.tickers_failed ?? 0 | num: { digits: 0 } }}
+            </dd>
+          </div>
+          <div>
+            <dt>Window</dt>
+            <dd class="num">{{ r.clipped_start ?? r.start }} to {{ r.end }}</dd>
+          </div>
+        </dl>
+        @if (r.warnings?.length) {
+          <ul class="warnings" aria-label="Ensure data warnings">
+            @for (w of r.warnings; track $index) {
+              <li>{{ w }}</li>
+            }
+          </ul>
+        }
+        @if (r.failed?.length) {
+          <p class="muted failed">Failed: {{ r.failed!.join(', ') }}</p>
+        }
+      }
+    </form>
+  </section>
+
+  @if (u) {
+    <section class="panel span-12" aria-labelledby="spec-title">
+      <div class="panel-head">
+        <h2 id="spec-title">Definition</h2>
+      </div>
+      <pre class="panel-body spec">{{ specJson() }}</pre>
+    </section>
+  }
+</div>

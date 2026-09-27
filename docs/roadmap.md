@@ -7,13 +7,15 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | Phase | Status |
 |-------|--------|
 | 1 to 8 | Done, except 5.4 end-to-end tests (now 13.14). 8.4 moved to 11.8. |
-| 9 | Waves 1, 2 and 4 done. Wave 3 done except 9.3.4. Wave 5 not started. Details under Phase 9. |
+| 9 | Waves 1 to 4 done. Wave 5: 9.5.1 to 9.5.5 done, 9.5.6 open. Details under Phase 9. |
+| 10 | Done: 10.1 to 10.5. |
 | 11 | Done except parts of 11.6. 11.8 is this docs refresh. |
-| 12 | Mostly done. Open: 12.10 soak test, three runbooks (tick failed, broker unreachable, disk full). |
+| 12 | Mostly done. Open: three runbooks (tick failed, broker unreachable, disk full). |
 | 13 | Partly done: PWA and push, command palette, in-app help, accessibility and locale. The rest is planned. |
 | 14 | Done except 14.9 lab offload. |
-| 15 | Partly done: design, data model, connection seam, notifications backend. Per-portfolio books are built but not wired into the tick yet. |
-| 16, 17 | Planned. |
+| 15 | Mostly done: design, data model, connection seam, insights, automation modes, notifications, home screen. The tick trades one book per portfolio. Open: order placement for real providers. |
+| 16 | 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. |
+| 17 | Planned. |
 
 Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor-agnostic schemas, third-party libraries wrapped behind a seam). Live-network tests go under `tests/integration/live/` behind `@pytest.mark.live`.
 
@@ -130,11 +132,15 @@ About 60 trading books from three reading lists and the Axon "100 books" series,
 
 - Wave 1: done.
 - Wave 2: done. The tick runs its books through the shared pipeline; backtests use it only when `BacktestConfig.construction` is set, which the lab and API don't do yet.
-- Wave 3: 9.3.1, 9.3.2, 9.3.3, 9.3.5 and 9.3.6 done. The rules are set under `[production.risk.rules.*]`, the circuit breaker and operational halt are off by default, and the quit rule alerts after every tick (`[production.quit_rule]`). Halts are listed and cleared with `stonks halts`. The lab runs the data preflight before tuning, and `stonks audit statements` checks the statements (also after `stonks ingest fundamentals`). 9.3.4 not started.
+- Wave 3: done. The rules are set under `[production.risk.rules.*]`, the circuit breaker and operational halt are off by default, and the quit rule alerts after every tick (`[production.quit_rule]`). Halts are listed and cleared with `stonks halts`. The lab runs the data preflight before tuning, and `stonks audit statements` checks the statements (also after `stonks ingest fundamentals`). 9.3.4 records the decision price and context on every order and reports implementation shortfall and the trade journal with `stonks tca`, `/api/tca` and MCP tools. Round trips with MAE and MFE in the journal are not built yet.
 - Wave 4: done. 9.4.1 to 9.4.4 (`quant_momentum`, `stocks_on_the_move` with `atr_parity`, `ewmac_trend`, `tsmom`, `ath_trend`, `TrailingStopWrapper`, `quant_value`), 9.4.5 (`RegimeFilter`) and 9.4.6 (legacy defaults and metadata backfill).
-- Wave 5: not started.
+- Wave 5: 9.5.1 done. The `hrp`, `erc` and `mean_variance_costs` constructors, four covariance estimators and the effective number of bets are in `portfolio/`. They read `returns_history`, which the tick and the backtest don't fill yet, so today they fall back to each name's own volatility.
+- Wave 5: 9.5.4 done. After each real tick the `risk_monitor` hook writes daily VaR and ES per portfolio and per strategy sleeve to `risk_snapshots` (SQLite `019`), with the violation ratio, a Kupiec test and the alpha-decay check. Alerts go to the portfolio owner, `health` warns on a bad violation ratio, and `/api/risk/live`, `/api/risk/snapshots` and two MCP tools read them. The `pool_correlation` survival test is in the registry but in no preset yet. The monitor reads `[production.risk_monitor]` and `[production.decay]`. `registry audit` with BH is not built.
+- Wave 5: 9.5.2 done. Purged and combinatorial purged k-fold and `CVObjective` (`lab/cv.py`), the `cpcv` test (in `promotion`), `LabDataset.train_segments`, the triple-barrier and uniqueness toolkit (`features/labels.py`), bet sizing and sample weights (`features/ml.py`). `trendline_meta_label` fits each CV segment separately, weights trades by uniqueness, reports a purged CV score and trades above the barriers' break-even probability. The lab objectives `cv_sharpe`, `cv_cagr` and `cv_final_return` tune on purged folds through `CVObjective` (CLI, API, MCP and the Lab page).
+- Wave 5: 9.5.3 done. `MarkovSwitchingRegime` (statsmodels, wrapped, with our own Hamilton filter) in `features/regimes.py`, the `latent_regime_filter` wrapper, the `vix_term_structure` condition (`features/regime_vix.py`) and Yahoo's `vix_spot` and `vix_3m` macro series.
+- Wave 5: 9.5.5 done. The `crisis` test (in `promotion`), the `stress` test (block bootstrap or GARCH-t filtered historical simulation, in no preset) and the `VolForecaster` seam (`ewma`, `garch` wrapping `arch`, `har_rv`) in `features/vol_forecast.py`.
 
-Migration numbers in the tables below were plans. The landed ones are SQLite `008_lab_trials`, `009_status_changes`, `014_position_attribution` and `016_risk_halts`, and DuckDB `014_statement_flags` and `015_universe_membership`. New migrations take the next free number.
+Migration numbers in the tables below were plans. The landed ones are SQLite `008_lab_trials`, `009_status_changes`, `014_position_attribution`, `016_risk_halts` and `017_tca`, and DuckDB `014_statement_flags` and `015_universe_membership`. New migrations take the next free number.
 
 This phase is roadmap item 7.7. It builds the backlog in `docs/research/book-lessons.md` (items BL-01 to BL-49) against the rules in `docs/principles.md`.
 
@@ -194,10 +200,22 @@ Integration 1: realistic costs by default (BL-13), `[lab.parallel]`, the CLI and
 |----|-------|------|
 | 9.5.1 Optimising constructors (BL-44) | Covariance estimators, HRP, ERC, mean-variance with costs (cvxpy, wrapped), effective number of bets. | `portfolio/{covariance,hrp,erc,optimizers,diversification}.py` |
 | 9.5.2 ML hygiene (BL-45) | Purged and combinatorial CV, CPCV test, triple-barrier and uniqueness toolkit, bet sizing. | `lab/cv.py`, `lab/survival/cpcv.py`, `features/labels.py`, `features/ml.py`, `strategies/examples/trendline_meta_label.py`, `lab/dataset.py` |
-| 9.5.3 Latent regimes (BL-46) | Markov-switching regime filter; VIX term-structure condition. | `features/regimes.py`, `strategies/latent_regime.py`, `features/regime_conditions_vix.py`, `ingest/sources/yahoo.py` |
-| 9.5.4 Live monitoring (BL-47) | VaR/ES with violation ratio, alpha-decay monitor, correlation-to-pool test. | `production/risk_metrics.py`, `production/decay.py`, `lab/survival/pool_correlation.py`, `store/migrations_sqlite/011_risk_snapshots.sql` |
+| 9.5.3 Latent regimes (BL-46) | Markov-switching regime filter; VIX term-structure condition. | `features/regimes.py`, `strategies/latent_regime.py`, `features/regime_vix.py`, `ingest/sources/yahoo.py` |
+| 9.5.4 Live monitoring (BL-47) | VaR/ES with violation ratio, alpha-decay monitor, correlation-to-pool test. | `production/risk_metrics.py`, `production/decay.py`, `lab/survival/pool_correlation.py`, `store/migrations_sqlite/019_risk_snapshots.sql` |
 | 9.5.5 Stress (BL-48) | Crisis windows, stress simulation, `VolForecaster` with GARCH (arch, wrapped). | `lab/survival/crisis.py`, `lab/survival/stress.py`, `features/vol_forecast.py` |
 | 9.5.6 Engineering guards (BL-49) | Point-in-time lake proxy, universe membership in engine and ranker, pyright, Hypothesis property tests, vectorised pre-screen. | `store/pit.py`, `lab/vectorized.py`, `pyrightconfig.json`, `backtest/engine.py`, `production/ranker.py`, `.github/workflows/ci.yml`, `tests/property/*` |
+
+## Phase 10: Repository, docs and data scale
+
+**Status:** 10.1 to 10.5 done.
+
+| WP | Scope | Status | Owns |
+|----|-------|--------|------|
+| 10.1 Public repo and branch protection | Protect `main`: changes land as squash PRs from `feat/roadmap` with CI green. Open the repo to the public. | Done. The repo is public after a full secret scan, and `main` needs a PR with passing `test` and `ui` checks, with no force push or deletion. | GitHub settings, `.github/workflows/` |
+| 10.2 GitHub wiki | Guides and the glossary on the wiki. `docs.yml` syncs the API and MCP references there. | Done. The wiki holds the guides and glossary, and `docs.yml` syncs the API and MCP references on every merge to `main`. | `.github/workflows/docs.yml`, wiki |
+| 10.3 API docs from code | `docs/api/rest.md` from the OpenAPI spec, `docs/api/mcp-tools.{json,md}` from the MCP tools, each route's permission as `x-permission`, Swagger UI on Pages. Tests fail when a checked-in copy is stale. | Done. | `api/openapi.py`, `api/docs.py`, `mcp/docs.py`, `docs/api/` |
+| 10.4 Parquet bar store | `BarStore` seam with the DuckDB table and hive-partitioned Parquet files that other processes can read while `stonks serve` holds the lake. `bars_migrate` moves the bars and switches. | Done. | `store/bars.py`, `store/bars_migrate.py`, `[lake.bars]` |
+| 10.5 Dynamic universes and on-demand tickers | Stored universes (list, exchange, rule, index) with point-in-time membership, index history import, and `DataEnsurer` that fetches only missing bars. Wired into settings (`[ensure]`, `[production].universe` as an id), the tick, `stonks universe` and `stonks lab run --universe-id --ensure-data`, API lab runs (`universe_id`, `ensure_data`), MCP and a daily scheduled refresh. | Done. The console universes page is still open. | `universes/`, `ingest/ensure.py`, `production/universe.py`, `app/universes.py`, `docs/universes.md` |
 
 ## Phase 11: Console and platform follow-ups
 
@@ -220,9 +238,8 @@ Found while building the console and merging Waves 2 and 3.
 
 **Status:**
 
-- Done: 12.1 calendars, 12.2 scheduler (`stonks schedule`), 12.3 dead-man's switch and observability (deadlines, pings, `GET /metrics`, probes, and the backup, push delivery and sync jobs), 12.4 backups (`stonks backup`, and `POST /api/backups` while the server holds the lake), 12.5 data quality and fallback (`[ingest.quality]`, `[ingest.fallback]`), 12.6 kill switch (`stonks halts kill`, the API, the MCP `engage_kill_switch` tool, resume needs a typed confirmation), 12.7 Docker and Compose, 12.8 security checks in CI, 12.9 releases, 12.12 repo hygiene.
+- Done: 12.1 calendars, 12.2 scheduler (`stonks schedule`), 12.3 dead-man's switch and observability (deadlines, pings, `GET /metrics`, probes, and the backup, push delivery and sync jobs), 12.4 backups (`stonks backup`, and `POST /api/backups` while the server holds the lake), 12.5 data quality and fallback (`[ingest.quality]`, `[ingest.fallback]`), 12.6 kill switch (`stonks halts kill`, the API, the MCP `engage_kill_switch` tool, resume needs a typed confirmation), 12.7 Docker and Compose, 12.8 security checks in CI, 12.9 releases, 12.10 paper soak (`tests/soak`, a smoke run in the default suite, the long run weekly in `soak.yml`), 12.12 repo hygiene.
 - Partly: 12.11 (runbooks for stale data, restore and failed deploys).
-- Not started: 12.10 soak test.
 
 What it takes to run Stonks unattended every day and trust it.
 
@@ -243,7 +260,7 @@ What it takes to run Stonks unattended every day and trust it.
 
 ## Phase 13: Trader-ready UX
 
-**Status:** done: 13.3 (PWA and push opt-in; live job updates), 13.10, 13.11, 13.13. 13.1 has its data model (users, roles) but no login yet. The rest is planned.
+**Status:** done: 13.3 (PWA and push opt-in; live job updates), 13.10, 13.11, 13.13. 13.1 has its data model (users, roles) but no login yet. The rest is planned. 13.4 and 13.6 have their API (`/api/universes`, `/api/lab/sweeps`); their pages are open.
 
 What a trader needs to use the console daily without the CLI.
 
@@ -288,8 +305,10 @@ Decided: one small always-on cloud VM (for example Hetzner Cloud or DigitalOcean
 **Status:**
 
 - Done: 15.1 design; 15.2 data model (migration 010, default owner `usr_owner` and portfolio `pf_default`, scoped services, golden single-owner tick); 15.3 read-only connection seam with Alpaca, SnapTrade and fake providers (`python -m stonks.connections`); the 15.6 notification backend (outbox, Web Push, email, webhook, quiet hours, preferences).
-- Partly: 15.5 (the tick loops over portfolio books and `load_tick_plan` builds them from paper and auto subscriptions, but the entrypoints still run the single default book; the notify hook, the auto checklist, trading through connections and the kill switch are open); 15.6 delivery works, but the tick does not enqueue signals yet.
-- Not started: per-user API and MCP tokens, 15.4 insights, 15.7 simple home screen.
+- Done: 15.5. The tick stores every scored strategy's signals and signal events with a plain reason (migration 020) and can score opted-in strategies on all cores. Per subscription, notify sends the events to the outbox, paper trades a simulated account (a broker portfolio gets its own paper account) and auto trades the connected account. Auto needs the checklist (20 paper days from `portfolio_runs`, a healthy connection that can trade, no halt) and a fresh second factor, pauses itself on a broker error, and obeys owner risk limits and the kill switch at every scope. The entrypoints build these per-portfolio books by default (`[production] books_from_subscriptions = true`). A promotion subscribes `pf_default` to the strategy (paper, or auto at an external broker, audited as `service:system`) and migration 022 did the same for the strategies already active, so the default book trades exactly as the old single book did. A parity test checks it. Still open: no provider but the fake one can place orders yet. 15.6 delivery works and the tick now enqueues signals.
+- Done: 15.4 insights. Any portfolio you own, a synced broker account too, shows allocation (asset class, sector, currency, ticker), exposure (gross, net, beta), P&L over periods, risk (volatility, drawdown, VaR, concentration) and which active strategies agree or disagree with each holding, and why. Routes under `/api/insights`, MCP tools `get_insights` and `get_strategy_agreement`. Admins see totals only.
+- Done: per-user API and MCP tokens. `stonks mcp` acts as the owner of `STONKS_MCP_TOKEN`, with that token's scopes. A test calls every MCP tool as several people and checks it is refused exactly when its REST route is.
+- Done: 15.7 simple home screen (portfolio, today’s signals, my strategies with the mode switch).
 
 Every trader gets a simple experience: connect a broker for insights, pick strategies, and choose whether Stonks acts or only notifies.
 
@@ -305,7 +324,7 @@ Every trader gets a simple experience: connect a broker for insights, pick strat
 
 ## Phase 16: Short selling
 
-**Status:** planned. Design: `docs/design/shorting.md`.
+**Status:** 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. Design and what changed from it: `docs/design/shorting.md`. A short book's paper broker charges borrow fees and debit interest for every day since the stored accrual date (migration 023, `production/financing.py`). Still open: the margin-call notification, a lake table of borrow rates, and broker-reported borrow.
 
 | WP | Scope |
 |----|-------|
@@ -349,6 +368,40 @@ The last phase. The whole project is reviewed file by file, fixed, tested throug
 | 18.6 Usability and polish | Walk every flow as a new trader, cut steps and jargon, fix copy, loading and error states, mobile, accessibility and performance until the gates pass. |
 | 18.7 Feature completeness | A capability matrix of API, console, CLI and MCP. Fill every gap and add the parity test. |
 | 18.8 Release | Changelog, docs and wiki final pass, version 1.0 tag and a deploy dry run. |
+
+**Gate status (integration step 7, measured 2026-09-27)**
+
+CI enforces each gate at today's value where it is still below the target, so it passes now and the floor only moves up. Raise a floor in the same change that lifts coverage.
+
+| Gate | Target | Today | Enforced by |
+|---|---|---|---|
+| Coverage overall (coverage.py's combined line and branch number) | 90 | 94.3 (lines 95.8, branches 88.0) | `fail_under = 90` in `pyproject.toml` |
+| Coverage `core/` | 95 | 98.5 | floor 95 (the target) in `tools/coverage_gate.py` |
+| Coverage `production/` | 95 | 95.9 | floor 95 |
+| Coverage `execution/` | 95 | 96.8 | floor 95 |
+| Coverage `auth/` | 95 | 98.5 | floor 95 |
+| Coverage `portfolio/` | 95 | 96.5 | floor 95 |
+| Pyright basic over `src/stonks` | 0 errors | 493 errors, all in the baseline (14 added in step 7: pandas typing noise in untouched files after the statsmodels and arch dependencies came in; errors in new code were fixed) | `tools/pyright_gate.py` fails on any error not in `tools/pyright-baseline.json` |
+| Surviving mutants on the money paths | under 10% | 19.8% over six targets (the risk rules still to run in full) | `tools/mutation.py`, weekly and manual (`.github/workflows/mutation.yml`) |
+| Ruff | no ignore without a comment | met | `[tool.ruff.lint]`, every ignore says why |
+| End to end, desktop and 375px phone | every journey passes | 26 passed (13 per viewport), 0 xfail, no known app issue | `uv run pytest -m e2e tests/e2e`, `.github/workflows/e2e.yml` |
+| axe violations | 0 | 0 on every page, both viewports, admin and trader | `test_accessibility.py`, `KNOWN_AXE` is empty |
+
+First mutation run per target (cosmic-ray, mutants inside type annotations skipped as equivalent):
+
+| Target | Module | Mutants run | Killed | Survived | Surviving |
+|---|---|---|---|---|---|
+| client_ids | `execution/orders.py` | 21 | 19 | 2 | 9.5% |
+| orders | `portfolio/orders.py` | 397 | 282 | 63 | 18.3% |
+| fills | `backtest/fills.py` | 393 | 188 | 108 | 36.5% |
+| risk | `production/risk.py` | 157 | 157 | 0 | 0% |
+| ledger_sync | `execution/reconcile.py` | 80 | 58 | 20 | 25.6% |
+| pnl | `production/pnl.py` | 184 | 127 | 12 | 8.6% |
+| rules | `production/rules/` | 136 of 2485 (sample) | 85 | 37 | about 30% |
+
+"Mutants run" includes incompetent ones (code that no longer runs), which count neither way. The rate is survived over killed plus survived: 205 of 1036, 19.8%. The first run found a real gap: the non-default portfolio branch of `make_client_id` had no unit test (now covered, 47.6% to 9.5%). The risk rules have about 2500 mutants, too many for a local run. The weekly job measures them. Next: kill the surviving fills, orders and ledger mutants with tests until every target is under 10%.
+
+Pyright strict plan. Strict mode comes one package at a time, smallest first, each in its own change that also shrinks the baseline: `core/`, then `execution/`, `auth/`, `portfolio/` and last `production/`. Each step adds the package to `strict` in `[tool.pyright]`. Most strict errors are unknown types from untyped libraries (pandas, alpaca-py, exchange_calendars, pywebpush), so each step adds `pandas-stubs` or a typed wrapper at the seam and uses `dict[str, Any]` instead of bare `dict`. The basic-mode baseline is burned down alongside: pandas `itertuples()` rows, constructor settings read from the base class, and pydantic models built with no arguments.
 
 ## Execution order
 

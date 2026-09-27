@@ -12,7 +12,7 @@ Enforced: BL-26 adds a `hypothesis` card to every strategy. BL-04 stores it with
 
 **P2. Every trial is counted, and a Sharpe ratio is never reported without its trial count.**
 Why: search a big enough parameter space and a high Sharpe always turns up. Overfitting is what normally happens, not a rare accident (López de Prado, *AFML*; Bailey et al.; Kahneman's "what you see is all there is").
-Enforced: today `LabRunner.run` logs the trial count and then throws the history away (`lab/runner.py:62-67`). BL-04 keeps a trial ledger, with a running count for each strategy class. BL-14 uses it.
+Enforced: BL-04's trial ledger (`lab/trials.py`, tables `lab_runs` and `lab_trials`) records every lab run with a running trial count for each strategy class. BL-14's deflated Sharpe reads that count.
 
 **P3. The best of many noisy estimates is biased upward, so it is shrunk before anyone acts on it.**
 Why: the winner's curse applies to tuner winners and to the top-ranked pick each tick alike (Kahneman; Bailey and López de Prado, deflated Sharpe).
@@ -38,23 +38,23 @@ Enforced: `oos`, `walk_forward` and OOS-mode MCPT score only data the tuner neve
 
 **P8. Pass/fail gates are statistical, not fixed thresholds.**
 Why: six months at Sharpe 0.5 can't be told apart from zero. A gate has to account for sample length, skew, fat tails and autocorrelation (Bailey and López de Prado, PSR and MinTRL; Lo 2002; Carver).
-Enforced: today `OutOfSampleTest` passes at a flat Sharpe of 0.5 (`lab/survival/oos.py:12,26`). BL-16 switches it to PSR ≥ 0.95 with a minimum trade count.
+Enforced: `OutOfSampleTest` gates on PSR ≥ 0.95 with a minimum trade count (BL-16). PSR, DSR and MinTRL take the Sharpe variance at the observed Sharpe with T - 1 bars (`stats/sharpe.py`), so negative skew and fat tails lower the PSR and lengthen the MinTRL (RS-08). `mode="sharpe"` keeps the old flat-Sharpe gate as an explicit opt-out.
 
 **P9. Train and test windows are separated by an embargo at least as long as the label horizon.**
 Why: overlapping labels and serially correlated features leak across a boundary with no gap (López de Prado, *AFML* ch. 7; Chan, *Machine Trading*).
-Enforced: `LabDataset.embargo_bars` skips that many trading bars between the train and validation windows (`[lab] embargo_bars`, `stonks lab run --embargo-bars`, the API's `embargo_bars`), raised per strategy to its `label_horizon_bars` (`LabDataset.for_strategy`). Walk-forward folds and walk-forward MCPT use the same embargo (BL-20).
+Enforced: `LabDataset.embargo_bars` skips that many trading bars between the train and validation windows (`[lab] embargo_bars`, `stonks lab run --embargo-bars`, the API's `embargo_bars`), raised per strategy to its `label_horizon_bars` (`LabDataset.for_strategy`). A wrapper reports the larger of its own and its inner strategy's label horizon and required history (RS-02). Walk-forward folds and walk-forward MCPT use the same embargo (BL-20). `LabDataset` refuses a `train_ratio` outside 0 to 1 and any window that leaves no validation data.
 
 **P10. Walk-forward is the default evidence for promotion.**
 Why: optimising over one split is close to worthless. Only the stitched out-of-sample segments count (Davey; Kaufman).
-Enforced: the `promotion` preset, the default suite of every registering lab run (API, MCP and CLI), runs `walk_forward`. It requires walk-forward efficiency ≥ 0.5 (`[lab.walk_forward] min_wfe`) and hands its stitched out-of-sample segments to `mc_trades` (BL-20). The go-live gate's `promotion_preset` check wants a stored report for every test of that preset.
+Enforced: the `promotion` preset, the default suite of every registering lab run (API, MCP and CLI), runs `walk_forward`. It requires walk-forward efficiency ≥ 0.5 (`[lab.walk_forward] min_wfe`) and hands its stitched out-of-sample segments to `mc_trades` (BL-20). The go-live gate's `promotion_preset` check wants a stored report for every test of that preset. A walk-forward run with no finite fold score fails.
 
 **P11. Judge strategies on trades, not bars.**
 Why: trade-level win rate, payoff, expectancy and the order of trades decide survival. A profit factor computed from per-bar returns is a different number (Davey; Ehlers and Way).
-Enforced: today there is no trade list, and the profit factor is per-bar (`backtest/report.py:43-57,107-114`). BL-02 adds the trade ledger. BL-16 requires at least 20 trades. BL-17 adds Monte Carlo over the trade sequence.
+Enforced: `backtest/trades.py` keeps the trade ledger (BL-02). A backtest trades one portfolio, so lots pair per ticker: a sell closes its own strategy's lots first, then any other lot of the ticker (RS-04). The strategy key is only a label. BL-16 requires at least 20 trades. BL-17 adds Monte Carlo over the trade sequence.
 
 **P12. No look-ahead, ever.**
 Why: one leaked bar or one early statement invalidates the whole result (McKinney; Graham and Dodd, via Gray and Carlisle's point-in-time rules; Hamilton, who warns that smoothed regime probabilities use future data).
-Enforced: today fills happen at the next bar's open (`backtest/engine.py:11-24`), statements are read by `filing_date`, and macro data carries publication lags. BL-49 adds a point-in-time lake proxy, plus a test that plants a future bar for every catalogued strategy.
+Enforced: today fills happen at the next bar's open (`backtest/engine.py:11-24`), statements are read by `filing_date`, and macro data carries publication lags. BL-49 adds a point-in-time lake proxy, plus a test that plants a future bar for every catalogued strategy. A strategy sees a bar only after it closes (`strategies._common.visible_cutoff`), and the catalogue-wide planted-future-bar test (`tests/unit/test_strategy_lookahead.py`) covers intraday decisions against daily reads (RS-03).
 
 **P13. Signals and returns use split- and dividend-adjusted prices.**
 Why: a 4:1 split looks like a 75% crash and ignored dividends understate total return, so both corrupt signals and equity curves (Chan; Clenow; Wilcox and Crittenden).
@@ -62,7 +62,7 @@ Enforced: today the engine and the bar cache read raw `close` (`backtest/engine.
 
 **P14. Universes are point in time, delisted names included.**
 Why: a universe of names that are alive today inflates every cross-sectional backtest (Malkiel; Clenow; Covel).
-Enforced: BL-37 (membership table and survivorship warning) and BL-49 (engine wiring).
+Enforced: BL-37 (membership table and survivorship warning). A backtest with a `universe_id` (`BacktestConfig.universe_id`, set from the lab dataset) trades a name only on days it is a member and sells a holding that leaves (RS-05). The preflight warns about tickers that are never members in the window.
 
 ## 3. Benchmarking
 
@@ -76,13 +76,13 @@ Enforced: BL-22 adds a `benchmark_relative` survival test that reports beta, alp
 
 **P17. A new strategy must bring something the pool lacks.**
 Why: many weak, uncorrelated streams beat one strong one. A candidate that correlates at 0.7 or more with an existing strategy adds cost and no breadth (Tulchinsky; Meucci; Dalio, via Schwager).
-Enforced: BL-47 (correlation-to-pool check) and BL-12 (per-strategy attribution).
+Enforced: the `pool_correlation` survival test (`lab/survival/pool_correlation.py`, BL-47) fails a candidate above 0.7 correlation with an active strategy unless its IR is 10% better. It is opt in, not in a preset yet. BL-12 attributes P&L per strategy, and the `risk_monitor` hook scores each strategy sleeve daily.
 
 ## 4. Costs and execution realism
 
 **P18. Costs are on by default in the lab, the tick and the API.**
 Why: a strategy that dies once costs are counted was never a strategy (Chan; Bogle; Carver).
-Enforced: today `[backtest.costs]` is all zeros (`config/default.toml`), and the tick builds a flat-slippage broker (`production/tick.py:439-454`). Roadmap 8.2 is putting the cost model into the tick now. BL-13 then makes realistic costs the default.
+Enforced: BL-13. `[backtest.costs]` in `config/default.toml` holds realistic costs by default, and the lab, backtests and the simulated tick broker all use that cost model. A run with all-zero costs logs a `zero_costs` warning and has to ask for it (`--cost-model zero`).
 
 **P19. A strategy must survive twice the modelled costs, and costs may eat at most a third of the pre-cost Sharpe.**
 Why: cost estimates are uncertain, and Carver's "speed limit" caps turnover (Chan; Carver; Wilmott).
@@ -94,7 +94,7 @@ Enforced: today impact is `impact_bps·sqrt(q/volume)` with no volatility term a
 
 **P21. The backtest fills orders the way we trade live.**
 Why: a backtest filled at the open and a live order filled at some intraday price measure different things (Johnson).
-Enforced: today the backtest fills at the next open, but the simulated tick fills at the latest close (`production/tick.py:450-456`). Roadmap 8.2 (in progress) brings cost-model parity. BL-32 records any remaining convention gap in TCA. Alpaca auction orders are deferred because the owner does not want Alpaca yet.
+Enforced: the backtest and the simulated tick share one cost model. The one convention gap left is the fill price: the backtest fills at the next bar's open, and the simulated tick fills at the latest close (the tick's broker factory in `production/tick.py`). BL-32 records that gap in TCA. Alpaca auction orders are deferred because the owner does not want Alpaca yet.
 
 **P22. Every order records what it was supposed to cost and what it did cost.**
 Why: you can't calibrate a cost model you never measure (Kissell; Bacidore; Perold's implementation shortfall).
@@ -138,7 +138,7 @@ Enforced: today alpha and sizing are fused in each strategy's `decide`. BL-08 ad
 
 **P31. Strategies are combined, never picked winner-take-all.**
 Why: IR ≈ IC·√breadth. One winner per tick means a breadth of about one, and the book churns whenever the winner changes (Grinold and Kahn; Carver; Dalio).
-Enforced: today the tick trades only the owner of `ranked[0]` (`production/tick.py:237-244`). BL-12 fixes this.
+Enforced: BL-12. The tick and the backtest share `portfolio.pipeline.build_orders`, and every book picks a `PortfolioConstructor`. The default `single_winner` still trades one strategy. `equal_weight_top_n`, `inverse_vol`, `vol_target`, `atr_parity` and the optimising constructors combine several.
 
 **P32. Scores go on one scale before they are compared.**
 Why: raw `estimate_return` units differ by strategy. `BuyAndHold` returns 1.0 (`strategies/examples/buy_and_hold.py:44`) and beats any realistic forecast (Grinold and Kahn: α = σ·IC·z; Carver's forecast scaling, mean |f| = 10, capped at 20).
@@ -156,7 +156,7 @@ Enforced: today `MacroRegimeFilter` and `FeatureRegimeFilter` (`strategies/macro
 
 **P35. Every strategy must be seen through at least one crisis before promotion, where data allows.**
 Why: a backtest that skips a crash is lying, and risk models fail exactly when they're needed (Kindleberger; Danielsson).
-Enforced: BL-48 (crisis windows and stress simulation). The EODHD free tier's one-year limit makes this a data requirement (BL-37 preflight).
+Enforced: the `crisis` test (in the `promotion` preset) compares the drawdown in each named crisis window with the benchmark's and reports `crisis_coverage`. The `stress` test replays 200 simulated validation windows (BL-48). The EODHD free tier's one-year limit makes this a data requirement (BL-37 preflight).
 
 **P36. Diversification is not a crash hedge: correlations go to one in panics.**
 Why: contagion (Kindleberger; Harris on liquidity vanishing).
@@ -186,7 +186,7 @@ Enforced: today status changes carry no reason and no audit row (`registry/store
 
 **P42. The machine keeps the trade journal.**
 Why: a generated review beats looking at the equity curve and reacting to the latest move (Elder; Steenbarger).
-Enforced: BL-32 (decision context on every order, `stonks journal`).
+Enforced: BL-32 (decision context on every order, `stonks tca journal` with notes).
 
 ## 9. Engineering and scalability
 
@@ -200,11 +200,11 @@ Enforced: BL-10.
 
 **P45. Parallelise at the coarsest independent grain, with deterministic seeds for each task and one DuckDB connection per worker process.**
 Why: tuning trials, permutations, walk-forward folds, noise lakes and per-ticker work are embarrassingly parallel. Results must not depend on the worker count (owner requirement; Slatkin).
-Enforced: today everything runs serially, apart from the API's thread pool (`app/jobs.py:285`). Roadmap 6.6 is adding the `lab/parallel.py` process-pool helper for MCPT now. BL-07 extends that same helper to tuners, folds and noise lakes. There is no second pool.
+Enforced: `lab/parallel.py` is the one process pool for tuners, folds, permutations and noise lakes (BL-07). Worker snapshots and modified lakes hold every ticker a run reads: the universe, each strategy's `data_tickers()` (a reference market, an index filter, a regime condition) and the benchmark (`lab.dataset.data_tickers`, RS-01). Tuning gives the same trials for one worker and many.
 
 **P46. Every lab result can be reproduced.**
 Why: a verdict you can't rerun can't be trusted or debugged (Slatkin; Strimpel; López de Prado).
-Enforced: today `RandomTuner` is seeded (`lab/tuning/random.py:19-25`). BL-06 records the git SHA, a config hash, a data fingerprint and the seeds.
+Enforced: today `RandomTuner` is seeded (`lab/tuning/random.py:19-25`). BL-06 records the git SHA, a config hash, a data fingerprint and the seeds. The data fingerprint hashes open, high, low, close, adjusted close and volume, 550 days of warm-up history, and every split and dividend row.
 
 **P47. Third-party libraries sit behind our seams, and statistics use numpy and scipy.**
 Why: vendor types must not leak (CLAUDE.md). The ADIA Lab reference code shows that PSR, DSR and PBO need nothing heavier.

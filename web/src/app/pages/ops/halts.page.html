@@ -1,0 +1,221 @@
+<app-page-header
+  title="Halts"
+  description="Halts stop new orders before they reach the broker. The kill switch is the manual one."
+>
+  <button
+    actions
+    type="button"
+    class="btn"
+    [disabled]="halts.isLoading()"
+    [attr.aria-busy]="halts.isLoading()"
+    (click)="halts.reload()"
+  >
+    {{ halts.isLoading() ? 'Refreshing…' : 'Refresh' }}
+  </button>
+</app-page-header>
+
+<div class="page-grid">
+  <!-- Active ---------------------------------------------------------------->
+  <section class="panel span-12" aria-labelledby="active-title">
+    <div class="panel-head">
+      <h2 id="active-title">Active halts</h2>
+      @if (halts.hasValue()) {
+        @if (killOn()) {
+          <app-status-pill status="error" tone="negative" label="Kill switch on" />
+        } @else if (active().length) {
+          <app-status-pill status="warn" tone="warn" [label]="active().length + ' active'" />
+        } @else {
+          <span class="muted">None active</span>
+        }
+      }
+    </div>
+    @if (halts.error(); as err) {
+      <app-error-state title="Could not load halts" [error]="err" (retry)="halts.reload()" />
+    } @else if (!halts.hasValue()) {
+      <app-loading-state label="Loading halts" [rows]="2" />
+    } @else if (active().length === 0) {
+      <app-empty-state
+        title="Trading is not halted"
+        message="Halts appear here when the kill switch is on, a circuit breaker trips, or health finds stale data."
+      />
+    } @else {
+      <app-data-table
+        caption="Active halts"
+        [rows]="active()"
+        [columns]="activeColumns"
+        [rowKey]="haltKey"
+        [initialSort]="{ key: 'tripped_at', dir: 'desc' }"
+      >
+        <ng-template appCell="kind" [appCellOf]="active()" let-h>
+          <app-status-pill
+            [status]="h.kind === 'kill' ? 'error' : 'warn'"
+            [label]="kindLabel[h.kind]"
+          />
+        </ng-template>
+        <ng-template appCell="action" [appCellOf]="active()" let-h>
+          <div class="cell-action">
+            @if (action(h) === 'resume') {
+              <button
+                type="button"
+                class="btn btn-danger"
+                [disabled]="busyId() === h.id || !session.can(endPermission(h))"
+                [attr.aria-busy]="busyId() === h.id"
+                (click)="resume(h)"
+              >
+                Resume trading
+              </button>
+            } @else {
+              <button
+                type="button"
+                class="btn"
+                [disabled]="busyId() === h.id || !session.can(endPermission(h))"
+                [attr.aria-busy]="busyId() === h.id"
+                (click)="clear(h)"
+              >
+                Clear
+              </button>
+            }
+            <app-permission-note [permission]="endPermission(h)" />
+          </div>
+        </ng-template>
+      </app-data-table>
+    }
+  </section>
+
+  <!-- Kill switch ----------------------------------------------------------->
+  <section class="panel span-12 kill" aria-labelledby="kill-title">
+    <div class="panel-head">
+      <h2 id="kill-title">Kill switch</h2>
+    </div>
+    <form class="panel-body" novalidate (submit)="$event.preventDefault(); engage()">
+      <p class="muted intro">
+        Stops new orders at once, from the next trading run on. Resuming needs the typed words
+        <strong>RESUME TRADING</strong> and a fresh second factor.
+      </p>
+      <div class="form-grid form-grid-2">
+        <fieldset class="scope">
+          <legend>Scope</legend>
+          @if (canKillGlobal()) {
+            <label class="check">
+              <input
+                type="radio"
+                name="kill-scope"
+                value="global"
+                [checked]="scope() === 'global'"
+                (change)="scope.set('global')"
+              />
+              Every portfolio
+            </label>
+          }
+          <label class="check">
+            <input
+              type="radio"
+              name="kill-scope"
+              value="portfolio"
+              [checked]="scope() === 'portfolio'"
+              (change)="scope.set('portfolio')"
+            />
+            One portfolio
+          </label>
+          @if (canKill() && !canKillGlobal()) {
+            <p class="hint">Only admins can stop every portfolio at once.</p>
+          }
+        </fieldset>
+        @if (scope() === 'portfolio') {
+          <div class="field">
+            <label for="kill-portfolio">Portfolio</label>
+            @if (portfolioOptions().length) {
+              <select
+                id="kill-portfolio"
+                class="input"
+                [value]="portfolioId()"
+                (change)="portfolioId.set($any($event.target).value)"
+              >
+                @for (p of portfolioOptions(); track p.id) {
+                  <option [value]="p.id" [selected]="p.id === portfolioId()">{{ p.name }}</option>
+                }
+              </select>
+            } @else {
+              <input
+                id="kill-portfolio"
+                class="input"
+                spellcheck="false"
+                autocapitalize="off"
+                aria-describedby="kill-portfolio-hint"
+                [attr.aria-invalid]="submitted() && !!portfolioError()"
+                [value]="portfolioId()"
+                (input)="portfolioId.set($any($event.target).value)"
+              />
+              <p id="kill-portfolio-hint" class="hint">Your main portfolio is filled in.</p>
+            }
+            @if (submitted() && portfolioError(); as e) {
+              <p class="error">{{ e }}</p>
+            }
+          </div>
+        }
+        <div class="field span-all">
+          <label for="kill-reason">Reason</label>
+          <textarea
+            id="kill-reason"
+            class="input"
+            rows="2"
+            aria-describedby="kill-reason-hint"
+            [attr.aria-invalid]="submitted() && !!reasonError()"
+            [value]="reason()"
+            (input)="reason.set($any($event.target).value)"
+          ></textarea>
+          <p id="kill-reason-hint" class="hint">Kept in the audit log.</p>
+          @if (submitted() && reasonError(); as e) {
+            <p class="error">{{ e }}</p>
+          }
+        </div>
+        <label class="check span-all">
+          <input
+            type="checkbox"
+            [checked]="flatten()"
+            (change)="flatten.set($any($event.target).checked)"
+          />
+          Flatten: stop buys only, let sells and exits through
+        </label>
+      </div>
+      <div class="form-actions">
+        <button
+          type="submit"
+          class="btn btn-danger"
+          [disabled]="engaging() || !canKill()"
+          [attr.aria-busy]="engaging()"
+        >
+          {{ engaging() ? 'Engaging…' : 'Engage kill switch' }}
+        </button>
+        <app-permission-note permission="killswitch.user" />
+      </div>
+    </form>
+  </section>
+
+  <!-- Past ------------------------------------------------------------------>
+  <section class="panel span-12" aria-labelledby="past-title">
+    <div class="panel-head">
+      <h2 id="past-title">Past halts</h2>
+    </div>
+    @if (halts.error()) {
+      <p class="panel-body muted">Past halts show once the list loads.</p>
+    } @else if (!halts.hasValue()) {
+      <app-loading-state label="Loading past halts" [rows]="3" />
+    } @else if (past().length === 0) {
+      <app-empty-state
+        title="No past halts"
+        message="Halts that were resumed, cleared or expired are listed here."
+      />
+    } @else {
+      <app-data-table
+        caption="Past halts"
+        [rows]="past()"
+        [columns]="pastColumns"
+        [rowKey]="haltKey"
+        [initialSort]="{ key: 'tripped_at', dir: 'desc' }"
+      />
+    }
+  </section>
+</div>
+
+<app-status-change-dialog />

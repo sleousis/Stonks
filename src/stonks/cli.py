@@ -7,7 +7,7 @@ To browse the lake interactively, run ``uv run duckdb -ui data/lake.duckdb``
 from __future__ import annotations
 
 import importlib
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, cast, get_args
 
@@ -41,6 +41,7 @@ from stonks.production.tick import BackdatedTickError, run_tick
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
+from stonks.universes.commands import app as universe_app
 
 _ASSET_CLASS_CHOICES: tuple[str, ...] = get_args(AssetClass)
 
@@ -91,6 +92,7 @@ app.add_typer(db_app, name="db")
 app.add_typer(ingest_app, name="ingest")
 app.add_typer(registry_app, name="registry")
 app.add_typer(ops_app, name="backup")
+app.add_typer(universe_app, name="universe")
 
 
 @app.command(
@@ -104,7 +106,7 @@ app.add_typer(ops_app, name="backup")
 )
 def schedule(ctx: typer.Context) -> None:
     """Built-in scheduler: run | next | runs | run-now JOB | check | metrics
-    (``stonks schedule --help`` for options; ``[scheduler]`` in the config)."""
+    (``stonks schedule --help`` for options; ``\\[scheduler]`` in the config)."""
     from stonks.scheduling.__main__ import main as schedule_main
 
     raise typer.Exit(code=schedule_main(list(ctx.args), prog="stonks schedule"))
@@ -513,7 +515,7 @@ def ingest_macro(
     ),
     source_id: str = _source_option(),
 ) -> None:
-    """Pull macroeconomic time series for one or more countries × indicators.
+    """Pull macroeconomic time series for one or more countries and indicators.
 
     Each (country, indicator) pair is one EODHD call; rows are upserted into
     the ``macro_indicators`` lake table keyed by
@@ -723,6 +725,7 @@ def registry_list(
         callback=_validate_asset_class,
     ),
 ) -> None:
+    """List registered strategies with their status."""
     settings = _settings()
     state, registry = _open_registry(settings)
     try:
@@ -756,6 +759,7 @@ def registry_list(
 
 @registry_app.command("show")
 def registry_show(strategy_id: str) -> None:
+    """Show one strategy: status, class, artifact folder and params."""
     settings = _settings()
     state, registry = _open_registry(settings)
     try:
@@ -902,6 +906,30 @@ def registry_history(strategy_id: str) -> None:
 # ---- production tick --------------------------------------------------------
 
 
+def _production_universe(
+    lake: Any,
+    settings: Any,
+    as_of: date | None,
+    tickers: str | None,
+    *,
+    required: bool = True,
+) -> list[str]:
+    """``--tickers``, else ``[production].universe`` (a list, or a universe
+    id resolved on ``as_of``, default today in UTC). ``required=False``
+    gives ``[]`` instead of an error."""
+    from stonks.production.universe import EmptyUniverseError, production_tickers
+
+    day = as_of or datetime.now(UTC).date()
+    try:
+        return production_tickers(
+            lake, settings.production.universe, day, tickers=_parse_tickers(tickers)
+        )
+    except EmptyUniverseError as exc:
+        if not required:
+            return []
+        raise typer.BadParameter(str(exc), param_hint="--tickers") from None
+
+
 @app.command("tick")
 def tick(
     dry_run: bool = typer.Option(False, "--dry-run", help="rank + log, place no orders"),
@@ -925,13 +953,15 @@ def tick(
         callback=_validate_asset_class,
     ),
 ) -> None:
-    """One-shot production tick. Rank active strategies × universe, pick a
-    winner, let it decide, execute idempotently through the broker, and
-    record everything in state. Designed to be invoked by cron/systemd."""
+    """One-shot production tick. Score every active strategy on the
+    universe, build each portfolio's orders with its constructor (the
+    default single_winner lets the top strategy decide), execute them
+    idempotently through the broker, and record everything in state.
+    Designed to be invoked by cron or systemd."""
     settings = _settings()
 
-    universe = _parse_tickers(tickers) or list(settings.production.universe)
-    if not universe:
+    configured = settings.production.universe
+    if not _parse_tickers(tickers) and not configured:
         raise typer.BadParameter(
             "production universe is empty — provide --tickers or set "
             "[production].universe in config/default.toml"
@@ -942,6 +972,7 @@ def tick(
     state, registry = _open_registry(settings)
     try:
         with _open_lake(settings.lake.path) as lake:
+            universe = _production_universe(lake, settings, as_of_date, tickers)
             # Apply --asset-class inside the same lake connection that
             # ``run_tick`` will use, so we don't open the lake twice.
             if asset_class is not None:
@@ -953,7 +984,9 @@ def tick(
                         "ingest profiles first or relax the filter"
                     )
 
-            runtime = build_tick_runtime(settings, universe)
+            # explicit tickers narrow the tick: other holdings are left alone
+            scoped = bool(_parse_tickers(tickers)) or asset_class is not None
+            runtime = build_tick_runtime(settings, universe, scoped=scoped)
             try:
                 result = run_tick(
                     state=state,
@@ -994,7 +1027,7 @@ def health(
         help="comma-separated tickers to check for fresh bars; overrides config.production.universe",
     ),
     notify: bool = typer.Option(
-        False, "--notify/--no-notify", help="send an alert through [notify] when unhealthy"
+        False, "--notify/--no-notify", help="send an alert through \\[notify] when unhealthy"
     ),
 ) -> None:
     """Check data freshness, stuck/failed runs and open risk halts. Stale data
@@ -1004,10 +1037,10 @@ def health(
     from stonks.production.health import notify_unhealthy
 
     settings = _settings()
-    universe = _parse_tickers(tickers) or list(settings.production.universe)
     state = SqliteState(settings.state.path)
     try:
         with _open_lake(settings.lake.path) as lake:
+            universe = _production_universe(lake, settings, None, tickers, required=False)
             report = run_health(state, lake, universe, settings.production.health)
     finally:
         state.close()
@@ -1086,15 +1119,15 @@ log = get_logger("stonks.cli")
 
 @app.command("serve")
 def serve(
-    host: str | None = typer.Option(None, "--host", help="bind address; default [api].host"),
-    port: int | None = typer.Option(None, "--port", help="bind port; default [api].port"),
+    host: str | None = typer.Option(None, "--host", help="bind address; default \\[api].host"),
+    port: int | None = typer.Option(None, "--port", help="bind port; default \\[api].port"),
     reload: bool = typer.Option(False, "--reload", help="auto-reload on code changes (dev)"),
 ) -> None:
     """Run the REST API (and the built UI from web/dist, if present) with uvicorn.
 
     Binds 127.0.0.1 by default. Every call needs a sign-in or an API token
     (docs/security.md). X-Forwarded-For is trusted only from
-    [api].trusted_proxies (env STONKS_API_TRUSTED_PROXIES).
+    \\[api].trusted_proxies (env STONKS_API_TRUSTED_PROXIES).
     """
     import uvicorn
 
@@ -1223,7 +1256,7 @@ def audit_statements_cmd(
     ),
 ) -> None:
     """Check the three statements against each other (BL-36) and replace
-    the audited tickers' rows in statement_flags. Tolerances: [audit]."""
+    the audited tickers' rows in statement_flags. Tolerances: \\[audit]."""
     settings = _settings()
     with _open_lake(settings.lake.path) as lake:
         lake.migrate()
@@ -1254,7 +1287,7 @@ def lab_ic(ctx: typer.Context) -> None:
 
 
 _LAB_TUNERS = ("grid", "random")
-_LAB_OBJECTIVES = ("sharpe", "cagr", "final_return")
+_LAB_OBJECTIVES = ("sharpe", "cagr", "final_return", "cv_sharpe", "cv_cagr", "cv_final_return")
 _LAB_COST_MODELS = ("config", "zero", "realistic")
 
 
@@ -1334,7 +1367,7 @@ _TEST_OPTION = typer.Option(
 _BENCHMARK = typer.Option(
     None,
     "--benchmark",
-    help="auto|EW|<ticker>|none; default [lab] benchmark",
+    help="auto|EW|<ticker>|none; default \\[lab] benchmark",
 )
 
 
@@ -1384,7 +1417,21 @@ def lab_run(
         help="JSON object of params to pin; tunable params left out are tuned",
     ),
     tickers: str | None = typer.Option(
-        None, "--tickers", help="comma-separated universe; default [production].universe"
+        None, "--tickers", help="comma-separated universe; default \\[production].universe"
+    ),
+    universe_id: str | None = typer.Option(
+        None,
+        "--universe-id",
+        help="stored universe: every member during the window, delisted names included",
+    ),
+    ensure_data: bool = typer.Option(
+        False, "--ensure-data", help="fetch missing bars first (\\[ensure] settings, --source)"
+    ),
+    source_id: str = typer.Option(
+        DEFAULT_SOURCE_ID,
+        "--source",
+        help=f"source for --ensure-data ({'|'.join(SOURCE_IDS)})",
+        callback=_validate_source,
     ),
     start: str = typer.Option(..., "--start", callback=_validate_iso_date, help="YYYY-MM-DD"),
     end: str = typer.Option(..., "--end", callback=_validate_iso_date, help="YYYY-MM-DD"),
@@ -1400,7 +1447,7 @@ def lab_run(
         "sharpe",
         "--objective",
         callback=_choice("--objective", _LAB_OBJECTIVES),
-        help="sharpe|cagr|final_return",
+        help="sharpe|cagr|final_return, or cv_ plus one of them to score on purged folds",
     ),
     tests: str | None = typer.Option(
         None,
@@ -1427,40 +1474,40 @@ def lab_run(
     mcpt_seed: int | None = typer.Option(None, "--mcpt-seed", help="default 17"),
     walk_forward: bool = typer.Option(False, "--walk-forward", help="add walk-forward test"),
     wf_splits: int | None = typer.Option(
-        None, "--wf-splits", min=1, help="default [lab.walk_forward].n_splits"
+        None, "--wf-splits", min=1, help="default \\[lab.walk_forward].n_splits"
     ),
     wf_test_days: int | None = typer.Option(
-        None, "--wf-test-days", min=1, help="default [lab.walk_forward].test_days"
+        None, "--wf-test-days", min=1, help="default \\[lab.walk_forward].test_days"
     ),
     wf_anchored: bool | None = typer.Option(
-        None, "--wf-anchored/--wf-rolling", help="default [lab.walk_forward].anchored"
+        None, "--wf-anchored/--wf-rolling", help="default \\[lab.walk_forward].anchored"
     ),
     wf_min_wfe: float | None = typer.Option(
         None,
         "--wf-min-wfe",
         min=0.0,
         max=1.0,
-        help="walk-forward efficiency gate; default [lab.walk_forward].min_wfe",
+        help="walk-forward efficiency gate; default \\[lab.walk_forward].min_wfe",
     ),
     wf_matrix: bool | None = typer.Option(
         None,
         "--wf-matrix/--no-wf-matrix",
-        help="also run the train x test matrix; default [lab.walk_forward].matrix",
+        help="also run the train x test matrix; default \\[lab.walk_forward].matrix",
     ),
     embargo_bars: int | None = typer.Option(
         None,
         "--embargo-bars",
         min=0,
-        help="bars between train and validation windows; default [lab] embargo_bars",
+        help="bars between train and validation windows; default \\[lab] embargo_bars",
     ),
     cost_model: str = typer.Option(
         "config",
         "--cost-model",
         callback=_choice("--cost-model", _LAB_COST_MODELS),
-        help="config ([backtest.costs], default)|zero|realistic",
+        help="config (\\[backtest.costs], default)|zero|realistic",
     ),
     workers: int | None = typer.Option(
-        None, "--workers", min=0, help="tuning processes; default [lab.parallel] (0 = all cores)"
+        None, "--workers", min=0, help="tuning processes; default \\[lab.parallel] (0 = all cores)"
     ),
     hypothesis: str | None = typer.Option(
         None, "--hypothesis", help="the edge and who pays for it (recorded before tuning, P1)"
@@ -1478,25 +1525,30 @@ def lab_run(
     test_option: list[str] | None = _TEST_OPTION,
     benchmark: str | None = _BENCHMARK,
     strict: bool = typer.Option(
-        False, "--strict", help="treat data preflight warnings as errors ([lab] strict_preflight)"
+        False, "--strict", help="treat data preflight warnings as errors (\\[lab] strict_preflight)"
     ),
     no_preflight: bool = typer.Option(
-        False, "--no-preflight", help="skip the data preflight ([lab] preflight)"
+        False, "--no-preflight", help="skip the data preflight (\\[lab] preflight)"
     ),
     json_out: str | None = typer.Option(None, "--json-out", help="write the result as JSON"),
 ) -> None:
     """Tune a strategy on the train window, then run the survival suite.
 
     Every run is pre-registered in the trial ledger (with --hypothesis /
-    --premortem). Transaction costs come from [backtest.costs] unless
+    --premortem). Transaction costs come from \\[backtest.costs] unless
     --cost-model says otherwise; walk-forward defaults from
-    [lab.walk_forward]; tuning workers from [lab.parallel]; the benchmark
-    from [lab] benchmark. --test-option tunes any survival test.
+    \\[lab.walk_forward]; tuning workers from \\[lab.parallel]; the benchmark
+    from \\[lab] benchmark. --test-option tunes any survival test.
     """
     import json
 
     from stonks.app.errors import ValidationError as AppValidationError
-    from stonks.app.lab import LabRunRequest, McptOptions, execute_lab_run
+    from stonks.app.lab import (
+        LabRunRequest,
+        McptOptions,
+        build_data_ensurer,
+        execute_lab_run,
+    )
     from stonks.app.serialize import to_jsonable
     from stonks.app.strategies import StrategyRef
     from stonks.core.interval import Interval
@@ -1533,9 +1585,15 @@ def lab_run(
     }
 
     settings = _settings()
-    universe = _parse_tickers(tickers) or list(settings.production.universe)
-    if not universe:
-        raise typer.BadParameter("pass --tickers or set [production].universe")
+    universe = _parse_tickers(tickers)
+    if not universe and not universe_id:
+        configured = settings.production.universe
+        if isinstance(configured, str):
+            universe_id = configured
+        else:
+            universe = list(configured)
+    if not universe and not universe_id:
+        raise typer.BadParameter("pass --tickers or --universe-id, or set [production].universe")
 
     wf_overrides = {
         k: v
@@ -1553,6 +1611,8 @@ def lab_run(
         request = LabRunRequest(
             strategy=StrategyRef(class_path=class_path),
             universe=universe,
+            universe_id=universe_id,
+            ensure_data=ensure_data,
             start=start_d,
             end=end_d,
             interval=bar_interval.code,
@@ -1584,10 +1644,21 @@ def lab_run(
     except ValueError as exc:  # pydantic ValidationError is a ValueError
         raise typer.BadParameter(str(exc)) from None
 
+    ensure_source = None
+    if ensure_data:
+        from stonks.universes import commands as universe_commands
+
+        ensure_source = universe_commands.ensure_source(settings, source_id)
     lake = _open_lake(settings.lake.path)
     state = SqliteState(settings.state.path)
     try:
         state.migrate()
+        if universe_id is not None and universe_id not in lake.universe_ids():
+            raise typer.BadParameter(
+                f"universe {universe_id!r} has no members: create and refresh it first "
+                f"(stonks universe refresh {universe_id})",
+                param_hint="--universe-id",
+            )
         execution = execute_lab_run(
             settings,
             strategy_cls,
@@ -1596,6 +1667,11 @@ def lab_run(
             state=state,
             fixed_params=pinned,
             parallel=_parallel_settings(settings, workers),
+            data_ensurer=(
+                build_data_ensurer(settings, lake, ensure_source)
+                if ensure_source is not None
+                else None
+            ),
         )
     except AppValidationError as exc:  # e.g. [lab] embargo_bars vs the window
         raise typer.BadParameter(str(exc)) from None
@@ -1639,6 +1715,7 @@ def lab_run(
         doc = {
             "strategy": class_path,
             "universe": universe,
+            "universe_id": universe_id,
             "window": [start, end],
             "interval": bar_interval.code,
             "run_id": result.run_id,
@@ -1667,7 +1744,7 @@ def lab_run(
 @lab_app.command("sweep")
 def lab_sweep(
     tickers: str | None = typer.Option(
-        None, "--tickers", help="comma-separated basket; default [production].universe"
+        None, "--tickers", help="comma-separated basket; default \\[production].universe"
     ),
     start: str = typer.Option(..., "--start", callback=_validate_iso_date, help="YYYY-MM-DD"),
     end: str = typer.Option(..., "--end", callback=_validate_iso_date, help="YYYY-MM-DD"),
@@ -1689,7 +1766,7 @@ def lab_sweep(
         "sharpe",
         "--objective",
         callback=_choice("--objective", _LAB_OBJECTIVES),
-        help="sharpe|cagr|final_return",
+        help="sharpe|cagr|final_return, or cv_ plus one of them to score on purged folds",
     ),
     tests: str | None = typer.Option(
         None, "--tests", help="comma-separated survival test ids; default: --preset"
@@ -1704,10 +1781,10 @@ def lab_sweep(
         "config",
         "--cost-model",
         callback=_choice("--cost-model", _LAB_COST_MODELS),
-        help="config ([backtest.costs], default)|zero|realistic",
+        help="config (\\[backtest.costs], default)|zero|realistic",
     ),
     workers: int | None = typer.Option(
-        None, "--workers", min=0, help="processes; default [lab.parallel] (0 = all cores)"
+        None, "--workers", min=0, help="processes; default \\[lab.parallel] (0 = all cores)"
     ),
     test_option: list[str] | None = _TEST_OPTION,
     benchmark: str | None = _BENCHMARK,
@@ -1736,9 +1813,15 @@ def lab_sweep(
     suite = _lab_suite(tests, preset, mcpt=False, walk_forward=False)
 
     settings = _settings()
-    basket = _parse_tickers(tickers) or list(settings.production.universe)
+    basket = _parse_tickers(tickers)
     if not basket:
-        raise typer.BadParameter("pass --tickers or set [production].universe")
+        from stonks.production.universe import EmptyUniverseError, window_tickers
+
+        with _open_lake(settings.lake.path) as lake:
+            try:
+                basket = window_tickers(lake, settings.production.universe, start_d, end_d)
+            except EmptyUniverseError as exc:
+                raise typer.BadParameter(str(exc), param_hint="--tickers") from None
     try:
         tasks = plan_sweep(basket, _parse_tickers(strategies), _parse_tickers(exclude))
     except ValueError as exc:
@@ -1807,7 +1890,7 @@ def lab_sweep(
 
 # ---- risk halts and the kill switch ------------------------------------------
 
-halts_app = typer.Typer(help="Kill switch and risk halts (roadmap 12.6)", no_args_is_help=True)
+halts_app = typer.Typer(help="Kill switch and risk halts", no_args_is_help=True)
 app.add_typer(halts_app, name="halts")
 
 _HALT_USER = typer.Option(
@@ -1910,12 +1993,15 @@ def halts_kill(
         None, "--portfolio", help="portfolio id (--scope portfolio)"
     ),
     flatten: bool = typer.Option(
-        False, "--flatten", help="stop buys only; sells and exits still go through"
+        False,
+        "--flatten",
+        help="only stops buys: sells and exits still go through, and no position is closed",
     ),
     reason: str = typer.Option(..., "--reason", help="why (audited)"),
     user: str | None = _HALT_USER,
 ) -> None:
-    """Engage the kill switch: no new orders (with --flatten, no new buys)."""
+    """Engage the kill switch: no new orders. With --flatten it only stops
+    buys and leaves open positions as they are."""
     from stonks.app.halts import KillSwitchRequest
 
     context, service = _halt_service()
@@ -1967,6 +2053,12 @@ def halts_clear(
     console.print(f"[green]cleared[/green]: halt #{view.id} ({view.kind})")
 
 
+# ---- transaction cost analysis and the journal (BL-32) ----------------------
+
+from stonks.cli_tca import app as tca_app  # noqa: E402
+
+app.add_typer(tca_app, name="tca")
+
 golive_app = typer.Typer(help="Go-live gate for paper-traded strategies")
 app.add_typer(golive_app, name="golive")
 
@@ -1981,7 +2073,7 @@ def golive_check(
         callback=_validate_iso_date,
     ),
 ) -> None:
-    """Evaluate a strategy's paper period against [golive]. Exit code 1 when
+    """Evaluate a strategy's paper period against \\[golive]. Exit code 1 when
     any check fails. Never changes the strategy's status."""
     from stonks.production.golive import evaluate_golive
 
@@ -2006,6 +2098,15 @@ def golive_check(
     for key, value in report.checklist.items():
         shown = "-" if value is None else f"{value:.4g}" if isinstance(value, float) else value
         console.print(f"  {key}: {shown}", markup=False)
+    if report.costs:
+        c = report.costs
+        console.print(
+            f"live costs (TCA): {c['orders']} order(s), shortfall "
+            + " vs model ".join(
+                "-" if v is None else f"{v:.1f} bps" for v in (c["live_is_bps"], c["modelled_bps"])
+            ),
+            markup=False,
+        )
     if report.passed:
         console.print("[green]PASS[/green]: ready for a human to promote")
         return
@@ -2094,7 +2195,7 @@ def report(
         None, "--end", callback=_validate_iso_date, help="tear sheet end (YYYY-MM-DD)"
     ),
     tickers: str | None = typer.Option(
-        None, "--tickers", help="tear sheet universe; default [production].universe"
+        None, "--tickers", help="tear sheet universe; default \\[production].universe"
     ),
     params: str = typer.Option(
         "{}", "--params", help="JSON params for a catalog strategy's tear sheet"
@@ -2132,7 +2233,7 @@ def report(
 def mcp_server() -> None:
     """Run the MCP server over stdio for Claude Code / Claude Desktop.
 
-    A client of the running REST API ([mcp].api_url, start it with
+    A client of the running REST API (\\[mcp].api_url, start it with
     `stonks serve`); it never opens the lake. Write and job tools send
     STONKS_API_TOKEN. See docs/mcp.md.
     """

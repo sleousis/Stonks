@@ -28,6 +28,7 @@ class PBOResult:
     degradation_slope: float
     #: Share of splits where the in-sample winner loses money out of sample.
     p_loss: float
+    #: Splits that were scored (degenerate ones are skipped, see ``cscv``).
     n_combinations: int
 
 
@@ -41,7 +42,9 @@ def cscv(
     ``C(n_blocks, n_blocks/2)`` exceeds ``max_combinations``, that many
     distinct splits are sampled with ``seed``. NaNs (failed bars or trials)
     are ignored per column; a trial with no usable data in a half never
-    wins it and ranks last."""
+    wins it and ranks last. A split where no trial has a usable Sharpe in
+    one half has no winner (or no ranking) and is skipped, so it counts
+    neither as overfit nor as not. With no usable split every rate is NaN."""
     x = np.asarray(m, dtype=float)
     if x.ndim != 2:
         raise ValueError(f"m must be a 2-D T x N matrix, got shape {x.shape}")
@@ -62,25 +65,31 @@ def cscv(
     s2 = np.stack([(vals[b] ** 2).sum(axis=0) for b in blocks])
 
     combos = _combinations(n_blocks, max_combinations, seed)
-    is_sr = np.empty(len(combos))
-    oos_sr = np.empty(len(combos))
-    lam = np.empty(len(combos))
+    is_sr: list[float] = []
+    oos_sr: list[float] = []
+    lam: list[float] = []
     all_blocks = np.arange(n_blocks)
-    for k, train in enumerate(combos):
+    for train in combos:
         test = np.setdiff1d(all_blocks, train)
         perf_is = _sharpe(cnt[train].sum(0), s1[train].sum(0), s2[train].sum(0))
         perf_oos = _sharpe(cnt[test].sum(0), s1[test].sum(0), s2[test].sum(0))
+        if not (np.isfinite(perf_is).any() and np.isfinite(perf_oos).any()):
+            continue  # no in-sample winner or no out-of-sample ranking
         best = int(np.argmax(perf_is))
         omega = rankdata(perf_oos)[best] / (n + 1)
-        lam[k] = math.log(omega / (1 - omega))
-        is_sr[k] = perf_is[best]
-        oos_sr[k] = perf_oos[best]
+        lam.append(math.log(omega / (1 - omega)))
+        is_sr.append(float(perf_is[best]))
+        oos_sr.append(float(perf_oos[best]))
 
+    if not lam:
+        nan = float("nan")
+        return PBOResult(pbo=nan, degradation_slope=nan, p_loss=nan, n_combinations=0)
+    oos = np.asarray(oos_sr)
     return PBOResult(
-        pbo=float(np.mean(lam <= 0)),
-        degradation_slope=_slope(is_sr, oos_sr),
-        p_loss=float(np.mean(oos_sr < 0)),
-        n_combinations=len(combos),
+        pbo=float(np.mean(np.asarray(lam) <= 0)),
+        degradation_slope=_slope(np.asarray(is_sr), oos),
+        p_loss=float(np.mean(oos < 0)),
+        n_combinations=len(lam),
     )
 
 

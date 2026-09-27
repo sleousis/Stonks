@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from stonks.config import SourcesConfig
+from stonks.config import SourcesConfig, secret_value
 from stonks.ingest.sources.base import DataSource
 
 
@@ -22,12 +22,13 @@ def _build_eodhd(cfg: SourcesConfig) -> DataSource:
     from stonks.ingest.sources.eodhd import EodhdDataSource
 
     eodhd = cfg.eodhd
-    if not eodhd.api_key:
+    api_key = secret_value(eodhd.api_key)
+    if not api_key:
         raise SourceConfigError(
             "EODHD_API_KEY is not set (add it to .env or your shell environment)"
         )
     return EodhdDataSource(
-        api_key=eodhd.api_key,
+        api_key=api_key,
         base_url=eodhd.base_url,
         timeout_seconds=eodhd.timeout_seconds,
         max_retries=eodhd.max_retries,

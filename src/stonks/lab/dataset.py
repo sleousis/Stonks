@@ -18,6 +18,27 @@ embargo is ``max(embargo_bars, label_horizon_bars)``; ``for_strategy``
 returns the dataset with it applied, and :func:`scoring_window` is what
 validation-style survival tests call.
 
+Data tickers (RS-01)
+--------------------
+``reference_tickers`` are tickers a strategy reads but never trades: a
+reference market, an index filter, a regime condition's ticker.
+``for_strategy`` adds the strategy's ``data_tickers()``. :func:`data_tickers`
+is the universe plus these plus the benchmark ticker, and it is what every
+worker snapshot and every permuted or perturbed lake copies, so a run gives
+the same answer on any worker count and a modified lake never silently
+drops a reference.
+
+Training segments (BL-45)
+-------------------------
+Cross-validation folds train on data either side of a test block.
+``train_segments`` holds those non-contiguous, purged training windows and
+``train_windows`` returns them (the single ``train_window`` when unset).
+A strategy that can fit on several windows reads ``train_windows``. One
+that only reads ``train_window`` then sees the longest segment, so it
+never trains on a test block. A dataset with segments is a CV fold: its
+tests score explicit windows, so it has no validation window of its own
+to check.
+
 Bars are converted to calendar days through the exchange-session calendar
 (``backtest.calendar.EXCHANGE_SESSIONS``: 252 sessions a year): the bars
 become sessions, the sessions become calendar days at the yearly average
@@ -31,12 +52,15 @@ from __future__ import annotations
 
 import dataclasses
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any, Literal
 
+from stonks.backtest.benchmark import AUTO_BENCHMARK_TICKER, normalize_spec
 from stonks.backtest.calendar import EXCHANGE_SESSIONS
 from stonks.core.interval import Interval
+from stonks.strategies.base import strategy_data_tickers
 
 if TYPE_CHECKING:  # pragma: no cover
     from stonks.backtest.costs import CostModelSettings
@@ -100,6 +124,12 @@ class LabDataset:
     #: an empty ``universe`` the lab resolves its members over the window
     #: (``lab.universe_data``); the preflight checks membership against it.
     universe_id: str | None = None
+    #: Tickers the strategy reads but never trades (see the module doc).
+    #: ``for_strategy`` fills it from the strategy's ``data_tickers()``.
+    reference_tickers: tuple[str, ...] = ()
+    #: Non-contiguous training windows of a CV fold (see the module doc).
+    #: Empty for an ordinary dataset.
+    train_segments: tuple[tuple[date, date], ...] = ()
     #: Stitched walk-forward OOS backtest, set by the walk-forward test for
     #: the tests after it (``mc_trades``). Never copied by ``replace``.
     stitched_oos_report: BacktestReport | None = field(
@@ -107,6 +137,11 @@ class LabDataset:
     )
 
     def __post_init__(self) -> None:
+        # RS-17: both windows must be non-empty and in order.
+        if not 0.0 < self.train_ratio < 1.0:
+            raise ValueError(f"train_ratio must lie in (0, 1), got {self.train_ratio}")
+        if self.end <= self.start:
+            raise ValueError(f"end {self.end} must be after start {self.start}")
         if self.embargo_bars < 0:
             raise ValueError(f"embargo_bars must be >= 0, got {self.embargo_bars}")
         if self.train_end is not None and not (self.start <= self.train_end < self.end):
@@ -114,14 +149,45 @@ class LabDataset:
                 f"train_end {self.train_end} must fall in [{self.start}, {self.end}) "
                 "so both the train and the validation window are non-empty"
             )
+        if self.train_segments:
+            self._check_segments()
+            return
         if self.embargo_bars > 0 and self.val_window[0] > self.end:
             raise ValueError(
                 f"an embargo of {self.embargo_bars} bars after {self.train_window[1]} "
                 f"leaves no validation window before {self.end}"
             )
+        if self.val_window[0] > self.end:
+            raise ValueError(
+                f"the window {self.start}..{self.end} is too short for train_ratio "
+                f"{self.train_ratio}: it leaves no validation window"
+            )
+
+    def _check_segments(self) -> None:
+        previous_end: date | None = None
+        for lo, hi in self.train_segments:
+            if not self.start <= lo <= hi <= self.end:
+                raise ValueError(f"train segment {lo}..{hi} must lie in [{self.start}, {self.end}]")
+            if previous_end is not None and lo <= previous_end:
+                raise ValueError("train segments must be sorted and must not overlap")
+            previous_end = hi
+
+    @property
+    def train_windows(self) -> tuple[tuple[date, date], ...]:
+        """Every training window: ``train_segments`` when set, else the
+        one ``train_window``."""
+        return self.train_segments or (self.train_window,)
+
+    def with_train_segments(self, segments: Iterable[tuple[date, date]]) -> LabDataset:
+        """This dataset as a CV fold that trains on ``segments``."""
+        return dataclasses.replace(self, train_segments=tuple(segments))
 
     @property
     def train_window(self) -> tuple[date, date]:
+        if self.train_segments:
+            # the longest segment (the latest on a tie): a strategy that
+            # reads one window never sees a test block
+            return max(self.train_segments, key=lambda seg: ((seg[1] - seg[0]).days, seg[0]))
         if self.train_end is not None:
             return self.start, self.train_end
         span_days = (self.end - self.start).days
@@ -146,12 +212,25 @@ class LabDataset:
         return max(self.embargo_bars, horizon)
 
     def for_strategy(self, strategy: Any) -> LabDataset:
-        """This dataset with the embargo ``strategy`` needs (itself when
-        the configured embargo already covers its label horizon)."""
+        """This dataset with the embargo ``strategy`` needs and its data
+        tickers added to ``reference_tickers`` (itself when neither
+        changes anything)."""
         embargo = self.effective_embargo_bars(strategy)
-        if embargo == self.embargo_bars:
+        refs = self.with_references(strategy_data_tickers(strategy)).reference_tickers
+        if embargo == self.embargo_bars and refs == self.reference_tickers:
             return self
-        return dataclasses.replace(self, embargo_bars=embargo)
+        return dataclasses.replace(self, embargo_bars=embargo, reference_tickers=refs)
+
+    def with_references(self, tickers: Iterable[str]) -> LabDataset:
+        """This dataset with ``tickers`` added to ``reference_tickers``
+        (universe members are left out, order is kept)."""
+        members = set(self.universe)
+        refs = tuple(
+            dict.fromkeys([*self.reference_tickers, *(t for t in tickers if t not in members)])
+        )
+        if refs == self.reference_tickers:
+            return self
+        return dataclasses.replace(self, reference_tickers=refs)
 
     def prices_on(self, as_of: date) -> dict[str, float]:
         df = self.lake.sql(
@@ -159,6 +238,26 @@ class LabDataset:
             [list(self.universe), as_of],
         )
         return {row.ticker: float(row.close) for row in df.itertuples(index=False)}
+
+
+def data_tickers(context: Any, extra: Iterable[str] = ()) -> list[str]:
+    """Every ticker whose data a run on ``context`` reads: the universe,
+    then ``reference_tickers``, ``extra`` and the benchmark ticker
+    (``"auto"`` names :data:`~stonks.backtest.benchmark.AUTO_BENCHMARK_TICKER`,
+    ``"EW"`` and ``"none"`` name none). Works on any context with a
+    ``universe``. A ticker with no bars in the lake is harmless: copies
+    simply hold nothing for it."""
+    tickers = [
+        *context.universe,
+        *getattr(context, "reference_tickers", ()),
+        *extra,
+    ]
+    bench = normalize_spec(getattr(context, "benchmark", None))
+    if bench == "auto":
+        tickers.append(AUTO_BENCHMARK_TICKER)
+    elif bench not in (None, "ew"):
+        tickers.append(bench)
+    return list(dict.fromkeys(str(t) for t in tickers if t))
 
 
 def scoring_window(context: Any, strategy: Any, window: ScoringWindow = "val") -> tuple[date, date]:

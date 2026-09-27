@@ -178,12 +178,19 @@ class ConnectionService:
 
     def available_providers(self, scope: Scope) -> list[ProviderInfo]:
         """Providers a user may connect: enabled by an admin and configured."""
+        return [p for p in self.providers(scope) if p.enabled]
+
+    def providers(self, scope: Scope) -> list[ProviderInfo]:
+        """Every registered provider, each marked ``enabled`` when an admin
+        turned it on and it is configured."""
         out: list[ProviderInfo] = []
-        for name in provider_classes():
+        for name, cls in provider_classes().items():
             try:
-                cls = enabled_provider(self.config, name)
+                enabled_provider(self.config, name)
             except ConnectionsError:
-                continue
+                enabled = False
+            else:
+                enabled = True
             out.append(
                 ProviderInfo(
                     name=name,
@@ -192,9 +199,25 @@ class ConnectionService:
                     capabilities=tuple(sorted(c.value for c in cls.capabilities)),
                     credential_fields=tuple(cls.credential_fields),
                     can_trade=cls.supports(Capability.TRADE),
+                    enabled=enabled,
+                    has_paper=cls.has_paper,
                 )
             )
         return out
+
+    def account_counts(self, connection_ids: list[str]) -> dict[str, int]:
+        """Broker accounts seen per connection (0 when none). The ids must
+        already be scope-checked by the caller."""
+        if not connection_ids:
+            return {}
+        marks = ", ".join("?" for _ in connection_ids)
+        rows = self._state.sql(
+            "SELECT connection_id, COUNT(*) AS n FROM broker_accounts"
+            f" WHERE connection_id IN ({marks}) GROUP BY connection_id",
+            list(connection_ids),
+        )
+        counts = {r["connection_id"]: int(r["n"]) for r in rows}
+        return {cid: counts.get(cid, 0) for cid in connection_ids}
 
     def list(self, scope: Scope) -> list[ConnectionRecord]:
         if scope.is_service:
@@ -622,7 +645,7 @@ class ConnectionService:
                     results.append(
                         PortfolioSyncResult(
                             pf.target.portfolio_id, pf.target.account_id, error=pf.error
-                        )  # fmt: skip
+                        )
                     )
                     continue
                 results.append(self._write_portfolio(record.id, pf, as_of, now))
@@ -804,6 +827,28 @@ class ConnectionService:
             [reason, _iso(now), *portfolio_ids],
         )
         return int(cur.rowcount or 0)
+
+    # ---- trading (auto mode, S6) -----------------------------------------------------------
+
+    def open_trader(self, scope: Scope, portfolio_id: str) -> Any:
+        """The ``Broker`` placing orders in the account ``portfolio_id``
+        mirrors, through its connection's trading adapter. Refused when the
+        portfolio isn't linked, the provider is disabled or can't trade.
+        Provider errors come back redacted."""
+        from stonks.connections.base import Capability
+
+        portfolio = owned_portfolio(self._state, scope, portfolio_id)
+        if not portfolio.broker_connection_id or not portfolio.external_account_id:
+            raise ConnectionsError(f"portfolio {portfolio_id!r} is not linked to a broker account")
+        record = owned_connection(self._state, scope, portfolio.broker_connection_id)
+        cls = enabled_provider(self.config, record.provider)
+        cls.require(Capability.TRADE)
+        credentials = self._open_credentials(self._secret_box(), record.id)
+        try:
+            conn = cls.open(credentials, self._context(cls, record.id))
+            return conn.trader(portfolio.external_account_id)
+        except ProviderError as exc:
+            raise _redacted(exc, credentials) from None
 
     # ---- key rotation ---------------------------------------------------------------------
 

@@ -4,6 +4,8 @@ Design for roadmap Phase 16. Stonks is long-only today: `SimulatedBroker` reject
 
 Goal: long/short books as an **opt-in**, with long-only behaviour byte-identical by default.
 
+Status: 16.1 and 16.2 are built and off by default. 16.3 and 16.4 are planned. Section 10 lists what was built and where it differs from this design.
+
 Non-goals: naked shorting, short options (see `options.md`), portfolio margin, securities lending income.
 
 ## 1. Two switches, both off by default
@@ -149,3 +151,37 @@ The registry-wide property test changes from "buy notional never increases, sell
 | 16.4 Validation | Two-sided trade ledger, exposure reports, borrow stress, benchmark choice | `backtest/{trades,metrics,report}.py`, `lab/survival/{cost_stress,benchmark_relative}.py` |
 
 16.2 and 16.4 can run in parallel with 16.1 against its interfaces (duck-typed `getattr(ctx, "margin", None)`); 16.3 needs 16.1. All of it needs the accounts design's `allow_short` column (step S1).
+
+## 10. Status
+
+16.1 and 16.2 are built. Every switch is off, so long-only runs are unchanged. 16.3 and 16.4 are planned.
+
+**Built in 16.1**
+- `Order.position_effect`, `execution/orders.classify` and `classify_all`, side tokens `short` and `cover` in client ids.
+- `Portfolio.long_value`, `short_value`, `gross` and `net`.
+- `execution/borrow.py`: the `BorrowSource` seam and the static `FlatBorrow` (fee per asset class, per-ticker `hard` and `none` lists, explicit quotes).
+- `execution/margin.py`: the `MarginModel` registry with `cash` and `reg_t`.
+- `SimulatedBroker`: short fills with borrow and margin checks, `accrue` for borrow fees and debit interest, `margin_call`, `recalled`.
+- Backtest engine: `BacktestConfig.allow_short`, orders split at zero when they fill, daily accrual, forced covers on a margin breach or a borrow recall, covers when a short leaves the universe.
+- Shorts pay dividends in full and scale on splits, in the backtest and in the tick ledger.
+- The trade ledger pairs short lots (`RoundTrip.side`).
+- `orders_from_targets(allow_short=True)` and the pipeline (`BookInput.allow_short`) with both switches: the book and `BaseStrategy.supports_short`.
+- The Alpaca adapter sends short sales when `brokers.alpaca.allow_short` is on.
+- SQLite migration 021 adds `orders.position_effect`.
+
+**Built in 16.2**
+- Rules `margin_call`, `squeeze_guard`, `gross_exposure`, `net_exposure`, `short_caps` and `borrow_check` under `[production.risk.rules.*]`.
+- `sell_within_position` lets short sales through only in a book that allows shorts.
+- A cover skips every order rule, and the batch rules only scale opening orders, so a forced cover is never blocked.
+
+**Changes from the design**
+- `squeeze_stop` is named `squeeze_guard`. It also covers on a price spike over a few bars.
+- A new `margin_call` rule does the forced cover on a margin breach in the tick and blocks new opens. The design only blocked opens and raised a notification. The notification is not built yet.
+- `margin_check` is part of `margin_call`: in good standing it clips opens to the margin room.
+- The tick's margin call closes the largest requirement first, because the risk context has no cost basis. The backtest closes the most losing position first.
+- `LakeBorrow`, the `borrow_rates` lake table and the broker capability source are not built. They need a lake migration. The seam is ready for them.
+- Rules and the engine read `allow_short` from the book. The backtest raises an error when the config and the broker disagree, instead of dropping orders quietly.
+- The tick does not call `accrue` yet. The tick keeps no state between runs, so it needs the last accrual date. `accrue(since=)` is ready for that.
+- Only the default book runs in the tick today and it is long-only, so tick shorts wait for per-portfolio plans. The tick ranker still drops negative scores (16.3).
+- Constructors still cap gross at 1.0 (`max_gross`). Books above 1.0 gross wait for 16.3.
+- Financing charges sit on `SimulatedBroker.financing` and forced orders on `Backtester.forced_orders`. Reports show them in 16.4.

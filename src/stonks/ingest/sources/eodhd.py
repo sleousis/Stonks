@@ -470,16 +470,24 @@ def parse_prices_response(ticker: str, payload: Any) -> Iterator[RawPriceBar]:
             raise EodhdFreeTierError(str(row.get(_FREE_TIER_WARNING_KEY)))
         if "date" not in row:
             continue
+        # a null or missing price is kept as None: the quality checker
+        # quarantines that row instead of the whole ticker failing
         yield RawPriceBar(
             ticker=ticker,
             date=row["date"],
-            open=row["open"],
-            high=row["high"],
-            low=row["low"],
-            close=row["close"],
-            adj_close=row.get("adjusted_close", row["close"]),
+            open=row.get("open"),
+            high=row.get("high"),
+            low=row.get("low"),
+            close=row.get("close"),
+            adj_close=_adjusted(row),
             volume=row.get("volume"),
         )
+
+
+def _adjusted(row: dict) -> Any:
+    """The vendor's adjusted close, or the close when it sent none."""
+    adj = row.get("adjusted_close")
+    return row.get("close") if adj is None else adj
 
 
 def parse_bulk_eod_response(exchange: str, payload: Any) -> list[RawPriceBar]:
@@ -500,11 +508,11 @@ def parse_bulk_eod_response(exchange: str, payload: Any) -> list[RawPriceBar]:
                 RawPriceBar(
                     ticker=f"{row['code']}.{exchange}",
                     date=row["date"],
-                    open=row["open"],
-                    high=row["high"],
-                    low=row["low"],
-                    close=row["close"],
-                    adj_close=row.get("adjusted_close", row["close"]),
+                    open=row.get("open"),
+                    high=row.get("high"),
+                    low=row.get("low"),
+                    close=row.get("close"),
+                    adj_close=_adjusted(row),
                     volume=row.get("volume"),
                 )
             )

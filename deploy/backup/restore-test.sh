@@ -2,7 +2,8 @@
 # Monthly automated restore test (Phase 14.5). Touches nothing live.
 #
 #   restic check (10% of the data) -> restore latest into the scratch `restore`
-#   volume -> open the restored stores with `stonks db info` -> wipe scratch
+#   volume -> restore it into a scratch data folder with the app -> check the
+#   state row counts, the lake and the artifacts -> wipe scratch
 #
 # Usage: deploy/backup/restore-test.sh
 set -Eeuo pipefail
@@ -32,20 +33,16 @@ restic() { compose --profile backup run --rm -T restic "$@"; }
 
 restic check --read-data-subset=10%
 compose --profile backup run --rm -T --entrypoint sh restic -c 'rm -rf /restore/* /restore/.[!.]*'
-restic restore latest --host stonks --target /restore
+restic restore latest --host stonks --target /restore/snapshot
 
-# Find the restored lake (stopped-volume copies keep /data/..., app backups
-# keep /data/backups/...). The last one by path (newest timestamped folder) wins.
-lake="$(compose --profile backup run --rm -T --entrypoint sh restic -c \
-	'find /restore -name lake.duckdb -exec dirname {} \; | sort -r | head -n 1')"
-lake="$(printf '%s' "$lake" | tr -d '\r')"
-[ -n "$lake" ] || {
-	log "no lake.duckdb in the restored snapshot"
-	exit 1
+# Restore with the same tool as restore.sh into a scratch data folder, then
+# check that the state DB holds the snapshot's users, strategies and orders
+# rows and that the lake and artifacts came back. A missing or empty state DB
+# fails the test. Runs as root: restic restores as root.
+app_ops() {
+	compose run --rm --no-deps -T --user 0 -v "stonks_restore:/restore" api \
+		python -m stonks.ops "$@"
 }
-log "restored lake folder: $lake"
-
-# Open both stores with the app itself (as root: restic restores as root).
-compose run --rm --no-deps -T --user 0 -v "stonks_restore:/restore" \
-	-e STONKS_DATA_DIR="$lake" api stonks db info
+app_ops restore-snapshot /restore/snapshot --data-dir /restore/check
+app_ops check-restore /restore/check --snapshot /restore/snapshot
 log "restore test passed"

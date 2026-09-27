@@ -131,6 +131,54 @@ def test_describe():
     assert "every" in IntervalTrigger(timedelta(minutes=5)).describe()
 
 
+@pytest.mark.parametrize(
+    ("trigger", "text"),
+    [
+        (
+            SessionTrigger("XNYS", offset=timedelta(minutes=45)),
+            "45 minutes after the New York market closes, on trading days",
+        ),
+        (
+            SessionTrigger("XNYS", anchor="open", offset=timedelta(minutes=-30)),
+            "30 minutes before the New York market opens, on trading days",
+        ),
+        (
+            SessionTrigger("XLON", anchor="close"),
+            "When the London market closes, on trading days",
+        ),
+        (
+            SessionTrigger("XNYS", offset=timedelta(hours=2)),
+            "2 hours after the New York market closes, on trading days",
+        ),
+        (
+            SessionTrigger("XNYS", offset=timedelta(minutes=1)),
+            "1 minute after the New York market closes, on trading days",
+        ),
+        (DailyTrigger(time(6, 0)), "Every day at 06:00 UTC"),
+        (
+            DailyTrigger(time(7, 30), tz="Europe/London", calendar="XLON"),
+            "Every London trading day at 07:30 Europe/London",
+        ),
+        (
+            DailyTrigger(time(9, 0), weekdays=frozenset({0, 4})),
+            "Mondays and Fridays at 09:00 UTC",
+        ),
+        (DailyTrigger(time(9, 0), weekdays=frozenset({5})), "Saturdays at 09:00 UTC"),
+        (IntervalTrigger(timedelta(minutes=5)), "Every 5 minutes"),
+        (IntervalTrigger(timedelta(hours=1)), "Every hour"),
+        (IntervalTrigger(timedelta(hours=6)), "Every 6 hours"),
+        (IntervalTrigger(timedelta(seconds=90)), "Every 90 seconds"),
+    ],
+)
+def test_plain_english_says_when_a_job_runs(trigger, text):
+    assert trigger.plain() == text
+    assert ";" not in text and "+" not in text
+
+
+def test_an_unknown_calendar_keeps_its_code():
+    assert SessionTrigger("XHKG").plain().startswith("When the XHKG market closes")
+
+
 def test_last_fire_at_or_before():
     lookback = timedelta(days=8)
     session = SessionTrigger("XNYS", offset=timedelta(minutes=30))

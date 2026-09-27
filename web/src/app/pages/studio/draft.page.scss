@@ -81,7 +81,7 @@
 
   &[aria-selected='true'] {
     color: var(--color-ink);
-    border-bottom-color: var(--color-brass);
+    border-bottom-color: var(--color-accent);
   }
 
   @include bp.phone {
@@ -102,7 +102,7 @@
   font-variant-numeric: tabular-nums;
 
   [aria-selected='true'] & {
-    background: var(--color-brass);
+    background: var(--color-accent);
     color: var(--color-surface);
   }
 }
@@ -260,7 +260,7 @@
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-sm);
   background: var(--color-surface-2);
-  font-family: ui-monospace, 'Cascadia Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: var(--text-sm);
   line-height: 1.5;
   tab-size: 4;

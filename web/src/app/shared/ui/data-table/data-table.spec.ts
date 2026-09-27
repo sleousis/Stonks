@@ -41,6 +41,12 @@ describe('DataTable', () => {
     expect(el.querySelector('caption')?.textContent).toContain('Test table');
   });
 
+  it('names its scroll region apart from the panel heading it repeats (A11Y-2)', async () => {
+    const { el } = await render({ caption: 'Stored universes' });
+    const region = el.querySelector('[role="region"]');
+    expect(region?.getAttribute('aria-label')).toBe('Stored universes, scrollable table');
+  });
+
   it('sorts on header click and exposes aria-sort', async () => {
     const { fixture, el, firstCells } = await render({});
     const [tickerBtn, valueBtn] = el.querySelectorAll<HTMLButtonElement>('th button');
@@ -83,6 +89,48 @@ describe('DataTable', () => {
       .click();
     await fixture.whenStable();
     expect(pages).toEqual([{ offset: 2, limit: 2 }]);
+  });
+
+  it('server mode shows the page given by the offset input', async () => {
+    // A page re-creates the table after each load: the offset keeps the pager right.
+    const { fixture, el } = await render({ pageSize: 2, total: 7, offset: 4 });
+    const pages: unknown[] = [];
+    fixture.componentInstance.pageChange.subscribe((p) => pages.push(p));
+    expect(el.textContent).toContain('5–6 of 7');
+    const button = (text: string) =>
+      [...el.querySelectorAll<HTMLButtonElement>('.pager button')].find(
+        (b) => b.textContent?.trim() === text,
+      )!;
+    expect(button('Previous').disabled).toBe(false);
+    button('Next').click();
+    await fixture.whenStable();
+    expect(pages).toEqual([{ offset: 6, limit: 2 }]);
+
+    fixture.componentRef.setInput('offset', 6);
+    await fixture.whenStable();
+    expect(el.textContent).toContain('7–7 of 7');
+    expect(button('Next').disabled).toBe(true);
+  });
+
+  it('server mode headers are not sort buttons and rows keep the API order', async () => {
+    const { el, firstCells } = await render({
+      pageSize: 2,
+      total: 7,
+      initialSort: { key: 'ticker', dir: 'asc' },
+    });
+    expect(el.querySelectorAll('th button.sort').length).toBe(0);
+    expect(el.querySelector('th')?.getAttribute('aria-sort')).toBeNull();
+    expect(firstCells()).toEqual(['b', 'a', 'c']);
+  });
+
+  it('keeps rows on screen and shows a progress bar while busy', async () => {
+    const { fixture, el } = await render({ busy: true });
+    expect(el.querySelector('.busy-bar')).not.toBeNull();
+    expect(el.querySelector('.table-wrap')?.getAttribute('aria-busy')).toBe('true');
+    expect(el.querySelectorAll('tbody tr').length).toBe(3);
+    fixture.componentRef.setInput('busy', false);
+    await fixture.whenStable();
+    expect(el.querySelector('.busy-bar')).toBeNull();
   });
 
   it('shows the empty message', async () => {
