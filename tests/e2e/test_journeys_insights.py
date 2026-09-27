@@ -108,11 +108,12 @@ def test_an_admin_sees_totals_across_every_book(browse, stack, viewport):
     v = browse(stack.admin)
     page = v.go("/insights")
     expect(page.get_by_role("heading", name="All portfolios")).to_be_visible()
-    # The seeded stack has fewer than three owners with live money, so the
-    # sums are held back and the card says so instead of showing zeros.
-    expect(
-        page.get_by_text("Totals appear once three or more traders have live money.")
-    ).to_be_visible()
+    # With fewer than three other owners the sums are held back and the card
+    # says so. Other journeys open portfolios, so which one shows depends on
+    # the order: either is right, zeros never are.
     totals = page.locator("section", has=page.get_by_role("heading", name="All portfolios"))
+    held = "Totals appear once three or more traders have live money."
+    shown = "Sums only. Admins never see anyone's holdings."
+    expect(totals.get_by_text(held).or_(totals.get_by_text(shown))).to_be_visible()
     expect(totals).not_to_contain_text("$0.00")
     v.check_page("insights-admin")
