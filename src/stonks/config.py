@@ -37,6 +37,7 @@ from stonks.production.monitor_settings import RiskMonitorSettings
 from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.rules.settings import RuleSettings
 from stonks.scheduling.config import SchedulerConfig
+from stonks.screener.settings import ScreenerSettings
 from stonks.store.audit import AuditTolerances
 from stonks.store.bars import BarBackend
 from stonks.streaming.settings import StreamingSettings
@@ -556,6 +557,8 @@ class Settings(BaseSettings):
     factors: FactorSettings = FactorSettings()
     # ``[streaming]``: live price streams (roadmap 21.1). Off by default.
     streaming: StreamingSettings = Field(default_factory=StreamingSettings)
+    # ``[screener]``: candidate cap, job threshold and result cache (roadmap 20.11).
+    screener: ScreenerSettings = Field(default_factory=ScreenerSettings)
 
 
 #: Secrets read straight from the environment by blocks that keep their own

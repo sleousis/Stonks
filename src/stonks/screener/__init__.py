@@ -6,13 +6,22 @@ metrics, point in time, on top of the universe rule.
 - :mod:`.metrics`: the :class:`ScreenMetric` seam, one class per metric,
   found by :mod:`.registry`;
 - :mod:`.data`: the lake reads, once per screen and date (P12);
-- :mod:`.engine`: :func:`run_screen` and :func:`screen_tickers`.
+- :mod:`.engine`: :func:`run_screen` and :func:`screen_tickers`, with the
+  candidate cap (:class:`TooManyCandidates`) and progress steps;
+- :mod:`.cache`: :class:`ScreenCache`, results reused per spec and date for
+  a short time; :mod:`.settings`: the ``[screener]`` section (roadmap 20.11).
 
 A ``rule`` universe takes the same fields, so a saved screen becomes a
 point-in-time universe for the lab (:mod:`stonks.universes.providers.rule`).
 """
 
-from stonks.screener.engine import ScreenResult, ScreenRow, run_screen, screen_tickers
+from stonks.screener.engine import (
+    ScreenResult,
+    ScreenRow,
+    TooManyCandidates,
+    run_screen,
+    screen_tickers,
+)
 from stonks.screener.metrics.base import ScreenMetric
 from stonks.screener.registry import all_metrics, metric_for, metric_ids
 from stonks.screener.spec import MetricFilter, ScreenSpec
@@ -23,6 +32,7 @@ __all__ = [
     "ScreenResult",
     "ScreenRow",
     "ScreenSpec",
+    "TooManyCandidates",
     "all_metrics",
     "metric_for",
     "metric_ids",

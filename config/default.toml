@@ -273,6 +273,16 @@ lease_seconds = 120
 cache = "parquet"
 # cache_dir = "data/factor_panels"  # omit: factor_panels next to the lake file
 
+[screener]
+# Screens at scale (roadmap 20.11, docs/universes.md#screener). A screen whose
+# rule keeps more than max_candidates fails with a message on how to narrow it.
+# Above job_threshold candidates the console runs it as a background job.
+# A result is reused for cache_seconds for the same spec and date (0: off).
+max_candidates = 10000
+job_threshold = 1000
+cache_seconds = 300
+cache_entries = 32
+
 [streaming]
 # Live price streams into 1m bars (roadmap 21.1, docs/design/intraday.md).
 # Off by default. Run with `python -m stonks.streaming run`. The EODHD key
