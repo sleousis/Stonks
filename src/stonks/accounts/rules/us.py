@@ -100,7 +100,7 @@ class WashSale(AccountRule):
         inputs: AccountRuleInputs,
         settings: AccountRulesSettings,
     ) -> Verdict | None:
-        if view.side != "buy" or not view.opening:
+        if view.side != "buy" or not view.opening or not inputs.profile.wash_sales:
             return None
         sold = inputs.loss_sales.get(view.ticker)
         if sold is None or inputs.as_of - sold > timedelta(days=settings.wash_sale_window_days):

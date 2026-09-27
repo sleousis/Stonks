@@ -86,6 +86,26 @@ def test_settings_default_update_and_audit(client, people, book, settings):
     assert [r["actor"] for r in rows] == [f"user:{people['alice']['id']}"]
 
 
+def test_live_account_facts_are_locked_while_real_money_trades(client, people, book, settings):
+    """The jurisdiction and base currency are the account profile's too, so
+    they are locked while the portfolio trades real money."""
+    from stonks.production.live.stages import change_stage
+
+    alice = people["alice"]["headers"]
+    q = {"portfolio_id": book["pid"]}
+    with SqliteState(settings.state.path) as state:
+        for stage in ("broker_paper", "live_small"):
+            change_stage(
+                state, book["pid"], stage, actor="u", reason="r",
+                gate_report={"target": stage, "passed": True},
+            )  # fmt: skip
+    for body in ({"jurisdiction": "eu"}, {"base_currency": "EUR"}):
+        locked = client.put("/api/tax/settings", params=q, json=body, headers=alice)
+        assert locked.status_code == 409, locked.text
+    fine = client.put("/api/tax/settings", params=q, json={"lot_method": "specific"}, headers=alice)
+    assert fine.status_code == 200, fine.text
+
+
 def test_other_people_get_404_and_viewers_cannot_write(client, people, book):
     q = {"portfolio_id": book["pid"]}
     bob, vic, ada = (people[n]["headers"] for n in ("bob", "vic", "ada"))

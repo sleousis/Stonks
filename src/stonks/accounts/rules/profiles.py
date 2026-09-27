@@ -5,6 +5,12 @@
 factor) is checked by the service layer before it calls
 :func:`set_profile`. A cash profile never allows shorts (the table checks
 it too).
+
+Each fact has one home (migration 038). The jurisdiction and whether wash
+sales apply live in ``portfolio_tax_settings``, the base currency in
+``portfolios``. A profile reads them from there, and setting a profile
+writes them there. ``account_profiles`` keeps only what is about the
+broker account itself.
 """
 
 from __future__ import annotations
@@ -32,7 +38,16 @@ def profiles_enabled(state: SqliteState) -> bool:
 def get_profile(state: SqliteState, portfolio_id: str) -> AccountProfile | None:
     if not profiles_enabled(state):
         return None
-    rows = state.sql(f"SELECT * FROM {TABLE} WHERE portfolio_id = ?", [portfolio_id])
+    rows = state.sql(
+        f"SELECT a.*, COALESCE(t.jurisdiction, 'us') AS jurisdiction,"
+        " COALESCE(t.wash_sales, 1) AS wash_sales,"
+        " upper(COALESCE(p.base_currency, 'USD')) AS base_currency"
+        f" FROM {TABLE} a"
+        " LEFT JOIN portfolio_tax_settings t ON t.portfolio_id = a.portfolio_id"
+        " LEFT JOIN portfolios p ON p.id = a.portfolio_id"
+        " WHERE a.portfolio_id = ?",
+        [portfolio_id],
+    )
     if not rows:
         return None
     r = rows[0]
@@ -45,6 +60,7 @@ def get_profile(state: SqliteState, portfolio_id: str) -> AccountProfile | None:
         fx_policy=r["fx_policy"],
         wash_sale_mode=r["wash_sale_mode"],
         allow_short=bool(r["allow_short"]),
+        wash_sales=bool(r["wash_sales"]),
     )
 
 
@@ -64,32 +80,43 @@ def set_profile(
     actor: str,
     clock: Clock = SYSTEM_CLOCK,
 ) -> AccountProfile:
-    """Insert or replace the portfolio's profile and audit the change."""
+    """Insert or replace the portfolio's profile and audit the change. The
+    jurisdiction goes to the tax settings and the base currency to the
+    portfolio (their one home). ``wash_sales`` is read, never written here:
+    it is a tax setting."""
     validate_profile(profile)
     now = iso_now(clock)
     with state.transaction():
         old = get_profile(state, profile.portfolio_id)
         state.execute(
-            f"INSERT INTO {TABLE} (portfolio_id, jurisdiction, account_type, client_class,"
-            " base_currency, fx_policy, wash_sale_mode, allow_short, updated_at, updated_by)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            " ON CONFLICT (portfolio_id) DO UPDATE SET jurisdiction = excluded.jurisdiction,"
-            " account_type = excluded.account_type, client_class = excluded.client_class,"
-            " base_currency = excluded.base_currency, fx_policy = excluded.fx_policy,"
+            f"INSERT INTO {TABLE} (portfolio_id, account_type, client_class, fx_policy,"
+            " wash_sale_mode, allow_short, updated_at, updated_by)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+            " ON CONFLICT (portfolio_id) DO UPDATE SET account_type = excluded.account_type,"
+            " client_class = excluded.client_class, fx_policy = excluded.fx_policy,"
             " wash_sale_mode = excluded.wash_sale_mode, allow_short = excluded.allow_short,"
             " updated_at = excluded.updated_at, updated_by = excluded.updated_by",
             [
                 profile.portfolio_id,
-                profile.jurisdiction,
                 profile.account_type,
                 profile.client_class,
-                profile.base_currency.upper(),
                 profile.fx_policy,
                 profile.wash_sale_mode,
                 int(profile.allow_short),
                 now,
                 actor,
             ],
+        )
+        state.execute(
+            "INSERT INTO portfolio_tax_settings (portfolio_id, jurisdiction, updated_at,"
+            " updated_by) VALUES (?, ?, ?, ?) ON CONFLICT (portfolio_id) DO UPDATE SET"
+            " jurisdiction = excluded.jurisdiction, updated_at = excluded.updated_at,"
+            " updated_by = excluded.updated_by",
+            [profile.portfolio_id, profile.jurisdiction, now, actor],
+        )
+        state.execute(
+            "UPDATE portfolios SET base_currency = ? WHERE id = ?",
+            [profile.base_currency.upper(), profile.portfolio_id],
         )
         AuditLog(state).record(
             actor,

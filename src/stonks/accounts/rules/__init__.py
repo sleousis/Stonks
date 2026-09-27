@@ -86,6 +86,10 @@ class AccountProfile:
     wash_sale_mode: WashSaleMode = "warn"
     #: Shorts need a margin account (a later Phase 19 follow-up).
     allow_short: bool = False
+    #: Whether wash sales apply at all: the tax setting
+    #: (``portfolio_tax_settings.wash_sales``). ``wash_sale_mode`` is what
+    #: the pre-trade guard does when they do.
+    wash_sales: bool = True
 
 
 @dataclass(frozen=True)

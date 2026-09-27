@@ -10,6 +10,10 @@ This is not tax advice. The files help you or your accountant file. Check them b
 - Cash is taken as already in the base currency.
 - An instrument with no currency in the lake is taken to trade in the base currency.
 
+## One home per setting
+
+The tax settings hold the jurisdiction and whether wash sales apply. The portfolio holds the base currency. A live portfolio's account profile reads all three from there, and saving a profile writes the jurisdiction and base currency there. The profile's own `wash_sale_mode` only says what the pre-trade guard does when wash sales apply: `warn` or `block`. Turn wash sales off here and the guard is off too. While a portfolio trades real money (`live_small` or `live_scale`), the jurisdiction and base currency are locked here like the profile.
+
 ## FX rates
 
 Rates live in the lake table `fx_rates`. One row per pair and day: how many units of the quote currency one unit of the base currency buys at the close.

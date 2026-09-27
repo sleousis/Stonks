@@ -450,6 +450,7 @@ PUT /api/portfolios/{id}/live/account-profile   {"jurisdiction": "us", "account_
 - In the console: Profile, then Live settings next to the LIVE portfolio. The page also lists which live safeguards and account rules act on it (`GET /api/portfolios/{id}/live/rules`). Gateway health and the reconcile reports show on Health (`GET /api/brokers/gateways`, `GET /api/reconcile/reports`).
 - The allocation is the most Stonks may hold in the book. There are no automatic steps. A bad week alerts but never changes it.
 - The profile picks the account rules: `us`, `eu` or `uk`, `cash` (default) or `margin`, `retail` (default) or `professional`. Shorts need a margin account.
+- The jurisdiction and base currency are stored once, in the tax settings and the portfolio (see [tax.md](tax.md)). Saving the profile updates them, and the tax settings page shows the same values.
 - The account is shared with your own trading. Stonks only trades the positions it opened (`[production.live] allow_manual_trades = true`).
 - The profile is locked while the portfolio trades real money (`live_small` or up). Move it down to `broker_paper` to change it.
 

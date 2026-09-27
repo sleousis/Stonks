@@ -479,7 +479,7 @@ flowchart LR
   ALL --> V
 ```
 
-**Account profile.** `account_profiles (portfolio_id, jurisdiction, account_type, client_class, base_currency, fx_policy, wash_sale_mode, allow_short, updated_at, updated_by)`, set in the console (`PUT /api/portfolios/{id}/live/account-profile`, step-up, audited):
+**Account profile.** `account_profiles (portfolio_id, account_type, client_class, fx_policy, wash_sale_mode, allow_short, updated_at, updated_by)`, plus the jurisdiction from `portfolio_tax_settings` and the base currency from `portfolios` (their one home since migration 038), set in the console (`PUT /api/portfolios/{id}/live/account-profile`, step-up, audited):
 
 - `jurisdiction` in {`us`, `eu`, `uk`}. It follows the IBKR entity that holds the account, not the owner's passport.
 - `account_type` in {`cash`, `margin`}, default `cash`. The owner's first live account is a cash account, long only. Shorts need `margin` (`allow_short` is refused on a cash profile, by the service and by the table). Margin with longs and shorts is a later follow-up.
