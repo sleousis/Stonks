@@ -6,7 +6,6 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
 from stonks.app.context import AppContext
 from stonks.app.pagination import Page
 from stonks.production.ledger import ledger_filter
@@ -56,9 +55,10 @@ class OrdersService:
         status: str | None = None,
         limit: int,
         offset: int,
-        portfolio_id: str = DEFAULT_PORTFOLIO_ID,
+        portfolio_id: str,
     ) -> Page[OrderView]:
-        """One portfolio's orders (default: the default portfolio)."""
+        """One portfolio's orders. The caller names the portfolio (the
+        route resolves one the caller owns), never a default (BE-46)."""
         clause, params = _where(
             {"tick_id": tick_id, "strategy_id": strategy_id, "ticker": ticker, "status": status}
         )
@@ -81,9 +81,9 @@ class OrdersService:
         order_client_id: str | None = None,
         limit: int,
         offset: int,
-        portfolio_id: str = DEFAULT_PORTFOLIO_ID,
+        portfolio_id: str,
     ) -> Page[FillView]:
-        """One portfolio's fills (default: the default portfolio)."""
+        """One portfolio's fills. The caller names the portfolio (BE-46)."""
         clause, params = _where(
             {"o.tick_id": tick_id, "f.ticker": ticker, "f.order_client_id": order_client_id}
         )

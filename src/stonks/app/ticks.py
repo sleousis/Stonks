@@ -35,6 +35,9 @@ TickStatus = Literal["running", "ok", "partial", "error"]
 #: (the CLI and in-process services).
 Who = Scope | Principal
 
+#: Orders fetched per page when a tick detail lists every order of a book.
+_ORDER_PAGE = 1000
+
 _TICK_ID_DATE = re.compile(r"^tick_(\d{4}-\d{2}-\d{2})_")
 
 
@@ -141,15 +144,20 @@ class TickService:
                 books = sorted(visible)
             else:
                 books = _order_books(state, tick_id)
-        orders = [
-            o
-            for pid in books
-            for o in self._orders.orders(
-                tick_id=tick_id, portfolio_id=pid, limit=10_000, offset=0
-            ).items
-        ]
+        orders = [o for pid in books for o in self._all_orders(tick_id, pid)]
         orders.sort(key=lambda o: str(o.created_at), reverse=True)
         return TickRunDetail(**_row_to_view(rows[0], visible).model_dump(), orders=orders)
+
+    def _all_orders(self, tick_id: str, portfolio_id: str) -> list[OrderView]:
+        """Every order of the tick in one book, page by page (no hard cap)."""
+        out: list[OrderView] = []
+        while True:
+            page = self._orders.orders(
+                tick_id=tick_id, portfolio_id=portfolio_id, limit=_ORDER_PAGE, offset=len(out)
+            )
+            out.extend(page.items)
+            if not page.items or len(out) >= page.total:
+                return out
 
     def _visible(self, who: Who) -> set[str] | None:
         """Ids of the portfolios ``who`` owns (``None``: a service, every
