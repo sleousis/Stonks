@@ -53,6 +53,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_model_version_history`](#get_model_version_history) | read | no |
 | [`get_my_risk_limits`](#get_my_risk_limits) | read | no |
 | [`get_news`](#get_news) | read | no |
+| [`get_notification_preferences`](#get_notification_preferences) | read | no |
 | [`get_order_tca`](#get_order_tca) | read | no |
 | [`get_pnl`](#get_pnl) | read | no |
 | [`get_portfolio`](#get_portfolio) | read | no |
@@ -142,6 +143,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`run_tick`](#run_tick) | guarded | yes |
 | [`save_screen_as_universe`](#save_screen_as_universe) | guarded | yes |
 | [`search_instruments`](#search_instruments) | read | no |
+| [`set_event_alerts`](#set_event_alerts) | guarded | yes |
 | [`shadow_strategy`](#shadow_strategy) | guarded | yes |
 | [`start_research`](#start_research) | job | no |
 | [`subscribe`](#subscribe) | guarded | yes |
@@ -482,6 +484,17 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `watchlist_id` | string \| null | no | `null` | one of your watchlists (scope watchlists) |
 | `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
 | `limit` | integer | no | `50` |  |
+
+### `get_notification_preferences`
+
+Your notification settings: which categories (signals, orders,
+risk, system, price alerts, event alerts) go to which channel, the
+upcoming-event alert kinds you get, and your quiet hours. The webhook
+shows its host only.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
 
 ### `get_order_tca`
 
@@ -2161,6 +2174,22 @@ Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes*
 | `end` | date \| null | no | `null` | YYYY-MM-DD |
 | `rebalance` | "weekly" \| "monthly" \| "quarterly" | no | `"monthly"` |  |
 | `name` | string \| null | no | `null` |  |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
+### `set_event_alerts`
+
+Turn kinds of upcoming-event alerts on or off for yourself:
+earnings coming up, ex-dividend dates coming up, economic releases
+coming up. Off means none of that kind, not even in the app. Without
+confirm=true returns your current switches and changes nothing.
+
+Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `earnings` | boolean \| null | no | `null` | true: on, false: off, omit: leave as is |
+| `dividends` | boolean \| null | no | `null` | true: on, false: off, omit: leave as is |
+| `economic` | boolean \| null | no | `null` | true: on, false: off, omit: leave as is |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
 ### `shadow_strategy`

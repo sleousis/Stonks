@@ -127,16 +127,21 @@ class EventAlertKindView(BaseModel):
     kind: str
     label: str
     default_days_ahead: int
+    #: The switch in your notification settings that turns this kind on or
+    #: off (earnings, dividends, economic).
+    topic: str
 
 
 @router.get(
     "/alert-kinds", response_model=list[EventAlertKindView], operation_id="listEventAlertKinds"
 )
 def list_event_alert_kinds() -> list[EventAlertKindView]:
-    """The upcoming-event alert kinds (earnings, ex-dividend) and how many
-    days ahead each looks by default."""
+    """The upcoming-event alert kinds (earnings, ex-dividend), how many
+    days ahead each looks by default, and the notification switch it follows."""
     return [
-        EventAlertKindView(kind=k.kind, label=k.label, default_days_ahead=k.default_days_ahead)
+        EventAlertKindView(
+            kind=k.kind, label=k.label, default_days_ahead=k.default_days_ahead, topic=k.topic
+        )
         for k in alert_kinds()
     ]
 

@@ -325,6 +325,12 @@ CASES: dict[str, Case] = {
     "list_alerts": _c("GET", "/api/alerts"),
     "list_notifications": _c("GET", "/api/notifications"),
     "mark_notifications_read": _c("POST", "/api/notifications/read"),
+    "get_notification_preferences": _c("GET", "/api/notifications/preferences"),
+    "set_event_alerts": _c(
+        "PUT",
+        "/api/notifications/preferences",
+        lambda i: {"dividends": False, "confirm": True},
+    ),
     "list_survival_tests": _c("GET", "/api/lab/survival-tests"),
     "list_survival_presets": _c("GET", "/api/lab/survival-presets"),
     "get_studio_capabilities": _c("GET", "/api/studio/capabilities"),

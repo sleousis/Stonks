@@ -64,8 +64,18 @@ class PreferenceItem(BaseModel):
     strategy_id: str | None = Field(default=None, max_length=200)
 
 
+class EventAlertSwitchItem(BaseModel):
+    #: earnings, dividends or economic.
+    topic: str = Field(min_length=1, max_length=32)
+    enabled: bool
+
+
 class PreferencesUpdate(BaseModel):
-    preferences: list[PreferenceItem] = Field(max_length=200)
+    """Only what is given changes."""
+
+    preferences: list[PreferenceItem] = Field(default_factory=list, max_length=200)
+    #: Turn a kind of upcoming-event alert on or off.
+    event_alerts: list[EventAlertSwitchItem] = Field(default_factory=list, max_length=20)
 
 
 class QuietHoursUpdate(BaseModel):
@@ -115,6 +125,13 @@ class ChannelDefaultView(BaseModel):
     fallback: bool
 
 
+class EventAlertSwitchView(BaseModel):
+    topic: str
+    #: Plain words for the switch.
+    label: str
+    enabled: bool
+
+
 class PreferencesView(BaseModel):
     preferences: list[PreferenceItem]
     quiet_start: str | None
@@ -126,6 +143,9 @@ class PreferencesView(BaseModel):
     channels: list[str]
     #: What each channel does when you have not set it.
     channel_defaults: list[ChannelDefaultView] = Field(default_factory=list)
+    #: One switch per kind of upcoming-event alert (earnings, dividends,
+    #: economic releases). Off: none of that kind, not even in the app.
+    event_alerts: list[EventAlertSwitchView] = Field(default_factory=list)
 
 
 class FeedItemView(BaseModel):
@@ -200,6 +220,10 @@ def _prefs(p: notify.NotificationPreferences) -> PreferencesView:
             ChannelDefaultView(channel=name, default_enabled=enabled, fallback=fallback)
             for name, enabled, fallback in p.channel_defaults
         ],
+        event_alerts=[
+            EventAlertSwitchView(topic=e.topic, label=e.label, enabled=e.enabled)
+            for e in p.event_alerts
+        ],
     )
 
 
@@ -273,7 +297,8 @@ class NotificationsAppService:
                 )
                 for p in request.preferences
             ]
-            return _prefs(notify.update_preferences(state, scope, prefs))
+            switches = {e.topic: e.enabled for e in request.event_alerts}
+            return _prefs(notify.update_preferences(state, scope, prefs, event_alerts=switches))
 
     def set_quiet_hours(self, scope: Scope, request: QuietHoursUpdate) -> PreferencesView:
         with self._state() as state:
