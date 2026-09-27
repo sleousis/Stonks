@@ -17,6 +17,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 16 | 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. |
 | 17 | Planned. |
 | 19 | Planned. Design: `docs/design/live-trading.md`. |
+| 20 | Backend of 20.1 to 20.5 done (API, CLI, MCP). The console screens are next. 20.6 planned. |
 
 Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor-agnostic schemas, third-party libraries wrapped behind a seam). Live-network tests go under `tests/integration/live/` behind `@pytest.mark.live`.
 
@@ -450,6 +451,14 @@ Waves: 19.1, 19.4, 19.6 and 19.7 first, then 19.2 and 19.8, then 19.3, 19.5, 19.
 ## Phase 20: Complete product
 
 Decided with the owner on 2026-09-27. Stonks stays private: the owner plus invited traders, no billing or public sign-up. Research data comes from EODHD All-in-one, live prices from Interactive Brokers.
+
+**Status:** the backend of 20.1 to 20.5 is done: services, API, CLI and MCP, with minimal console services. The console screens come next, after the usability pass. 20.6 is planned.
+
+- 20.1: `production/manual.py`, `app/manual_orders.py`, `/api/orders/manual`, `stonks orders`, the MCP tools `place_order`, `change_order` and `cancel_order`. The order ticket and the account rules arrive with Phase 19 as registered risk rules, which manual orders already run. A real-money book needs a fresh second factor (`orders.live`). The tick never trades a manual holding.
+- 20.2: `price_alerts/`, `app/price_alerts.py`, `/api/price-alerts`, `stonks price-alerts`, five MCP tools, and the `price_alerts` scheduler job after the price ingest. Live prices can call the same check once intraday lands.
+- 20.3: `telegram/` (the channel, the long-polling bot, one-time link codes), `/api/telegram`, `stonks telegram`. Off unless `[telegram] enabled` and `STONKS_TELEGRAM_BOT_TOKEN` are set.
+- 20.4: `assistant/` (the `ChatModel` seam, an OpenAI-compatible client, the agent loop over the MCP tools, conversations), `/api/assistant` with streamed answers. Off unless `[assistant] base_url` is set.
+- 20.5: lake `fx_rates` (017) from EODHD forex, `fx/`, base-currency values in the portfolio, P&L, insights and TCA views, and `tax/` with the yearly CSV exports (`/api/tax`, `stonks tax`, `stonks ingest fx`). See `docs/tax.md`.
 
 | WP | Scope |
 |----|-------|

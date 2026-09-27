@@ -1,6 +1,21 @@
 {
   "components": {
     "schemas": {
+      "ActionDecision": {
+        "additionalProperties": false,
+        "properties": {
+          "approve": {
+            "description": "true runs the action, false drops it.",
+            "title": "Approve",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "approve"
+        ],
+        "title": "ActionDecision",
+        "type": "object"
+      },
       "AgreementView": {
         "properties": {
           "as_of": {
@@ -261,6 +276,76 @@
           }
         },
         "title": "AssetClassCosts",
+        "type": "object"
+      },
+      "AssistantEventView": {
+        "description": "One server-sent event of a turn. ``kind`` is also the SSE event name.\n\n- ``text``: ``{delta}``, a piece of the answer\n- ``tool_call``: ``{id, name, arguments, needs_confirmation}``\n- ``tool_result``: ``{id, name, ok, result | error}``\n- ``confirm_required``: ``{action_id, tool, description, arguments, preview}``\n- ``error``: ``{code, message}`` (``model_error``, ``timeout``, ``max_steps``, ...)\n- ``done``: ``{conversation_id, steps, pending_action_id}``, always last",
+        "properties": {
+          "data": {
+            "additionalProperties": true,
+            "title": "Data",
+            "type": "object"
+          },
+          "kind": {
+            "enum": [
+              "text",
+              "tool_call",
+              "tool_result",
+              "confirm_required",
+              "done",
+              "error"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "data"
+        ],
+        "title": "AssistantEventView",
+        "type": "object"
+      },
+      "AssistantStatusView": {
+        "properties": {
+          "enabled": {
+            "description": "True when a model endpoint is configured.",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "max_steps": {
+            "title": "Max Steps",
+            "type": "integer"
+          },
+          "max_tokens": {
+            "title": "Max Tokens",
+            "type": "integer"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The model name, when enabled.",
+            "title": "Model"
+          },
+          "timeout_seconds": {
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "enabled",
+          "model",
+          "max_steps",
+          "max_tokens",
+          "timeout_seconds"
+        ],
+        "title": "AssistantStatusView",
         "type": "object"
       },
       "AuthCheck": {
@@ -1593,6 +1678,96 @@
           "updated_at"
         ],
         "title": "ConnectionView",
+        "type": "object"
+      },
+      "ConversationCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "title": "ConversationCreate",
+        "type": "object"
+      },
+      "ConversationDetailView": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/MessageView"
+            },
+            "title": "Messages",
+            "type": "array"
+          },
+          "pending_actions": {
+            "description": "Write actions waiting for you to approve or reject.",
+            "items": {
+              "$ref": "#/components/schemas/PendingActionView"
+            },
+            "title": "Pending Actions",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "created_at",
+          "updated_at",
+          "messages",
+          "pending_actions"
+        ],
+        "title": "ConversationDetailView",
+        "type": "object"
+      },
+      "ConversationView": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ConversationView",
         "type": "object"
       },
       "CostComparisonView": {
@@ -2999,6 +3174,42 @@
         "title": "FillView",
         "type": "object"
       },
+      "FxRateView": {
+        "properties": {
+          "base_currency": {
+            "title": "Base Currency",
+            "type": "string"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "quote_currency": {
+            "title": "Quote Currency",
+            "type": "string"
+          },
+          "rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate"
+          }
+        },
+        "required": [
+          "base_currency",
+          "quote_currency",
+          "day",
+          "rate"
+        ],
+        "title": "FxRateView",
+        "type": "object"
+      },
       "GoLiveCheckView": {
         "properties": {
           "detail": {
@@ -4080,6 +4291,14 @@
           "exposure": {
             "$ref": "#/components/schemas/Exposure"
           },
+          "fx_missing": {
+            "description": "Held currencies with no FX rate to the base currency.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Fx Missing",
+            "type": "array"
+          },
           "notes": {
             "items": {
               "type": "string"
@@ -4133,6 +4352,18 @@
           "total_value": {
             "title": "Total Value",
             "type": "number"
+          },
+          "total_value_base": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Cash (kept in the base currency) plus every priced holding converted to the base currency at the latest FX rate; null when a held currency has no rate.",
+            "title": "Total Value Base"
           },
           "uncovered": {
             "description": "Broker symbols no ticker maps to.",
@@ -5886,6 +6117,368 @@
         "title": "LoginView",
         "type": "object"
       },
+      "LotPick": {
+        "additionalProperties": false,
+        "properties": {
+          "buy_fill_id": {
+            "title": "Buy Fill Id",
+            "type": "integer"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0.0,
+            "title": "Quantity",
+            "type": "number"
+          }
+        },
+        "required": [
+          "buy_fill_id",
+          "quantity"
+        ],
+        "title": "LotPick",
+        "type": "object"
+      },
+      "LotPickView": {
+        "properties": {
+          "buy_fill_id": {
+            "title": "Buy Fill Id",
+            "type": "integer"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          },
+          "sell_fill_id": {
+            "title": "Sell Fill Id",
+            "type": "integer"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sell_fill_id",
+          "buy_fill_id",
+          "ticker",
+          "quantity"
+        ],
+        "title": "LotPickView",
+        "type": "object"
+      },
+      "LotPicksUpdate": {
+        "additionalProperties": false,
+        "description": "The lots one sell fill closes. An empty list clears the picks.",
+        "properties": {
+          "picks": {
+            "items": {
+              "$ref": "#/components/schemas/LotPick"
+            },
+            "maxItems": 500,
+            "title": "Picks",
+            "type": "array"
+          },
+          "sell_fill_id": {
+            "title": "Sell Fill Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sell_fill_id"
+        ],
+        "title": "LotPicksUpdate",
+        "type": "object"
+      },
+      "ManualOrderChange": {
+        "additionalProperties": false,
+        "description": "A new quantity or limit for one of your working manual orders. It is\ncancelled at the broker and replaced by a new order.",
+        "properties": {
+          "allow_reduce": {
+            "default": false,
+            "title": "Allow Reduce",
+            "type": "boolean"
+          },
+          "limit_price": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Price"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio Id"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1000000000.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ManualOrderChange",
+        "type": "object"
+      },
+      "ManualOrderRequest": {
+        "additionalProperties": false,
+        "description": "One order you place by hand. It goes through the kill switch, every\nhalt and every risk rule of the book, like a strategy's order.",
+        "properties": {
+          "allow_reduce": {
+            "default": false,
+            "description": "Place a smaller order when a risk rule shrinks it. Off: the order is refused and the answer says what the rules allow.",
+            "title": "Allow Reduce",
+            "type": "boolean"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_.\\-]{1,64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Your idempotency key. The same key places the order once.",
+            "title": "Client Id"
+          },
+          "limit_price": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Needed for a limit order.",
+            "title": "Limit Price"
+          },
+          "order_type": {
+            "default": "market",
+            "enum": [
+              "market",
+              "limit"
+            ],
+            "title": "Order Type",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One of your portfolios. Default: your own book.",
+            "title": "Portfolio Id"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1000000000.0,
+            "title": "Quantity",
+            "type": "number"
+          },
+          "reason": {
+            "description": "Why you trade (recorded).",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          },
+          "side": {
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "ticker": {
+            "description": "Instrument id, e.g. AAPL.US",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._\\-^=]{0,31}$",
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker",
+          "side",
+          "quantity",
+          "reason"
+        ],
+        "title": "ManualOrderRequest",
+        "type": "object"
+      },
+      "ManualOrderResult": {
+        "properties": {
+          "adjustments": {
+            "items": {
+              "$ref": "#/components/schemas/RiskAdjustmentView"
+            },
+            "title": "Adjustments",
+            "type": "array"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "duplicate": {
+            "default": false,
+            "description": "The client id was placed before.",
+            "title": "Duplicate",
+            "type": "boolean"
+          },
+          "fill_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fill Price"
+          },
+          "halt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A halt that limits the book.",
+            "title": "Halt"
+          },
+          "limit_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Price"
+          },
+          "live": {
+            "description": "The book trades real money.",
+            "title": "Live",
+            "type": "boolean"
+          },
+          "order_type": {
+            "enum": [
+              "market",
+              "limit"
+            ],
+            "title": "Order Type",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "quantity": {
+            "description": "What was placed (smaller when allow_reduce applied).",
+            "title": "Quantity",
+            "type": "number"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it ended in its status.",
+            "title": "Reason"
+          },
+          "reference_price": {
+            "description": "The latest close the order was checked at.",
+            "title": "Reference Price",
+            "type": "number"
+          },
+          "requested_quantity": {
+            "title": "Requested Quantity",
+            "type": "number"
+          },
+          "side": {
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "preview",
+              "pending",
+              "filled",
+              "partially_filled",
+              "rejected",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "portfolio_id",
+          "ticker",
+          "side",
+          "order_type",
+          "limit_price",
+          "status",
+          "requested_quantity",
+          "quantity",
+          "reference_price",
+          "live"
+        ],
+        "title": "ManualOrderResult",
+        "type": "object"
+      },
       "MarginCallSettings": {
         "additionalProperties": false,
         "properties": {
@@ -6224,7 +6817,9 @@
               "token",
               "legacy",
               "cli",
-              "scheduler"
+              "scheduler",
+              "assistant",
+              "telegram"
             ],
             "title": "Via",
             "type": "string"
@@ -6241,6 +6836,85 @@
           "mfa_fresh"
         ],
         "title": "MeView",
+        "type": "object"
+      },
+      "MessageCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "MessageCreate",
+        "type": "object"
+      },
+      "MessageView": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant",
+              "tool"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "tool_call_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Call Id"
+          },
+          "tool_calls": {
+            "items": {
+              "$ref": "#/components/schemas/ToolCallView"
+            },
+            "title": "Tool Calls",
+            "type": "array"
+          },
+          "tool_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Name"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "content",
+          "created_at"
+        ],
+        "title": "MessageView",
         "type": "object"
       },
       "MfaCodeRequest": {
@@ -6531,6 +7205,57 @@
         "title": "Opinion",
         "type": "object"
       },
+      "OrderCancelRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio Id"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "OrderCancelRequest",
+        "type": "object"
+      },
+      "OrderCancelResult": {
+        "properties": {
+          "cancelled": {
+            "title": "Cancelled",
+            "type": "boolean"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "status",
+          "cancelled"
+        ],
+        "title": "OrderCancelResult",
+        "type": "object"
+      },
       "OrderView": {
         "properties": {
           "broker_order_id": {
@@ -6563,13 +7288,55 @@
             ],
             "title": "Limit Price"
           },
+          "manual_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Reason"
+          },
           "order_type": {
             "title": "Order Type",
             "type": "string"
           },
+          "origin": {
+            "default": "strategy",
+            "enum": [
+              "strategy",
+              "manual"
+            ],
+            "title": "Origin",
+            "type": "string"
+          },
+          "placed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Placed By"
+          },
           "quantity": {
             "title": "Quantity",
             "type": "number"
+          },
+          "replaces_client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaces Client Id"
           },
           "side": {
             "title": "Side",
@@ -6760,6 +7527,37 @@
           "offset"
         ],
         "title": "Page[ConnectionView]",
+        "type": "object"
+      },
+      "Page_ConversationView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[ConversationView]",
         "type": "object"
       },
       "Page_CoverageRow_": {
@@ -7101,6 +7899,68 @@
           "offset"
         ],
         "title": "Page[PortfolioSummaryView]",
+        "type": "object"
+      },
+      "Page_PriceAlertEventView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PriceAlertEventView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[PriceAlertEventView]",
+        "type": "object"
+      },
+      "Page_PriceAlertView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PriceAlertView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[PriceAlertView]",
         "type": "object"
       },
       "Page_PushDeviceView_": {
@@ -7777,6 +8637,53 @@
         "title": "PasswordResetRequest",
         "type": "object"
       },
+      "PendingActionView": {
+        "properties": {
+          "arguments": {
+            "additionalProperties": true,
+            "title": "Arguments",
+            "type": "object"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "done",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tool_call_id": {
+            "title": "Tool Call Id",
+            "type": "string"
+          },
+          "tool_name": {
+            "title": "Tool Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tool_call_id",
+          "tool_name",
+          "arguments",
+          "status",
+          "created_at"
+        ],
+        "title": "PendingActionView",
+        "type": "object"
+      },
       "PeriodPnl": {
         "properties": {
           "change": {
@@ -7936,6 +8843,39 @@
       "PnlSeries": {
         "description": "One row per day. ``strategy_id`` is ``None`` for the real portfolio\nand a shadow strategy's id for its virtual portfolio.",
         "properties": {
+          "base_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Currency"
+          },
+          "base_rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PnlRowView"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Rows"
+          },
+          "fx_missing": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Fx Missing",
+            "type": "array"
+          },
           "rows": {
             "items": {
               "$ref": "#/components/schemas/PnlRowView"
@@ -8230,6 +9170,18 @@
       },
       "PortfolioView": {
         "properties": {
+          "base_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The portfolio's base (reporting) currency.",
+            "title": "Base Currency"
+          },
           "cash": {
             "title": "Cash",
             "type": "number"
@@ -8246,6 +9198,14 @@
             "title": "Currency",
             "type": "string"
           },
+          "fx_missing": {
+            "description": "Held currencies with no stored FX rate to the base currency.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Fx Missing",
+            "type": "array"
+          },
           "positions": {
             "items": {
               "$ref": "#/components/schemas/PositionView"
@@ -8256,6 +9216,18 @@
           "positions_value": {
             "title": "Positions Value",
             "type": "number"
+          },
+          "positions_value_base": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "positions_value in the base currency; null when a held currency has no FX rate (see fx_missing).",
+            "title": "Positions Value Base"
           },
           "snapshot_total_value": {
             "anyOf": [
@@ -8294,6 +9266,18 @@
           "total_value": {
             "title": "Total Value",
             "type": "number"
+          },
+          "total_value_base": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Cash (kept in the base currency) plus positions_value_base; null when a held currency has no FX rate.",
+            "title": "Total Value Base"
           },
           "unrealized_pnl": {
             "default": 0.0,
@@ -8393,6 +9377,18 @@
               }
             ],
             "title": "Market Value"
+          },
+          "market_value_base": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "market_value in the portfolio's base currency, at the FX rate of the price date; null when unpriced or no FX rate is stored.",
+            "title": "Market Value Base"
           },
           "price": {
             "anyOf": [
@@ -8664,6 +9660,410 @@
         "title": "PreflightView",
         "type": "object"
       },
+      "PriceAlertCreate": {
+        "additionalProperties": false,
+        "description": "A rule on one ticker (``ticker``) or on one of your watchlists\n(``watchlist_id``), not both.",
+        "properties": {
+          "condition": {
+            "enum": [
+              "crosses_above",
+              "crosses_below",
+              "moves_pct"
+            ],
+            "title": "Condition",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The price to watch (crossings).",
+            "title": "Level"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1000.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Percent move, either way (moves_pct).",
+            "title": "Pct"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker"
+          },
+          "watchlist_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Watchlist Id"
+          },
+          "window_days": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Calendar days the move is measured over.",
+            "title": "Window Days"
+          }
+        },
+        "required": [
+          "condition"
+        ],
+        "title": "PriceAlertCreate",
+        "type": "object"
+      },
+      "PriceAlertEventView": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "observed_at": {
+            "title": "Observed At",
+            "type": "string"
+          },
+          "price": {
+            "title": "Price",
+            "type": "number"
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "rule_id",
+          "ticker",
+          "observed_at",
+          "price",
+          "detail",
+          "created_at"
+        ],
+        "title": "PriceAlertEventView",
+        "type": "object"
+      },
+      "PriceAlertRunRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          }
+        },
+        "title": "PriceAlertRunRequest",
+        "type": "object"
+      },
+      "PriceAlertRunView": {
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "checked": {
+            "title": "Checked",
+            "type": "integer"
+          },
+          "fired": {
+            "title": "Fired",
+            "type": "integer"
+          },
+          "published": {
+            "title": "Published",
+            "type": "integer"
+          },
+          "rules": {
+            "title": "Rules",
+            "type": "integer"
+          },
+          "skipped_no_price": {
+            "title": "Skipped No Price",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "as_of",
+          "rules",
+          "checked",
+          "fired",
+          "published",
+          "skipped_no_price"
+        ],
+        "title": "PriceAlertRunView",
+        "type": "object"
+      },
+      "PriceAlertUpdate": {
+        "additionalProperties": false,
+        "description": "Change the name, the thresholds or switch the rule on or off. The\ntarget and the condition stay (make a new rule for another one).",
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The price to watch (crossings).",
+            "title": "Level"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1000.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Percent move, either way (moves_pct).",
+            "title": "Pct"
+          },
+          "window_days": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Calendar days the move is measured over.",
+            "title": "Window Days"
+          }
+        },
+        "title": "PriceAlertUpdate",
+        "type": "object"
+      },
+      "PriceAlertView": {
+        "properties": {
+          "condition": {
+            "enum": [
+              "crosses_above",
+              "crosses_below",
+              "moves_pct"
+            ],
+            "title": "Condition",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_seen": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Last Seen",
+            "type": "object"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct"
+          },
+          "target_kind": {
+            "enum": [
+              "ticker",
+              "watchlist"
+            ],
+            "title": "Target Kind",
+            "type": "string"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "watchlist_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Watchlist Id"
+          },
+          "window_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Days"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "target_kind",
+          "ticker",
+          "watchlist_id",
+          "condition",
+          "level",
+          "pct",
+          "window_days",
+          "enabled",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "PriceAlertView",
+        "type": "object"
+      },
       "ProbeView": {
         "properties": {
           "checks": {
@@ -8772,6 +10172,21 @@
               }
             ],
             "title": "Next Step"
+          },
+          "risk_adjustments": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Adjustments"
           },
           "status": {
             "title": "Status",
@@ -12544,6 +13959,125 @@
         "title": "SystemChecklistView",
         "type": "object"
       },
+      "TaxSettingsUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "base_currency": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Z]{3}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Currency"
+          },
+          "jurisdiction": {
+            "anyOf": [
+              {
+                "enum": [
+                  "us",
+                  "eu",
+                  "uk"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jurisdiction"
+          },
+          "lot_method": {
+            "anyOf": [
+              {
+                "enum": [
+                  "fifo",
+                  "specific"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Method"
+          },
+          "wash_sales": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wash Sales"
+          }
+        },
+        "title": "TaxSettingsUpdate",
+        "type": "object"
+      },
+      "TaxSettingsView": {
+        "properties": {
+          "base_currency": {
+            "description": "Reporting currency of values, P&L and exports.",
+            "title": "Base Currency",
+            "type": "string"
+          },
+          "jurisdiction": {
+            "description": "us applies wash sales when switched on.",
+            "enum": [
+              "us",
+              "eu",
+              "uk"
+            ],
+            "title": "Jurisdiction",
+            "type": "string"
+          },
+          "lot_method": {
+            "description": "fifo, or specific: your picks first, then FIFO for the rest.",
+            "enum": [
+              "fifo",
+              "specific"
+            ],
+            "title": "Lot Method",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "wash_sales": {
+            "description": "US wash sale adjustment (us jurisdiction only).",
+            "title": "Wash Sales",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "base_currency",
+          "jurisdiction",
+          "lot_method",
+          "wash_sales"
+        ],
+        "title": "TaxSettingsView",
+        "type": "object"
+      },
       "TcaGroupView": {
         "description": "Costs of a group of orders, weighted by notional, in bps.",
         "properties": {
@@ -12679,8 +14213,69 @@
         "title": "TcaGroupView",
         "type": "object"
       },
+      "TcaMoneyView": {
+        "description": "A group's money figures in the portfolio's base currency (roadmap\n20.5), each order converted at the FX rate of its decision day. Null\nwhen an order's currency has no rate.",
+        "properties": {
+          "filled_notional": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filled Notional"
+          },
+          "is_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Cost"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "opportunity_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opportunity Cost"
+          }
+        },
+        "required": [
+          "key",
+          "filled_notional",
+          "is_cost",
+          "opportunity_cost"
+        ],
+        "title": "TcaMoneyView",
+        "type": "object"
+      },
       "TcaSummaryView": {
         "properties": {
+          "base_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Currency"
+          },
           "by": {
             "enum": [
               "all",
@@ -12694,11 +14289,27 @@
             "title": "By",
             "type": "string"
           },
+          "fx_missing": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Fx Missing",
+            "type": "array"
+          },
           "groups": {
             "items": {
               "$ref": "#/components/schemas/TcaGroupView"
             },
             "title": "Groups",
+            "type": "array"
+          },
+          "groups_base": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TcaMoneyView"
+            },
+            "title": "Groups Base",
             "type": "array"
           },
           "portfolio_id": {
@@ -12815,6 +14426,97 @@
           "status_history"
         ],
         "title": "TearSheetView",
+        "type": "object"
+      },
+      "TelegramLinkCodeView": {
+        "properties": {
+          "bot_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bot Username"
+          },
+          "code": {
+            "description": "Shown once. Send /link CODE to the bot.",
+            "title": "Code",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "expires_at"
+        ],
+        "title": "TelegramLinkCodeView",
+        "type": "object"
+      },
+      "TelegramLinkView": {
+        "properties": {
+          "bot_configured": {
+            "description": "The server has a bot token, so it can send.",
+            "title": "Bot Configured",
+            "type": "boolean"
+          },
+          "bot_enabled": {
+            "description": "The server answers commands ([telegram].enabled).",
+            "title": "Bot Enabled",
+            "type": "boolean"
+          },
+          "bot_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bot Username"
+          },
+          "linked": {
+            "title": "Linked",
+            "type": "boolean"
+          },
+          "linked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linked At"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The linked chat's @username.",
+            "title": "Username"
+          }
+        },
+        "required": [
+          "bot_configured",
+          "bot_enabled",
+          "linked"
+        ],
+        "title": "TelegramLinkView",
         "type": "object"
       },
       "TestNotificationView": {
@@ -13394,6 +15096,30 @@
           "revoked_at"
         ],
         "title": "TokenView",
+        "type": "object"
+      },
+      "ToolCallView": {
+        "properties": {
+          "arguments": {
+            "additionalProperties": true,
+            "title": "Arguments",
+            "type": "object"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "arguments"
+        ],
+        "title": "ToolCallView",
         "type": "object"
       },
       "TradeStatsView": {
@@ -14656,6 +16382,695 @@
         "summary": "List Alerts",
         "tags": [
           "alerts"
+        ]
+      }
+    },
+    "/api/assistant/conversations": {
+      "get": {
+        "description": "Your conversations, most recent first.",
+        "operationId": "listAssistantConversations",
+        "parameters": [
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ConversationView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Conversations",
+        "tags": [
+          "assistant"
+        ]
+      },
+      "post": {
+        "operationId": "createAssistantConversation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Conversation",
+        "tags": [
+          "assistant"
+        ],
+        "x-permission": "data.read"
+      }
+    },
+    "/api/assistant/conversations/{conversation_id}": {
+      "delete": {
+        "operationId": "deleteAssistantConversation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Conversation",
+        "tags": [
+          "assistant"
+        ],
+        "x-permission": "data.read"
+      },
+      "get": {
+        "description": "One of your conversations with its messages and pending actions.",
+        "operationId": "getAssistantConversation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationDetailView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Conversation",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
+    "/api/assistant/conversations/{conversation_id}/actions/{action_id}": {
+      "post": {
+        "description": "Approve (run) or reject a write action the assistant asked for. The\nturn then continues as a new event stream.",
+        "operationId": "decideAssistantAction",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "action_id",
+            "required": true,
+            "schema": {
+              "title": "Action Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionDecision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "itemSchema": {
+                  "properties": {
+                    "data": {
+                      "contentMediaType": "application/json",
+                      "contentSchema": {
+                        "$ref": "#/components/schemas/AssistantEventView"
+                      },
+                      "type": "string"
+                    },
+                    "event": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "retry": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Decide Action",
+        "tags": [
+          "assistant"
+        ],
+        "x-permission": "data.read"
+      }
+    },
+    "/api/assistant/conversations/{conversation_id}/messages": {
+      "post": {
+        "description": "Send a message. The answer streams as events (text pieces, tool\ncalls and results) and ends with ``done``. A write action stops the\nturn with ``confirm_required``: approve or reject it with the actions\nroute.",
+        "operationId": "sendAssistantMessage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "itemSchema": {
+                  "properties": {
+                    "data": {
+                      "contentMediaType": "application/json",
+                      "contentSchema": {
+                        "$ref": "#/components/schemas/AssistantEventView"
+                      },
+                      "type": "string"
+                    },
+                    "event": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "retry": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Send Message",
+        "tags": [
+          "assistant"
+        ],
+        "x-permission": "data.read"
+      }
+    },
+    "/api/assistant/status": {
+      "get": {
+        "description": "Whether a model endpoint is configured, its model and the turn limits.",
+        "operationId": "getAssistantStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantStatusView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Assistant Status",
+        "tags": [
+          "assistant"
         ]
       }
     },
@@ -19149,6 +21564,122 @@
         "summary": "Portfolio snapshots as CSV",
         "tags": [
           "exports"
+        ]
+      }
+    },
+    "/api/fx/rate": {
+      "get": {
+        "description": "The rate the system converts with: the latest on or before ``day``\n(default today), the inverse pair, or a cross through USD.",
+        "operationId": "getFxRate",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "base",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z]{3}$",
+              "title": "Base",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "quote",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z]{3}$",
+              "title": "Quote",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "day",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Day"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FxRateView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Fx Rate",
+        "tags": [
+          "fx"
         ]
       }
     },
@@ -23804,6 +26335,26 @@
             }
           },
           {
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "strategy",
+                    "manual"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Origin"
+            }
+          },
+          {
             "description": "page size",
             "in": "query",
             "name": "limit",
@@ -24099,6 +26650,386 @@
         "tags": [
           "orders"
         ]
+      }
+    },
+    "/api/orders/manual": {
+      "post": {
+        "description": "Place an order on one of your portfolios. A simulated book fills at\nonce at the latest close. A book at a broker sends it through the broker.\nThe same ``client_id`` places the order once.",
+        "operationId": "placeManualOrder",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualOrderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManualOrderResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Place Manual Order",
+        "tags": [
+          "orders"
+        ],
+        "x-permission": "portfolio.trade"
+      }
+    },
+    "/api/orders/manual/preview": {
+      "post": {
+        "description": "Run every check of an order and say what would be placed. Nothing is\nrecorded or sent.",
+        "operationId": "previewManualOrder",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualOrderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManualOrderResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Manual Order",
+        "tags": [
+          "orders"
+        ],
+        "x-permission": "portfolio.trade"
+      }
+    },
+    "/api/orders/{client_id}/cancel": {
+      "post": {
+        "description": "Cancel one working order of your portfolio, yours or a strategy's.",
+        "operationId": "cancelOrder",
+        "parameters": [
+          {
+            "description": "The order's client id",
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "description": "The order's client id",
+              "maxLength": 200,
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderCancelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderCancelResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Cancel Order",
+        "tags": [
+          "orders"
+        ],
+        "x-permission": "portfolio.trade"
+      }
+    },
+    "/api/orders/{client_id}/change": {
+      "post": {
+        "description": "Change the quantity or limit of one of your working manual orders:\nit is cancelled at the broker and a new order replaces it.",
+        "operationId": "changeManualOrder",
+        "parameters": [
+          {
+            "description": "The order's client id",
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "description": "The order's client id",
+              "maxLength": 200,
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualOrderChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManualOrderResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change Manual Order",
+        "tags": [
+          "orders"
+        ],
+        "x-permission": "portfolio.trade"
       }
     },
     "/api/pnl": {
@@ -24923,6 +27854,688 @@
           "portfolio"
         ],
         "x-permission": "portfolio.manage"
+      }
+    },
+    "/api/price-alerts": {
+      "get": {
+        "description": "Your price alert rules, oldest first, with the price each last saw.",
+        "operationId": "listPriceAlerts",
+        "parameters": [
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_PriceAlertView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Price Alerts",
+        "tags": [
+          "price-alerts"
+        ]
+      },
+      "post": {
+        "description": "A new rule: crosses_above or crosses_below a level, or moves_pct by a\npercent over window_days, on a ticker or on one of your watchlists.",
+        "operationId": "createPriceAlert",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceAlertCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceAlertView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Price Alert",
+        "tags": [
+          "price-alerts"
+        ],
+        "x-permission": "notifications.manage"
+      }
+    },
+    "/api/price-alerts/evaluate": {
+      "post": {
+        "description": "Check every enabled rule of every person against the latest closes\nnow (the scheduler runs this after each price ingest).",
+        "operationId": "evaluatePriceAlerts",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PriceAlertRunRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceAlertRunView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Evaluate Price Alerts",
+        "tags": [
+          "price-alerts"
+        ],
+        "x-permission": "operations.run"
+      }
+    },
+    "/api/price-alerts/events": {
+      "get": {
+        "description": "When your rules fired, newest first.",
+        "operationId": "listPriceAlertEvents",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "rule_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rule Id"
+            }
+          },
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_PriceAlertEventView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Price Alert Events",
+        "tags": [
+          "price-alerts"
+        ]
+      }
+    },
+    "/api/price-alerts/{alert_id}": {
+      "delete": {
+        "operationId": "deletePriceAlert",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "alert_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Alert Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Price Alert",
+        "tags": [
+          "price-alerts"
+        ],
+        "x-permission": "notifications.manage"
+      },
+      "get": {
+        "operationId": "getPriceAlert",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "alert_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Alert Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceAlertView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Price Alert",
+        "tags": [
+          "price-alerts"
+        ]
+      },
+      "patch": {
+        "description": "Rename a rule, change its thresholds, or switch it on or off.",
+        "operationId": "updatePriceAlert",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "alert_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Alert Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceAlertUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceAlertView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Price Alert",
+        "tags": [
+          "price-alerts"
+        ],
+        "x-permission": "notifications.manage"
       }
     },
     "/api/push/subscriptions": {
@@ -29562,6 +33175,664 @@
         "x-permission": "portfolio.trade"
       }
     },
+    "/api/tax/exports/dividends": {
+      "get": {
+        "description": "Every dividend with its ex-date in ``year``: gross, withholding, net.",
+        "operationId": "exportTaxDividends",
+        "parameters": [
+          {
+            "description": "Calendar year, e.g. 2025",
+            "in": "query",
+            "name": "year",
+            "required": true,
+            "schema": {
+              "description": "Calendar year, e.g. 2025",
+              "maximum": 2200,
+              "minimum": 1900,
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "A CSV file with a header row"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Dividends and withholding as CSV",
+        "tags": [
+          "tax"
+        ]
+      }
+    },
+    "/api/tax/exports/gains": {
+      "get": {
+        "description": "Every lot disposed in ``year``: FIFO or your specific lots, US wash\nsales when on, amounts in the trade and the base currency.",
+        "operationId": "exportTaxGains",
+        "parameters": [
+          {
+            "description": "Calendar year, e.g. 2025",
+            "in": "query",
+            "name": "year",
+            "required": true,
+            "schema": {
+              "description": "Calendar year, e.g. 2025",
+              "maximum": 2200,
+              "minimum": 1900,
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "A CSV file with a header row"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Realized gains per lot as CSV",
+        "tags": [
+          "tax"
+        ]
+      }
+    },
+    "/api/tax/lots/picks": {
+      "get": {
+        "description": "The specific lots each sell closes (used with lot_method specific).",
+        "operationId": "listTaxLotPicks",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "sell_fill_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sell Fill Id"
+            }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LotPickView"
+                  },
+                  "title": "Response Listtaxlotpicks",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Tax Lot Picks",
+        "tags": [
+          "tax"
+        ]
+      },
+      "put": {
+        "description": "Replace the lots one sell fill closes (an empty list clears them).\nThe buys must be this portfolio's, the same ticker, filled before the\nsell, and fit the sell's and each buy's quantity. Audited.",
+        "operationId": "setTaxLotPicks",
+        "parameters": [
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LotPicksUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LotPickView"
+                  },
+                  "title": "Response Settaxlotpicks",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Tax Lot Picks",
+        "tags": [
+          "tax"
+        ],
+        "x-permission": "portfolio.manage"
+      }
+    },
+    "/api/tax/settings": {
+      "get": {
+        "description": "Base currency, jurisdiction, lot method and wash sale switch of one\nof your portfolios (defaults when never set).",
+        "operationId": "getTaxSettings",
+        "parameters": [
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxSettingsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Tax Settings",
+        "tags": [
+          "tax"
+        ]
+      },
+      "put": {
+        "description": "Change the fields you send. Audited.",
+        "operationId": "updateTaxSettings",
+        "parameters": [
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaxSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxSettingsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Tax Settings",
+        "tags": [
+          "tax"
+        ],
+        "x-permission": "portfolio.manage"
+      }
+    },
     "/api/tca/journal": {
       "get": {
         "description": "The trade journal, newest first: each order with its reason, the\nsignal context, the outcome and your notes.",
@@ -30220,6 +34491,230 @@
         "tags": [
           "tca"
         ]
+      }
+    },
+    "/api/telegram/link": {
+      "delete": {
+        "description": "Unlink your chat. Nothing more is sent there. Idempotent.",
+        "operationId": "deleteTelegramLink",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Link",
+        "tags": [
+          "telegram"
+        ],
+        "x-permission": "notifications.manage"
+      },
+      "get": {
+        "description": "Whether the server has a bot, and which chat is linked to you.",
+        "operationId": "getTelegramLink",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelegramLinkView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Link",
+        "tags": [
+          "telegram"
+        ]
+      }
+    },
+    "/api/telegram/link-code": {
+      "post": {
+        "description": "A one-time code (valid for a few minutes). Send ``/link CODE`` to the\nbot from the chat to link. A new code retires your older ones. 503 when\nthe server has no bot token.",
+        "operationId": "createTelegramLinkCode",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelegramLinkCodeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Link Code",
+        "tags": [
+          "telegram"
+        ],
+        "x-permission": "notifications.manage"
       }
     },
     "/api/ticks": {

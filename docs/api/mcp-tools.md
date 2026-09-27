@@ -10,10 +10,14 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`add_journal_note`](#add_journal_note) | job | no |
 | [`backtest_draft`](#backtest_draft) | job | no |
 | [`cancel_job`](#cancel_job) | job | no |
+| [`cancel_order`](#cancel_order) | guarded | yes |
+| [`change_order`](#change_order) | guarded | yes |
 | [`create_draft`](#create_draft) | job | no |
+| [`create_price_alert`](#create_price_alert) | job | no |
 | [`create_universe`](#create_universe) | guarded | yes |
 | [`create_watchlist`](#create_watchlist) | job | no |
 | [`delete_draft`](#delete_draft) | guarded | yes |
+| [`delete_price_alert`](#delete_price_alert) | guarded | yes |
 | [`delete_universe`](#delete_universe) | guarded | yes |
 | [`disable_draft`](#disable_draft) | guarded | yes |
 | [`edit_journal_note`](#edit_journal_note) | job | no |
@@ -28,6 +32,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_connection_accounts`](#get_connection_accounts) | read | no |
 | [`get_coverage`](#get_coverage) | read | no |
 | [`get_draft`](#get_draft) | read | no |
+| [`get_fx_rate`](#get_fx_rate) | read | no |
 | [`get_golive_report`](#get_golive_report) | read | no |
 | [`get_health_report`](#get_health_report) | read | no |
 | [`get_insights`](#get_insights) | read | no |
@@ -49,6 +54,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_strategy_agreement`](#get_strategy_agreement) | read | no |
 | [`get_strategy_history`](#get_strategy_history) | read | no |
 | [`get_studio_capabilities`](#get_studio_capabilities) | read | no |
+| [`get_tax_settings`](#get_tax_settings) | read | no |
 | [`get_tca_summary`](#get_tca_summary) | read | no |
 | [`get_tear_sheet`](#get_tear_sheet) | read | no |
 | [`get_tick`](#get_tick) | read | no |
@@ -71,6 +77,8 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_orders`](#list_orders) | read | no |
 | [`list_portfolio_snapshots`](#list_portfolio_snapshots) | read | no |
 | [`list_portfolios`](#list_portfolios) | read | no |
+| [`list_price_alert_events`](#list_price_alert_events) | read | no |
+| [`list_price_alerts`](#list_price_alerts) | read | no |
 | [`list_risk_snapshots`](#list_risk_snapshots) | read | no |
 | [`list_shadow_decisions`](#list_shadow_decisions) | read | no |
 | [`list_shadow_pnl`](#list_shadow_pnl) | read | no |
@@ -81,6 +89,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_subscriptions`](#list_subscriptions) | read | no |
 | [`list_survival_presets`](#list_survival_presets) | read | no |
 | [`list_survival_tests`](#list_survival_tests) | read | no |
+| [`list_tax_lot_picks`](#list_tax_lot_picks) | read | no |
 | [`list_ticks`](#list_ticks) | read | no |
 | [`list_trade_journal`](#list_trade_journal) | read | no |
 | [`list_trading_modes`](#list_trading_modes) | read | no |
@@ -89,6 +98,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`live_risk`](#live_risk) | read | no |
 | [`mark_notifications_read`](#mark_notifications_read) | job | no |
 | [`order_tca`](#order_tca) | read | no |
+| [`place_order`](#place_order) | guarded | yes |
 | [`promote_strategy`](#promote_strategy) | guarded | yes |
 | [`refresh_universe`](#refresh_universe) | guarded | yes |
 | [`register_draft`](#register_draft) | guarded | yes |
@@ -109,6 +119,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`tca_summary`](#tca_summary) | read | no |
 | [`trade_journal`](#trade_journal) | read | no |
 | [`update_draft`](#update_draft) | job | no |
+| [`update_price_alert`](#update_price_alert) | job | no |
 | [`update_subscription`](#update_subscription) | guarded | yes |
 | [`update_watchlist`](#update_watchlist) | job | no |
 | [`validate_draft`](#validate_draft) | job | no |
@@ -211,6 +222,20 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `draft_id` | string | yes |  |  |
+
+### `get_fx_rate`
+
+The FX rate the system converts with: units of quote per one base,
+the latest stored on or before the day (inverse pair or a cross
+through USD when needed). Null when no stored rate gives it.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `base` | string | yes |  | ISO code, e.g. EUR |
+| `quote` | string | yes |  | ISO code, e.g. EUR |
+| `day` | date \| null | no | `null` | YYYY-MM-DD; default today |
 
 ### `get_golive_report`
 
@@ -439,6 +464,18 @@ What the Studio allows on this server: whether code drafts are allowed (an opera
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
+
+### `get_tax_settings`
+
+One of your portfolios' base currency and tax settings: the
+jurisdiction (us, eu or uk), the lot method (fifo or specific) and
+whether US wash sales are adjusted.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
 
 ### `get_tca_summary`
 
@@ -681,6 +718,29 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
 
+### `list_price_alert_events`
+
+When your price alerts fired, newest first.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `rule_id` | string \| null | no | `null` |  |
+| `limit` | integer | no | `50` | page size |
+| `offset` | integer | no | `0` | rows to skip |
+
+### `list_price_alerts`
+
+Your price alert rules, with the price each last saw per ticker.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `limit` | integer | no | `100` | page size |
+| `offset` | integer | no | `0` | rows to skip |
+
 ### `list_risk_snapshots`
 
 Daily risk snapshots of one of your portfolios, newest first:
@@ -794,6 +854,17 @@ Every survival test a lab run can name (the ids survival_tests takes), with what
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
+
+### `list_tax_lot_picks`
+
+The specific lots each sell closes (used with lot method specific).
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
+| `sell_fill_id` | integer \| null | no | `null` |  |
 
 ### `list_ticks`
 
@@ -1038,6 +1109,24 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 | `kind` | "rule" \| "code" | no | `"rule"` |  |
 | `source_code` | string \| null | no | `null` | Python source of a code draft (API must allow code strategies) |
 
+### `create_price_alert`
+
+Create a price alert on a ticker or one of your watchlists. It is
+checked after each data refresh and sent through your notification
+channels (push, email, Telegram) with your quiet hours.
+
+Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `condition` | "crosses_above" \| "crosses_below" \| "moves_pct" | yes |  | crosses_above or crosses_below a level, or moves_pct |
+| `ticker` | string \| null | no | `null` | one instrument id, e.g. AAPL.US |
+| `watchlist_id` | string \| null | no | `null` | or every ticker of one of your watchlists |
+| `level` | number \| null | no | `null` | the price to watch (crossings) |
+| `pct` | number \| null | no | `null` | percent move, either way |
+| `window_days` | integer \| null | no | `null` | calendar days the move is measured over |
+| `name` | string \| null | no | `null` |  |
+
 ### `create_watchlist`
 
 Start a watchlist of yours. Names are unique per person. Needs a
@@ -1210,6 +1299,21 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: no.
 | `spec` | object \| null | no | `null` | replaces the spec |
 | `source_code` | string \| null | no | `null` | Python source of a code draft (API must allow code strategies) |
 
+### `update_price_alert`
+
+Change a price alert's thresholds or name, or switch it on or off.
+
+Safety: writes, destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `alert_id` | string | yes |  |  |
+| `level` | number \| null | no | `null` | the price to watch (crossings) |
+| `pct` | number \| null | no | `null` | percent move, either way |
+| `window_days` | integer \| null | no | `null` | calendar days the move is measured over |
+| `name` | string \| null | no | `null` |  |
+| `enabled` | boolean \| null | no | `null` |  |
+
 ### `update_watchlist`
 
 Rename one of your watchlists, replace its tickers, or both.
@@ -1240,6 +1344,39 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 
 Need `confirm=true` to act. Without it they return a preview and change nothing.
 
+### `cancel_order`
+
+Cancel one working order of your portfolio (yours or a strategy's).
+Without confirm=true returns the order and cancels nothing.
+
+Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `client_id` | string | yes |  |  |
+| `reason` | string | yes |  | why you trade (recorded and audited) |
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
+### `change_order`
+
+Change the quantity or limit of one of your working manual orders.
+The order is cancelled at the broker and a new one replaces it, after
+every check again. Without confirm=true returns the order as it is
+now and changes nothing.
+
+Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `client_id` | string | yes |  |  |
+| `reason` | string | yes |  | why you trade (recorded and audited) |
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
+| `quantity` | number \| null | no | `null` |  |
+| `limit_price` | number \| null | no | `null` |  |
+| `allow_reduce` | boolean | no | `false` |  |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
 ### `create_universe`
 
 Store a universe definition. It has no members until refreshed
@@ -1268,6 +1405,18 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `draft_id` | string | yes |  |  |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
+### `delete_price_alert`
+
+Delete one of your price alerts. Without confirm=true returns the
+rule and deletes nothing.
+
+Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `alert_id` | string | yes |  |  |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
 ### `delete_universe`
@@ -1395,6 +1544,29 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 | `test_options` | object \| null | no | `null` | options per survival test id, validated by each test (422 on an unknown test or option), e.g. {"oos": {"mode": "sharpe", "min_trades": 0}, "deflated_sharpe": {"min_dsr": 0.9}, "pbo": {"max_pbo": 0.3}, "mc_trades": {"n_paths": 2000}, "cost_stress": {"stress_multiplier": 3}}; each test must be in the suite |
 | `benchmark` | string \| null | no | `null` | benchmark to compare against: auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark |
 | `embargo_bars` | integer \| null | no | `null` | trading bars skipped between the train and validation windows (a strategy's label horizon raises it); default [lab] embargo_bars |
+
+### `place_order`
+
+Place a manual order on one of your portfolios. It goes through the
+kill switch, every halt and every risk rule, like a strategy's order.
+Without confirm=true returns the preview (what would be placed, the
+risk rules' adjustments) and places nothing. Real-money books are
+refused here: place those in the web app with a fresh second factor.
+
+Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `ticker` | string | yes |  | instrument id, e.g. AAPL.US or BTC-USD.CC |
+| `side` | "buy" \| "sell" | yes |  |  |
+| `quantity` | number | yes |  |  |
+| `reason` | string | yes |  | why you trade (recorded and audited) |
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
+| `order_type` | "market" \| "limit" | no | `"market"` |  |
+| `limit_price` | number \| null | no | `null` |  |
+| `client_id` | string \| null | no | `null` | your idempotency key: the same key places the order once |
+| `allow_reduce` | boolean | no | `false` | accept a smaller order when a risk rule shrinks it |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
 ### `promote_strategy`
 

@@ -47,6 +47,7 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `universes_refresh`: refresh stored universes and fill their recent bars | close + 20 min | none |
 | `ingest_metadata`: splits, dividends and other metadata for the universe, from Yahoo | close + 25 min | none |
 | `ingest_prices`: last 7 days of daily bars for `[production].universe` | close + 30 min | 60 min |
+| `price_alerts`: every person's price alerts against the new closes | close + 40 min | none |
 | `tick` | close + 45 min | 60 min |
 | `report`: `reports/latest.html` next to the state DB | close + 90 min | none |
 | `health`: checks, and opens or clears the operational halt | every 4 hours | none |
@@ -240,6 +241,62 @@ Set `STONKS_VAPID_PUBLIC_KEY`, `STONKS_VAPID_PRIVATE_KEY` and `STONKS_VAPID_SUBJ
 
 The scheduler runs the delivery worker. Without the scheduler, run `deliver` every minute from cron or a timer. The console's install and push opt-in are described in [ui.md](ui.md#install-and-notifications-pwa).
 
+## Price alerts
+
+Each person keeps their own alert rules, on one ticker or on every ticker of one of their watchlists:
+
+| Condition | Fires when |
+|-----------|------------|
+| `crosses_above` | The price moves up through `level` since the last check. |
+| `crosses_below` | The price moves down through `level`. |
+| `moves_pct` | The price moved at least `pct` percent, up or down, over the last `window_days` days. It fires when that becomes true, not every day it stays true. |
+
+- The `price_alerts` job checks every enabled rule after the price ingest, on the latest close of each ticker. Each rule remembers the last price it saw per ticker, so a crossing is found whatever the time between checks.
+- A firing goes to the rule's owner through the notification router: the feed, push, email, Telegram and their webhook, with their quiet hours and preferences. It is recorded once per rule, ticker and bar, so a rerun sends nothing twice.
+- Changing a rule's thresholds starts it fresh from the next price.
+- Manage rules in the console, over MCP or the API (`/api/price-alerts`), or from the shell:
+
+```bash
+uv run stonks price-alerts create --user you@example.com --ticker AAPL.US --condition crosses_above --level 250
+uv run stonks price-alerts create --user you@example.com --watchlist wl_... --condition moves_pct --pct 8 --window-days 5
+uv run stonks price-alerts list|events --user you@example.com
+uv run stonks price-alerts run [--as-of YYYY-MM-DD]    # what the job does, for every person
+```
+
+## Telegram
+
+The Telegram bot sends your notifications to a chat and answers a few commands. It uses long polling, so it needs no public webhook and works on a home server.
+
+1. Make a bot with @BotFather in Telegram and copy its token.
+2. Put the token in `.env` as `STONKS_TELEGRAM_BOT_TOKEN`. Never in TOML.
+3. With the token set, linked chats get notifications (the `telegram` channel, on by default, and a fallback for urgent ones like email).
+4. To answer commands too, set `[telegram] enabled = true` and restart `stonks serve`. The bot then polls inside the API process.
+5. Each person links their own chat: make a one-time code in the console (Settings, Telegram) or with the CLI, then send `/link CODE` to the bot. The code works once, for 10 minutes.
+
+```bash
+uv run stonks telegram link-code --user you@example.com
+uv run stonks telegram status --user you@example.com
+uv run stonks telegram unlink --user you@example.com
+uv run stonks telegram poll [--once]    # run the bot in the foreground instead of inside serve
+```
+
+Commands in a linked private chat: `/status` (halts, last tick, portfolio value), `/today` (orders, fills and P&L change today), `/positions [portfolio_id]`, `/signals` (latest signals of the strategies you follow), `/kill` (stops new orders on all your portfolios after you type `KILL ALL`), `/unlink` and `/help`. Resuming after the kill switch is only possible in the web app. Group chats are refused.
+
+Run only one poller per bot token. Do not run `stonks telegram poll` while `stonks serve` has the bot enabled.
+
+## AI assistant
+
+The console has a chat that talks to your own model server and acts through the MCP tools as the signed-in person. It is off until you point it at a server.
+
+1. Run a model server that speaks the OpenAI chat API with tool calls: Ollama, vLLM or a llama.cpp server. Pick a model that supports tools.
+2. Set `[assistant] base_url` and `model` in `config/default.toml`, for example `base_url = "http://127.0.0.1:11434/v1"` and `model = "llama3.1"` for Ollama.
+3. If the server needs a key, put it in `.env` as `STONKS_ASSISTANT_API_KEY`. Never in TOML. Local servers usually need none.
+4. Restart `stonks serve`. `GET /api/assistant/status` shows whether it is on.
+
+Limits per turn, all under `[assistant]`: `max_steps` model calls (default 8), `max_tokens` per call (1024), `timeout_seconds` for the whole turn with its tool calls (120), `max_conversation_messages` sent to the model (40) and `max_tool_result_chars` of each tool result (8000).
+
+Read tools run at once. A tool that changes something waits: the chat shows what it will do, and runs it only when the person approves. Actions that need a fresh second factor stay in the web app. Conversations are stored per person in the state database.
+
 ## Broker connections
 
 Connections sync a user's broker accounts read-only: positions, cash and activities, into a linked `broker` portfolio. No provider works until an admin enables it.
@@ -258,6 +315,27 @@ uv run python -m stonks.connections rotate-keys       # after adding a new maste
 - SnapTrade needs `STONKS_SNAPTRADE_CLIENT_ID` and `STONKS_SNAPTRADE_CONSUMER_KEY` and connects through its portal (`connect snaptrade --redirect URL`, then `callback`).
 - A sync writes one `portfolio_snapshots` row per portfolio and day (`source` other than `tick`), and is safe to repeat.
 - The scheduler's `connections_sync` job runs `sync --due` every hour. Without the scheduler, run it from cron or a timer.
+
+## Manual orders
+
+A person can place, change and cancel orders on their own portfolios by hand, next to what the strategies do. The console, MCP (`place_order`, `change_order`, `cancel_order`, each with `confirm=true`), the API (`/api/orders/manual`) and the CLI all do the same:
+
+```bash
+uv run stonks orders preview --user you@example.com --ticker AAPL.US --side buy --quantity 10
+uv run stonks orders place --user you@example.com --ticker AAPL.US --side buy --quantity 10 --reason "earnings dip" [--limit 190] [--client-id k1]
+uv run stonks orders change <client-id> --quantity 5 --reason "smaller" --user you@example.com
+uv run stonks orders cancel <client-id> --reason "changed my mind" --user you@example.com
+uv run stonks orders list --manual --user you@example.com
+```
+
+- Every order goes through the kill switch, every halt and every risk rule of the book, like a strategy's order. The account rules and live safeguards of Phase 19 are risk rules too, so they apply as soon as they are registered.
+- A rule that would drop the order refuses it. A rule that would make it smaller refuses it too and says what is allowed, unless the person accepts a smaller order (`allow_reduce`). The answer lists each rule's adjustment.
+- The same client id places the order once. The ledger id is `manual:<portfolio>:<key>`.
+- A simulated book fills at once at the latest close. A limit order fills only when that close is at or better than the limit, else it is recorded as rejected. A book at a broker sends it through the broker and books fills when the broker reports them.
+- A book that trades real money needs a fresh second factor in the web app, so MCP and API tokens can only preview there. The CLI asks you to type `PLACE LIVE ORDER`.
+- A change cancels the working order and places a new one (`<id>.r1`, `<id>.r2`, ...) through every check again. Only a working manual order can change. Cancel works on any working order of your portfolio.
+- Each order is recorded with `origin = manual`, no strategy, who placed it and why, and an `audit_log` row. An order is refused while a tick runs.
+- The tick never trades a manual holding. Strategies decide and size without it, and the snapshot keeps it.
 
 ## Risk policy
 
@@ -415,6 +493,16 @@ uv run stonks pnl --strategy <id>      # a model book
 ```
 
 Columns: `date`, `value` (cash plus marked positions), `change`, `daily`, `cumulative` (since the first snapshot) and `drawdown` (below the running peak). `--since` only trims rows; `cumulative` and `drawdown` still count from inception.
+
+## FX rates
+
+Portfolios report in their base currency (see `docs/tax.md`). Values in other currencies need FX rates in the lake:
+
+```bash
+uv run stonks ingest fx --pairs EURUSD,GBPUSD --since 2024-01-01
+```
+
+Run it after the daily price ingest, for every pair between a held currency and a base currency (one pair per currency to USD is enough: Stonks crosses through USD). Each pair is one unit of the `ingest_runs` row, so a bad pair never blocks the rest. Without a rate the base totals stay empty and `fx_missing` names the currency. Tax files come from `stonks tax gains|dividends --year Y [--portfolio ID] [--out FILE]`.
 
 ## Trading costs and the journal
 

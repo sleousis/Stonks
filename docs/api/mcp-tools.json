@@ -182,6 +182,141 @@
     },
     {
       "annotations": {
+        "destructive": true,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Cancel one working order of your portfolio (yours or a strategy's).\nWithout confirm=true returns the order and cancels nothing.",
+      "input_schema": {
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
+          "reason": {
+            "description": "why you trade (recorded and audited)",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "reason"
+        ],
+        "title": "cancel_orderArguments",
+        "type": "object"
+      },
+      "name": "cancel_order",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Change the quantity or limit of one of your working manual orders.\nThe order is cancelled at the broker and a new one replaces it, after\nevery check again. Without confirm=true returns the order as it is\nnow and changes nothing.",
+      "input_schema": {
+        "properties": {
+          "allow_reduce": {
+            "default": false,
+            "title": "Allow Reduce",
+            "type": "boolean"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "limit_price": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Limit Price"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Quantity"
+          },
+          "reason": {
+            "description": "why you trade (recorded and audited)",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "reason"
+        ],
+        "title": "change_orderArguments",
+        "type": "object"
+      },
+      "name": "change_order",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
         "destructive": false,
         "idempotent": false,
         "open_world": false,
@@ -241,6 +376,119 @@
         "type": "object"
       },
       "name": "create_draft",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Create a price alert on a ticker or one of your watchlists. It is\nchecked after each data refresh and sent through your notification\nchannels (push, email, Telegram) with your quiet hours.",
+      "input_schema": {
+        "properties": {
+          "condition": {
+            "description": "crosses_above or crosses_below a level, or moves_pct",
+            "enum": [
+              "crosses_above",
+              "crosses_below",
+              "moves_pct"
+            ],
+            "title": "Condition",
+            "type": "string"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "the price to watch (crossings)",
+            "title": "Level"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "maximum": 1000,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "percent move, either way",
+            "title": "Pct"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one instrument id, e.g. AAPL.US",
+            "title": "Ticker"
+          },
+          "watchlist_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "or every ticker of one of your watchlists",
+            "title": "Watchlist Id"
+          },
+          "window_days": {
+            "anyOf": [
+              {
+                "maximum": 365,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "calendar days the move is measured over",
+            "title": "Window Days"
+          }
+        },
+        "required": [
+          "condition"
+        ],
+        "title": "create_price_alertArguments",
+        "type": "object"
+      },
+      "name": "create_price_alert",
       "needs_confirm": false
     },
     {
@@ -408,6 +656,36 @@
         "type": "object"
       },
       "name": "delete_draft",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Delete one of your price alerts. Without confirm=true returns the\nrule and deletes nothing.",
+      "input_schema": {
+        "properties": {
+          "alert_id": {
+            "title": "Alert Id",
+            "type": "string"
+          },
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "alert_id"
+        ],
+        "title": "delete_price_alertArguments",
+        "type": "object"
+      },
+      "name": "delete_price_alert",
       "needs_confirm": true
     },
     {
@@ -1025,6 +1303,53 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "The FX rate the system converts with: units of quote per one base,\nthe latest stored on or before the day (inverse pair or a cross\nthrough USD when needed). Null when no stored rate gives it.",
+      "input_schema": {
+        "properties": {
+          "base": {
+            "description": "ISO code, e.g. EUR",
+            "pattern": "^[A-Za-z]{3}$",
+            "title": "Base",
+            "type": "string"
+          },
+          "day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD; default today",
+            "title": "Day"
+          },
+          "quote": {
+            "description": "ISO code, e.g. EUR",
+            "pattern": "^[A-Za-z]{3}$",
+            "title": "Quote",
+            "type": "string"
+          }
+        },
+        "required": [
+          "base",
+          "quote"
+        ],
+        "title": "get_fx_rateArguments",
+        "type": "object"
+      },
+      "name": "get_fx_rate",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "The go-live gate for one strategy: every check of its paper period\n(days, trades, drawdown, Sharpe against the backtest, MinTRL, ...)\nwith its value, limit and pass or fail, and the verdict. Read it\nbefore promote_strategy: an override skips exactly these checks.",
       "input_schema": {
         "properties": {
@@ -1583,6 +1908,37 @@
         "type": "object"
       },
       "name": "get_studio_capabilities",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "One of your portfolios' base currency and tax settings: the\njurisdiction (us, eu or uk), the lot method (fifo or specific) and\nwhether US wash sales are adjusted.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          }
+        },
+        "title": "get_tax_settingsArguments",
+        "type": "object"
+      },
+      "name": "get_tax_settings",
       "needs_confirm": false
     },
     {
@@ -2720,6 +3076,82 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "When your price alerts fired, newest first.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Rule Id"
+          }
+        },
+        "title": "list_price_alert_eventsArguments",
+        "type": "object"
+      },
+      "name": "list_price_alert_events",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Your price alert rules, with the price each last saw per ticker.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 100,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          }
+        },
+        "title": "list_price_alertsArguments",
+        "type": "object"
+      },
+      "name": "list_price_alerts",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Daily risk snapshots of one of your portfolios, newest first:\nVaR, ES, the day's hypothetical return, violations and decay.",
       "input_schema": {
         "properties": {
@@ -3108,6 +3540,49 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "The specific lots each sell closes (used with lot method specific).",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
+          "sell_fill_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Sell Fill Id"
+          }
+        },
+        "title": "list_tax_lot_picksArguments",
+        "type": "object"
+      },
+      "name": "list_tax_lot_picks",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Production tick runs, newest first. Summaries show the global\noutcome and the parts about your own portfolios only.",
       "input_schema": {
         "properties": {
@@ -3358,6 +3833,116 @@
       },
       "name": "order_tca",
       "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Place a manual order on one of your portfolios. It goes through the\nkill switch, every halt and every risk rule, like a strategy's order.\nWithout confirm=true returns the preview (what would be placed, the\nrisk rules' adjustments) and places nothing. Real-money books are\nrefused here: place those in the web app with a fresh second factor.",
+      "input_schema": {
+        "properties": {
+          "allow_reduce": {
+            "default": false,
+            "description": "accept a smaller order when a risk rule shrinks it",
+            "title": "Allow Reduce",
+            "type": "boolean"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_.\\-]{1,64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "your idempotency key: the same key places the order once",
+            "title": "Client Id"
+          },
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "limit_price": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Limit Price"
+          },
+          "order_type": {
+            "default": "market",
+            "enum": [
+              "market",
+              "limit"
+            ],
+            "title": "Order Type",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0,
+            "title": "Quantity",
+            "type": "number"
+          },
+          "reason": {
+            "description": "why you trade (recorded and audited)",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          },
+          "side": {
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "ticker": {
+            "description": "instrument id, e.g. AAPL.US or BTC-USD.CC",
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker",
+          "side",
+          "quantity",
+          "reason"
+        ],
+        "title": "place_orderArguments",
+        "type": "object"
+      },
+      "name": "place_order",
+      "needs_confirm": true
     },
     {
       "annotations": {
@@ -5634,6 +6219,99 @@
         "type": "object"
       },
       "name": "update_draft",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Change a price alert's thresholds or name, or switch it on or off.",
+      "input_schema": {
+        "properties": {
+          "alert_id": {
+            "title": "Alert Id",
+            "type": "string"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Enabled"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "the price to watch (crossings)",
+            "title": "Level"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "maximum": 1000,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "percent move, either way",
+            "title": "Pct"
+          },
+          "window_days": {
+            "anyOf": [
+              {
+                "maximum": 365,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "calendar days the move is measured over",
+            "title": "Window Days"
+          }
+        },
+        "required": [
+          "alert_id"
+        ],
+        "title": "update_price_alertArguments",
+        "type": "object"
+      },
+      "name": "update_price_alert",
       "needs_confirm": false
     },
     {
