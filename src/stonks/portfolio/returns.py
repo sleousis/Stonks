@@ -66,7 +66,7 @@ def market_history(view: Any, tickers: Iterable[str], *, lookback: int) -> Marke
         close = bars["close"].astype(float)
         adj = bars["adj_close"].astype(float)
         closes = adj.where(adj.notna() & (adj > 0), close).to_numpy()
-        index = pd.DatetimeIndex(pd.to_datetime(bars["timestamp"])).normalize()
+        index = pd.DatetimeIndex(pd.to_datetime(bars["timestamp"]).dt.normalize())
         series = pd.Series(closes, index=index).pct_change().iloc[1:]
         series = series[np.isfinite(series.to_numpy())]
         if not series.empty:
