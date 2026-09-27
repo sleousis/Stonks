@@ -47,6 +47,8 @@ class Permission(StrEnum):
     TOKENS_REVOKE = "tokens.revoke"
     RECOVERY_CODES = "mfa.recovery_codes"
     PASSWORD_CHANGE = "password.change"
+    #: A live portfolio's allocation and account profile (roadmap 19.6, 19.7).
+    LIVE_MANAGE = "live.manage"
 
 
 @dataclass(frozen=True)
@@ -83,6 +85,7 @@ POLICY: dict[Permission, Rule] = {
     Permission.TOKENS_REVOKE: Rule(_ALL, frozenset(ApiScope)),
     Permission.RECOVERY_CODES: Rule(_ALL, frozenset({ApiScope.READ}), step_up=True),
     Permission.PASSWORD_CHANGE: Rule(_ALL, frozenset({ApiScope.READ}), step_up=True),
+    Permission.LIVE_MANAGE: Rule(_TRADERS, frozenset({ApiScope.TRADE}), step_up=True),
 }
 
 

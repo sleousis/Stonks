@@ -25,7 +25,7 @@ the optional Flex token comes from ``STONKS_IBKR_FLEX_TOKEN``.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -38,16 +38,17 @@ _SECRET_KEYS = ("username", "user_id", "password", "flex_token", "token")
 def _refuse_secrets(data: Any, where: str) -> Any:
     if not isinstance(data, dict):
         return data
-    found = [k for k in _SECRET_KEYS if k in data]
+    table = cast("dict[str, Any]", data)
+    found = [k for k in _SECRET_KEYS if k in table]
     if found:
         for key in found:
-            data[key] = "**********"
+            table[key] = "**********"
         names = ", ".join(f"{where}.{k}" for k in found)
         raise ValueError(
             f"{names} must not be set in config: the IBKR login lives in the gateway's "
             "Docker secret files and the Flex token in STONKS_IBKR_FLEX_TOKEN"
         )
-    return data
+    return table
 
 
 class IbkrGatewayConfig(BaseModel):

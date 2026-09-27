@@ -48,6 +48,7 @@ export const POLICY: Readonly<Record<Permission, Rule>> = {
   'tokens.revoke': { roles: ALL, scopes: ALL_SCOPES },
   'mfa.recovery_codes': { roles: ALL, scopes: ['read'] },
   'password.change': { roles: ALL, scopes: ['read'] },
+  'live.manage': { roles: TRADERS, scopes: ['trade'] },
 };
 
 /** True when `me` holds `permission` (false when nobody is signed in). */

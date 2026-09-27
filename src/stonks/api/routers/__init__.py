@@ -22,6 +22,7 @@ from stonks.api.routers import (
     jobs,
     lab,
     ledger,
+    live,
     market,
     notifications,
     onboarding,
@@ -81,6 +82,7 @@ API_ROUTERS: list[APIRouter] = [
     watchlists.router,
     charts.router,
     exports.router,
+    live.router,
 ]
 
 #: Routers that always need a principal, even for reads on loopback.
