@@ -680,16 +680,20 @@ def run_gateway_checks(
     client_factory: ClientFactory | None = None,
     actions_for: Callable[[Sequence[str]], CorporateActions | None] | None = None,
     publish: Publish | None = None,
+    portfolio_ids: Sequence[str] | None = None,
 ) -> list[CheckResult]:
-    """Check every portfolio listed on a gateway in ``[brokers.ibkr.gateways]``,
-    through that gateway (the ``reconcile`` client id). ``actions_for``
-    returns the splits for the tickers the portfolios own, when the lake
-    can be read."""
+    """Check every portfolio listed on a gateway in ``[brokers.ibkr.gateways]``
+    (only ``portfolio_ids`` when given), through that gateway (the
+    ``reconcile`` client id). ``actions_for`` returns the splits for the
+    tickers the portfolios own, when the lake can be read."""
     from stonks.execution.brokers.ibkr.factory import connect_ibkr, default_client_factory
 
     results: list[CheckResult] = []
     for name, gateway in sorted(config.gateways.items()):
-        if not gateway.portfolios:
+        wanted = [
+            pid for pid in gateway.portfolios if portfolio_ids is None or pid in portfolio_ids
+        ]
+        if not wanted:
             continue
         broker = connect_ibkr(
             config,
@@ -700,7 +704,7 @@ def run_gateway_checks(
             client_factory=client_factory or default_client_factory,
         )
         try:
-            for portfolio_id in gateway.portfolios:
+            for portfolio_id in wanted:
                 actions = None
                 if actions_for is not None:
                     actions = actions_for(sorted(owned_positions(state, portfolio_id)))
