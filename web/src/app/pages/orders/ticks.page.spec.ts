@@ -67,6 +67,32 @@ describe('TicksPage', () => {
     expect(link?.textContent).not.toContain('t1');
   });
 
+  it('dry-run row shows Dry run; live run shows the LIVE stamp', async () => {
+    const fixture = TestBed.createComponent(TicksPage);
+    fixture.detectChanges();
+    (await nextRequest(controller, '/api/ticks')).flush({
+      items: [
+        { ...run(1), summary: { dry_run: true, orders_placed: 0 } },
+        { ...run(2), summary: { dry_run: false, broker_mode: 'live', orders_placed: 2 } },
+        { ...run(3), summary: { orders_placed: 0 } },
+      ],
+      total: 3,
+      limit: 25,
+      offset: 0,
+    });
+    for (let i = 0; i < 3; i++) {
+      await tick();
+      fixture.detectChanges();
+    }
+    const el = fixture.nativeElement as HTMLElement;
+    const rows = [...el.querySelectorAll('tbody tr')];
+    const rowOf = (id: string) => rows.find((r) => r.querySelector(`a[href="/orders/ticks/${id}"]`))!;
+    expect(rowOf('t1').textContent).toContain('Dry run');
+    expect(rowOf('t2').querySelector('app-mode-stamp')?.textContent).toContain('LIVE');
+    expect(rowOf('t3').textContent).not.toContain('Dry run');
+    expect(rowOf('t3').querySelector('app-mode-stamp')).toBeNull();
+  });
+
   it('suggests a dry run when nothing has run', async () => {
     const fixture = TestBed.createComponent(TicksPage);
     fixture.detectChanges();
