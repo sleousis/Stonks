@@ -15,14 +15,18 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from stonks.production.rules.borrow_check import BorrowCheckSettings
+from stonks.production.rules.capital_ramp import CapitalRampSettings
 from stonks.production.rules.circuit_breaker import CircuitBreakerSettings, Cooldown
 from stonks.production.rules.drawdown_scaling import DrawdownScalingSettings, Schedule
 from stonks.production.rules.exposure import GrossExposureSettings, NetExposureSettings
 from stonks.production.rules.liquidity import LiquiditySettings
+from stonks.production.rules.live_caps import LiveNotionalCapsSettings
 from stonks.production.rules.margin_call import MarginCallSettings
 from stonks.production.rules.max_holding import MaxHoldingSettings
+from stonks.production.rules.max_orders import MaxOrdersPerRunSettings
 from stonks.production.rules.operational_halt import OperationalHaltSettings
 from stonks.production.rules.portfolio_vol import PortfolioVolSettings
+from stonks.production.rules.price_band import PriceBandSettings
 from stonks.production.rules.risk_per_position import RiskPerPositionSettings
 from stonks.production.rules.sector_cap import SectorCapSettings
 from stonks.production.rules.short_caps import ShortCapsSettings
@@ -30,15 +34,19 @@ from stonks.production.rules.squeeze_guard import SqueezeGuardSettings
 
 __all__ = [
     "BorrowCheckSettings",
+    "CapitalRampSettings",
     "CircuitBreakerSettings",
     "DrawdownScalingSettings",
     "GrossExposureSettings",
     "LiquiditySettings",
+    "LiveNotionalCapsSettings",
     "MarginCallSettings",
     "MaxHoldingSettings",
+    "MaxOrdersPerRunSettings",
     "NetExposureSettings",
     "OperationalHaltSettings",
     "PortfolioVolSettings",
+    "PriceBandSettings",
     "RiskPerPositionSettings",
     "RuleSettings",
     "SectorCapSettings",
@@ -67,6 +75,12 @@ class RuleSettings(BaseModel):
     net_exposure: NetExposureSettings = NetExposureSettings()
     short_caps: ShortCapsSettings = ShortCapsSettings()
     borrow_check: BorrowCheckSettings = BorrowCheckSettings()
+    # Live safeguards (roadmap 19.6): act only on books at a real broker,
+    # every one off by default.
+    capital_ramp: CapitalRampSettings = CapitalRampSettings()
+    live_notional_caps: LiveNotionalCapsSettings = LiveNotionalCapsSettings()
+    price_band: PriceBandSettings = PriceBandSettings()
+    max_orders_per_run: MaxOrdersPerRunSettings = MaxOrdersPerRunSettings()
 
 
 def _min_optional(a: float | None, b: float | None) -> float | None:
@@ -153,6 +167,23 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
     "net_exposure": {"min_net": _max_optional, "max_net": _min_optional},
     "short_caps": {"max_short_weight": _min_optional, "max_short_total": _min_optional},
     "borrow_check": {"enabled": _either, "max_borrow_fee": _min_optional, "borrow": _keep_base},
+    "capital_ramp": {"enabled": _either},
+    "live_notional_caps": {
+        "max_order_notional": _min_optional,
+        "max_day_notional": _min_optional,
+        "max_user_day_notional": _min_optional,
+        "max_global_day_notional": _min_optional,
+    },
+    "price_band": {
+        "band_pct": _min_optional,
+        "nbbo_band_pct": min,
+        "delayed_band_pct": min,
+        "max_gap_pct": _min_optional,
+    },
+    "max_orders_per_run": {
+        "max_opening_orders": _min_optional,
+        "max_closing_orders": _min_optional,
+    },
 }
 
 

@@ -37,12 +37,17 @@ Order of application (``order``; lower first):
    dropped after a loss halt or when the data feed is stale (BL-28);
 4b. ``gross_exposure`` (6), ``net_exposure`` (7), ``short_caps`` (8) and
    ``borrow_check`` (9): the short-book limits (roadmap 16.2);
+4c. the live safeguards, which act only when ``ctx.live`` is set
+   (roadmap 19.6): ``capital_ramp`` (4, the owner's allocation cap),
+   ``live_notional_caps`` (9) and ``price_band`` (9);
 5. one order-rule pass: ``sell_within_position`` (10), ``require_price``
    (20), ``max_open_positions`` (30), ``max_weight_per_ticker`` (40),
    ``max_weight_per_asset_class`` (50), ``risk_per_position`` (52),
    ``sector_cap`` (54), ``liquidity`` (56), ``cash_buffer`` (60) and
    ``min_order_notional`` (70), so cash and the minimum notional see the
-   final size.
+   final size. ``account_rules`` (65) joins it for live books;
+6. ``max_orders_per_run`` (80): the last word on how many orders a live
+   run may send.
 
 Every step only shrinks buys, so the result is at most what any single
 rule allows. A rule may declare ``enabled(policy)``; disabled rules are
@@ -70,6 +75,7 @@ if TYPE_CHECKING:
     import pandas as pd
 
     from stonks.config import RiskPolicy
+    from stonks.production.live.context import LiveContext
 
 __all__ = [
     "EPS",
@@ -152,6 +158,11 @@ class RiskContext:
     #: short rules fall back to their own settings without them.
     margin: Any = None
     borrow: Any = None
+    #: The live state of a book at a real broker (roadmap 19.6): the
+    #: owner's allocation, the account, quotes, the notional sent today and
+    #: the account rules' inputs. ``None`` in backtests and paper books, so
+    #: the live safeguards do nothing there.
+    live: LiveContext | None = None
 
     def __post_init__(self) -> None:
         if self.cost_model is not None and (self.slippage_bps or self.fee_per_trade):
