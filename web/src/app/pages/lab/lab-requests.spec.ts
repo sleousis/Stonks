@@ -15,7 +15,9 @@ import {
   groupStrategies,
   labRunErrors,
   parseTickers,
+  SUITES,
   suiteTests,
+  suitesFromPresets,
 } from './lab-requests';
 
 const TODAY = new Date(2026, 8, 26);
@@ -146,6 +148,30 @@ describe('lab requests', () => {
         preset: 'promotion',
       });
       expect(suiteTests({ suite: 'standard', tests: [] })).toContain('walk_forward');
+    });
+
+    it("takes each named suite's tests from the server's presets", () => {
+      const suites = suitesFromPresets([
+        { name: 'quick', tests: ['oos', 'drift', 'not_in_the_console_yet'], options: {} },
+      ]);
+      expect(suiteTests({ suite: 'quick', tests: [] }, suites)).toEqual(['oos', 'drift']);
+      // A suite the server did not name keeps the console's fallback list.
+      expect(suiteTests({ suite: 'standard', tests: [] }, suites)).toEqual(
+        SUITES.find((s) => s.id === 'standard')!.tests,
+      );
+      expect(suites.find((s) => s.id === 'quick')!.label).toBe('Quick');
+      expect(labRunErrors(labForm({ suite: 'quick' }), {}, suites)['tests']).toBeUndefined();
+    });
+
+    it('runs on a stored universe, fetching missing data first when asked', () => {
+      const body = buildLabRunRequest(labForm({ tickers: '', universeId: 'sp500', ensureData: true }));
+      expect(body.universe_id).toBe('sp500');
+      expect(body.ensure_data).toBe(true);
+      expect(body).not.toHaveProperty('universe');
+      expect(labRunErrors(labForm({ tickers: '', universeId: 'sp500' }))['tickers']).toBeUndefined();
+      expect(buildLabRunRequest(labForm({ universeId: 'sp500' }))).not.toHaveProperty('ensure_data');
+      expect(buildLabRunRequest(labForm({ ensureData: true }))).not.toHaveProperty('ensure_data');
+      expect(labRunErrors(labForm({ tickers: '' }))['tickers']).toBeDefined();
     });
 
     it('sends a custom suite as survival_tests in canonical order', () => {

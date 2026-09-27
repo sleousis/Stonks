@@ -9,6 +9,7 @@ import type { FormErrors, WindowForm } from './lab-requests';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @let p = idPrefix();
+    @if (showTickers()) {
     <div class="field tickers">
       <label [for]="p + '-tickers'">Tickers</label>
       <textarea
@@ -32,6 +33,7 @@ import type { FormErrors, WindowForm } from './lab-requests';
         </span>
       }
     </div>
+    }
     <div class="row">
       <div class="field">
         <label [for]="p + '-start'">Start</label>
@@ -124,6 +126,8 @@ export class WindowFields {
   readonly errors = input<FormErrors>({});
   readonly intervals = input<readonly IntervalInfo[]>([]);
   readonly idPrefix = input('window');
+  /** Hidden when a stored universe replaces the typed tickers. */
+  readonly showTickers = input(true);
   readonly patch = output<Partial<WindowForm>>();
 
   /** Falls back to daily bars while the catalog loads (or if it failed). */

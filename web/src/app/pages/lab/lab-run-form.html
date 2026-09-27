@@ -32,11 +32,51 @@
 
   <fieldset class="group">
     <legend>Data</legend>
+    @if (universes().length) {
+      <div class="field">
+        <label for="lr-universe">Run on</label>
+        <select
+          id="lr-universe"
+          class="input"
+          aria-describedby="lr-universe-hint"
+          (change)="setUniverse($any($event.target).value)"
+        >
+          <option value="" [selected]="form().universeId === ''">Tickers I type</option>
+          @for (u of universes(); track u.id) {
+            <option [value]="u.id" [selected]="form().universeId === u.id">
+              Universe: {{ u.name || u.id }}
+            </option>
+          }
+        </select>
+        <span class="hint" id="lr-universe-hint">
+          A saved universe runs on every ticker that was a member during the window, delisted
+          ones included.
+        </span>
+      </div>
+      @if (form().universeId) {
+        <div class="field">
+          <label class="check">
+            <input
+              type="checkbox"
+              aria-describedby="lr-ensure-hint"
+              [checked]="form().ensureData"
+              (change)="patch({ ensureData: $any($event.target).checked })"
+            />
+            Fetch missing data first
+          </label>
+          <span class="hint" id="lr-ensure-hint">
+            Downloads the prices the run needs that our data lacks before it starts. It can take
+            a while for a large universe.
+          </span>
+        </div>
+      }
+    }
     <app-window-fields
       idPrefix="lr"
       [value]="form()"
       [errors]="errors()"
       [intervals]="intervals()"
+      [showTickers]="!form().universeId"
       (patch)="patch($event)"
     />
     <div class="grid-2">
@@ -186,7 +226,7 @@
   <fieldset class="group" [attr.aria-describedby]="errors()['tests'] ? 'lr-tests-error' : null">
     <legend>Survival tests</legend>
     <div class="suites" role="radiogroup" aria-label="Test suite">
-      @for (s of suites; track s.id) {
+      @for (s of suites(); track s.id) {
         <label class="suite" [class.chosen]="form().suite === s.id">
           <input
             type="radio"

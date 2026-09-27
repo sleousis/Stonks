@@ -137,6 +137,10 @@ describe('LabPage', () => {
         return req.flush(LAB_RUN_VIEW);
       case '/api/lab/survival-tests':
         return req.flush(SURVIVAL_TEST_CATALOG);
+      case '/api/lab/survival-presets':
+        return req.flush([]);
+      case '/api/universes':
+        return req.flush({ items: [], total: 0, limit: 200, offset: 0 });
       case '/api/lab/sweeps/sw-1/result':
         return req.flush(SWEEP_RESULT);
     }
