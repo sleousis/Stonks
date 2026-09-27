@@ -11,6 +11,16 @@
 
 All of them are long-only by default and scaled so gross never exceeds
 ``max_gross`` (1.0 in a cash account); weights left over are cash.
+
+Long/short modes (``long_only=False``, roadmap 16.3):
+
+- ``equal_weight_top_n`` also shorts the ``n_short`` (default ``n``) most
+  negative combined scores, every position at ``max_gross / names``. Its
+  signals are then z-scores, so a score below the cross-section mean is a
+  short.
+- ``vol_target`` keeps negative forecasts as short weights.
+
+Both read betas, so ``neutral`` may be ``"dollar"`` or ``"beta"``.
 """
 
 from __future__ import annotations
@@ -75,6 +85,12 @@ def _top(scores: Mapping[str, float], n: int | None) -> list[str]:
     return ranked if n is None else ranked[:n]
 
 
+def _bottom(scores: Mapping[str, float], n: int) -> list[str]:
+    """Tickers with a negative score, most negative first, at most n."""
+    ranked = sorted((t for t, v in scores.items() if v < 0), key=lambda t: (scores[t], t))
+    return ranked[:n]
+
+
 # --- single winner --------------------------------------------------------------
 
 
@@ -121,6 +137,8 @@ class SingleWinner(PortfolioConstructor):
 
 class EqualWeightSettings(ConstructorSettings):
     n: int = Field(default=10, ge=1)
+    #: Shorts in long/short mode; ``None`` means ``n``.
+    n_short: int | None = Field(default=None, ge=0)
 
 
 @register_constructor("equal_weight_top_n")
@@ -129,17 +147,31 @@ class EqualWeightTopN(PortfolioConstructor):
 
     Signals are percentile ranks (RS-06): the pipeline passes only scores
     above the threshold, so every input is a buy, and a z-score would clip
-    the below-mean half to 0 in long-only mode."""
+    the below-mean half to 0 in long-only mode. In long/short mode the
+    ``n_short`` most negative z-scores are shorts (see the module doc)."""
 
     signal_method = "rank"
+    long_short_signal_method = "zscore"
+    beta_aware = True
     Settings = EqualWeightSettings
 
     def target_weights(self, inp: ConstructionInput) -> TargetBook:
+        s = self.settings
+        assert isinstance(s, EqualWeightSettings)
         combined, attribution = combine_signals(inp)
         eligible = {t: v for t, v in combined.items() if inp.tradable(t)}
-        chosen = _top(eligible, self.settings.n)
-        weights = {t: self.settings.max_gross / len(chosen) for t in chosen}
-        return self.finalize(weights, attribution)
+        chosen = _top(eligible, s.n)
+        if s.long_only:
+            weights = {t: s.max_gross / len(chosen) for t in chosen}
+            return self.finalize(weights, attribution)
+        shorts = _bottom(eligible, s.n if s.n_short is None else s.n_short)
+        names = len(chosen) + len(shorts)
+        weights = {t: s.max_gross / names for t in chosen}
+        weights.update({t: -s.max_gross / names for t in shorts})
+        return self.finalize(weights, attribution, betas=self._betas(inp, weights))
+
+    def _betas(self, inp: ConstructionInput, weights: Mapping[str, float]) -> dict[str, float]:
+        return inp.betas_for(weights) if self.settings.neutral == "beta" else {}
 
 
 # --- inverse vol ----------------------------------------------------------------
@@ -202,6 +234,7 @@ class VolTarget(PortfolioConstructor):
     """
 
     signal_method = "forecast"
+    beta_aware = True
     Settings = VolTargetSettings
 
     def target_weights(self, inp: ConstructionInput) -> TargetBook:
@@ -223,4 +256,5 @@ class VolTarget(PortfolioConstructor):
         for t in eligible:
             forecast = max(-FORECAST_CAP, min(FORECAST_CAP, fdm * combined[t]))
             weights[t] = s.tau * idm * iw * forecast / FORECAST_TARGET / inp.vol(t)  # type: ignore[operator]
-        return self.finalize(weights, attribution, meta={"fdm": fdm, "idm": idm})
+        betas = inp.betas_for(weights) if s.neutral == "beta" and not s.long_only else None
+        return self.finalize(weights, attribution, meta={"fdm": fdm, "idm": idm}, betas=betas)
