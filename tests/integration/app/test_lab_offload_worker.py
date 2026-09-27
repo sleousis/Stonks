@@ -185,7 +185,7 @@ def cli_env(settings, seeded, tmp_path, monkeypatch):
     return ["--config", str(tmp_path / "none.toml")]
 
 
-def test_cli_status_snapshot_and_one_worker_job(cli_env, settings, capsys):
+def test_cli_status_snapshot_and_one_worker_job(cli_env, settings, capsys, monkeypatch):
     import json
 
     from stonks.app.jobs import JobStore
@@ -199,7 +199,10 @@ def test_cli_status_snapshot_and_one_worker_job(cli_env, settings, capsys):
     assert "snapshot" in json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     store = JobStore(settings.state.path)
     job = store.create("lab_run", _request().model_dump(mode="json"), executor="worker")
+    tmp = settings.lake.path.parent / "lab_tmp"
+    monkeypatch.setenv("TMPDIR", str(tmp))
     assert main([*cli_env, "worker", "--once", "--id", "w-cli"]) == 0
+    assert tmp.is_dir()
     done = store.get(job.id)
     assert done.status == "succeeded", done.error
 

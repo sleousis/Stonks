@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import signal
 import sys
 import threading
@@ -42,6 +43,9 @@ def _settings(config_path: Path | None) -> Any:
 def _cmd_worker(settings: Any, args: argparse.Namespace) -> int:
     from stonks.lab.offload.worker import build_worker
 
+    tmp = os.environ.get("TMPDIR")
+    if tmp:  # Compose points it at the data volume; create it before first use
+        Path(tmp).mkdir(parents=True, exist_ok=True)
     worker = build_worker(settings, worker_id=args.id)
     if args.once:
         worker.run_once()
