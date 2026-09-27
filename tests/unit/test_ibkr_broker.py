@@ -137,19 +137,23 @@ def test_gateway_down_is_unavailable():
 def test_login_check_ok():
     broker, _ = make()
     check = broker.login_check()
-    assert check.connected and check.fault is None
+    assert check.ok and check.fault is None
     assert check.account_id == ACCOUNT and check.server_time == T0
 
 
 def test_login_check_faults():
     wrong, _ = make(FakeIbGateway(["U1"]))
     assert wrong.login_check().fault == "wrong_account"
+    assert not wrong.login_check().ok
+    lost, lost_gw = make()
+    lost_gw.link_ok = False
+    assert not lost.login_check().ok and lost.login_check().fault is None
     refused, _ = make(FakeIbGateway([]))
     assert refused.login_check().fault == "login_refused"
     competing, gw = make()
     gw.competing = True
     check = competing.login_check()
-    assert check.fault == "competing_session" and check.connected
+    assert check.fault == "competing_session" and not check.ok
     down_gw = FakeIbGateway()
     down_gw.connect_failures = 5
     down, _ = make(down_gw)

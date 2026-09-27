@@ -86,6 +86,10 @@ class LoginCheck:
     #: A real fault that pauses auto at once, else ``None``.
     fault: LoginFault | None = None
 
+    @property
+    def ok(self) -> bool:
+        return self.connected and self.fault is None
+
 
 class IbkrBroker:
     def __init__(
@@ -119,6 +123,22 @@ class IbkrBroker:
         self._account: str | None = None
         self._checked_connects = -1
         self._seen_execs: set[str] = set()
+        self._closers: list[Callable[[], object]] = []
+
+    def on_close(self, fn: Callable[[], object]) -> None:
+        """Run ``fn`` when the broker closes (a state DB it owns, say)."""
+        self._closers.append(fn)
+
+    def close(self) -> None:
+        """Close the gateway session and anything the broker owns."""
+        close = getattr(self.client, "close", None)
+        try:
+            if callable(close):
+                close()
+        finally:
+            for fn in reversed(self._closers):
+                fn()
+            self._closers.clear()
 
     # ---- readiness and the account safety check ---------------------------------------
 
@@ -191,11 +211,11 @@ class IbkrBroker:
             server_time = self._guard("server time", self.client.server_time)
         except LiveTradingRefusedError as exc:
             fault = "login_refused" if "no managed account" in str(exc) else "wrong_account"
-            return LoginCheck(connected=True, detail=str(exc), fault=fault)
+            return LoginCheck(connected=False, detail=str(exc), fault=fault)
         except BrokerUnavailableError as exc:
-            status = self.client.status()
-            fault = "competing_session" if status.competing else None
-            return LoginCheck(connected=status.connected, detail=str(exc), fault=fault)
+            # down, or up without a usable link to IBKR (1100, 10197)
+            fault = "competing_session" if self.client.status().competing else None
+            return LoginCheck(connected=False, detail=str(exc), fault=fault)
         except BrokerError as exc:
             return LoginCheck(connected=False, detail=str(exc))
         return LoginCheck(

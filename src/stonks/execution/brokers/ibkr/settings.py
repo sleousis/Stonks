@@ -101,6 +101,9 @@ class IbkrHealthSettings(BaseModel):
 
     #: Seconds a probe may take before the gateway counts as down.
     probe_timeout_seconds: float = Field(default=2.0, gt=0)
+    #: ``login`` logs in through the adapter and checks the account (19.2).
+    #: ``socket`` only checks that the API port accepts a connection.
+    probe: Literal["login", "socket"] = "login"
     #: Failed checks in a row before the owners get a high-urgency push.
     alert_after_failures: int = Field(default=2, ge=1)
     #: Trading sessions the gateway may stay down before the auto

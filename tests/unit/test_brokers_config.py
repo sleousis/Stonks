@@ -111,11 +111,23 @@ def test_unknown_kind_rejected():
         BrokersConfig(kind="etrade")  # type: ignore[arg-type]
 
 
-def test_ibkr_kind_is_known_but_has_no_adapter_yet():
-    """Roadmap 19.2 builds the adapter. Until then make_broker refuses."""
+def test_ibkr_kind_needs_a_gateway(tmp_path):
+    """Roadmap 19.2: make_broker builds the IBKR adapter for the default
+    portfolio's gateway, and refuses when none is configured."""
     from stonks.config import Settings
     from stonks.execution.brokers import BrokerError, make_broker
+    from stonks.execution.brokers.ibkr.broker import IbkrBroker
 
     assert BrokersConfig(kind="ibkr").kind == "ibkr"
-    with pytest.raises(BrokerError, match=r"19.2"):
-        make_broker(Settings(), Portfolio(cash=0.0), kind="ibkr")
+    state = {"path": str(tmp_path / "state.sqlite")}
+    with pytest.raises(BrokerError, match="no IB Gateway"):
+        make_broker(Settings(state=state), Portfolio(cash=0.0), kind="ibkr")
+    gateways = {"paper": {"host": "ib-gateway-paper", "port": 4004, "mode": "paper"}}
+    settings = Settings(state=state, brokers={"ibkr": {"gateways": gateways}})
+    broker = make_broker(settings, Portfolio(cash=0.0), kind="ibkr")
+    try:
+        assert isinstance(broker, IbkrBroker)
+        assert broker.mode == "paper"
+        assert broker.client.endpoint.client_id == 11  # the tick's id
+    finally:
+        broker.close()
